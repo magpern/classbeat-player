@@ -16,6 +16,8 @@ export interface LinkView {
   readonly songIndex: number | null;
   /** Rule 6: the clock holds at the window's end; the last interval stays on screen. */
   readonly held: boolean;
+  /** The music app reports playing (a hold at the window's end then says holding, not paused). */
+  readonly playing: boolean;
   /** Rule 6: the elastic countdown of the last interval while holding, else null. */
   readonly holdRemainingMs: number | null;
   /** Ambiguous: the occurrences the instructor can pick between. */
@@ -46,6 +48,7 @@ export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, leng
     guessing: l.state === "Coasting" || l.state === "Off the list",
     songIndex: l.songIndex,
     held: l.held,
+    playing: l.playing,
     holdRemainingMs: holdRemaining,
     candidates: l.state === "Ambiguous" && l.amb ? l.amb.candidates : [],
     announcement: live && l.announce ? l.announce.text : null,

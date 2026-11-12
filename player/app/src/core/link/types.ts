@@ -95,6 +95,8 @@ export interface LinkModel {
   /** The next following step moves the clock exactly, without smoothing. */
   readonly force: boolean;
   readonly held: boolean;
+  /** The music app reported playing at the last reading (Ambiguous does not say it by its name). */
+  readonly playing: boolean;
   /** Monotonic time the next song is expected, while the clock holds (rule 6). */
   readonly holdUntil: number | null;
   readonly announce: Announcement | null;
@@ -134,6 +136,7 @@ export function initialLink(following: boolean): LinkModel {
     pick: null,
     force: false,
     held: false,
+    playing: false,
     holdUntil: null,
     announce: null,
     undo: null,

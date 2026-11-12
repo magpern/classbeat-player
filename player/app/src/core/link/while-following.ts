@@ -48,10 +48,11 @@ export interface ControlLabels {
  * hands the clock over says it stops following, and one applied to the clock keeps its plain name.
  */
 export function controlLabels(link: LinkModel, available: boolean, canSend: boolean): ControlLabels {
-  const label = (cmd: ClockCommand, plain: string, music: string): string => {
-    const r = routeWhileFollowing(link, available, cmd, canSend);
-    if (r === null || (r.kind === "transport" && r.alsoClock === true)) return plain;
-    return r.kind === "transport" ? music : `${plain} (stops following)`;
+  const next = routeWhileFollowing(link, available, { type: "next" }, canSend);
+  const previous = routeWhileFollowing(link, available, { type: "previous" }, canSend);
+  // Next names the music when it goes there; Previous never does (it moves the clock).
+  return {
+    next: next === null || (next.kind === "transport" && next.alsoClock === true) ? "Next interval" : next.kind === "transport" ? "Next song" : "Next interval (stops following)",
+    previous: previous?.kind === "manual" ? "Previous interval (stops following)" : "Previous interval",
   };
-  return { next: label({ type: "next" }, "Next interval", "Next song"), previous: label({ type: "previous" }, "Previous interval", "Previous song") };
 }

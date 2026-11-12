@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { NEWER_VERSION_MESSAGE } from "../../src/core/class-file.ts";
-import { advance, command, INITIAL, openText, refuse, snapshotOf } from "../../src/core/player-state.ts";
+import { advance, command, INITIAL, openText, refuse, snapshotOf, withoutReader } from "../../src/core/player-state.ts";
 import { classSchema, converterExamples, EXAMPLES } from "./fixtures.ts";
 
 const good = readFileSync(converterExamples()[0], "utf8");
@@ -67,4 +67,13 @@ test("commands reach the clock: start, pause, next", () => {
   assert.equal(v?.status, "paused");
   assert.equal(v?.intervalIndex, 1);
   assert.equal(v?.intervalElapsedMs, 0);
+});
+
+test("a reader that cannot work is reported as the reason, but not for a class that is manual only anyway", () => {
+  const withReason = snapshotOf(withoutReader(openText(INITIAL, "a.json", good, classSchema, 0, true)), 0);
+  assert.equal(withReason.link?.unavailable, true);
+  assert.equal(withReason.link?.available, false);
+  const noMusic = readFileSync(join(EXAMPLES, "valid", "short-class-no-music.json"), "utf8");
+  const manualOnly = snapshotOf(withoutReader(openText(INITIAL, "b.json", noMusic, classSchema, 0, true)), 0);
+  assert.equal(manualOnly.link?.unavailable, false, "nothing was to be followed, so there is nothing to explain");
 });

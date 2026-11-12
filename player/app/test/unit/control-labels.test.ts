@@ -7,7 +7,8 @@ import { test } from "node:test";
 import { controlLabels, initialLink, routeWhileFollowing } from "../../src/core/link/index.ts";
 import type { LinkModel, LinkStateName, MusicReader, MusicTransport, Observation } from "../../src/core/link/index.ts";
 import { createController } from "../../src/main/controller.ts";
-import { converterExamples } from "./fixtures.ts";
+import { join } from "node:path";
+import { converterExamples, EXAMPLES } from "./fixtures.ts";
 
 const STATES: readonly LinkStateName[] = ["Locked", "Paused", "Ambiguous", "Coasting", "Off the list", "Manual"];
 const linked = (state: LinkStateName, over: Partial<LinkModel> = {}): LinkModel => ({ ...initialLink(true), state, everLocked: true, ...over });
@@ -44,6 +45,7 @@ test("for every link state, mode and transport, the label agrees with the route"
             assert.equal(l.next === "Next song", next?.kind === "transport", `next song only when sent to the music: ${where}`);
             assert.equal(l.next.endsWith("(stops following)"), next?.kind === "manual", `next: ${where}`);
             assert.equal(l.next === "Next interval", next === null, `next: ${where}`);
+            assert.notEqual(prev?.kind, "transport", `previous never goes to the music: ${where}`);
             assert.equal(l.previous.endsWith("(stops following)"), prev?.kind === "manual", `previous: ${where}`);
             assert.equal(l.previous === "Previous interval", prev === null, `previous: ${where}`);
           }
@@ -68,4 +70,27 @@ test("the snapshot carries the labels: interval labels, then song labels once lo
   self.obs = { title: first.title, artist: first.artist, lengthMs: first.length_ms, positionMs: 5000, playing: true, at: self.t, seenAt: self.t };
   assert.deepEqual(c.snapshot().controls, { next: "Next song", previous: "Previous interval (stops following)" });
   assert.deepEqual(c.command({ type: "manual" }).controls, { next: "Next interval", previous: "Previous interval" });
+});
+
+test("without a transport the labels say the clock is handed over, and a manual-only class keeps the plain ones", () => {
+  const self = { t: 0, obs: null as Observation | null };
+  const reader: MusicReader = { kind: "fake", latest: () => self.obs };
+  const c = createController(() => self.t, reader, null);
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  self.t = 1000;
+  self.obs = { title: first.title, artist: first.artist, lengthMs: first.length_ms, positionMs: 5000, playing: true, at: self.t, seenAt: self.t };
+  assert.deepEqual(c.snapshot().controls, { next: "Next interval (stops following)", previous: "Previous interval (stops following)" });
+});
+
+test("a class with no song timing (manual only) has the plain labels and no link to follow", () => {
+  const noMusic = readFileSync(join(EXAMPLES, "valid", "short-class-no-music.json"), "utf8");
+  const reader: MusicReader & MusicTransport = { kind: "fake", latest: () => null, send: () => undefined };
+  const c = createController(() => 0, reader, reader);
+  const snap = c.open("b.json", noMusic);
+  assert.equal(snap.link?.available, false);
+  assert.deepEqual(snap.controls, { next: "Next interval", previous: "Previous interval" });
+  const after = c.command({ type: "follow" });
+  assert.equal(after.link?.mode, "manual", "Follow does nothing without song timing");
+  assert.deepEqual(after.controls, { next: "Next interval", previous: "Previous interval" });
 });

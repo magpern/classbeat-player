@@ -66,7 +66,7 @@ export function createController(now: () => number = () => performance.now(), re
       return snapshot();
     },
     command(cmd) {
-      // While following, Pause, Resume and Next go to the music instead of the clock.
+      // While following, Start, Pause, Resume and Next go to the music instead of the clock (before the first lock, Start goes to both).
       const action = transportFor(state, cmd, transport !== null);
       if (action !== null) transport?.send(action);
       state = command(state, cmd, now(), transport !== null);
