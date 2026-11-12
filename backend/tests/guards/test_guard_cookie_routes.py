@@ -48,6 +48,10 @@ DEVICE_TOKEN_ROUTES = frozenset(
     {
         ("GET", "/api/player/device"),
         ("DELETE", "/api/player/device"),
+        # Section 6, "Scope": the account's classes, removals and cursor, read only.
+        ("GET", "/api/player/changes"),
+        ("GET", "/api/player/classes/{class_id}"),
+        ("GET", "/api/player/cursor"),
     }
 )
 # The source API (section 7): a source token in `Authorization: Bearer`, never a cookie.
@@ -162,14 +166,15 @@ def test_every_cookie_route_applies_the_origin_check() -> None:
 
 
 def test_no_route_takes_a_token_in_its_path() -> None:
-    # Principle 3. The path parameters are a session's, a device's and a link's id and a
-    # source's own class id: not credentials.
+    # Principle 3. The path parameters are a session's, a device's and a link's id, a
+    # source's own class id and a class row's id: not credentials.
     parameters = {r.path for r in _routes() if "{" in r.path}
     assert parameters == {
         "/api/site/sessions/{session_id}",
         "/api/site/devices/{device_id}",
         "/api/site/source-links/{link_id}",
         "/api/source/classes/{source_class_id}",
+        "/api/player/classes/{class_id}",
     }
 
 
