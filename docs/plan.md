@@ -172,7 +172,8 @@ serves well is the person teaching, who is also the person who chooses the produ
 
 *Considered and not chosen:* studio lights that follow the zone and the beat. MOWL already
 drives studio lighting this way and so does at least one other product, so it would be catching
-up, not a niche. It can come later if studios ask for it.
+up, not a niche. It is also ruled out: external hardware such as lighting is not part of this
+product (owner, 2026-11-12).
 
 **Our own direction**
 
