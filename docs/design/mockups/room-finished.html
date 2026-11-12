@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room screen: finished</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="room.css">
+</head>
+<body>
+<!-- State: the class has ended. House lights up: a white gel, no zone. -->
+<aside class="gel blank">
+  <span class="lbl" data-tier="label">Class</span>
+  <span class="gel-name n" data-tier="value">Complete</span>
+  <div class="gel-targets" data-tier="minor"><span>42:00</span></div>
+</aside>
+
+<header class="rail">
+
+  <span class="lbl seg"></span>
+  <span class="link" data-tier="label">Following Spotify</span>
+</header>
+
+<section class="intro">
+  <h1 data-tier="value">Thursday threshold</h1>
+  <div class="facts">
+    <div><span class="lbl" data-tier="label">Ridden</span><span class="v n" data-tier="value">42:00</span></div>
+    <div><span class="lbl" data-tier="label">Songs</span><span class="v n" data-tier="value">11</span></div>
+    <div><span class="lbl" data-tier="label">Class load, planned</span><span class="v n" data-tier="value">58</span></div>
+  </div>
+  <span class="lbl ztitle" data-tier="label">Time in each zone, as planned</span>
+  <div class="zones">
+    <div class="z1"><span class="bar"><span class="n" data-tier="minor">1</span><span class="tm" data-tier="minor">6:00</span></span><span class="t" data-tier="label">Recovery</span></div>
+    <div class="z2"><span class="bar"><span class="n" data-tier="minor">2</span><span class="tm" data-tier="minor">11:30</span></span><span class="t" data-tier="label">Endurance</span></div>
+    <div class="z3"><span class="bar"><span class="n" data-tier="minor">3</span><span class="tm" data-tier="minor">8:00</span></span><span class="t" data-tier="label">Tempo</span></div>
+    <div class="z4"><span class="bar"><span class="n" data-tier="minor">4</span><span class="tm" data-tier="minor">9:00</span></span><span class="t" data-tier="label">Threshold</span></div>
+    <div class="z5"><span class="bar"><span class="n" data-tier="minor">5</span><span class="tm" data-tier="minor">6:00</span></span><span class="t" data-tier="label">VO2 max</span></div>
+    <div class="z6"><span class="bar"><span class="n" data-tier="minor">6</span><span class="tm" data-tier="minor">1:30</span></span><span class="t" data-tier="label">Anaerobic</span></div>
+  </div>
+</section>
+
+<p class="cue intro-cue" data-tier="text">Thank you for riding. Stretch before you go.</p>
+
+<section class="score">
+  <div class="track iv">
+    <div class="block z1" style="left:-25.00vw;width:50.00vw"></div>
+  </div>
+  <div class="track songs">
+    <div class="clip" style="left:-25.00vw;width:50.00vw;--phrase:2.778vw"></div>
+  </div>
+  <div class="end" style="left:25.00vw"><span data-tier="label">End</span></div>
+  <div class="past"></div>
+  <div class="now"></div>
+</section>
+</body>
+</html>

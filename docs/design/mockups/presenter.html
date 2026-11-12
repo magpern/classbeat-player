@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Presenter window: room preview, link and controls</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* The instructor's own screen, read at arm's length. Pixel sizes, not shares of height. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--stage); color: var(--light-1); font-family: var(--face-text);
+    font-variant-numeric: tabular-nums; width: 1280px; height: 800px; overflow: hidden;
+    display: grid; grid-template-columns: 768px 1fr; gap: 32px; padding: 24px 32px;
+  }
+  .lbl { font-size: 15px; color: var(--light-3); line-height: 1.2; }
+  .n { font-family: var(--face-number); font-weight: 800; }
+  h2 { font-size: 15px; font-weight: 400; color: var(--light-3); margin-bottom: 8px; }
+  .preview { width: 768px; height: 432px; overflow: hidden; outline: 1px solid var(--stage-line); }
+  .preview iframe { width: 1920px; height: 1080px; border: 0; transform: scale(0.4); transform-origin: 0 0; }
+  .cue { font-size: 28px; font-weight: 700; line-height: 1.2; margin-top: 20px; max-width: 30em; }
+  .list { margin-top: 20px; display: grid; grid-template-columns: auto 1fr auto auto auto; column-gap: 20px; row-gap: 8px; align-items: baseline; }
+  .list .chip { font-family: var(--face-number); font-weight: 800; font-size: 26px; background: var(--zone); color: var(--ink); padding: 2px 8px 0; line-height: 1; }
+  .list .v { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1; }
+  .list .dim { color: var(--light-2); }
+  .side { display: flex; flex-direction: column; gap: 22px; }
+  .state { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .state::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--light-1); }
+  .detail { font-size: 17px; color: var(--light-2); margin-top: 4px; line-height: 1.35; }
+  .notice { background: var(--light-1); color: var(--ink); padding: 14px 16px; display: flex; align-items: center; gap: 16px; border-radius: 6px; }
+  .notice p { font-size: 18px; font-weight: 700; line-height: 1.25; flex: 1; }
+  .notice p span { display: block; font-weight: 400; font-size: 15px; }
+  button {
+    font: inherit; font-size: 17px; font-weight: 700; color: var(--light-1); background: var(--stage-raised);
+    border: 1px solid var(--stage-line); border-radius: 6px; padding: 10px 14px; cursor: pointer;
+  }
+  button:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }
+  .notice button { background: var(--ink); color: var(--light-1); border-color: var(--ink); }
+  .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .controls .main { grid-column: span 3; font-size: 20px; padding: 14px; background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
+  .controls .wide { grid-column: span 3; }
+  .kbd { font-size: 14px; color: var(--light-2); font-weight: 400; margin-left: 6px; }
+  .main .kbd { color: var(--stage-line); }
+  .song .v { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1.05; }
+</style>
+</head>
+<body>
+<!-- Presenter window at 1280x800: the room preview (the room screen drawn at 768x432),
+     the cue, the next intervals, the music link with a resync notice, and the controls. -->
+<main>
+  <h2 data-tier="label">Room screen</h2>
+  <div class="preview"><iframe src="room-running.html" title="Room screen preview" tabindex="-1"></iframe></div>
+  <p class="cue" data-tier="minor">Find the beat and hold it. Breathe out on every second bar.</p>
+  <div class="list">
+    <span class="chip z2" data-tier="minor">2</span><span class="v" data-tier="minor">Endurance</span><span class="v" data-tier="minor">0:45</span><span class="v dim" data-tier="minor">85–95 rpm</span><span class="v dim" data-tier="minor">Seated</span>
+    <span class="chip z5" data-tier="minor">5</span><span class="v" data-tier="minor">VO2 max</span><span class="v" data-tier="minor">1:30</span><span class="v dim" data-tier="minor">100–110 rpm</span><span class="v dim" data-tier="minor">Standing</span>
+    <span class="chip z3" data-tier="minor">3</span><span class="v" data-tier="minor">Tempo</span><span class="v" data-tier="minor">1:30</span><span class="v dim" data-tier="minor">On the beat</span><span class="v dim" data-tier="minor">Seated</span>
+  </div>
+</main>
+<aside class="side">
+  <section>
+    <h2 data-tier="label">Music</h2>
+    <p class="state" data-tier="minor">Following Spotify</p>
+    <p class="detail" data-tier="minor">Neon Avenue, 2:51 of 3:37. Crossfade planned 9 s, measured 6 s.</p>
+  </section>
+  <div class="notice" role="status">
+    <p data-tier="minor">Resynced, 30 s back<span>The music was paused while the link was lost.</span></p>
+    <button data-tier="minor">Undo</button>
+  </div>
+  <section class="song">
+    <h2 data-tier="label">Next song in 1:10</h2>
+    <p class="v" data-tier="minor">Pulse Theory</p>
+    <p class="detail" data-tier="minor">Aurora Lane, 132 bpm, drop after 45 s</p>
+  </section>
+  <section class="controls">
+    <button class="main" data-tier="minor">Pause <span class="kbd">Space</span></button>
+    <button data-tier="minor">−1 s <span class="kbd">←</span></button>
+    <button data-tier="minor">+1 s <span class="kbd">→</span></button>
+    <button data-tier="minor">Next song</button>
+    <button class="wide" data-tier="minor">Use the manual clock</button>
+  </section>
+</aside>
+</body>
+</html>

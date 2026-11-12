@@ -1,0 +1,186 @@
+/* The plain 2D room screen (docs/design/room-2d.md). Reference mock-up only. */
+
+*,
+*::before,
+*::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--stage);
+  color: var(--light-1);
+  font-family: var(--face-text);
+  font-size: var(--t-label); /* so every line box scales with the screen, not with 16px */
+  line-height: 1.1;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.n { font-family: var(--face-number); font-weight: 800; letter-spacing: 0; }
+.lbl { font-family: var(--face-text); font-size: var(--t-label); color: var(--light-3); font-weight: 400; line-height: 1.1; }
+
+/* ---------- The gel: the one lit thing on the stage ---------- */
+.gel {
+  position: absolute; left: 0; top: 0; width: 27vw; height: 76vh;
+  background: var(--zone);
+  color: var(--ink);
+  box-shadow: 0 0 16vh 1vh color-mix(in srgb, var(--zone) 30%, transparent);
+  padding: var(--safe-y) 2vw 3vh var(--safe-x);
+  display: flex; flex-direction: column;
+  transition: background-color var(--m-change), color var(--m-change);
+}
+.gel .lbl { color: var(--ink); font-weight: 700; }
+.gel-num { font-size: var(--t-gel); line-height: 0.78; margin-top: 2vh; margin-left: -0.6vw; }
+.gel-name { font-size: var(--t-value); line-height: 0.95; margin-top: auto; font-weight: 800; }
+.gel-targets span { white-space: nowrap; }
+.gel-targets { display: flex; flex-wrap: wrap; column-gap: 2.4vw; margin-top: 1.6vh; font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1.05; }
+
+/* Lights down: paused, or not started. The zone stays readable as a coloured glyph. */
+.gel.down {
+  background: color-mix(in srgb, var(--zone) 6%, var(--stage));
+  color: var(--zone);
+  box-shadow: inset -0.5vh 0 0 var(--zone);
+}
+.gel.down .lbl { color: var(--zone); }
+
+/* No zone: the class has ended. White, never a hue. */
+.gel.blank { background: var(--light-1); --zone: var(--light-1); box-shadow: 0 0 16vh 1vh rgb(246 244 239 / 0.18); }
+
+/* ---------- Right side ---------- */
+.rail {
+  position: absolute; left: 31vw; right: var(--safe-x); top: var(--safe-y);
+  display: flex; align-items: baseline; gap: 1vw;
+}
+.rail .val { font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; }
+.rail .val + .lbl { margin-right: 2.4vw; }
+.rail > * { white-space: nowrap; }
+.rail .seg { margin-left: auto; color: var(--light-2); }
+.rail:has(.alert) .seg { visibility: hidden; }
+
+.link {
+  font-size: var(--t-label); line-height: 1.1; color: var(--light-3);
+  display: inline-flex; align-items: center; gap: 0.8vw; white-space: nowrap;
+}
+.link::before { content: ""; width: 1.4vh; height: 1.4vh; border-radius: 50%; background: var(--light-3); }
+/* Anything but "following": a white plate with black text. Clear without a hue. */
+.link.alert {
+  color: var(--ink); background: var(--light-1);
+  padding: 0.7vh 1.2vw; border-radius: 0.6vh; font-weight: 700;
+}
+.link.alert::before { background: var(--ink); border-radius: 0; width: 1.2vh; height: 1.2vh; }
+
+.clock { position: absolute; left: 31vw; top: 11vh; }
+.clock .lbl { display: flex; gap: 1vw; align-items: center; }
+.count { font-size: var(--t-hero); line-height: 0.82; margin-top: 1.2vh; margin-left: -0.4vw; }
+.bars { font-size: var(--t-minor); color: var(--light-2); margin-top: 1.4vh; line-height: 1.1; }
+.bars .n { font-weight: 600; color: var(--light-1); }
+
+.pill { font-size: var(--t-label); font-weight: 700; color: var(--ink); background: var(--light-1); padding: 0.4vh 1vw; border-radius: 0.6vh; }
+
+.metrics {
+  position: absolute; left: 73vw; right: var(--safe-x); top: 12.5vh;
+  display: flex; flex-direction: column; gap: 2.6vh;
+}
+.metric .lbl { display: block; }
+.metric .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
+.metric .v small { font-size: var(--t-minor); font-weight: 600; color: var(--light-2); margin-left: 0.6vw; }
+
+.cue {
+  position: absolute; left: 31vw; right: var(--safe-x); top: 54.5vh;
+  font-size: var(--t-text); font-weight: 700; line-height: 1.12;
+  max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); overflow: hidden;
+  text-wrap: balance;
+}
+.cue.long { font-size: var(--t-text-min); }
+
+.next {
+  position: absolute; left: 31vw; right: var(--safe-x); top: 73.5vh;
+  display: flex; align-items: center; gap: 1.6vw; white-space: nowrap;
+}
+.next .chip {
+  font-family: var(--face-number); font-weight: 800; font-size: var(--t-minor);
+  background: var(--zone); color: var(--ink); line-height: 1; padding: 0.3vh 0.8vw 0.1vh; border-radius: 0.4vh;
+}
+.next .v { font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; }
+.next .v.dim { color: var(--light-2); }
+
+/* ---------- The score: the class as a strip moving under a fixed "now" ---------- */
+.score { position: absolute; left: 0; right: 0; top: 79.5vh; height: 15.5vh; }
+.track { position: absolute; left: 0; right: 0; }
+.track.iv { top: 0; height: 6.6vh; }
+.track.songs { top: 7.5vh; height: 8vh; }
+.block {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--zone); color: var(--ink);
+  border-right: 0.3vh solid var(--stage);
+  padding: 0 0.8vw; display: flex; align-items: center; gap: 0.8vw; overflow: hidden; white-space: nowrap;
+  container-type: inline-size;
+}
+/* A block too narrow for its name shows the number alone (the product measures each name). */
+@container (max-width: 18vh) { .block .t { display: none; } }
+.block .n { font-size: 5vh; line-height: 1; }
+.block .t { font-size: var(--t-label); font-weight: 700; }
+.clip {
+  position: absolute; top: 0; bottom: 0;
+  background-color: var(--stage-raised);
+  /* phrase ticks: every 4 bars */
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(var(--phrase) - 2px), var(--stage-line) calc(var(--phrase) - 2px) var(--phrase));
+  background-size: 100% 1.2vh; background-repeat: no-repeat; background-position: 0 100%;
+  border-right: 0.3vh solid var(--stage);
+  padding: 0.9vh 0.8vw; display: flex; align-items: flex-start; gap: 1vw; overflow: hidden; white-space: nowrap;
+  font-size: var(--t-label); line-height: 1.1;
+}
+.clip b { font-weight: 700; }
+.clip .a { color: var(--light-2); }
+.clip .bpm { margin-left: 1vw; color: var(--light-2); }
+.moment { position: absolute; top: 4.2vh; bottom: 0; width: 0.35vw; background: var(--light-1); }
+.moment span { position: absolute; left: 0.8vw; bottom: 0.4vh; font-size: var(--t-label); font-weight: 700; color: var(--light-1); white-space: nowrap; }
+.past { position: absolute; left: 0; top: 0; bottom: 0; width: 25vw; background: rgb(0 0 0 / 0.62); }
+.now { position: absolute; left: 25vw; top: 0; bottom: 0; width: 0.5vh; margin-left: -0.25vh; background: var(--light-1); }
+.now::before { content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%); border: 1.2vh solid transparent; border-top-color: var(--light-1); border-bottom: 0; }
+.unsure .now { background: repeating-linear-gradient(180deg, var(--light-1) 0 1.4vh, transparent 1.4vh 2.4vh); }
+.end { position: absolute; top: 0; bottom: 0; width: 0.5vh; background: var(--light-1); }
+.end span { position: absolute; left: 1vw; top: 2.2vh; font-size: var(--t-label); font-weight: 700; color: var(--light-1); }
+
+/* ---------- Before the start and after the end ---------- */
+.intro { position: absolute; left: 31vw; right: var(--safe-x); top: 11vh; }
+.intro h1 { font-family: var(--face-number); font-weight: 800; font-size: 11vh; line-height: 0.9; }
+.facts { display: flex; gap: 3.4vw; margin-top: 2.6vh; }
+.facts .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
+.ztitle { display: block; margin-top: 3.4vh; }
+.zones { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6vw; margin-top: 1.2vh; }
+.zones div { display: flex; flex-direction: column; gap: 0.8vh; min-width: 0; }
+.zones .bar { display: flex; justify-content: space-between; align-items: baseline; background: var(--zone); color: var(--ink); padding: 0.6vh 0.6vw 0.3vh; }
+.zones .n { font-size: var(--t-minor); line-height: 1; }
+.zones .t { font-size: var(--t-label); font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.zones .tm { font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; }
+.cue.intro-cue { top: 61.5vh; }
+
+/* Manual clock: chosen, not a fault. A square instead of a dot, no plate. */
+.link.manual { color: var(--light-2); }
+.link.manual::before { border-radius: 0; background: var(--light-2); }
+
+/* ---------- 4:3 and other narrow screens ---------- */
+@media (max-aspect-ratio: 3/2) {
+  /* The gel is shorter; the cue gets the full width under it. */
+  .gel { width: 30vw; height: 54vh; padding-bottom: 2.4vh; }
+  .gel-num { font-size: 31vh; }
+  .rail, .clock, .intro { left: 34vw; }
+  .rail .seg { display: none; }
+  .clock { top: 11vh; }
+  .count { font-size: 28vh; }
+  .metrics { left: 34vw; top: 46.5vh; flex-direction: row; gap: 3vw; }
+  .metric .v { font-size: 7.4vh; }
+  .cue { left: var(--safe-x); top: 59.5vh; }
+  .cue.long { font-size: var(--t-text-min); }
+  .next { left: var(--safe-x); top: 75.8vh; }
+  .score { top: 81.6vh; height: 13.4vh; }
+  .track.iv { height: 5vh; }
+  .block .n { font-size: 4.6vh; }
+  .track.songs { top: 5.6vh; height: 7.8vh; }
+  .clip { padding-top: 0.6vh; }
+  .intro h1 { font-size: 9vh; }
+  .facts { gap: 2.4vw; }
+  .zones { grid-template-columns: repeat(3, 1fr); row-gap: 1.6vh; }
+  .cue.intro-cue { top: 65vh; font-size: var(--t-text-min); }
+}
