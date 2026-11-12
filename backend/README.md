@@ -9,7 +9,7 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
 | `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in and site sessions (ADR 0002, sections 4 and 5). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
 | `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, the client address and what is kept of it, the request checks and response headers, sign-in |
-| `src/player_backend/mail.py`, `no_mailer.py` | The mail interface. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
+| `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the data-access modules, the migration runner and the operator's commands. The only place that may call a handle |
 | `src/player_backend/db/executor/` | The executor: the only holder of the database driver. Makes every connection and the pool, hands out handles, owns `Query` and its registry |
@@ -47,15 +47,20 @@ fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and
 | `POST sign-in/link` `{email}` | Always `200 {"status":"accepted"}`, whether or not the address can sign in. Sets `__Host-cbp_login` when the browser has none. `429` only for the requester's own limit (10 an hour per address) |
 | `POST sign-in/complete` `{token}` | Uses a link: once, within 15 minutes, in the browser that asked. Sets `__Host-cbp_session`. Every refusal is `401 sign_in_refused` |
 | `GET sessions` | The account's live sessions |
-| `DELETE sessions/{id}`, `POST sign-out` | End one session, or this one |
+| `DELETE sessions/{id}`, `POST sign-out` | End one session, or this one. Signing out with no live session is `204` too, and clears the cookie |
 | `POST sessions/end-all` | Sign out everywhere. Needs a sign-in within the last 10 minutes (`403 recent_sign_in_required`) |
 
 - Migration `0004` gives `rate_limit_hit`, `auth_enter_session`, `auth_request_login` and
   `auth_complete_login` their bodies, with ADR 0002's defaults written in the SQL, as in
-  `auth_purge_expired`. The other functions still fail closed.
+  `auth_purge_expired`. The other functions still fail closed. Migration `0005` replaces the
+  bodies of the last two: the same lookups and writes for every address, and an advisory lock
+  each, so that two link requests from one browser leave one usable link and two sign-ins at
+  once leave at most 20 sessions.
 - A signed-in request is one transaction: `site_session` (`site/deps.py`) calls
   `auth_enter_session` as its first statement and yields an `AccountContext` with the handle.
-  It is committed after the route's function returns and before the response is sent.
+  It is committed after the route's function returns and before the response is sent. When
+  the route refuses (403, 404), what the route wrote is rolled back and the session's "last
+  used" is kept; any other error rolls back everything.
 - Every state change needs `Origin` equal to `PLAYER_SITE_ORIGIN` and, when present,
   `Sec-Fetch-Site: same-origin`. Every response has the page headers of section 5, and the
   site's API is `Cache-Control: no-store`.

@@ -3,7 +3,8 @@
 `site_session` is the one dependency of the session credential: it opens the request's
 transaction, calls `auth_enter_session` as its first statement and yields the `AccountContext`.
 The transaction is committed when the route's function has returned, before the response is
-sent, and rolled back when the route raises.
+sent. A route that refuses the request (an `ApiError`: a 403 or a 404) has its own writes rolled
+back and the session's "last used" kept: the session was used. Any other error rolls back all.
 """
 
 from __future__ import annotations
@@ -54,15 +55,31 @@ def caller(request: Request) -> Caller:
     )
 
 
+class NotSignedIn(ApiError):
+    """The request has no live session: no cookie, a malformed one, or one that has ended."""
+
+    def __init__(self) -> None:
+        super().__init__(401, "not_signed_in")
+
+
 def site_session(
     request: Request, token: Annotated[str | None, Depends(session_cookie_token)]
 ) -> Generator[AccountContext]:
     if token is None:
-        raise ApiError(401, "not_signed_in")
+        raise NotSignedIn
+    refusal: ApiError | None = None
     with site_sessions.entered(site_state(request).pool, token_hash(token)) as context:
         if context is None:
-            raise ApiError(401, "not_signed_in")
-        yield context
+            raise NotSignedIn
+        try:
+            # What the route wrote is undone when it refuses, and nothing else is.
+            with site_sessions.undone_on_error(context):
+                yield context
+        except ApiError as error:
+            refusal = error
+    # Raised again once the transaction, with the session's "last used", has been committed.
+    if refusal is not None:
+        raise refusal
 
 
 def recent_sign_in(

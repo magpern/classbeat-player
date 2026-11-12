@@ -8,6 +8,7 @@ M0001_TABLES: Final[Query] = Query.from_file("0001_tables.sql")
 M0002_POLICIES_AND_GRANTS: Final[Query] = Query.from_file("0002_policies_and_grants.sql")
 M0003_AUTH_FUNCTIONS: Final[Query] = Query.from_file("0003_auth_functions.sql")
 M0004_LOGIN_AND_SESSIONS: Final[Query] = Query.from_file("0004_login_and_sessions.sql")
+M0005_SIGN_IN_HARDENING: Final[Query] = Query.from_file("0005_sign_in_hardening.sql")
 
 # The ledger lives in its own schema, with row-level security forced like every table, and one
 # policy for player_owner alone. No other role has any right on it.

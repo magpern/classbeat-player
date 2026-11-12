@@ -65,6 +65,16 @@ def entered(pool: Pool, token_hash: bytes) -> Generator[AccountContext | None]:
         )
 
 
+@contextmanager
+def undone_on_error(ctx: AccountContext) -> Generator[None]:
+    """A savepoint in the request's transaction: what the block wrote is undone when it raises.
+
+    The session's "last used", written before it by `auth_enter_session`, is not.
+    """
+    with ctx.db.transaction():
+        yield
+
+
 def _event(ctx: AccountContext, event: str, client: ClientInfo, detail: dict[str, object]) -> None:
     ctx.db.rows(
         q.ADD_SESSION_EVENT,
