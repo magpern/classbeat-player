@@ -123,7 +123,7 @@ export function command(s: PlayerState, cmd: ClockCommand, now: number, canSend 
   const viaLink = applyToLink(l, cmd, now);
   if (viaLink) return { ...s, loaded: { ...l, link: viaLink.link, clock: viaLink.clock } };
   const route = routeOf(l, cmd, canSend);
-  if (route?.kind === "transport") return s;
+  if (route?.kind === "transport" && route.alsoClock !== true) return s;
   const link = route?.kind === "manual" ? handOver(l.link, l.clock, now).link : l.link;
   return { ...s, loaded: { ...l, link, clock: applyToClock(l.clock, l.plan, cmd, now) } };
 }
