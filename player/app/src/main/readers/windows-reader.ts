@@ -7,8 +7,10 @@
 //
 // The helper runs only while the instructor is following the music (`setActive`). If it hangs,
 // dies or writes garbage, `latest` gives the old reading (which ages, rule 8) or null, and the
-// supervisor replaces the helper after a growing wait. A helper that never comes up, start after
-// start, cannot work on this computer: the reader then stops for good (`unavailable`).
+// supervisor replaces the helper after a growing wait. A helper that never runs the script,
+// start after start, cannot work on this computer: the reader then stops for good
+// (`unavailable`). A helper that runs the script and whose polls fail is not that: it writes the
+// script's own failed line, is replaced as before, and following comes back when the fault clears.
 import { createReaderLifecycle } from "../../core/link/reader-lifecycle.ts";
 import type { Answer } from "../../core/link/reader-lifecycle.ts";
 import type { MusicReader } from "../../core/link/reader.ts";
@@ -20,7 +22,7 @@ import type { HelperLine } from "../../core/link/windows-parse.ts";
 import { windowsHelperDeps } from "./windows-spawn.ts";
 
 /** Fixed limits of the helper (the poll interval itself is fixed in the script: 250 ms). */
-export const WINDOWS_HELPER_LIMITS: Omit<SupervisorOptions, "onLine" | "onDown"> = {
+export const WINDOWS_HELPER_LIMITS: Omit<SupervisorOptions, "onLine" | "onDown" | "runs"> = {
   // Starting PowerShell and loading the system types can take seconds on a cold studio computer.
   startTimeoutMs: 15_000,
   silenceTimeoutMs: 5000,
@@ -29,6 +31,9 @@ export const WINDOWS_HELPER_LIMITS: Omit<SupervisorOptions, "onLine" | "onDown">
   healthyMs: 30_000,
   minGapMs: 1000,
 };
+
+/** What the script writes when a poll failed (windows-script.ts). */
+export const HELPER_FAILED_LINE = '{"error":true}';
 
 export interface WindowsMusic extends MusicReader, MusicTransport {
   readonly kind: "windows";
@@ -88,9 +93,11 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
       else life.answer(answerOf(parsed));
       return true;
     },
-    onDown(spoke) {
+    // The script's own line for a poll that failed: no reading, but the script is running.
+    runs: (line) => line.trim() === HELPER_FAILED_LINE,
+    onDown(ran) {
       forgetHelper();
-      life.lost(spoke);
+      life.lost(ran);
     },
   });
 

@@ -18,8 +18,8 @@ const READERS = join(SRC, "main", "readers");
 const source = (name: string): string => readFileSync(join(READERS, name), "utf8");
 
 test("the helper script is exactly the pinned one", () => {
-  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "c66ae793415f958bcae790d867f3daafa655095eeb325076cb5adc835de97767");
-  assert.equal(SCRIPT.split("\n").length, 70);
+  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "ad5e31e1be6ba3694807d92f7caaa79bcced9f3287af93ae9e5ff7590b7a0d35");
+  assert.equal(SCRIPT.split("\n").length, 75);
 });
 
 test("the script is a constant: nothing is interpolated into it", () => {
@@ -31,7 +31,7 @@ test("the script is a constant: nothing is interpolated into it", () => {
 
 test("the script uses only these commands", () => {
   const cmdlets = new Set(SCRIPT.match(/\b[A-Za-z]+-[A-Za-z]+\b/g));
-  assert.deepEqual([...cmdlets].sort(), ["Add-Type", "ConvertTo-Json", "New-Object", "Out-Null", "Select-Object", "Start-Sleep", "Where-Object"]);
+  assert.deepEqual([...cmdlets].sort(), ["Add-Type", "ConvertTo-Json", "New-Object", "Out-Null", "Start-Sleep", "Where-Object"]);
   // The only types it names: the console (for its two standard streams), a reader and a writer
   // for them, the system's own async bridge, a date, and the two media session types.
   const types = new Set([...SCRIPT.matchAll(/\[([A-Za-z][\w.]*)[\],]/g)].map((m) => m[1]));
@@ -58,7 +58,20 @@ test("the script follows and controls the Spotify session only, by its two exact
   assert.match(SCRIPT, /\n\$spotifyIds = @\('Spotify\.exe', 'SpotifyAB\.SpotifyMusic_zpdnekdrzrea0!Spotify'\)\n/);
   assert.equal(SCRIPT.match(/\$spotifyIds\b/g)?.length, 3, "set once, used to pick the session and to tell another app");
   assert.doesNotMatch(SCRIPT, /-like|-match|\*/, "no pattern: an id is one of the two or it is not");
-  assert.deepEqual(SCRIPT.match(/\$session = .*/g), ["$session = $sessions | Where-Object { $spotifyIds -contains $_.SourceAppUserModelId } | Select-Object -First 1"]);
+  // Each session is asked for its id inside its own try: one that cannot be asked is passed
+  // over, and never makes the poll a failed one (issue #51, item 3).
+  const pick = [
+    "    $sessions = @($manager.GetSessions())",
+    "    $session = $null",
+    "    foreach ($candidate in $sessions) {",
+    "      try {",
+    "        if ($spotifyIds -contains $candidate.SourceAppUserModelId) { $session = $candidate; break }",
+    "      } catch { }",
+    "    }",
+  ].join("\n");
+  assert.ok(SCRIPT.includes(`\n${pick}\n`));
+  assert.deepEqual(SCRIPT.match(/\$session = .*/g), ["$session = $null", "$session = $candidate; break }"]);
+  assert.deepEqual(SCRIPT.match(/Where-Object/g)?.length, 1, "only where the script finds the system's own async bridge");
   assert.doesNotMatch(SCRIPT, /GetCurrentSession/, "never whichever session is current");
   const controlled = [...SCRIPT.matchAll(/(\$\w+)\.Try(?:Play|Pause|SkipNext|GetMediaProperties)Async/g)].map((m) => m[1]);
   assert.deepEqual(controlled, ["$session", "$session", "$session", "$session"], "commands and properties: the Spotify session only");
@@ -82,7 +95,7 @@ test("another app playing is reported by its id alone, and only while Spotify is
     "    } elseif ($session) {",
   ].join("\n");
   assert.ok(SCRIPT.includes(`\n${probe}\n`));
-  assert.deepEqual([...SCRIPT.matchAll(/\$candidate\.(\w+)/g)].map((m) => m[1]), ["SourceAppUserModelId", "GetPlaybackInfo"], "its id and whether it plays: nothing else is read from it, and nothing is sent to it");
+  assert.deepEqual([...SCRIPT.matchAll(/\$candidate\.(\w+)/g)].map((m) => m[1]), ["SourceAppUserModelId", "SourceAppUserModelId", "GetPlaybackInfo"], "its id and whether it plays: nothing else is read from a session that is not Spotify's, and nothing is sent to it");
   assert.doesNotMatch(SCRIPT, /\$other\./, "what is kept of it is its id, a text");
   assert.deepEqual(SCRIPT.match(/\$other\b[^\n]*/g), ["$other = $null", "$other = $id; break }", "$other) {", "$other; status = 'Playing'; spotify = $status; commands = $read } | ConvertTo-Json -Compress"]);
   assert.deepEqual(SCRIPT.match(/\$id\b/g)?.length, 4, "the id is read once and used for nothing but the comparison and the line");

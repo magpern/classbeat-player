@@ -6,8 +6,8 @@
 // session only. A failed poll writes the fixed line {"error":true}; no session writes
 // {"app":null}. While Spotify is not playing and another app is, the line is that app's id,
 // "Playing" and Spotify's own status, and nothing more (not its title): the link then shows Off
-// the list (ADR 0001). A session of another app that cannot be asked is passed over: it never
-// turns the poll into a failed one. Every other line than the failed one also carries the number
+// the list (ADR 0001). A session that cannot be asked for its id, or another app's that cannot
+// be asked whether it plays, is passed over: it never turns the poll into a failed one. Every other line than the failed one also carries the number
 // of command lines the script has read from its input so far (`commands`), so the reader knows
 // when a command it wrote has been taken. It asks for no token, opens no connection and never
 // starts the music app; it only looks at sessions that already exist (ADR 0001, option A).
@@ -44,7 +44,12 @@ while ($true) {
   $line = '{"error":true}'
   try {
     $sessions = @($manager.GetSessions())
-    $session = $sessions | Where-Object { $spotifyIds -contains $_.SourceAppUserModelId } | Select-Object -First 1
+    $session = $null
+    foreach ($candidate in $sessions) {
+      try {
+        if ($spotifyIds -contains $candidate.SourceAppUserModelId) { $session = $candidate; break }
+      } catch { }
+    }
     $status = ''
     if ($session) {
       foreach ($command in $commands) {

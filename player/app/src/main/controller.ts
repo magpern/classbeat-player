@@ -38,10 +38,10 @@ export function createController(now: () => number = () => performance.now(), re
 
   // Every snapshot follows the music first, so a snapshot taken between ticks never shows a clock
   // that ran past a window's end.
-  const usable = (): boolean => reader.kind !== "manual" && reader.unavailable?.() !== true;
   const snapshot = (): Snapshot => {
     const t = now();
-    if (!usable()) state = withoutReader(state);
+    // Also right after a class is opened: every snapshot asks, so the reason is always shown.
+    if (reader.unavailable?.() === true) state = withoutReader(state);
     state = advance(state, t, reader.latest(t));
     return snapshotOf(state, t);
   };
@@ -55,7 +55,7 @@ export function createController(now: () => number = () => performance.now(), re
   return {
     snapshot,
     open(fileName, text) {
-      state = openText(state, fileName, text, classSchema, now(), usable(), !onDemand);
+      state = openText(state, fileName, text, classSchema, now(), reader.kind !== "manual", !onDemand);
       sync();
       push();
       return snapshot();

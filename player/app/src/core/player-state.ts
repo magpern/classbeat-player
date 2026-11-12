@@ -29,6 +29,8 @@ export interface Loaded {
   readonly link: LinkModel;
   /** False when no music reader exists: the clock is manual only. */
   readonly following: boolean;
+  /** The reader said following cannot work on this computer; shown as the reason. */
+  readonly unavailable: boolean;
 }
 
 export interface PlayerState {
@@ -51,7 +53,7 @@ export function openText(s: PlayerState, fileName: string, text: string, classSc
   const plan = planFrom(r.doc);
   const linkPlan = linkPlanFrom(r.doc);
   const link = initialLink(following && followAtOnce && !linkPlan.manualOnly);
-  const loaded: Loaded = { fileName, doc: r.doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following };
+  const loaded: Loaded = { fileName, doc: r.doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following, unavailable: false };
   return { loaded, error: null, loadId: s.loadId + 1 };
 }
 
@@ -136,13 +138,14 @@ export function advance(s: PlayerState, now: number, obs: Observation | null = n
 
 /**
  * The reader cannot work on this computer: the open class goes to the manual clock, the clock
- * keeps going as it is, and following is no longer offered (the link is not `available`).
+ * keeps going as it is, and following is no longer offered (the link is not `available`, and
+ * says it is `unavailable`, so the screen can give the reason).
  */
 export function withoutReader(s: PlayerState): PlayerState {
   const l = s.loaded;
   if (l === null || !l.following) return s;
   const manual = goManual(l.link, l.clock);
-  return { ...s, loaded: { ...l, following: false, link: manual.link, clock: manual.clock } };
+  return { ...s, loaded: { ...l, following: false, unavailable: true, link: manual.link, clock: manual.clock } };
 }
 
 /** True while the instructor follows the music: only then does the shell ask for readings. */
@@ -158,7 +161,7 @@ export function snapshotOf(s: PlayerState, now: number): Snapshot {
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view: l ? viewAt(l.clock, l.plan, now) : null,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, l.following && !l.linkPlan.manualOnly) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, l.following && !l.linkPlan.manualOnly, l.unavailable && !l.linkPlan.manualOnly) : null,
     error: s.error,
   };
 }

@@ -38,10 +38,16 @@ export interface SupervisorOptions {
   /** One complete line. Returns false when it is not a line the helper is meant to write. */
   onLine(line: string): boolean;
   /**
-   * The helper was dropped: whatever it last said is no longer backed by a running helper.
-   * `spoke` is false when it never wrote a good line: it failed to start.
+   * A line that is not a good one, but that only a helper doing its work could have written
+   * (its own "this poll failed" line). It stays a bad line; it only shows the helper started.
    */
-  onDown(spoke: boolean): void;
+  runs?(line: string): boolean;
+  /**
+   * The helper was dropped: whatever it last said is no longer backed by a running helper.
+   * `ran` is false when it never showed that it does its work (no good line, and no line that
+   * `runs` accepts): it failed to start.
+   */
+  onDown(ran: boolean): void;
 }
 
 export interface Supervisor {
@@ -71,8 +77,8 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
   let failures = 0;
   let notBefore = Number.NEGATIVE_INFINITY;
   let startedAt = 0;
-  /** The running helper has written a good line. */
-  let spoke = false;
+  /** The running helper has shown that it does its work. */
+  let ran = false;
   let watchdog: unknown = null;
   let restart: unknown = null;
 
@@ -101,7 +107,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
 
   function fail(): void {
     drop();
-    opts.onDown(spoke);
+    opts.onDown(ran);
     failures += 1;
     notBefore = Math.max(notBefore, deps.now() + backoffMs(failures));
     schedule();
@@ -123,7 +129,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
   function launch(): void {
     startedAt = deps.now();
     notBefore = startedAt + opts.minGapMs;
-    spoke = false;
+    ran = false;
     let c: HelperChild;
     try {
       c = deps.startHelper();
@@ -141,6 +147,14 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
     watch(opts.startTimeoutMs);
   }
 
+  const proves = (line: string): boolean => {
+    try {
+      return opts.runs?.(line) === true;
+    } catch {
+      return false;
+    }
+  };
+
   /** False when the line made the supervisor drop the helper. */
   function take(line: string): boolean {
     if (line.trim() === "") return true;
@@ -151,12 +165,13 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
       good = false;
     }
     if (good) {
-      spoke = true;
+      ran = true;
       garbage = 0;
       if (deps.now() - startedAt >= opts.healthyMs) failures = 0;
       watch(opts.silenceTimeoutMs);
       return true;
     }
+    if (!ran) ran = proves(line);
     garbage += 1;
     if (garbage < opts.maxGarbageLines) return true;
     fail();

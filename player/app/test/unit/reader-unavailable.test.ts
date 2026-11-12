@@ -1,10 +1,12 @@
 // A helper that can never run (issue #51, item 7; #45 N2, #50 N4): osascript or busctl is not
 // there, PowerShell is missing or its script is refused. After six failures to start in a row
 // the reader stops for good and says following is unavailable; the shell then goes to the manual
-// clock and no longer offers to follow. A helper that starts and then fails (Spotify closed, no
-// session bus, a timeout, garbage) is never counted. Fake helpers: no process is started.
+// clock, no longer offers to follow, and says why on the Music link line. A helper that starts
+// and then fails (Spotify closed, no session bus, a timeout, garbage, the Windows script's own
+// failed line) is never counted. Fake helpers: no process is started.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { START_FAILURES_LIMIT } from "../../src/core/link/reader-lifecycle.ts";
 import { createController } from "../../src/main/controller.ts";
@@ -12,9 +14,10 @@ import { createLinuxMusic } from "../../src/main/linux-reader.ts";
 import { createMacMusic } from "../../src/main/macos-reader.ts";
 import { couldNotStart } from "../../src/main/polled-reader.ts";
 import { backoffMs } from "../../src/main/readers/helper-supervisor.ts";
-import { createWindowsMusic, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
+import { createWindowsMusic, HELPER_FAILED_LINE, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
+import { WINDOWS_HELPER_SCRIPT } from "../../src/main/readers/windows-script.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
-import { converterExamples } from "./fixtures.ts";
+import { converterExamples, REPO } from "./fixtures.ts";
 import { FAILED, NOT_INSTALLED, RIGS, macRig } from "./reader-rigs.ts";
 import { createHarness, noSession, sessionLine } from "./windows-harness.ts";
 
@@ -151,7 +154,10 @@ test("Windows: a helper that ends, or hangs, before its first good line counts a
   for (let i = 1; i <= START_FAILURES_LIMIT; i++) {
     assert.equal(died.h.children.length, i);
     assert.equal(died.r.unavailable(), false);
-    died.h.child.line('{"error":true}');
+    // What it writes is not the script's: an error text, and lines of the wrong shape.
+    died.h.child.line("The term 'Add-Type' is not recognized");
+    died.h.child.line('{"error":false}');
+    died.h.child.line('{"error":true,"commands":0}');
     died.h.child.die();
     died.h.advance(backoffMs(i));
   }
@@ -168,6 +174,64 @@ test("Windows: a helper that ends, or hangs, before its first good line counts a
   assert.equal(hung.r.unavailable(), true);
   assert.equal(hung.h.children.length, START_FAILURES_LIMIT);
   assert.ok(hung.h.children.every((c) => c.killed));
+});
+
+test("Windows: each helper has to show for itself that it runs: one that worked does not vouch for six that never start", () => {
+  const { h, r } = windows();
+  r.setActive(true);
+  h.child.line(sessionLine());
+  h.child.line(HELPER_FAILED_LINE);
+  h.failSpawn = true;
+  h.child.die();
+  // The helper that had run is the first failure of the wait, not a failure to start: six more tries.
+  h.advance(1000 + 2000 + 4000 + 8000 + 16_000 + 30_000 - 1);
+  assert.equal(r.unavailable(), false);
+  h.advance(1);
+  assert.equal(r.unavailable(), true);
+  assert.equal(h.children.length, 1);
+});
+
+// The reviewer's probe on #59 (B1): the script runs, and its polls fail (a call to Spotify's
+// session times out, say). That is an outage, not a helper that can never run.
+test("Windows: good readings, then only the script's failed line: replaced as before, never unavailable, and following comes back", () => {
+  assert.equal(HELPER_FAILED_LINE, '{"error":true}');
+  assert.ok(WINDOWS_HELPER_SCRIPT.includes(`  $line = '${HELPER_FAILED_LINE}'\n`), "the very line the script writes for a failed poll");
+  const { h, r } = windows();
+  r.setActive(true);
+  h.child.line(sessionLine());
+  assert.equal(r.latest(h.now)?.title, "Spike Song A");
+  // An hour of failed polls, four a second.
+  for (let i = 0; i < 4 * 3600; i++) {
+    h.advance(250);
+    if (!h.child.killed) h.child.line(HELPER_FAILED_LINE);
+    assert.equal(r.unavailable(), false, `after ${i} polls`);
+  }
+  assert.ok(h.children.length > 100, "it was replaced again and again, every 30 s at the slowest");
+  assert.equal(r.latest(h.now), null);
+  // The fault clears: the helper running then, or the next one, reads again.
+  while (h.child.killed) h.advance(250);
+  h.child.line(sessionLine({ title: "Back" }));
+  assert.equal(r.latest(h.now)?.title, "Back");
+  assert.equal(r.unavailable(), false);
+});
+
+test("Windows: a helper whose every poll fails from its very first line has started: it is never counted", () => {
+  const { h, r } = windows();
+  r.setActive(true);
+  for (let i = 0; i < 4 * 600; i++) {
+    h.advance(250);
+    if (!h.child.killed) h.child.line(i % 2 === 0 ? HELPER_FAILED_LINE : ` ${HELPER_FAILED_LINE}\r`);
+  }
+  assert.equal(r.unavailable(), false);
+  assert.ok(h.children.length > START_FAILURES_LIMIT);
+  // One failed line is proof enough, even from a helper that then dies or goes quiet.
+  for (let i = 0; i < 20; i++) {
+    while (h.child.killed) h.advance(250);
+    h.child.line(HELPER_FAILED_LINE);
+    if (i % 2 === 0) h.child.die();
+    else h.advance(LIMITS.startTimeoutMs);
+  }
+  assert.equal(r.unavailable(), false);
 });
 
 test("Windows: a helper that has spoken and then dies is replaced as before, however often; one good line begins the count again", () => {
@@ -199,9 +263,11 @@ test("in the shell: following that cannot work goes to the manual clock, and Fol
   assert.equal(c.open("a.json", text).link?.available, true, "offered until it is known not to work");
   c.command({ type: "start" });
   assert.equal(c.command({ type: "follow" }).link?.mode, "following");
+  assert.equal(c.snapshot().link?.unavailable, false);
   for (let i = 1; i < START_FAILURES_LIMIT; i++) r.step();
   const snap = c.snapshot();
   assert.deepEqual([snap.link?.mode, snap.link?.state, snap.link?.available], ["manual", "Manual", false]);
+  assert.equal(snap.link?.unavailable, true, "and the link says why");
   assert.equal(snap.link?.guessing, false);
   assert.equal(snap.link?.announcement, null);
   assert.equal(snap.view?.status, "running", "the class clock goes on as it was");
@@ -216,7 +282,7 @@ test("in the shell: following that cannot work goes to the manual clock, and Fol
   assert.equal(c.command({ type: "pause" }).view?.status, "paused");
   // A class opened later is manual only, as with no reader at all.
   const again = c.open("b.json", text);
-  assert.deepEqual([again.link?.mode, again.link?.available], ["manual", false]);
+  assert.deepEqual([again.link?.mode, again.link?.available, again.link?.unavailable], ["manual", false, true]);
   assert.equal(c.command({ type: "follow" }).link?.mode, "manual");
   assert.equal(r.calls.length, calls);
   c.stop();
@@ -249,7 +315,7 @@ test("in the shell (Windows): six failed starts, then the manual clock; the help
   assert.deepEqual([c.snapshot().link?.mode, c.snapshot().link?.available], ["following", true], "still trying");
   h.advance(1000);
   const snap = c.snapshot();
-  assert.deepEqual([snap.link?.mode, snap.link?.state, snap.link?.available], ["manual", "Manual", false]);
+  assert.deepEqual([snap.link?.mode, snap.link?.state, snap.link?.available, snap.link?.unavailable], ["manual", "Manual", false, true]);
   h.failSpawn = false;
   c.command({ type: "follow" });
   c.open("b.json", text);
@@ -257,4 +323,25 @@ test("in the shell (Windows): six failed starts, then the manual clock; the help
   h.advance(600_000);
   assert.equal(h.children.length, 0);
   c.stop();
+});
+
+test("the reason is shown: the Music link line stays, with the words, and the manual clock is untouched", () => {
+  const src = join(REPO, "player", "app", "src");
+  const html = readFileSync(join(src, "renderer", "presenter.html"), "utf8");
+  // The same line as before, with one more hidden span in it: no new element around it.
+  assert.ok(html.includes('<p>Music link: <output id="link-state"></output><span id="link-unavailable" hidden> (following the music is unavailable on this computer)</span><span id="link-guess" hidden>'));
+  assert.equal(html.match(/unavailable on this computer/g)?.length, 1);
+  const presenter = readFileSync(join(src, "renderer", "presenter.ts"), "utf8");
+  assert.ok(presenter.includes('  hide("link-unavailable", !k.unavailable);\n'));
+  assert.ok(presenter.includes('  hide("link", k === null);\n'), "the line itself is hidden only when no class is open");
+
+  // A reader that works, the manual reader, and a class before Follow never say it.
+  const r = macRig();
+  const c = createController(() => r.clock.t, r.reader, r.reader);
+  assert.equal(c.open("a.json", text).link?.unavailable, false);
+  c.command({ type: "follow" });
+  r.last("read").ok(r.out.playing);
+  assert.equal(c.snapshot().link?.unavailable, false);
+  c.stop();
+  assert.equal(createController(() => 0).open("a.json", text).link?.unavailable, false);
 });
