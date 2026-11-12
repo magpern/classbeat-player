@@ -17,17 +17,17 @@ owner's: running both spikes (owner.md).
 
 Merged: link core (#38), macOS reader (#43), hardening (#46), Windows reader (#45), Linux reader
 (#50), shared reader lifecycle (#59), and the gaps the Verifier found on `main`: Start while
-following (#62, #66), control labels that follow the routes (#63, #69), hardening (#70, #72), the holding status text
+following (#62, #66), Next and Previous say what they do while following (#63, #69), hardening (#70, #72), the holding status text
 (#64, #65). The live checks with a real Spotify account are the owner's (owner.md).
 
 ## PL2: backend and sign-in
 
 Merged: service skeleton, roles and migrations (#32), email link sign-in and site sessions (#54),
 sign-in hardening (#60), ADR 0002 as built (#57, #68 and this update), device pairing (#58, #61),
-pairing hardening (#71, #79). In progress: the source API (#73), pairing in the app (#74).
-Next: the player API (sync since a cursor), the class library, passkeys; the real mailer with an
-enforced timeout, the allowlist command, a purge schedule, `PLAYER_SITE_ORIGIN` and trusted
-proxies in deploy files.
+pairing hardening (#71, #79), pairing in the app (#74, #84; hardening #87, #89), the source API
+(#73, #86), the SMTP mailer and operator commands (#83, #90). In progress: the player API (#92).
+Next: the class library, passkeys; deploy files with the hourly purge, `PLAYER_SITE_ORIGIN` and
+trusted proxies; purge counts (needs a migration).
 
 ## PL4: screens
 
@@ -37,7 +37,7 @@ screen (#77) and the spec follow-ups (#78).
 ## Infra
 
 Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
-(#75, #76).
+(#75, #76); the backend job also runs for changes under `schema/` (#88, #93).
 
 ## Scene spike
 
@@ -59,7 +59,10 @@ Merged: #30 and its findings (#53).
   stopping the native scene clears its state (#53); one capitalisation convention for status
   texts (#65 design review).
 - Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); remove the unused
-  `devices.count_active` and `MAX_DEVICES` (#79 review).
+  `devices.count_active` and `MAX_DEVICES` (#79 review); SMTP review notes N2–N7 (#90); source
+  API notes: a U+0000 key test, a row-lock test, packaging of `schema/` (#86).
+- Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
+  test).
 
 ## Carried into PL1
 
