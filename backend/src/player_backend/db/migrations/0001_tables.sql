@@ -1,6 +1,17 @@
 -- ADR 0002, section 9: the schema and its tables. Runs as player_owner, which owns everything.
 -- Every token, code and challenge is kept only as its SHA-256 (32 bytes, unique where looked up).
 
+-- The REVOKE below works only because player_owner owns the database (10-roles.sql) and so
+-- holds pg_database_owner, which owns `public`. A non-owner's REVOKE is only a warning, so check
+-- first and fail loudly rather than leave PUBLIC its rights on `public`.
+DO $$
+BEGIN
+  IF (SELECT datdba FROM pg_catalog.pg_database WHERE datname = current_database())
+     <> current_user::regrole THEN
+    RAISE EXCEPTION 'migrations must run as the database owner (player_owner)';
+  END IF;
+END
+$$;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
 CREATE SCHEMA player;

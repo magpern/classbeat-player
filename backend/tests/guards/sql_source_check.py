@@ -5,7 +5,12 @@ Fails on:
 - any import of a database driver, or of psycopg's SQL composition, outside the data-access
   package `player_backend/db/`;
 - an `execute`-like call whose statement is not a constant: a string literal, or a module-level
-  name bound once to one. The single exception is the migration runner executing a shipped file.
+  name bound once to one. The statement is the first positional argument or any statement
+  keyword (`query=`, `statement=`, `sql=`, ...); a call with no statement, with `*args` or with
+  `**kwargs` fails too. The single exception is the migration runner executing a shipped file;
+- an SQL wrapper (`text()`, `sql.SQL()`, `literal_column()`, ...) around anything but a constant;
+- an `execute`-like method used other than by calling it at once (an alias such as
+  `run = conn.execute`, `functools.partial(conn.execute, ...)`, or `getattr(conn, "execute")`).
 """
 
 from __future__ import annotations
@@ -18,7 +23,26 @@ from pathlib import Path
 DATA_ACCESS = "player_backend/db/"
 DRIVERS = ("psycopg", "psycopg2", "psycopg_pool", "asyncpg", "sqlalchemy", "pg8000", "databases")
 COMPOSITION = ("psycopg.sql", "psycopg2.sql")
-EXECUTE_METHODS = frozenset({"execute", "executemany", "copy", "stream", "cursor_execute"})
+EXECUTE_METHODS = frozenset(
+    {
+        "execute",
+        "executemany",
+        "executescript",
+        "exec_driver_sql",
+        "copy",
+        "stream",
+        "cursor_execute",
+        "mogrify",
+        "fetch",
+        "fetchrow",
+        "fetchval",
+        "prepare",
+    }
+)
+STATEMENT_KEYWORDS = frozenset({"query", "statement", "sql", "operation", "stmt", "command"})
+WRAPPERS = frozenset(
+    {"text", "SQL", "Composed", "Literal", "literal_column", "TextClause", "TextualSelect"}
+)
 # (file relative to src/, the statement argument exactly as written).
 TRUSTED_STATEMENTS = frozenset({("player_backend/db/migrate.py", "migration.body")})
 
@@ -53,10 +77,16 @@ def _looks_like_sql(node: ast.expr) -> bool:
     return False
 
 
-def _joins_sql(node: ast.expr) -> bool:
-    if isinstance(node, ast.List | ast.Tuple | ast.Set):
-        return any(_looks_like_sql(e) for e in node.elts)
-    return _looks_like_sql(node)
+def _call_name(func: ast.expr) -> str | None:
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    if isinstance(func, ast.Name):
+        return func.id
+    return None
+
+
+def _is_literal(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str | bytes)
 
 
 class _Checker(ast.NodeVisitor):
@@ -64,6 +94,8 @@ class _Checker(ast.NodeVisitor):
         self.rel = rel
         self.found: list[Violation] = []
         self.constants: set[str] = set()
+        self.sql_names: set[str] = set()
+        self.called: set[int] = set()
 
     def _add(self, node: ast.AST, rule: str) -> None:
         self.found.append(Violation(self.rel, getattr(node, "lineno", 0), rule))
@@ -87,6 +119,24 @@ class _Checker(ast.NodeVisitor):
                         self.constants.add(target.id)
         # A name assigned more than once at module level is not a constant.
         self.constants = {n for n in self.constants if counts[n] == 1}
+        # Any name, in any scope, bound to SQL text: building on it counts as building SQL.
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign | ast.AnnAssign) and node.value is not None:
+                if self._sql(node.value):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    self.sql_names.update(t.id for t in targets if isinstance(t, ast.Name))
+            if isinstance(node, ast.Call):
+                self.called.add(id(node.func))
+
+    def _sql(self, node: ast.expr) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id in self.sql_names
+        if isinstance(node, ast.BinOp):
+            return self._sql(node.left) or self._sql(node.right)
+        if isinstance(node, ast.JoinedStr):
+            names = [v.value for v in node.values if isinstance(v, ast.FormattedValue)]
+            return _looks_like_sql(node) or any(self._sql(n) for n in names)
+        return _looks_like_sql(node)
 
     def _check_import(self, node: ast.AST, module: str) -> None:
         if module in COMPOSITION or module.startswith(tuple(f"{c}." for c in COMPOSITION)):
@@ -106,30 +156,81 @@ class _Checker(ast.NodeVisitor):
             self._check_import(node, f"{module}.{alias.name}")
 
     def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
-        if any(isinstance(v, ast.FormattedValue) for v in node.values) and _looks_like_sql(node):
+        if any(isinstance(v, ast.FormattedValue) for v in node.values) and self._sql(node):
             self._add(node, "SQL built with an f-string")
         self.generic_visit(node)
 
     def visit_BinOp(self, node: ast.BinOp) -> None:
-        if isinstance(node.op, ast.Mod | ast.Add) and _looks_like_sql(node):
+        if isinstance(node.op, ast.Mod | ast.Add) and self._sql(node):
             self._add(node, "SQL built with % or +")
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr in EXECUTE_METHODS and id(node) not in self.called:
+            self._add(node, f"execute-like method not called at once: {ast.unparse(node)}")
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
+        name = _call_name(func)
         if isinstance(func, ast.Attribute):
-            if func.attr in {"format", "format_map"} and _looks_like_sql(func.value):
+            if func.attr in {"format", "format_map"} and (
+                self._sql(func.value)
+                or any(self._sql(a) for a in node.args)
+                or any(self._sql(k.value) for k in node.keywords)
+            ):
                 self._add(node, "SQL built with str.format")
-            if func.attr == "join" and any(_joins_sql(a) for a in node.args):
+            if func.attr == "join" and any(self._joins(a) for a in node.args):
                 self._add(node, "SQL built with str.join")
-            if func.attr in EXECUTE_METHODS and node.args:
-                self._check_statement(node, node.args[0])
+        if name == "getattr" and any(
+            isinstance(a, ast.Constant) and a.value in EXECUTE_METHODS for a in node.args
+        ):
+            self._add(node, "execute-like method taken with getattr")
+        if name in WRAPPERS:
+            inner = node.args[0] if node.args else None
+            if inner is None or not self._constant(inner) or len(node.args) > 1 or node.keywords:
+                self._add(node, f"SQL wrapper over a non-constant: {ast.unparse(node)}")
+        if name in EXECUTE_METHODS:
+            self._check_execute(node)
         self.generic_visit(node)
 
+    def _joins(self, node: ast.expr) -> bool:
+        if isinstance(node, ast.List | ast.Tuple | ast.Set):
+            return any(self._sql(e) for e in node.elts)
+        return self._sql(node)
+
+    def _constant(self, arg: ast.expr) -> bool:
+        return _is_literal(arg) or (isinstance(arg, ast.Name) and arg.id in self.constants)
+
+    def _check_execute(self, node: ast.Call) -> None:
+        statements: list[ast.expr] = []
+        if node.args:
+            if isinstance(node.args[0], ast.Starred):
+                self._add(node, "statement passed with *args")
+                return
+            statements.append(node.args[0])
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                self._add(node, "arguments passed with **kwargs")
+                return
+            if keyword.arg in STATEMENT_KEYWORDS:
+                statements.append(keyword.value)
+        if not statements:
+            self._add(node, "execute-like call without a constant statement")
+        for statement in statements:
+            self._check_statement(node, statement)
+
     def _check_statement(self, node: ast.Call, arg: ast.expr) -> None:
-        if isinstance(arg, ast.Constant) and isinstance(arg.value, str | bytes):
+        if self._constant(arg):
             return
-        if isinstance(arg, ast.Name) and arg.id in self.constants:
+        # A wrapper is checked on its own (visit_Call); over a constant it is a constant.
+        if (
+            isinstance(arg, ast.Call)
+            and _call_name(arg.func) in WRAPPERS
+            and len(arg.args) == 1
+            and not arg.keywords
+            and self._constant(arg.args[0])
+        ):
             return
         if (self.rel, ast.unparse(arg)) in TRUSTED_STATEMENTS:
             return

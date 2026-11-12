@@ -46,6 +46,31 @@ def test_each_rule_fails_outside_the_data_access_package(snippet: str, rule: str
         ('conn.execute(f"SELECT {c} FROM t")', "f-string"),
         ('Q = "SELECT 1"\nQ = "SELECT 2"\nconn.execute(Q)', "not a constant"),
         ("def f(q):\n    conn.execute(q)", "not a constant"),
+        # Review of #32: a statement passed by keyword, and SQL built from names only.
+        ('q = "SELECT * FROM t WHERE id = \'"\nconn.execute(query=q + x)', "not a constant"),
+        ('q = "SELECT * FROM t WHERE id = \'"\nconn.execute(query=q + x)', "% or +"),
+        ("conn.execute(query=built)", "not a constant"),
+        ("conn.execute(statement=built)", "not a constant"),
+        ("conn.execute(sql=built, params=(1,))", "not a constant"),
+        ('conn.execute("SELECT 1", query=built)', "not a constant"),
+        ("conn.execute(*parts)", "*args"),
+        ("conn.execute(**options)", "**kwargs"),
+        ("conn.execute(params=(1,))", "without a constant statement"),
+        ('def f(x):\n    q = "DELETE FROM t WHERE id = "\n    return q + x', "% or +"),
+        ('q = "SELECT a FROM t"\nconn.execute(f"{q} WHERE id = {x}")', "f-string"),
+        ('q = "SELECT a FROM t"\nconn.execute("{} {}".format(q, x))', "str.format"),
+        # Wrappers around SQL text, positional or keyword.
+        ("conn.execute(text(built))", "wrapper over a non-constant"),
+        ("conn.execute(statement=text(built))", "wrapper over a non-constant"),
+        ("conn.execute(sql.SQL(built))", "wrapper over a non-constant"),
+        ("conn.execute(SQL(text=built))", "wrapper over a non-constant"),
+        ("stmt = text(built)", "wrapper over a non-constant"),
+        # Aliases of an execute-like method.
+        ("run = conn.execute\nrun(q + x)", "not called at once"),
+        ("functools.partial(conn.execute, query)", "not called at once"),
+        ('getattr(conn, "execute")(q)', "getattr"),
+        ("execute(built)", "not a constant"),
+        ("async def f():\n    await conn.fetch(built)", "not a constant"),
     ],
 )
 def test_each_rule_fails_inside_the_data_access_package(snippet: str, rule: str) -> None:
@@ -60,6 +85,10 @@ def test_each_rule_fails_inside_the_data_access_package(snippet: str, rule: str)
         'conn.execute("SELECT a FROM t WHERE id = %s", (x,))',
         "import psycopg",
         'message = f"applied {name}"',
+        'Q = "SELECT a FROM t WHERE id = %s"\nconn.execute(query=Q, params=(x,))',
+        'conn.execute(query="SELECT 1")',
+        'conn.execute(text("SELECT a FROM t WHERE id = :id"), {"id": x})',
+        'Q = "SELECT 1"\nconn.execute(statement=text(Q))',
     ],
 )
 def test_constant_statements_with_bound_parameters_pass(snippet: str) -> None:
