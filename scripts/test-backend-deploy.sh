@@ -265,6 +265,28 @@ fi
 : >"$tmp/mount/player_app_password"
 if run_entry app >/dev/null 2>&1; then bad "an empty password file started the app"; else ok "an empty password file is refused"; fi
 
+rc=0
+sh "$root/docker/postgres/set-role-password.sh" player_app "$(printf 'a\nb')" >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 2 ]; then
+  ok "set-role-password.sh refuses a file name with a newline"
+else
+  bad "set-role-password.sh did not refuse a file name with a newline (exit $rc)"
+fi
+
+# --- the db files: healthcheck over TCP, the data directory from $PGDATA -----------------------
+if grep -Eq 'pg_isready .*-h 127\.0\.0\.1' "$root/docker/compose.backend.yml"; then
+  ok "the db healthcheck checks over TCP (not the init server's socket)"
+else
+  bad "the db healthcheck does not use -h 127.0.0.1"
+fi
+# shellcheck disable=SC2016 # the text searched for is literal shell source
+if grep -v '^#' "$root/docker/postgres/db-entrypoint.sh" | grep -q '\${PGDATA:-/var/lib/postgresql/data}' \
+  && ! grep -v '^#' "$root/docker/postgres/db-entrypoint.sh" | sed 's|\${PGDATA:-/var/lib/postgresql/data}||' | grep -q '/var/lib/postgresql/data'; then
+  ok "db-entrypoint.sh takes the data directory from PGDATA, with the image default"
+else
+  bad "db-entrypoint.sh hard-codes the data directory"
+fi
+
 # --- the scheduler -----------------------------------------------------------------------------
 cat >"$tmp/entry" <<'EOF'
 #!/bin/sh
