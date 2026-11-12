@@ -24,17 +24,27 @@ Swedebeat (a licensed music provider, later) and classbeat (our own class source
 
 - The product is **invite-only, free and non-commercial**. There is no payment code, no price, no
   paid plan and no advertising anywhere in the repository.
-- New accounts are created only for email addresses on the backend's allowlist (the sign-up
-  mode default of ADR 0002). Open sign-up is off by default and needs the owner's decision.
+- New accounts are created only for email addresses on the backend's allowlist. That sign-up
+  default is ADR 0002's (in review, #8); this ADR adopts it, and if ADR 0002 changes it, this line
+  follows. Open sign-up is off by default and needs the owner's decision.
 - Releases are published to GitHub Releases (AGENTS.md, section 1). No app store listing is made
   without the owner (decision 9).
 
 ### 2. Spotify
 
-- **What is stored.** Only what classbeat sends in a class document (ADR 0003): song title,
-  artist, duration, the song's window in class time, and the optional Spotify track id and ISRC.
-  The backend stores them as part of the class; the player keeps them in its offline class cache.
-  Nothing else from Spotify is stored: no cover art, no audio, no audio features, no playlists,
+Rule 3 in full applies (plan section 3): Spotify's music stays in Spotify's own app; no class
+audio or video is ever streamed from our server; music is never chosen, stretched or shifted from
+a measured cadence, and the song sets the target, never the other way round. Rule 1 applies too:
+the player never selects songs or builds a class from a playlist.
+
+- **What is stored.** Only the song fields of a class document as the source sends them
+  (ADR 0003): `title`, `artist`, `length_ms`, the song window (`start_ms`, `end_ms`), `bpm`,
+  `ids` (`spotify_track`, `isrc`, `swedebeat_mix`), `beat_anchors` and `moments`. The backend
+  stores them as part of the class; the player keeps them in its offline class cache.
+- **Where tempo, anchors and moments come from.** `bpm`, `beat_anchors` and `moments` are the
+  source's own analysis (classbeat's), sent in the class document. This product never fetches
+  them, or anything else, from a Spotify interface.
+- Nothing else from Spotify is stored: no cover art, no audio, no audio features, no playlists,
   no user data, no tokens.
 - **Audio, never.** No code downloads, records, captures, stores, caches, streams or plays
   Spotify audio, on the device or on the server (rule 3). A Reviewer rejects any dependency or
@@ -65,8 +75,10 @@ Swedebeat (a licensed music provider, later) and classbeat (our own class source
   palette or screen design of MOWL (rule 6). The backend and the player never call a MOWL server.
 - classbeat stays the only party that talks to MOWL. What reaches this product is classbeat's own
   class document (ADR 0003), never MOWL's data in MOWL's format.
-- Nothing in the repository refers to MOWL except the plan and ADRs, where it is named for
-  comparison.
+- MOWL is named in the repository only where a rule needs the name: the plan and ADRs (for
+  comparison and these rules), AGENTS.md (who may contact which company), the README's
+  non-affiliation line, and the guard list of section 7. Product code, screens and tests name it
+  nowhere else.
 
 ### 5. Swedebeat
 
@@ -86,9 +98,10 @@ from a provider writes it in `docs/owner.md` and carries on.
 
 ### 7. Checks
 
-- A rule guard test in each lane that has dependencies fails the build if a dependency or source
-  file brings in a Spotify Web API or SDK client, a system-audio capture library, or a known
-  MOWL endpoint host. The list it checks is kept in one file and only grows.
+- A rule guard test fails the build if a dependency or source file brings in a Spotify Web API
+  or SDK client, a system-audio capture library, or a known MOWL endpoint host. It lives in the
+  infra lane: the list in `scripts/provider-guard.txt`, the check in `scripts/check-providers.sh`,
+  run by the `repo-checks` job over every lane. The list only grows.
 - Reviewers list sections 2, 4 and 5 of this ADR in the verdict of every rule-sensitive pull
   request that touches music handling, provider data or the class cache.
 
@@ -96,7 +109,8 @@ from a provider writes it in `docs/owner.md` and carries on.
 
 - Any owner decision on payment, openness or distribution (decisions 9, 12 and 13).
 - Adding option B (section 2).
-- PL11 and the owner's answer on Swedebeat (decision 11).
+- PL11 and the owner's answer on Swedebeat (decision 11). Getting Swedebeat audio through the
+  user's MOWL account, one route decision 11 names, would also reopen section 4.
 - Any new music provider or new class source.
 
 ## Alternatives
