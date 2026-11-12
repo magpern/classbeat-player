@@ -461,15 +461,16 @@ a computer.
 
 **Sensors (Bluetooth), from the web page only**
 
-Owner, 2026-11-12: sensors are wanted if a page opened from a link can read them. No phone app
-is planned. (The desktop player stays an installed application.)
+Owner, 2026-11-12: sensor reading stays in the plan, from a page opened from a link. No phone
+app of our own is planned; on iPhone the answer is "use Bluefy". (The desktop player stays an
+installed application.)
 
 | Device | Can a web page read Bluetooth sensors? |
 |---|---|
 | The desktop player (Windows, macOS, Linux) | Yes, built in |
 | Android phone or tablet, in Chrome | Yes |
 | A computer's Chrome or Edge browser | Yes |
-| **iPhone and iPad** | **Not in Safari, Chrome, Edge or Firefox**, which all run on Safari's engine there and have no Web Bluetooth. It can work in a special Bluetooth-capable browser the user installs themselves (Bluefy is the known one); untested, and not ours to maintain. The page offers sensors wherever the browser supports them, so such a browser works without extra effort from us, but nothing depends on it. Otherwise iPhone riders get the targets and the timing, without their own sensor |
+| **iPhone and iPad** | **Only in the Bluefy browser** (owner's decision, 2026-11-12). Safari, Chrome, Edge and Firefox all run on Safari's engine there and have no Web Bluetooth. An iPhone user who wants their sensor installs Bluefy, a free browser that adds it, and opens the link there; the page says so when it sees an iPhone without Bluetooth support. Without Bluefy an iPhone still gets the targets and the timing |
 
 Limits of reading from a web page, on every device:
 
@@ -488,7 +489,8 @@ Limits of reading from a web page, on every device:
   has to be tried.
 - First step: the instructor's own bike and heart rate on the computer, shown against the target.
 - Second step: each rider's phone reads their own bike or strap, shows it to that rider against
-  their target, and sends it to the instructor's screen only (rule 13). Android only, as above.
+  their target, and sends it to the instructor's screen only (rule 13). Android in Chrome, iPhone
+  in Bluefy.
 - Treadmills: reading speed and incline is the same work. Controlling a treadmill is out of scope
   for safety.
 
@@ -510,7 +512,7 @@ strong at the scene and weak at the application; web technology is the reverse.
 | Television or any other screen | Anything with a browser | Android TV; no Apple TV | Apple TV, Android TV, consoles | Consoles |
 | Virtual reality later | Yes (WebXR) | Yes | Yes | Yes |
 | A rich 3D scene | Good, built in code; fewer ready-made tools | Full engine with an editor | Full engine, largest ecosystem | Highest fidelity |
-| Bluetooth sensors | Built in on desktop and Android; not on iPhone | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
+| Bluetooth sensors | Built in on desktop and Android; on iPhone through the Bluefy browser | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
 | Sign-in, forms, lists, the website | Native ground | Awkward | Awkward | Awkward |
 | One code base for the room's screen, the phone and the website | **Yes** | No: phone page and website are separate web code anyway | No | No |
 | Agents can build it, test it and check screenshots | Best | Good (text scenes, headless runs) | Harder (editor licence in CI, heavy asset files) | Poor |
@@ -523,8 +525,8 @@ strong at the scene and weak at the application; web technology is the reverse.
 - On the desktop it ships inside a shell. Recommended: Electron, because it brings the same
   browser engine to Windows, macOS and Linux and has Bluetooth built in. Tauri is the alternative
   for a much smaller download.
-- On phones it is a web page. No phone app is planned (owner, 2026-11-12), so iPhones cannot
-  read sensors; that is accepted.
+- On phones it is a web page. No phone app of our own is planned (owner, 2026-11-12); iPhone
+  users who want their sensor use the Bluefy browser.
 - Unreal is excluded: it is probably MOWL's engine (not confirmed) and the heaviest to build.
 
 **The room's 3D scene is a separate, replaceable part.** The shell owns everything that is not
@@ -631,7 +633,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL6** | The 3D scene, in the technology spike 2 confirmed: design direction, the light show and the score, beat pulse, quality levels, reduced motion | About 6 to 8 | Reviews the design |
 | **PL7** | Release: signing, notarisation, updater, release workflow, download page, deploy runbook | About 5 | Signing accounts; domain; the first deploy |
 | **PL8** | Live sessions. First **the handlebar companion**: the instructor's phone as teleprompter and remote (section 3). Then riders: join by code, the rider's view in step with the room. Also the player as a web app on a phone or tablet | About 10 | |
-| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' Android phones sending theirs to the session, from the web page | About 6 | A bike to test on |
+| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
@@ -704,6 +706,8 @@ the owner described.
 - Godot's web export on iPhone: its 4.2 documentation says it does not run there; later versions
   are said to have improved it, not confirmed.
 - Whether any Godot Bluetooth plugin covers iPhone and Android.
+- Bluefy on iPhone with bike and heart-rate sensors: not tested. It is a third party's app; if it
+  stops working, iPhone sensors stop with it.
 - Which Bluetooth services each studio bike and treadmill model really exposes.
 - Bluetooth field layouts, engine licence terms and the legal notes in section 3 are from general
   knowledge, not from documents opened for this plan.
