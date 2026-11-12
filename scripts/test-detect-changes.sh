@@ -22,8 +22,10 @@ commit() { # commit <path>
   git commit -qm "change $1"
 }
 flags() { # flags <event> <base> <head>: the true flags, space separated
-  EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh" |
-    { grep '=true' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
+  local o="$tmp/output"
+  : >"$o"
+  GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
+  { grep '=true' "$o" || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
 }
 
 commit README.md
