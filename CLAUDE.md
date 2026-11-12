@@ -7,8 +7,8 @@
   message so they run at the same time: one `developer` per unblocked issue, each in an isolated
   worktree; a `reviewer` per pull request; the `designer` and `verifier` when section 5 and
   section 4 of AGENTS.md call for them.
-- The first review of a pull request is a new `reviewer`. Later rounds on that pull request
-  resume the same one with the new head commit.
+- The first review of a pull request is a new `reviewer`. Every later round on that pull
+  request, after any number of `FAIL`s, resumes the same one with the new head commit.
 - Pass a top-tier model when spawning for a security-critical or rule-sensitive pull request.
 - Never ask the owner in chat whether to continue, skip a review or start the next issue. Open
   owner items go in `docs/owner.md`.
@@ -19,14 +19,17 @@ Aliases, not version numbers, so each role moves to the newest model of its tier
 
 | Role | Default | Stronger model when |
 |---|---|---|
-| Orchestrator (main session) | `opus` | `fable` for planning a milestone, a new security design, or reassessing after a repeated `FAIL` |
+| Orchestrator (main session) | `opus` | |
 | Developer | `sonnet` | `opus` for security-critical issues |
-| Reviewer | `sonnet` | `opus` for security-critical and rule-sensitive pull requests; `fable` for the first review of a new security design |
+| Reviewer | `sonnet` | `opus` for security-critical and rule-sensitive pull requests and the first review of a new security design |
 | Designer | `sonnet` for verdicts | `opus` when setting a new visual direction |
 | Verifier | `sonnet` | |
 | Explorer | `haiku` | |
 
 A Reviewer is never a weaker model than the Developer whose work it reviews.
+
+Top tier means `opus`. `fable` is never used for any role unless the owner explicitly says so
+for that piece of work (owner, 2026-11-12).
 
 ## Before any merge
 
