@@ -186,7 +186,11 @@ its first publication, and it only grows.
 | `GET /api/player/classes/{class_id}` | One class the account holds now: `{class_id, source, source_class_id, publication_number, content_hash, position, document}`. A removal's marker, an unknown id and another account's id are all `404 not_found` |
 | `GET /api/player/cursor` | `{cursor}` |
 
-Each request counts towards the device token's 60 a minute; nothing else is written.
+Each request counts towards the device token's 60 a minute; nothing else is written. `after`,
+`limit` and `class_id` are taken as raw text and parsed by `sync_policy.py` (ASCII digits only;
+a class id only in its canonical 8-4-4-4-12 form), so a malformed one is refused by the route
+with `422 invalid_request` and still counts: a value the framework refused would be refused
+inside the device token's transaction and roll back its count.
 
 ## Linking a source, the source token and publications (ADR 0002, sections 3, 7, 10 and 11)
 

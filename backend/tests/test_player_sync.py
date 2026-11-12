@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
+from fastapi.routing import APIRoute
 
+from player_backend.player_api.sync import router as sync_router
 from player_backend.publication_policy import content_hash
 from player_backend.token_issue import new_token
 from tests import pairhelp
@@ -167,22 +169,36 @@ def test_changes_come_in_pages_with_a_limit(site: Site) -> None:
     assert len(account.get(f"{CHANGES}?limit=500")["changes"]) == 5
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        "?limit=0",
-        "?limit=501",
-        "?limit=-1",
-        "?after=-1",
-        "?after=9223372036854775808",
-        "?after=x",
-        "?limit=1.5",
-    ],
+# Refused by the routes themselves (sync_policy.py), never by the framework: each is the
+# device token's use all the same (ADR 0002, section 10).
+MALFORMED = (
+    f"{CHANGES}?limit=0",
+    f"{CHANGES}?limit=501",
+    f"{CHANGES}?limit=-1",
+    f"{CHANGES}?after=-1",
+    f"{CHANGES}?after=9223372036854775808",
+    f"{CHANGES}?after=99999999999999999999999",
+    f"{CHANGES}?after=x",
+    f"{CHANGES}?after=",
+    f"{CHANGES}?after=+1",
+    f"{CHANGES}?after=%201",
+    f"{CHANGES}?after=1_0",
+    f"{CHANGES}?after=%D9%A3",  # an Arabic-Indic digit, which `int` would take
+    f"{CHANGES}?limit=1.5",
+    f"{CLASSES}/not-an-id",
+    f"{CLASSES}/11111111111141118111111111111111",
+    f"{CLASSES}/%7B11111111-1111-4111-8111-111111111111%7D",
+    f"{CLASSES}/urn:uuid:11111111-1111-4111-8111-111111111111",
 )
-def test_a_cursor_or_limit_out_of_range_is_refused(site: Site, query: str) -> None:
+
+
+@pytest.mark.parametrize("path", MALFORMED)
+def test_a_malformed_cursor_limit_or_class_id_is_refused(site: Site, path: str) -> None:
     account = _account(site)
-    answer = account.app.get(CHANGES + query, headers=bearer(account.token))
+    answer = account.app.get(path, headers=bearer(account.token))
     assert answer.status_code == 422 and answer.json() == {"error": "invalid_request"}
+    # Counted as the token's use: "last used" is written, the request is not undone.
+    assert pairhelp.device_rows(site, EMAIL) == [("Studio PC", True, False)]
 
 
 def test_a_cursor_from_another_account_reads_only_this_accounts_changes(site: Site) -> None:
@@ -229,8 +245,9 @@ def test_one_class_by_its_id(site: Site) -> None:
         f"{CLASSES}/00000000-0000-4000-8000-000000000000", headers=bearer(account.token)
     )
     assert unknown.status_code == 404 and unknown.json() == {"error": "not_found"}
-    malformed = account.app.get(f"{CLASSES}/not-an-id", headers=bearer(account.token))
-    assert malformed.status_code == 422 and malformed.json() == {"error": "invalid_request"}
+    # The canonical form only, in either case.
+    upper = account.get(f"{CLASSES}/{str(change['class_id']).upper()}")
+    assert upper["class_id"] == change["class_id"]
 
 
 def test_sync_writes_nothing_but_the_device_tokens_own_use(site: Site) -> None:
@@ -241,7 +258,7 @@ def test_sync_writes_nothing_but_the_device_tokens_own_use(site: Site) -> None:
     before = _stored(site)
     for path in (CHANGES, f"{CHANGES}?after=1&limit=1", CURSOR, f"{CLASSES}/{class_id}"):
         account.get(path)
-    for refused in (f"{CHANGES}?after=99", f"{CLASSES}/{new_uuid()}", f"{CHANGES}?limit=0"):
+    for refused in (f"{CHANGES}?after=99", f"{CLASSES}/{new_uuid()}", *MALFORMED):
         assert account.app.get(refused, headers=bearer(account.token)).status_code in (
             404,
             409,
@@ -289,3 +306,28 @@ def test_the_sync_routes_count_towards_the_device_tokens_limit(site: Site) -> No
     assert set(statuses) <= {200, 404}
     over = account.app.get(CHANGES, headers=bearer(account.token))
     assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
+
+
+def test_malformed_requests_count_towards_the_device_tokens_limit(site: Site) -> None:
+    account = _account(site)
+    pairhelp.settle(site, 60)
+    statuses = [
+        account.app.get(MALFORMED[n % len(MALFORMED)], headers=bearer(account.token)).status_code
+        for n in range(60)
+    ]
+    assert set(statuses) == {422}
+    for path in (CHANGES, MALFORMED[0]):
+        over = account.app.get(path, headers=bearer(account.token))
+        assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
+
+
+def test_every_sync_parameter_is_taken_as_raw_text() -> None:
+    # A parameter the framework parses is refused by it inside the device token's transaction,
+    # which then rolls back the token's count: each is text, parsed by the route.
+    seen = 0
+    for route in sync_router.routes:
+        assert isinstance(route, APIRoute)
+        for field in (*route.dependant.path_params, *route.dependant.query_params):
+            assert field.field_info.annotation in (str, str | None), (route.path, field.name)
+            seen += 1
+    assert seen == 3

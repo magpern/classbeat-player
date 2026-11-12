@@ -108,6 +108,14 @@ def test_the_class_sync_queries_keep_to_their_account_without_the_policy(
     as_b = _context(db, b)
     assert class_sync.cursor(as_b) == 5
     assert [change.id for change in class_sync.changes(as_b, 0, 500).changes] == b_ids
+    # A placeholder (number 0) is never committed by a publication. Should one ever be, with a
+    # place in the order, sync still does not show it: the player API takes numbers above 0.
+    su.execute(
+        "INSERT INTO player.classes (account_id, source_id, source_class_id, "
+        "publication_number, sync_position) VALUES (%s, 'classbeat', 'placeholder', 0, 1)",
+        (a,),
+    )
+    assert [change.id for change in class_sync.changes(as_a, 0, 500).changes] == a_ids
     # An account with no sync row yet has cursor 0 and no changes.
     assert class_sync.cursor(_context(db, uuid.uuid4())) == 0
     assert list(class_sync.changes(_context(db, uuid.uuid4()), 0, 1).changes) == []

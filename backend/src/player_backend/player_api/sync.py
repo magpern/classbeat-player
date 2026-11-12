@@ -8,12 +8,13 @@
   A removal, an unknown id and another account's id are all `404 not_found`.
 - `GET /api/player/cursor`: the account's current cursor.
 
-Everything is the device token's account (deps.py); nothing is written here.
+Everything is the device token's account (deps.py); nothing is written here. The parameters
+are taken as raw text and parsed by `sync_policy.py`, so that a malformed one is refused by the
+route (`422 invalid_request`) and still counts as the token's use (section 10): a value the
+framework refused would roll back what `auth_enter_device` and the counters wrote.
 """
 
 from __future__ import annotations
-
-from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -21,7 +22,7 @@ from fastapi.responses import JSONResponse
 from player_backend.db import class_sync
 from player_backend.http_errors import ApiError
 from player_backend.player_api.deps import DeviceToken
-from player_backend.sync_policy import PAGE_DEFAULT, is_page_request, needs_resync
+from player_backend.sync_policy import class_id_of, needs_resync, page_request
 
 router = APIRouter(prefix="/api/player")
 
@@ -40,13 +41,18 @@ def _change(change: class_sync.Change) -> dict[str, object]:
 
 
 @router.get("/changes")
-def changes(context: DeviceToken, after: int = 0, limit: int = PAGE_DEFAULT) -> JSONResponse:
-    if not is_page_request(after, limit):
+def changes(
+    context: DeviceToken, after: str | None = None, limit: str | None = None
+) -> JSONResponse:
+    # Raw text, parsed here: a value the framework refused would roll back the token's count.
+    requested = page_request(after, limit)
+    if requested is None:
         raise ApiError(422, "invalid_request")
+    after_place, size = requested
     current = class_sync.cursor(context)
-    if needs_resync(after, current):
+    if needs_resync(after_place, current):
         raise ApiError(409, "resync_required", extra={"cursor": current})
-    page = class_sync.changes(context, after, limit)
+    page = class_sync.changes(context, after_place, size)
     return JSONResponse(
         {
             "changes": [_change(change) for change in page.changes],
@@ -57,8 +63,12 @@ def changes(context: DeviceToken, after: int = 0, limit: int = PAGE_DEFAULT) -> 
 
 
 @router.get("/classes/{class_id}")
-def held_class(class_id: UUID, context: DeviceToken) -> JSONResponse:
-    found = class_sync.held_class(context, class_id)
+def held_class(class_id: str, context: DeviceToken) -> JSONResponse:
+    # Raw text, parsed here, for the same reason as above.
+    parsed = class_id_of(class_id)
+    if parsed is None:
+        raise ApiError(422, "invalid_request")
+    found = class_sync.held_class(context, parsed)
     if found is None:
         raise ApiError(404, "not_found")
     return JSONResponse(

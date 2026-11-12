@@ -11,14 +11,51 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
+from uuid import UUID
 
 PAGE_DEFAULT: Final = 100
 PAGE_MAX: Final = 500
 # The largest place a cursor can name: the column is a PostgreSQL bigint.
 CURSOR_MAX: Final = 2**63 - 1
+
+
+def page_request(after: str | None, limit: str | None) -> tuple[int, int] | None:
+    """The cursor and page size of a request, from the query's raw text; None when either is
+    not a plain decimal number in its range. Absent, they are 0 and `PAGE_DEFAULT`.
+
+    Parsed here rather than by the framework, so the route refuses the request itself and the
+    device token's use is still counted (ADR 0002, section 10).
+    """
+    cursor = 0 if after is None else _decimal(after)
+    size = PAGE_DEFAULT if limit is None else _decimal(limit)
+    if cursor is None or size is None or not is_page_request(cursor, size):
+        return None
+    return cursor, size
+
+
+def class_id_of(raw: str) -> UUID | None:
+    """A class row's id from the path: only the canonical 8-4-4-4-12 hexadecimal form."""
+    if _CANONICAL_UUID.fullmatch(raw) is None:
+        return None
+    return UUID(raw)
+
+
+def _decimal(raw: str) -> int | None:
+    # ASCII digits only (`int` would also take signs, spaces, `_` and other scripts' digits),
+    # and no more than a bigint can have, so nothing large is ever converted.
+    if _DECIMAL.fullmatch(raw) is None:
+        return None
+    return int(raw)
+
+
+_DECIMAL: Final = re.compile(r"[0-9]{1,19}")
+_CANONICAL_UUID: Final = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 
 def is_page_request(after: int, limit: int) -> bool:

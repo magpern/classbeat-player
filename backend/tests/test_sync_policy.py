@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 
 from player_backend.sync_policy import (
     CURSOR_MAX,
     PAGE_DEFAULT,
     PAGE_MAX,
+    class_id_of,
     is_page_request,
     needs_resync,
     page_of,
+    page_request,
 )
 
 
@@ -19,6 +23,50 @@ def test_the_ranges() -> None:
     assert is_page_request(0, 1) and is_page_request(CURSOR_MAX, PAGE_MAX)
     for after, limit in ((-1, 1), (CURSOR_MAX + 1, 1), (0, 0), (0, PAGE_MAX + 1), (0, -1)):
         assert not is_page_request(after, limit)
+
+
+def test_a_page_request_from_the_querys_raw_text() -> None:
+    assert page_request(None, None) == (0, PAGE_DEFAULT)
+    assert page_request("0", "1") == (0, 1)
+    assert page_request("007", "500") == (7, 500)
+    assert page_request(str(CURSOR_MAX), None) == (CURSOR_MAX, PAGE_DEFAULT)
+    for after, limit in (
+        (str(CURSOR_MAX + 1), None),
+        ("9" * 20, None),
+        ("9" * 4000, None),
+        ("", None),
+        ("-1", None),
+        ("+1", None),
+        (" 1", None),
+        ("1 ", None),
+        ("1\n", None),
+        ("1_0", None),
+        ("٣", None),  # an Arabic-Indic digit: `int` would take it
+        ("1.0", None),
+        ("0x1", None),
+        (None, "0"),
+        (None, "501"),
+        (None, ""),
+        (None, "1.5"),
+    ):
+        assert page_request(after, limit) is None, (after, limit)
+
+
+def test_a_class_id_in_its_canonical_form_only() -> None:
+    canonical = "1a2b3c4d-0000-4000-8000-00000000000f"
+    assert class_id_of(canonical) == UUID(canonical)
+    assert class_id_of(canonical.upper()) == UUID(canonical)
+    for raw in (
+        "",
+        "not-an-id",
+        canonical.replace("-", ""),
+        "{" + canonical + "}",
+        "urn:uuid:" + canonical,
+        canonical + "\n",
+        " " + canonical,
+        canonical[:-1] + "g",
+    ):
+        assert class_id_of(raw) is None, raw
 
 
 def test_only_a_cursor_above_the_current_one_needs_a_resync() -> None:
