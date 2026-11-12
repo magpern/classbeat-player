@@ -18,7 +18,12 @@ files=""
 if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
   all=1
 else
-  files="$(git diff --name-only "$base" "$head" 2>/dev/null)" || all=1
+  # Pull requests use the merge base (base...head): only what the branch itself changed,
+  # not what main gained since. Pushes compare the two tips.
+  range="$base $head"
+  [ "${EVENT-}" = pull_request ] && range="$base...$head"
+  # shellcheck disable=SC2086
+  files="$(git diff --name-only $range 2>/dev/null)" || all=1
 fi
 
 flag() { # flag <name> <extended regex>
