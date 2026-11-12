@@ -35,8 +35,9 @@ test("the Windows reader is chosen on Windows, and constructing it starts nothin
 for (const platform of ["linux", "darwin", "freebsd", "", "Win32", "win32 ", "windows"]) {
   test(`on "${platform}" the Windows reader is never constructed`, () => {
     const mac = { kind: "macos" as const, latest: () => null, send: () => undefined };
-    const chosen = selectMusic(platform, () => mac, never);
-    assert.equal(chosen.reader, platform === "darwin" ? mac : manualReader);
+    const linux = { kind: "linux" as const, latest: () => null, send: () => undefined };
+    const chosen = selectMusic(platform, () => mac, never, () => linux);
+    assert.equal(chosen.reader, platform === "darwin" ? mac : platform === "linux" ? linux : manualReader);
   });
 }
 

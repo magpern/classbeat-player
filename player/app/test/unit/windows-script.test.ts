@@ -168,8 +168,9 @@ test("the Windows helper is started only in windows-spawn.ts, and nothing starts
   const all = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(join(dir, e.name)) : [join(dir, e.name)]));
   const files = all(SRC).map((p) => ({ path: p.slice(SRC.length + 1).replaceAll("\\", "/"), text: readFileSync(p, "utf8") }));
   const starters = files.filter((f) => /child_process|\bworker_threads\b|\bcluster\b/.test(f.text)).map((f) => f.path);
-  // The macOS reader (#41) runs osascript; the Windows helper is the only other process.
-  assert.deepEqual(starters.sort(), ["main/macos-reader.ts", "main/readers/windows-spawn.ts"]);
+  // The macOS reader (#41) runs osascript and the Linux reader (#47) busctl; the Windows helper
+  // is the only other process.
+  assert.deepEqual(starters.sort(), ["main/linux-reader.ts", "main/macos-reader.ts", "main/readers/windows-spawn.ts"]);
   const namers = files.filter((f) => /powershell\.exe|WINDOWS_HELPER_(ARGS|ENCODED|SCRIPT)/i.test(f.text)).map((f) => f.path);
   assert.deepEqual(namers.sort(), ["main/readers/windows-script.ts", "main/readers/windows-spawn.ts"]);
   const spawn = source("windows-spawn.ts");
