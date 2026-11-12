@@ -4,9 +4,10 @@ import { test } from "node:test";
 import type { ClockView } from "../../src/core/clock/view.ts";
 import type { LinkView } from "../../src/core/link/view.ts";
 import { statusText } from "../../src/core/status-text.ts";
+import { classLength, makePlan, pauseAt, play, run } from "./link-harness.ts";
 
 const clock = (over: Partial<ClockView>): ClockView => ({ status: "running", holding: false, ...over }) as ClockView;
-const link = (over: Partial<LinkView>): LinkView => ({ mode: "following", held: false, ...over }) as LinkView;
+const link = (over: Partial<LinkView>): LinkView => ({ mode: "following", state: "Locked", held: false, ...over }) as LinkView;
 
 test("held at a song window's end while following: holding, not paused", () => {
   assert.equal(statusText(clock({ status: "paused" }), link({ held: true })), "Holding at the end of the song");
@@ -23,4 +24,26 @@ test("the class end still says holding at the end", () => {
 
 test("a stale held flag in manual mode is ignored", () => {
   assert.equal(statusText(clock({ status: "paused" }), link({ mode: "manual", held: true })), "paused");
+});
+
+test("music paused past the window end is a real pause", () => {
+  assert.equal(statusText(clock({ status: "paused" }), link({ state: "Paused", held: true })), "paused");
+});
+
+test("the last song held and the clock ended keeps the class-end text", () => {
+  assert.equal(statusText(clock({ status: "ended", holding: true }), link({ held: true })), "ended (holding at the end)");
+});
+
+test("the issue's repro through the link: holding while the song plays past its window, paused when the music pauses", () => {
+  const plan = makePlan(["A", "B", "C", "D"]);
+  const t = run({ plan, segments: [play(1000, "A", 0), pauseAt(180_000, "A", 179_000)], until: 182_000 });
+  const text = (now: number): string => {
+    const r = t.at(now);
+    return statusText(clock({ status: r.status, holding: r.classMs >= classLength(plan) }), r.view);
+  };
+  assert.equal(t.at(175_000).state, "Locked");
+  assert.equal(t.at(175_000).view.held, true);
+  assert.equal(text(175_000), "Holding at the end of the song");
+  assert.equal(t.at(181_000).state, "Paused");
+  assert.equal(text(181_000), "paused");
 });
