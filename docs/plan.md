@@ -50,8 +50,8 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    each song's length, BPM and sections through the user's MOWL account. The
    player removes MOWL from the room, not from the design. Section 11.
 6. **Spotify in a studio is a terms problem for every player, MOWL's included.** Spotify's own
-   terms do not allow playing it publicly from a business. Swedebeat is the licensed route and has
-   no interface a desktop player can use today (section 4).
+   terms do not allow playing it publicly from a business. Swedebeat is the licensed route; the
+   player could play its mixes itself, given a sanctioned source of the audio (section 4).
 
 ## 2. What the MOWL player does, and what ours would do
 
@@ -106,9 +106,11 @@ version and every later feature. A change to one of them is the owner's decision
    never builds a class from a playlist, and never selects songs.
 2. **It is software only**, never coupled to a bike or a machine, and it **never controls
    equipment**: no resistance, incline, brake or speed.
-3. **The music stays in the user's own music app.** No class audio or video is streamed from our
-   server, and music is never chosen, stretched or shifted from a measured cadence. The song sets
-   the target, never the other way round.
+3. **Spotify's music stays in Spotify's own app**: the player never downloads, stores or plays
+   it. Audio from a licensed provider that allows it (Swedebeat) may be played by the player,
+   fetched from the provider straight to the device. No class audio or video is ever streamed
+   from our server, and music is never chosen, stretched or shifted from a measured cadence. The
+   song sets the target, never the other way round.
 
 *What the screen shows*
 
@@ -175,8 +177,9 @@ What the research found:
 - **MOWL itself** starts and controls the Spotify app, asks users for a 10 s crossfade, and
   recently shipped a "compatibility update for Spotify changes, so music stays in sync when
   seeking". Staying in step with Spotify is ongoing work for everyone.
-- **Swedebeat** shows only phone apps and no API or SDK. classbeat reads a mix's audio only for
-  analysis and deletes it; playing it is not something we are allowed to do today.
+- **Swedebeat** shows only phone apps and no public API or SDK. MOWL plays a Swedebeat mix by
+  downloading it to a cache, playing while it downloads (the owner, 2026-11-12). classbeat reads
+  a mix's audio only for analysis and deletes it.
 
 Options:
 
@@ -186,7 +189,7 @@ Options:
 | B | Follow and control through the Spotify Web API | No: 5 users, non-commercial, Premium | A few seconds, by polling | Only as an optional extra for the beta circle |
 | C | Play Spotify inside the player | No | Exact | Rejected: not workable in our shell and not permitted for our use |
 | D | **Manual clock:** press Start with the music, nudge earlier or later | Yes | As good as the instructor's timing | **Always available**; the only mode for Swedebeat and soundless classes at first |
-| E | Play licensed audio files ourselves (the gym's own files, or a Swedebeat mix with Swedebeat's permission) | Yes | Exact | Later, needs its own ADR and a provider's agreement |
+| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below). Also possible later for a gym's own files | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
 
 **Recommended design: follow, never depend.**
 
@@ -246,6 +249,26 @@ Options:
 the music. Effects on the beat need a few hundredths of a second, which the local interfaces may
 not give. Passing the first does not prove the second. If the beat target fails, the scene pulses
 at the song's tempo without claiming to hit each beat, and bursts are tied to interval changes.
+
+**Swedebeat: the player plays the mix itself** (owner, 2026-11-12: download and cache, or play
+while downloading, as MOWL does)
+
+- **Why it is the best case technically.** A mix is one long file. When the player plays it, the
+  player knows the position exactly, so interval timing and beat effects are exact, there is no
+  link to lose, and a cached mix plays with no network. It is also the music a gym may legally
+  play in the room.
+- **How it would work.** The audio goes from the provider straight to the device, never through
+  our backend. It plays while it downloads into a cache on the device. The cache is encrypted,
+  tied to the signed-in account, usable only by the player, and removed when the class is removed
+  or the account signs out.
+- **The open question is the source of the audio, not the playback.** Today the only route
+  classbeat knows is through the user's MOWL account, which hands out a short-lived link to the
+  mix. Using that would make the player depend on MOWL for every Swedebeat class. The other route
+  is Swedebeat's own service, which has no public interface for it.
+- **Permission.** Swedebeat's licence is what makes the music legal in the room, and it is given
+  through Swedebeat's app and its partners. Playing and caching its audio in our player needs
+  Swedebeat's agreement. Without one, the manual clock stays the Swedebeat mode: the mix plays
+  from Swedebeat's own app and the instructor starts the player with it.
 
 This still uses the instructor's personal Spotify in a room, which Spotify's terms do not allow for
 a business whichever player shows the class. That stays the instructor's and the gym's
@@ -559,7 +582,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL8** | Live sessions and the phone page: start a session, join by code, the rider's view in step with the room; the player as a web app on a phone or tablet | About 8 | |
 | **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session (Android in the browser, iPhone as a wrapped app) | About 8 | A bike to test on; an Apple Developer account for the iPhone app |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
-| **PL11** | Swedebeat or own audio files | Unknown | A provider's agreement; its own ADR |
+| **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
 
 **Spike 1 pass criteria** (proposed; fixed in the timing ADR before the spike runs). A throwaway
@@ -607,16 +630,19 @@ the owner described.
 9. **Signing accounts:** an Apple Developer membership and a Windows signing identity, in whose
    name, and whether to use the Microsoft Store and Mac App Store instead.
 10. **Hosting:** the backend's domain, and whether it runs beside classbeat on the same server.
-11. **Swedebeat:** whether to ask Swedebeat about playing a mix in the player. classbeat's
-    standing decision is that providers are not contacted; this would be the first exception.
+11. **Swedebeat:** the owner wants download-and-cache playback (2026-11-12). Open: whether to
+    ask Swedebeat for an agreement and a source of the audio, or to get the audio through the
+    user's MOWL account. classbeat's standing decision is that providers are not contacted;
+    asking would be the first exception. Recommended: ask Swedebeat.
 12. **Name and look:** the product's name, and whether it shares classbeat's design or gets its
     own.
 13. **Repository:** public or private, and the licence.
 
 ## 14. Not verified
 
-- MOWL: its engine, prices, casting, how it holds its Spotify access, and where a Swedebeat mix
-  plays. Its help centre could be read only as search excerpts.
+- MOWL: its engine, prices, casting, how it holds its Spotify access, and the terms under which
+  it plays Swedebeat mixes.
+- Swedebeat: whether its own service can deliver a user's mix to anything but its app and MOWL. Its help centre could be read only as search excerpts.
 - Spotify: no ruling on whether a workout timeline or a tempo-driven scene is "visual media" under
   III.6; whether the Web API sees an offline desktop app; current position accuracy of the Windows
   media session and of AppleScript with crossfade on (spike 1 measures both).
