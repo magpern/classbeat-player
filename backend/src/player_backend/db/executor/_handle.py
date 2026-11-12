@@ -19,10 +19,10 @@ from player_backend.db.executor._query import Query, registered_text
 
 type Row = tuple[object, ...]
 type Params = Sequence[object] | Mapping[str, object]
-type _Connection = psycopg.Connection[Row]
+type Connection = psycopg.Connection[Row]
 
 
-def _fetch(connection: _Connection, text: str, params: Params | None) -> list[Row]:
+def _fetch(connection: Connection, text: str, params: Params | None) -> list[Row]:
     with connection.cursor() as cursor:
         # The one place text reaches the driver: always the registry's own.
         cursor.execute(cast(LiteralString, text), params)
@@ -32,11 +32,11 @@ def _fetch(connection: _Connection, text: str, params: Params | None) -> list[Ro
 # The driver's objects, by the identity of the handle or transaction that stands for them. They
 # are kept here, in the executor's own module, so that a handle has no attribute, private or
 # not, that holds or returns one.
-_connections: dict[int, _Connection] = {}
+_connections: dict[int, Connection] = {}
 _transactions: dict[int, AbstractContextManager[psycopg.Transaction]] = {}
 
 
-def _connection_of(handle: Handle) -> _Connection:
+def _connection_of(handle: Handle) -> Connection:
     connection = _connections.get(id(handle))
     if connection is None:
         raise HandleClosed("the handle's connection has been given back")
@@ -68,7 +68,7 @@ class _Transaction:
 
 @final
 class Handle:
-    """Made by `connect` only: a handle made any other way has no connection."""
+    """Made by `connect` or a pool only: a handle made any other way has no connection."""
 
     __slots__ = ()
 
@@ -87,13 +87,22 @@ class Handle:
 
 
 @contextmanager
-def connect(conninfo: str) -> Generator[Handle]:
-    """A handle on a connection of its own (autocommit; use `transaction()`), closed on exit."""
-    connection = guarded(lambda: psycopg.connect(conninfo, autocommit=True))
+def lend(connection: Connection) -> Generator[Handle]:
+    """A handle that stands for `connection` inside the block and for nothing after it."""
     handle = Handle()
     _connections[id(handle)] = connection
     try:
         yield handle
     finally:
         del _connections[id(handle)]
+
+
+@contextmanager
+def connect(conninfo: str) -> Generator[Handle]:
+    """A handle on a connection of its own (autocommit; use `transaction()`), closed on exit."""
+    connection = guarded(lambda: psycopg.connect(conninfo, autocommit=True))
+    try:
+        with lend(connection) as handle:
+            yield handle
+    finally:
         guarded(connection.close)

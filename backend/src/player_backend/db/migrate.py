@@ -83,6 +83,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0003_auth_functions.sql") as pending:
         if pending:
             db.rows(q.M0003_AUTH_FUNCTIONS)
+    with _step(db, done, "0004_login_and_sessions.sql") as pending:
+        if pending:
+            db.rows(q.M0004_LOGIN_AND_SESSIONS)
     return done
 
 

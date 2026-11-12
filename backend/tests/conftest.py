@@ -24,6 +24,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from player_backend.db.executor import Handle, connect
 from player_backend.db.migrate import apply_migrations
 from tests.dbhelp import ROLES, Conn
+from tests.sitehelp import Site, running_site
 
 BACKEND = Path(__file__).resolve().parents[1]
 INIT_SQL = BACKEND / "db" / "init" / "10-roles.sql"
@@ -85,6 +86,16 @@ def owner_url(_urls: tuple[str, str]) -> str:
     return _urls[1]
 
 
+@pytest.fixture(scope="session")
+def app_url(db_url: str) -> str:
+    """A player_app URL to `player_test`, for the running backend's pool."""
+    password = secrets.token_hex(16)
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        conn.execute(sql.SQL("ALTER ROLE player_app PASSWORD {}").format(sql.Literal(password)))
+    params = {k: str(v) for k, v in conninfo_to_dict(db_url).items() if v is not None}
+    return make_conninfo("", **{**params, "user": "player_app", "password": password})
+
+
 @pytest.fixture
 def owner_db(owner_url: str) -> Iterator[Handle]:
     """A handle from the executor, connected as player_owner (autocommit)."""
@@ -98,3 +109,10 @@ def su(db_url: str) -> Iterator[Conn]:
     with psycopg.connect(db_url) as conn:
         yield conn
         conn.rollback()
+
+
+@pytest.fixture
+def site(app_url: str, db_url: str) -> Iterator[Site]:
+    """The real app as player_app, with a fake mailer; its rows are removed afterwards."""
+    with running_site(app_url, db_url) as running:
+        yield running
