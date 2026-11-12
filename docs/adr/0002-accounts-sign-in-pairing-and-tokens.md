@@ -129,7 +129,8 @@ proves only "the same browser".
 1. The user enters an email. The answer is always the same page and status ("if this address
    can sign in, a link is on its way"). It is the same for an unknown address, an address that
    is not allowed, and an address over its limits (section 10). Only the per-address limit, which
-   does not depend on the email, answers 429.
+   does not depend on the email, answers 429, and input that is not an email address at all
+   answers `422` (step 2).
 2. The request makes the same two calls for every address (amended 2026-11-12). First,
    `rate_limit_hit` for the requesting address alone, which answers the 429 of step 1 before
    the email is looked at. Then `auth_request_login`, in the same transaction: the counters
@@ -142,10 +143,15 @@ proves only "the same browser".
    exception that section 10 requires: a request over its per-pair limits does not count
    toward the per-email total of 30 a day, so it makes one counter write fewer. That depends
    only on the requester's own earlier requests for that email, so it tells them nothing new.
+   A request over any of its limits, the per-email total included, also cancels no older link
+   (step 3); over the per-email total that tells the requester at most that the day's total
+   for that email is used up, whether or not the address can sign in.
    Input that is not an email address is refused with `422` after the first call and makes
    no second call.
 3. A newer link cancels older ones **only when asked from the same browser** (the same browser
-   token). Links asked from other browsers stay valid: each works only in its own browser, so
+   token), and only when the request is within its limits (section 10). A request over its
+   limits cancels nothing. Whether the address can sign in plays no part (amended 2026-11-12).
+   Links asked from other browsers stay valid: each works only in its own browser, so
    nothing is lost, and a stranger who knows the email cannot cancel the user's link.
 4. The mail holds `https://<site>/sign-in#<token>`. The token is in the fragment.
 5. The page reads the fragment, removes it from the address bar (`history.replaceState`) and
@@ -190,9 +196,12 @@ Changing the email address is not part of PL2. When it is added it gets its own 
   no `Domain`. `Max-Age` equals the absolute lifetime.
 - A new token is issued at every sign-in. A token from before sign-in is never upgraded.
 - Lifetime: 14 days without use, 60 days in total. "Last used" is written at most once every 5
-  minutes. At most 20 sessions per account; the oldest is dropped.
+  minutes, when the session is checked at the start of a request, so a signed-in request that
+  is refused later (for example for want of a recent sign-in) still counts as use. At most 20
+  sessions per account; the oldest is dropped.
 - Revocation deletes the row, so it takes effect on the next request. The site lists sessions
-  (browser family, last used) and can end one or all.
+  (browser family, last used) and can end one or all. Signing out with a session that has
+  already ended or expired is done already: it answers `204` and clears the cookie.
 - Cross-site requests. Every state change is a POST, PUT, PATCH or DELETE. For those the server
   requires an `Origin` header equal to the site's origin, and refuses the request when
   `Sec-Fetch-Site` is present and is not `same-origin`. No cross-origin resource sharing is
@@ -879,7 +888,7 @@ the database's log is covered too:
 | A stolen session cookie | `HttpOnly`, `Secure`, `__Host-`. Sensitive actions need a recent sign-in. Sessions are listed and can be ended. 14 days idle, 60 days in total |
 | A forwarded, intercepted or pre-opened sign-in link | Single use, 15 minutes, bound to the browser that asked, token in the fragment and removed from the address bar, used only by a POST |
 | A stranger who knows an email blocking that account's link sign-in | A new link cancels older ones only from the same browser, so the stranger cancels nothing. The limits count per email and requesting address together, so the stranger uses up only their own. What is left: someone with several addresses can reach the total of 30 a day for one email, which stops new links to that mailbox until the next day and sends it up to 30 mails. Passkey sign-in and sessions already open are not affected |
-| Finding out who has an account | A link request always gives the same answer, makes the same two database calls and sends mail after the response. The second call writes one row more for an address with an account (its audit event); that small difference in time is not hidden. A request over its per-pair limits writes one counter fewer, which tells the requester only about their own earlier requests. Over the per-email limits the answer is still the same. The only 429 depends on the requester's address alone. Passkey sign-in takes no email and lists no credentials. Unknown addresses write no audit event |
+| Finding out who has an account | A link request always gives the same answer, makes the same two database calls and sends mail after the response. The second call writes one row more for an address with an account (its audit event); that small difference in time is not hidden. A request over its per-pair limits writes one counter fewer, which tells the requester only about their own earlier requests. Over the per-email limits the answer is still the same, and a request over any limit cancels no older link; over the per-email total that tells at most that the day's total is used up. The only 429 depends on the requester's address alone. Passkey sign-in takes no email and lists no credentials. Unknown addresses write no audit event |
 | Cross-site requests and cross-site WebSocket use | `SameSite=Lax`, the `Origin` check, no cross-origin sharing. The cookie is read by a fixed, tested list of routes. The WebSocket takes no cookie and checks `Origin` for browser roles |
 | A token in a log, a link or a public repository | Long tokens are never in a path or query, and codes in links are in the fragment. The one exception, the source link code, lives 60 seconds and needs the PKCE verifier. Headers and token bodies are not logged. The prefix makes a leak findable; CI scans for it |
 | A copy of the database | It holds hashes of 256-bit tokens, which cannot be reversed, and public keys. Live codes and tokens are not in it. It does hold all content, so a copy is a full breach of stored data; the hashes only stop it from becoming a way in |
@@ -972,7 +981,9 @@ the database's log is covered too:
 - The limits counted inside the `auth_*` functions, the link's 15 minutes, the session
   lifetimes and the cap of 20 sessions are constants in those functions (principle 7).
   Changing one is a migration that replaces a function body, so it is a security-critical pull
-  request with a top-tier Reviewer. The other limits are settings, and raising one is a normal
+  request with a top-tier Reviewer. The per-address limit on link requests (10 an hour) is a
+  constant in the backend's sign-in rules (`login_policy.py`); changing it is also a
+  security-critical pull request. The other limits are settings, and raising one is a normal
   change. Removing a guard test is never a normal change.
 
 **Defaults chosen here that the owner may want to change.** Each is a setting or a small,

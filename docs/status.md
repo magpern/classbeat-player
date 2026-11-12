@@ -13,38 +13,46 @@ All issues are merged: CI (#1, #10, #17, #24, #33), ADRs 0001–0004 (#2, #3, #9
 spike 1 harness (#4), and spike 2 web and Godot variants (#5, #18). What is still open is the
 owner's: running both spikes (owner.md).
 
-## Work in progress
+## PL5: music link (done on fakes)
 
-| Issue | Lane | What | State |
-|---|---|---|---|
-| #20, #26 | contract | Class format schema, generated types, reference converter | Merged (#23, #27) |
-| #29 | player | Desktop shell skeleton, class files, class clock | Merged (#36) |
-| #37 | player | Music link core: link states, following the music | Merged (#38) |
-| #41 | player | macOS music reader | Merged (#43) |
-| #44 | player | Music link hardening from the #38 and #43 reviews | Merged (#46) |
-| #42 | player | Windows music reader | PR #45, in progress |
-| #47 | player | Linux music reader (best effort) | In progress |
-| #22 | docs | Design system and the plain 2D room screen spec | PR #31, fixing after a second `FAIL` |
-| #28 | backend | Service skeleton, database roles, migrations | PR #32, fixing one finding |
-| #39 | docs | ADR 0002: two-layer SQL guard and its scope | Merged (#40) |
+Merged: link core (#38), macOS reader (#43), hardening (#46), Windows reader (#45), Linux reader
+(#50), shared reader lifecycle (#59). The Verifier's run on `main` found three gaps, now issues
+#62 (Start while following, PR #66), #63 (after #62) and #64 (holding status text, PR #65). The
+live checks with a real Spotify account are the owner's (owner.md).
+
+## PL2: backend and sign-in
+
+Merged: service skeleton, roles and migrations (#32), email link sign-in and site sessions (#54),
+sign-in hardening (#60), ADR 0002 as built (#57, #67). In progress: device pairing (#58, PR #61).
+Next: the source API, the class library, passkeys; the real mailer with an enforced timeout,
+the allowlist command, a purge schedule, `PLAYER_SITE_ORIGIN` and trusted proxies in deploy files.
+
+## PL4: screens
+
+PR #31 (design system and the plain 2D room screen spec, #22): Design `PASS`, under review.
+Screen tokens and the plain 2D room screen follow it.
+
+## Scene spike
+
+Merged: #30 and its findings (#53).
 
 ## Decisions recorded
 
 - ADR 0002 section 9 item 1 (amended in #40): string-built SQL is held by an executor that alone
   owns the driver and runs only registered `Query` objects, with a source guard aimed at
   mistakes. After four `FAIL`s on a source-only guard, the Orchestrator reassessed the design.
-- The macOS reader opens a class on the manual clock and calls Spotify only once Follow is
-  picked (#43).
+- ADR 0002 principle 7 (#57): limits that bound the app's database role are constants in the
+  database functions and change by migration in a security-critical pull request.
+- Another app playing while following shows "Off the list" (ADR 0001).
+- A reader that cannot start six times reports following as unavailable on that computer (#59).
 
-## Next
+## Later hardening (non-blocking findings)
 
-- After #45 and #47: transport control and the crossfade check, which finish PL5 on fakes.
-- After #32: PL2 sign-in functions, sign-in, pairing and the source API.
-- After #31: PL4 screen tokens and the plain 2D room screen.
-- Non-blocking findings for later hardening issues:
-  - scene spike #30: the 1–9 keys in native Godot, the hidden window on more than one display,
-    a malformed `godotweb://` request, a test timeout;
-  - presenter layout notes from the design review of #38.
+- Player: reader findings N3, N4, N6, N7 from #59; presenter layout notes from #38; a test that
+  stopping the native scene clears its state (#53); one capitalisation convention for status
+  texts (#65 design review).
+- Backend: a test that a request over the per-email total leaves the older link; the
+  `auth_session_active` stub.
 
 ## Carried into PL1
 
