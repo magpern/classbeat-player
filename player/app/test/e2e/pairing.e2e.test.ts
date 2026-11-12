@@ -49,6 +49,7 @@ function fakeBackend(): Server {
 }
 
 let app: ElectronApplication;
+let closed = false;
 let page: Page;
 const userData = mkdtempSync(join(tmpdir(), "player-e2e-pairing-"));
 const output: string[] = [];
@@ -70,7 +71,7 @@ before(async () => {
   });
 });
 after(async () => {
-  await app?.close();
+  if (!closed) await app?.close();
   server?.closeAllConnections();
   server?.close();
 });
@@ -138,6 +139,11 @@ test("the token and the device code never reached the page, its console, the app
     assert.ok(!consoleLines.join("\n").includes(secret), "in the page's console");
     assert.ok(!output.join("").includes(secret), "in the app's output");
   }
+  // The files are read once the app has quit: on Windows a running Chromium keeps some of its
+  // files locked (EBUSY), and what is written on the way out is checked as well.
+  await app.close();
+  closed = true;
+  for (const secret of [TOKEN, DEVICE_CODE]) assert.ok(!output.join("").includes(secret), "in the app's output on quitting");
   // Chromium's Singleton* entries are symbolic links to nowhere: only real files are read.
   const files = (dir: string): string[] =>
     readdirSync(dir).flatMap((n) => {
