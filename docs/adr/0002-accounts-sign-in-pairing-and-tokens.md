@@ -655,26 +655,50 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
 - What stands against that:
   1. **No SQL is ever built from strings.** Every statement is a constant with bound
      parameters. Two layers hold this (amended 2026-11-12):
-     - *At run time, by type.* Every statement is an instance of a sealed `Query` type,
-       created only while the query modules are first imported. After that, the registry is
-       frozen and any later creation raises. `Query` supports no `+`, `%`, `format` or
-       conversion back to a statement. The one executor module is the only code that imports
-       the database driver. It runs a statement only if the object is a registered `Query`,
-       checked by identity, and raises on anything else, including a plain `str`.
-       So SQL built from strings, or a constant replaced by a new value, fails when it is run,
-       whichever way the source got there. A test drives each of these through the executor.
+     - *At run time: the executor and `Query`.*
+       - **The executor owns the driver.** One executor package is the only code that holds a
+         driver object. "The driver" is a closed list: `psycopg`, `psycopg_pool`, and any other
+         database client library. The executor creates the pool and every connection, including
+         the live process's listening connection, and no connection, cursor or pool object
+         leaves it. Data access, the migration runner and the operator's commands get a handle
+         from the executor. A handle takes only a registered `Query` and bound parameters, and
+         returns rows; it has no method that takes text. Only the listening connection takes no
+         statement: the executor issues its `LISTEN` from a registered `Query` of its own.
+       - **`Query` and its registry.** A `Query` is made only from a string literal in a query
+         module, or from a `.sql` file committed in the repository; migrations are such files.
+         The registry opens when the executor package is imported. The query modules and the
+         migration files are then loaded in one fixed list, and the registry is frozen. Making
+         a `Query` after the freeze raises. The executor runs nothing before the freeze.
+         `Query` has no `+`, `%`, `format`, `str()` or `repr()` that returns the statement, and
+         no public attribute that holds its text.
+       - **What is run.** The executor looks up the object it is given in its registry by
+         identity, and runs the text the registry holds for it, never a field of the object.
+         Anything else raises: a plain `str`, `sql.SQL`, `Composed`, bytes, a subclass or copy
+         of `Query`, or an unregistered `Query`. So SQL built from strings, and a query name
+         rebound to a new value, fail when they are run. An object changed in place still runs
+         its registered text. A test drives each of these through the public interface.
+       - **What it holds against.** Ordinary code that uses the public interface of `Query`, the
+         executor and its handles. It is not a sandbox. Code in the same process can patch the
+         executor or reach private attributes, `gc` or `object.__setattr__`. That is code
+         written to evade the layers, the row "A compromised backend process" in the threat
+         table, and review answers it.
      - *In the source.* A guard test reads the backend's source. It fails on:
-       - any import of the database driver outside the executor;
-       - any database call outside the data-access modules;
-       - a query constant used other than as the direct statement argument of an executor call;
+       - any import of a driver library outside the executor package;
+       - any use of a driver object or a handle's private attributes outside the executor;
+       - a query constant used other than as the direct statement argument of a handle call;
        - SQL text made by an f-string, `format`, `%` or `+`.
        The linter's rule for string-built SQL is an error in CI as well.
-     - *Scope.* The two layers catch mistakes in ordinary code, the threat in the row "One
-       account reading another's rows". The source guard is not expected to catch code written
-       to evade it: re-exports, aliases of `sys` or `builtins`, split strings, and the like.
-       The run-time layer and review cover that. A bypass of the source guard by deliberately
-       obfuscated code is a non-blocking finding. A bypass of the run-time layer, or of the
-       driver-import rule, is blocking.
+     - *Scope.* The two layers answer injected SQL that comes from a mistake in ordinary code:
+       the row "Injected SQL running as the backend's role". Code written to evade them is the
+       row "A compromised backend process". The source guard is not expected to catch evasive
+       code, such as re-exports, aliases of `sys` or `builtins`, or split strings.
+       - **Blocking:**
+         - a way for ordinary code, using only the public interface, to run text that is not a
+           registered `Query`;
+         - a driver object reachable outside the executor without private attributes;
+         - a driver import outside the executor package.
+       - **Non-blocking:** a bypass of the source guard by evasive code, or a bypass of the
+         run-time layer that needs private attributes or patching.
   2. Row-level security as the backstop against accidental cross-account reads.
   3. The closed tables.
   4. The audit events written inside the `auth_*` functions, which the backend's role cannot
@@ -686,7 +710,7 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
 
 **In FastAPI.** One dependency per credential type calls its `auth_enter_*` function as the
 first statement of the request's transaction and yields an `AccountContext`. Data access takes
-that context and nothing else hands out a database connection. Queries still filter by
+that context and a handle from the executor; nothing hands out a database connection. Queries still filter by
 `account_id` in the code; the policy is the backstop.
 
 **Guard tests** (never weakened; all read the catalogue or the source, so anything new fails
