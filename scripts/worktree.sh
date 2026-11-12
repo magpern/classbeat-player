@@ -48,8 +48,18 @@ case "$cmd" in
     for dir in "$wt_base/$issue"-*; do
       [ -d "$dir" ] || continue
       found=1
+      branch="$(git -C "$dir" symbolic-ref --short -q HEAD || true)"
       git -C "$root" worktree remove --force "$dir"
       echo "removed $dir"
+      [ -n "$branch" ] || continue
+      # Delete the branch only when origin/main already contains it (merged, or no commits
+      # of its own); otherwise keep it, because it may hold unmerged work.
+      if git -C "$root" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
+        git -C "$root" branch -D "$branch" >/dev/null
+        echo "deleted branch $branch (merged or no commits of its own)"
+      else
+        echo "kept branch $branch: not contained in origin/main"
+      fi
     done
     [ "$found" -eq 1 ] || { echo "no worktree for issue $issue" >&2; exit 1; }
     ;;
