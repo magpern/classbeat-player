@@ -44,5 +44,8 @@ check "all-zero before means everything" "backend schema player web desktop" "$(
 check "unknown base means everything" "backend schema player web desktop" "$(flags pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$feature")"
 commit scripts/other.sh
 check "unrelated file sets no flag" "" "$(flags push "$main_tip" HEAD)"
+before_wf="$(git rev-parse HEAD)"
+commit .github/workflows/ci.yml
+check "workflow change runs schema and desktop" "schema desktop" "$(flags push "$before_wf" HEAD)"
 
 exit "$fail"

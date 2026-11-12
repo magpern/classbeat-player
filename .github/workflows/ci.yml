@@ -79,9 +79,30 @@ jobs:
       - name: npm ci and npm test in every package
         run: bash scripts/run-node-packages.sh .
 
+  # Runs schema/ci.sh: install from lockfiles, generated types current, Python and TypeScript
+  # checks. A failure fails this job, and `ci` below fails when it fails.
+  schema:
+    needs: changes
+    if: needs.changes.outputs.schema == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: schema/**/uv.lock
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: schema/**/package-lock.json
+      - name: Schema checks
+        run: bash schema/ci.sh
+
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages]
+    needs: [changes, repo-checks, node-packages, schema]
     if: always()
     runs-on: ubuntu-latest
     steps:
