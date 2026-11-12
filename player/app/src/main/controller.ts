@@ -43,7 +43,7 @@ export function createController(now: () => number = () => performance.now(), re
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
     if (reader.unavailable?.() === true) state = withoutReader(state);
     state = advance(state, t, reader.latest(t));
-    return snapshotOf(state, t);
+    return snapshotOf(state, t, transport !== null);
   };
   const onDemand = reader.setActive !== undefined;
   const sync = (): void => reader.setActive?.(isFollowing(state));

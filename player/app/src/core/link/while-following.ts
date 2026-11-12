@@ -35,3 +35,23 @@ export function routeWhileFollowing(link: LinkModel, available: boolean, cmd: Cl
   if (action !== undefined) return canSend ? { kind: "transport", action } : { kind: "manual" };
   return MOVES_THE_CLOCK.includes(cmd.type) ? { kind: "manual" } : null;
 }
+
+/** What the Next and Previous controls say. Provisional until the presenter design spec (#22, #31). */
+export interface ControlLabels {
+  readonly next: string;
+  readonly previous: string;
+}
+
+/**
+ * The control labels, taken from the same routing as the commands, so a label cannot promise what
+ * the route does not do: a control sent to the music is named for the music ("Next song"), one that
+ * hands the clock over says it stops following, and one applied to the clock keeps its plain name.
+ */
+export function controlLabels(link: LinkModel, available: boolean, canSend: boolean): ControlLabels {
+  const label = (cmd: ClockCommand, plain: string, music: string): string => {
+    const r = routeWhileFollowing(link, available, cmd, canSend);
+    if (r === null || (r.kind === "transport" && r.alsoClock === true)) return plain;
+    return r.kind === "transport" ? music : `${plain} (stops following)`;
+  };
+  return { next: label({ type: "next" }, "Next interval", "Next song"), previous: label({ type: "previous" }, "Previous interval", "Previous song") };
+}
