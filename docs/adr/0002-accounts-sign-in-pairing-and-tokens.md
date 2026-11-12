@@ -698,7 +698,7 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
          - a way for ordinary code, using only the public interface, to run text that is not a
            registered `Query`;
          - a driver object reachable outside the executor without private attributes;
-         - a driver import outside the executor package.
+         - a driver import outside the executor.
        - **Non-blocking:** a bypass of the source guard by evasive code, or a bypass of the
          run-time layer that needs private attributes or patching.
   2. Row-level security as the backstop against accidental cross-account reads.
