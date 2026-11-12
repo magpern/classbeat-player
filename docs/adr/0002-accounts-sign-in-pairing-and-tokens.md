@@ -92,8 +92,8 @@ every code. That is accepted, because the pairing code alone collects nothing (s
 | Source token `cbp_src_` | Site, on the code exchange | Publish and remove classes for one account; read its own publication numbers. Reads no class content, devices or account data | No fixed end; ends after 365 days without use | Hash, in `source_links` | Encrypted in the source's own store | The user on the site, the source itself, account deletion, idle expiry |
 | Host token `cbp_hst_` | Live process, when a device starts a live session | Be the host of that one session | The session | Hash, in memory | App memory only | Session end; device revoked; account deleted |
 | Join code (short) | Live process, when a session starts | Names one live session; lets a phone ask to join as a rider | The session | Memory of the live process | On the room screen and in the QR code | Session end; the host can lock the session or make a new code |
-| Control code (short) | Live process, when the host asks | Exchange once, with the session's join code, for a controller token | 2 minutes, single use | Memory, with its session | On the instructor's screen only | Use, expiry, 5 wrong tries, a newer code |
-| Controller token `cbp_ctl_` | Live process, for a control code or the instructor's session | Steer and follow one live session | The session | Hash, in memory | Phone, `sessionStorage` | The host drops the controller; "sign out everywhere"; session end |
+| Control code (short) | Live process, when the host asks | Exchange once, with the session's join code, for a controller token | 2 minutes, single use | Memory, with its session | On the instructor's screen only | Use, expiry, 5 wrong tries for its session, a newer code |
+| Controller token `cbp_ctl_` | Live process, for a control code or the instructor's session | Steer and follow one live session | The session | Hash, in memory | Phone, `sessionStorage` | The host drops the controller; for one got by sign-in, the end of that site session; session end |
 | Rider token `cbp_rdr_` | Live process, on a join | Follow one live session and send that rider's own data to its host | The session | Hash, in memory | Phone, `sessionStorage` | The host removes the rider; session end |
 
 Passkeys are not tokens. The server stores only the public key (section 4).
@@ -281,6 +281,10 @@ ADR 0003, section 6: `source_class_id`, `publication_number`, `removed`, `conten
 - The decision is made in one transaction. It first runs `INSERT … ON CONFLICT (account_id,
   source_id, source_class_id) DO NOTHING` with number 0, then `SELECT … FOR UPDATE` on that row.
   So a first publication has a row to lock too, and two sends of the same class never cross.
+- The row with number 0 is a placeholder: no document and no marker. If the publication is
+  refused, the transaction is rolled back and the placeholder goes with it, so none is ever
+  committed. The player API, the class list and the count of 2,000 take only rows with a
+  number above 0.
 
 | Incoming number against the highest seen | Result |
 |---|---|
@@ -309,8 +313,9 @@ controller and rider tokens, nicknames and readings exist only in the live proce
 Nothing about riders is written to the database or to logs. The live process does read the
 database, as the role `player_app` and only through the functions of section 9, for three
 things: to check a device token when a session starts and while it runs (`auth_enter_device`,
-`auth_device_active`), to check a site session on the one cookie route (`auth_enter_session`),
-and to write the account's audit events.
+`auth_device_active`), to check a site session on the one cookie route and while its controller
+is connected (`auth_enter_session`, `auth_session_active`), and to write the account's audit
+events.
 
 **Roles.**
 
@@ -335,20 +340,36 @@ and to write the account's audit events.
   one, which is closed with code 4409. That is the reconnect after a network drop.
 - If the app loses the host token (it was restarted), the session cannot be taken up again. It
   ends by the rule below and the app starts a new one.
-- At most 3 live sessions per account. A session ends when the host ends it, 15 minutes after
-  the host's connection is lost, or after 12 hours.
+- **One live session per device.** When a device starts a session, the live process first ends
+  any earlier session that device started. So an app that was restarted never fills the limit
+  with sessions it can no longer reach.
+- At most 3 live sessions per account. A session ends when the host ends it, when its device
+  starts a new one, 15 minutes after the host's connection is lost, or after 12 hours.
 
 **Revocation while a session runs.**
 
-- The site's transaction that revokes a device, deletes an account or ends all sessions of an
-  account calls `pg_notify('live_revocations', <account id>)`. The live process listens on that
-  channel.
-- A notification is only a hint. On one, and in any case every 30 seconds, the live process
-  calls `auth_device_active` with each affected session's stored device-token hash.
-- When the answer is false (the device is revoked or expired, or the account is gone), the
-  session ends: the host, controller and rider tokens are dropped and every connection is closed
-  with code 4403. The worst-case delay is 30 seconds.
-- "Sign out everywhere" drops the controllers of the account's sessions. The session goes on.
+- The live process records, with each session, the hash of the device token that started it,
+  and with each controller got by sign-in, the hash of the site session token that asked.
+- **The re-check.** Every 30 seconds the live process calls `auth_device_active` for each
+  session and `auth_session_active` for each such controller.
+  - Device not active (revoked, expired, or the account is gone): the session ends. The host,
+    controller and rider tokens are dropped and every connection is closed with code 4403.
+  - Site session not active (signed out, "sign out everywhere", expired, account gone): that
+    controller is dropped. The session goes on. A controller got by a control code is not tied
+    to a sign-in; the host drops it.
+- **The hint.** The site's transaction that revokes a device, ends sessions or deletes an
+  account calls `pg_notify('live_revocations', <account id>)`. On a notification the live
+  process runs the re-check at once for that account's sessions. A notification carries no
+  authority: only the re-check's answer changes anything.
+- The live process listens on a connection of its own, kept open for that purpose, direct to
+  the database and never through a transaction pooler. When that connection is lost it
+  reconnects and runs the full re-check at once.
+- So every revocation, a missed notification included, takes effect within 30 seconds.
+- **Audit.** "Live session started" and "ended" are written by the live process after
+  `auth_enter_device`. Once the device is revoked that function no longer sets the account, so
+  the live process writes nothing then. The site's own event, written in the revoking
+  transaction ("device revoked", "all sessions ended"), is the record, and its detail says that
+  live sessions end with it. A deleted account has no events left to write to.
 
 **Joining as a rider.** The room screen shows the join code and a QR code of
 `https://<site>/j#<code>`. The code is in the fragment and the address carries nothing else: no
@@ -357,7 +378,8 @@ with the code and a nickname in the body, and gets a rider token. A nickname is 
 characters with control characters removed, is always rendered as text, and is gone when the
 session ends. At most 60 riders per session. A join that fails gets one answer, `cannot_join`,
 whether the code is unknown, the session is locked or it is full, so it tells nothing about who
-is there. The rider's FTP and maximum heart rate stay on the phone (plan section 7).
+is there. Join limits are made for a whole class on one studio address (section 10): joins are
+counted per session, and only joins with an unknown code are counted per address. The rider's FTP and maximum heart rate stay on the phone (plan section 7).
 
 **Becoming a controller.** Two ways, as the plan says. The join code alone never gives control.
 
@@ -373,11 +395,16 @@ is there. The rider's FTP and maximum heart rate stay on the phone (plan section
   only to name the session) and `code` (the control code). The live process finds the session by
   the join code and compares the control code with that session's current one only.
   - A right code gives a controller token and is used up.
-  - A wrong code for a session that exists counts against that session. At 5 the session's
-    control code is cancelled and the host is told; the host may make a new one.
-  - An unknown session and a wrong code get the same answer, `invalid_code`.
-  - Every call, right or wrong, counts against the caller's address: 5 per 10 minutes.
-  - A host may make 10 control codes an hour per session.
+  - A wrong code for a session that exists counts against that session, not against the
+    caller's address. At 5 the session's control code is cancelled and the host is told. The
+    host resets it by making a new code.
+  - An unknown session and a wrong code get the same answer, `invalid_code`. An unknown session
+    counts as a join with an unknown code for the caller's address (section 10).
+  - There is no per-address limit on exchanges for a session that exists. The instructor's
+    phone and the riders' phones share the studio's address, so such a limit would let a rider
+    lock the instructor out.
+  - A host may make 30 control codes an hour per session. That bounds guessing at 150 tries an
+    hour per session.
 
 Either way the phone gets a controller token. At most 2 controllers per session.
 
@@ -391,6 +418,7 @@ Either way the phone gets a controller token. At most 2 controllers per session.
 - Before `hello`, a connection may send one message of at most 1 KiB. After it, a message is at
   most 16 KiB and a connection may send 10 messages a second. Breaking a limit closes the
   connection.
+- One connection per token. A new connection with the same token replaces the old one.
 - When a token is dropped or the session ends, the server closes its connections with code 4403.
 
 **Routing is an allowlist, decided by the server.**
@@ -419,7 +447,7 @@ Either way the phone gets a controller token. At most 2 controllers per session.
 
 | Role | Used for | Rights |
 |---|---|---|
-| `player_owner` | Migrations only | Owns the schema and the tables. A member of `player_auth`, so that migrations can create its functions |
+| `player_owner` | Migrations and the operator's commands only | Owns the schema and the tables. A member of `player_auth`, so that migrations can create its functions |
 | `player_app` | The running backend, including the live process | `LOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, owns nothing. Grants below |
 | `player_auth` | Owner of the `SECURITY DEFINER` functions | `NOLOGIN`, `BYPASSRLS`. Nobody but `player_owner` is a member. Grants below |
 
@@ -432,15 +460,21 @@ Either way the phone gets a controller token. At most 2 controllers per session.
 
 ```sql
 CREATE POLICY tenant ON <table>
-  USING      (account_id = (SELECT current_account()))
-  WITH CHECK (account_id = (SELECT current_account()));
+  USING      (account_id = (SELECT nullif(current_setting('app.account_id', true), '')::uuid))
+  WITH CHECK (account_id = (SELECT nullif(current_setting('app.account_id', true), '')::uuid));
 ```
+
+  With no account set the expression is null and no row is visible or writable. The inner
+  `SELECT` makes the setting be read once per query.
 
 - *Closed tables* exist before any account is known or hold what the backend must not read
   freely: `login_links`, `login_challenges`, `pairings`, `source_link_codes`, `rate_limits`,
-  `signup_allowlist`, `auth_secret`. They have no policy and `player_app` has **no grant** on
-  them. They are reached only through the functions below. `pairings.account_id` is null until
-  approval. This list is the written allowlist of tables without the tenant policy.
+  `signup_allowlist`. `player_app` has **no grant** on them and they have no policy for it. They
+  are reached only through the functions below. `pairings.account_id` is null until approval.
+  This list is the written allowlist of tables without the tenant policy.
+- `signup_allowlist` has one policy, for `player_owner` alone, allowing everything. The operator
+  edits the list with a command of the backend (`allowlist add`, `remove`, `list`) that is run
+  on the server and connects as `player_owner`, like a migration. No running role can write it.
 
 **Grants.**
 
@@ -450,79 +484,104 @@ CREATE POLICY tenant ON <table>
 
 | Tables | Rights |
 |---|---|
-| The closed tables except the two below | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
-| `signup_allowlist`, `auth_secret` | `SELECT` |
+| `login_links`, `login_challenges`, `pairings`, `source_link_codes`, `rate_limits` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| `signup_allowlist` | `SELECT` |
 | `accounts` | `SELECT`, `INSERT` |
 | `sessions`, `devices`, `source_links` | `SELECT`, `INSERT`, `UPDATE` of the last-used column, `DELETE` of expired rows |
 | `passkeys` | `SELECT`, `UPDATE` of the counter and last-used columns |
 | `audit_events` | `INSERT`, `DELETE` of rows past their retention |
 | `classes`, `class_markers`, `passkey_registrations` | None |
 
-**The account context cannot be forged by the backend's role.** The policy does not trust a
-plain setting, because any role can set one.
+**Setting the account.** An `auth_enter_*` function looks a credential up by its hash, checks
+that it is valid, and then runs `set_config('app.account_id', <account id>, true)`. The value is
+local to the transaction, so a pooled connection never carries one request's account into the
+next. It is never set at session level, and the backend's code never sets it itself. An account
+id is a random UUID. No endpoint and no function shows it to another account.
 
-- `auth_secret` holds one row: 32 random bytes made when the database is created
-  (`gen_random_bytes`, extension `pgcrypto`). Only `player_auth` can read it.
-- A function that has verified a credential sets, local to the transaction, `app.account_ctx` to
-  `<account id>.<backend pid>.<transaction start>.<mac>`, where `mac` is
-  `hmac(<the first three fields>, <secret>, 'sha256')`.
-- `current_account()` reads that setting. It returns the account id only if the MAC is right and
-  the pid and the transaction start are those of the running transaction
-  (`pg_backend_pid()`, `transaction_timestamp()`). Otherwise it returns null, and no row is
-  visible or writable.
-- So `player_app` can enter an account only by presenting a valid credential's hash to an
-  `auth_enter_*` function. An account id, an email or a context value copied from another
-  transaction does not switch the account. The value is local to the transaction, so a pooled
-  connection never carries one request's account into the next.
-
-**The functions.** All are `SECURITY DEFINER`, owned by `player_auth`, with `search_path` pinned
-to `pg_catalog` and the schema, `EXECUTE` revoked from `PUBLIC` and granted to `player_app`.
-This is the complete list. Adding one is a security-critical change.
+**The functions.** All are `SECURITY DEFINER`, owned by `player_auth`, with
+`SET search_path = pg_catalog, <schema>, pg_temp` (`pg_temp` named last, so a temporary object
+can never stand in for a real one). Anything outside those schemas is called schema-qualified.
+`EXECUTE` is revoked from `PUBLIC` and granted to `player_app`. This is the complete list.
+Adding one is a security-critical change.
 
 | Function | Does | Returns |
 |---|---|---|
-| `current_account()` | Verifies the context (above). Used by the policies | The account id or null |
-| `auth_enter_session(hash)` | Finds a live session row by its token hash, updates last-used, sets the context | The session's id and last sign-in time, or nothing |
+| `auth_enter_session(hash)` | Finds a live session row by its token hash, updates last-used, sets the account | The session's id and last sign-in time, or nothing |
 | `auth_enter_device(hash)` | The same for a device token | The device id and a state: `ok`, `revoked`, `expired`, `unknown` |
 | `auth_enter_source(hash)` | The same for a source token | The link id and the source id, or nothing |
-| `auth_device_active(hash)` | Checks a device token without setting a context (live process) | True or false |
-| `auth_request_login(email, link_hash, browser_hash, address_hash)` | Counts the limits, writes the link row, writes the audit event if the account exists | True when a mail is to be sent |
+| `auth_device_active(hash)` | Checks a device token without setting the account (live process) | True or false |
+| `auth_session_active(hash)` | Checks a session token without setting the account (live process) | True or false |
+| `auth_request_login(email, link_hash, browser_hash, address_hash)` | Counts the limits, writes the link row | True when a mail is to be sent |
 | `auth_complete_login(link_hash, browser_hash, session_hash)` | Checks and uses up the link, creates the account if needed and allowed, creates the session | True or false |
 | `auth_new_login_challenge(challenge_hash, browser_hash)` | Stores a passkey sign-in challenge | Nothing |
 | `auth_passkey_for_login(credential_id)` | Finds a passkey by its credential id | The public key and the counter. No account id |
 | `auth_complete_passkey(credential_id, challenge_hash, browser_hash, counter, session_hash)` | Uses up the challenge, applies the counter rule, creates the session | True or false |
 | `auth_start_pairing(device_code_hash, user_code_hash, platform, version)` | Writes a pending pairing | Nothing |
-| `auth_decide_pairing(user_code_hash, approve, name)` | For `current_account()` only: approves or denies a pending pairing | The pairing's platform and version, or nothing |
+| `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies a pending pairing | The pairing's platform and version, or nothing |
 | `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email |
-| `auth_new_link_code(code_hash, source, redirect, challenge)` | For `current_account()` only: stores a source link code | Nothing |
+| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code | Nothing |
 | `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link | True or false |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
 | `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
 
 The database checks what it can itself: hashes, expiry, single use, the browser binding, the
-PKCE verifier, the counter rule. The WebAuthn signature is checked by the backend, so
-`auth_complete_passkey` trusts its caller for that one fact. A caller still needs a credential
-id, which is random, at least 16 bytes, and never listed by any endpoint or function.
+PKCE verifier, the counter rule, the limits.
+
+**Audit inside the functions.** Every `auth_*` function that makes, uses up or refuses a
+credential for an existing account writes that account's audit event itself, in the same
+transaction: link requested, signed in, sign-in refused, pairing decided, device created,
+source link created. A caller cannot do one of these without the event. The `auth_enter_*` and
+`*_active` functions run on every request and write no event; they update "last used".
+
+**What this stops and what it does not.** Stated exactly, so that nobody builds on more:
+
+- It stops *accidents*: a query that forgot its account filter, a new table without a policy, a
+  job that ran with no account. Those return nothing, and the guard tests catch them.
+- It keeps what is in the closed tables away from the backend's own queries: pending links,
+  challenges, pairing rows, link codes, counters and the allowlist.
+- It does **not** contain code that runs as `player_app`, that is a compromised backend or
+  injected SQL. Such code can act for any account whose email, passkey credential id or account
+  id it knows:
+  - it can call `auth_request_login` and `auth_complete_login` with a link token, a browser
+    token and a session token of its own making, for any address that can sign in. It then
+    holds a session for that account without the mail being read. The database cannot tell this
+    from a real sign-in, because the backend is what makes the link token and sends the mail;
+  - it can do the same with `auth_complete_passkey` for a credential id it knows, because the
+    WebAuthn signature is checked by the backend, not by the database;
+  - it can run `set_config('app.account_id', …)` itself with an account id it knows;
+  - inside an account it reads that account's rows, token hashes included.
+- What stands against that:
+  1. **No SQL is ever built from strings.** Every statement is a constant with bound
+     parameters. A guard test reads the backend's source and fails on any SQL text made by an
+     f-string, `format`, `%` or `+`, and on any database call outside the data-access modules.
+     The linter's rule for string-built SQL is an error in CI as well.
+  2. Row-level security as the backstop against accidental cross-account reads.
+  3. The closed tables.
+  4. The audit events written inside the `auth_*` functions: an account entered through the
+     sign-in functions shows a sign-in the user did not make.
+  5. The rate limits counted inside the functions. They slow a caller that keeps to one address
+     hash; a caller that makes up address hashes is held only by the per-email limits.
 
 **In FastAPI.** One dependency per credential type calls its `auth_enter_*` function as the
 first statement of the request's transaction and yields an `AccountContext`. Data access takes
 that context and nothing else hands out a database connection. Queries still filter by
-`account_id` in the code; the policy is the backstop. All SQL is parameterised: no value from a
-request is ever put into SQL text. That, not the roles, is the defence against injected SQL.
+`account_id` in the code; the policy is the backstop.
 
-**Guard tests** (never weakened; all read the catalogue, so anything new fails until listed):
+**Guard tests** (never weakened; all read the catalogue or the source, so anything new fails
+until listed):
 
 - Every table has row-level security enabled and forced. Every table has the tenant policy
-  unless it is on the closed list, and `player_app` has no grant on any closed table.
+  unless it is on the closed list. `player_app` has no grant on any closed table, and no closed
+  table has a policy except the one on `signup_allowlist` for `player_owner`.
 - The set of `SECURITY DEFINER` functions equals the list above. Each is owned by `player_auth`,
-  has `search_path` pinned and is not executable by `PUBLIC`.
+  has the `search_path` above and is not executable by `PUBLIC`.
 - The set of roles with `BYPASSRLS` equals `player_auth` plus the database's bootstrap
   superuser. `player_auth` cannot log in and its only member is `player_owner`. Its table grants
   equal the table above.
 - `player_app` is not a superuser, cannot bypass row-level security and owns nothing.
-- As `player_app`: with no context no tenant row is visible; a hand-written `app.account_ctx`
-  with any account id shows no row; a context value copied from one transaction shows no row in
-  another.
+- As `player_app` with no account set, no tenant row is visible or writable. An account set in
+  one transaction is gone in the next one on the same connection.
+- No string-built SQL (item 1 above).
 - With two accounts, every endpoint is called as one and can neither read nor change the
   other's rows.
 
@@ -549,12 +608,15 @@ the live process's memory.
 | Player API requests | 60 per device token per minute | 429 |
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
 | Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working |
-| Live joins | 10 per address per minute | 429 |
-| Control code exchanges, right or wrong | 5 per address per 10 minutes | 429 |
-| Wrong control codes | 5 per session | The code is cancelled; the host is told |
-| Control codes made | 10 per session per hour | 429 to the host |
-| WebSocket connections | 30 per address per minute; 20 waiting for `hello` per address | Refused |
+| Live joins, per session (per join code) | 120 per minute; 60 riders at a time | `cannot_join` |
+| Live joins and control exchanges with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
+| Wrong control codes | 5 per session and code | The code is cancelled; the host is told and may make a new one |
+| Control codes made | 30 per session per hour | 429 to the host |
+| WebSocket connections | 300 per address per minute; 100 waiting for `hello` per address; one per token; 63 per session (60 riders, 2 controllers, the host) | Refused |
 | Account exports | 3 per account per day | 429 |
+
+The live limits are sized for a class of 40 to 60 riders who join in the same minute from one
+studio address: nothing that a rider with the right code does is counted per address.
 
 The per-email limits are counted per requesting address first, so one stranger cannot use up a
 user's links. The total of 30 a day per email is a brake on mail sent to one mailbox. What is
@@ -572,7 +634,9 @@ device token refused as revoked; source linked or revoked; publication applied, 
 or as a conflict; class deleted on the site; live session started or ended; controller added;
 control code cancelled after wrong tries; export made; account deletion.
 
-An event is written only for an account that exists. A sign-in request or a refused sign-in for
+Events about sign-in, pairing and linking are written inside the `auth_*` functions (section
+9), so the backend cannot do those things without them. An event is written only for an
+account that exists. A sign-in request or a refused sign-in for
 an unknown address writes no event, only its counters.
 
 An event never holds a token, a code, a hash, a class title, a nickname or a rider's reading.
@@ -606,13 +670,14 @@ logged.
 | A second host connection taking over a session | Needs the host token. A new host connection replaces the old one, so there is always exactly one receiver of rider data |
 | **A guessed pairing code** | 2.6 × 10^10 values, 10 minutes, 5 wrong tries per account per 15 minutes, and a signed-in session is needed to try at all. A hit only attaches someone else's waiting device to the guesser's own account; the token goes to the holder of the device code. The app shows which account it joined |
 | A pairing code pushed on a user by an attacker | The code is typed, never in a link. The page says to confirm only a code on the user's own screen and shows the asking platform. A mail tells the user a device was paired. The token is read-only and revocable |
-| **A guessed join code** | Same code space; 10 joins per address per minute. A hit makes the guesser a rider in a stranger's class: they receive the clock and class state, never anyone's data. The host sees them, can remove them, lock the session or make a new code. At most 60 riders |
-| A guessed control code | The exchange names a session, so a guess is tried against one session's code only. 2 minutes, single use, cancelled after 5 wrong tries for that session, 5 exchanges per address per 10 minutes. A controller can only start, pause, skip and nudge; the host can drop it |
-| Someone in the room cancelling control codes on purpose | They know the join code, so they can burn a control code with 5 wrong tries, within the per-address limit. The host is told and can make a new one. Control by sign-in is not affected |
+| **A guessed join code** | Same code space; 60 joins with an unknown code per address per minute. A hit makes the guesser a rider in a stranger's class: they receive the clock and class state, never anyone's data. The host sees them, can remove them, lock the session or make a new code. At most 60 riders |
+| A guessed control code | The exchange names a session, so a guess is tried against one session's code only. 2 minutes, single use, cancelled after 5 wrong tries, at most 30 codes an hour per session: 150 tries an hour against 2.6 × 10^10 values. A controller can only start, pause, skip and nudge; the host can drop it |
+| A rider on the studio's Wi-Fi cancelling control codes on purpose | They know the join code, so they can burn each control code with 5 wrong tries. The count is per session, never per address, so the instructor's phone on the same Wi-Fi is not locked out: the host makes a new code, and a right code is accepted whatever was tried before. Someone who keeps burning codes can stop control by code for that class. Control by sign-in does not use the code and always works |
+| A rider on the studio's Wi-Fi blocking joins on purpose | 60 joins with unknown codes a minute from the studio's address stop further joins from that address for the rest of that minute. Riders already in are not affected, nor are phones on mobile data. It lasts only while the person keeps it up |
 | **A replayed publication** | Needs the source token. The same number and hash is a repeat and changes nothing. The same number with other content is refused |
 | **An out-of-order publication** | A lower number is refused as stale. The check and the write are one transaction under a row lock that exists from the first publication, so two sends cannot cross. Markers of removed classes keep their number, so old content cannot return |
 | A stolen source token | It writes classes for one account and reads nothing but publication numbers. The user or the source revokes it. Publications are audited. It ends after 365 days without use |
-| **One account reading another's rows** | Queries filter by account in the code. Row-level security, forced, with a role that cannot bypass it, refuses the rest. The account context is set only by a function that has verified a credential, and is bound to its transaction. Guard tests cover every table, every function and every endpoint |
+| **One account reading another's rows** | Queries filter by account in the code. Row-level security, forced, with a role that cannot bypass it, refuses the rest. The account is set per transaction by a function that has checked a credential. Guard tests cover every table, every function and every endpoint. This answers mistakes in the backend's code. It does not answer a backend that is itself compromised: see the next two rows |
 | **A rider reaching another rider's data** | The server has no route from rider to rider. Messages to riders are closed schemas with no rider-derived field. Riders get no roster or count, and a failed join does not say whether a session is full. A rider token is tied to one session and one rider. Rider data goes to the one host connection only. Nothing about riders is stored. A rule guard test holds this |
 | A stolen session cookie | `HttpOnly`, `Secure`, `__Host-`. Sensitive actions need a recent sign-in. Sessions are listed and can be ended. 14 days idle, 60 days in total |
 | A forwarded, intercepted or pre-opened sign-in link | Single use, 15 minutes, bound to the browser that asked, token in the fragment and removed from the address bar, used only by a POST |
@@ -620,8 +685,9 @@ logged.
 | Finding out who has an account | A link request always gives the same answer, does the same database work and sends mail after the response. Over the per-email limits the answer is still the same. The only 429 depends on the requester's address alone. Passkey sign-in takes no email and lists no credentials. Unknown addresses write no audit event |
 | Cross-site requests and cross-site WebSocket use | `SameSite=Lax`, the `Origin` check, no cross-origin sharing. The cookie is read by a fixed, tested list of routes. The WebSocket takes no cookie and checks `Origin` for browser roles |
 | A token in a log, a link or a public repository | Long tokens are never in a path or query, and codes in links are in the fragment. The one exception, the source link code, lives 60 seconds and needs the PKCE verifier. Headers and token bodies are not logged. The prefix makes a leak findable; CI scans for it |
-| A copy of the database | It holds hashes of 256-bit tokens, which cannot be reversed, and public keys. Live codes and tokens are not in it. It does hold the context secret and all content, so a copy is a full breach of stored data; the hashes only stop it from becoming a way in |
-| Injected SQL running as the backend's role | The defence is that all SQL is parameterised. If it fails, the roles limit the damage and do not remove it. Injected SQL acts as the account of the request it rides on: it can read and change that account's rows. It cannot switch account: the context needs a valid credential's hash and cannot be written by hand. It cannot read the closed tables, the secret or any hash. It can call the listed functions with their fixed inputs: for example ask whether an address would get a sign-in mail, or use up rate limits. It cannot bypass row-level security or change the schema |
+| A copy of the database | It holds hashes of 256-bit tokens, which cannot be reversed, and public keys. Live codes and tokens are not in it. It does hold all content, so a copy is a full breach of stored data; the hashes only stop it from becoming a way in |
+| Injected SQL running as the backend's role | The defence is that it cannot happen: no SQL is built from strings, every statement is a constant with bound parameters, and a guard test and the linter fail the build otherwise. If it happened all the same, the roles would **not** contain it. The injected SQL could act for any account whose email, passkey credential id or account id it knows, by driving the sign-in functions or setting the account itself (section 9). It could not read the closed tables, bypass row-level security for accounts it knows nothing of, or change the schema. Its sign-ins would leave audit events in the accounts it entered |
+| A compromised backend process | The same bound, and more: it sees every request, token and mail that passes through it. Nothing in the database stops it from acting for the accounts it can name. What limits it: token hashes cannot be turned back into tokens, the closed tables are not readable in bulk, emails of other accounts are not listed anywhere it can read, and what it does through the `auth_*` functions is audited inside the database |
 | An instructor opening another instructor's classes on a shared studio computer | Not prevented in this design. Each paired account's token and cache are separate, but switching account in the app needs no credential, so anyone at that computer can open the classes of every instructor paired on it. The tokens there are read-only. Removing an account from the app or revoking the device on the site ends it. A local lock is a later, owner-decided feature |
 | Hostile text in a nickname or a device name | Length limits, control characters removed, always rendered as text. The site's content security policy allows no foreign script |
 | The site shown inside another site's frame | `frame-ancestors 'none'` |
@@ -656,8 +722,19 @@ logged.
   The first-message token needs neither.
 - **Tenant isolation in the code only.** One forgotten filter would leak. The plan asks for the
   database as well.
-- **A policy on a plain setting (`app.account_id`).** It stops a forgotten filter, but the
-  backend's own role can set it to any account. The verified context closes that.
+- **A signed account context** (the account id with a MAC under a secret only `player_auth`
+  reads, checked in every policy). Tried in an earlier draft and dropped. It stops only a
+  switch by a known account id, and ids are random and never shown across accounts. The wider
+  way in, a known email through the sign-in functions, stays open. It cost a secret, an
+  extension and a check in every query for very little.
+- **The database makes the link token and a separate mail worker sends it.** The sign-in
+  function would create the token itself and write the mail to a closed outbox table that only
+  a mail-worker role can read. The backend would never see a link token, so code running as
+  `player_app` could no longer sign in as a known email (the passkey path would stay as it is).
+  This is the stronger design and the only one that makes "the backend cannot switch account"
+  nearly true. Not chosen for PL2: it adds a role, a worker and a queue. It can be added later
+  without changing the tables or the tokens, and is the first thing to revisit if the bound in
+  section 9 is judged too wide.
 - **A schema or a database per account.** Strong, but heavy to migrate and to pool for many
   small accounts.
 - **Token lookups through a policy on the hash instead of functions.** Possible, but it spreads
@@ -673,15 +750,19 @@ logged.
   guard tests are named. PL8 adds the live part without changing the rest.
 - The backend sends mail (sign-in links and notices). Tests use a fake. A real mail service is
   the owner's to choose before the first deploy.
-- The database needs three roles and the `pgcrypto` extension, created by the database's init
-  script as the bootstrap superuser. Much of the sign-in logic lives in SQL functions, which
-  need their own tests.
+- The database needs three roles, created by the database's init script as the bootstrap
+  superuser, and no extension. Much of the sign-in logic lives in SQL functions, which need
+  their own tests, and every change to them is security-critical.
+- The database does not contain a compromised backend (section 9). The design relies on
+  parameterised SQL and its guard test for that, and says so.
 - The live process reads the database for credentials and audit events. It needs the database
   to start a session, not to keep the room screen running.
 - An account is as safe as its mailbox, because the email link is the way back in.
 - A device that was offline for more than 180 days is paired again. It keeps its cache.
-- Restarting the live process, or the app that hosts, ends the live session. The room screen
-  does not depend on it.
+- Restarting the live process, or the app that hosts, ends the live session. The app starts a
+  new one, which replaces its old one. The room screen does not depend on it.
+- Someone in the room who wants to can stop control by code, or late joins from the studio's
+  address, for as long as they keep at it. Control by sign-in is the way round the first.
 - Riders see nothing of each other, not even how many they are. The handlebar companion shows
   no rider data.
 - An app with one display cannot offer a control code; the instructor signs in on the phone.
