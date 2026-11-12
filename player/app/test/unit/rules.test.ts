@@ -45,10 +45,10 @@ test("the core is pure: no Electron, filesystem, network, process or DOM", () =>
   assert.deepEqual(hits, []);
 });
 
-test("source files stay under about 300 lines (150 for the clock's rule modules)", () => {
+test("source files stay under about 300 lines (150 for the clock and link rule modules)", () => {
   for (const s of sources) {
     const lines = s.text.split("\n").length;
-    const cap = s.path.startsWith(join("core", "clock")) ? 150 : 300;
+    const cap = s.path.startsWith(join("core", "clock")) || s.path.startsWith(join("core", "link")) ? 150 : 300;
     assert.ok(lines <= cap, `${s.path}: ${lines} lines`);
   }
 });
