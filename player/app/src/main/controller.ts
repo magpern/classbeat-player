@@ -5,7 +5,7 @@ import type { WebContents } from "electron";
 import classSchema from "../../../../schema/class-format/v1/class.schema.json" with { type: "json" };
 import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
-import { advance, command, INITIAL, isFollowing, openText, refuse, snapshotOf } from "../core/player-state.ts";
+import { advance, command, INITIAL, isFollowing, openText, refuse, snapshotOf, transportFor } from "../core/player-state.ts";
 import type { PlayerState } from "../core/player-state.ts";
 import { manualReader } from "../core/link/reader.ts";
 import type { MusicReader } from "../core/link/reader.ts";
@@ -63,7 +63,10 @@ export function createController(now: () => number = () => performance.now(), re
       return snapshot();
     },
     command(cmd) {
-      state = command(state, cmd, now());
+      // While following, Pause, Resume and Next go to the music instead of the clock.
+      const action = transportFor(state, cmd, transport !== null);
+      if (action !== null) transport?.send(action);
+      state = command(state, cmd, now(), transport !== null);
       sync();
       push();
       return snapshot();

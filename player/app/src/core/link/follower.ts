@@ -12,7 +12,7 @@ import { measureCrossfade } from "./crossfade.ts";
 import { classify, resyncText } from "./events.ts";
 import { matchCandidates } from "./match.ts";
 import { holdRemainingMs } from "./totals.ts";
-import { DEFAULT_LINK_CONFIG } from "./types.ts";
+import { DEFAULT_LINK_CONFIG, FOLLOWING } from "./types.ts";
 import type { LinkConfig, LinkEvent, LinkModel, LinkPlan, LinkStateName, Observation } from "./types.ts";
 
 export interface StepResult {
@@ -21,7 +21,6 @@ export interface StepResult {
   readonly event: LinkEvent | null;
 }
 
-const FOLLOWING: readonly LinkStateName[] = ["Locked", "Paused", "Ambiguous"];
 /** A move the instructor can no longer undo once a newer one has happened. */
 const SUPERSEDING: readonly LinkEvent[] = ["song_change", "seek", "backward"];
 
@@ -91,7 +90,7 @@ function follow(l: LinkModel, clock: ClockState, plan: LinkPlan, obs: Observatio
     held,
     holdUntil: held ? now + holdRemainingMs(song.lengthMs, posMs, measured ?? plan.plannedCrossfadeMs, isLast) : null,
     announce: announced ? { text: resyncText(deltaMs), deltaMs, until: now + cfg.undoWindowMs } : superseded ? null : l.announce,
-    undo: announced ? { clockMs, until: now + cfg.undoWindowMs } : superseded ? null : l.undo,
+    undo: announced ? { clockMs, at: now, until: now + cfg.undoWindowMs } : superseded ? null : l.undo,
     lastPlayed: choice.ambiguous ? l.lastPlayed : { songIndex: choice.index, obs },
     measuredCrossfadeMs: measured,
   };

@@ -243,6 +243,10 @@ test("play, pause and next run their fixed scripts, one at a time, and their out
     assert.deepEqual(call.args, MAC_SCRIPTS[action].flatMap((l) => ["-e", l]));
     assert.equal(call.options, EXEC_OPTIONS);
     call.done(action === "pause" ? new Error("failed") : null, "notrunning\n");
+    // The second one was queued, not dropped (test/unit/macos-queue.test.ts): it goes now.
+    assert.equal(r.calls.length, n + 2);
+    assert.deepEqual(r.calls[n + 1].args, MAC_SCRIPTS.next.flatMap((l) => ["-e", l]));
+    r.calls[n + 1].done(null, "notrunning\n");
   }
   assert.equal(r.mac.latest(0), before);
 });
