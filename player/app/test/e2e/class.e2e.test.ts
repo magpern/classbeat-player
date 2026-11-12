@@ -93,6 +93,8 @@ interface LinkSeen {
   readonly link: { readonly available: boolean; readonly mode: string; readonly state: string } | null;
   readonly view: { readonly status: string } | null;
 }
+/** macOS (#41) and Windows (#42) have a reader of their own. */
+const HAS_READER = process.platform === "darwin" || process.platform === "win32";
 const player = (call: string): Promise<LinkSeen | null> => page.evaluate(`window.player.${call}`) as Promise<LinkSeen | null>;
 
 // Issue #41: the macOS reader is chosen on macOS only. Elsewhere there is nothing to follow, and
@@ -101,9 +103,9 @@ test("the shell starts on the manual clock; off macOS there is no reader and mus
   const seen = await player("getState()");
   assert.equal(seen?.link?.mode, "manual");
   assert.equal(seen?.link?.state, "Manual");
-  assert.equal(seen?.link?.available, process.platform === "darwin");
+  assert.equal(seen?.link?.available, HAS_READER);
   assert.equal(await page.locator("#manual").isHidden(), true);
-  assert.equal(await page.locator("#follow").isHidden(), process.platform !== "darwin");
+  assert.equal(await page.locator("#follow").isHidden(), !HAS_READER);
 
   // Named music commands pass the bridge; on the manual clock they reach nothing.
   for (const action of ["play", "pause", "next"]) {
@@ -114,7 +116,7 @@ test("the shell starts on the manual clock; off macOS there is no reader and mus
   for (const bad of ['{ type: "music", action: "previous" }', '{ type: "music", action: "play", script: "x" }', '{ type: "music" }']) {
     assert.equal(await player(`command(${bad})`), null, bad);
   }
-  if (process.platform !== "darwin") assert.equal((await player('command({ type: "follow" })'))?.link?.mode, "manual", "nothing to follow");
+  if (!HAS_READER) assert.equal((await player('command({ type: "follow" })'))?.link?.mode, "manual", "nothing to follow");
 
   await page.click("#start");
   await page.waitForFunction(() => document.getElementById("status")?.textContent === "running");
