@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Presenter</title>
+<style>
+  body { font: 16px system-ui, sans-serif; background: #14141c; color: #eee; margin: 24px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  button { font: inherit; padding: 8px 14px; margin: 0 6px 6px 0; }
+  .big { font-size: 40px; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; } td, th { padding: 4px 10px; text-align: left; border-bottom: 1px solid #333; }
+  kbd { background: #333; padding: 1px 6px; border-radius: 3px; }
+  #recovery { color: #ffb23f; }
+</style>
+</head>
+<body>
+<h1>Presenter (spike 2)</h1>
+<div class="big" id="time">0:00</div>
+<div id="now"></div>
+<p>
+  <button data-cmd="toggle">Start / pause <kbd>Space</kbd></button>
+  <button data-cmd="reset">Reset <kbd>R</kbd></button>
+  <button data-cmd="kill-scene">Kill scene renderer <kbd>K</kbd></button>
+  <button data-cmd="mode-plain">Plain 2D <kbd>P</kbd></button>
+  <button data-cmd="mode-scene">Scene <kbd>S</kbd></button>
+</p>
+<p>Room screen mode: <b id="mode"></b> <span id="recovery"></span></p>
+<h1>Displays <small>(press <kbd>1</kbd> to <kbd>9</kbd> to move the room screen to display N)</small></h1>
+<table id="displays"></table>
+<script src="presenter.js"></script>
+</body>
+</html>
