@@ -50,7 +50,12 @@ live sessions.
    holds for the database's log too (section 11).
 5. Tenant isolation is done twice: in the code and in the database.
 6. What a role may receive in a live session is an allowlist. Nothing is sent by default.
-7. All numbers below are settings with these values as defaults.
+7. All numbers below are settings with these values as defaults. A setting that bounds what
+   the backend's role can do is held by the database, not passed in by the backend. That
+   covers `SIGNUP_MODE`, `LOGIN_LINK_SAME_BROWSER` and the limits counted inside the `auth_*`
+   functions. Passing one in from `player_app` would undo the bound in section 9. Such a
+   setting is a constant in the function's body and is changed by a migration (amended
+   2026-11-12).
 
 ### 2. Token format and hashing
 
@@ -124,13 +129,16 @@ proves only "the same browser".
    can sign in, a link is on its way"). It is the same for an unknown address, an address that
    is not allowed, and an address over its limits (section 10). Only the per-address limit, which
    does not depend on the email, answers 429.
-2. The request makes the same one call, `auth_request_login`, for every address: the counters
+2. The request makes the same two calls for every address (amended 2026-11-12). First,
+   `rate_limit_hit` for the requesting address alone, which answers the 429 of step 1 before
+   the email is looked at. Then `auth_request_login`, in the same transaction: the counters
    are kept and a row is written to `login_links` with the hash of a new `cbp_ml_` token, the
    email and the browser token's hash. For an address that cannot sign in, or over its limits,
    the row is marked unusable and no mail is sent. The mail is queued and sent after the
    response. The work differs by one row only: for an address that has an account the function
-   also writes the "link requested" event (section 11). Nothing else in the time taken tells
-   the cases apart.
+   also writes the "link requested" event (section 11), whether or not a mail is sent.
+   Nothing else in the time taken tells the cases apart: the function does the same lookups
+   and writes for every address.
 3. A newer link cancels older ones **only when asked from the same browser** (the same browser
    token). Links asked from other browsers stay valid: each works only in its own browser, so
    nothing is lost, and a stranger who knows the email cannot cancel the user's link.
@@ -139,8 +147,9 @@ proves only "the same browser".
    shows a "Sign in" button. Pressing it sends the token in the body of a POST. A mail scanner
    that opens the link uses nothing up.
 6. The server accepts the token once, within 15 minutes, and only with the matching browser
-   token. A link opened in another browser is refused with a message to ask for a new link from
-   that browser. So a forwarded or stolen mail does not sign anyone in. This is the setting
+   token. Every refused completion gets the same answer: an expired, used, unknown or
+   wrong-browser link alike. The page says to ask for a new link from this browser (amended
+   2026-11-12). So a forwarded or stolen mail does not sign anyone in. This is the setting
    `LOGIN_LINK_SAME_BROWSER`, on by default.
 7. On success the account is created if needed, a session is issued and the link row is deleted.
 
@@ -793,8 +802,8 @@ One table, `audit_events`, owned by the account like any other: time, event name
 of the credential that acted, the client address shortened to its network (/24 or /48), the
 browser or app family, and a small detail object.
 
-Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out; all
-sessions ended; passkey added or removed; passkey refused by the counter rule; pairing approved
+Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out (with
+`current: false` when the user ends another of their sessions); all sessions ended; passkey added or removed; passkey refused by the counter rule; pairing approved
 or denied; device created; device revoked; source linked or revoked; publication applied,
 refused as stale or as a conflict; class deleted on the site; live session started or ended;
 controller added; control code cancelled after wrong tries; export made.
