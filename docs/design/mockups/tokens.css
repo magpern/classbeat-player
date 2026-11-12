@@ -43,9 +43,9 @@
   /* Zone gels. Colour means the planned zone and nothing else (rule 7). */
   --zone-1: #6fa8ff; /* sky */
   --zone-2: #22d3c5; /* teal */
-  --zone-3: #a8e05a; /* lime */
-  --zone-4: #ffc83d; /* amber */
-  --zone-5: #ff8a3d; /* orange */
+  --zone-3: #81b250; /* grass */
+  --zone-4: #ffe626; /* yellow */
+  --zone-5: #ff8940; /* orange */
   --zone-6: #ff6680; /* coral */
   --zone-7: #bb8cff; /* ultraviolet */
 
@@ -54,7 +54,7 @@
   --face-text: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
 
   /* Type scale, font size as a share of screen height. Cap heights in system.md. */
-  --t-hero: 36vh; /* interval countdown */
+  --t-hero: 36vh; /* interval countdown, at most: see .count in room.css */
   --t-gel: 46vh; /* zone numeral in the gel */
   --t-value: 8.4vh; /* zone name, cadence, position, BPM */
   --t-text: 5.4vh; /* cue (steps down to --t-text-min for long cues) */
