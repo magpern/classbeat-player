@@ -2,6 +2,7 @@
 // wait for the design spec). Text only through textContent; nothing from a file becomes markup.
 import { clockText, targetText, zoneText } from "../core/format.ts";
 import type { Snapshot } from "../core/snapshot.ts";
+import { statusText } from "../core/status-text.ts";
 
 interface PlayerApi {
   getState(): Promise<Snapshot | null>;
@@ -106,7 +107,7 @@ function render(s: Snapshot | null): void {
   $("clock").hidden = s.view === null;
   if (s.view) {
     const v = s.view;
-    setText("status", v.holding ? `${v.status} (holding at the end)` : v.status);
+    setText("status", statusText(v, s.link));
     setText("class-time", clockText(v.classMs));
     setText("class-length", clockText(v.lengthMs));
     setText("class-left", clockText(v.classRemainingMs));
