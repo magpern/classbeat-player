@@ -83,26 +83,37 @@ fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and
 | `POST /api/pairing/start` `{platform, version}` | None | Returns `device_code`, `user_code` (`XXXX-XXXX`), `verification_uri` (`<site>/pair`, without the code), `expires_in: 600`, `interval: 5`. `429` over 10 starts an hour per address |
 | `POST /api/pairing/token` `{device_code}` | The device code, in the body | `200 {device_token, email}` once, on the first poll after approval. Otherwise `400` with `authorization_pending`, `slow_down`, `access_denied` or `expired_token` (also for a used or unknown code, and for anything that is not a `cbp_dc_` token, which is refused before any lookup) |
 | `POST /api/site/pairing/find` `{code}` | Session cookie | `200 {platform, version}` of the pending pairing; changes nothing. `404 pairing_not_found` for a wrong code, an ended or decided pairing and a closed form alike |
-| `POST /api/site/pairing/decide` `{code, approve, name}` | Session cookie | `200 {"status": "approved" or "denied"}`. `404 pairing_not_found` as above; `409 too_many_devices` at 10 active devices; `422 invalid_name` |
+| `POST /api/site/pairing/decide` `{code, approve, name}` | Session cookie | `200 {"status": "approved" or "denied"}`. `404 pairing_not_found` as above; `409 too_many_devices` for an approval at 10 active devices, pairings that are approved and not collected yet included; `422 invalid_name` |
 | `GET /api/site/devices`, `DELETE /api/site/devices/{id}` | Session cookie | List the devices that are not revoked (`last_used_at: null` is "never used"); revoke one |
 | `GET /api/player/device`, `DELETE /api/player/device` | `Authorization: Bearer cbp_dev_…` | The device's own name, platform, version and paired date; the app revokes its own token |
 
 - Migration `0006` gives `auth_start_pairing`, `auth_find_pairing`, `auth_decide_pairing`,
   `auth_collect_pairing` and `auth_enter_device` their bodies, with ADR 0002's numbers as
   constants in the SQL (principle 7). No grant, table or function is added.
-  `auth_device_active` still fails closed (PL8).
+  `auth_device_active` still fails closed (PL8). Migration `0007` replaces the body of
+  `auth_decide_pairing`: an approval refused at the cap returns `NULL` (not `false`, which is a
+  wrong code or a closed form), so the site can answer `409` whatever fills the cap. The cap
+  is checked by the function alone.
+- `/api/pairing/start` and `/api/pairing/token` take no credential and are for the desktop
+  app alone (`app_only`, `player_api/deps.py`): a request with a `Sec-Fetch-Site` header that
+  is not `none` (a page in a browser) is `403 cross_site_request`, and a body that is not sent
+  as `application/json` is `415 unsupported_media_type`, both before anything is counted.
 - Wrong codes are counted inside the database, at the look-up and the decision together: the
   fifth in 15 minutes closes the account's form for 15 minutes. The two site routes *return*
   their `404` instead of raising it, so the request's transaction commits and the count stays.
+  The `409` is returned the same way, so its `pairing.refused` event stays.
 - A device-token request is one transaction: `device_token` (`player_api/deps.py`) calls
   `auth_enter_device` as its first statement and yields an `AccountContext`. A token that does
   not work is answered `401` with `token_revoked`, `token_unknown` or `token_expired` and
   `WWW-Authenticate: Bearer`, after its transaction (and so its counters) has been committed.
   Anything that is not a `cbp_dev_` bearer token is `401 invalid_token`, with nothing looked up.
+  When a player route refuses the request (an `ApiError`), what the route wrote is rolled back
+  and the token's request count and the device's "last used" are kept, as for a site session.
 - Limits (section 10): 60 requests a minute per device token; the same unknown or revoked token
   from one address 20 times in 5 minutes is then refused (`429`) for 5 minutes without a
   lookup, from this process's memory; over 200 unknown tokens in 5 minutes from one address,
-  further unknown ones get `429` until the window ends, and valid tokens keep working.
+  further unknown ones get `429` until the window ends, and valid tokens keep working. The
+  address's counter is counted first: over it, no per-token counter row is written.
 - A paired device sends the account a mail, after the response. Events: `pairing.approved`,
   `pairing.denied`, `pairing.refused` (the cap) and `device.created` inside the functions;
   `device.revoked` by the backend.

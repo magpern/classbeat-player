@@ -14,7 +14,9 @@ COLLECT_PAIRING: Final[Query] = Query(
     "FROM player.auth_collect_pairing(%s, %s, ROW(%s::cidr, %s)::player.client_info)"
 )
 
-# Both for the account already set: they run inside a signed-in request's transaction.
+# Both for the account already set: they run inside a signed-in request's transaction. The
+# decision is true (decided), false (no such pending pairing, or the form is closed) or NULL
+# (an approval refused at the cap of devices).
 FIND_PAIRING: Final[Query] = Query("SELECT platform, version FROM player.auth_find_pairing(%s)")
 
 DECIDE_PAIRING: Final[Query] = Query(

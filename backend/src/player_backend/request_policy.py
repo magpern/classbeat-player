@@ -2,6 +2,8 @@
 
 - Cross-site requests: a state change needs an `Origin` header equal to the site's origin, and
   is refused when `Sec-Fetch-Site` is present and is not `same-origin`.
+- The app's routes that take no credential (pairing): refused for a browser, which always
+  sends `Sec-Fetch-Site`, and for a body that is not sent as `application/json`.
 - Recent sign-in: sensitive actions need a sign-in within the last 10 minutes.
 - The headers every response carries, and `Cache-Control: no-store` on the site's API, the
   pairing endpoints, the player API and the source API, whose responses carry tokens or an
@@ -12,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from http import HTTPMethod
-from typing import Final
+from typing import Final, Literal
 
 SITE_API: Final = "/api/site/"
 NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/", "/api/source/")
@@ -36,6 +38,26 @@ def cross_site_refusal(
         return "origin"
     if sec_fetch_site is not None and sec_fetch_site != "same-origin":
         return "sec_fetch_site"
+    return None
+
+
+def app_request_refusal(
+    sec_fetch_site: str | None, content_type: str | None
+) -> Literal["browser", "content_type"] | None:
+    """Why a request to a route of the app that takes no credential is refused, or None.
+
+    Those routes are for the desktop app alone. A browser sends `Sec-Fetch-Site` with every
+    request and a page cannot set or remove it; the app's main process does not send it. So a
+    request that has the header with any value but `none` (which a browser sends for what the
+    user did themselves, never for a page's own request) comes from a page, and is refused.
+    The body must be sent as `application/json`: a form of another site cannot send that, and
+    a script of another origin cannot without a preflight, which is not answered.
+    """
+    if sec_fetch_site is not None and sec_fetch_site != "none":
+        return "browser"
+    media_type = (content_type or "").partition(";")[0].strip().lower()
+    if media_type != "application/json":
+        return "content_type"
     return None
 
 

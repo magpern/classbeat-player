@@ -8,6 +8,7 @@ closed table, behind the functions. The site's two calls (`find`, `decide`) take
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Literal
 
 from player_backend.client_policy import ClientInfo
 from player_backend.db.context import AccountContext
@@ -15,6 +16,11 @@ from player_backend.db.executor import DatabaseError, Pool
 from player_backend.db.queries import pairing as q
 
 _UNIQUE_VIOLATION = "23505"
+
+# What `auth_decide_pairing` said: the pairing was approved or denied; no pending pairing has
+# that code (a wrong code, which it counted) or the form is closed; or the approval was refused
+# because the account is at its cap of devices.
+type Decision = Literal["decided", "not_found", "device_limit"]
 
 
 def start_allowed(pool: Pool, *, address_key: bytes, window: timedelta, max_starts: int) -> bool:
@@ -73,12 +79,19 @@ def decide(
     approve: bool,
     name: str | None,
     client: ClientInfo,
-) -> bool:
-    """Approve or deny the pending pairing with this code. True only when the function said so.
+) -> Decision:
+    """Approve or deny the pending pairing with this code: `decided` only when the function
+    said so.
 
-    False is a wrong code (counted), a closed form or an approval above the cap of devices.
+    `device_limit` is an approval above the cap of devices, which the function refused and
+    wrote as the account's `pairing.refused` event. `not_found` is a wrong code (counted), a
+    closed form and anything unexpected. For the count and the event to stay, the caller's
+    transaction must be committed: a refusal is returned to the client, not raised.
     """
     done = ctx.db.rows(
         q.DECIDE_PAIRING, (user_code_hash, approve, name, client.network, client.family)
     )
-    return done[0][0] is True
+    answer = done[0][0] if len(done) == 1 else False
+    if answer is True:
+        return "decided"
+    return "device_limit" if answer is None else "not_found"

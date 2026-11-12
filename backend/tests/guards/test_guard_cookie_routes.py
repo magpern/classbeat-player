@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from player_backend.app import create_app
-from player_backend.player_api.deps import device_token
+from player_backend.player_api.deps import app_only, device_token
 from player_backend.settings import Settings
 from player_backend.site.cookies import login_cookie_token, session_cookie_token
 from player_backend.site.deps import same_origin, site_session
@@ -141,6 +141,14 @@ def test_every_route_is_on_one_of_the_lists() -> None:
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES
+
+
+def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_alone() -> None:
+    # The pairing routes take no credential, so nothing but this check stands between a page
+    # in a browser and them: each applies it, and a new one fails here until it does.
+    open_routes = {(m, p) for m, p in NO_CREDENTIAL_ROUTES if p != "/healthz"}
+    assert open_routes and all(p.startswith("/api/pairing/") for _, p in open_routes)
+    assert _using(app_only) == open_routes
 
 
 def test_every_cookie_route_is_in_the_sites_api_or_is_the_one_live_route() -> None:

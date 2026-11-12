@@ -27,8 +27,8 @@ from player_backend.bearer_policy import (
     unknown_tokens_key,
 )
 from player_backend.db import sources
+from player_backend.db.context import undone_on_error
 from player_backend.db.devices import BearerKeys
-from player_backend.db.site_sessions import undone_on_error
 from player_backend.http_errors import ApiError
 from player_backend.login_policy import retry_after
 from player_backend.player_api.deps import bearer_blocks

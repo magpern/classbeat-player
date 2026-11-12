@@ -240,6 +240,16 @@ def test_many_unknown_tokens_from_one_address_do_not_stop_a_valid_one(site: Site
     limited = app.get(DEVICE, headers=bearer(new_token("dev")))
     assert limited.status_code == 429 and limited.json() == {"error": "too_many_requests"}
     assert 1 <= int(limited.headers["retry-after"]) <= 300
+    # Over its limit the address gets no counter row for each further token it makes up: the
+    # address's counter is checked first, and the per-token one is then left alone.
+    count = "SELECT count(*)::int, sum(hits)::int FROM player.rate_limits"
+    rows = site.su.execute(count).fetchone()
+    assert rows is not None and isinstance(rows[1], int)
+    for _ in range(5):
+        again = app.get(DEVICE, headers=bearer(new_token("dev")))
+        assert again.status_code == 429 and again.json() == {"error": "too_many_requests"}
+    after = site.su.execute(count).fetchone()
+    assert after == (rows[0], rows[1] + 5)
     # A studio behind one address is not locked out: its valid token keeps working.
     assert app.get(DEVICE, headers=bearer(token)).status_code == 200
     # Another address is not held back.

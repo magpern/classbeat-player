@@ -1,8 +1,8 @@
 """Pairing as the signed-in user sees it (ADR 0002, section 6, step 3): look up, then decide.
 
 Both are POSTs with the user code in the body. A wrong code is counted inside the database, in
-the request's transaction, so a refusal here is returned, not raised: raising would roll the
-count back.
+the request's transaction, and an approval above the cap of devices writes its event there, so
+a refusal here is returned, not raised: raising would roll the count and the event back.
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from player_backend.code_policy import INPUT_MAX, code_hash, normalise_code
-from player_backend.db import devices, pairing
+from player_backend.db import pairing
 from player_backend.http_errors import ApiError, error_response
-from player_backend.pairing_policy import LABEL_MAX, MAX_DEVICES, clean_label
+from player_backend.pairing_policy import LABEL_MAX, clean_label
 from player_backend.site.deps import SiteSession, TheCaller
 
 router = APIRouter()
@@ -59,13 +59,14 @@ def decide(body: CodeDecision, context: SiteSession, who: TheCaller) -> JSONResp
     name = clean_label(body.name) if body.approve else None
     if body.approve and name is None:
         raise ApiError(422, "invalid_name")
-    if body.approve and devices.count_active(context) >= MAX_DEVICES:
-        # Told apart for the user. The function refuses it too, and counts pairings that are
-        # approved and not collected yet, which only it can see.
-        raise ApiError(409, "too_many_devices")
-    decided = pairing.decide(
+    # The cap of devices is the function's alone to check: it counts the pairings that are
+    # approved and not collected yet, which only it can see, and writes `pairing.refused`.
+    decision = pairing.decide(
         context, user_code_hash=user_code_hash, approve=body.approve, name=name, client=who.info
     )
-    if not decided:
+    if decision == "device_limit":
+        # Told apart for the user, and only for a code that names a pending pairing.
+        return error_response(409, "too_many_devices")
+    if decision != "decided":
         return _not_found()
     return JSONResponse({"status": "approved" if body.approve else "denied"})
