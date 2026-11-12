@@ -147,7 +147,8 @@ proves only "the same browser".
    (step 3); over the per-email total that tells the requester at most that the day's total
    for that email is used up, whether or not the address can sign in.
    Input that is not an email address is refused with `422` after the first call and makes
-   no second call.
+   no second call. A body that is not valid JSON of the expected shape is refused by the
+   framework with `422` before the first call and counts nothing.
 3. A newer link cancels older ones **only when asked from the same browser** (the same browser
    token), and only when the request is within its limits (section 10). A request over its
    limits cancels nothing. Whether the address can sign in plays no part (amended 2026-11-12).
@@ -246,8 +247,18 @@ deleted. The app starts pairing again.
 
 Limits: a pairing lives 10 minutes. A user gets 5 wrong codes in 15 minutes, then the form is
 closed for 15 minutes. Both calls of step 3 count wrong codes, inside the database. An address
-may start 10 pairings an hour. At most 10 active devices per account; an approval above that is
-refused.
+may start 10 pairings an hour. At most 10 active devices per account, counting approvals not yet
+collected; an approval above that is refused: `auth_decide_pairing` returns nothing (`NULL`), the
+site answers `409 too_many_devices` and the refusal is the audit event `pairing.refused`. The
+`409` comes only for a code that matches a pending pairing; a wrong code at the cap is still a
+wrong code (`404`, counted).
+
+**The app's routes without a credential** (`POST /api/pairing/start`, `POST /api/pairing/token`)
+are for the desktop app, not for a browser. They refuse a request whose `Sec-Fetch-Site` header
+is present and is not `none` (browsers send it; the app's main process does not), and a body that
+is not `Content-Type: application/json` (`415`). A body that claims JSON and does not parse is
+refused by the framework (`422`) before that check; nothing runs either way. A guard test
+compares the routes with this check with the routes that take no credential.
 
 The user code can only attach the waiting device to the account of whoever confirms it. Only the
 holder of the device code, which never leaves the app, collects the token. So a guessed user code
@@ -618,7 +629,7 @@ Adding one is a security-critical change.
 | `auth_complete_passkey(credential_id, challenge_hash, browser_hash, counter, session_hash)` | Uses up the challenge, applies the counter rule, creates the session | True or false |
 | `auth_start_pairing(device_code_hash, user_code_hash, platform, version)` | Writes a pending pairing | Nothing |
 | `auth_find_pairing(user_code_hash)` | For the account already set only: looks up a pending pairing that has not expired. Changes nothing about it. A code that matches none counts as a wrong code for the account; while the form is closed it finds nothing | The pairing's platform and version, or nothing |
-| `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices | True or false |
+| `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices (approved and not yet collected count) | True when decided, false for a wrong code, nothing (`NULL`) when refused at the cap |
 | `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email |
 | `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code | Nothing |
 | `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false |
@@ -780,7 +791,8 @@ so several API processes share them. Keys are hashes (an email or an address is 
 a counter). Counters are kept for every email, known or not. The client address is taken from
 the proxy header only when the request comes from a configured trusted proxy. A refused request
 gets 429 with `Retry-After`, except where the table says otherwise. Live limits are counted in
-the live process's memory.
+the live process's memory. A request a route refuses keeps what its credential check wrote (the
+counters, "last used"); any other error undoes the whole request.
 
 | What | Limit | Over the limit |
 |---|---|---|
@@ -795,7 +807,7 @@ the live process's memory.
 | Publications | 60 per source token per minute | 429 |
 | Player API requests | 60 per device token per minute | 429 |
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
-| Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working |
+| Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |
 | Live joins, control exchanges and controller requests with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
 | Wrong control codes | 5 per session and code | The code is cancelled; the host is told and may make a new one |
@@ -818,8 +830,8 @@ browser or app family, and a small detail object.
 
 Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out (with
 `current: false` when the user ends another of their sessions); all sessions ended; passkey
-added or removed; passkey refused by the counter rule; pairing approved or denied; device
-created; device revoked; source linked or revoked; publication applied, refused as stale or as a
+added or removed; passkey refused by the counter rule; pairing approved, denied or refused at
+the device cap (`pairing.refused`); device created; device revoked; source linked or revoked; publication applied, refused as stale or as a
 conflict; class deleted on the site; live session started or ended; controller added; control
 code cancelled after wrong tries; export made.
 
