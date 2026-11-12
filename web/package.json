@@ -1,0 +1,28 @@
+{
+  "name": "classbeat-player-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The class player's screens: design tokens and the plain 2D room screen (issue #77).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:unit": "node --import tsx --test \"test/unit/*.test.ts\"",
+    "test:spec": "npm run build && node --import tsx --test --test-concurrency=1 --test-timeout=3000000 \"test/spec/*.test.ts\"",
+    "test": "bash ci.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "esbuild": "0.28.1",
+    "eslint": "10.13.0",
+    "playwright-core": "1.64.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

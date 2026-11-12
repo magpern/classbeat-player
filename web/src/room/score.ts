@@ -1,0 +1,193 @@
+// The score: the class as a strip moving under a fixed "now" line (docs/design/room-2d.md,
+// "Layout", "Fitting text"). Pure: positions in vw from class time, and which labels may be drawn
+// at all. Whether a name fits whole beside its number is the browser's to say (the markup lets
+// it wrap onto a hidden row); this module only decides what is offered.
+import type { Class } from "./input.ts";
+
+type Interval = Class["intervals"][number];
+type Song = Class["songs"][number];
+
+/** Where "now" is, as a share of the width. */
+export const NOW_X = 25;
+/** The score is six minutes wide: 1.5 behind "now", 4.5 ahead. */
+export const SPAN_S = 360;
+/** vw per second: 0.2778, the 0.28 vw per second of system.md, Motion. */
+export const VW_PER_S = 100 / SPAN_S;
+const SAFE_RIGHT = 95;
+const PAD = 0.8;
+/** An interval block narrower than this cannot hold its number whole: it is drawn as history. */
+export const MIN_BLOCK_W = 4;
+/** A block that begins right of this has no room for its number inside the safe area. */
+export const NUMBER_FITS_UNTIL = 91;
+/** A song title is offered only when at least this much of the clip is visible for it. */
+export const TITLE_MIN_W = 8;
+/** A moment's label is offered only left of this. */
+const MOMENT_LABEL_UNTIL = 80;
+
+export interface ScoreBlock {
+  readonly zone: number;
+  readonly left: number;
+  readonly width: number;
+  readonly padLeft: number | null;
+  readonly padRight: number | null;
+  readonly name: string;
+}
+
+export interface ScoreGone {
+  readonly left: number;
+  readonly width: number;
+}
+
+export interface ScoreClip {
+  readonly left: number;
+  readonly width: number;
+  /** Width of four bars, for the phrase ticks; null without a tempo. */
+  readonly phrase: number | null;
+  readonly padLeft: number | null;
+  readonly padRight: number | null;
+  readonly title: string | null;
+  readonly artist: string | null;
+  readonly bpm: number | null;
+}
+
+export interface ScoreMoment {
+  readonly left: number;
+  readonly label: string;
+}
+
+export interface ScoreModel {
+  /** The clock only guesses: "now" is dashed. */
+  readonly unsure: boolean;
+  /** Everything wholly in the past, one grey block: history, not information. */
+  readonly gone: ScoreGone | null;
+  /** Past blocks too narrow for their number are history too. */
+  readonly thin: readonly ScoreGone[];
+  readonly blocks: readonly ScoreBlock[];
+  readonly clips: readonly ScoreClip[];
+  readonly moments: readonly ScoreMoment[];
+  /** The "End" mark, when the end of the class is on the score. */
+  readonly endLeft: number | null;
+}
+
+export interface ScoreInput {
+  readonly classMs: number;
+  readonly lengthMs: number;
+  readonly intervals: readonly Interval[];
+  readonly songs: readonly Song[];
+  readonly zoneName: (zone: number) => string;
+  /** The recording that plays is in the class more than once: which occurrence this is. */
+  readonly ambiguity: { readonly songIndex: number; readonly ordinal: number; readonly total: number } | null;
+  readonly unsure: boolean;
+}
+
+const r2 = (v: number): number => Math.round(v * 100) / 100;
+const r3 = (v: number): number => Math.round(v * 1000) / 1000;
+
+/** The x position, in vw, of a class time. */
+export function xAt(timeMs: number, classMs: number): number {
+  return NOW_X + ((timeMs - classMs) / 1000) * VW_PER_S;
+}
+
+/**
+ * How far the strip has moved left, in vw, since the score was laid out for `classMs`: continuous,
+ * or in whole-second steps with reduced motion (system.md, Motion).
+ */
+export function scoreShiftVw(elapsedMs: number, reducedMotion: boolean): number {
+  const s = Math.max(0, elapsedMs) / 1000;
+  return (reducedMotion ? Math.floor(s) : s) * VW_PER_S;
+}
+
+export function ordinalText(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  const suffix = { 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+export function songBpm(song: Song): number | null {
+  return song.bpm ?? song.beat_anchors?.anchors[0]?.bpm ?? null;
+}
+
+function padsFor(left: number, right: number): { padLeft: number | null; padRight: number | null } {
+  // A label that began in the past stays just right of "now"; one that would cross the safe edge
+  // is kept inside it.
+  const padLeft = left < NOW_X ? r2(NOW_X - left + PAD) : null;
+  const padRight = right > SAFE_RIGHT ? r2(right - SAFE_RIGHT) : null;
+  return { padLeft, padRight };
+}
+
+function layoutIntervals(inp: ScoreInput): Pick<ScoreModel, "gone" | "thin" | "blocks"> {
+  const blocks: ScoreBlock[] = [];
+  const thin: ScoreGone[] = [];
+  let goneLeft: number | null = null;
+  let goneRight = 0;
+  for (const iv of inp.intervals) {
+    const left = xAt(iv.start_ms, inp.classMs);
+    const right = xAt(iv.start_ms + iv.length_ms, inp.classMs);
+    if (right <= 0 || left >= 100) continue;
+    if (right <= NOW_X) {
+      goneLeft = goneLeft === null ? left : Math.min(goneLeft, left);
+      goneRight = Math.max(goneRight, right);
+      continue;
+    }
+    const width = right - left;
+    // A zone colour always carries its number whole (system.md, rule 2): a block with no room
+    // for it, in width or before the safe edge, is not drawn in colour.
+    if (width < MIN_BLOCK_W) {
+      thin.push({ left: r2(left), width: r2(width) });
+      continue;
+    }
+    if (left > NUMBER_FITS_UNTIL) continue;
+    blocks.push({ zone: iv.zone, left: r2(left), width: r2(width), ...padsFor(left, right), name: inp.zoneName(iv.zone) });
+  }
+  const gone = goneLeft === null ? null : { left: r2(Math.max(goneLeft, -NOW_X)), width: r2(goneRight - Math.max(goneLeft, -NOW_X)) };
+  return { gone, thin, blocks };
+}
+
+function clipFor(song: Song, index: number, inp: ScoreInput): ScoreClip | null {
+  const left = xAt(song.start_ms, inp.classMs);
+  const right = xAt(song.end_ms, inp.classMs);
+  if (right <= 0 || left >= 100) return null;
+  const bpm = songBpm(song);
+  const phrase = bpm ? r3(((16 * 60) / bpm) * VW_PER_S) : null;
+  const base = { left: r2(left), width: r2(right - left), phrase };
+  // Wholly past: history, no label. Beginning past the visible room for a title: no label.
+  const room = Math.min(right, SAFE_RIGHT) - Math.max(left, NOW_X) - 2 * PAD;
+  if (right <= NOW_X || room < TITLE_MIN_W) return { ...base, padLeft: null, padRight: null, title: null, artist: null, bpm: null };
+  const amb = inp.ambiguity?.songIndex === index ? inp.ambiguity : null;
+  return {
+    ...base,
+    ...padsFor(left, right),
+    title: amb ? `${song.title}, ${ordinalText(amb.ordinal)} of ${amb.total}` : song.title,
+    artist: amb ? null : song.artist,
+    bpm: song.bpm ?? null,
+  };
+}
+
+function layoutSongs(inp: ScoreInput): { clips: ScoreClip[]; moments: ScoreMoment[] } {
+  const clips: ScoreClip[] = [];
+  const moments: ScoreMoment[] = [];
+  inp.songs.forEach((song, i) => {
+    const clip = clipFor(song, i, inp);
+    if (clip) clips.push(clip);
+    // "No moments" means no marks: a missing quality is not drawn.
+    const m = song.moments;
+    if (!m || m.quality === "missing") return;
+    for (const item of m.items) {
+      const x = xAt(song.start_ms + item.at_ms, inp.classMs);
+      if (x >= NOW_X && x <= MOMENT_LABEL_UNTIL) moments.push({ left: r2(x), label: momentLabel(item.kind) });
+    }
+  });
+  return { clips, moments };
+}
+
+function momentLabel(kind: "drop" | "breakdown" | "build" | "other"): string {
+  return { drop: "Drop", breakdown: "Breakdown", build: "Build", other: "Moment" }[kind];
+}
+
+export function layoutScore(inp: ScoreInput): ScoreModel {
+  const endX = xAt(inp.lengthMs, inp.classMs);
+  // The mark's label sits 1 vw right of it: it needs the safe area on both sides.
+  const endLeft = endX >= 4 && endX <= 90 ? r2(endX) : null;
+  return { unsure: inp.unsure, ...layoutIntervals(inp), ...layoutSongs(inp), endLeft };
+}
