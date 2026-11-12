@@ -9,6 +9,7 @@ const { CLASS_DEF, ZONES } = require('./class-def');
 const { createRecovery } = require('./recovery');
 const { parseCommand } = require('./commands');
 const { VARIANTS, parseVariant } = require('./variant');
+const { needsRestart } = require('./native-display');
 const { launchNative, buildArgs, defaultBinary } = require('./godot-native');
 const godotWeb = require('./godot-web');
 
@@ -23,6 +24,7 @@ let roomMode = 'scene';
 let roomDisplayId = null;
 let lastRecovery = null;
 let fpsLog = null;
+let nativeBounds = null; // where Godot runs or is being launched (set at launch, so a key pressed while it starts counts)
 let native = null; // the running Godot program (variant godot-native): { send, stop, bounds, child }
 let nativeGen = 0; // bumped on every start and stop, so a late event from an old launch is ignored
 let captureDir = null;
@@ -70,19 +72,20 @@ function startNative() {
   room.hide();
   const gen = ++nativeGen;
   const bounds = displayBounds();
+  nativeBounds = bounds;
   const extra = (process.env.SPIKE_GODOT_ARGS || '').split(' ').filter(Boolean);
   const size = ROOM_SIZE.length === 2 && ROOM_SIZE[0] ? ROOM_SIZE : null;
   launchNative({
     exe: process.env.SPIKE_GODOT_BIN || defaultBinary(), args: buildArgs({ bounds, size, extra }), captureDir, log,
     onMessage: (m) => { if (gen === nativeGen) onNativeMessage(m); },
-    onDead: (reason) => { if (gen !== nativeGen) return; native = null; log(`native scene gone: ${reason}`); recovery.onSceneGone(); },
+    onDead: (reason) => { if (gen !== nativeGen) return; native = null; nativeBounds = null; log(`native scene gone: ${reason}`); recovery.onSceneGone(); },
   }).then((n) => { if (gen === nativeGen) native = { ...n, bounds }; else n.stop(); })
-    .catch((e) => { if (gen === nativeGen) { log(`native launch failed: ${e.message}`); recovery.onSceneGone(); } });
+    .catch((e) => { if (gen === nativeGen) { nativeBounds = null; log(`native launch failed: ${e.message}`); recovery.onSceneGone(); } });
   // Keep the keyboard on the presenter whatever the new window does.
   setTimeout(() => { if (presenter && !presenter.isDestroyed()) presenter.focus(); }, 1500);
 }
 
-function stopNative() { nativeGen++; const n = native; native = null; if (n) n.stop(); }
+function stopNative() { nativeGen++; const n = native; native = null; nativeBounds = null; if (n) n.stop(); }
 
 function onNativeMessage(m) {
   if (m.type === 'fps' && Number.isFinite(m.v)) log(`fps mode=scene ${m.v.toFixed(1)}`);
@@ -138,12 +141,19 @@ function placeRoom(displayId) {
   const d = all.find((x) => x.id === displayId) || all.find((x) => x.id !== screen.getPrimaryDisplay().id) || all[0];
   roomDisplayId = d.id;
   if (ROOM_SIZE.length === 2 && ROOM_SIZE[0]) { room.setContentSize(ROOM_SIZE[0], ROOM_SIZE[1]); return; }
+  // A hidden room window (godot-native) only gets its bounds: full screen could show it over Godot.
+  if (!room.isVisible()) { room.setBounds(d.bounds); return; }
   const b = room.getBounds();
   if (all.length > 1 && room.isFullScreen() && b.x === d.bounds.x && b.y === d.bounds.y && b.width === d.bounds.width && b.height === d.bounds.height) return; // already right: no flicker
   if (all.length === 1) { room.setFullScreen(false); room.setBounds({ x: d.bounds.x + 40, y: d.bounds.y + 40, width: 1280, height: 720 }); return; }
   room.setFullScreen(false);
   room.setBounds(d.bounds);
   room.setFullScreen(true);
+}
+
+// The Godot window cannot be moved from outside: when its display changed, start it again there.
+function restartNativeIfMoved() {
+  if (VARIANT === 'godot-native' && needsRestart(nativeBounds, displayBounds())) startNative();
 }
 
 function createWindows() {
@@ -174,8 +184,7 @@ function createWindows() {
   const refit = () => {
     if (!room) return;
     placeRoom(roomDisplayId);
-    // The Godot window cannot be moved from outside: when its display changed, start it again there.
-    if (native && VARIANT === 'godot-native' && JSON.stringify(native.bounds) !== JSON.stringify(displayBounds())) startNative();
+    restartNativeIfMoved();
   };
   screen.on('display-added', refit);
   screen.on('display-removed', refit);
@@ -198,7 +207,7 @@ function command(cmd) {
     case 'mode': setMode(cmd.mode); break;
     case 'variant': if (cmd.variant !== VARIANT) setVariant(cmd.variant); break;
     case 'capture': capture().catch((e) => log(`capture failed: ${e.message}`)); break;
-    case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); break;
+    case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); restartNativeIfMoved(); break;
     default: break;
   }
   return state();
@@ -231,6 +240,6 @@ app.whenReady().then(() => {
     for (const w of [presenter, room]) if (w && !w.isDestroyed() && !w.webContents.isCrashed()) w.webContents.send('state', s);
     if (native) native.send(sceneState());
   }, 100);
-  if (TEST) process.spikeTest = { getNative: () => native, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state };
+  if (TEST) process.spikeTest = { getNative: () => native, getNativeBounds: () => nativeBounds, restartNativeIfMoved, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state };
   app.on('window-all-closed', () => app.quit());
 });

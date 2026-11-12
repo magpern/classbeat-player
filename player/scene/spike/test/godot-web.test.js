@@ -18,3 +18,10 @@ test('refuses everything else: other hosts, schemes, paths, extensions, dotfiles
     assert.equal(resolveRequest(bad, root), null, bad);
   }
 });
+
+test('a badly percent-encoded request is refused, it never throws', () => {
+  for (const bad of ['godotweb://app/%E0.js', 'godotweb://app/%.js', 'godotweb://app/index%ZZ.js', 'godotweb://app/%E0%A4%A.wasm']) {
+    assert.doesNotThrow(() => resolveRequest(bad, root), bad);
+    assert.equal(resolveRequest(bad, root), null, bad);
+  }
+});

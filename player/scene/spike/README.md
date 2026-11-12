@@ -92,6 +92,9 @@ option for a clean fps log.
    freezing it. Native text and zone: is the zone a number and a name as well as a colour?
 5. **Start-up:** seconds from start to first frame, per variant; Godot native and web also load their
    engine first.
+   With more than one display, `1`-`9` must also move the Godot window (native Godot is started again on
+   the chosen display), and the hidden room window must never appear over Godot while it runs (the shell
+   does not call full screen on it while it is hidden). The restart rule and "same display keeps the same process" are tested; a real second display is not testable headless: check it here.
 6. Anything odd: flicker, tearing, the window on the wrong display, a slow start, antivirus or
    firewall prompts (the native variant opens a loopback socket and starts a second program).
 
