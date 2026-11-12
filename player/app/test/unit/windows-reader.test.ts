@@ -1,14 +1,15 @@
 // The Windows reader against a fake helper process: it runs only while following; a hang, a
-// crash, garbage, no Spotify session and another app's session all end as null or an ageing
-// reading (rule 8), and the helper is replaced after a growing wait. Nothing here starts a process.
+// crash, garbage and no Spotify session all end as null or an ageing reading (rule 8), and the
+// helper is replaced after a growing wait; another app playing is a reading with that app's id
+// only; commands are bounded to one in flight and one waiting. Nothing here starts a process.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_LINK_CONFIG, isCurrent } from "../../src/core/link/index.ts";
 import { backoffMs } from "../../src/main/readers/helper-supervisor.ts";
-import { createWindowsMusic, MIN_COMMAND_GAP_MS, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
+import { COMMAND_ANSWER_LINES, createWindowsMusic, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
 import type { WindowsMusic } from "../../src/main/readers/windows-reader.ts";
-import { MAX_LINE_LENGTH } from "../../src/main/readers/windows-parse.ts";
-import { createHarness, NO_SESSION, sessionLine } from "./windows-harness.ts";
+import { MAX_LINE_LENGTH } from "../../src/core/link/windows-parse.ts";
+import { createHarness, NO_SESSION, OTHER_APP, sessionLine } from "./windows-harness.ts";
 import type { Harness } from "./windows-harness.ts";
 
 function following(): { h: Harness; r: WindowsMusic } {
@@ -76,15 +77,29 @@ test("no Spotify session: null, and the helper is left running", () => {
   assert.equal(h.child.killed, false);
 });
 
-test("another app's session is ignored: it never becomes a reading", () => {
+test("another app playing is a reading with that app's id and nothing of its own: never Spotify's", () => {
   const { h, r } = following();
-  const chrome = sessionLine({ app: "Chrome", title: "Somebody else's video" });
-  h.child.line(chrome);
-  assert.equal(r.latest(h.now), null);
   h.child.line(sessionLine());
-  h.child.line(chrome);
-  assert.equal(r.latest(h.now), null, "not even the Spotify reading before it is passed off as current");
+  h.advance(250);
+  h.child.line(OTHER_APP);
+  assert.deepEqual(r.latest(h.now), { title: "", artist: "", lengthMs: null, trackId: null, app: "Chrome", positionMs: 0, playing: true, at: h.now, seenAt: h.now });
   assert.equal(h.children.length, 1, "the helper is well; it is not replaced");
+  h.advance(250);
+  h.child.line(sessionLine({ title: "Back" }));
+  assert.equal(r.latest(h.now)?.app, "Spotify.exe");
+  assert.equal(r.latest(h.now)?.title, "Back");
+});
+
+test("a playing position with no usable age gives no reading, and the helper is left running", () => {
+  const { h, r } = following();
+  h.child.line(sessionLine());
+  for (let i = 0; i < 40; i++) {
+    h.advance(250);
+    h.child.line(sessionLine({ positionMs: 0, lastUpdatedUtcMs: -11_644_473_600_000 }));
+    assert.equal(r.latest(h.now), null);
+  }
+  assert.equal(h.children.length, 1);
+  assert.equal(h.child.killed, false);
 });
 
 test("hang after readings: the old reading ages and goes stale, then the helper is replaced", () => {
@@ -231,51 +246,102 @@ test("turning following off and on cannot start helpers faster than one a second
   assert.equal(h.children.length, 2, "a pending start is cancelled when following stops");
 });
 
-test("play, pause and next are written to the helper as their fixed names, and nothing else is", () => {
-  const { h, r } = following();
-  r.send("play");
-  h.advance(MIN_COMMAND_GAP_MS);
-  r.send("pause");
-  h.advance(MIN_COMMAND_GAP_MS);
-  r.send("next");
-  assert.deepEqual(h.child.written, ["play\n", "pause\n", "next\n"]);
-  h.advance(MIN_COMMAND_GAP_MS);
-  for (const bad of ["previous", "next\nplay", "play; calc.exe", "", "PLAY", " play", 7, null, { toString: () => "play" }]) {
-    h.advance(MIN_COMMAND_GAP_MS);
-    r.send(bad as never);
+/** The helper answers: enough good lines for a written command to count as done. */
+function answer(h: Harness): void {
+  for (let i = 0; i < COMMAND_ANSWER_LINES; i++) {
+    h.advance(250);
+    h.child.line(NO_SESSION);
   }
-  assert.deepEqual(h.child.written.length, 3, "only the three names ever reach the helper");
+}
+
+function ready(): { h: Harness; r: WindowsMusic } {
+  const f = following();
+  f.h.child.line(NO_SESSION);
+  return f;
+}
+
+test("play, pause and next are written to the helper as their fixed names, and nothing else is", () => {
+  const { h, r } = ready();
+  for (const action of ["play", "pause", "next"] as const) {
+    r.send(action);
+    answer(h);
+  }
+  assert.deepEqual(h.child.written, ["play\n", "pause\n", "next\n"]);
+  for (const bad of ["previous", "next\nplay", "play; calc.exe", "", "PLAY", " play", 7, null, { toString: () => "play" }]) {
+    r.send(bad as never);
+    answer(h);
+  }
+  assert.equal(h.child.written.length, 3, "only the three names ever reach the helper");
 });
 
-test("a command that comes too soon waits: at most one, the newest, and it is neither lost nor sent twice", () => {
+test("nothing is written before the helper's first good line; then one command, the newest", () => {
   const { h, r } = following();
+  for (let i = 0; i < 10; i++) {
+    r.send("next");
+    h.advance(1000);
+  }
+  r.send("pause");
+  assert.deepEqual(h.child.written, [], "a helper that has not spoken is not reading its input");
+  h.child.line("Await : timeout");
+  assert.deepEqual(h.child.written, [], "garbage is not a first good line");
+  h.child.line(NO_SESSION);
+  assert.deepEqual(h.child.written, ["pause\n"], "one command, not eleven");
+  answer(h);
+  answer(h);
+  assert.equal(h.child.written.length, 1);
+});
+
+test("one in flight and one waiting: a double Next is two nexts, and a newer command replaces the waiting one", () => {
+  const { h, r } = ready();
   r.send("next");
   r.send("next");
   assert.deepEqual(h.child.written, ["next\n"], "one at a time");
-  h.advance(MIN_COMMAND_GAP_MS - 1);
-  assert.equal(h.child.written.length, 1);
-  h.advance(1);
-  assert.deepEqual(h.child.written, ["next\n", "next\n"], "a double Next is two nexts");
-  h.advance(10 * MIN_COMMAND_GAP_MS);
+  h.advance(250);
+  h.child.line(NO_SESSION);
+  assert.equal(h.child.written.length, 1, "the first line after a write may have been on its way already");
+  h.advance(250);
+  h.child.line(NO_SESSION);
+  assert.deepEqual(h.child.written, ["next\n", "next\n"]);
+  answer(h);
+  answer(h);
   assert.equal(h.child.written.length, 2, "and not three");
 
   r.send("pause");
   for (let i = 0; i < 100; i++) r.send("next");
   r.send("play");
-  h.advance(MIN_COMMAND_GAP_MS);
-  assert.deepEqual(h.child.written.slice(2), ["pause\n", "play\n"], "one waits, and the newest replaces the older");
-  h.advance(10 * MIN_COMMAND_GAP_MS);
+  answer(h);
+  assert.deepEqual(h.child.written.slice(2), ["pause\n", "play\n"]);
+  answer(h);
   assert.equal(h.child.written.length, 4);
 });
 
+test("during a stall at most one command is in the helper's input and one waits", () => {
+  const { h, r } = ready();
+  r.send("next");
+  for (let i = 0; i < 4; i++) {
+    h.advance(1000);
+    r.send("next");
+  }
+  r.send("pause");
+  assert.deepEqual(h.child.written, ["next\n"], "a helper that is not answering gets nothing more");
+  h.child.line('{"error":true}');
+  assert.equal(h.child.written.length, 1, "garbage is no answer");
+  answer(h);
+  assert.deepEqual(h.child.written, ["next\n", "pause\n"], "it recovers: the one waiting command follows, the newest");
+  answer(h);
+  assert.equal(h.child.written.length, 2);
+});
+
 test("a waiting command is forgotten when following stops or the helper goes; none reaches a later helper", () => {
-  const { h, r } = following();
+  const { h, r } = ready();
   r.send("pause");
   r.send("next");
   r.setActive(false);
   r.setActive(true);
   h.advance(5000);
   assert.equal(h.children.length, 2);
+  h.child.line(NO_SESSION);
+  answer(h);
   assert.deepEqual(h.children.map((c) => c.written), [["pause\n"], []]);
 
   r.send("pause");
@@ -283,23 +349,26 @@ test("a waiting command is forgotten when following stops or the helper goes; no
   h.child.die();
   h.advance(5000);
   assert.equal(h.children.length, 3);
+  h.child.line(NO_SESSION);
+  answer(h);
   assert.deepEqual(h.child.written, []);
+
+  const early = following();
+  early.r.send("next");
+  early.h.advance(LIMITS.startTimeoutMs + 5000);
+  assert.equal(early.h.children.length, 2, "the helper that never spoke was replaced");
+  early.h.child.line(NO_SESSION);
+  assert.deepEqual(early.h.child.written, [], "a command sent to a helper that never came up is not kept for the next one");
 });
 
 test("commands do nothing when no helper runs, and never start one", () => {
-  const { h, r } = following();
-  r.send("next");
-  h.advance(MIN_COMMAND_GAP_MS);
-  r.send("pause");
-  assert.deepEqual(h.child.written, ["next\n", "pause\n"]);
-
+  const { h, r } = ready();
   h.child.die();
-  h.advance(MIN_COMMAND_GAP_MS);
   r.send("play");
   r.setActive(false);
   r.send("play");
   assert.equal(h.children.length, 1, "a command never starts a helper");
-  assert.equal(h.child.written.length, 2);
+  assert.deepEqual(h.child.written, []);
 });
 
 test("close stops the helper for good", () => {

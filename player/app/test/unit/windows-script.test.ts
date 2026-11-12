@@ -18,8 +18,8 @@ const READERS = join(SRC, "main", "readers");
 const source = (name: string): string => readFileSync(join(READERS, name), "utf8");
 
 test("the helper script is exactly the pinned one", () => {
-  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "0bb5430babe0803ae1cd684d211a67417fb7b6da92ed37ebe35bca77a73f1855");
-  assert.equal(SCRIPT.split("\n").length, 51);
+  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "bac46f98b3301a21cdfe9e285f0e5b7e38fc0eb35f5b1ee5c09a560a9e54f30c");
+  assert.equal(SCRIPT.split("\n").length, 62);
 });
 
 test("the script is a constant: nothing is interpolated into it", () => {
@@ -54,11 +54,25 @@ test("the script uses only these commands", () => {
   assert.match(SCRIPT, /Add-Type -AssemblyName System\.Runtime\.WindowsRuntime\n/, "an assembly of the system, never source code");
 });
 
-test("the script only reads the Spotify session, and its only controls are play, pause and next", () => {
-  assert.equal(SCRIPT.match(/SourceAppUserModelId -like 'Spotify\*'/g)?.length, 1);
+test("the script follows and controls the Spotify session only, by its two exact ids", () => {
+  assert.match(SCRIPT, /\n\$spotifyIds = @\('Spotify\.exe', 'SpotifyAB\.SpotifyMusic_zpdnekdrzrea0!Spotify'\)\n/);
+  assert.equal(SCRIPT.match(/\$spotifyIds\b/g)?.length, 3, "set once, used to pick the session and to tell another app");
+  assert.doesNotMatch(SCRIPT, /-like|-match|\*/, "no pattern: an id is one of the two or it is not");
+  assert.deepEqual(SCRIPT.match(/\$session = .*/g), ["$session = $sessions | Where-Object { $spotifyIds -contains $_.SourceAppUserModelId } | Select-Object -First 1"]);
   assert.doesNotMatch(SCRIPT, /GetCurrentSession/, "never whichever session is current");
+  const controlled = [...SCRIPT.matchAll(/(\$\w+)\.Try(?:Play|Pause|SkipNext|GetMediaProperties)Async/g)].map((m) => m[1]);
+  assert.deepEqual(controlled, ["$session", "$session", "$session", "$session"], "commands and properties: the Spotify session only");
+});
+
+test("another app playing is reported by its id alone, and only while Spotify is not playing", () => {
+  assert.match(SCRIPT, /if \(\$status -ne 'Playing'\) \{\n {6}\$other = \$sessions \| Where-Object \{ \$_\.SourceAppUserModelId -and \(\$spotifyIds -notcontains \$_\.SourceAppUserModelId\) -and \(\$_\.GetPlaybackInfo\(\)\.PlaybackStatus\.ToString\(\) -eq 'Playing'\) \} \| Select-Object -First 1\n/);
+  assert.deepEqual([...SCRIPT.matchAll(/\$other\.(\w+)/g)].map((m) => m[1]), ["SourceAppUserModelId"], "nothing else is read from it, and nothing is sent to it");
+  assert.match(SCRIPT, /\$line = \[ordered\]@\{ app = \$other\.SourceAppUserModelId; status = 'Playing' \} \| ConvertTo-Json -Compress\n/);
+});
+
+test("the script's only calls on the system, and its only controls: play, pause and next", () => {
   const calls = [...SCRIPT.matchAll(/[.:](Try\w+|Request\w+|Get\w+)\(/g)].map((m) => m[1]).sort();
-  assert.deepEqual(calls, ["GetMethods", "GetParameters", "GetParameters", "GetPlaybackInfo", "GetSessions", "GetTimelineProperties", "RequestAsync", "TryGetMediaPropertiesAsync", "TryPauseAsync", "TryPlayAsync", "TrySkipNextAsync"]);
+  assert.deepEqual(calls, ["GetMethods", "GetParameters", "GetParameters", "GetPlaybackInfo", "GetPlaybackInfo", "GetSessions", "GetTimelineProperties", "RequestAsync", "TryGetMediaPropertiesAsync", "TryPauseAsync", "TryPlayAsync", "TrySkipNextAsync"]);
   const names = [...SCRIPT.matchAll(/\$command -ceq '([^']*)'/g)].map((m) => m[1]);
   assert.deepEqual(names, [...TRANSPORT_ACTIONS], "input lines are compared, case and all, with the three names");
   assert.equal(SCRIPT.match(/\$command\b/g)?.length, 4, "and used for nothing else");
@@ -166,15 +180,17 @@ test("the Windows helper is started only in windows-spawn.ts, and nothing starts
 });
 
 test("the parser, the supervisor and the reader do no I/O of their own", () => {
-  for (const name of ["windows-parse.ts", "helper-supervisor.ts", "windows-reader.ts"]) {
+  for (const name of ["helper-supervisor.ts", "windows-reader.ts"]) {
     assert.doesNotMatch(source(name), /from\s+["'](node:[\w/]+|electron|fs|child_process)["']|\bprocess\.|\bsetTimeout\b|\bDate\.now\b/, name);
   }
   assert.deepEqual(source("windows-script.ts").match(/from\s+["'][^"']+["']/g), ['from "node:path"'], "the script module only joins a path");
 });
 
 test("the reader holds no token and reaches no network", () => {
-  for (const name of readdirSync(READERS)) {
-    assert.doesNotMatch(source(name), /access[_-]?token|client[_-]?secret|api[_-]?key|password|authorization|bearer|oauth/i, name);
-    assert.doesNotMatch(source(name), /https?:|node:(net|http|https|tls|dgram|dns)\b|\bfetch\(/, name);
+  const texts = [...readdirSync(READERS).map((name) => [name, source(name)]), ["core/link/windows-parse.ts", readFileSync(join(SRC, "core", "link", "windows-parse.ts"), "utf8")]];
+  assert.equal(texts.length, 5);
+  for (const [name, text] of texts) {
+    assert.doesNotMatch(text, /access[_-]?token|client[_-]?secret|api[_-]?key|password|authorization|bearer|oauth/i, name);
+    assert.doesNotMatch(text, /https?:|node:(net|http|https|tls|dgram|dns)\b|\bfetch\(/, name);
   }
 });

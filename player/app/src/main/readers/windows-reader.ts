@@ -12,7 +12,7 @@ import type { MusicTransport, TransportAction } from "../../core/link/transport.
 import type { Observation } from "../../core/link/types.ts";
 import { createSupervisor } from "./helper-supervisor.ts";
 import type { SupervisorDeps, SupervisorOptions } from "./helper-supervisor.ts";
-import { MAX_LINE_LENGTH, parseWindowsLine } from "./windows-parse.ts";
+import { MAX_LINE_LENGTH, parseWindowsLine } from "../../core/link/windows-parse.ts";
 import { windowsHelperDeps } from "./windows-spawn.ts";
 
 /** Fixed limits of the helper (the poll interval itself is fixed in the script: 250 ms). */
@@ -26,11 +26,8 @@ export const WINDOWS_HELPER_LIMITS: Omit<SupervisorOptions, "onLine" | "onDown">
   minGapMs: 1000,
 };
 
-/**
- * Never more than one command to the helper in this time. A command that comes sooner waits: at
- * most one, and a newer one replaces an older one (the instructor's latest intent wins).
- */
-export const MIN_COMMAND_GAP_MS = 200;
+/** A written command is answered by the second good line after it (see below). */
+export const COMMAND_ANSWER_LINES = 2;
 
 export interface WindowsMusic extends MusicReader, MusicTransport {
   readonly kind: "windows";
@@ -40,14 +37,30 @@ export interface WindowsMusic extends MusicReader, MusicTransport {
 /** Constructing the reader starts nothing: the helper starts on `setActive(true)`. */
 export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): WindowsMusic {
   let latest: Observation | null = null;
-  let lastCommandAt = Number.NEGATIVE_INFINITY;
+  // Commands, bounded as on macOS: at most one in flight and one waiting.
+  // - Nothing is written before the helper's first good line: until then it is not reading its
+  //   input, and whatever was written would pile up and all run at once when it comes up.
+  // - A written command is in flight until the helper has answered it: the helper reads its input
+  //   once per poll, before it writes that poll's line. The first good line after a write may
+  //   have been on its way already, so the second one is the answer.
+  // - A command sent meanwhile waits: at most one, and a newer one replaces an older one (the
+  //   instructor's latest intent wins). It is written when the one in flight is answered.
+  // So a helper that is slow to start or stalls never has more than one command in its input.
+  let ready = false;
+  /** Good lines still to come before the written command counts as answered; 0 when none is. */
+  let inFlight = 0;
   let waiting: TransportAction | null = null;
-  let waitTimer: unknown = null;
 
   const forget = (): void => {
+    ready = false;
+    inFlight = 0;
     waiting = null;
-    if (waitTimer !== null) deps.clearTimer(waitTimer);
-    waitTimer = null;
+  };
+
+  /** Writes one of the three names to the running helper; a command never starts one. */
+  const sendNow = (action: TransportAction): void => {
+    waiting = null;
+    inFlight = supervisor.write(`${action}\n`) ? COMMAND_ANSWER_LINES : 0;
   };
 
   const supervisor = createSupervisor(deps, {
@@ -56,6 +69,9 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
       const parsed = parseWindowsLine(line, deps.now());
       if (parsed.kind === "garbage") return false;
       latest = parsed.kind === "reading" ? parsed.observation : null;
+      ready = true;
+      if (inFlight > 0) inFlight -= 1;
+      if (inFlight === 0 && waiting !== null) sendNow(waiting);
       return true;
     },
     onDown() {
@@ -63,11 +79,6 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
       forget();
     },
   });
-
-  /** Writes one of the three names to the running helper; a command never starts one. */
-  const sendNow = (action: TransportAction): void => {
-    if (supervisor.write(`${action}\n`)) lastCommandAt = deps.now();
-  };
 
   return {
     kind: "windows",
@@ -84,19 +95,8 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
     send(action) {
       // The name is checked again here: only one of the three literals is ever written.
       if (!isTransportAction(action) || !supervisor.running) return;
-      const wait = lastCommandAt + MIN_COMMAND_GAP_MS - deps.now();
-      if (wait <= 0) {
-        sendNow(action);
-        return;
-      }
-      waiting = action;
-      if (waitTimer !== null) return;
-      waitTimer = deps.setTimer(() => {
-        waitTimer = null;
-        const next = waiting;
-        waiting = null;
-        if (next !== null) sendNow(next);
-      }, wait);
+      if (ready && inFlight === 0) sendNow(action);
+      else waiting = action;
     },
   };
 }

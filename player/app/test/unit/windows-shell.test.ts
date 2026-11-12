@@ -12,7 +12,8 @@ import { createWindowsMusic } from "../../src/main/readers/windows-reader.ts";
 import { selectMusic } from "../../src/main/select-music.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import { converterExamples, EXAMPLES } from "./fixtures.ts";
-import { createHarness, sessionLine } from "./windows-harness.ts";
+import { createHarness, NO_SESSION, OTHER_APP, sessionLine } from "./windows-harness.ts";
+import { REPO } from "./fixtures.ts";
 
 const text = readFileSync(converterExamples()[0], "utf8");
 const first = (JSON.parse(text) as Class).songs[0];
@@ -85,8 +86,14 @@ test("music commands reach the helper only while following; stopping the shell s
   assert.equal(h.children.length, 0, "a command never starts a helper");
   c.command({ type: "follow" });
   c.music("pause");
-  h.advance(1000);
+  assert.deepEqual(h.child.written, [], "nothing before the helper's first line");
+  h.child.line(NO_SESSION);
+  assert.deepEqual(h.child.written, ["pause\n"]);
   c.music("next");
+  for (let i = 0; i < 2; i++) {
+    h.advance(250);
+    h.child.line(NO_SESSION);
+  }
   assert.deepEqual(h.child.written, ["pause\n", "next\n"]);
   c.command({ type: "manual" });
   h.advance(1000);
@@ -126,12 +133,70 @@ test("follow, lock on the helper's reading, coast when it hangs or dies, lock ag
   assert.equal(c.snapshot().link?.state, "Coasting", "a dead helper gives no reading");
 });
 
-test("another app's session never moves the class", () => {
+test("another app playing while Spotify is not: Off the list within 3 s, the clock runs on, and it locks again on return", () => {
   const { h, c } = shell();
   c.open("a.json", text);
   c.command({ type: "follow" });
-  h.child.line(sessionLine({ app: "Chrome", title: first.title, artist: first.artist, endMs: first.length_ms, positionMs: 60_000 }));
+  h.child.line(line(20_000));
+  assert.equal(c.snapshot().link?.state, "Locked");
+
+  // Spotify is paused and a browser plays: the helper reports the browser, by its id only.
+  h.advance(250);
+  h.child.line(OTHER_APP);
+  let snap = c.snapshot();
+  assert.equal(snap.link?.state, "Off the list");
+  assert.equal(snap.view?.status, "running", "the class clock runs on");
+  assert.equal(snap.view?.classMs, first.start_ms + 20_250, "and the other app did not move it");
+  for (let i = 0; i < 40; i++) {
+    h.advance(250);
+    h.child.line(OTHER_APP);
+  }
+  snap = c.snapshot();
+  assert.equal(snap.link?.state, "Off the list");
+  assert.equal(snap.view?.classMs, first.start_ms + 30_250);
+  assert.equal(snap.link?.songIndex, null, "it is matched to no song");
+
+  c.music("next");
+  h.advance(250);
+  h.child.line(line(45_000));
+  snap = c.snapshot();
+  assert.equal(snap.link?.state, "Locked", "Spotify plays again");
+  assert.equal(snap.view?.classMs, first.start_ms + 45_000);
+});
+
+test("another app playing before anything was followed never moves the class", () => {
+  const { h, c } = shell();
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  h.child.line(OTHER_APP);
   const snap = c.snapshot();
-  assert.equal(snap.link?.state, "Manual");
+  assert.equal(snap.link?.state, "Off the list");
+  assert.equal(snap.view?.status, "ready");
   assert.equal(snap.view?.classMs, 0);
+});
+
+test("a playing session that never dated its position is not followed: the class is not shown as locked", () => {
+  const { h, c } = shell();
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  for (let i = 0; i < 40; i++) {
+    h.advance(250);
+    h.child.line(sessionLine({ title: first.title, artist: first.artist, endMs: first.length_ms, positionMs: 0, lastUpdatedUtcMs: -11_644_473_600_000 }));
+    assert.equal(c.snapshot().link?.state, "Manual");
+  }
+  assert.equal(c.snapshot().view?.status, "ready");
+});
+
+test("quitting the application stops the controller, and with it a running helper", () => {
+  const main = readFileSync(join(REPO, "player", "app", "src", "main", "main.ts"), "utf8");
+  assert.match(main, /\n {2}app\.on\("will-quit", \(\) => controller\.stop\(\)\);\n/, "quitting from the menu skips window-all-closed");
+  assert.match(main, /app\.on\("window-all-closed", \(\) => \{\n {4}controller\.stop\(\);/);
+  const { h, c } = shell();
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  c.stop();
+  c.stop();
+  assert.equal(h.child.killed, true);
+  h.advance(120_000);
+  assert.equal(h.children.length, 1, "and it stays stopped");
 });

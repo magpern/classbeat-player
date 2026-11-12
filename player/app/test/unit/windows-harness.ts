@@ -110,3 +110,5 @@ export function sessionLine(over: Record<string, unknown> = {}): string {
 }
 
 export const NO_SESSION = '{"app":null}';
+/** Another app is playing while Spotify is not: its id and "Playing", nothing else. */
+export const OTHER_APP = '{"app":"Chrome","status":"Playing"}';

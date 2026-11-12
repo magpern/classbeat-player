@@ -2,9 +2,12 @@
 // media session (Global System Media Transport Controls) of the Spotify desktop app and writes
 // one JSON line per poll, as UTF-8. Constants and two path functions, no I/O: the script is never
 // built from data. Nothing is interpolated into it, and the only input it takes is the three
-// command names on its standard input, compared against literals. A failed poll writes the fixed
-// line {"error":true}; no session writes {"app":null}. It asks for no token, opens no connection and never starts
-// the music app; it only looks at a session that already exists (ADR 0001, option A).
+// command names on its standard input, compared against literals, and they go to the Spotify
+// session only. A failed poll writes the fixed line {"error":true}; no session writes
+// {"app":null}. While Spotify is not playing and another app is, the line is that app's id and
+// "Playing" and nothing more (not its title): the link then shows Off the list (ADR 0001). It
+// asks for no token, opens no connection and never starts the music app; it only looks at
+// sessions that already exist (ADR 0001, option A).
 import { win32 } from "node:path";
 
 /** How often the script polls and how long it waits for one system call, both fixed in the script. */
@@ -25,6 +28,7 @@ $manager = Await ($managerType::RequestAsync()) $managerType
 $stdin = [System.IO.StreamReader]::new([Console]::OpenStandardInput())
 $stdout = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), (New-Object System.Text.UTF8Encoding $false))
 $pending = $stdin.ReadLineAsync()
+$spotifyIds = @('Spotify.exe', 'SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify')
 while ($true) {
   $commands = @()
   while ($pending.IsCompleted) {
@@ -34,19 +38,29 @@ while ($true) {
   }
   $line = '{"error":true}'
   try {
-    $session = $manager.GetSessions() | Where-Object { $_.SourceAppUserModelId -like 'Spotify*' } | Select-Object -First 1
+    $sessions = @($manager.GetSessions())
+    $session = $sessions | Where-Object { $spotifyIds -contains $_.SourceAppUserModelId } | Select-Object -First 1
+    $status = ''
     if ($session) {
       foreach ($command in $commands) {
         if ($command -ceq 'play') { Await ($session.TryPlayAsync()) ([bool]) | Out-Null }
         elseif ($command -ceq 'pause') { Await ($session.TryPauseAsync()) ([bool]) | Out-Null }
         elseif ($command -ceq 'next') { Await ($session.TrySkipNextAsync()) ([bool]) | Out-Null }
       }
+      $status = $session.GetPlaybackInfo().PlaybackStatus.ToString()
+    }
+    $other = $null
+    if ($status -ne 'Playing') {
+      $other = $sessions | Where-Object { $_.SourceAppUserModelId -and ($spotifyIds -notcontains $_.SourceAppUserModelId) -and ($_.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') } | Select-Object -First 1
+    }
+    if ($other) {
+      $line = [ordered]@{ app = $other.SourceAppUserModelId; status = 'Playing' } | ConvertTo-Json -Compress
+    } elseif ($session) {
       $properties = Await ($session.TryGetMediaPropertiesAsync()) $propertiesType
       $timeline = $session.GetTimelineProperties()
-      $playback = $session.GetPlaybackInfo()
       $line = [ordered]@{
         app = $session.SourceAppUserModelId
-        status = $playback.PlaybackStatus.ToString()
+        status = $status
         title = $properties.Title
         artist = $properties.Artist
         positionMs = [int64]$timeline.Position.TotalMilliseconds

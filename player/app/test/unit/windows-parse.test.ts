@@ -1,11 +1,11 @@
 // The Windows helper's output lines, parsed: table tests on output lines in the helper's format
-// (the Spotify session playing and paused, the Store edition, no session, another app) and on
-// everything else a helper could write.
+// (the Spotify session playing and paused, the Store edition, no session, another app playing)
+// and on everything else a helper could write.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_LINE_LENGTH, isSpotifySession, parseWindowsLine } from "../../src/main/readers/windows-parse.ts";
+import { MAX_LINE_LENGTH, isSpotifySession, parseWindowsLine } from "../../src/core/link/windows-parse.ts";
 import type { Observation } from "../../src/core/link/types.ts";
-import { NO_SESSION, sessionLine } from "./windows-harness.ts";
+import { NO_SESSION, OTHER_APP, sessionLine } from "./windows-harness.ts";
 
 const AT = 50_000;
 const BASE: Observation = { title: "Spike Song A", artist: "Spike Artist", lengthMs: 180_000, trackId: null, app: "Spotify.exe", positionMs: 12_500, playing: true, at: AT - 800, seenAt: AT };
@@ -27,9 +27,18 @@ const READINGS: readonly [string, string, Observation][] = [
     { ...BASE, title: "Älskar dig – Sång å Köln", artist: "Björk", lengthMs: 200_000, positionMs: 42_000, at: AT - 300 },
   ],
   ["the Store edition's session id", sessionLine({ app: "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify" }), { ...BASE, app: "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify" }],
+  ["the id in another case", sessionLine({ app: "SPOTIFY.EXE" }), { ...BASE, app: "SPOTIFY.EXE" }],
   ["a byte order mark and a carriage return around the line", `\uFEFF${sessionLine()}\r`, BASE],
-  ["the system clock moved back: the age is unusable, so the position is dated now", sessionLine({ nowUtcMs: 1_793_999_999_000 }), { ...BASE, at: AT }],
-  ["a position last updated over an hour ago is not extrapolated from", sessionLine({ nowUtcMs: 1_794_003_600_000 }), { ...BASE, at: AT }],
+  ["a position updated just under an hour ago is still dated by its age", sessionLine({ nowUtcMs: 1_794_003_599_999 }), { ...BASE, at: AT - 3_599_999 }],
+  ["a position updated this instant", sessionLine({ nowUtcMs: 1_794_000_000_000 }), { ...BASE, at: AT }],
+  ["paused, with a time the app never set: a paused position needs no age", sessionLine({ status: "Paused", lastUpdatedUtcMs: -11_644_473_600_000 }), { ...BASE, playing: false, at: AT }],
+  ["another app playing while Spotify is not: its id only, with nothing to match", OTHER_APP, { title: "", artist: "", lengthMs: null, trackId: null, app: "Chrome", positionMs: 0, playing: true, at: AT, seenAt: AT }],
+  [
+    "another music app playing",
+    '{"app":"Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic","status":"Playing"}',
+    { title: "", artist: "", lengthMs: null, trackId: null, app: "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", positionMs: 0, playing: true, at: AT, seenAt: AT },
+  ],
+  ["an app whose id only starts with the name is another app", '{"app":"SpotifyHelper.exe","status":"Playing"}', { title: "", artist: "", lengthMs: null, trackId: null, app: "SpotifyHelper.exe", positionMs: 0, playing: true, at: AT, seenAt: AT }],
   ["no length from the system", sessionLine({ endMs: 0 }), { ...BASE, lengthMs: null }],
   ["no artist", sessionLine({ artist: null }), { ...BASE, artist: "" }],
   ["an empty title (an advert, say) is still a reading; it matches no song", sessionLine({ title: "" }), { ...BASE, title: "" }],
@@ -41,16 +50,18 @@ for (const [name, line, want] of READINGS) {
   test(`reading: ${name}`, () => assert.deepEqual(parseWindowsLine(line, AT), { kind: "reading", observation: want }));
 }
 
+// Timing rule 8: a playing position whose age cannot be used says nothing about now. It is never
+// dated "now" and followed; the line gives no reading, so the link coasts.
 const NONE: readonly [string, string][] = [
   ["no Spotify session", NO_SESSION],
-  ["a browser's session", '{"app":"Chrome","status":"Playing","title":"Spike Song A","artist":"Spike Artist","positionMs":5000,"startMs":0,"endMs":180000,"lastUpdatedUtcMs":1794000000000,"nowUtcMs":1794000000100}'],
-  ["another music app's session", sessionLine({ app: "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic" })],
-  ["an app whose id only contains the name", sessionLine({ app: "NotSpotify.exe" })],
-  ["another app, with fields that would be garbage", '{"app":"Chrome","title":5}'],
+  ["playing, the system clock moved back: the age is in the future", sessionLine({ nowUtcMs: 1_793_999_999_999 })],
+  ["playing, last updated an hour ago", sessionLine({ nowUtcMs: 1_794_003_600_000 })],
+  ["playing, last updated days ago", sessionLine({ nowUtcMs: 1_794_500_000_000 })],
+  ["playing, with a time the app never set (the system's zero date)", sessionLine({ positionMs: 0, lastUpdatedUtcMs: -11_644_473_600_000 })],
 ];
 
 for (const [name, line] of NONE) {
-  test(`ignored, as if there were no session: ${name}`, () => assert.deepEqual(parseWindowsLine(line, AT), { kind: "none" }));
+  test(`no reading: ${name}`, () => assert.deepEqual(parseWindowsLine(line, AT), { kind: "none" }));
 }
 
 const GARBAGE: readonly [string, string][] = [
@@ -80,15 +91,22 @@ const GARBAGE: readonly [string, string][] = [
   ["a title beyond any real one", sessionLine({ title: "x".repeat(1025) })],
   ["a line beyond the limit", sessionLine({ artist: "y".repeat(900), title: "x".repeat(900), status: "z".repeat(900) }).padEnd(MAX_LINE_LENGTH + 1, " ")],
   ["two objects on one line", `${NO_SESSION}${NO_SESSION}`],
+  ["another app that is not playing", '{"app":"Chrome","status":"Paused"}'],
+  ["another app with no status", '{"app":"Chrome"}'],
+  ["another app carrying a title", '{"app":"Chrome","status":"Playing","title":"Some video"}'],
+  ["another app in the full session shape", sessionLine({ app: "Chrome" })],
+  ["another app with an id beyond any real one", `{"app":"${"c".repeat(1025)}","status":"Playing"}`],
 ];
 
 for (const [name, line] of GARBAGE) {
   test(`garbage: ${name}`, () => assert.deepEqual(parseWindowsLine(line, AT), { kind: "garbage" }));
 }
 
-test("the Spotify session is told by the start of its id, whatever the case", () => {
+test("the Spotify session is one of its two exact ids, whatever the case", () => {
   for (const id of ["Spotify.exe", "spotify.exe", "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"]) assert.equal(isSpotifySession(id), true, id);
-  for (const id of ["Chrome", "MSEdge", "NotSpotify.exe", "", " Spotify.exe"]) assert.equal(isSpotifySession(id), false, id);
+  for (const id of ["Chrome", "MSEdge", "NotSpotify.exe", "", " Spotify.exe", "Spotify", "Spotify.exe.evil", "SpotifyHelper.exe", "SpotifyAB.SpotifyMusic_other!Spotify"]) {
+    assert.equal(isSpotifySession(id), false, id);
+  }
 });
 
 test("a line never changes what it claims by carrying extra fields", () => {
