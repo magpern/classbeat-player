@@ -8,13 +8,18 @@
     "start": "electron harness/main.js",
     "test": "node --test \"test/*.test.js\"",
     "test:headless": "xvfb-run -a -s \"-screen 0 1920x1080x24\" npm test",
-    "screenshots": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js"
+    "screenshots": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js",
+    "screenshots:godot": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js --variants=godot-web,godot-native",
+    "godot:setup": "node tools/godot.js setup",
+    "godot:export": "node tools/godot.js export all",
+    "godot:check": "node tools/godot.js setup && xvfb-run -a -s \"-screen 0 1920x1080x24\" node --test --test-concurrency=1 \"test-godot/*.test.js\""
   },
   "dependencies": {
-    "three": "0.170.0"
+    "three": "0.170.0",
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "electron": "44.10.0",
+    "electron": "44.11.2",
     "playwright-core": "1.64.1"
   }
 }

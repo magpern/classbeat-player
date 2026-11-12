@@ -22,6 +22,14 @@ test('room window: security defaults, text size, scene, recovery, fps log', { ti
     for (const p of prefs) assert.deepEqual(p, { ci: true, ni: false, sb: true });
     assert.equal(await room.evaluate(() => typeof require), 'undefined');
 
+    // Only the presenter may command: a command from the room window is refused and changes nothing.
+    const running = await app.evaluate(() => process.spikeTest.clock.running());
+    for (const cmd of [{ type: 'toggle' }, { type: 'reset' }, { type: 'mode', mode: 'plain' }, { type: 'variant', variant: 'godot-native' }, { type: 'kill-scene' }, { type: 'capture' }]) {
+      assert.equal(await room.evaluate((c) => window.spike.command(c), cmd), null, JSON.stringify(cmd));
+    }
+    assert.equal(await app.evaluate(() => process.spikeTest.clock.running()), running);
+    assert.deepEqual(await app.evaluate(() => { const s = process.spikeTest.state(); return [s.roomMode, s.variant]; }), ['scene', 'web']);
+
     // Text height: every main number is at least 8 % of the window height, in the scene and in plain mode.
     const heights = async () => room.evaluate((ids) => ids.map((id) => document.getElementById(id).getBoundingClientRect().height / innerHeight), MAIN_NUMBERS);
     for (const h of await heights()) assert.ok(h >= 0.08, `text height ${h} < 8 %`);

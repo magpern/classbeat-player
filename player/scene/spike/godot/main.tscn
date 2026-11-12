@@ -1,0 +1,57 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="Script" path="res://score.gd" id="2_score"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 9)
+fov = 50.0
+
+[node name="Body" type="Node3D" parent="."]
+
+[node name="Beams" type="Node3D" parent="."]
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Score" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_score")
+
+[node name="Text" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Zone" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Name" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Left" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Cadence" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Bpm" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Next" type="Label" parent="Hud/Text"]
+layout_mode = 0
+
+[node name="Tag" type="Label" parent="Hud/Text"]
+layout_mode = 0
