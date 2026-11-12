@@ -108,9 +108,11 @@ Two families, both under the SIL Open Font License 1.1, committed with their lic
 | **Big Shoulders Display** (600, 800) | Every number, the zone name, values | A condensed signage face made for being read from far away: tall figures in little width, so the countdown can be a third of the screen high and still fit beside the gel |
 | **Atkinson Hyperlegible** (400, 700) | Cues, labels, song titles, anything a rider reads as a sentence | Drawn by the Braille Institute for legibility: letters that cannot be confused (I l 1, O 0) at a distance and through a cheap projector |
 
-Big Shoulders' figures are proportional (a "1" is narrower than a "0"). The product sets each
-digit of a running number (the countdown, class time) in a cell as wide as a "0", so a running
-countdown does not shift sideways; the mock-ups, being static, do not. Labels are sentence case,
+Big Shoulders' figures are proportional (a "1" is narrower than a "0"). Each digit of a running
+number (the countdown, class time) sits in a cell as wide as the face's widest digit at that
+weight ("5", 0.480 em at 800; "4", 0.417 em at 600), so a running number never shifts sideways,
+and the countdown's width rule (room-2d.md) is measured with those cells. The mock-ups do the
+same (`.d` in room.css). Labels are sentence case,
 never all capitals. Text is never placed in an image.
 
 ### Type scale
@@ -120,11 +122,11 @@ and on any projector. Cap height is the measured height of a capital H in that f
 
 | Token | Font size | Face | Cap height (measured) | Use |
 |---|---|---|---|---|
-| `--t-gel` | 46 vh (31 vh at 4:3) | Big Shoulders 800 | 37.4 % (25.2 % at 4:3) | The zone numeral in the gel |
+| `--t-gel` | 46 vh (31.5 vh at 4:3) | Big Shoulders 800 | 37.4 % (25.6 % at 4:3, 25.3 % at 1024×768) | The zone numeral in the gel |
 | `--t-hero` | at most 36 vh (28 vh at 4:3); smaller when the width needs it (room-2d.md, "Fitting text") | Big Shoulders 800 | 29.2 % at most; never under 20 % | Time left in the interval |
-| `--t-value` | 8.4 vh (7.4 vh for the metrics at 4:3; 6.9 vh for a two-line zone name at 4:3) | Big Shoulders 800 | 6.8 % (5.9 %, 5.5 %) | Zone name, cadence, position, BPM |
+| `--t-value` | 8.4 vh; the zone name at most 5 vw (5.75 vw at 3:2 and narrower); at 3:2 and narrower the metrics min(7.4 vh, 5.55 vw) and a two-line zone name 6.9 vh | Big Shoulders 800 | 6.8 % (at least 5.5 % at every size: 5.6 % for the metrics at 5:4) | Zone name, cadence, position, BPM |
 | `--t-text` | 5.4 vh | Atkinson 700 | 3.6 % | The cue |
-| `--t-text-min` | 4.6 vh | Atkinson 700 | 3.1 % | A long cue (over 70 characters) |
+| `--t-text-min` | 4.6 vh | Atkinson 700 | 3.1 % | A long cue (over 60 characters) |
 | `--t-minor` | 4.6 vh | Big Shoulders 600/800 | 3.7 % | Class time, next interval, targets |
 | `--t-label` | 3.1 vh | Atkinson 400/700 | 2.1 % | Labels, link state, score text |
 
@@ -138,7 +140,7 @@ the 2 % tier is kept for labels, link states and the score's song titles.
   Projectors overscan and keystone; no text goes outside it. Colour fields (the gel, the score)
   may run to the edge.
 - **Grid (16:9 and 16:10, anything wider than 3:2):** the gel is 27 % of the width; the content
-  column starts at 31 %; the metrics column is 40 vh wide against the right safe edge; the score
+  column starts at 31 %; the metrics column is 38 vh wide against the right safe edge; the score
   is the bottom 15.5 % above the safe edge, with "now" at 25 % of the width. At 3:2 and narrower
   (4:3, 5:4): the gel is 30 % wide and 60 % high, the metrics sit in a row under the countdown,
   and the cue and the next interval use the full width under the gel.

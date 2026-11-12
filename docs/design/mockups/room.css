@@ -14,6 +14,8 @@ body {
   line-height: 1.1;
   overflow: hidden;
   font-variant-numeric: lining-nums;
+  /* A word longer than its line breaks rather than being cut. */
+  overflow-wrap: break-word;
 }
 
 .n { font-family: var(--face-number); font-weight: 800; letter-spacing: 0; }
@@ -25,15 +27,29 @@ body {
   background: var(--zone);
   color: var(--ink);
   box-shadow: 0 0 16vh 1vh color-mix(in srgb, var(--zone) 30%, transparent);
-  padding: var(--safe-y) 2vw 3vh var(--safe-x);
+  padding: var(--safe-y) 2vw 2vh var(--safe-x);
   display: flex; flex-direction: column;
   transition: background-color var(--m-change), color var(--m-change);
 }
 .gel .lbl { color: var(--ink); font-weight: 700; }
-.gel-num { font-size: var(--t-gel); line-height: 0.78; margin-top: 2vh; margin-left: -0.6vw; }
-.gel-name { font-size: var(--t-value); line-height: 0.95; margin-top: auto; font-weight: 800; }
+/* The label sits beside the numeral's top, not above it: the gel's height goes to the name and
+   up to three targets. */
+.gel-head { display: flex; align-items: flex-start; gap: 1vw; margin-top: 2vh; }
+.gel-head .lbl { margin-top: 0.4vh; }
+.gel-num { font-size: var(--t-gel); line-height: 0.78; flex: none; }
+/* The name and the targets keep their whole height (never squeezed): the fitting rules
+   (room-2d.md) choose the size and the number of lines so that they fit. */
+/* At most 5 vw, so a word of up to 4 em ("Functional", 3.85 em) fits the gel's 20 vw inside. */
+.gel-name { font-size: min(var(--t-value), 5vw); line-height: 0.95; margin-top: auto; font-weight: 800; flex: none; }
+/* A name that needs more than two lines at --t-value: --t-minor, at most three lines, then an
+   ellipsis (names are up to 80 characters; the presenter shows it whole). */
+.gel-name.long {
+  --tier: minor; /* read by measure.js: the type tier follows the step-down */
+  font-size: var(--t-minor); line-height: 1.05;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
 .gel-targets span { white-space: nowrap; }
-.gel-targets { display: flex; flex-wrap: wrap; column-gap: 2.4vw; margin-top: 1.6vh; font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1.05; }
+.gel-targets { display: flex; flex-wrap: wrap; column-gap: 2.4vw; margin-top: 1vh; font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; flex: none; }
 
 /* Lights down: paused, or not started. The zone stays readable as a coloured glyph. */
 .gel.down {
@@ -54,7 +70,8 @@ body {
 .rail .val { font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; }
 .rail .val + .lbl { margin-right: 2.4vw; }
 .rail > * { white-space: nowrap; }
-.rail .seg { margin-left: auto; color: var(--light-2); }
+/* The segment name takes what is left and ends in an ellipsis (names are up to 80 characters). */
+.rail .seg { margin-left: auto; color: var(--light-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rail:has(.alert) .seg { visibility: hidden; }
 
 .link {
@@ -71,22 +88,25 @@ body {
 
 .clock { position: absolute; left: 31vw; top: 11vh; }
 .clock .lbl { display: flex; gap: 1vw; align-items: center; }
+/* Running numbers set each digit in a cell as wide as the widest digit of the face and weight
+   ("5": 0.480 em at 800, "4": 0.417 em at 600), so a number never shifts sideways as it runs. */
+.d { display: inline-block; width: var(--cell, 0.48em); text-align: center; }
+.rail .val .d { --cell: 0.42em; }
 /* The countdown is as large as --t-hero allows and never wider than the space left of the
-   metrics column (62vw - 40vh at 16:9 and 16:10). --count-w is the widest string of the
-   interval's format, in em: 1.70 for M:SS, 2.11 for MM:SS (and "99+"). The size is chosen at
-   the interval change and stays fixed for the interval. */
+   metrics column (62vw - 38vh at 16:9 and 16:10). --count-w is the widest string of the
+   interval's format in em, digits in their cells: 1.70 for M:SS, 2.16 for MM:SS (and "99+").
+   The size is chosen at the interval change and stays fixed for the interval. */
 .count {
   --count-w: 1.7;
-  font-size: min(var(--t-hero), calc((62vw - 40vh) / var(--count-w)));
+  font-size: min(var(--t-hero), calc((62vw - 38vh) / var(--count-w)));
   line-height: 0.82; margin-top: 1.2vh; margin-left: -0.4vw; white-space: nowrap;
+  position: relative; width: fit-content;
 }
-.count.mmss { --count-w: 2.11; }
+.count.mmss { --count-w: 2.16; }
 /* Estimated (coasting, off the list): the digits dim to the secondary white and carry a dashed
    rule, the same dash as the "now" line. No width is added. */
-.count.est {
-  color: var(--light-2);
-  text-decoration: underline dashed var(--light-2); text-decoration-thickness: 0.7vh; text-underline-offset: 2.2vh;
-}
+.count.est { color: var(--light-2); }
+.count.est::after { content: ""; position: absolute; left: 0.4vw; right: 0; bottom: -2.6vh; border-top: 0.7vh dashed var(--light-2); }
 .tag { font-size: var(--t-label); font-weight: 700; color: var(--light-1); border: 0.25vh solid var(--light-1); padding: 0.3vh 0.8vw; border-radius: 0.6vh; }
 .bars { font-size: var(--t-minor); color: var(--light-2); margin-top: 1.4vh; line-height: 1.1; }
 .bars .n { font-weight: 600; color: var(--light-1); }
@@ -94,20 +114,26 @@ body {
 .pill { font-size: var(--t-label); font-weight: 700; color: var(--ink); background: var(--light-1); padding: 0.4vh 1vw; border-radius: 0.6vh; }
 
 .metrics {
-  position: absolute; right: var(--safe-x); width: 40vh; top: 12.5vh;
+  position: absolute; right: var(--safe-x); width: 38vh; top: 12.5vh;
   display: flex; flex-direction: column; gap: 2.6vh;
 }
-.metric .lbl { display: block; }
-.metric .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
+.metric { flex: none; }
+.metric .lbl { display: block; white-space: nowrap; }
+/* A value never wraps: the longest ("On the beat", 4.24 em) fits the column, and the row at 3:2
+   and narrower is sized for it (see the media query). */
+.metric .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; white-space: nowrap; }
 .metric .v small { font-size: var(--t-minor); font-weight: 600; color: var(--light-2); margin-left: 0.6vw; }
 
 .cue {
   position: absolute; left: 31vw; right: var(--safe-x); top: 54.5vh;
   font-size: var(--t-text); font-weight: 700; line-height: 1.12;
-  max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); overflow: hidden;
-  text-wrap: balance;
+  /* The cue box ends above the next row: three lines at --t-text, four at --t-text-min (the
+     fourth is needed only near 3:2, where the column is narrowest). Never cut: measure.js
+     fails a cue that overflows its box. */
+  max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); overflow: hidden;
+  text-wrap: pretty;
 }
-.cue.long { font-size: var(--t-text-min); }
+.cue.long { font-size: var(--t-text-min); line-height: 1.02; }
 
 .next {
   position: absolute; left: 31vw; right: var(--safe-x); top: 73.5vh;
@@ -119,6 +145,10 @@ body {
 }
 .next .v { font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; }
 .next .v.dim { color: var(--light-2); }
+/* Chip, length, cadence and position always show; the zone name takes the rest of the row and
+   ends in an ellipsis when it is longer (the whole name is on the gel when that zone plays). */
+.next > * { flex: none; }
+.next .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- The score: the class as a strip moving under a fixed "now" ---------- */
 .score { position: absolute; left: 0; right: 0; top: 79.5vh; height: 15.5vh; }
@@ -145,10 +175,13 @@ body {
   background-image: repeating-linear-gradient(90deg, transparent 0 calc(var(--phrase) - 2px), var(--stage-line) calc(var(--phrase) - 2px) var(--phrase));
   background-size: 100% 1.2vh; background-repeat: no-repeat; background-position: 0 100%;
   border-right: 0.3vh solid var(--stage);
-  padding: 0.9vh 0.8vw; display: flex; align-items: flex-start; gap: 1vw; overflow: hidden; white-space: nowrap;
+  /* Title first, ending in an ellipsis if it is longer than the clip; the artist and the BPM
+     only if they fit whole: one that does not wraps onto a hidden second row. */
+  padding: 0.9vh 0.8vw; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start;
+  column-gap: 1vw; row-gap: 5vh; overflow: hidden; white-space: nowrap;
   font-size: var(--t-label); line-height: 1.1;
 }
-.clip b { font-weight: 700; }
+.clip b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .clip .a { color: var(--light-2); }
 .clip .bpm { margin-left: 1vw; color: var(--light-2); }
 .moment { position: absolute; top: 4.2vh; bottom: 0; width: 0.35vw; background: var(--light-1); }
@@ -163,6 +196,12 @@ body {
 /* ---------- Before the start and after the end ---------- */
 .intro { position: absolute; left: 31vw; right: var(--safe-x); top: 11vh; }
 .intro h1 { font-family: var(--face-number); font-weight: 800; font-size: 11vh; line-height: 0.9; }
+/* A title that does not fit one line at 11 vh: --t-value on one line (two at 3:2 and narrower),
+   then an ellipsis (titles are up to 80 characters; the presenter shows it whole). */
+.intro h1.long {
+  font-size: var(--t-value); line-height: 0.95;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+}
 .facts { display: flex; gap: 3.4vw; margin-top: 2.6vh; }
 .facts .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
 .ztitle { display: block; margin-top: 3.4vh; }
@@ -177,7 +216,7 @@ body {
 .zones .n { background: var(--zone); color: var(--ink); font-size: var(--t-minor); line-height: 1; text-align: center; padding: 0.4vh 0 0.2vh; }
 .zones .tm { font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; color: var(--light-2); padding-top: 0.4vh; }
 .zones .t {
-  font-size: var(--t-label); font-weight: 700; line-height: 1.1; padding-top: 0.6vh;
+  font-size: var(--t-label); font-weight: 700; line-height: 1.1; padding-top: 0.6vh; overflow-wrap: anywhere; /* a word wider than the column breaks, never cut */
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 
@@ -188,18 +227,28 @@ body {
 /* ---------- 4:3 and other narrow screens ---------- */
 @media (max-aspect-ratio: 3/2) {
   /* The gel is shorter; the cue gets the full width under it. */
-  .gel { width: 30vw; height: 60vh; padding-bottom: 2.4vh; }
-  .gel-num { font-size: 31vh; margin-top: 1vh; }
-  /* A zone name that needs two lines steps down to 6.9 vh (cap 5.5 %) at this ratio. */
-  .gel-name.two { font-size: 6.9vh; }
+  .gel { width: 30vw; height: 60vh; padding-bottom: 1.6vh; }
+  .gel-head { margin-top: 1.4vh; }
+  .gel-num { font-size: 31.5vh; }
+  /* A zone name that needs two lines steps down to 6.9 vh (cap 5.5 %) at this ratio; beside
+     three targets, or when it needs more than two lines, it is --t-minor on at most two lines
+     (the gel is 60 vh high: room-2d.md, "Fitting text"). */
+  .gel-name { font-size: min(var(--t-value), 5.75vw); } /* 23 vw inside: 4 em */
+  .gel-name.two { font-size: min(6.9vh, 5.75vw); }
+  .gel.t3 .gel-name.two { --tier: minor; font-size: var(--t-minor); line-height: 1.05; }
+  .gel-name.long { -webkit-line-clamp: 2; }
   .rail, .clock, .intro { left: 34vw; }
   .rail .seg { display: none; }
   .clock { top: 11vh; }
   .count { font-size: min(28vh, calc(61vw / var(--count-w))); }
-  .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; gap: 3vw; }
-  .metric .v { font-size: 7.4vh; }
-  .cue { left: var(--safe-x); top: 62vh; }
-  .cue.long { font-size: var(--t-text-min); }
+  /* The row holds the widest case ("On the beat", "Standing", "Song, planned") down to 5:4: the
+     columns spread to the safe edge with at least 1.6 vw between them, and the values step down
+     with the width (7.4 vh at 4:3, 6.94 vh at 5:4, cap 5.6 %). */
+  .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; justify-content: space-between; gap: 1.6vw; }
+  .metric .v { font-size: min(7.4vh, 5.55vw); }
+  /* Full width: two lines at --t-text, three at --t-text-min. */
+  .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
+  .cue.long { line-height: 1.12; }
   .next { left: var(--safe-x); top: 78vh; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
@@ -208,6 +257,7 @@ body {
   .track.songs { top: 4.8vh; height: 7.2vh; }
   .clip { padding-top: 0.6vh; }
   .intro h1 { font-size: 9vh; }
+  .intro h1.long { font-size: 7.4vh; -webkit-line-clamp: 2; }
   .facts { gap: 2.4vw; }
   .zones { column-gap: 2vw; }
 }
