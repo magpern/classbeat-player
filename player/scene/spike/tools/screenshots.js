@@ -12,18 +12,19 @@ async function shot(size, mode, startAt) {
   try {
     const room = await roomPage();
     await room.waitForFunction(() => window.__roomState && document.querySelector('canvas'), null, { timeout: 20000 });
-    if (mode === 'plain') {
-      await app.evaluate(() => process.spikeTest.command({ type: 'mode', mode: 'plain' }));
-      await app.evaluate(async () => {
-        const wc = process.spikeTest.getRoom().webContents;
-        for (let i = 0; i < 50; i++) {
-          if (!wc.isLoading() && await wc.executeJavaScript('document.body.classList.contains("plain") && !!window.__roomState')) break;
-          await new Promise((r) => setTimeout(r, 100));
-        }
-      });
-    } else {
-      await sleep(1500);
-    }
+    if (mode === 'plain') await app.evaluate(() => process.spikeTest.command({ type: 'mode', mode: 'plain' }));
+    // Capture only painted content: page loaded in the wanted mode, zone text filled, then two frames.
+    await app.evaluate(async (_e, wantPlain) => {
+      const wc = process.spikeTest.getRoom().webContents;
+      const ready = `(${wantPlain} === document.body.classList.contains('plain')) && !!window.__roomState
+        && document.getElementById('zone').textContent.length > 0 && (${wantPlain} || !!document.querySelector('canvas'))`;
+      for (let i = 0; i < 100; i++) {
+        if (!wc.isLoading() && await wc.executeJavaScript(ready)) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      await wc.executeJavaScript('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    }, mode === 'plain');
+    if (mode === 'scene') await sleep(1500);
     const b64 = await app.evaluate(async () => (await process.spikeTest.getRoom().webContents.capturePage()).toPNG().toString('base64'));
     const file = path.join(OUT, `room-${mode}-${size}.png`);
     fs.writeFileSync(file, Buffer.from(b64, 'base64'));

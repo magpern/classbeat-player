@@ -34,7 +34,7 @@ test('plain screen not shown within 2 s is reported as a failure', () => {
   assert.equal(r.pending(), false);
 });
 
-test('shown exactly at the deadline passes; repeated gone events are ignored', () => {
+test('shown 1 ms before the deadline passes; repeated gone events are ignored', () => {
   const f = fakeTimers(); let shown = 0;
   const r = createRecovery({ ...f, showPlain: () => { shown++; } });
   r.onSceneGone(); r.onSceneGone();

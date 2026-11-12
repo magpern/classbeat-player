@@ -61,3 +61,8 @@ Electron for the headless run only; the app's own windows never set them.
 The end-to-end test checks: the security defaults of both windows, every main number at least
 8 % of the window height (scene and plain), the fps log, and recovery (scene killed, plain
 screen within 2 s, clock continuous).
+
+Not covered by the spike recovery: a hung renderer (unresponsive) or a lost WebGL context
+does not fall back; only a renderer crash does. Note it for the real shell (PL4, PL5).
+Electron is pinned to a supported release (44.x) and npm audit is clean; bump it when the
+spike is run later. CI does not run this package yet.

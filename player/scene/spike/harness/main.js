@@ -7,11 +7,12 @@ const path = require('node:path');
 const { createClock } = require('./clock');
 const { CLASS_DEF, ZONES } = require('./class-def');
 const { createRecovery } = require('./recovery');
+const { parseCommand } = require('./commands');
 
 const VARIANT = process.env.SPIKE_VARIANT || 'web';
 const TEST = process.env.SPIKE_TEST === '1';
 const ROOM_SIZE = (process.env.SPIKE_ROOM_SIZE || '').split('x').map(Number); // windowed size for tests
-const clock = createClock(CLASS_DEF, () => Date.now());
+const clock = createClock(CLASS_DEF, () => performance.now()); // monotonic: immune to system clock steps
 let presenter = null;
 let room = null;
 let roomMode = 'scene';
@@ -30,7 +31,8 @@ const webPreferences = () => ({
 
 function guard(win) {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) e.preventDefault(); });
+  // The harness never navigates by itself (loadFile does not go through will-navigate): deny all.
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
 const roomUrlOpts = (mode) => ({ query: { mode, variant: VARIANT } });
@@ -65,6 +67,8 @@ function placeRoom(displayId) {
   const d = all.find((x) => x.id === displayId) || all.find((x) => x.id !== screen.getPrimaryDisplay().id) || all[0];
   roomDisplayId = d.id;
   if (ROOM_SIZE.length === 2 && ROOM_SIZE[0]) { room.setContentSize(ROOM_SIZE[0], ROOM_SIZE[1]); return; }
+  const b = room.getBounds();
+  if (all.length > 1 && room.isFullScreen() && b.x === d.bounds.x && b.y === d.bounds.y && b.width === d.bounds.width && b.height === d.bounds.height) return; // already right: no flicker
   if (all.length === 1) { room.setFullScreen(false); room.setBounds({ x: d.bounds.x + 40, y: d.bounds.y + 40, width: 1280, height: 720 }); return; }
   room.setFullScreen(false);
   room.setBounds(d.bounds);
@@ -95,7 +99,7 @@ function createWindows() {
   const refit = () => { if (room) placeRoom(roomDisplayId); };
   screen.on('display-added', refit);
   screen.on('display-removed', refit);
-  screen.on('display-metrics-changed', refit);
+  screen.on('display-metrics-changed', (_e, display, changed) => { if (display.id === roomDisplayId && changed.includes('bounds')) refit(); });
 }
 
 function command(cmd) {
@@ -115,9 +119,17 @@ app.whenReady().then(() => {
   log(`start variant=${VARIANT} electron=${process.versions.electron} chrome=${process.versions.chrome}`);
   // No network: only file:// is ever allowed.
   session.defaultSession.webRequest.onBeforeRequest((d, cb) => cb({ cancel: !d.url.startsWith('file://') && !d.url.startsWith('devtools://') }));
-  ipcMain.handle('state', () => state());
-  ipcMain.handle('command', (_e, cmd) => command(cmd));
-  ipcMain.on('fps', (_e, v) => log(`fps mode=${roomMode} ${Number(v).toFixed(1)}`));
+  // Deny every permission request (camera, notifications, ...): the harness needs none.
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  // IPC: only the presenter may command; only the room may report fps; payloads are validated.
+  const from = (e, win) => win && !win.isDestroyed() && e.sender === win.webContents;
+  ipcMain.handle('state', (e) => (from(e, presenter) || from(e, room) ? state() : null));
+  ipcMain.handle('command', (e, cmd) => {
+    const c = from(e, presenter) ? parseCommand(cmd) : null;
+    return c ? command(c) : null;
+  });
+  ipcMain.on('fps', (e, v) => { if (from(e, room) && Number.isFinite(v)) log(`fps mode=${roomMode} ${v.toFixed(1)}`); });
   createWindows();
   if (process.env.SPIKE_START_AT_S) clock.seek(Number(process.env.SPIKE_START_AT_S) * 1000); // test/screenshots only
   if (process.env.SPIKE_AUTOSTART === '1') clock.start();
