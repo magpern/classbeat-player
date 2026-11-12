@@ -1,0 +1,47 @@
+# Provider guard list (ADR 0004, sections 2, 4 and 7). Read by scripts/check-providers.sh.
+# The list only grows: an entry is removed only by a new ADR that replaces the rule.
+#
+# One entry per line: "<kind> <value>". Blank lines and lines starting with # are ignored.
+#   host     a host name or domain; it and every subdomain are forbidden in any tracked file
+#            outside the allowed places below.
+#   package  a package name; forbidden in dependency manifests and lockfiles, and in an
+#            import, from, require or use statement in source files.
+#
+# Allowed places, where the names may appear: documents under docs/, AGENTS.md, README.md at
+# the repository root, and this file.
+
+# Spotify Web API and OAuth (ADR 0004, section 2: no Spotify developer interface).
+host api.spotify.com
+host accounts.spotify.com
+# Spotify Web Playback SDK.
+host sdk.scdn.co
+package @spotify/web-api-ts-sdk
+package spotify-web-api-node
+package spotify-web-api-js
+package spotify-web-api-ts
+package spotify-web-playback-sdk
+package react-spotify-web-playback
+package @types/spotify-web-playback-sdk
+package @types/spotify-api
+package spotipy
+package rspotify
+package tekore
+
+# System-audio capture libraries (ADR 0004, section 2: no Spotify audio is ever captured).
+package node-record-lpcm16
+package node-audiorecorder
+package naudiodon
+package pyaudio
+package sounddevice
+package soundcard
+package pyaudiowpatch
+package electron-audio-loopback
+package audify
+package cpal
+
+# MOWL endpoint hosts (ADR 0004, section 4: this product never calls a MOWL server).
+host mowl.com
+host intelligent-cycling.com
+
+# Swedebeat endpoint hosts (ADR 0004, section 5; no credentials or keys from its apps).
+host swedebeat.se

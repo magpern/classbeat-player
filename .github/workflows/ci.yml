@@ -45,9 +45,12 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Repository checks
         run: bash scripts/check-repo.sh
+      - name: Provider guard (ADR 0004)
+        run: bash scripts/check-providers.sh
       - name: Script tests
         run: |
           bash scripts/test-check-repo.sh
+          bash scripts/test-check-providers.sh
           bash scripts/test-check-pr-title.sh
           bash scripts/test-detect-changes.sh
           bash scripts/test-worktree.sh
