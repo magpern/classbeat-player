@@ -195,7 +195,9 @@ Options:
   class time becomes the song's `start` plus `p`. A pause pauses the class, a skip or a seek moves
   it. If the link goes quiet the clock runs on by itself and locks again when the link returns.
 - Because nothing goes through Spotify's servers, there is no token to expire in the middle of a
-  class and no rate limit, and a downloaded playlist keeps working without a network.
+  class and no rate limit. The player never downloads, stores or plays any music itself: the
+  audio stays inside Spotify's own app. (A playlist the instructor has saved for offline listening
+  inside Spotify keeps working without a network.)
 - Start, pause and next go through the same local interface (and the keyboard's media keys), so
   the instructor does not have to leave the player.
 - Songs are matched by title, artist and length, in the class's order; Spotify's own ids are used
