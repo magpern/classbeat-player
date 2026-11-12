@@ -246,7 +246,7 @@ body {
      columns spread to the safe edge with at least 1.6 vw between them, and the values step down
      with the width (7.4 vh at 4:3, 6.94 vh at 5:4, cap 5.6 %). */
   .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; justify-content: space-between; gap: 1.6vw; }
-  .metric .v { font-size: min(7.4vh, 5.55vw); }
+  .metric .v { font-size: min(7.7vh, 5.85vw); } /* spec: min(7.4vh, 5.55vw); +5 % so a different Chrome's metrics still leave 5.5 % cap height (CI measured 5.47 % on the spec value) */
   /* Full width: two lines at --t-text, three at --t-text-min. */
   .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
