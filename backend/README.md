@@ -9,7 +9,9 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
 | `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in, site sessions, the user's side of pairing and the account's devices (ADR 0002, sections 4, 5 and 6). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
 | `src/player_backend/player_api/` | The app's side: pairing (`/api/pairing/`) and the player API (`/api/player/`). No cookie is read here. `deps.py` has the one dependency of the device token |
-| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits |
+| `src/player_backend/source_api/` | The source API, `/api/source/`: the code exchange, publications, a source's own numbers and its own link (ADR 0002, section 7). No cookie is read here. `deps.py` has the one dependency of the source token |
+| `src/player_backend/class_schemas.py` | Reads the class format's schemas from `schema/class-format/v1/` (ADR 0003); the validators are the contract lane's `classformat` package |
+| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits, linking a source, a publication's checks |
 | `src/player_backend/bearer_blocks.py` | What one process remembers about bearer tokens it refuses without a lookup (section 10). In memory only |
 | `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. Without an SMTP host every mail is dropped (`NoMailer`); tests use fakes |
 | `src/player_backend/smtp_mailer.py`, `smtp_deadline.py`, `smtp_settings.py` | The SMTP mailer (see "Mail"): TLS always and verified, one time limit for the whole conversation, the password from a file |
@@ -171,6 +173,37 @@ URL in an environment file that only the deploy user can read:
   `pairing.denied`, `pairing.refused` (the cap) and `device.created` inside the functions;
   `device.revoked` by the backend.
 - Responses under `/api/pairing/` and `/api/player/` are `Cache-Control: no-store`.
+
+## Linking a source, the source token and publications (ADR 0002, sections 3, 7, 10 and 11)
+
+Known sources are the setting `PLAYER_SOURCES`: a JSON list of `{id, name, redirect_uris}`, the
+exact HTTPS addresses (HTTP on loopback for development) a source may be sent back to. Empty by
+default: no source can be linked.
+
+| Route | Credential | What |
+|---|---|---|
+| `POST /api/site/source-links/check` `{source, redirect_uri}` | Session cookie | `200 {source, name, scope}`; `400 unknown_source` for an unknown source or address (the page then redirects nowhere) |
+| `POST /api/site/source-links/approve` `{source, redirect_uri, state, code_challenge, code_challenge_method?}` | Session cookie | `200 {redirect}`: the redirect address with `code` (`cbp_lc_`, 60 seconds, single use) and `state`, for the page's script to go to. `409 too_many_links` at 5 links; `422` for a challenge that is not S256 or a bad state. The account gets a mail |
+| `GET /api/site/source-links`, `DELETE /api/site/source-links/{link_id}` | Session cookie | The account's links (source, linked, last used); revoking deletes the link, the classes stay |
+| `POST /api/source/token` `{source, code, redirect_uri, code_verifier}` | The link code, in the body | `200 {source_token, token_type}` once. `400 invalid_grant` for every refusal (a code that is not `cbp_lc_` is refused before any lookup); `429` over 10 exchanges a minute per address |
+| `POST /api/source/publications` (ADR 0003, section 6) | `Authorization: Bearer cbp_src_…` | `200 {status: applied or repeat, highest_publication_number}`; `409 stale_publication` or `publication_conflict` with `highest_publication_number`; `409 too_many_classes` at 2,000; `422` (`invalid_publication`, `content_hash_mismatch`, `unsupported_format_version`); `413 document_too_large` over 1 MiB |
+| `GET /api/source/classes/{source_class_id}` | Source token | The highest number seen and whether it was a removal. Numbers only |
+| `DELETE /api/source/link` | Source token | The source ends its own link |
+
+- Migration `0008` gives `auth_new_link_code`, `auth_exchange_link_code` and
+  `auth_enter_source` their bodies, ADR 0002's numbers as constants in them. The exchange checks
+  the code's account, source, redirect address and PKCE verifier, uses the code up whatever
+  follows, refuses above 5 links, and writes `source.linked` or `source.link_refused`.
+- A source token ends after 365 days without use; "last used" is written at most once every 5
+  minutes. Every source API request counts toward 60 a minute per token; the bearer limits of
+  the device token apply to unknown source tokens too.
+- A publication is decided in the request's transaction under the class row's lock (a
+  placeholder with number 0 first). A refusal is rolled back to a savepoint and its event
+  (`publication.stale`, `publication.conflict`, `publication.refused`) is written in a second
+  transaction that enters the account again with `auth_enter_source`; the request's count and
+  "last used" stay. `publication.applied` and `source.revoked` are written by the backend.
+- The document is checked in readers' mode (any minor of major 1) and stored in its RFC 8785
+  form; the envelope takes no field beyond its five.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

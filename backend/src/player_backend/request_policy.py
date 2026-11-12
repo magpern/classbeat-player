@@ -6,7 +6,8 @@
   sends `Sec-Fetch-Site`, and for a body that is not sent as `application/json`.
 - Recent sign-in: sensitive actions need a sign-in within the last 10 minutes.
 - The headers every response carries, and `Cache-Control: no-store` on the site's API, the
-  pairing endpoints and the player API, whose responses carry tokens or an account's data.
+  pairing endpoints, the player API and the source API, whose responses carry tokens or an
+  account's data.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from http import HTTPMethod
 from typing import Final, Literal
 
 SITE_API: Final = "/api/site/"
-NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/")
+NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/", "/api/source/")
 STATE_CHANGING: Final = frozenset(
     {HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE}
 )

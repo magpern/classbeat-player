@@ -15,6 +15,8 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.site_sessions",
     "player_backend.db.queries.pairing",
     "player_backend.db.queries.devices",
+    "player_backend.db.queries.sources",
+    "player_backend.db.queries.classes",
     "player_backend.db.queries.operator",
 )
 
@@ -27,4 +29,5 @@ SQL_FILES: Final = (
     "0005_sign_in_hardening.sql",
     "0006_pairing_and_devices.sql",
     "0007_pairing_hardening.sql",
+    "0008_source_api.sql",
 )

@@ -38,7 +38,9 @@ LOCKED_OTHERS = frozenset(
     "annotated-doc annotated-types anyio certifi click colorama fastapi h11 httpcore httpx idna "
     "iniconfig nodeenv opentelemetry-api packaging player-backend pluggy pydantic pydantic-core "
     "pygments pyright pytest ruff starlette typing-extensions typing-inspection tzdata "
-    "uvicorn".split()
+    "uvicorn "
+    # The class format's validators (ADR 0003, section 4) and what they need: no database client.
+    "classformat jsonschema jsonschema-specifications referencing rpds-py attrs rfc8785".split()
 )
 
 

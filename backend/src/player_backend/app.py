@@ -23,6 +23,7 @@ from player_backend.settings import Settings
 from player_backend.site import router as site_router
 from player_backend.site.state import SiteState
 from player_backend.smtp_mailer import mailer_from_env
+from player_backend.source_api import router as source_router
 
 _access_log = logging.getLogger("player_backend.access")
 _log = logging.getLogger("player_backend.app")
@@ -54,6 +55,7 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(site_router)
     app.include_router(player_router)
+    app.include_router(source_router)
 
     @app.middleware("http")
     async def access_log(  # pyright: ignore[reportUnusedFunction]

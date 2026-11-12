@@ -15,23 +15,35 @@ from fastapi.responses import JSONResponse
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, headers: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        headers: Mapping[str, str] | None = None,
+        extra: Mapping[str, object] | None = None,
+    ) -> None:
         super().__init__(code)
         self.status = status
         self.code = code
         self.headers = dict(headers or {})
+        # Fields the server itself puts beside the code (never what the client sent).
+        self.extra = dict(extra or {})
 
 
 def error_response(
-    status: int, code: str, headers: Mapping[str, str] | None = None
+    status: int,
+    code: str,
+    headers: Mapping[str, str] | None = None,
+    extra: Mapping[str, object] | None = None,
 ) -> JSONResponse:
-    return JSONResponse({"error": code}, status_code=status, headers=dict(headers or {}))
+    body: dict[str, object] = {**(extra or {}), "error": code}
+    return JSONResponse(body, status_code=status, headers=dict(headers or {}))
 
 
 def install_error_handlers(app: FastAPI) -> None:
     async def api_error(request: Request, error: Exception) -> JSONResponse:
         known = cast(ApiError, error)
-        return error_response(known.status, known.code, known.headers)
+        return error_response(known.status, known.code, known.headers, known.extra)
 
     async def invalid_request(request: Request, error: Exception) -> JSONResponse:
         return error_response(422, "invalid_request")

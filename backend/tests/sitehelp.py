@@ -20,6 +20,7 @@ from player_backend.app import create_app
 from player_backend.client_policy import Network
 from player_backend.mail import Mail
 from player_backend.settings import Settings
+from player_backend.source_policy import KnownSource
 from tests.dbhelp import Conn
 
 ORIGIN = "https://player.test"
@@ -28,6 +29,8 @@ SESSION_COOKIE = "__Host-cbp_session"
 LOGIN_COOKIE = "__Host-cbp_login"
 FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
 SAME_ORIGIN = {"Origin": ORIGIN, "User-Agent": FIREFOX}
+# The one known source of the tests (ADR 0002, section 7): a made-up address, never contacted.
+SOURCE = KnownSource("classbeat", "classbeat", frozenset({"https://classbeat.test/player/linked"}))
 
 _CLEAN = (
     "TRUNCATE player.accounts, player.login_links, player.login_challenges, player.pairings, "
@@ -169,7 +172,9 @@ def link_token(mail: Mail) -> str:
 @contextmanager
 def running_site(app_url: str, db_url: str, proxies: tuple[Network, ...] = ()) -> Generator[Site]:
     mailer = RecordingMailer()
-    settings = Settings(database_url=app_url, site_origin=ORIGIN, trusted_proxies=proxies)
+    settings = Settings(
+        database_url=app_url, site_origin=ORIGIN, trusted_proxies=proxies, sources=(SOURCE,)
+    )
     app = create_app(settings, mailer)
     loop = asyncio.new_event_loop()
     started = app.router.lifespan_context(app)  # the app's start and stop: the pool

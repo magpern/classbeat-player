@@ -20,10 +20,10 @@ from player_backend.db.executor import Handle
 @dataclass(frozen=True)
 class AccountContext:
     account_id: UUID
-    credential_kind: Literal["session", "device"]
+    credential_kind: Literal["session", "device", "source"]
     credential_id: UUID
     # When the user last proved who they are, and the time of this request's transaction: both
-    # by the database's clock. A device token proves no sign-in: None.
+    # by the database's clock. A device or source token proves no sign-in: None.
     signed_in_at: datetime | None
     entered_at: datetime
     db: Handle
