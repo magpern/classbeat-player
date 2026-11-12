@@ -11,7 +11,7 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/player_api/` | The app's side: pairing (`/api/pairing/`) and the player API (`/api/player/`). No cookie is read here. `deps.py` has the one dependency of the device token |
 | `src/player_backend/source_api/` | The source API, `/api/source/`: the code exchange, publications, a source's own numbers and its own link (ADR 0002, section 7). No cookie is read here. `deps.py` has the one dependency of the source token |
 | `src/player_backend/class_schemas.py` | Reads the class format's schemas from `schema/class-format/v1/` (ADR 0003); the validators are the contract lane's `classformat` package |
-| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits, linking a source, a publication's checks |
+| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits, linking a source, a publication's checks, class sync's cursor and pages |
 | `src/player_backend/bearer_blocks.py` | What one process remembers about bearer tokens it refuses without a lookup (section 10). In memory only |
 | `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. Without an SMTP host every mail is dropped (`NoMailer`); tests use fakes |
 | `src/player_backend/smtp_mailer.py`, `smtp_deadline.py`, `smtp_settings.py` | The SMTP mailer (see "Mail"): TLS always and verified, one time limit for the whole conversation, the password from a file |
@@ -173,6 +173,20 @@ URL in an environment file that only the deploy user can read:
   `pairing.denied`, `pairing.refused` (the cap) and `device.created` inside the functions;
   `device.revoked` by the backend.
 - Responses under `/api/pairing/` and `/api/player/` are `Cache-Control: no-store`.
+
+## Class sync for the player (ADR 0002, sections 6, 7 and 9)
+
+Read only, with a device token, for its account (`player_api/sync.py`, `db/class_sync.py`, the
+pure rules in `sync_policy.py`). A cursor is the account's own `account_sync` position: 0 before
+its first publication, and it only grows.
+
+| Route | What |
+|---|---|
+| `GET /api/player/changes?after=<cursor>&limit=<n>` | The class rows whose place is above `after` (default 0), in sync order, at most `limit` (1 to 500, default 100): `{changes: [{class_id, source, source_class_id, publication_number, removed, content_hash, published_at, position}], cursor, more}`. No content. A removal is its class's own row, with `removed: true` and no hash. `cursor` is the place of the page's last change (`after` for an empty page). A cursor above the account's own is `409 resync_required` with the current `cursor`: it was never this account's |
+| `GET /api/player/classes/{class_id}` | One class the account holds now: `{class_id, source, source_class_id, publication_number, content_hash, position, document}`. A removal's marker, an unknown id and another account's id are all `404 not_found` |
+| `GET /api/player/cursor` | `{cursor}` |
+
+Each request counts towards the device token's 60 a minute; nothing else is written.
 
 ## Linking a source, the source token and publications (ADR 0002, sections 3, 7, 10 and 11)
 

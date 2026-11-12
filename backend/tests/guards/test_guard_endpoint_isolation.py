@@ -23,6 +23,9 @@ from tests.sitehelp import Browser, Site
 A = "a@example.test"
 B = "b@example.test"
 SESSIONS = "/api/site/sessions"
+CHANGES = "/api/player/changes"
+PLAYER_CLASSES = "/api/player/classes"
+CURSOR = "/api/player/cursor"
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,8 @@ class Other:
     user_code: str  # of a pairing B has approved and whose token is not collected yet
     link_id: str
     source_token: str  # B's source token: used here only to see that it still works
+    class_ids: tuple[str, ...]  # the ids of B's class rows, as the player API names a class
+    cursor: int  # B's sync cursor
 
 
 @dataclass(frozen=True)
@@ -166,6 +171,42 @@ def _own_device(site: Site, a: Actor) -> None:
     assert "B PC" not in answer.text
 
 
+def _changes(site: Site, a: Actor) -> None:
+    # Only A's own changes, in A's own order: B's class of the same source class id is not one.
+    answer = a.app.get(CHANGES, headers=bearer(a.token))
+    assert answer.status_code == 200
+    body = answer.json()
+    listed = [
+        (c["source_class_id"], c["publication_number"], c["removed"]) for c in body["changes"]
+    ]
+    assert listed == [("shared", 1, False), ("b-only", 9, True)]
+    assert (body["cursor"], body["more"]) == (2, False)
+    # B's cursor is above A's: it was never A's, and it shows A nothing of B.
+    ahead = a.app.get(f"{CHANGES}?after={a.other.cursor}", headers=bearer(a.token))
+    assert ahead.status_code == 409 and ahead.json() == {"error": "resync_required", "cursor": 2}
+    # A cursor that A's own order has reached reads A's rows after it, and nothing of B's.
+    later = a.app.get(f"{CHANGES}?after=1", headers=bearer(a.token))
+    assert [c["source_class_id"] for c in later.json()["changes"]] == ["b-only"]
+    for class_id in a.other.class_ids:
+        assert class_id not in answer.text + ahead.text + later.text
+
+
+def _held_class(site: Site, a: Actor) -> None:
+    # B's class ids are known to A here; they are still not A's to read.
+    for class_id in a.other.class_ids:
+        refused = a.app.get(f"{PLAYER_CLASSES}/{class_id}", headers=bearer(a.token))
+        assert refused.status_code == 404 and refused.json() == {"error": "not_found"}
+    listed = a.app.get(CHANGES, headers=bearer(a.token)).json()["changes"]
+    own = next(c["class_id"] for c in listed if c["source_class_id"] == "shared")
+    answer = a.app.get(f"{PLAYER_CLASSES}/{own}", headers=bearer(a.token))
+    assert answer.status_code == 200 and answer.json()["document"]["class"]["title"] == "A"
+
+
+def _cursor(site: Site, a: Actor) -> None:
+    answer = a.app.get(CURSOR, headers=bearer(a.token))
+    assert answer.status_code == 200 and answer.json() == {"cursor": 2}
+
+
 def _revoke_own_device(site: Site, a: Actor) -> None:
     assert a.app.delete(DEVICE, headers=bearer(a.token)).status_code == 204
     assert a.app.get(DEVICE, headers=bearer(a.token)).status_code == 401
@@ -188,6 +229,9 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/source/classes/{source_class_id}"): _read_numbers,
     ("DELETE", "/api/source/link"): _end_own_link,
     ("GET", "/api/player/device"): _own_device,
+    ("GET", "/api/player/changes"): _changes,
+    ("GET", "/api/player/classes/{class_id}"): _held_class,
+    ("GET", "/api/player/cursor"): _cursor,
     ("DELETE", "/api/player/device"): _revoke_own_device,
     ("POST", "/api/site/sessions/end-all"): _end_all,
 }
@@ -239,6 +283,23 @@ def _account_b(site: Site) -> tuple[Browser, Other]:
             B,
         ),
         source_token=b_source,
+        class_ids=tuple(
+            str(row[0])
+            for row in site.su.execute(
+                "SELECT x.id FROM player.classes x "
+                "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s "
+                "ORDER BY x.sync_position",
+                (B,),
+            ).fetchall()
+        ),
+        cursor=int(
+            _one(
+                site,
+                "SELECT x.position FROM player.account_sync x "
+                "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s",
+                B,
+            )
+        ),
     )
     return b, other
 
@@ -277,6 +338,9 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
             f"{sh.CLASSES}/shared", headers=sh.bearer(other.source_token)
         )
         assert b_read.json()["highest_publication_number"] == 3
+        b_sync = b_app.get(CHANGES, headers=bearer(other.token)).json()
+        assert [c["class_id"] for c in b_sync["changes"]] == list(other.class_ids)
+        assert b_sync["cursor"] == other.cursor
     # And the cases did act on A's own rows: A's classes are A's, A's source ended its own link,
     # and the last two revoked A's device and ended every session of A.
     assert sorted(row[:3] for row in sh.class_rows(site, A)) == [

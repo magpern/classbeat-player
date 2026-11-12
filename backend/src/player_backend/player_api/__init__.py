@@ -10,7 +10,9 @@ from fastapi import APIRouter
 
 from player_backend.player_api.device import router as device_router
 from player_backend.player_api.pairing import router as pairing_router
+from player_backend.player_api.sync import router as sync_router
 
 router = APIRouter()
 router.include_router(pairing_router)
 router.include_router(device_router)
+router.include_router(sync_router)

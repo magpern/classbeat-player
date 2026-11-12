@@ -17,6 +17,7 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.devices",
     "player_backend.db.queries.sources",
     "player_backend.db.queries.classes",
+    "player_backend.db.queries.class_sync",
     "player_backend.db.queries.operator",
 )
 
