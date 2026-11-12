@@ -662,7 +662,8 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
          connection, including the live process's listening connection, and no driver object
          leaves it: no connection, cursor, pool, notification or driver exception. It turns
          driver errors and notifications into its own types first. Data access, the migration
-         runner and the operator's commands get a handle from the executor. A handle takes only a registered `Query` and bound parameters, and
+         runner and the operator's commands get a handle from the executor. A handle takes
+         only a registered `Query` and bound parameters, and
          returns rows; it has no method that takes text. Only the listening connection takes no
          statement: the executor issues its `LISTEN` from a registered `Query` of its own.
        - **`Query` and its registry.** A `Query` is made only from a string literal in a query
@@ -677,7 +678,8 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
          Anything else raises: a plain `str`, `sql.SQL`, `Composed`, bytes, a copy of `Query`,
          or an unregistered `Query`. `Query` is final: subclassing it raises. So SQL built
          from strings, and a query name rebound to a new value, fail when they are run. An
-         object changed in place still runs its registered text. A test drives each of these through the public interface.
+         object changed in place still runs its registered text. A test drives each of these
+         through the public interface.
        - **What it holds against.** Ordinary code that uses the public interface of `Query`, the
          executor and its handles. It is not a sandbox. Code in the same process can patch the
          executor or reach private attributes, `gc`, `object.__setattr__`, introspection
