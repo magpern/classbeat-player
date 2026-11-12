@@ -30,5 +30,6 @@ cp -a "$app/dist/." "$resources/dist/"
 printf '{"name":"classbeat-player","version":"0.0.0","main":"dist/main.cjs"}\n' >"$resources/package.json"
 
 mkdir -p "$out"
-tar -czf "$out/classbeat-player-$label-unsigned.tar.gz" -C "$stage" "classbeat-player-$label"
+# Piped, because GNU tar on Windows reads "D:" in an output path as a remote host.
+tar -cf - -C "$stage" "classbeat-player-$label" | gzip >"$out/classbeat-player-$label-unsigned.tar.gz"
 ls -l "$out/classbeat-player-$label-unsigned.tar.gz"
