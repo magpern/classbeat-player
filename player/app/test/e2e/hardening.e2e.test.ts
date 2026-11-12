@@ -37,7 +37,7 @@ test("the page has no Node and only the narrow preload API", async () => {
     process: typeof (globalThis as Record<string, unknown>).process,
     api: Object.keys((window as unknown as { player: object }).player).sort(),
   }));
-  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["command", "getState", "onUpdate", "openDropped"] });
+  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["command", "getState", "onUpdate", "openDropped", "pairingState", "startPairing", "unpair"] });
 });
 
 test("CSP is present and blocks inline scripts and network requests", async () => {
@@ -109,13 +109,16 @@ test("IPC from the wrong window is refused and changes nothing", async () => {
         state: await wc.executeJavaScript("window.player.getState()"),
         command: await wc.executeJavaScript("window.player.command({ type: 'start' })"),
         open: await wc.executeJavaScript("window.player.openDropped('x.json', '{}')"),
+        pairingState: await wc.executeJavaScript("window.player.pairingState()"),
+        startPairing: await wc.executeJavaScript("window.player.startPairing()"),
+        unpair: await wc.executeJavaScript("window.player.unpair()"),
       };
       w.destroy();
       return out;
     },
     { preload, presenterFile },
   );
-  assert.deepEqual(r, { state: null, command: null, open: null });
+  assert.deepEqual(r, { state: null, command: null, open: null, pairingState: null, startPairing: null, unpair: null });
   const afterState = await page.evaluate(() => (window as unknown as { player: { getState(): Promise<unknown> } }).player.getState());
   assert.deepEqual(afterState, before);
 });

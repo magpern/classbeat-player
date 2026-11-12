@@ -151,6 +151,8 @@ const src = (path: string): string => code(sources.find((s) => s.path === path)?
 // main/readers/windows-spawn.ts; test/unit/windows-script.test.ts pins how.
 const WINDOWS_SPAWN = "main/readers/windows-spawn.ts";
 const EXEC_READERS = ["main/linux-reader.ts", "main/macos-reader.ts"];
+// The one place that opens anything in the system: the pairing page in the browser (#74).
+const OPENS_PAGE = "main/pairing/setup.ts";
 
 test("only the macOS and Linux readers and the Windows helper start a process, the readers with execFile, and never a shell", () => {
   const users = sources.filter((s) => /child_process/.test(code(s.text))).map((s) => s.path);
@@ -163,11 +165,24 @@ test("only the macOS and Linux readers and the Windows helper start a process, t
     assert.equal(reader.match(/\bshell:/g)?.length, reader.match(/\bshell: false\b/g)?.length, `${path}: never another value`);
   }
   for (const s of sources) {
-    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
+    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawnSync|fork)\(|shell:\s*true|\bopenPath\b/, s.path);
+    if (s.path !== OPENS_PAGE) assert.doesNotMatch(code(s.text), /\bopenExternal\b/, s.path);
     if (s.path !== WINDOWS_SPAWN) assert.doesNotMatch(code(s.text), /\bspawn\(/, s.path);
   }
   assert.equal(src(WINDOWS_SPAWN).match(/\bspawn\(/g)?.length, 1, "one call site");
   assert.match(src(WINDOWS_SPAWN), /shell: false/);
+});
+
+test("the browser is opened in one place, only with the pairing page, which the server's answer must put on its own origin", () => {
+  const setup = src(OPENS_PAGE);
+  assert.equal(setup.match(/\bopenExternal\b/g)?.length, 1, "one call site");
+  assert.match(setup, /openPage: \(url\) => void shell\.openExternal\(url\)/);
+  const service = src("main/pairing/service.ts");
+  assert.deepEqual([...service.matchAll(/\bd\.openPage\(([^)]*)\)/g)].map((m) => m[1]), ["e.page"]);
+  // The open_page effect's page is the start answer's, and that is checked by pairingPageOn.
+  const machine = src("core/pairing/machine.ts");
+  assert.deepEqual([...machine.matchAll(/do: "open_page", page: ([\w.]+)/g)].map((m) => m[1]), ["answer.page"]);
+  assert.match(src("core/pairing/protocol.ts"), /const page = pairingPageOn\(origin, field\(a\.body, "verification_uri"\)\);/);
 });
 
 test("the scripts are constants: no template text, no joining with data, and one place names osascript", () => {
@@ -187,11 +202,17 @@ test("the reader is built in the main process only, by platform", () => {
   assert.match(src("main/main.ts"), /selectMusic\(process\.platform\)/);
 });
 
-test("the preload bridge is unchanged: the same four functions and no new channel", () => {
+test("the preload bridge: the same four functions, and the three of pairing (#74), which take no argument", () => {
   const preload = src("preload/preload.ts");
   const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
-  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate"]);
-  assert.deepEqual([...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]), ["player:state", "player:command", "player:open-dropped", "player:update"]);
+  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "unpair"]);
+  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["unpair", "CH_UNPAIR"]]) {
+    assert.match(preload, new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${channel}\\),$`, "m"), name);
+  }
+  assert.deepEqual(
+    [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair"],
+  );
 });
 
 test("no Spotify token, sign-in or developer interface, and no network, in the reader", () => {
