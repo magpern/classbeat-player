@@ -20,9 +20,9 @@ _SHORT_CODE = re.compile(r"\b[BCDFGHJKLMNPQRSTVWXZ]{4}-?[BCDFGHJKLMNPQRSTVWXZ]{4
 _CREDENTIAL_HEADER = re.compile(r"(?i)\b(authorization|cookie|set-cookie)\s*[:=]\s*\S.*")
 
 
-def redact(text: str) -> str:
-    """Return `text` with every token, hash, short code and credential header value removed."""
-    text = _CREDENTIAL_HEADER.sub(lambda m: f"{m.group(1)}: {REDACTED}", text)
-    text = _TOKEN.sub(REDACTED, text)
-    text = _HEX_HASH.sub(REDACTED, text)
-    return _SHORT_CODE.sub(REDACTED, text)
+def redact(line: str) -> str:
+    """Return `line` with every token, hash, short code and credential header value removed."""
+    line = _CREDENTIAL_HEADER.sub(lambda m: f"{m.group(1)}: {REDACTED}", line)
+    line = _TOKEN.sub(REDACTED, line)
+    line = _HEX_HASH.sub(REDACTED, line)
+    return _SHORT_CODE.sub(REDACTED, line)

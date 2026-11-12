@@ -2,8 +2,9 @@
 
 Files in `migrations/` named `NNNN_name.sql` run once each, in order, each in its own transaction
 together with its row in the ledger `player_meta.schema_migrations`. An applied file that has
-changed since is refused. Run: `uv run python -m player_backend.db.migrate` with
-`PLAYER_DATABASE_OWNER_URL` set.
+changed since is refused. Every file is a constant of `queries.migrations` and has its own step
+below: a new file needs a new constant and a new step (a test fails until both exist). Run:
+`uv run python -m player_backend.db.migrate` with `PLAYER_DATABASE_OWNER_URL` set.
 """
 
 from __future__ import annotations
@@ -12,91 +13,77 @@ import hashlib
 import os
 import re
 import sys
-from dataclasses import dataclass
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
 
-MIGRATIONS_DIR = Path(__file__).with_name("migrations")
+from player_backend.db.queries import migrations as q
+from player_backend.db.sqlfile import SQL_DIR, sql_file
+
 _NAME = re.compile(r"^(\d{4})_[a-z0-9_]+\.sql$")
 
-# The ledger lives in its own schema, with row-level security forced like every table, and one
-# policy for player_owner alone. No other role has any right on it.
-_LEDGER = b"""
-CREATE SCHEMA IF NOT EXISTS player_meta;
-REVOKE ALL ON SCHEMA player_meta FROM PUBLIC;
-CREATE TABLE IF NOT EXISTS player_meta.schema_migrations (
-  version    integer PRIMARY KEY,
-  name       text NOT NULL,
-  sha256     text NOT NULL,
-  applied_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE player_meta.schema_migrations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE player_meta.schema_migrations FORCE ROW LEVEL SECURITY;
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policy
-                 WHERE polrelid = 'player_meta.schema_migrations'::regclass) THEN
-    CREATE POLICY migrator ON player_meta.schema_migrations
-      TO player_owner USING (true) WITH CHECK (true);
-  END IF;
-END
-$$;
-"""
-_LOCK = "SELECT pg_advisory_xact_lock(7270001)"
-_APPLIED = "SELECT version, sha256 FROM player_meta.schema_migrations"
-_RECORD = "INSERT INTO player_meta.schema_migrations (version, name, sha256) VALUES (%s, %s, %s)"
+type Conn = psycopg.Connection[tuple[object, ...]]
 
 
 class MigrationError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
-class Migration:
-    version: int
-    name: str
-    body: bytes
-
-    @property
-    def sha256(self) -> str:
-        return hashlib.sha256(self.body).hexdigest()
-
-
-def load_migrations(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
-    found: list[Migration] = []
+def load_migrations(directory: Path = SQL_DIR) -> list[str]:
+    """The migration file names, checked to be numbered 0001, 0002, ... without gaps."""
+    names: list[str] = []
     for path in sorted(directory.iterdir()):
         if path.suffix != ".sql":
             continue
-        match = _NAME.match(path.name)
-        if match is None:
+        if _NAME.match(path.name) is None:
             raise MigrationError(f"bad migration file name: {path.name}")
-        found.append(Migration(int(match.group(1)), path.name, path.read_bytes()))
-    versions = [m.version for m in found]
-    if versions != list(range(1, len(found) + 1)):
+        names.append(path.name)
+    if [int(n[:4]) for n in names] != list(range(1, len(names) + 1)):
         raise MigrationError("migration versions must be 0001, 0002, ... without gaps")
-    return found
+    return names
 
 
-def apply_migrations(conn: psycopg.Connection[tuple[object, ...]]) -> list[str]:
-    """Apply what is pending on `conn` (connected as, or set to, player_owner)."""
-    applied_now: list[str] = []
+def sha256(body: str) -> str:
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def _step(conn: Conn, done: list[str], name: str, body: str) -> Generator[bool]:
+    """One migration's transaction. Yields whether it is still to be applied."""
+    if body != sql_file(name):
+        raise MigrationError(f"step and file differ: {name}")
+    version = int(name[:4])
     with conn.transaction():
-        conn.execute(_LOCK)
-        conn.execute(_LEDGER)
-    for migration in load_migrations():
-        with conn.transaction():
-            conn.execute(_LOCK)
-            applied = {int(str(v)): str(h) for v, h in conn.execute(_APPLIED).fetchall()}
-            if migration.version in applied:
-                if applied[migration.version] != migration.sha256:
-                    raise MigrationError(f"applied migration changed: {migration.name}")
-                continue
-            # A trusted file shipped in this package, run as a whole. Not built from strings.
-            conn.execute(migration.body)
-            conn.execute(_RECORD, (migration.version, migration.name, migration.sha256))
-            applied_now.append(migration.name)
-    return applied_now
+        conn.execute(q.LOCK)
+        applied = {int(str(v)): str(h) for v, h in conn.execute(q.APPLIED).fetchall()}
+        if version in applied:
+            if applied[version] != sha256(body):
+                raise MigrationError(f"applied migration changed: {name}")
+            yield False
+            return
+        yield True
+        conn.execute(q.RECORD, (version, name, sha256(body)))
+        done.append(name)
+
+
+def apply_migrations(conn: Conn) -> list[str]:
+    """Apply what is pending on `conn` (connected as, or set to, player_owner)."""
+    done: list[str] = []
+    with conn.transaction():
+        conn.execute(q.LOCK)
+        conn.execute(q.LEDGER)
+    with _step(conn, done, "0001_tables.sql", q.M0001_TABLES) as pending:
+        if pending:
+            conn.execute(q.M0001_TABLES)
+    with _step(conn, done, "0002_policies_and_grants.sql", q.M0002_POLICIES_AND_GRANTS) as pending:
+        if pending:
+            conn.execute(q.M0002_POLICIES_AND_GRANTS)
+    with _step(conn, done, "0003_auth_functions.sql", q.M0003_AUTH_FUNCTIONS) as pending:
+        if pending:
+            conn.execute(q.M0003_AUTH_FUNCTIONS)
+    return done
 
 
 def main() -> int:

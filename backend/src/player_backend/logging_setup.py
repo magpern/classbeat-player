@@ -23,7 +23,7 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": redact(record.getMessage()),
         }
-        fields: object = getattr(record, "fields", None)
+        fields: object = record.__dict__.get("fields")
         if isinstance(fields, dict):
             for key, value in cast("dict[object, object]", fields).items():
                 if isinstance(key, str) and key in ALLOWED_FIELDS:
