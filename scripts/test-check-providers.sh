@@ -115,6 +115,22 @@ for p in "${packages[@]}"; do
 done
 
 new_repo
+printf '%s\n' "packages:" "" "  /${packages[0]}@1.0.0:" "    resolution: {integrity: x}" >"$r/player/pnpm-lock.yaml"
+expect fail "package in a pnpm v6 lock key"
+
+# The guard reports file:line only, never the matching text.
+new_repo
+echo "const u = 'https://${hosts[0]}/secret-marker';" >"$r/player/a.ts"
+git -C "$r" add -A
+out="$(cd "$r" && bash scripts/check-providers.sh 2>&1 || true)"
+if [ -z "$out" ] || grep -qE "secret-marker|${hosts[0]//./\\.}/" <<<"$out" || ! grep -q 'player/a.ts:1' <<<"$out"; then
+  echo "FAIL: output must name file:line and not the matching text"
+  fail=1
+else
+  echo "ok: output names file:line and not the matching text"
+fi
+
+new_repo
 mkdir -p "$r/player/a/b"
 printf '{"dependencies":{"%s":"1"}}\n' "${packages[0]}" >"$r/player/a/b/package.json"
 expect fail "package in a deeply nested manifest"

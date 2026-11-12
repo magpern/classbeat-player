@@ -25,6 +25,7 @@ package @types/spotify-web-playback-sdk
 package @types/spotify-api
 package spotipy
 package rspotify
+package tekore
 
 # System-audio capture libraries (ADR 0004, section 2: no Spotify audio is ever captured).
 package node-record-lpcm16
@@ -33,9 +34,14 @@ package naudiodon
 package pyaudio
 package sounddevice
 package soundcard
+package pyaudiowpatch
+package electron-audio-loopback
+package audify
+package cpal
 
 # MOWL endpoint hosts (ADR 0004, section 4: this product never calls a MOWL server).
 host mowl.com
+host intelligent-cycling.com
 
 # Swedebeat endpoint hosts (ADR 0004, section 5; no credentials or keys from its apps).
 host swedebeat.se

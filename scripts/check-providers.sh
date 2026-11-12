@@ -45,7 +45,7 @@ while read -r kind value extra; do
       report "host $value" "$found"
       ;;
     package)
-      found="$(git grep -I -i -n -E -e "(^|[^A-Za-z0-9._@/-]|node_modules/)${esc}([^A-Za-z0-9._-]|\$)" -- "${manifests[@]}" "${allowed[@]}" || true)"
+      found="$(git grep -I -i -n -E -e "(^|[^A-Za-z0-9._@/-]|node_modules/|^[[:space:]]*/)${esc}([^A-Za-z0-9._-]|\$)" -- "${manifests[@]}" "${allowed[@]}" || true)"
       report "package $value in a manifest" "$found"
       found="$(git grep -I -i -n -E -e "(import|from|require\\(?|use)[[:space:](\"']*${esc}([^A-Za-z0-9._-]|\$)" -- . "${allowed[@]}" || true)"
       report "package $value imported" "$found"
