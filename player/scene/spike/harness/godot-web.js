@@ -17,7 +17,8 @@ function resolveRequest(url, root = ROOT) {
   let u;
   try { u = new URL(url); } catch { return null; }
   if (u.protocol !== `${SCHEME}:` || u.hostname !== 'app') return null;
-  const name = decodeURIComponent(u.pathname.replace(/^\//, ''));
+  let name;
+  try { name = decodeURIComponent(u.pathname.replace(/^\//, '')); } catch { return null; } // bad %-encoding: 404, never a throw
   if (!/^[A-Za-z0-9._-]+$/.test(name) || name.startsWith('.')) return null;
   const type = TYPES[path.extname(name)];
   return type ? { file: path.join(root, name), type } : null;

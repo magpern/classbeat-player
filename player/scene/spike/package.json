@@ -6,7 +6,7 @@
   "main": "harness/main.js",
   "scripts": {
     "start": "electron harness/main.js",
-    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "test": "node --test --test-concurrency=1 --test-timeout=120000 \"test/*.test.js\"",
     "test:headless": "xvfb-run -a -s \"-screen 0 1920x1080x24\" npm test",
     "screenshots": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js",
     "screenshots:godot": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js --variants=godot-web,godot-native",

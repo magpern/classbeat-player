@@ -138,12 +138,19 @@ function placeRoom(displayId) {
   const d = all.find((x) => x.id === displayId) || all.find((x) => x.id !== screen.getPrimaryDisplay().id) || all[0];
   roomDisplayId = d.id;
   if (ROOM_SIZE.length === 2 && ROOM_SIZE[0]) { room.setContentSize(ROOM_SIZE[0], ROOM_SIZE[1]); return; }
+  // A hidden room window (godot-native) only gets its bounds: full screen could show it over Godot.
+  if (!room.isVisible()) { room.setBounds(d.bounds); return; }
   const b = room.getBounds();
   if (all.length > 1 && room.isFullScreen() && b.x === d.bounds.x && b.y === d.bounds.y && b.width === d.bounds.width && b.height === d.bounds.height) return; // already right: no flicker
   if (all.length === 1) { room.setFullScreen(false); room.setBounds({ x: d.bounds.x + 40, y: d.bounds.y + 40, width: 1280, height: 720 }); return; }
   room.setFullScreen(false);
   room.setBounds(d.bounds);
   room.setFullScreen(true);
+}
+
+// The Godot window cannot be moved from outside: when its display changed, start it again there.
+function restartNativeIfMoved() {
+  if (native && VARIANT === 'godot-native' && JSON.stringify(native.bounds) !== JSON.stringify(displayBounds())) startNative();
 }
 
 function createWindows() {
@@ -174,8 +181,7 @@ function createWindows() {
   const refit = () => {
     if (!room) return;
     placeRoom(roomDisplayId);
-    // The Godot window cannot be moved from outside: when its display changed, start it again there.
-    if (native && VARIANT === 'godot-native' && JSON.stringify(native.bounds) !== JSON.stringify(displayBounds())) startNative();
+    restartNativeIfMoved();
   };
   screen.on('display-added', refit);
   screen.on('display-removed', refit);
@@ -198,7 +204,7 @@ function command(cmd) {
     case 'mode': setMode(cmd.mode); break;
     case 'variant': if (cmd.variant !== VARIANT) setVariant(cmd.variant); break;
     case 'capture': capture().catch((e) => log(`capture failed: ${e.message}`)); break;
-    case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); break;
+    case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); restartNativeIfMoved(); break;
     default: break;
   }
   return state();
