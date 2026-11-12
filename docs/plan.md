@@ -469,7 +469,7 @@ is planned. (The desktop player stays an installed application.)
 | The desktop player (Windows, macOS, Linux) | Yes, built in |
 | Android phone or tablet, in Chrome | Yes |
 | A computer's Chrome or Edge browser | Yes |
-| **iPhone and iPad** | **No.** Safari has no Web Bluetooth, and every browser on iPhone is built on Safari. iPhone riders get the targets and the timing, without their own sensor |
+| **iPhone and iPad** | **Not in Safari, Chrome, Edge or Firefox**, which all run on Safari's engine there and have no Web Bluetooth. It can work in a special Bluetooth-capable browser the user installs themselves (Bluefy is the known one); untested, and not ours to maintain. The page offers sensors wherever the browser supports them, so such a browser works without extra effort from us, but nothing depends on it. Otherwise iPhone riders get the targets and the timing, without their own sensor |
 
 Limits of reading from a web page, on every device:
 
