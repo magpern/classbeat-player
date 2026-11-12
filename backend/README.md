@@ -9,9 +9,13 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
 | `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in, site sessions, the user's side of pairing and the account's devices (ADR 0002, sections 4, 5 and 6). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
 | `src/player_backend/player_api/` | The app's side: pairing (`/api/pairing/`) and the player API (`/api/player/`). No cookie is read here. `deps.py` has the one dependency of the device token |
-| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits |
+| `src/player_backend/source_api/` | The source API, `/api/source/`: the code exchange, publications, a source's own numbers and its own link (ADR 0002, section 7). No cookie is read here. `deps.py` has the one dependency of the source token |
+| `src/player_backend/class_schemas.py` | Reads the class format's schemas from `schema/class-format/v1/` (ADR 0003); the validators are the contract lane's `classformat` package |
+| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits, linking a source, a publication's checks |
 | `src/player_backend/bearer_blocks.py` | What one process remembers about bearer tokens it refuses without a lookup (section 10). In memory only |
-| `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
+| `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. Without an SMTP host every mail is dropped (`NoMailer`); tests use fakes |
+| `src/player_backend/smtp_mailer.py`, `smtp_deadline.py`, `smtp_settings.py` | The SMTP mailer (see "Mail"): TLS always and verified, one time limit for the whole conversation, the password from a file |
+| `src/player_backend/admin.py`, `db/operator.py` | The operator's commands, as `player_owner` (see "Operator commands") |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the data-access modules, the migration runner and the operator's commands. The only place that may call a handle |
 | `src/player_backend/db/executor/` | The executor: the only holder of the database driver. Makes every connection and the pool, hands out handles, owns `Query` and its registry |
@@ -41,6 +45,59 @@ transaction, recorded with its SHA-256 in `player_meta.schema_migrations`; a cha
 is refused. Never edit an applied migration; add the next number, its name in the executor's
 fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and its step in
 `db/migrate.py` (tests fail until all three exist).
+
+## Mail
+
+`app_from_env` uses the SMTP mailer when `PLAYER_SMTP_HOST` is set, and `NoMailer` (every
+mail dropped, logged as `mail.not_configured`) when it is not. Which mail service is used is
+the owner's choice (`docs/owner.md`).
+
+| Setting | |
+|---|---|
+| `PLAYER_SMTP_HOST` | The server's host name. Without it no other `PLAYER_SMTP_` setting may be set |
+| `PLAYER_SMTP_TLS` | `implicit` (default; TLS from the first byte) or `starttls`. There is no plain mode |
+| `PLAYER_SMTP_PORT` | Default 465 for `implicit`, 587 for `starttls` |
+| `PLAYER_SMTP_FROM` | The sender, a plain `name@host` address |
+| `PLAYER_SMTP_USER`, `PLAYER_SMTP_PASSWORD_FILE` | Both or neither. The password is read once at start-up from that file (one line; a final line break is dropped). `PLAYER_SMTP_PASSWORD` is refused |
+| `PLAYER_SMTP_HELO_NAME` | The name given in `EHLO`, default `localhost`, so that no lookup of the local host is made |
+
+- The certificate and the host name are verified against the system's trust store, TLS 1.2 at
+  least. With `starttls`, a server that offers no STARTTLS gets no login and no mail. After
+  STARTTLS nothing read before it is kept.
+- `send` keeps to the limit `deliver` gives it (10 seconds) for the whole conversation: each step
+  gets the time that is left, and a watchdog shuts the connection when it runs out. Only the
+  name lookup of the host is the system's.
+- Nothing of a mail is logged or printed; a failure reaches the log as its type alone
+  (`mail not sent: SMTPAuthenticationError`).
+- Tests: a fake server on loopback with certificates made for the run (`tests/smtphelp.py`).
+  Every test runs under the network guard (`tests/netguard.py`): no lookup of a name but
+  `localhost` and no connect past loopback.
+
+## Operator commands
+
+Run on the server as `player_owner`, with `PLAYER_DATABASE_OWNER_URL` as for migrations. The
+commands check the role they connect as and refuse anything but `player_owner`; they never read
+`PLAYER_DATABASE_URL`.
+
+```bash
+python -m player_backend.admin allowlist add <email>     # trimmed and lower-cased first
+python -m player_backend.admin allowlist remove <email>
+python -m player_backend.admin allowlist list            # email, tab, when it was added
+python -m player_backend.admin purge                     # auth_purge_expired(), once
+```
+
+The allowlist is changed through its one policy (ADR 0002, section 9) and nothing else.
+`purge` calls `auth_purge_expired()` once, in its own transaction; the function returns
+nothing, so the command prints only that it ran. A database error is printed as its type and
+SQLSTATE, never its message. Exit status: 0 done, 1 refused or failed, 2 bad input or no URL.
+
+**The purge schedule.** `purge` runs every hour on the server, outside the web process. The
+deploy files are the infra lane's; until they exist, the schedule is this cron line, with the
+URL in an environment file that only the deploy user can read:
+
+```cron
+17 * * * *  set -a; . /etc/classbeat-player/owner.env; set +a; python -m player_backend.admin purge
+```
 
 ## Sign-in and site sessions (ADR 0002, sections 4, 5, 10 and 11)
 
@@ -81,30 +138,72 @@ fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and
 | `POST /api/pairing/start` `{platform, version}` | None | Returns `device_code`, `user_code` (`XXXX-XXXX`), `verification_uri` (`<site>/pair`, without the code), `expires_in: 600`, `interval: 5`. `429` over 10 starts an hour per address |
 | `POST /api/pairing/token` `{device_code}` | The device code, in the body | `200 {device_token, email}` once, on the first poll after approval. Otherwise `400` with `authorization_pending`, `slow_down`, `access_denied` or `expired_token` (also for a used or unknown code, and for anything that is not a `cbp_dc_` token, which is refused before any lookup) |
 | `POST /api/site/pairing/find` `{code}` | Session cookie | `200 {platform, version}` of the pending pairing; changes nothing. `404 pairing_not_found` for a wrong code, an ended or decided pairing and a closed form alike |
-| `POST /api/site/pairing/decide` `{code, approve, name}` | Session cookie | `200 {"status": "approved" or "denied"}`. `404 pairing_not_found` as above; `409 too_many_devices` at 10 active devices; `422 invalid_name` |
+| `POST /api/site/pairing/decide` `{code, approve, name}` | Session cookie | `200 {"status": "approved" or "denied"}`. `404 pairing_not_found` as above; `409 too_many_devices` for an approval at 10 active devices, pairings that are approved and not collected yet included; `422 invalid_name` |
 | `GET /api/site/devices`, `DELETE /api/site/devices/{id}` | Session cookie | List the devices that are not revoked (`last_used_at: null` is "never used"); revoke one |
 | `GET /api/player/device`, `DELETE /api/player/device` | `Authorization: Bearer cbp_dev_…` | The device's own name, platform, version and paired date; the app revokes its own token |
 
 - Migration `0006` gives `auth_start_pairing`, `auth_find_pairing`, `auth_decide_pairing`,
   `auth_collect_pairing` and `auth_enter_device` their bodies, with ADR 0002's numbers as
   constants in the SQL (principle 7). No grant, table or function is added.
-  `auth_device_active` still fails closed (PL8).
+  `auth_device_active` still fails closed (PL8). Migration `0007` replaces the body of
+  `auth_decide_pairing`: an approval refused at the cap returns `NULL` (not `false`, which is a
+  wrong code or a closed form), so the site can answer `409` whatever fills the cap. The cap
+  is checked by the function alone.
+- `/api/pairing/start` and `/api/pairing/token` take no credential and are for the desktop
+  app alone (`app_only`, `player_api/deps.py`): a request with a `Sec-Fetch-Site` header that
+  is not `none` (a page in a browser) is `403 cross_site_request`, and a body that is not sent
+  as `application/json` is `415 unsupported_media_type`, both before anything is counted.
 - Wrong codes are counted inside the database, at the look-up and the decision together: the
   fifth in 15 minutes closes the account's form for 15 minutes. The two site routes *return*
   their `404` instead of raising it, so the request's transaction commits and the count stays.
+  The `409` is returned the same way, so its `pairing.refused` event stays.
 - A device-token request is one transaction: `device_token` (`player_api/deps.py`) calls
   `auth_enter_device` as its first statement and yields an `AccountContext`. A token that does
   not work is answered `401` with `token_revoked`, `token_unknown` or `token_expired` and
   `WWW-Authenticate: Bearer`, after its transaction (and so its counters) has been committed.
   Anything that is not a `cbp_dev_` bearer token is `401 invalid_token`, with nothing looked up.
+  When a player route refuses the request (an `ApiError`), what the route wrote is rolled back
+  and the token's request count and the device's "last used" are kept, as for a site session.
 - Limits (section 10): 60 requests a minute per device token; the same unknown or revoked token
   from one address 20 times in 5 minutes is then refused (`429`) for 5 minutes without a
   lookup, from this process's memory; over 200 unknown tokens in 5 minutes from one address,
-  further unknown ones get `429` until the window ends, and valid tokens keep working.
+  further unknown ones get `429` until the window ends, and valid tokens keep working. The
+  address's counter is counted first: over it, no per-token counter row is written.
 - A paired device sends the account a mail, after the response. Events: `pairing.approved`,
   `pairing.denied`, `pairing.refused` (the cap) and `device.created` inside the functions;
   `device.revoked` by the backend.
 - Responses under `/api/pairing/` and `/api/player/` are `Cache-Control: no-store`.
+
+## Linking a source, the source token and publications (ADR 0002, sections 3, 7, 10 and 11)
+
+Known sources are the setting `PLAYER_SOURCES`: a JSON list of `{id, name, redirect_uris}`, the
+exact HTTPS addresses (HTTP on loopback for development) a source may be sent back to. Empty by
+default: no source can be linked.
+
+| Route | Credential | What |
+|---|---|---|
+| `POST /api/site/source-links/check` `{source, redirect_uri}` | Session cookie | `200 {source, name, scope}`; `400 unknown_source` for an unknown source or address (the page then redirects nowhere) |
+| `POST /api/site/source-links/approve` `{source, redirect_uri, state, code_challenge, code_challenge_method?}` | Session cookie | `200 {redirect}`: the redirect address with `code` (`cbp_lc_`, 60 seconds, single use) and `state`, for the page's script to go to. `409 too_many_links` at 5 links; `422` for a challenge that is not S256 or a bad state. The account gets a mail |
+| `GET /api/site/source-links`, `DELETE /api/site/source-links/{link_id}` | Session cookie | The account's links (source, linked, last used); revoking deletes the link, the classes stay |
+| `POST /api/source/token` `{source, code, redirect_uri, code_verifier}` | The link code, in the body | `200 {source_token, token_type}` once. `400 invalid_grant` for every refusal (a code that is not `cbp_lc_` is refused before any lookup); `429` over 10 exchanges a minute per address |
+| `POST /api/source/publications` (ADR 0003, section 6) | `Authorization: Bearer cbp_src_…` | `200 {status: applied or repeat, highest_publication_number}`; `409 stale_publication` or `publication_conflict` with `highest_publication_number`; `409 too_many_classes` at 2,000; `422` (`invalid_publication`, `content_hash_mismatch`, `unsupported_format_version`); `413 document_too_large` over 1 MiB |
+| `GET /api/source/classes/{source_class_id}` | Source token | The highest number seen and whether it was a removal. Numbers only |
+| `DELETE /api/source/link` | Source token | The source ends its own link |
+
+- Migration `0008` gives `auth_new_link_code`, `auth_exchange_link_code` and
+  `auth_enter_source` their bodies, ADR 0002's numbers as constants in them. The exchange checks
+  the code's account, source, redirect address and PKCE verifier, uses the code up whatever
+  follows, refuses above 5 links, and writes `source.linked` or `source.link_refused`.
+- A source token ends after 365 days without use; "last used" is written at most once every 5
+  minutes. Every source API request counts toward 60 a minute per token; the bearer limits of
+  the device token apply to unknown source tokens too.
+- A publication is decided in the request's transaction under the class row's lock (a
+  placeholder with number 0 first). A refusal is rolled back to a savepoint and its event
+  (`publication.stale`, `publication.conflict`, `publication.refused`) is written in a second
+  transaction that enters the account again with `auth_enter_source`; the request's count and
+  "last used" stay. `publication.applied` and `source.revoked` are written by the backend.
+- The document is checked in readers' mode (any minor of major 1) and stored in its RFC 8785
+  form; the envelope takes no field beyond its five.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

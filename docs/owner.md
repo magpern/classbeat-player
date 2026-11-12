@@ -40,7 +40,7 @@ with other work; nothing in the development loop waits for an answer.
   - a song that is not in the class shows "Off the list";
   - quitting and restarting Spotify during a class;
   - Windows timestamps; the 30 s repair path; an hour with no drift;
-  - the beat flash is within 50 ms of the beat;
+  - the beat flash is within 50 ms of the beat for at least 90% of beats;
   - the helper process stops when the app quits;
   - Linux without MPRIS shows "following the music is unavailable".
 - **Music readers, facts agents could not check:**

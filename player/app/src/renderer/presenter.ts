@@ -1,14 +1,19 @@
 // The minimal presenter: the class's intervals and the clock state, unstyled (the real screens
 // wait for the design spec). Text only through textContent; nothing from a file becomes markup.
 import { clockText, targetText, zoneText } from "../core/format.ts";
+import type { PairingView } from "../core/pairing/view.ts";
 import type { Snapshot } from "../core/snapshot.ts";
 import { statusText } from "../core/status-text.ts";
+import { mountPairing } from "./pairing-panel.ts";
 
 interface PlayerApi {
   getState(): Promise<Snapshot | null>;
   command(cmd: unknown): Promise<Snapshot | null>;
   openDropped(name: string, text: string): Promise<Snapshot | null>;
   onUpdate(cb: (s: Snapshot) => void): void;
+  startPairing(): Promise<PairingView | null>;
+  pairingState(): Promise<PairingView | null>;
+  unpair(): Promise<PairingView | null>;
 }
 
 const api = (window as unknown as { player: PlayerApi }).player;
@@ -148,4 +153,5 @@ window.addEventListener("drop", (e) => {
 });
 
 api.onUpdate(render);
+mountPairing(api);
 void api.getState().then(render);

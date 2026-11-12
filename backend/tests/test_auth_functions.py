@@ -10,8 +10,9 @@ from psycopg import errors, sql
 from tests.dbhelp import Conn, as_role
 from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
 
-# Given their bodies by migration 0004 (tests/test_login_functions.py and the site tests) and
-# by migration 0006 (tests/test_pairing_functions.py, tests/test_device_functions.py).
+# Given their bodies by migration 0004 (tests/test_login_functions.py and the site tests), by
+# migration 0006 (tests/test_pairing_functions.py, tests/test_device_functions.py) and by
+# migration 0008 (tests/test_source_functions.py).
 IMPLEMENTED = {
     "auth_enter_session",
     "auth_request_login",
@@ -22,6 +23,9 @@ IMPLEMENTED = {
     "auth_decide_pairing",
     "auth_collect_pairing",
     "auth_enter_device",
+    "auth_new_link_code",
+    "auth_exchange_link_code",
+    "auth_enter_source",
 }
 STUBS = sorted(SECURITY_DEFINER_FUNCTIONS - IMPLEMENTED - {"auth_purge_expired"})
 

@@ -34,10 +34,11 @@ flag() { # flag <name> <extended regex>
   fi
 }
 
-# A workflow change also runs the backend and schema jobs, so a change to CI itself is exercised.
-flag backend '^(backend/|\.github/workflows/)'
+# A workflow change also runs the backend, schema and player jobs, so a change to CI itself is exercised.
+# The backend also depends on schema/ (the class format and the path dependency schema/python).
+flag backend '^(backend/|schema/|\.github/workflows/)'
 flag schema '^(schema/|\.github/workflows/)'
-flag player '^player/'
+flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
 flag web '^web/'
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.

@@ -12,10 +12,11 @@ from pathlib import Path
 import pytest
 
 from player_backend.app import create_app
-from player_backend.player_api.deps import device_token
+from player_backend.player_api.deps import app_only, device_token
 from player_backend.settings import Settings
 from player_backend.site.cookies import login_cookie_token, session_cookie_token
 from player_backend.site.deps import same_origin, site_session
+from player_backend.source_api.deps import source_token
 from tests.guards.cookie_source_check import READERS, check_source, check_tree
 from tests.routehelp import RouteInfo, routes_of
 
@@ -34,6 +35,11 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("POST", "/api/site/pairing/decide"),
         ("GET", "/api/site/devices"),
         ("DELETE", "/api/site/devices/{device_id}"),
+        # Section 7, steps 2 to 4 and "The site lists them": the signed-in user's side of a link.
+        ("POST", "/api/site/source-links/check"),
+        ("POST", "/api/site/source-links/approve"),
+        ("GET", "/api/site/source-links"),
+        ("DELETE", "/api/site/source-links/{link_id}"),
     }
 )
 # The app's routes: pairing takes the device code in the body, the player API a device token
@@ -44,6 +50,17 @@ DEVICE_TOKEN_ROUTES = frozenset(
         ("DELETE", "/api/player/device"),
     }
 )
+# The source API (section 7): a source token in `Authorization: Bearer`, never a cookie.
+SOURCE_TOKEN_ROUTES = frozenset(
+    {
+        ("POST", "/api/source/publications"),
+        ("GET", "/api/source/classes/{source_class_id}"),
+        ("DELETE", "/api/source/link"),
+    }
+)
+# The code exchange (section 7, step 5): the source link code in the body, from the source's
+# server. No cookie and no other credential.
+LINK_CODE_ROUTES = frozenset({("POST", "/api/source/token")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -99,11 +116,39 @@ def test_the_routes_that_take_a_device_token_equal_the_list_and_read_no_cookie()
         assert path.startswith("/api/player/")
 
 
+def test_the_routes_that_take_a_source_token_equal_the_list_and_read_no_cookie() -> None:
+    assert _using(source_token) == SOURCE_TOKEN_ROUTES
+    assert not _using(source_token) & (_using(session_cookie_token) | _using(login_cookie_token))
+    assert not _using(source_token) & _using(device_token)
+    for _, path in SOURCE_TOKEN_ROUTES | LINK_CODE_ROUTES:
+        assert path.startswith("/api/source/")
+
+
+def test_the_code_exchange_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token)
+    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    assert not LINK_CODE_ROUTES & (bearer | cookie)
+
+
 def test_every_route_is_on_one_of_the_lists() -> None:
     # A new route fails here until someone has said which credential it takes.
-    listed = SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES | DEVICE_TOKEN_ROUTES
+    listed = (
+        SESSION_COOKIE_ROUTES
+        | LOGIN_COOKIE_ROUTES
+        | DEVICE_TOKEN_ROUTES
+        | SOURCE_TOKEN_ROUTES
+        | LINK_CODE_ROUTES
+    )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES
+
+
+def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_alone() -> None:
+    # The pairing routes take no credential, so nothing but this check stands between a page
+    # in a browser and them: each applies it, and a new one fails here until it does.
+    open_routes = {(m, p) for m, p in NO_CREDENTIAL_ROUTES if p != "/healthz"}
+    assert open_routes and all(p.startswith("/api/pairing/") for _, p in open_routes)
+    assert _using(app_only) == open_routes
 
 
 def test_every_cookie_route_is_in_the_sites_api_or_is_the_one_live_route() -> None:
@@ -117,9 +162,15 @@ def test_every_cookie_route_applies_the_origin_check() -> None:
 
 
 def test_no_route_takes_a_token_in_its_path() -> None:
-    # Principle 3. The path parameters are a session's id and a device's id: not credentials.
+    # Principle 3. The path parameters are a session's, a device's and a link's id and a
+    # source's own class id: not credentials.
     parameters = {r.path for r in _routes() if "{" in r.path}
-    assert parameters == {"/api/site/sessions/{session_id}", "/api/site/devices/{device_id}"}
+    assert parameters == {
+        "/api/site/sessions/{session_id}",
+        "/api/site/devices/{device_id}",
+        "/api/site/source-links/{link_id}",
+        "/api/source/classes/{source_class_id}",
+    }
 
 
 def test_backend_source_reads_cookies_only_in_the_cookie_module() -> None:

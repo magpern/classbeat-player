@@ -73,7 +73,8 @@ def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[Accoun
     """The transaction of a device-token request, or why the token sets no account.
 
     Committed when the block ends, rolled back when it raises. For a `Refused` the caller
-    leaves the block first and raises after it, so that what was counted stays counted.
+    leaves the block first and raises after it, so that what was counted stays counted; for a
+    route that refuses the request it does the same (`undone_on_error`, db/context.py).
     """
     with pool.handle() as db, db.transaction():
         found = db.rows(q.ENTER_DEVICE, (token_hash,))
@@ -103,13 +104,17 @@ def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[Accoun
         refusal: DeviceRefusal = (
             "revoked" if state == "revoked" else "expired" if state == "expired" else "unknown"
         )
-        yield Refused(
-            refusal,
-            same_token_over=refusal in COUNTED_PER_TOKEN
-            and _over(db, keys.same_token, SAME_TOKEN_WINDOW, SAME_TOKEN_MAX),
-            unknown_over=refusal == "unknown"
-            and _over(db, keys.unknown_tokens, UNKNOWN_WINDOW, UNKNOWN_MAX),
+        # The address's counter first. An address over its limit of unknown tokens is refused
+        # by that alone, and gets no counter row of its own for each further token it makes up.
+        unknown_over = refusal == "unknown" and _over(
+            db, keys.unknown_tokens, UNKNOWN_WINDOW, UNKNOWN_MAX
         )
+        same_token_over = (
+            not unknown_over
+            and refusal in COUNTED_PER_TOKEN
+            and _over(db, keys.same_token, SAME_TOKEN_WINDOW, SAME_TOKEN_MAX)
+        )
+        yield Refused(refusal, same_token_over=same_token_over, unknown_over=unknown_over)
 
 
 def list_devices(ctx: AccountContext) -> list[DeviceInfo]:

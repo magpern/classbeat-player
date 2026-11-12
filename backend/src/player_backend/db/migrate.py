@@ -92,6 +92,12 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0006_pairing_and_devices.sql") as pending:
         if pending:
             db.rows(q.M0006_PAIRING_AND_DEVICES)
+    with _step(db, done, "0007_pairing_hardening.sql") as pending:
+        if pending:
+            db.rows(q.M0007_PAIRING_HARDENING)
+    with _step(db, done, "0008_source_api.sql") as pending:
+        if pending:
+            db.rows(q.M0008_SOURCE_API)
     return done
 
 

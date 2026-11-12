@@ -4,10 +4,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_COMMAND, CH_OPEN_DROPPED, CH_STATE } from "../../src/core/channels.ts";
+import { CH_COMMAND, CH_OPEN_DROPPED, CH_PAIRING_START, CH_PAIRING_STATE, CH_STATE, CH_UNPAIR } from "../../src/core/channels.ts";
 import type { Controller } from "../../src/main/controller.ts";
 import { registerHandlers } from "../../src/main/ipc-handlers.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
+import type { PairingService } from "../../src/main/pairing/service.ts";
 
 const TRUSTED = { presenterId: 7, presenterUrl: "file:///app/dist/presenter.html" };
 const event = (over: { id?: number; parent?: unknown; url?: string; noFrame?: boolean } = {}): IpcMainInvokeEvent =>
@@ -25,10 +26,16 @@ function rig() {
     command: () => (calls.push("command"), snap),
     music: () => (calls.push("music"), snap),
   } as unknown as Controller;
+  const view = { state: "unpaired", message: null };
+  const pairing = {
+    view: () => (calls.push("pairing.view"), view),
+    start: () => (calls.push("pairing.start"), view),
+    unpair: () => (calls.push("pairing.unpair"), view),
+  } as unknown as PairingService;
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
-  registerHandlers(bus, controller, () => TRUSTED);
-  return { calls, snap, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw), handlers };
+  registerHandlers(bus, controller, () => TRUSTED, pairing);
+  return { calls, snap, view, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw), handlers };
 }
 
 /** A message that the parser would accept, and a getter that records every read of it. */
@@ -59,8 +66,18 @@ const UNTRUSTED = [
   ["no frame", event({ noFrame: true })],
 ] as const;
 
-test("all three channels are registered", () => {
-  assert.deepEqual([...rig().handlers.keys()].sort(), [CH_COMMAND, CH_OPEN_DROPPED, CH_STATE].sort());
+test("the six channels are registered, and no other", () => {
+  assert.deepEqual([...rig().handlers.keys()].sort(), [CH_COMMAND, CH_OPEN_DROPPED, CH_PAIRING_START, CH_PAIRING_STATE, CH_STATE, CH_UNPAIR].sort());
+});
+
+test("pairing: a trusted sender is served, and whatever the page sends along is never read", () => {
+  const r = rig();
+  for (const ch of [CH_PAIRING_STATE, CH_PAIRING_START, CH_UNPAIR]) {
+    const w = watched({ deviceCode: "x", origin: "https://example.invalid" });
+    assert.equal(r.call(ch, event(), w.raw), r.view, ch);
+    assert.equal(w.reads(), 0, `${ch} read its argument`);
+  }
+  assert.deepEqual(r.calls, ["pairing.view", "pairing.start", "pairing.unpair"]);
 });
 
 test("a trusted sender is served on every branch", () => {
@@ -73,9 +90,10 @@ test("a trusted sender is served on every branch", () => {
 });
 
 for (const [label, e] of UNTRUSTED) {
-  test(`untrusted sender (${label}): state, music, clock and dropped file all get null, the controller is not touched, and nothing is parsed`, () => {
+  test(`untrusted sender (${label}): state, music, clock, dropped file and pairing all get null, the controller and pairing are not touched, and nothing is parsed`, () => {
     const r = rig();
     assert.equal(r.call(CH_STATE, e), null);
+    for (const ch of [CH_PAIRING_STATE, CH_PAIRING_START, CH_UNPAIR]) assert.equal(r.call(ch, e), null, ch);
     const cases: [string, object][] = [
       [CH_COMMAND, { type: "music", action: "next" }],
       [CH_COMMAND, { type: "pause" }],

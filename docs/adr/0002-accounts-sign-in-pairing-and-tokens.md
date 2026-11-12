@@ -147,7 +147,8 @@ proves only "the same browser".
    (step 3); over the per-email total that tells the requester at most that the day's total
    for that email is used up, whether or not the address can sign in.
    Input that is not an email address is refused with `422` after the first call and makes
-   no second call.
+   no second call. A body that is not valid JSON of the expected shape is refused by the
+   framework with `422` before the first call and counts nothing.
 3. A newer link cancels older ones **only when asked from the same browser** (the same browser
    token), and only when the request is within its limits (section 10). A request over its
    limits cancels nothing. Whether the address can sign in plays no part (amended 2026-11-12).
@@ -246,8 +247,18 @@ deleted. The app starts pairing again.
 
 Limits: a pairing lives 10 minutes. A user gets 5 wrong codes in 15 minutes, then the form is
 closed for 15 minutes. Both calls of step 3 count wrong codes, inside the database. An address
-may start 10 pairings an hour. At most 10 active devices per account; an approval above that is
-refused.
+may start 10 pairings an hour. At most 10 active devices per account, counting approvals not yet
+collected; an approval above that is refused: `auth_decide_pairing` returns nothing (`NULL`), the
+site answers `409 too_many_devices` and the refusal is the audit event `pairing.refused`. The
+`409` comes only for a code that matches a pending pairing; a wrong code at the cap is still a
+wrong code (`404`, counted).
+
+**The app's routes without a credential** (`POST /api/pairing/start`, `POST /api/pairing/token`)
+are for the desktop app, not for a browser. They refuse a request whose `Sec-Fetch-Site` header
+is present and is not `none` (`403 cross_site_request`; browsers send it, the app's main process
+does not), and a body that is not `Content-Type: application/json` (`415`). A body that claims JSON and does not parse is
+refused by the framework (`422`) before that check; nothing runs either way. A guard test
+compares the routes with this check with the routes that take no credential.
 
 The user code can only attach the waiting device to the account of whoever confirms it. Only the
 holder of the device code, which never leaves the app, collects the token. So a guessed user code
@@ -263,10 +274,13 @@ direction is enough, and the plan describes this one.
 - Scope: the player API (classes, removals, cursors) for its account, and starting live sessions
   for that account. "Read-only" means it changes no stored data: live sessions are not stored.
 - On the device it is kept in the operating system's secret store (Keychain, DPAPI, Secret
-  Service). If none is available the token is kept in memory for that run and not written to
-  disk.
+  Service), through Electron's `safeStorage`, in a file only that user can read. If none is
+  available the app does not pair: there is no plain-text fallback, and on Linux `safeStorage`'s
+  `basic_text` and `unknown` count as none (as built in #84; stricter than keeping the token in
+  memory for the run).
 - A shared studio computer holds one device token per paired account, each its own keychain
-  entry and its own cache. Switching account is local and needs no credential (see the threat
+  entry and its own cache. As built in #84 the app holds one pairing at a time; more than one
+  account per computer is left for later. Switching account is local and needs no credential (see the threat
   table and Consequences).
 - The site lists devices: name, platform, paired date, last used. Revoking one sets
   `revoked_at`. The row is kept 90 days so the server can answer `token_revoked`, then deleted.
@@ -303,7 +317,8 @@ direction is enough, and the plan describes this one.
 5. The source's server calls `POST /api/source/token` with the code, the `redirect_uri` and the
    `code_verifier` in the body. All four bindings are checked. It gets the source token once.
 
-At most 5 links per account. The site lists them (source, linked date, last used) and can revoke
+At most 5 links per account; a link idle for 365 days is neither listed nor counted, and its row
+stays until it is revoked. The site lists them (source, linked date, last used) and can revoke
 each. The source can end its own link with `DELETE /api/source/link`. Revoking a link keeps the
 classes: they belong to the account.
 
@@ -325,7 +340,10 @@ ADR 0003, section 6: `source_class_id`, `publication_number`, `removed`, `conten
   source_id, source_class_id) DO NOTHING` with number 0, then `SELECT … FOR UPDATE` on that row.
   So a first publication has a row to lock too, and two sends of the same class never cross.
 - The row with number 0 is a placeholder: no document. If the publication is refused, the
-  transaction is rolled back and the placeholder goes with it, so none is ever committed. The
+  request is rolled back to a savepoint taken after the token check, and the placeholder goes
+  with it, so none is ever committed. The token's counters and "last used" stay; the refusal's
+  event is written in a second transaction that enters the account again through
+  `auth_enter_source`, and is not written if the link has ended in between. The
   player API takes only rows with a number above 0. The class list and the count of 2,000 take
   only rows that hold a document.
 - **The sync cursor** is one row per account in the tenant table `account_sync`, made at the
@@ -618,9 +636,9 @@ Adding one is a security-critical change.
 | `auth_complete_passkey(credential_id, challenge_hash, browser_hash, counter, session_hash)` | Uses up the challenge, applies the counter rule, creates the session | True or false |
 | `auth_start_pairing(device_code_hash, user_code_hash, platform, version)` | Writes a pending pairing | Nothing |
 | `auth_find_pairing(user_code_hash)` | For the account already set only: looks up a pending pairing that has not expired. Changes nothing about it. A code that matches none counts as a wrong code for the account; while the form is closed it finds nothing | The pairing's platform and version, or nothing |
-| `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices | True or false |
+| `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices (approved and not yet collected count) | True when decided, false for a wrong code, nothing (`NULL`) when refused at the cap |
 | `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email |
-| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code | Nothing |
+| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused` | Nothing |
 | `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
 | `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
@@ -780,7 +798,8 @@ so several API processes share them. Keys are hashes (an email or an address is 
 a counter). Counters are kept for every email, known or not. The client address is taken from
 the proxy header only when the request comes from a configured trusted proxy. A refused request
 gets 429 with `Retry-After`, except where the table says otherwise. Live limits are counted in
-the live process's memory.
+the live process's memory. A request a route refuses keeps what its credential check wrote (the
+counters, "last used"); any other error undoes the whole request.
 
 | What | Limit | Over the limit |
 |---|---|---|
@@ -792,10 +811,10 @@ the live process's memory.
 | Pairing polls | One per 5 seconds per device code | `slow_down` |
 | Wrong pairing codes, at the look-up and at the decision together | 5 per account per 15 minutes | The form is closed for 15 minutes |
 | Source code exchanges | 10 per address per minute | 429 |
-| Publications | 60 per source token per minute | 429 |
+| Source API requests (publications, number reads, ending the link) | 60 per source token per minute | 429 |
 | Player API requests | 60 per device token per minute | 429 |
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
-| Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working |
+| Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |
 | Live joins, control exchanges and controller requests with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
 | Wrong control codes | 5 per session and code | The code is cancelled; the host is told and may make a new one |
@@ -818,13 +837,14 @@ browser or app family, and a small detail object.
 
 Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out (with
 `current: false` when the user ends another of their sessions); all sessions ended; passkey
-added or removed; passkey refused by the counter rule; pairing approved or denied; device
-created; device revoked; source linked or revoked; publication applied, refused as stale or as a
-conflict; class deleted on the site; live session started or ended; controller added; control
-code cancelled after wrong tries; export made.
+added or removed; passkey refused by the counter rule; pairing approved, denied or refused at
+the device cap (`pairing.refused`); device created; device revoked; source linked or revoked;
+publication applied, refused as stale or as a conflict; class deleted on the site; live session
+started or ended; controller added; control code cancelled after wrong tries; export made.
 
 Not events, because no account is set when they happen: a passkey sign-in whose signature
 fails, and a request with a revoked device token. Both are counted in the limits (section 10).
+A new source link code writes no event either (section 9).
 Deleting the account writes no event either: its events go with it.
 
 Events about sign-in, pairing and linking are written inside the `auth_*` functions (section

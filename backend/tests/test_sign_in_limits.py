@@ -80,6 +80,24 @@ def test_thirty_links_per_email_in_a_day_from_all_addresses(site: Site) -> None:
     assert len(site.mailer.sent) == 30
 
 
+def test_a_link_over_the_total_per_email_does_not_cancel_the_one_in_the_mail(site: Site) -> None:
+    site.allow(EMAIL)
+    # The user's own browser has a link in the mail: the first of the email's 30 a day.
+    token = site.ask(site.first, EMAIL)
+    assert token is not None
+    for n in range(2, 12):
+        browser = site.browser(_address(n))
+        for _ in range(3 if n < 11 else 2):
+            assert site.ask(browser, EMAIL) is not None
+    assert len(site.mailer.sent) == 30
+    # The same browser asks again: within its own limits, over the total per email. No mail,
+    # and the request cancels nothing, so the link in the mail still signs the user in.
+    assert site.ask(site.first, EMAIL) is None
+    assert len(site.mailer.sent) == 30
+    done = site.first.post("/api/site/sign-in/complete", json={"token": token})
+    assert done.status_code == 200
+
+
 def test_ten_requests_per_address_in_an_hour_then_429(site: Site) -> None:
     site.allow(EMAIL)
     here = site.browser(_address(1))
