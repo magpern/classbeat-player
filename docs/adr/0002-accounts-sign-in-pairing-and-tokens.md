@@ -656,7 +656,7 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
   1. **No SQL is ever built from strings.** Every statement is a constant with bound
      parameters. Two layers hold this (amended 2026-11-12):
      - *At run time: the executor and `Query`.*
-       - **The executor owns the driver.** One executor package is the only code that holds a
+       - **The executor owns the driver.** The executor, one package, is the only code that holds a
          driver object. "The driver" is a closed list: `psycopg`, `psycopg_pool`, and any other
          database client library. The executor creates the pool and every connection, including
          the live process's listening connection, and no connection, cursor or pool object
@@ -666,15 +666,15 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
          statement: the executor issues its `LISTEN` from a registered `Query` of its own.
        - **`Query` and its registry.** A `Query` is made only from a string literal in a query
          module, or from a `.sql` file committed in the repository; migrations are such files.
-         The registry opens when the executor package is imported. The query modules and the
+         The registry opens when the executor is imported. The query modules and the
          migration files are then loaded in one fixed list, and the registry is frozen. Making
          a `Query` after the freeze raises. The executor runs nothing before the freeze.
          `Query` has no `+`, `%`, `format`, `str()` or `repr()` that returns the statement, and
          no public attribute that holds its text.
        - **What is run.** The executor looks up the object it is given in its registry by
          identity, and runs the text the registry holds for it, never a field of the object.
-         Anything else raises: a plain `str`, `sql.SQL`, `Composed`, bytes, a subclass or copy
-         of `Query`, or an unregistered `Query`. So SQL built from strings, and a query name
+         Anything else raises: a plain `str`, `sql.SQL`, `Composed`, bytes, a copy of `Query`,
+         or an unregistered `Query`. `Query` is final: subclassing it raises. So SQL built from strings, and a query name
          rebound to a new value, fail when they are run. An object changed in place still runs
          its registered text. A test drives each of these through the public interface.
        - **What it holds against.** Ordinary code that uses the public interface of `Query`, the
@@ -683,8 +683,10 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
          written to evade the layers, the row "A compromised backend process" in the threat
          table, and review answers it.
      - *In the source.* A guard test reads the backend's source. It fails on:
-       - any import of a driver library outside the executor package;
+       - any import of a driver library outside the executor;
        - any use of a driver object or a handle's private attributes outside the executor;
+       - any handle call outside the data-access modules, the migration runner and the
+         operator's commands;
        - a query constant used other than as the direct statement argument of a handle call;
        - SQL text made by an f-string, `format`, `%` or `+`.
        The linter's rule for string-built SQL is an error in CI as well.
