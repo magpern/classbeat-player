@@ -8,6 +8,7 @@ import { enableSandboxUnlessTest, hardenSession } from "./hardening.ts";
 import { registerIpc } from "./ipc.ts";
 import { installMenu } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
+import { selectReader } from "./readers/select.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
 const DIST = __dirname;
@@ -16,7 +17,8 @@ const PRESENTER_FILE = join(DIST, "presenter.html");
 const PRESENTER_URL = pathToFileURL(PRESENTER_FILE).href;
 
 let presenter: BrowserWindow | null = null;
-const controller = createController();
+// This system's own reader, or the manual reader where there is none (readers/select.ts).
+const controller = createController(undefined, selectReader(process.platform));
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 
@@ -63,6 +65,8 @@ if (!app.requestSingleInstanceLock()) {
     createPresenter();
     controller.attach(() => live()?.webContents ?? null);
   });
+  // Quitting from the menu skips window-all-closed; a reader's helper must stop either way.
+  app.on("will-quit", () => controller.stop());
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

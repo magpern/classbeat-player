@@ -5,6 +5,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { CH_COMMAND, CH_OPEN_DROPPED, CH_STATE } from "../core/channels.ts";
 import { parseClockCommand, parseDroppedFile } from "../core/commands.ts";
+import { parseMusicCommand } from "../core/music-command.ts";
 import { isTrustedSender } from "../core/ipc-policy.ts";
 import type { Trusted } from "../core/ipc-policy.ts";
 import type { Controller } from "./controller.ts";
@@ -20,7 +21,10 @@ export function registerIpc(controller: Controller, trusted: () => Trusted): voi
   ipcMain.handle(CH_COMMAND, (e, raw: unknown) => {
     if (!trustedEvent(e, trusted)) return null;
     const cmd = parseClockCommand(raw);
-    return cmd ? controller.command(cmd) : null;
+    if (cmd) return controller.command(cmd);
+    // Play, pause and next in the music app: the same channel, and only these three names.
+    const music = parseMusicCommand(raw);
+    return music ? controller.music(music.action) : null;
   });
   ipcMain.handle(CH_OPEN_DROPPED, (e, raw: unknown) => {
     if (!trustedEvent(e, trusted)) return null;

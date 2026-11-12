@@ -22,10 +22,10 @@ export interface DroppedFile {
   readonly text: string;
 }
 
-const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+export const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
 
-const hasOnly = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
+export const hasOnly = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(v).every((k) => keys.includes(k)) && keys.every((k) => k in v);
 
 const SIMPLE = new Set(["start", "pause", "resume", "next", "previous", "undo", "manual", "follow"]);
