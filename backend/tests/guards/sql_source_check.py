@@ -4,8 +4,9 @@ It reads the backend's source (not the tests) and fails on:
 
 1. an import of a driver library (`DRIVERS`) outside the executor (`EXECUTOR_DIR`);
 2. a use of a driver object (the driver's name, its API names in `DRIVER_NAMES`, a string equal
-   to one) or of a handle's private attribute (`_driver_*`, a `_` name or module of the
-   executor) outside the executor;
+   to one) or of a private attribute outside the executor: any `_name` attribute of anything
+   but `self` or `cls`, which covers every private attribute a handle or its transaction could
+   have (they have none: a test checks it), and any `_` name or module of the executor;
 3. a handle call (`HANDLE_CALLS`) outside the data-access package (`HANDLE_CALLERS`): the
    data-access modules, the migration runner and the operator's commands;
 4. a query constant used other than as the direct statement argument (the first positional
@@ -127,6 +128,11 @@ class _Checker(ast.NodeVisitor):
         self.allowed: set[int] = set()  # query references that are a handle call's statement
         package = module_name(rel).split(".")
         self.package = package if rel.endswith("__init__.py") else package[:-1]
+        # Every import first, wherever it stands, so that a use above its import is seen too.
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self.visit_ImportFrom(node)
+        self.found.clear()
 
     def _add(self, node: ast.AST, rule: str) -> None:
         self.found.append(Violation(self.rel, getattr(node, "lineno", 0), rule))
@@ -147,8 +153,6 @@ class _Checker(ast.NodeVisitor):
             return
         if name in DRIVERS or name in DRIVER_NAMES:
             self._add(node, f"2: use of a driver object: {name}")
-        if name.startswith("_driver_"):
-            self._add(node, f"2: private attribute of a handle: {name}")
         if name in HANDLE_CALLS and not self.calls_handles:
             self._add(node, f"3: handle call outside the data-access package: {name}")
 
@@ -191,6 +195,10 @@ class _Checker(ast.NodeVisitor):
     def visit_Attribute(self, node: ast.Attribute) -> None:
         self._name(node, node.attr)
         owner = node.value
+        own = isinstance(owner, ast.Name) and owner.id in ("self", "cls")
+        if node.attr.startswith("_") and not node.attr.startswith("__") and not own:
+            if not self.in_executor:
+                self._add(node, f"2: private attribute of another object: {node.attr}")
         if isinstance(owner, ast.Name) and owner.id in self.module_aliases:
             if id(node) not in self.allowed:
                 self._add(node, f"4: not the statement of a handle call: {ast.unparse(node)}")

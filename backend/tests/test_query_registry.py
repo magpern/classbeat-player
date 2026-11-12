@@ -146,3 +146,7 @@ def test_a_failed_load_leaves_the_registry_frozen() -> None:
         registry.load(load)
     with pytest.raises(RegistryFrozen):
         registry.add(object(), "after a failed load")
+    with pytest.raises(RegistryFrozen):
+        registry.load(lambda: None)
+    with pytest.raises(NotAQuery):  # frozen, not closed: a lookup is answered
+        registry.text_of(object())

@@ -29,15 +29,29 @@ def _fetch(connection: _Connection, text: str, params: Params | None) -> list[Ro
         return cursor.fetchall() if cursor.description is not None else []
 
 
+# The driver's objects, by the identity of the handle or transaction that stands for them. They
+# are kept here, in the executor's own module, so that a handle has no attribute, private or
+# not, that holds or returns one.
+_connections: dict[int, _Connection] = {}
+_transactions: dict[int, AbstractContextManager[psycopg.Transaction]] = {}
+
+
+def _connection_of(handle: Handle) -> _Connection:
+    connection = _connections.get(id(handle))
+    if connection is None:
+        raise HandleClosed("the handle's connection has been given back")
+    return connection
+
+
 @final
 class _Transaction:
-    __slots__ = ("_driver_transaction",)
-
-    def __init__(self, connection: _Connection) -> None:
-        self._driver_transaction = connection.transaction()
+    __slots__ = ()
 
     def __enter__(self) -> None:
-        guarded(self._driver_transaction.__enter__)
+        transaction = _transactions.get(id(self))
+        if transaction is None:
+            raise HandleClosed("a transaction block is entered once")
+        guarded(transaction.__enter__)
 
     def __exit__(
         self,
@@ -45,43 +59,41 @@ class _Transaction:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        transaction = self._driver_transaction
+        transaction = _transactions.pop(id(self))
         return bool(guarded(lambda: transaction.__exit__(exc_type, exc, traceback)))
+
+    def __del__(self) -> None:
+        _transactions.pop(id(self), None)
 
 
 @final
 class Handle:
-    __slots__ = ("_driver_connection",)
+    """Made by `connect` only: a handle made any other way has no connection."""
 
-    def __init__(self, connection: _Connection) -> None:
-        self._driver_connection: _Connection | None = connection
-
-    def _connection(self) -> _Connection:
-        if self._driver_connection is None:
-            raise HandleClosed("the handle's connection has been given back")
-        return self._driver_connection
+    __slots__ = ()
 
     def rows(self, query: Query, params: Params | None = None, /) -> list[Row]:
         """Run a registered `Query` with bound parameters. Anything else raises `NotAQuery`."""
         text = registered_text(query)
-        connection = self._connection()
+        connection = _connection_of(self)
         return guarded(lambda: _fetch(connection, text, params))
 
     def transaction(self) -> AbstractContextManager[None]:
         """A transaction, or a savepoint inside one. Rolled back when the block raises."""
-        return _Transaction(self._connection())
-
-    def _close(self) -> None:
-        connection, self._driver_connection = self._driver_connection, None
-        if connection is not None:
-            guarded(connection.close)
+        connection = _connection_of(self)
+        transaction = _Transaction()
+        _transactions[id(transaction)] = connection.transaction()
+        return transaction
 
 
 @contextmanager
 def connect(conninfo: str) -> Generator[Handle]:
     """A handle on a connection of its own (autocommit; use `transaction()`), closed on exit."""
-    handle = Handle(guarded(lambda: psycopg.connect(conninfo, autocommit=True)))
+    connection = guarded(lambda: psycopg.connect(conninfo, autocommit=True))
+    handle = Handle()
+    _connections[id(handle)] = connection
     try:
         yield handle
     finally:
-        handle._close()  # pyright: ignore[reportPrivateUsage]
+        del _connections[id(handle)]
+        guarded(connection.close)

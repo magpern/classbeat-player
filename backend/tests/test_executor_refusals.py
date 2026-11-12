@@ -159,6 +159,34 @@ def test_driver_errors_without_a_sqlstate_are_converted_too(owner_db: Handle) ->
     assert not any(_from_the_driver(value) for value in _reachable(refused.value))
 
 
+def _cut_the_owners_connections(db_url: str) -> None:
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        conn.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'player_owner'"
+        )
+
+
+@pytest.mark.parametrize("boundary", ["enter", "exit"])
+def test_a_driver_error_at_a_transactions_boundary_is_converted_too(
+    boundary: str, owner_db: Handle, db_url: str
+) -> None:
+    if boundary == "enter":
+        _cut_the_owners_connections(db_url)
+    with pytest.raises(DatabaseError) as raised:
+        with owner_db.transaction():
+            if boundary == "exit":
+                _cut_the_owners_connections(db_url)
+    error = raised.value
+    assert error.__cause__ is None and error.__context__ is None
+    assert not any(_from_the_driver(value) for value in _reachable(error))
+
+
+def test_a_handle_made_without_connect_has_no_connection() -> None:
+    for use in (lambda: Handle().rows(q.LOCK), Handle().transaction):
+        with pytest.raises(HandleClosed):
+            use()
+
+
 def test_an_error_raised_while_another_is_handled_keeps_only_that_one(owner_db: Handle) -> None:
     with pytest.raises(DatabaseError) as raised:
         try:

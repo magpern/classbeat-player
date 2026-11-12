@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from player_backend.db.executor import QUERY_MODULES, SQL_DIR, SQL_FILES
+from player_backend.db.executor import QUERY_MODULES, SQL_DIR, SQL_FILES, Handle
+from player_backend.db.executor._handle import _Transaction  # pyright: ignore[reportPrivateUsage]
 from tests.guards.query_module_check import is_query_module, module_name
 from tests.guards.sql_source_check import DRIVERS, check_source, check_tree, source_files
 
@@ -51,6 +52,16 @@ def test_the_fixed_lists_are_the_files_in_the_repository() -> None:
     assert sorted(p.name for p in SQL_DIR.iterdir()) == sorted(SQL_FILES)
 
 
+def test_a_handle_and_its_transaction_have_no_private_attribute() -> None:
+    # Rule 2 forbids every `_name` attribute outside the executor. This pins that the handle
+    # keeps nothing there to reach in the first place: the driver's objects are in the
+    # executor's own module, not on the handle.
+    for cls in (Handle, _Transaction):
+        assert cls.__slots__ == ()
+        private = [n for n in vars(cls) if n.startswith("_") and not n.startswith("__")]
+        assert private == []
+
+
 def test_every_locked_distribution_is_a_listed_driver_or_listed_as_none() -> None:
     lock = tomllib.loads((BACKEND / "uv.lock").read_text(encoding="utf-8"))
     locked = {str(package["name"]) for package in lock["package"]}
@@ -73,6 +84,8 @@ def test_every_locked_distribution_is_a_listed_driver_or_listed_as_none() -> Non
         ),
         ("from player_backend.db.executor import Handle\ndef dep() -> Handle: ...", OUTSIDE),
         ("import re\nPATTERN = re.compile('x')", OUTSIDE),
+        ("class A:\n    def f(self):\n        return self._value + type(self).__name__", OUTSIDE),
+        ("def f(db):\n    return db.rows(auth.FIND)\n" + IMPORT, DB),
         ('message = f"applied {name}"', OUTSIDE),
         ("import psycopg\ncursor.execute(text, params)\ncursor.fetchall()", EXECUTOR),
     ],
@@ -126,6 +139,15 @@ FAILING = [
     ('operator.attrgetter("execute")(conn)(q)', DB),
     ('type(conn).__dict__["execute"](conn, q)', DB),
     ('name = "exec_params"', DB),
+    # The fifth review's probes: a handle's private methods, in the data-access package and out.
+    ("conn = db._connection()", DB),
+    ("conn = db._connection()\nconn.cursor().stream(text)", DB),
+    ("handle._connection().cursor().copy(text)", OUTSIDE),
+    ("db._close()", DB),
+    ("db._close()", OUTSIDE),
+    ("self.db._connection()", DB),
+    ("conn = executor._handle._connections[id(db)]", DB),
+    ("tx = _handle._transactions", DB),
     ("conn = db._driver_connection", DB),
     ('conn = getattr(db, "_driver_connection")', DB),
     ("tx._driver_transaction.connection", OUTSIDE),
@@ -163,6 +185,8 @@ FAILING = [
     (IMPORT + "helper(auth)", DB),
     (IMPORT + "m = auth\ndb.rows(m.FIND)", DB),
     (IMPORT + "db.rows(auth.FIND)\nother(auth.FIND)", DB),
+    ("def f():\n    return auth.FIND + x\n" + IMPORT, DB),
+    ("def f():\n    from player_backend.db.queries import auth\n    return auth.FIND", DB),
     (IMPORT + "STEPS = [(1, auth.FIND)]", DB),
     (FIND + "kept = FIND", DB),
     (FIND + "db.rows(FIND + x)", DB),
@@ -218,6 +242,7 @@ def test_every_broken_rule_fails(snippet: str, rel: str) -> None:
         ("import psycopg", "1"),
         ("conn.execute(x)", "2"),
         ("db._driver_connection", "2"),
+        ("db._connection", "2"),
         (IMPORT + "db.rows(auth.FIND)", "3"),
         (IMPORT + "s = auth.FIND", "4"),
         ("q = Query(x)", "5"),

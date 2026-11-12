@@ -31,8 +31,9 @@ class DatabaseError(ExecutorError):
     """A failure reported by the database or the driver, as the executor's own type.
 
     `sqlstate` is PostgreSQL's five-character code, or None when the failure has none (no
-    connection, wrong number of parameters). The message is the server's primary message only:
-    never its detail line, which can hold row values.
+    connection, wrong number of parameters). The message is the server's primary message only,
+    never its detail line. Even so it can hold a value the caller bound (`invalid input syntax
+    for type uuid: "<value>"`), so log the type and `sqlstate`, never `str()` of the error.
     """
 
     def __init__(self, message: str, sqlstate: str | None) -> None:

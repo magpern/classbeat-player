@@ -6,9 +6,7 @@ that no `Query` can be made, and a handle runs only the registry's text for a `Q
 there by identity. Everything public is named below; the `_` modules are the executor's own.
 """
 
-from __future__ import annotations
-
-from importlib import import_module
+from importlib import import_module as _import_module
 
 from player_backend.db.executor._errors import (
     DatabaseError,
@@ -45,7 +43,7 @@ __all__ = [
 
 def _load_fixed_list() -> None:
     for name in QUERY_MODULES:
-        import_module(name)
+        _import_module(name)
 
 
 _REGISTRY.load(_load_fixed_list)
