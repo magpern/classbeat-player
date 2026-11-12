@@ -253,11 +253,20 @@ Options:
   class time is that song's start plus its position. If it arrives early, because the real
   crossfade is longer than planned, the clock **jumps forward** over the last seconds of the
   previous window.
-- **The clock never moves backwards by itself.** In the example, with crossfade off the clock
+- **While locked, the clock never moves backwards by itself.** In the example, with crossfade off the clock
   holds at 171 s for nine seconds and then continues from 171 s with the second song: nothing
   repeats and nothing is skipped. It moves backwards only when the instructor seeks or goes to an
   earlier song, and then intervals replay on purpose. Backward corrections smaller than the
   measuring error are smoothed out, not applied.
+- **Locking again means going to where the music is, in either direction.** While coasting or
+  off the list the clock is only a guess. When fresh readings of a class song return, the music
+  is the truth: the clock is set to the song's start plus its position, forwards or backwards,
+  within three seconds. Example: readings are lost while the music is paused for 30 s, the
+  clock coasts on, and on return it goes back 30 s and those intervals play again with the
+  music. The player does not wait for a confirmation, because the instructor is riding. A
+  correction of more than five seconds in either direction is announced on the instructor's
+  screen and the companion ("resynced, 30 s back") with a one-touch undo that returns to the
+  manual clock at the earlier place.
 - **The last interval under a song is elastic.** During a hold it stays on screen with its cue,
   and its countdown is the time until the next song is expected, worked out from the song's
   length and the crossfade measured so far (the planned one before the first song change).
@@ -275,7 +284,7 @@ Options:
 |---|---|---|
 | Locked | A song of the class is playing and readings are fresh | Follows the music |
 | Paused | The music app reports pause | Stops |
-| Coasting | Readings stopped or went stale; the music app closed or restarted | Runs on by itself, marked on screen; locks again when readings return |
+| Coasting | Readings stopped or went stale; the music app closed or restarted | Runs on by itself, marked on screen. When readings return it goes to where the music is, forwards or backwards |
 | Off the list | Something plays that is not in the class (another song, an advert, another app) | Runs on by itself, marked on screen; the instructor can pause or pick the place |
 | Ambiguous | The same recording occurs twice in the class and the order does not settle which | Stays on the occurrence nearest the current class time; the instructor can pick the other |
 | Manual | No link, or the instructor chose it | Start, pause and nudge by hand |
@@ -562,8 +571,10 @@ three ways to join, and they differ in who owns the projector window and who dra
 | A transparent shell window laid over Godot's | Both | HTML | Fragile across systems and in full screen; not recommended |
 
 **The choice does not have to be made now**, but it is made on the integrated application, not on
-pictures alone. The shell, the class clock and the plain 2D screen are built first and are the
-same in every case (phases PL4 and PL5). Spike 2 builds the same rough light-show scene in web 3D
+pictures alone. The real shell, class clock and plain 2D screen are the same in every case and
+are built in phases PL4 and PL5. Spike 2 runs earlier, in PL0, on a **throwaway harness**: a
+minimal shell with a presenter window, a fake class clock and the 2D screen as a stub, written
+only for the trial and deleted after it. Its result is required before phase PL6 starts. Spike 2 builds the same rough light-show scene in web 3D
 and in Godot (as its own program and as a web export) and must show, for each:
 
 - the look, and the frame rate on a studio-class computer;
@@ -592,7 +603,9 @@ No choice here changes the music question: no engine can play Spotify itself, an
   Both are paid and in the owner's name.
 - **Updates:** signed automatic updates from the repository's releases.
 - **CI cost:** macOS and Windows build runners cost more minutes than Linux; the application's
-  jobs run only when `player/` or `schema/` changes.
+  jobs run when anything they are built from changes: `player/`, `web/` (the screens the
+  application shows), `schema/`, the build and packaging scripts, the workflow files themselves
+  and the dependency manifests and lockfiles.
 
 ## 11. Terms and risks
 
@@ -650,6 +663,8 @@ for a full class at crossfade off, 5 s and 9 s.
 | The same recording twice in one class | The right occurrence is chosen from the order; a cold start on such a song is reported as ambiguous, not guessed silently |
 | A song that is not in the class; an advert; another app playing | Reported as off the list within 3 s; the clock keeps running; locks again on return |
 | The music app closed and restarted; readings going stale | Coasting is entered within 3 s and left within 3 s of fresh readings; no stale reading is ever applied as current |
+| Readings lost while the music is paused for 30 s, then restored | The clock coasts, then goes back to the music's place within 3 s of fresh readings, announces the correction, and the undo works |
+| Readings lost while the music keeps playing for 30 s, then restored | The clock is within the interval target on return, with no announcement |
 | An hour of play | No drift beyond the interval target |
 | Beat effects (measured separately) | A flash on the beat is within 50 ms of the audible beat for at least 90 % of beats. If not, beat effects fall back to tempo-only (section 4) and the plan is otherwise unchanged |
 

@@ -131,7 +131,9 @@ enforced three ways:
   written; it goes to `docs/owner.md` instead.
 - **In tests ("rule guards").** Where a rule can be checked by a machine, it is: for example, the
   live-session messages contain nothing that carries one rider's data to another rider, and the
-  player has no code path that writes to a bike or a sensor. A pull request never weakens a rule
+  player sends no equipment-control command (nothing that sets resistance, speed, incline or a
+  brake). Connecting to a sensor and switching on its measurement notifications is allowed and
+  needed. A pull request never weakens a rule
   guard.
 - **In review.** Pull requests touching the scene, live sessions, sensors, music handling or
   anything a rule names are **rule-sensitive**: the Reviewer checks each rule explicitly and
