@@ -15,8 +15,10 @@ case "$role" in
     exit 2
     ;;
 esac
+nl='
+'
 case "$file" in
-  '' | *"'"* | *'`'*)
+  '' | *"'"* | *'`'* | *"$nl"*)
     echo "set-role-password: bad file name" >&2
     exit 2
     ;;

@@ -11,7 +11,7 @@ set -eu
 
 dir=/run/dbinit
 # Only at the first start (an empty data directory): later starts skip the init scripts.
-if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+if [ ! -s "${PGDATA:-/var/lib/postgresql/data}/PG_VERSION" ]; then
   for name in player_owner_password player_app_password; do
     install -m 0400 -o postgres -g postgres "/run/secrets/$name" "$dir/$name"
   done

@@ -92,12 +92,8 @@ nothing, so the command prints only that it ran. A database error is printed as 
 SQLSTATE, never its message. Exit status: 0 done, 1 refused or failed, 2 bad input or no URL.
 
 **The purge schedule.** `purge` runs every hour on the server, outside the web process. The
-deploy files are the infra lane's; until they exist, the schedule is this cron line, with the
-URL in an environment file that only the deploy user can read:
-
-```cron
-17 * * * *  set -a; . /etc/classbeat-player/owner.env; set +a; python -m player_backend.admin purge
-```
+deploy files run it as the `purge` service of `docker/compose.backend.yml`; see
+`docs/runbooks/backend-deploy.md`.
 
 ## Sign-in and site sessions (ADR 0002, sections 4, 5, 10 and 11)
 
