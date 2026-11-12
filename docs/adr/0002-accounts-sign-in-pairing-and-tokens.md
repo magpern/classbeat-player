@@ -556,12 +556,18 @@ It also has `EXECUTE` on the functions below. Nothing else.
 | `sessions`, `devices` | `SELECT`, `INSERT`, `UPDATE (last_used_at)`, `DELETE` |
 | `source_links` | `SELECT`, `INSERT`, `UPDATE (last_used_at)` |
 | `passkeys` | `SELECT`, `UPDATE (sign_count, last_used_at)` |
-| `audit_events` | `INSERT`, `DELETE` |
+| `audit_events` | `INSERT`, `SELECT (occurred_at)`, `DELETE` |
 | `classes`, `account_sync`, `passkey_registrations` | None |
 
 `player_auth` deletes from `sessions` for the cap of 20 and for expiry, from `devices` for old
 revoked and never-used rows, and from `audit_events` for retention. Those are the only ways an
 event is removed, apart from the deletion of its whole account.
+The retention purge's `DELETE … WHERE occurred_at < …` needs `SELECT` on that one column
+(amended 2026-11-12, from the review of PR #32).
+
+The migration ledger `player_meta.schema_migrations` is the one table that is neither a tenant
+table nor a closed table. It has row-level security enabled and forced, one policy for
+`player_owner`, and no grant to `player_app` or `player_auth` (amended 2026-11-12).
 
 **Setting the account.** An `auth_enter_*` function looks a credential up by its hash, checks
 that it is valid, and then runs `set_config('app.account_id', <account id>, true)`. The value is
@@ -671,6 +677,9 @@ until listed):
 - Every table has row-level security enabled and forced. Every table has the tenant policy
   unless it is on the closed list. `player_app` has no grant on any closed table, and no closed
   table has a policy except the one on `signup_allowlist` for `player_owner`.
+- `player_meta.schema_migrations` is the only table outside the tenant and closed lists, named
+  exactly: row-level security forced, one `player_owner` policy, no grant to `player_app` or
+  `player_auth`. Any other table outside both lists fails.
 - The set of `SECURITY DEFINER` functions equals the list above. Each is owned by `player_auth`,
   has the `search_path` above and is not executable by `PUBLIC`.
 - The set of roles with `BYPASSRLS` equals `player_auth` plus the database's bootstrap

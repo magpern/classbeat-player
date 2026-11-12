@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'none'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Class player</title>
+<script src="presenter.js" defer></script>
+</head>
+<body>
+<h1 id="title">No class open</h1>
+<p id="hint">Open a class with File, Open Class, or drop a class file on this window.</p>
+<p id="error" role="alert" hidden></p>
+<ul id="error-details" hidden></ul>
+<section id="clock" hidden>
+  <p>Status: <output id="status"></output></p>
+  <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>
+  <p>Interval <output id="interval-number"></output>: <output id="interval-left"></output> left</p>
+  <p>Crossfade: planned <output id="crossfade"></output></p>
+  <p>
+    <button type="button" id="start">Start</button>
+    <button type="button" id="pause">Pause</button>
+    <button type="button" id="resume">Resume</button>
+    <button type="button" id="previous">Previous interval</button>
+    <button type="button" id="next">Next interval</button>
+    <button type="button" id="back5">Back 5 s</button>
+    <button type="button" id="forward5">Forward 5 s</button>
+  </p>
+  <table>
+    <thead><tr><th>Now</th><th>#</th><th>Start</th><th>Length</th><th>Zone</th><th>Target</th><th>Cue</th></tr></thead>
+    <tbody id="intervals"></tbody>
+  </table>
+</section>
+</body>
+</html>
