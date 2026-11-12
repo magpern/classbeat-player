@@ -13,6 +13,21 @@
 - Never ask the owner in chat whether to continue, skip a review or start the next issue. Open
   owner items go in `docs/owner.md`.
 
+## Models
+
+Aliases, not version numbers, so each role moves to the newest model of its tier by itself.
+
+| Role | Default | Stronger model when |
+|---|---|---|
+| Orchestrator (main session) | `opus` | `fable` for planning a milestone, a new security design, or reassessing after a repeated `FAIL` |
+| Developer | `sonnet` | `opus` for security-critical issues |
+| Reviewer | `sonnet` | `opus` for security-critical and rule-sensitive pull requests; `fable` for the first review of a new security design |
+| Designer | `sonnet` for verdicts | `opus` when setting a new visual direction |
+| Verifier | `sonnet` | |
+| Explorer | `haiku` | |
+
+A Reviewer is never a weaker model than the Developer whose work it reviews.
+
 ## Before any merge
 
 No `Agent review (<model>): PASS <sha>` for the pull request's current head commit means no
