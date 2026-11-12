@@ -16,6 +16,7 @@ const linked = (state: LinkStateName, over: Partial<LinkModel> = {}): LinkModel 
 const TRANSPORT: readonly [ClockCommand, TransportAction][] = [
   [{ type: "pause" }, "pause"],
   [{ type: "resume" }, "play"],
+  [{ type: "start" }, "play"],
   [{ type: "next" }, "next"],
 ];
 const MOVES: readonly ClockCommand[] = [{ type: "previous" }, { type: "jump", deltaMs: 5000 }, { type: "jump", deltaMs: -5000 }];
@@ -36,16 +37,26 @@ test("with no transport, a pause or next can only be done on the clock: manual",
 });
 
 test("not following: every control is the clock's own", () => {
-  const all = [...TRANSPORT.map(([c]) => c), ...MOVES, { type: "start" } as const];
+  const all = [...TRANSPORT.map(([c]) => c), ...MOVES];
   for (const cmd of all) {
     assert.equal(routeWhileFollowing(linked("Coasting"), true, cmd, true), null, `coasting ${cmd.type}`);
     assert.equal(routeWhileFollowing(linked("Off the list"), true, cmd, true), null, `off the list ${cmd.type}`);
     assert.equal(routeWhileFollowing(linked("Manual"), true, cmd, true), null, `manual state ${cmd.type}`);
     assert.equal(routeWhileFollowing(linked("Locked", { mode: "manual" }), true, cmd, true), null, `manual mode ${cmd.type}`);
-    assert.equal(routeWhileFollowing(linked("Locked", { everLocked: false }), true, cmd, true), null, `before the first lock ${cmd.type}`);
+    if (cmd.type !== "start") assert.equal(routeWhileFollowing(linked("Locked", { everLocked: false }), true, cmd, true), null, `before the first lock ${cmd.type}`);
     assert.equal(routeWhileFollowing(linked("Locked"), false, cmd, true), null, `no reader ${cmd.type}`);
   }
-  assert.equal(routeWhileFollowing(linked("Locked"), true, { type: "start" }, true), null);
+  for (const state of ["Coasting", "Off the list", "Manual"] as const) assert.equal(routeWhileFollowing(linked(state), true, { type: "start" }, true), null, `start while ${state}`);
+});
+
+test("before the first lock, Start asks the music to play and also starts the clock", () => {
+  const before = linked("Locked", { everLocked: false });
+  assert.deepEqual(routeWhileFollowing(before, true, { type: "start" }, true), { kind: "transport", action: "play", alsoClock: true });
+  assert.equal(routeWhileFollowing(before, true, { type: "start" }, false), null, "no transport: just the clock");
+});
+
+test("Start while following with no transport is done on the clock and goes manual", () => {
+  assert.deepEqual(routeWhileFollowing(linked("Paused"), true, { type: "start" }, false), { kind: "manual" });
 });
 
 const text = readFileSync(converterExamples()[0], "utf8");
@@ -108,6 +119,31 @@ for (const [cmd, label] of [
     assert.deepEqual(sent, [], "nothing was sent to the music");
   });
 }
+
+test("Start while the music is paused goes to the music as play, and the clock follows the answer", () => {
+  const { c, sent, self, reading } = rig();
+  self.t = 1200;
+  reading(5200, false);
+  assert.equal(c.snapshot().view?.status, "paused");
+  const snap = c.command({ type: "start" });
+  assert.deepEqual(sent, ["play"]);
+  assert.equal(snap.link?.mode, "following");
+  assert.equal(snap.view?.status, "paused", "not started by itself");
+  self.t = 1300;
+  reading(5300, true);
+  assert.equal(c.snapshot().view?.status, "running");
+});
+
+test("Start after Follow, before anything has played, asks the music to play and starts the clock", () => {
+  const sent: TransportAction[] = [];
+  const reader: MusicReader & MusicTransport = { kind: "fake", latest: () => null, send: (a) => void sent.push(a) };
+  const c = createController(() => 0, reader, reader);
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  const snap = c.command({ type: "start" });
+  assert.deepEqual(sent, ["play"]);
+  assert.equal(snap.view?.status, "running");
+});
 
 test("with no transport, Pause while following is done on the clock and goes manual", () => {
   const { c } = rig(false);
