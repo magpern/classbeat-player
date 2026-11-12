@@ -21,7 +21,7 @@ function toState(s: string): PlayState {
  * (both timestamps come from the same Windows clock). A paused position is valid now.
  */
 export function parseWindowsLine(line: string, receivedMonoMs: number): Reading | null {
-  const text = line.trim();
+  const text = line.replace(/^\uFEFF/, "").trim();
   if (!text.startsWith("{")) return null;
   let j: Record<string, unknown>;
   try {
@@ -45,6 +45,7 @@ export function parseWindowsLine(line: string, receivedMonoMs: number): Reading 
     readAtMs: usable ? receivedMonoMs - age : receivedMonoMs,
     polledAtMs: receivedMonoMs,
     source: "windows-gsmtc",
+    app: typeof j["app"] === "string" ? j["app"] : null,
   };
 }
 

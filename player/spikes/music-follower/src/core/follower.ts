@@ -24,6 +24,9 @@ export const DEFAULT_CONFIG: FollowerConfig = {
   ambiguityMarginMs: 10_000,
 };
 
+const RESYNC_FROM: LinkState[] = ["Coasting", "Off the list", "Manual", "Ambiguous"];
+const UNDO_WINDOW_MS = 30_000;
+
 export class ClassFollower {
   private clockMs = 0;
   private started = false;
@@ -35,7 +38,9 @@ export class ClassFollower {
   private manual = false;
   private picked: number | null = null;
   private force = false;
+  private ambiguousSet: number[] | null = null;
   private undoClockMs: number | null = null;
+  private undoUntilMs = 0;
 
   constructor(
     private readonly plan: Plan,
@@ -57,7 +62,10 @@ export class ClassFollower {
 
   /** The instructor undoes a resync: back to the manual clock at the earlier place. */
   undo(nowMs: number): Decision {
-    if (this.undoClockMs === null) return this.decide(nowMs, { event: null });
+    if (this.undoClockMs === null || nowMs > this.undoUntilMs) {
+      this.undoClockMs = null;
+      return this.decide(nowMs, { event: "undo_unavailable" });
+    }
     this.manual = true;
     this.running = true;
     this.clockMs = this.undoClockMs;
@@ -68,8 +76,11 @@ export class ClassFollower {
   }
 
   /** Leave the manual clock and follow the music again. */
-  relink(): void {
+  relink(nowMs: number): Decision {
     this.manual = false;
+    this.undoClockMs = null;
+    this.lastNow = nowMs;
+    return this.decide(nowMs, { event: "relink" });
   }
 
   /** The instructor picks which occurrence of a repeated recording is playing. */
@@ -107,8 +118,9 @@ export class ClassFollower {
     const prevState = this.state;
     const prevIndex = this.songIndex;
     const prevClock = this.clockMs;
+    const prevCands = this.ambiguousSet;
     const expected = this.started ? prevClock + (this.running ? dt : 0) : null;
-    const { index, ambiguous } = this.choose(cands, pos, expected);
+    const { index, ambiguous } = this.choose(cands, pos, expected, prevState === "Ambiguous" ? prevCands : null);
     const song = this.plan.songs[index]!;
     const raw = song.startMs + pos;
     const target = Math.max(0, Math.min(raw, song.endMs));
@@ -123,31 +135,36 @@ export class ClassFollower {
     this.clockMs = clock;
     this.started = true;
     this.songIndex = index;
+    this.ambiguousSet = ambiguous ? cands : null;
     this.running = r.state === "playing";
     this.state = ambiguous ? "Ambiguous" : r.state === "playing" ? "Locked" : "Paused";
 
     let event: string | null = null;
     let announce: string | null = null;
-    if (expected === null) event = "locked";
-    else if (prevState === "Coasting" || prevState === "Off the list") {
-      event = "relock";
+    if (expected === null) event = ambiguous ? "ambiguous" : "locked";
+    else if (RESYNC_FROM.includes(prevState) && !(prevState === "Ambiguous" && ambiguous)) {
+      event = prevState === "Ambiguous" ? "resolved" : "relock";
       if (Math.abs(delta!) > this.cfg.announceMs) {
         announce = `resynced, ${Math.round(Math.abs(delta!) / 1000)} s ${delta! < 0 ? "back" : "forward"}`;
         this.undoClockMs = expected;
+        this.undoUntilMs = nowMs + UNDO_WINDOW_MS;
       }
     } else if (prevIndex !== index) event = "song_change";
     else if (Math.abs(delta!) > this.cfg.seekMs) event = "seek";
     else if (prevState === "Paused" && this.state === "Locked") event = "resume";
     else if (prevState === "Locked" && this.state === "Paused") event = "pause";
     else if (this.state === "Ambiguous" && prevState !== "Ambiguous") event = "ambiguous";
+    else if (clock < prevClock) event = "backward";
 
     return this.decide(nowMs, { event, deltaMs: delta, held: raw > song.endMs, announce, candidates: cands });
   }
 
-  private choose(cands: number[], pos: number, expected: number | null): { index: number; ambiguous: boolean } {
+  private choose(cands: number[], pos: number, expected: number | null, prevAmbiguous: number[] | null): { index: number; ambiguous: boolean } {
     if (this.picked !== null && cands.includes(this.picked)) return { index: this.picked, ambiguous: false };
     this.picked = null;
     if (cands.length === 1) return { index: cands[0]!, ambiguous: false };
+    // Still the same repeated recording: stay Ambiguous until a song change or a pick settles it.
+    if (prevAmbiguous && prevAmbiguous.join() === cands.join() && this.songIndex !== null) return { index: this.songIndex, ambiguous: true };
     if (expected === null) return { index: cands[0]!, ambiguous: true }; // cold start: report, do not guess silently
     const ranked = cands
       .map((i) => {

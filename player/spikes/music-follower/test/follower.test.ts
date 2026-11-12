@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { ClassFollower } from "../src/core/follower.js";
 import { at, plan, play, simulate, track } from "./helpers.js";
 
 describe("class plan", () => {
@@ -79,12 +80,48 @@ describe("the same recording twice", () => {
     const { ds, follower } = simulate({ events: [play(1, 0, 30_000)] }, 2000);
     const d = ds[0]!;
     assert.equal(d.state, "Ambiguous");
+    assert.equal(d.event, "ambiguous");
     assert.deepEqual(d.candidates, [1, 3]);
     follower.pickOccurrence(3);
     const after = follower.step(2250, { ...simulateReading(2250) });
     assert.equal(after.state, "Locked");
     assert.equal(after.songIndex, 3);
     assert.equal(after.classTimeMs, plan.songs[3]!.startMs + 32_250);
+  });
+
+  it("stays Ambiguous with the candidates logged until something settles it", () => {
+    const { ds } = simulate({ events: [play(3, 0, 30_000)] }, 60_000, { stepMs: 500 });
+    assert.ok(ds.every((d) => d.state === "Ambiguous" && d.candidates.join() === "1,3"));
+  });
+
+  it("cold start on the second occurrence: the next song change settles it, and the correction is announced", () => {
+    // Song 3 (second B) at 30 s; its window ends at 543000+191000, so song 4 follows after 161 s.
+    const next = 161_000;
+    const { ds } = simulate({ events: [play(3, 0, 30_000), play(4, next)] }, next + 3000, { stepMs: 500 });
+    assert.equal(at(ds, next - 500).state, "Ambiguous");
+    const settled = at(ds, next);
+    assert.equal(settled.state, "Locked");
+    assert.equal(settled.event, "resolved");
+    assert.equal(settled.songIndex, 4);
+    assert.equal(settled.classTimeMs, plan.songs[4]!.startMs);
+    assert.match(settled.announce ?? "", /resynced/);
+  });
+
+  it("cold start on the first occurrence is settled by the next song as well", () => {
+    const { ds } = simulate({ events: [play(1, 0, 30_000), play(2, 170_000)] }, 172_000, { stepMs: 500 });
+    assert.equal(at(ds, 169_500).state, "Ambiguous");
+    assert.equal(at(ds, 170_000).state, "Locked");
+    assert.equal(at(ds, 170_000).songIndex, 2);
+  });
+
+  it("the instructor's pick settles it and the clock goes to that occurrence", () => {
+    const { ds, follower } = simulate({ events: [play(3, 0, 30_000)] }, 1000);
+    assert.equal(ds.at(-1)!.state, "Ambiguous");
+    follower.pickOccurrence(3);
+    const d = follower.step(1250, { ...simulateReading(1250), ...track(3), positionMs: 31_250 });
+    assert.equal(d.state, "Locked");
+    assert.equal(d.songIndex, 3);
+    assert.equal(d.classTimeMs, plan.songs[3]!.startMs + 31_250);
   });
 
   it("chooses the right occurrence from the order during a class", () => {
@@ -128,7 +165,7 @@ describe("a song that is not in the class", () => {
 });
 
 describe("stale readings and lost readings", () => {
-  it("enters coasting within 3 s of the last fresh reading and leaves it at the next fresh one", () => {
+  it("(a silent reader, modelled as frozen polls) enters coasting within 3 s of the last fresh reading and leaves it at the next fresh one", () => {
     const { ds } = simulate({ events: [play(0, 0)], frozen: [[60_000, 70_000]] }, 75_000);
     const coast = ds.find((d) => d.state === "Coasting")!;
     assert.ok(coast.nowMs - 60_000 <= 3000, `coasting at ${coast.nowMs}`);
@@ -182,4 +219,74 @@ describe("the clock never moves backwards by itself", () => {
       for (let i = 1; i < ds.length; i++) assert.ok(ds[i]!.classTimeMs >= ds[i - 1]!.classTimeMs, `backwards at ${ds[i]!.nowMs}`);
     });
   }
+});
+
+describe("extrapolation from a reading's own timestamp (ADR rule 8)", () => {
+  const windowsLike = (t: number, state: "playing" | "paused") => ({
+    ...track(0),
+    positionMs: 10_000, // the system updated its position at readAtMs and has not touched it since
+    state,
+    readAtMs: 1000,
+    polledAtMs: t,
+    source: "windows-gsmtc",
+  });
+
+  it("advances a playing reading with real time even though the system's position is constant", () => {
+    const f = new ClassFollower(plan);
+    for (const t of [9000, 9250, 9500, 12_000, 20_000]) {
+      const d = f.step(t, windowsLike(t, "playing"));
+      assert.equal(d.state, "Locked");
+      assert.equal(d.classTimeMs, 10_000 + (t - 1000), `at ${t}`);
+    }
+  });
+
+  it("does not extrapolate a paused reading", () => {
+    const f = new ClassFollower(plan);
+    for (const t of [9000, 12_000, 20_000]) {
+      const d = f.step(t, windowsLike(t, "paused"));
+      assert.equal(d.state, "Paused");
+      assert.equal(d.classTimeMs, 10_000);
+    }
+  });
+});
+
+describe("another app playing and the control keys", () => {
+  it("another app's reading is off the list at once, then relocks when Spotify returns", () => {
+    const f = new ClassFollower(plan);
+    const base = (t: number, app: string, title: string) => ({ ...track(0), title, positionMs: t, state: "playing" as const, readAtMs: t, polledAtMs: t, source: "x", app });
+    assert.equal(f.step(1000, base(1000, "Spotify.exe", "Spike Song A")).state, "Locked");
+    const off = f.step(1250, base(1250, "Chrome", "Spike Song A")); // even the same title: it is another app
+    assert.equal(off.state, "Off the list");
+    assert.equal(off.event, "off_list");
+    assert.ok(off.classTimeMs > 1000);
+    assert.equal(f.step(1500, base(1500, "Spotify.exe", "Spike Song A")).state, "Locked");
+  });
+
+  it("logs the undo decision, and relink returns to following so later scenarios are valid", () => {
+    const { ds, follower } = simulate({ events: [play(0, 0), { at: 50_000, state: "paused" }], lost: [[50_250, 80_000]] }, 80_000);
+    const undone = follower.undo(80_250);
+    assert.equal(undone.event, "undo");
+    assert.equal(undone.state, "Manual");
+    assert.ok(undone.classTimeMs > ds.at(-1)!.classTimeMs);
+    assert.equal(follower.step(81_000, null).state, "Manual");
+    assert.equal(follower.relink(81_250).event, "relink");
+    const r = { ...simulateReading(82_000), ...track(0), positionMs: 50_000, state: "paused" as const };
+    const back = follower.step(82_000, r);
+    assert.equal(back.state, "Paused");
+    assert.equal(back.event, "relock");
+    assert.equal(back.classTimeMs, 50_000);
+  });
+
+  it("an undo target expires and is cleared by relink", () => {
+    const { follower } = simulate({ events: [play(0, 0), { at: 50_000, state: "paused" }], lost: [[50_250, 80_000]] }, 80_000);
+    assert.equal(follower.undo(80_000 + 31_000).event, "undo_unavailable");
+    assert.equal(follower.undo(80_000 + 31_500).event, "undo_unavailable");
+  });
+
+  it("logs a backward event when the clock steps back on the same song", () => {
+    const { ds } = simulate({ events: [play(0, 0), { at: 30_000, positionMs: 29_000 }] }, 31_000);
+    const d = at(ds, 30_000);
+    assert.equal(d.event, "backward");
+    assert.equal(d.deltaMs, -1000);
+  });
 });

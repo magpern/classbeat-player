@@ -4,7 +4,7 @@
   "private": true,
   "description": "Spike 1 (throwaway): follow the Spotify desktop app through the operating system and log how well a class clock tracks it.",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=24" },
   "bin": { "music-follower": "dist/cli.js" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -13,7 +13,7 @@
     "start": "node dist/cli.js"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

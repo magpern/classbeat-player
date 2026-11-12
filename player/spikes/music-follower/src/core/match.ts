@@ -30,6 +30,7 @@ function artistMatches(a: string, b: string): boolean {
  * otherwise title and artist (and length when both sides know it), as plan section 4 says.
  */
 export function matchCandidates(plan: Plan, r: Reading): number[] {
+  if (r.app && !/spotify/i.test(r.app)) return []; // another app is playing: not in the class
   if (r.trackId) {
     const id = normalizeId(r.trackId);
     const byId = plan.songs.filter((s) => s.trackId !== null && normalizeId(s.trackId) === id);

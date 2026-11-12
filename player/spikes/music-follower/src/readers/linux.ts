@@ -37,6 +37,7 @@ export function parseLinuxOutput(stdout: string, readAtMs: number, polledAtMs: n
 
 export class LinuxReader implements Reader {
   readonly source = "linux-playerctl";
+  readonly limitations = ["another-app-playing"]; // only the Spotify player is asked
 
   async readNow(): Promise<Reading | null> {
     const { file, args } = linuxCommand();

@@ -4,6 +4,7 @@
 export function windowsScript(intervalMs: number): string {
   return `
 $ErrorActionPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
   $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
@@ -15,11 +16,15 @@ $propType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMedi
 $mgr = Await ($mgrType::RequestAsync()) $mgrType
 while ($true) {
   $s = $mgr.GetSessions() | Where-Object { $_.SourceAppUserModelId -like '*Spotify*' } | Select-Object -First 1
+  $cur = $mgr.GetCurrentSession()
+  # Another app playing while Spotify is not: report that app's session, so it is "off the list".
+  if ($cur -and ($cur.SourceAppUserModelId -notlike '*Spotify*') -and ($cur.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') -and (-not $s -or $s.GetPlaybackInfo().PlaybackStatus.ToString() -ne 'Playing')) { $s = $cur }
   if ($s) {
     $p = Await ($s.TryGetMediaPropertiesAsync()) $propType
     $tl = $s.GetTimelineProperties()
     $pb = $s.GetPlaybackInfo()
     [ordered]@{
+      app = $s.SourceAppUserModelId
       status = $pb.PlaybackStatus.ToString()
       title = $p.Title
       artist = $p.Artist

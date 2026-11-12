@@ -11,7 +11,7 @@ account, token or API; send play, pause, skip or any other command to Spotify. I
 ## Install
 
 1. Spotify desktop app, signed in, with the playlist you will play.
-2. Node 22 or newer (`node -v`), from nodejs.org.
+2. Node 24 or newer (`node -v`), from nodejs.org.
 3. In this folder:
 
    ```
@@ -41,7 +41,10 @@ node dist/cli.js --class my-class.json --out run-xfade-off-mac.jsonl
 ```
 
 Options: `--rate 4` (polls per second), `--reader auto|macos|windows|linux`, `--stale-ms 2500`.
-Keys while it runs: `b` beat tap, `m` mark, `u` undo the last announced resync, `q` quit.
+Keys while it runs: `b` beat tap, `m` mark, `u` undo the last announced resync (within 30 s; goes
+to the manual clock at the earlier place), `r` relink (follow the music again; always press it
+after `u`, or every later scenario runs on the manual clock), `1`-`9` pick the song number when the
+status says Ambiguous, `q` quit. Undo and relink are written to the log as `t: "control"` lines.
 The terminal shows the class time, the link state and the song number.
 
 For the reference recording, film the screen showing the terminal next to the room with a phone,
@@ -68,13 +71,18 @@ Start the tool first, then start the class playlist from song 1.
 3. **Seek** forwards and then backwards inside a song.
 4. **Next** and **previous** song.
 5. **The same recording twice**: start the class on the repeated song (cold start; the log should
-   say Ambiguous), then play on to its second occurrence.
+   say Ambiguous and stay Ambiguous, listing the candidates), then either play on to the next song
+   (the order settles it, event `resolved`) or press the number of the song you are in (a `pick`
+   marker). Do it once starting on the first occurrence and once on the second.
 6. **A song that is not in the class** (and an advert if you have the free tier): play it for 20 s, then
-   return to the class.
+   return to the class. **Another app playing** (Windows only): pause Spotify, play something in a
+   browser or another media app for 20 s, then return. On **macOS this part of the row cannot be
+   measured** with this follower: Spotify's AppleScript interface knows nothing about other apps, so
+   another app playing looks like Spotify paused. The log says so (`limitations` in the first line).
 7. **Quit Spotify** for 10 s, start it again and play. (Coasting in, locked out.)
 8. **Readings lost while paused**: pause the music, quit Spotify for 30 s, start it again and
    pause at about the same place. Expect the clock to coast, then go back and announce
-   "resynced, 30 s back"; press `u` to test the undo. (The exact 30 s case is covered by the unit
+   "resynced, 30 s back"; press `u` to test the undo, then `r` to follow the music again. (The exact 30 s case is covered by the unit
    tests with a fake reader; this run shows what a real app does.)
 9. **Readings lost while playing**: if you can, play with Spotify minimised to a state where it
    stops answering for about 30 s; otherwise skip (covered by the unit tests).
@@ -108,12 +116,15 @@ class time. The first and last lines are `t: "meta"`.
   applying to re-locks).
 - The same recording twice on a cold start is Ambiguous; mid-class the occurrence nearest the
   clock is chosen (Ambiguous if both are within 10 s of it).
+- Windows also reads the current media session; when another app plays while Spotify does not,
+  that reading never matches the class (Off the list). macOS and Linux cannot see other apps.
 - Matching: track id when the system gives one, otherwise title, artist and length (within 2.5 s).
 
 ## Development
 
 ```
 npm ci && npm test && npm run build     # npm run typecheck also checks the tests
+# The test named "frozen polls" models a silent reader; real readers stamp every poll.
 ```
 
 Tests use a fake reader and fixtures (`test/fixtures`). The fixtures are synthetic samples written

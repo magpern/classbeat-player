@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { buildPlan } from "../src/core/class_plan.js";
 import { matchCandidates } from "../src/core/match.js";
 import { linuxCommand, parseLinuxOutput } from "../src/readers/linux.js";
 import { macCommand, MAC_SCRIPT_LINES, parseMacOutput } from "../src/readers/macos.js";
@@ -70,9 +71,44 @@ describe("Windows reader", () => {
     assert.deepEqual(matchCandidates(plan, r), [1, 3]);
   });
 
+  it("sets the console to UTF-8 without a byte-order mark before printing anything", () => {
+    const script = windowsScript(250);
+    const enc = script.indexOf("[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false");
+    assert.ok(enc >= 0);
+    assert.ok(enc < script.indexOf("ConvertTo-Json"));
+  });
+
+  it("keeps non-ASCII titles and artists intact (also after a stray byte-order mark) and matches them", () => {
+    const unicodePlan = buildPlan({ crossfadeMs: 0, songs: [{ title: "Älskar dig – Sång å Köln", artist: "Björk", durationMs: 200000 }] });
+    for (const line of [fx("windows_unicode.json"), "\uFEFF" + fx("windows_unicode.json")]) {
+      const r = parseWindowsLine(line, 1000)!;
+      assert.equal(r.title, "Älskar dig – Sång å Köln");
+      assert.equal(r.artist, "Björk");
+      assert.deepEqual(matchCandidates(unicodePlan, r), [0]);
+    }
+  });
+
+  it("asks for the current session too, and an app that is not Spotify never matches the class", () => {
+    assert.match(windowsScript(250), /GetCurrentSession\(\)/);
+    const r = parseWindowsLine(fx("windows_other_app.json"), 1000)!;
+    assert.equal(r.app, "Chrome");
+    assert.equal(r.title, "Spike Song A"); // even with a class title, it is another app
+    assert.deepEqual(matchCandidates(plan, r), []);
+    assert.equal(parseWindowsLine(fx("windows_playing.json"), 1000)!.app, null);
+  });
+
   it("ignores no-session and garbage lines", () => {
     assert.equal(parseWindowsLine("none", 0), null);
     assert.equal(parseWindowsLine("{broken", 0), null);
+  });
+});
+
+describe("limits of the readers", () => {
+  it("macOS and Linux readers say that another app playing cannot be observed", async () => {
+    const { MacReader } = await import("../src/readers/macos.js");
+    const { LinuxReader } = await import("../src/readers/linux.js");
+    assert.deepEqual(new MacReader().limitations, ["another-app-playing"]);
+    assert.deepEqual(new LinuxReader().limitations, ["another-app-playing"]);
   });
 });
 

@@ -18,11 +18,17 @@ export function markerLine(stamp: Stamp, key: string, classTimeMs: number | null
   return JSON.stringify({ t: "marker", ...stamp, key, classTimeMs });
 }
 
+/** A control key (undo, relink, pick) and the decision it produced. */
+export function controlLine(stamp: Stamp, key: string, decision: Decision): string {
+  return JSON.stringify({ t: "control", ...stamp, key, decision });
+}
+
 /** One-line status for the terminal. */
 export function statusText(d: Decision): string {
   const s = Math.floor(d.classTimeMs / 1000);
   const mm = String(Math.floor(s / 60)).padStart(2, "0");
   const ss = String(s % 60).padStart(2, "0");
   const ann = d.announce ? `  ** ${d.announce} (u = undo)` : "";
-  return `${mm}:${ss}  ${d.state}${d.held ? " (hold)" : ""}  song ${d.songIndex ?? "-"}${ann}`;
+  const pick = d.state === "Ambiguous" ? `  pick the song: ${d.candidates.map((i) => i + 1).join(" or ")} (press its number)` : "";
+  return `${mm}:${ss}  ${d.state}${d.held ? " (hold)" : ""}  song ${d.songIndex === null ? "-" : d.songIndex + 1}${ann}${pick}`;
 }

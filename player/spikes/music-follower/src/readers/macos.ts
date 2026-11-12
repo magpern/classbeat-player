@@ -4,6 +4,9 @@ import type { PlayState, Reading } from "../core/types.js";
 import { runCommand } from "./exec.js";
 import type { Reader } from "./reader.js";
 
+/** A hung Spotify must not delay coasting past 3 s at 4 Hz. */
+const OSASCRIPT_TIMEOUT_MS = 700;
+
 /** Never starts Spotify: it only asks when the app is already running. */
 export const MAC_SCRIPT_LINES = [
   'if application "Spotify" is not running then return "notrunning"',
@@ -45,11 +48,12 @@ export function parseMacOutput(stdout: string, readAtMs: number, polledAtMs: num
 
 export class MacReader implements Reader {
   readonly source = "macos-osascript";
+  readonly limitations = ["another-app-playing"]; // only the Spotify player is asked
 
   async readNow(): Promise<Reading | null> {
     const { file, args } = macCommand();
     const before = monoMs();
-    const out = await runCommand(file, args);
+    const out = await runCommand(file, args, OSASCRIPT_TIMEOUT_MS);
     const after = monoMs();
     if (out === null) return null;
     // The position was read somewhere inside the call: take the midpoint.

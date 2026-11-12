@@ -16,6 +16,8 @@ export interface Reading {
   /** The moment this information reached us; used to judge staleness. */
   polledAtMs: number;
   source: string;
+  /** The media app the reading came from, when the system says (Windows). */
+  app?: string | null;
 }
 
 /** Link states of plan section 4. */
