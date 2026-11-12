@@ -1,0 +1,14 @@
+# Allowlist: only what the Dockerfile copies.
+*
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/src
+!backend/db
+!schema/python
+!schema/class-format
+!docker/backend-entrypoint.sh
+!docker/purge-loop.sh
+**/.venv
+**/__pycache__
+**/tests
+**/node_modules
