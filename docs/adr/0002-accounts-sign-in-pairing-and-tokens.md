@@ -654,9 +654,27 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
   change or delete an audit event.
 - What stands against that:
   1. **No SQL is ever built from strings.** Every statement is a constant with bound
-     parameters. A guard test reads the backend's source and fails on any SQL text made by an
-     f-string, `format`, `%` or `+`, and on any database call outside the data-access modules.
-     The linter's rule for string-built SQL is an error in CI as well.
+     parameters. Two layers hold this (amended 2026-11-12):
+     - *At run time, by type.* Every statement is an instance of a sealed `Query` type,
+       created only while the query modules are first imported. After that, the registry is
+       frozen and any later creation raises. `Query` supports no `+`, `%`, `format` or
+       conversion back to a statement. The one executor module is the only code that imports
+       the database driver. It runs a statement only if the object is a registered `Query`,
+       checked by identity, and raises on anything else, including a plain `str`.
+       So SQL built from strings, or a constant replaced by a new value, fails when it is run,
+       whichever way the source got there. A test drives each of these through the executor.
+     - *In the source.* A guard test reads the backend's source. It fails on:
+       - any import of the database driver outside the executor;
+       - any database call outside the data-access modules;
+       - a query constant used other than as the direct statement argument of an executor call;
+       - SQL text made by an f-string, `format`, `%` or `+`.
+       The linter's rule for string-built SQL is an error in CI as well.
+     - *Scope.* The two layers catch mistakes in ordinary code, the threat in the row "One
+       account reading another's rows". The source guard is not expected to catch code written
+       to evade it: re-exports, aliases of `sys` or `builtins`, split strings, and the like.
+       The run-time layer and review cover that. A bypass of the source guard by deliberately
+       obfuscated code is a non-blocking finding. A bypass of the run-time layer, or of the
+       driver-import rule, is blocking.
   2. Row-level security as the backstop against accidental cross-account reads.
   3. The closed tables.
   4. The audit events written inside the `auth_*` functions, which the backend's role cannot
