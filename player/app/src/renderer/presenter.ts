@@ -114,6 +114,8 @@ function render(s: Snapshot | null): void {
     setText("interval-left", clockText(v.intervalRemainingMs));
     setText("crossfade", `${v.plannedCrossfadeMs / 1000} s`);
   }
+  setText("previous", s.controls?.previous ?? "Previous interval");
+  setText("next", s.controls?.next ?? "Next interval");
   renderIntervals(s);
   renderLink(s);
 }

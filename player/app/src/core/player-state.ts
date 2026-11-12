@@ -15,7 +15,7 @@ import { linkPlanFrom } from "./link/plan.ts";
 import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
 import { linkViewAt } from "./link/view.ts";
-import { routeWhileFollowing } from "./link/while-following.ts";
+import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
 import type { Routed } from "./link/while-following.ts";
 import type { TransportAction } from "./link/transport.ts";
 import type { FileError, Snapshot } from "./snapshot.ts";
@@ -154,7 +154,7 @@ export function isFollowing(s: PlayerState): boolean {
   return l !== null && l.following && !l.linkPlan.manualOnly && l.link.mode === "following";
 }
 
-export function snapshotOf(s: PlayerState, now: number): Snapshot {
+export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapshot {
   const l = s.loaded;
   return {
     loadId: s.loadId,
@@ -162,6 +162,7 @@ export function snapshotOf(s: PlayerState, now: number): Snapshot {
     doc: l?.doc ?? null,
     view: l ? viewAt(l.clock, l.plan, now) : null,
     link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, l.following && !l.linkPlan.manualOnly, l.unavailable && !l.linkPlan.manualOnly) : null,
+    controls: l ? controlLabels(l.link, l.following && !l.linkPlan.manualOnly, canSend) : null,
     error: s.error,
   };
 }
