@@ -1,7 +1,9 @@
-# Class player: plan (draft)
+# Class player: plan
 
-Status: **Draft for the owner, 2026-11-12. Nothing is built.** The owner's decisions are in
-section 13.
+Status: **Frozen by the owner, 2026-11-12.** Implementation starts with phase PL0. Changes from
+now on are made only by the Orchestrator in a docs pull request of its own, and only to record a
+decision or a result (an ADR, a spike, the owner's answer); the product rules of section 3 change
+only on the owner's word. Section 13 lists what is decided and what is still open.
 
 This is a **new product in its own repository, separate from classbeat**, with its own backend,
 accounts and releases. classbeat is where classes are made; it sends a finished class to this
@@ -674,6 +676,10 @@ opens class files from disk. After PL5 the player is usable in a class; PL6 make
 the owner described.
 
 ## 13. Decisions for the owner
+
+At the freeze (2026-11-12) the owner gave go on PL0. Until the owner says otherwise, the
+recommended option of each decision below is the working default (AGENTS.md, section 1).
+Decisions 9 to 13 stay open; agents work around them with reversible defaults.
 
 1. **Go or no-go** on PL0 (repository setup, the ADRs and two spikes; no product code).
 2. **Music:** follow the Spotify desktop app locally (A) with the manual clock (D) as fallback.
