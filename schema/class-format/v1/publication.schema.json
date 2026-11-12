@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/class-format/v1/publication.schema.json",
+  "title": "Publication",
+  "description": "What a source sends to the backend for one class (ADR 0003, section 6): a document, or a removal that carries none.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_class_id", "publication_number"],
+  "properties": {
+    "source_class_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "publication_number": { "type": "integer", "minimum": 1 },
+    "removed": { "type": "boolean" },
+    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "document": { "$ref": "class.schema.json" }
+  },
+  "if": { "required": ["removed"], "properties": { "removed": { "const": true } } },
+  "then": { "not": { "anyOf": [{ "required": ["document"] }, { "required": ["content_hash"] }] } },
+  "else": { "required": ["document", "content_hash"] }
+}
