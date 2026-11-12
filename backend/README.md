@@ -53,9 +53,12 @@ fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and
 - Migration `0004` gives `rate_limit_hit`, `auth_enter_session`, `auth_request_login` and
   `auth_complete_login` their bodies, with ADR 0002's defaults written in the SQL, as in
   `auth_purge_expired`. The other functions still fail closed. Migration `0005` replaces the
-  bodies of the last two: the same lookups and writes for every address, and an advisory lock
-  each, so that two link requests from one browser leave one usable link and two sign-ins at
-  once leave at most 20 sessions.
+  bodies of the last two. A link request does the same lookups and writes whether or not the
+  address can sign in, with the two differences ADR 0002 names: the "link requested" event of
+  an address that has an account, and no count toward the total per email for a request over
+  its per-pair limits. A newer link cancels the browser's older ones only when the request is
+  within its limits. An advisory lock each makes two link requests from one browser leave one
+  usable link and two sign-ins at once leave at most 20 sessions.
 - A signed-in request is one transaction: `site_session` (`site/deps.py`) calls
   `auth_enter_session` as its first statement and yields an `AccountContext` with the handle.
   It is committed after the route's function returns and before the response is sent. When

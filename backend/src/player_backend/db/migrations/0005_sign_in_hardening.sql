@@ -4,8 +4,9 @@
 -- and the search_path are restated, as in 0004.
 --
 -- auth_request_login: the allowlist lookup and the cancelling DELETE run for every address,
--- whatever its account and limits (section 4, step 2), and requests for one email from one
--- browser are taken one at a time.
+-- whatever its account and limits (section 4, step 2). The DELETE cancels the browser's older
+-- links when the request is within its limits, whether or not the address can sign in (0004:
+-- only when it can). Requests for one email from one browser are taken one at a time.
 -- auth_complete_login: sign-ins to one account are taken one at a time, so the cap of 20
 -- sessions holds when two happen at once.
 --
@@ -73,11 +74,13 @@ BEGIN
     convert_to('login.link:' || v_email || ':', 'UTF8') || v_browser) FROM 1 FOR 4), 'hex')
   )::bit(32)::integer);
 
-  -- A newer link cancels older ones only when asked from the same browser, and only when the
-  -- newer one works. The statement finds the older links for every address: whether it deletes
-  -- them is a comparison with a time, which the planner cannot fold away as it would a constant
-  -- false.
-  v_cancel := CASE WHEN v_usable THEN 'infinity' ELSE '-infinity' END;
+  -- A newer link cancels older ones only when asked from the same browser and within its
+  -- limits (section 10): a request over its limits cancels nothing, so nobody can cancel a
+  -- link that works by asking too often. Whether the address can sign in plays no part: its
+  -- older links are found and deleted like anyone's (they are unusable anyway). Whether the
+  -- statement deletes is a comparison with a time, which the planner cannot fold away as it
+  -- would a constant false, so it finds the older links for every request.
+  v_cancel := CASE WHEN v_over THEN '-infinity' ELSE 'infinity' END;
   DELETE FROM player.login_links l
   WHERE l.email = v_email AND l.browser_hash = v_browser AND l.created_at < v_cancel;
   INSERT INTO player.login_links (link_hash, email, browser_hash, usable, expires_at)

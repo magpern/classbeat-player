@@ -2,11 +2,13 @@
 usable link, and two sign-ins to one account leave at most 20 sessions.
 
 Each test holds one call's transaction open on a connection of its own, starts the second call
-on another, sees it wait, and only then lets the first one commit.
+on another, sees it wait, and only then lets the first one commit. A call that waits longer than
+`LOCK_TIMEOUT` fails, so a broken lock fails its test instead of hanging it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 import uuid
@@ -24,47 +26,73 @@ REQUEST = f"SELECT player.auth_request_login(%s, %s, %s, %s, {CLIENT})"
 COMPLETE = f"SELECT player.auth_complete_login(%s, %s, %s, {CLIENT})"
 LINK_LOCK = 7270002
 SESSION_LOCK = 7270003
+LOCK_TIMEOUT = "5s"
 
 
 def _h() -> bytes:
     return uuid.uuid4().bytes * 2
 
 
+def _link_key(email: str, browser: bytes) -> int:
+    """The second key of the lock of an email and browser, as pg_locks shows it (unsigned)."""
+    digest = hashlib.sha256(("login.link:" + email + ":").encode() + browser).digest()
+    return int.from_bytes(digest[:4], "big")
+
+
+def _signed(key: int) -> int:
+    """The key as the 32-bit integer an advisory lock function takes."""
+    return key - (1 << 32) if key >= 1 << 31 else key
+
+
 @pytest.fixture
 def two(db_url: str) -> Iterator[tuple[Conn, Conn]]:
     """Two connections, each in a transaction of its own until it commits."""
     with psycopg.connect(db_url) as first, psycopg.connect(db_url) as second:
+        for conn in (first, second):
+            conn.execute("SELECT set_config('lock_timeout', %s, false)", (LOCK_TIMEOUT,))
+            conn.commit()
         yield first, second
 
 
-def _advisory(site: Site, conn: Conn, granted: bool) -> list[int]:
-    """The first key of the advisory locks `conn` holds, or is waiting for."""
+def _advisory(site: Site, conn: Conn, granted: bool) -> list[tuple[int, int, str]]:
+    """(first key, second key, mode) of the advisory locks `conn` holds, or is waiting for."""
     found = site.su.execute(
-        "SELECT classid::int FROM pg_locks WHERE locktype = 'advisory' AND pid = %s "
-        "AND granted = %s",
+        "SELECT classid::bigint, objid::bigint, mode FROM pg_locks "
+        "WHERE locktype = 'advisory' AND objsubid = 2 AND pid = %s AND granted = %s",
         (conn.info.backend_pid, granted),
     ).fetchall()
-    return [int(str(row[0])) for row in found]
+    return [(int(str(first)), int(str(second)), str(mode)) for first, second, mode in found]
 
 
 def _in_background(
     conn: Conn, statement: str, params: tuple[object, ...]
 ) -> tuple[threading.Thread, list[object]]:
-    """Run a call and commit it on a thread. The list gets what the call returned."""
+    """Run a call and commit it on a thread. The list gets what it returned, or its error."""
     result: list[object] = []
 
     def run() -> None:
-        row = conn.execute(statement.encode(), params).fetchone()
-        conn.commit()
-        result.append(row[0] if row is not None else None)
+        try:
+            row = conn.execute(statement.encode(), params).fetchone()
+            conn.commit()
+            result.append(row[0] if row is not None else None)
+        except psycopg.Error as error:
+            conn.rollback()
+            result.append(type(error).__name__)
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
     return thread, result
 
 
+def _finished(thread: threading.Thread, result: list[object]) -> object:
+    thread.join(10)
+    assert not thread.is_alive(), "the second call did not finish"
+    assert len(result) == 1
+    return result[0]
+
+
 def _wait_until_blocked(site: Site, conn: Conn) -> None:
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 4
     while time.monotonic() < deadline:
         state = site.su.execute(
             "SELECT wait_event_type FROM pg_stat_activity WHERE pid = %s",
@@ -85,13 +113,13 @@ def test_two_requests_at_once_from_one_browser_leave_one_usable_link(
     # The two requests come from different addresses, so they share no per-pair counter.
     assert first.execute(REQUEST.encode(), (EMAIL, link_one, browser, _h())).fetchone() == (True,)
     # The first holds the lock of this email and browser until it commits.
-    assert _advisory(site, first, granted=True) == [LINK_LOCK]
+    key = _link_key(EMAIL, browser)
+    assert _advisory(site, first, granted=True) == [(LINK_LOCK, key, "ExclusiveLock")]
     thread, result = _in_background(second, REQUEST, (EMAIL, link_two, browser, _h()))
     _wait_until_blocked(site, second)
     assert result == []
     first.commit()
-    thread.join(10)
-    assert result == [True]
+    assert _finished(thread, result) is True
     usable = site.su.execute(
         "SELECT link_hash FROM player.login_links WHERE email = %s AND browser_hash = %s "
         "AND usable",
@@ -99,6 +127,33 @@ def test_two_requests_at_once_from_one_browser_leave_one_usable_link(
     ).fetchall()
     # The newer link cancelled the older one, although both were asked for at once.
     assert usable == [(link_two,)]
+
+
+def test_a_request_waits_for_the_lock_of_its_email_and_browser(
+    site: Site, two: tuple[Conn, Conn]
+) -> None:
+    """The lock alone holds a request back, whatever the counters do: its key and its mode."""
+    site.allow(EMAIL)
+    holder, second = two
+    browser, link = _h(), _h()
+    key = _link_key(EMAIL, browser)
+    # Held shared by someone else: only a request that asks for it exclusively has to wait.
+    holder.execute("SELECT pg_advisory_xact_lock_shared(%s, %s)", (LINK_LOCK, _signed(key)))
+    thread, result = _in_background(second, REQUEST, (EMAIL, link, browser, _h()))
+    _wait_until_blocked(site, second)
+    assert _advisory(site, second, granted=False) == [(LINK_LOCK, key, "ExclusiveLock")]
+    assert result == []
+    holder.commit()
+    assert _finished(thread, result) is True
+
+    # The lock of another browser, or of another email, holds nothing back.
+    for email, other in ((EMAIL, _h()), ("other@example.test", browser)):
+        holder.execute(
+            "SELECT pg_advisory_xact_lock(%s, %s)", (LINK_LOCK, _signed(_link_key(email, other)))
+        )
+    thread, result = _in_background(second, REQUEST, (EMAIL, _h(), browser, _h()))
+    assert _finished(thread, result) is True
+    holder.commit()
 
 
 def test_a_request_for_another_email_does_not_wait_and_cancels_nothing(
@@ -136,14 +191,15 @@ def test_two_sign_ins_at_once_leave_20_sessions(site: Site, two: tuple[Conn, Con
     first, second = two
     session_one, session_two = _h(), _h()
     assert first.execute(COMPLETE.encode(), (*links[0], session_one)).fetchone() == (True,)
-    assert _advisory(site, first, granted=True) == [SESSION_LOCK]
+    assert isinstance(account[0], uuid.UUID)
+    held = (SESSION_LOCK, int(account[0].hex[:8], 16), "ExclusiveLock")
+    assert _advisory(site, first, granted=True) == [held]
     thread, result = _in_background(second, COMPLETE, (*links[1], session_two))
     _wait_until_blocked(site, second)
     # It waits for the account's sign-in lock, before it has made its session.
-    assert _advisory(site, second, granted=False) == [SESSION_LOCK]
+    assert _advisory(site, second, granted=False) == [held]
     first.commit()
-    thread.join(10)
-    assert result == [True]
+    assert _finished(thread, result) is True
     assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (20,)
     kept = site.su.execute(
         "SELECT count(*) FROM player.sessions WHERE token_hash = ANY(%s)",

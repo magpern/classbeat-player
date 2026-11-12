@@ -1,17 +1,20 @@
 """`auth_request_login` does the same lookups and writes for every address (ADR 0002, section 4,
 step 2), counted with the database's own per-transaction statistics.
 
-Two exceptions, both the ADR's: an address that has an account gets its "link requested" event
-(section 11), and a request over its per-pair limits does not count toward the total per email
-(section 10), so it makes one counter write fewer.
+Whether the address can sign in changes one thing only: an address that has an account gets
+its "link requested" event (section 11). The requester's limits change two, whatever the
+address: a request over its per-pair limits does not count toward the total per email (section
+10), so it makes one counter write fewer, and a request over any limit cancels no older link
+(section 4, step 3).
+
+Every measured request comes from a browser that already has a link for that email, so the
+cancelling statement has a row to find, and to delete or leave, in every state.
 """
 
 from __future__ import annotations
 
 import hashlib
 import uuid
-
-import pytest
 
 from tests.dbhelp import Conn
 
@@ -67,12 +70,12 @@ def _measured(
     account: bool = False,
     listed: bool = False,
     over: str | None = None,
-    older_link: bool = False,
+    older_link: bool = True,
 ) -> tuple[bool, Work]:
     """One request for an address in the given state: (mail?, the work the call did).
 
     A first request has made the address's counters, so the measured one updates them whatever
-    the state. With `older_link` that first request came from the same browser.
+    the state. That first request came from the same browser, unless `older_link` is False.
     """
     email = f"{uuid.uuid4().hex}@example.test"
     browser = _h()
@@ -115,57 +118,57 @@ def _without_the_event(work: Work, account: bool) -> Work:
     }
 
 
-STATES = [
-    # (account, listed, over the total per email)
-    (False, False, False),
-    (False, True, False),
-    (True, False, False),
-    (True, True, False),
-    (False, False, True),
-    (False, True, True),
-    (True, False, True),
+CAN_SIGN_IN = [
+    # (account, listed): cannot, may sign up, has an account, both
+    (False, False),
+    (False, True),
+    (True, False),
+    (True, True),
 ]
 
 
-def test_every_address_gets_the_same_lookups_and_writes(su: Conn) -> None:
+def test_within_the_limits_every_address_gets_the_same_lookups_and_writes(su: Conn) -> None:
     _, unknown = _measured(su)
-    # What is compared is real work: both lookups, the cancelling statement, three counters.
+    # What is compared is real work: both lookups, three counters, and the older link of the
+    # browser found, deleted and replaced, for an address that cannot sign in too.
     assert unknown["accounts"] == (1, 0, 0, 0)
     assert unknown["signup_allowlist"] == (1, 0, 0, 0)
-    assert unknown["login_links"][0] >= 1 and unknown["login_links"][1:] == (1, 0, 0)
+    assert unknown["login_links"][0] >= 1 and unknown["login_links"][1:] == (1, 0, 1)
     assert unknown["rate_limits"][1:] == (0, 3, 0)
-    for account, listed, over in STATES:
-        mail, work = _measured(su, account=account, listed=listed, over="email" if over else None)
-        assert mail is ((account or listed) and not over)
-        assert _without_the_event(work, account) == unknown, (account, listed, over)
+    for account, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, account=account, listed=listed)
+        assert mail is (account or listed)
+        assert _without_the_event(work, account) == unknown, (account, listed)
 
 
-@pytest.mark.parametrize(("account", "listed"), [(False, False), (False, True), (True, False)])
-def test_over_the_per_pair_limits_it_makes_one_counter_write_fewer(
-    su: Conn, account: bool, listed: bool
-) -> None:
-    _, unknown = _measured(su)
-    mail, work = _measured(su, account=account, listed=listed, over="pair")
-    assert mail is False
-    # Section 10: what is over its own limits does not count toward the total per email.
-    assert work["rate_limits"][1:] == (0, 2, 0)
-    assert work["rate_limits"][0] < unknown["rate_limits"][0]
-    work = _without_the_event(work, account)
-    # Nothing else differs.
-    assert {**work, "rate_limits": unknown["rate_limits"]} == unknown
+def test_over_the_total_per_email_only_the_cancelling_differs(su: Conn) -> None:
+    _, within = _measured(su)
+    for account, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, account=account, listed=listed, over="email")
+        assert mail is False
+        # Step 3: over its limits a request cancels nothing. The older link is found and left.
+        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (account, listed)
+        work = _without_the_event(work, account)
+        assert {**work, "login_links": within["login_links"]} == within, (account, listed)
 
 
-def test_the_older_links_of_the_browser_are_found_whether_or_not_they_are_cancelled(
-    su: Conn,
-) -> None:
-    cancelled, usable = _measured(su, listed=True, older_link=True)
-    kept, unknown = _measured(su, older_link=True)
-    limited, over = _measured(su, listed=True, over="email", older_link=True)
-    assert (cancelled, kept, limited) == (True, False, False)
-    # A newer link cancels the older one only when the newer one works...
-    assert usable["login_links"][1:] == (1, 0, 1)
-    assert unknown["login_links"][1:] == over["login_links"][1:] == (1, 0, 0)
-    # ...but the statement that looks for it runs all the same.
-    assert usable["login_links"][0] == unknown["login_links"][0] == over["login_links"][0]
-    _, none = _measured(su)
-    assert usable["login_links"][0] == none["login_links"][0]
+def test_over_the_per_pair_limits_it_also_makes_one_counter_write_fewer(su: Conn) -> None:
+    _, within = _measured(su)
+    for account, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, account=account, listed=listed, over="pair")
+        assert mail is False
+        # Section 10: what is over its own limits does not count toward the total per email.
+        assert work["rate_limits"][1:] == (0, 2, 0), (account, listed)
+        assert work["rate_limits"][0] < within["rate_limits"][0]
+        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (account, listed)
+        work = _without_the_event(work, account)
+        # Nothing else differs.
+        same = {"rate_limits": within["rate_limits"], "login_links": within["login_links"]}
+        assert {**work, **same} == within, (account, listed)
+
+
+def test_the_cancelling_statement_runs_with_no_older_link_to_find(su: Conn) -> None:
+    _, with_one = _measured(su)
+    for account, listed in CAN_SIGN_IN:
+        _, none = _measured(su, account=account, listed=listed, older_link=False)
+        assert none["login_links"] == (with_one["login_links"][0], 1, 0, 0), (account, listed)
