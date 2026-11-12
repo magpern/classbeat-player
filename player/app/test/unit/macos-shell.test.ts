@@ -36,20 +36,18 @@ test("the reader is chosen by platform: the macOS one on macOS only", () => {
   assert.equal(chosen.reader.kind, "macos");
 });
 
-for (const platform of ["win32", "freebsd", "", "Darwin", "darwin ", "Linux", "linux "]) {
+const never = (): never => assert.fail("constructed");
+
+for (const platform of ["freebsd", "", "Darwin", "darwin ", "Linux", "linux ", "Win32"]) {
   test(`on "${platform}" no reader is ever constructed and the clock is manual`, () => {
-    const chosen = selectMusic(
-      platform,
-      () => assert.fail("constructed"),
-      () => assert.fail("constructed"),
-    );
+    const chosen = selectMusic(platform, never, never, never);
     assert.equal(chosen.reader, manualReader);
     assert.equal(chosen.transport, null);
   });
 }
 
-// Linux has its own reader (test/unit/linux-shell.test.ts covers the selection there).
-test("the real selection on this machine: nothing is constructed unless it has a reader", { skip: process.platform === "darwin" || process.platform === "linux" }, () => {
+// Windows and Linux have their own (test/unit/windows-shell.test.ts, test/unit/linux-shell.test.ts).
+test("the real selection on this machine: nothing is constructed unless it has a reader of its own", { skip: ["darwin", "win32", "linux"].includes(process.platform) }, () => {
   const chosen = selectMusic(process.platform);
   assert.equal(chosen.reader.kind, "manual");
   assert.equal(chosen.transport, null);
@@ -149,10 +147,15 @@ const sources = files(SRC).map((p) => ({ path: relative(SRC, p).split(sep).join(
 const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const src = (path: string): string => code(sources.find((s) => s.path === path)?.text ?? assert.fail(`missing ${path}`));
 
-test("only the macOS and Linux readers start a process, with execFile and never a shell", () => {
+// The Windows helper (#42) is the one process not run with execFile, started in
+// main/readers/windows-spawn.ts; test/unit/windows-script.test.ts pins how.
+const WINDOWS_SPAWN = "main/readers/windows-spawn.ts";
+const EXEC_READERS = ["main/linux-reader.ts", "main/macos-reader.ts"];
+
+test("only the macOS and Linux readers and the Windows helper start a process, the readers with execFile, and never a shell", () => {
   const users = sources.filter((s) => /child_process/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(users.sort(), ["main/linux-reader.ts", "main/macos-reader.ts"]);
-  for (const path of users) {
+  assert.deepEqual(users.sort(), [...EXEC_READERS, WINDOWS_SPAWN]);
+  for (const path of EXEC_READERS) {
     const reader = src(path);
     assert.match(reader, /import \{ execFile \} from "node:child_process";/, path);
     assert.equal(reader.match(/\bexecFile\(/g)?.length, 1, `${path}: one call site`);
@@ -160,8 +163,11 @@ test("only the macOS and Linux readers start a process, with execFile and never 
     assert.equal(reader.match(/\bshell:/g)?.length, reader.match(/\bshell: false\b/g)?.length, `${path}: never another value`);
   }
   for (const s of sources) {
-    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawn|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
+    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
+    if (s.path !== WINDOWS_SPAWN) assert.doesNotMatch(code(s.text), /\bspawn\(/, s.path);
   }
+  assert.equal(src(WINDOWS_SPAWN).match(/\bspawn\(/g)?.length, 1, "one call site");
+  assert.match(src(WINDOWS_SPAWN), /shell: false/);
 });
 
 test("the scripts are constants: no template text, no joining with data, and one place names osascript", () => {

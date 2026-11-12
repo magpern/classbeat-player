@@ -6,14 +6,16 @@
 // age (rule 8) and never throws. The lifecycle is the macOS reader's (main/macos-reader.ts), with
 // two additions. While Spotify is not playing, the other players on the bus are asked whether
 // they play: one that does is reported as another player, which the link shows as off the list
-// (ADR 0001); it is never followed and never sent a command. And no command is sent to Spotify
-// before Spotify has given a first good reading.
+// (ADR 0001); it is never followed and never sent a command. And commands are bounded as in the
+// Windows reader: nothing is sent before Spotify's first good answer, at most one command is in
+// flight and at most one waits.
 import { execFile } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { BUSCTL, LINUX_CALLS, LINUX_MAX_OUTPUT_BYTES, LINUX_POLL_MS, LINUX_TIMEOUT_MS, otherPlayerArgs } from "../core/link/linux-calls.ts";
-import { asOtherPlayer, parseLinuxOutput, parseOtherPlayers } from "../core/link/linux-parse.ts";
+import { otherPlayerReading, parseLinuxOutput, parseOtherPlayers } from "../core/link/linux-parse.ts";
 import type { LinuxParse } from "../core/link/linux-parse.ts";
 import type { MusicReader } from "../core/link/reader.ts";
+import { isTransportAction } from "../core/link/transport.ts";
 import type { MusicTransport, TransportAction } from "../core/link/transport.ts";
 import type { Observation } from "../core/link/types.ts";
 
@@ -75,11 +77,13 @@ export function createLinuxMusic(deps: LinuxDeps = {}): LinuxMusic {
   let readCall = 0;
   let sendSince: number | null = null;
   let sendCall = 0;
-  // A command sent while another is in flight waits here: at most one, and a newer one replaces
-  // an older one (the instructor's latest intent wins). It is never dropped silently.
+  // Commands, bounded as in the Windows reader: at most one in flight and one waiting.
+  // - Nothing is sent before Spotify's first good answer since following began (`ready`): until
+  //   then nothing is known to be there. A command sent while that first read is under way
+  //   waits for it, and is given up if the read brings no good answer, so it never goes late.
+  // - A command sent while another is in flight waits: at most one, and a newer one replaces an
+  //   older one (the instructor's latest intent wins). It goes when the one in flight is done.
   let waiting: TransportAction | null = null;
-  // True once Spotify itself has given a good reading since following began: before that nothing
-  // is known to be there, and no command is sent.
   let ready = false;
   const inFlight = (since: number | null, t: number): boolean => since !== null && t - since < GIVE_UP_MS;
 
@@ -125,7 +129,11 @@ export function createLinuxMusic(deps: LinuxDeps = {}): LinuxMusic {
 
     ask(LINUX_CALLS.read, (stdout, began, ended) => {
       const own = parse(stdout, began, ended);
-      if (own?.kind === "reading") ready = true;
+      // Playing, paused or nothing loaded: Spotify is there and answering.
+      if (own?.kind === "reading" || own?.kind === "closed") {
+        ready = true;
+        if (waiting !== null && !inFlight(sendSince, now())) sendNow(waiting);
+      } else if (!ready) waiting = null;
       if (own?.kind === "reading" && own.obs.playing) return settle(own);
       ask(LINUX_CALLS.names, (list) => {
         const others = list === null ? [] : parseOtherPlayers(list);
@@ -135,7 +143,7 @@ export function createLinuxMusic(deps: LinuxDeps = {}): LinuxMusic {
             const other = parse(out, b, e);
             if (other?.kind !== "reading" || !other.obs.playing) return tryOther(i + 1);
             readSince = null;
-            last = asOtherPlayer(other.obs);
+            last = otherPlayerReading(others[i], other.obs.at, other.obs.seenAt);
           });
         };
         tryOther(0);
@@ -176,9 +184,10 @@ export function createLinuxMusic(deps: LinuxDeps = {}): LinuxMusic {
       last = null;
     },
     send(action) {
-      if (stopTimer === null || !ready) return;
-      if (inFlight(sendSince, now())) waiting = action;
-      else sendNow(action);
+      // The name is checked again here: only one of the three fixed calls is ever run.
+      if (!isTransportAction(action) || stopTimer === null) return;
+      if (ready && !inFlight(sendSince, now())) sendNow(action);
+      else waiting = action;
     },
   };
 }

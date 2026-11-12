@@ -93,13 +93,12 @@ interface LinkSeen {
   readonly link: { readonly available: boolean; readonly mode: string; readonly state: string } | null;
   readonly view: { readonly status: string } | null;
 }
+/** macOS (#41), Windows (#42) and Linux (#47) have a reader of their own. */
+const HAS_READER = ["darwin", "win32", "linux"].includes(process.platform);
 const player = (call: string): Promise<LinkSeen | null> => page.evaluate(`window.player.${call}`) as Promise<LinkSeen | null>;
 
-// Issues #41 and #47: macOS and Linux have a reader. Elsewhere there is nothing to follow, and
-// with a reader nothing is asked of the system until Follow is picked (never in this test, so no
-// helper process and no D-Bus call is ever made here).
-const HAS_READER = process.platform === "darwin" || process.platform === "linux";
-
+// Elsewhere there is nothing to follow, and with a reader nothing is asked of the system until
+// Follow is picked (never in this test, so no helper process and no D-Bus call is made here).
 test("the shell starts on the manual clock; without a reader there is nothing to follow, and music commands do nothing", { timeout: 30_000 }, async () => {
   const seen = await player("getState()");
   assert.equal(seen?.link?.mode, "manual");

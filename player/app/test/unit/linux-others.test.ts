@@ -1,7 +1,7 @@
 // Three things the Linux reader must get right beside following Spotify (ADR 0001, rule 8):
 // another player that plays is reported as another app (off the list), never followed and never
-// commanded; a reading whose time cannot be told is never dated "now"; and no command is sent
-// before Spotify's first good reading. A fake execFile: nothing here starts a process.
+// commanded; a reading whose time cannot be told is never dated "now"; and commands are bounded
+// as in the Windows reader (nothing before Spotify's first good answer, one in flight, one waiting). A fake execFile: nothing here starts a process.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { isCurrent, matchCandidates } from "../../src/core/link/index.ts";
 import type { LinkPlan } from "../../src/core/link/index.ts";
 import { BUSCTL, isOtherPlayer, LINUX_CALLS, MAX_OTHER_PLAYERS, otherPlayerArgs } from "../../src/core/link/linux-calls.ts";
-import { asOtherPlayer, OTHER_PLAYER, parseLinuxOutput, parseOtherPlayers } from "../../src/core/link/linux-parse.ts";
+import { otherPlayerReading, parseLinuxOutput, parseOtherPlayers } from "../../src/core/link/linux-parse.ts";
 import { createController } from "../../src/main/controller.ts";
 import { createLinuxMusic } from "../../src/main/linux-reader.ts";
 import type { ExecFileFn } from "../../src/main/linux-reader.ts";
@@ -23,6 +23,9 @@ const VLC = "org.mpris.MediaPlayer2.vlc";
 const FIREFOX = "org.mpris.MediaPlayer2.firefox.instance_1_84";
 const names = (list: readonly unknown[]): string => `${JSON.stringify({ type: "as", data: [list] })}\n`;
 const FAILED = Object.assign(new Error("Call failed"), { code: 1 });
+// A class that holds the very recording the fixtures play, by title, artist, length and id.
+const SONG = { index: 0, title: "Spike Song A", artist: "Spike Artist", lengthMs: 180_000, startMs: 0, endMs: 171_000, trackIds: ["SPIKEEXAMPLE0001"] };
+const PLAN: LinkPlan = { songs: [SONG], plannedCrossfadeMs: 9000, manualOnly: false };
 
 type Answer = string | Error | null;
 
@@ -83,13 +86,12 @@ for (const [label, spotify] of [
     assert.deepEqual(b.asked, [READ, LIST, other(VLC)]);
     const obs = b.linux.latest(500);
     assert.ok(obs);
-    assert.deepEqual([obs.app, obs.trackId, obs.playing, obs.title, obs.seenAt], [OTHER_PLAYER, null, true, "Spike Song A", 500]);
-    // The very recording the class holds, by title, artist, length and id: still not followed.
-    const song = { index: 0, title: "Spike Song A", artist: "Spike Artist", lengthMs: 180_000, startMs: 0, endMs: 171_000, trackIds: ["SPIKEEXAMPLE0001"] };
-    const plan: LinkPlan = { songs: [song], plannedCrossfadeMs: 9000, manualOnly: false };
-    assert.deepEqual(matchCandidates(plan, obs, { lengthToleranceMs: 2500 }), []);
+    // The player's bus name and nothing else (as the Windows reader reports another app).
+    assert.deepEqual(obs, { title: "", artist: "", lengthMs: null, trackId: null, app: VLC, positionMs: 0, playing: true, at: 500, seenAt: 500 });
+    // It plays the very recording the class holds: still not followed.
+    assert.deepEqual(matchCandidates(PLAN, obs, { lengthToleranceMs: 2500 }), []);
     const own = parseLinuxOutput(PLAYING, 0, 0);
-    assert.deepEqual(matchCandidates(plan, own.kind === "reading" ? own.obs : assert.fail(), { lengthToleranceMs: 2500 }), [0], "Spotify's own reading of it is followed");
+    assert.deepEqual(matchCandidates(PLAN, own.kind === "reading" ? own.obs : assert.fail(), { lengthToleranceMs: 2500 }), [0], "Spotify's own reading of it is followed");
   });
 }
 
@@ -98,8 +100,9 @@ test("a player whose name merely contains Spotify's is another player too", () =
     const b = bus({ spotify: FAILED, players: { [name]: PLAYING } });
     b.linux.setActive(true);
     assert.deepEqual(b.asked, [READ, LIST, other(name)], name);
-    assert.equal(b.linux.latest(0)?.app, "another player", name);
-    assert.doesNotMatch(b.linux.latest(0)?.app ?? "", /spotify/i);
+    const obs = b.linux.latest(0);
+    assert.deepEqual([obs?.app, obs?.title, obs?.trackId], [name, "", null], name);
+    assert.deepEqual(matchCandidates(PLAN, obs ?? assert.fail(), { lengthToleranceMs: 2500 }), [], `${name} is never followed`);
   }
 });
 
@@ -114,7 +117,7 @@ test("another player that does not play changes nothing: Spotify's own paused re
 test("the first other player that plays is taken; when it stops, Spotify's reading is back; when Spotify plays, it is followed again", () => {
   const b = bus({ spotify: PAUSED, players: { [VLC]: PAUSED, [FIREFOX]: PLAYING } });
   b.linux.setActive(true);
-  assert.equal(b.linux.latest(0)?.app, OTHER_PLAYER);
+  assert.equal(b.linux.latest(0)?.app, FIREFOX);
   b.state.players = { [VLC]: PAUSED, [FIREFOX]: PAUSED };
   b.poll();
   assert.equal(b.linux.latest(0)?.app, "Spotify");
@@ -185,7 +188,7 @@ test("only well-formed player names the bus listed are asked, at most four, and 
 test("commands go to Spotify's name only, whatever else plays: there is no command for another player", () => {
   const b = bus({ spotify: PAUSED, players: { [VLC]: PLAYING } });
   b.linux.setActive(true);
-  assert.equal(b.linux.latest(0)?.app, OTHER_PLAYER);
+  assert.equal(b.linux.latest(0)?.app, VLC);
   const before = b.runs.length;
   for (const action of ["play", "pause", "next"] as const) b.linux.send(action);
   assert.deepEqual(b.runs.slice(before), [LINUX_CALLS.play, LINUX_CALLS.pause, LINUX_CALLS.next]);
@@ -269,36 +272,72 @@ for (const [label, step] of [
   });
 }
 
-test("asOtherPlayer keeps the reading's own times and drops what could be matched by id", () => {
-  const own = parseLinuxOutput(PLAYING, 10, 20);
-  assert.ok(own.kind === "reading");
-  assert.deepEqual(asOtherPlayer(own.obs), { ...own.obs, app: "another player", trackId: null });
+test("a reading of another player holds its name and its times, and nothing of what it plays", () => {
+  assert.deepEqual(otherPlayerReading(VLC, 10, 20), { title: "", artist: "", lengthMs: null, trackId: null, app: VLC, positionMs: 0, playing: true, at: 10, seenAt: 20 });
 });
 
 // 3. Commands.
 
+const COMMANDS = [LINUX_CALLS.play, LINUX_CALLS.pause, LINUX_CALLS.next] as readonly (readonly string[])[];
+
 for (const [label, spotify, players] of [
   ["not running", FAILED, {}],
-  ["with nothing loaded", STOPPED, {}],
   ["answering garbage", "garbage", {}],
-  ["not answering yet", null, {}],
   ["not running while another player plays", FAILED, { [VLC]: PLAYING }],
 ] as const) {
-  test(`no command is sent before Spotify's first good reading: Spotify ${label}`, () => {
+  test(`no command is sent before Spotify's first good answer, and none goes late: Spotify ${label}`, () => {
     const b = bus({ spotify, players });
     b.linux.setActive(true);
-    const before = b.runs.length;
+    const sent = (): number => b.runs.filter((r) => COMMANDS.includes(r)).length;
     for (const action of ["play", "pause", "next"] as const) b.linux.send(action);
-    assert.equal(b.runs.length, before);
-    if (spotify === null) return;
-    // Once Spotify has answered well (playing or paused), commands go, and nothing held back is sent late.
+    assert.equal(sent(), 0);
+    // The next read brings no good answer either: what waited is given up.
+    b.poll();
+    assert.equal(sent(), 0);
     b.state.spotify = PAUSED;
     b.poll();
-    assert.equal(b.runs.filter((r) => r === LINUX_CALLS.play || r === LINUX_CALLS.pause || r === LINUX_CALLS.next).length, 0);
+    assert.equal(sent(), 0, "nothing held back is sent late");
     b.linux.send("play");
-    assert.equal(b.runs.at(-1), LINUX_CALLS.play);
+    assert.equal(b.runs.at(-1), LINUX_CALLS.play, "once Spotify has answered, a command goes at once");
   });
 }
+
+for (const [label, answer] of [
+  ["playing", PLAYING],
+  ["paused", PAUSED],
+  ["with nothing loaded", STOPPED],
+] as const) {
+  test(`a command sent while the first read is under way waits, the newest only, and goes when Spotify answers ${label}`, () => {
+    const runs: (readonly string[])[] = [];
+    let answerRead: (out: string) => void = () => assert.fail("no read");
+    const exec: ExecFileFn = (_file, args, _options, done) => {
+      runs.push(args);
+      if (args === LINUX_CALLS.read) answerRead = (out) => done(null, out);
+      else if (args === LINUX_CALLS.names) done(null, names([]));
+    };
+    const linux = createLinuxMusic({ exec, now: () => 0, every: () => () => undefined });
+    linux.setActive(true);
+    for (const action of ["play", "next", "pause"] as const) linux.send(action);
+    assert.deepEqual(runs, [LINUX_CALLS.read], "nothing before the first good answer");
+    answerRead(answer);
+    assert.deepEqual(runs.filter((r) => COMMANDS.includes(r)), [LINUX_CALLS.pause]);
+  });
+}
+
+test("a command sent while Spotify has not answered at all stays unsent", () => {
+  const b = bus({ spotify: null });
+  b.linux.setActive(true);
+  b.linux.send("play");
+  assert.deepEqual(b.runs, [LINUX_CALLS.read], "Spotify has not answered: nothing is sent");
+});
+
+test("anything but the three names is refused by the reader itself", () => {
+  const b = bus({ spotify: PLAYING });
+  b.linux.setActive(true);
+  const before = b.runs.length;
+  for (const bad of ["read", "names", "Play", "previous", "", "toString", "__proto__", null, 5, ["play"]]) b.linux.send(bad as never);
+  assert.equal(b.runs.length, before);
+});
 
 test("the gate closes again when following stops: following anew waits for a new first reading", () => {
   const b = bus({ spotify: PLAYING });
@@ -308,9 +347,9 @@ test("the gate closes again when following stops: following anew waits for a new
   b.linux.setActive(false);
   b.state.spotify = FAILED;
   b.linux.setActive(true);
-  const before = b.runs.length;
   b.linux.send("play");
-  assert.equal(b.runs.length, before);
+  b.poll();
+  assert.equal(b.runs.filter((r) => r === LINUX_CALLS.play).length, 0);
 });
 
 test("at most one command in flight and one waiting, the newest replacing the one that waits", () => {

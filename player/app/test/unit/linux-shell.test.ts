@@ -27,19 +27,12 @@ function fake(kind: "macos" | "linux"): MusicReader & MusicTransport {
 test("the reader is chosen by platform: the Linux one on Linux only, the macOS one on macOS only", () => {
   const mac = fake("macos");
   const linux = fake("linux");
-  const onLinux = selectMusic(
-    "linux",
-    () => assert.fail("the macOS reader was constructed on Linux"),
-    () => linux,
-  );
+  const never = (): never => assert.fail("another system's reader was constructed");
+  const onLinux = selectMusic("linux", never, never, () => linux);
   assert.equal(onLinux.reader, linux);
   assert.equal(onLinux.transport, linux);
-  const onMac = selectMusic(
-    "darwin",
-    () => mac,
-    () => assert.fail("the Linux reader was constructed on macOS"),
-  );
-  assert.equal(onMac.reader, mac);
+  assert.equal(selectMusic("darwin", () => mac, never, never).reader, mac);
+  assert.equal(selectMusic("win32", never, () => mac, never).reader, mac);
 });
 
 test("the real selection on Linux is the Linux reader, and constructing it runs nothing", { skip: process.platform !== "linux" }, () => {
@@ -197,7 +190,7 @@ test("the Linux reader is built in the main process only, by platform", () => {
   assert.deepEqual(builders.sort(), ["main/linux-reader.ts", "main/select-music.ts"]);
   const importers = sources.filter((s) => /linux-reader|linux-calls|linux-parse/.test(code(s.text))).map((s) => s.path);
   assert.deepEqual(importers.sort(), ["core/link/linux-parse.ts", "main/linux-reader.ts", "main/select-music.ts"]);
-  assert.match(src("main/select-music.ts"), /platform === "linux" \? makeLinux/);
+  assert.match(src("main/select-music.ts"), /platform === "linux" \? makeLinux : null/);
 });
 
 test("no Spotify token, sign-in or developer interface, no network and no file, in the Linux reader", () => {

@@ -1,7 +1,8 @@
 // The interface every follower of a music app implements (ADR 0001: "One interface, one module
-// per follower"). The macOS reader is main/macos-reader.ts, the Linux one main/linux-reader.ts;
-// the Windows reader comes later; the manual reader reads nothing. A reader only reports what the music app says:
-// no method here plays, fetches, stores or controls anything (plan section 3, rule 3).
+// per follower"). The macOS reader is main/macos-reader.ts, the Windows reader
+// main/readers/windows-reader.ts and the Linux reader main/linux-reader.ts; the manual reader
+// reads nothing. A reader only reports what the music app says: no method here plays, fetches,
+// stores or controls anything (plan section 3, rule 3).
 import type { Observation } from "./types.ts";
 
 export interface MusicReader {

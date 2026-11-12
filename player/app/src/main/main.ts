@@ -66,6 +66,8 @@ if (!app.requestSingleInstanceLock()) {
     createPresenter();
     controller.attach(() => live()?.webContents ?? null);
   });
+  // Quitting from the menu skips window-all-closed; a follower's helper must stop either way.
+  app.on("will-quit", () => controller.stop());
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

@@ -99,6 +99,7 @@ test("nothing runs until following is turned on, and nothing after it is turned 
   assert.equal(r.timers(), 0);
   r.tick();
   r.linux.send("next");
+  r.tick();
   assert.equal(r.calls.length, 1);
   assert.equal(r.listed.n, 0, "and while Spotify plays the bus is asked nothing else");
 });

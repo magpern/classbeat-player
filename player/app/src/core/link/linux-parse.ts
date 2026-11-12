@@ -90,12 +90,13 @@ export function parseLinuxOutput(stdout: string, at: number, seenAt: number): Li
   };
 }
 
-/** What a reading of any player but Spotify is called: a constant, never the player's own name. */
-export const OTHER_PLAYER = "another player";
-
-/** A reading of another player: it can only ever be off the list (match.ts), never followed. */
-export function asOtherPlayer(obs: Observation): Observation {
-  return { ...obs, app: OTHER_PLAYER, trackId: null };
+/**
+ * Another player is playing while Spotify is not: its bus name and nothing else, as the Windows
+ * reader reports another app (windows-parse.ts). No title and no id, so it matches no song and
+ * the link shows Off the list; it can never be followed.
+ */
+export function otherPlayerReading(name: string, at: number, seenAt: number): Observation {
+  return { title: "", artist: "", lengthMs: null, trackId: null, app: name, positionMs: 0, playing: true, at, seenAt };
 }
 
 /** The other MPRIS players in the bus's answer to the names call; none when it is unreadable. */
