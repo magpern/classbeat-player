@@ -1,7 +1,7 @@
 // The shape of what the player's shell sends a screen: the open class, the clock view and the
 // music link view. It mirrors the fields of `Snapshot` in player/app/src/core/snapshot.ts that
-// the room screen reads (this lane never imports from player/ at run time; a type-only test,
-// test/unit/snapshot-compat.test.ts, fails the build when the two drift apart). Pure types.
+// the room screen reads (this lane never imports from player/; a drift test,
+// test/unit/snapshot-compat.test.ts, fails when the two drift apart). Pure types.
 import type { Class } from "../../../schema/generated/ts/class.d.ts";
 
 export type { Class };
