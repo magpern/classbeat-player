@@ -13,6 +13,8 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.migrations",
     "player_backend.db.queries.login",
     "player_backend.db.queries.site_sessions",
+    "player_backend.db.queries.pairing",
+    "player_backend.db.queries.devices",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"
@@ -22,4 +24,5 @@ SQL_FILES: Final = (
     "0003_auth_functions.sql",
     "0004_login_and_sessions.sql",
     "0005_sign_in_hardening.sql",
+    "0006_pairing_and_devices.sql",
 )

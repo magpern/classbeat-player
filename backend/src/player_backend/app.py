@@ -10,12 +10,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
+from player_backend.bearer_blocks import BearerBlocks
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
 from player_backend.logging_setup import configure_logging
 from player_backend.mail import Mailer
 from player_backend.no_mailer import NoMailer
+from player_backend.player_api import router as player_router
 from player_backend.request_policy import response_headers
 from player_backend.settings import Settings
 from player_backend.site import router as site_router
@@ -45,9 +47,12 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    # Section 10: bearer tokens this process refuses without a lookup. In memory only.
+    app.state.bearer_blocks = BearerBlocks()
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(site_router)
+    app.include_router(player_router)
 
     @app.middleware("http")
     async def access_log(  # pyright: ignore[reportUnusedFunction]
@@ -61,7 +66,7 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
             # exception's type only (logging_setup.py).
             _log.exception("unhandled error")
             response = error_response(500, "internal_error")
-        # ADR 0002, section 5: the page headers on every response, no-store on the site's API.
+        # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
         response.headers.update(response_headers(request.url.path))
         # Method, path and status only: never the query string, a header or a body.
         _access_log.info(

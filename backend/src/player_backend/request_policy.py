@@ -3,8 +3,8 @@
 - Cross-site requests: a state change needs an `Origin` header equal to the site's origin, and
   is refused when `Sec-Fetch-Site` is present and is not `same-origin`.
 - Recent sign-in: sensitive actions need a sign-in within the last 10 minutes.
-- The headers every response carries, and `Cache-Control: no-store` on the site's API, whose
-  responses carry tokens or an account's data.
+- The headers every response carries, and `Cache-Control: no-store` on the site's API, the
+  pairing endpoints and the player API, whose responses carry tokens or an account's data.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from http import HTTPMethod
 from typing import Final
 
 SITE_API: Final = "/api/site/"
+NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/")
 STATE_CHANGING: Final = frozenset(
     {HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE}
 )
@@ -43,11 +44,11 @@ def is_recent_sign_in(signed_in_at: datetime, now: datetime) -> bool:
 
 
 def response_headers(path: str) -> dict[str, str]:
-    """The headers of every response; the site's API is also never stored."""
+    """The headers of every response; the APIs that carry tokens or data are never stored."""
     headers = {
         "Content-Security-Policy": CONTENT_SECURITY_POLICY,
         "Referrer-Policy": "no-referrer",
     }
-    if path.startswith(SITE_API):
+    if path.startswith(NEVER_STORED):
         headers["Cache-Control"] = "no-store"
     return headers

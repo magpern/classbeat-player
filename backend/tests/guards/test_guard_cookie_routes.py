@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from player_backend.app import create_app
+from player_backend.player_api.deps import device_token
 from player_backend.settings import Settings
 from player_backend.site.cookies import login_cookie_token, session_cookie_token
 from player_backend.site.deps import same_origin, site_session
@@ -28,6 +29,26 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("DELETE", "/api/site/sessions/{session_id}"),
         ("POST", "/api/site/sign-out"),
         ("POST", "/api/site/sessions/end-all"),
+        # Section 6, step 3 and "The site lists devices": the signed-in user's side of pairing.
+        ("POST", "/api/site/pairing/find"),
+        ("POST", "/api/site/pairing/decide"),
+        ("GET", "/api/site/devices"),
+        ("DELETE", "/api/site/devices/{device_id}"),
+    }
+)
+# The app's routes: pairing takes the device code in the body, the player API a device token
+# in `Authorization: Bearer`. None of them reads a cookie.
+DEVICE_TOKEN_ROUTES = frozenset(
+    {
+        ("GET", "/api/player/device"),
+        ("DELETE", "/api/player/device"),
+    }
+)
+NO_CREDENTIAL_ROUTES = frozenset(
+    {
+        ("GET", "/healthz"),
+        ("POST", "/api/pairing/start"),
+        ("POST", "/api/pairing/token"),
     }
 )
 # The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
@@ -71,6 +92,20 @@ def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
     assert _using(session_cookie_token) == _using(site_session)
 
 
+def test_the_routes_that_take_a_device_token_equal_the_list_and_read_no_cookie() -> None:
+    assert _using(device_token) == DEVICE_TOKEN_ROUTES
+    assert not _using(device_token) & (_using(session_cookie_token) | _using(login_cookie_token))
+    for _, path in DEVICE_TOKEN_ROUTES:
+        assert path.startswith("/api/player/")
+
+
+def test_every_route_is_on_one_of_the_lists() -> None:
+    # A new route fails here until someone has said which credential it takes.
+    listed = SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES | DEVICE_TOKEN_ROUTES
+    assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES
+    assert not listed & NO_CREDENTIAL_ROUTES
+
+
 def test_every_cookie_route_is_in_the_sites_api_or_is_the_one_live_route() -> None:
     for method, path in SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES:
         assert path.startswith(SITE_API) or (method, path) == LIVE_COOKIE_ROUTE
@@ -82,9 +117,9 @@ def test_every_cookie_route_applies_the_origin_check() -> None:
 
 
 def test_no_route_takes_a_token_in_its_path() -> None:
-    # Principle 3. The one path parameter is a session's id, which is not a credential.
+    # Principle 3. The path parameters are a session's id and a device's id: not credentials.
     parameters = {r.path for r in _routes() if "{" in r.path}
-    assert parameters == {"/api/site/sessions/{session_id}"}
+    assert parameters == {"/api/site/sessions/{session_id}", "/api/site/devices/{device_id}"}
 
 
 def test_backend_source_reads_cookies_only_in_the_cookie_module() -> None:
