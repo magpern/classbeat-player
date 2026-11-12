@@ -265,12 +265,21 @@ fi
 : >"$tmp/mount/player_app_password"
 if run_entry app >/dev/null 2>&1; then bad "an empty password file started the app"; else ok "an empty password file is refused"; fi
 
+# A real, readable password file whose NAME holds a newline must be refused by the name guard
+# (not by a missing file), and psql must never run. A stub psql leaves a marker if it does.
+nlfile="$tmp/pw"$'\n'"file"
+printf 'good-pw\n' >"$nlfile"
+cat >"$tmp/bin/psql" <<EOF
+#!/bin/sh
+touch "$tmp/psql-ran"
+EOF
+chmod +x "$tmp/bin/psql"
 rc=0
-sh "$root/docker/postgres/set-role-password.sh" player_app "$(printf 'a\nb')" >/dev/null 2>&1 || rc=$?
-if [ "$rc" -eq 2 ]; then
-  ok "set-role-password.sh refuses a file name with a newline"
+err="$(PATH="$tmp/bin:$PATH" POSTGRES_USER=u POSTGRES_DB=d sh "$root/docker/postgres/set-role-password.sh" player_app "$nlfile" 2>&1 >/dev/null)" || rc=$?
+if [ "$rc" -eq 2 ] && [ "$err" = "set-role-password: bad file name" ] && [ ! -e "$tmp/psql-ran" ]; then
+  ok "set-role-password.sh refuses a file name with a newline, without running psql"
 else
-  bad "set-role-password.sh did not refuse a file name with a newline (exit $rc)"
+  bad "set-role-password.sh did not refuse a file name with a newline (exit $rc, stderr: $err)"
 fi
 
 # --- the db files: healthcheck over TCP, the data directory from $PGDATA -----------------------
