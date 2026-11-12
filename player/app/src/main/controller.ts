@@ -5,7 +5,7 @@ import type { WebContents } from "electron";
 import classSchema from "../../../../schema/class-format/v1/class.schema.json" with { type: "json" };
 import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
-import { advance, command, INITIAL, isFollowing, openText, refuse, snapshotOf, transportFor } from "../core/player-state.ts";
+import { advance, command, INITIAL, isFollowing, openText, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
 import type { PlayerState } from "../core/player-state.ts";
 import { manualReader } from "../core/link/reader.ts";
 import type { MusicReader } from "../core/link/reader.ts";
@@ -28,7 +28,8 @@ export interface Controller {
 /**
  * The reader is the music link's source of readings; with the manual reader the clock is manual
  * only. A reader that asks the system (one with `setActive`) is on only while the instructor
- * follows the music, and with it a class opens on the manual clock until Follow is picked.
+ * follows the music, and with it a class opens on the manual clock until Follow is picked. A
+ * reader that says following is unavailable on this computer counts as no reader from then on.
  */
 export function createController(now: () => number = () => performance.now(), reader: MusicReader = manualReader, transport: MusicTransport | null = null): Controller {
   let state: PlayerState = INITIAL;
@@ -37,8 +38,10 @@ export function createController(now: () => number = () => performance.now(), re
 
   // Every snapshot follows the music first, so a snapshot taken between ticks never shows a clock
   // that ran past a window's end.
+  const usable = (): boolean => reader.kind !== "manual" && reader.unavailable?.() !== true;
   const snapshot = (): Snapshot => {
     const t = now();
+    if (!usable()) state = withoutReader(state);
     state = advance(state, t, reader.latest(t));
     return snapshotOf(state, t);
   };
@@ -52,7 +55,7 @@ export function createController(now: () => number = () => performance.now(), re
   return {
     snapshot,
     open(fileName, text) {
-      state = openText(state, fileName, text, classSchema, now(), reader.kind !== "manual", !onDemand);
+      state = openText(state, fileName, text, classSchema, now(), usable(), !onDemand);
       sync();
       push();
       return snapshot();

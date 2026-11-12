@@ -29,11 +29,27 @@ for (const [file, want] of READINGS) {
   });
 }
 
-for (const file of ["notrunning.txt", "stopped.txt"]) {
+// Stopped is also what Spotify says for a moment between two songs, so it is marked `between`
+// (issue #51, item 4): the reader holds what it had for one poll. Not running is not.
+for (const [file, want] of [
+  ["notrunning.txt", { kind: "closed" }],
+  ["stopped.txt", { kind: "closed", between: true }],
+] as const) {
   test(`recorded output ${file}: the music app is closed or has nothing loaded`, () => {
-    assert.deepEqual(parseMacOutput(fx(file), AT, SEEN), { kind: "closed" });
+    assert.deepEqual(parseMacOutput(fx(file), AT, SEEN), want);
   });
 }
+
+test("playing with neither a title nor an artist is what Spotify says between two songs: marked, and still a reading", () => {
+  const obs = { title: "", artist: "", lengthMs: null, trackId: null, app: "Spotify", positionMs: 0, playing: true, at: AT, seenAt: SEEN };
+  assert.deepEqual(parseMacOutput("playing\t\t\t\t0\t0\n", AT, SEEN), { kind: "reading", obs, between: true });
+  // Paused with nothing named, or playing with a title or an artist, is a reading as it stands.
+  for (const out of ["paused\t\t\t\t0\t0\n", "playing\t\tT\t\t0\t0\n", "playing\t\t\tA\t0\t0\n"]) {
+    const r = parseMacOutput(out, AT, SEEN);
+    assert.equal(r.kind, "reading");
+    assert.ok(!("between" in r), out);
+  }
+});
 
 const GOOD = "playing\tspotify:track:X\tT\tA\t1.5\t180000\n";
 const GARBAGE: readonly [string, string][] = [

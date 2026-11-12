@@ -37,8 +37,11 @@ export interface SupervisorOptions {
   readonly minGapMs: number;
   /** One complete line. Returns false when it is not a line the helper is meant to write. */
   onLine(line: string): boolean;
-  /** The helper was dropped: whatever it last said is no longer backed by a running helper. */
-  onDown(): void;
+  /**
+   * The helper was dropped: whatever it last said is no longer backed by a running helper.
+   * `spoke` is false when it never wrote a good line: it failed to start.
+   */
+  onDown(spoke: boolean): void;
 }
 
 export interface Supervisor {
@@ -68,6 +71,8 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
   let failures = 0;
   let notBefore = Number.NEGATIVE_INFINITY;
   let startedAt = 0;
+  /** The running helper has written a good line. */
+  let spoke = false;
   let watchdog: unknown = null;
   let restart: unknown = null;
 
@@ -96,7 +101,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
 
   function fail(): void {
     drop();
-    opts.onDown();
+    opts.onDown(spoke);
     failures += 1;
     notBefore = Math.max(notBefore, deps.now() + backoffMs(failures));
     schedule();
@@ -118,6 +123,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
   function launch(): void {
     startedAt = deps.now();
     notBefore = startedAt + opts.minGapMs;
+    spoke = false;
     let c: HelperChild;
     try {
       c = deps.startHelper();
@@ -145,6 +151,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
       good = false;
     }
     if (good) {
+      spoke = true;
       garbage = 0;
       if (deps.now() - startedAt >= opts.healthyMs) failures = 0;
       watch(opts.silenceTimeoutMs);

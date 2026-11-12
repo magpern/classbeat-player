@@ -134,6 +134,17 @@ export function advance(s: PlayerState, now: number, obs: Observation | null = n
   return { ...s, loaded: { ...l, link: r.link, clock: tick(r.clock, now) } };
 }
 
+/**
+ * The reader cannot work on this computer: the open class goes to the manual clock, the clock
+ * keeps going as it is, and following is no longer offered (the link is not `available`).
+ */
+export function withoutReader(s: PlayerState): PlayerState {
+  const l = s.loaded;
+  if (l === null || !l.following) return s;
+  const manual = goManual(l.link, l.clock);
+  return { ...s, loaded: { ...l, following: false, link: manual.link, clock: manual.clock } };
+}
+
 /** True while the instructor follows the music: only then does the shell ask for readings. */
 export function isFollowing(s: PlayerState): boolean {
   const l = s.loaded;

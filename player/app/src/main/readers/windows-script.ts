@@ -4,10 +4,13 @@
 // built from data. Nothing is interpolated into it, and the only input it takes is the three
 // command names on its standard input, compared against literals, and they go to the Spotify
 // session only. A failed poll writes the fixed line {"error":true}; no session writes
-// {"app":null}. While Spotify is not playing and another app is, the line is that app's id and
-// "Playing" and nothing more (not its title): the link then shows Off the list (ADR 0001). It
-// asks for no token, opens no connection and never starts the music app; it only looks at
-// sessions that already exist (ADR 0001, option A).
+// {"app":null}. While Spotify is not playing and another app is, the line is that app's id,
+// "Playing" and Spotify's own status, and nothing more (not its title): the link then shows Off
+// the list (ADR 0001). A session of another app that cannot be asked is passed over: it never
+// turns the poll into a failed one. Every other line than the failed one also carries the number
+// of command lines the script has read from its input so far (`commands`), so the reader knows
+// when a command it wrote has been taken. It asks for no token, opens no connection and never
+// starts the music app; it only looks at sessions that already exist (ADR 0001, option A).
 import { win32 } from "node:path";
 
 /** How often the script polls and how long it waits for one system call, both fixed in the script. */
@@ -28,12 +31,14 @@ $manager = Await ($managerType::RequestAsync()) $managerType
 $stdin = [System.IO.StreamReader]::new([Console]::OpenStandardInput())
 $stdout = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), (New-Object System.Text.UTF8Encoding $false))
 $pending = $stdin.ReadLineAsync()
+$read = 0
 $spotifyIds = @('Spotify.exe', 'SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify')
 while ($true) {
   $commands = @()
   while ($pending.IsCompleted) {
     if ($null -eq $pending.Result) { exit 0 }
     $commands += $pending.Result
+    $read += 1
     $pending = $stdin.ReadLineAsync()
   }
   $line = '{"error":true}'
@@ -51,10 +56,15 @@ while ($true) {
     }
     $other = $null
     if ($status -ne 'Playing') {
-      $other = $sessions | Where-Object { $_.SourceAppUserModelId -and ($spotifyIds -notcontains $_.SourceAppUserModelId) -and ($_.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') } | Select-Object -First 1
+      foreach ($candidate in $sessions) {
+        try {
+          $id = $candidate.SourceAppUserModelId
+          if ($id -and ($spotifyIds -notcontains $id) -and ($candidate.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing')) { $other = $id; break }
+        } catch { }
+      }
     }
     if ($other) {
-      $line = [ordered]@{ app = $other.SourceAppUserModelId; status = 'Playing' } | ConvertTo-Json -Compress
+      $line = [ordered]@{ app = $other; status = 'Playing'; spotify = $status; commands = $read } | ConvertTo-Json -Compress
     } elseif ($session) {
       $properties = Await ($session.TryGetMediaPropertiesAsync()) $propertiesType
       $timeline = $session.GetTimelineProperties()
@@ -68,8 +78,9 @@ while ($true) {
         endMs = [int64]$timeline.EndTime.TotalMilliseconds
         lastUpdatedUtcMs = $timeline.LastUpdatedTime.ToUnixTimeMilliseconds()
         nowUtcMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        commands = $read
       } | ConvertTo-Json -Compress
-    } else { $line = '{"app":null}' }
+    } else { $line = [ordered]@{ app = $null; commands = $read } | ConvertTo-Json -Compress }
   } catch { }
   $stdout.WriteLine($line)
   $stdout.Flush()

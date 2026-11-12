@@ -93,7 +93,10 @@ export function createHarness(): Harness {
   return h;
 }
 
-/** A line as the helper writes it for a session. Times are the system clock's, in ms. */
+/**
+ * A line as the helper writes it for a session. Times are the system clock's, in ms. `commands`
+ * is how many command lines the helper has read from its input so far.
+ */
 export function sessionLine(over: Record<string, unknown> = {}): string {
   return JSON.stringify({
     app: "Spotify.exe",
@@ -105,10 +108,14 @@ export function sessionLine(over: Record<string, unknown> = {}): string {
     endMs: 180_000,
     lastUpdatedUtcMs: 1_794_000_000_000,
     nowUtcMs: 1_794_000_000_800,
+    commands: 0,
     ...over,
   });
 }
 
-export const NO_SESSION = '{"app":null}';
-/** Another app is playing while Spotify is not: its id and "Playing", nothing else. */
-export const OTHER_APP = '{"app":"Chrome","status":"Playing"}';
+/** No Spotify session, from a helper that has read `commands` command lines. */
+export const noSession = (commands = 0): string => `{"app":null,"commands":${commands}}`;
+export const NO_SESSION = noSession();
+/** Another app is playing while Spotify is not: its id, "Playing" and Spotify's own status, nothing else. */
+export const otherApp = (app = "Chrome", spotify = "Paused", commands = 0): string => JSON.stringify({ app, status: "Playing", spotify, commands });
+export const OTHER_APP = otherApp();

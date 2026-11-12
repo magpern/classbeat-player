@@ -18,8 +18,8 @@ const READERS = join(SRC, "main", "readers");
 const source = (name: string): string => readFileSync(join(READERS, name), "utf8");
 
 test("the helper script is exactly the pinned one", () => {
-  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "bac46f98b3301a21cdfe9e285f0e5b7e38fc0eb35f5b1ee5c09a560a9e54f30c");
-  assert.equal(SCRIPT.split("\n").length, 62);
+  assert.equal(createHash("sha256").update(SCRIPT, "utf8").digest("hex"), "c66ae793415f958bcae790d867f3daafa655095eeb325076cb5adc835de97767");
+  assert.equal(SCRIPT.split("\n").length, 70);
 });
 
 test("the script is a constant: nothing is interpolated into it", () => {
@@ -65,9 +65,41 @@ test("the script follows and controls the Spotify session only, by its two exact
 });
 
 test("another app playing is reported by its id alone, and only while Spotify is not playing", () => {
-  assert.match(SCRIPT, /if \(\$status -ne 'Playing'\) \{\n {6}\$other = \$sessions \| Where-Object \{ \$_\.SourceAppUserModelId -and \(\$spotifyIds -notcontains \$_\.SourceAppUserModelId\) -and \(\$_\.GetPlaybackInfo\(\)\.PlaybackStatus\.ToString\(\) -eq 'Playing'\) \} \| Select-Object -First 1\n/);
-  assert.deepEqual([...SCRIPT.matchAll(/\$other\.(\w+)/g)].map((m) => m[1]), ["SourceAppUserModelId"], "nothing else is read from it, and nothing is sent to it");
-  assert.match(SCRIPT, /\$line = \[ordered\]@\{ app = \$other\.SourceAppUserModelId; status = 'Playing' \} \| ConvertTo-Json -Compress\n/);
+  // Each session is asked inside its own try: one that cannot be asked is passed over, and never
+  // makes the poll a failed one (issue #51, item 3).
+  const probe = [
+    "    $other = $null",
+    "    if ($status -ne 'Playing') {",
+    "      foreach ($candidate in $sessions) {",
+    "        try {",
+    "          $id = $candidate.SourceAppUserModelId",
+    "          if ($id -and ($spotifyIds -notcontains $id) -and ($candidate.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing')) { $other = $id; break }",
+    "        } catch { }",
+    "      }",
+    "    }",
+    "    if ($other) {",
+    "      $line = [ordered]@{ app = $other; status = 'Playing'; spotify = $status; commands = $read } | ConvertTo-Json -Compress",
+    "    } elseif ($session) {",
+  ].join("\n");
+  assert.ok(SCRIPT.includes(`\n${probe}\n`));
+  assert.deepEqual([...SCRIPT.matchAll(/\$candidate\.(\w+)/g)].map((m) => m[1]), ["SourceAppUserModelId", "GetPlaybackInfo"], "its id and whether it plays: nothing else is read from it, and nothing is sent to it");
+  assert.doesNotMatch(SCRIPT, /\$other\./, "what is kept of it is its id, a text");
+  assert.deepEqual(SCRIPT.match(/\$other\b[^\n]*/g), ["$other = $null", "$other = $id; break }", "$other) {", "$other; status = 'Playing'; spotify = $status; commands = $read } | ConvertTo-Json -Compress"]);
+  assert.deepEqual(SCRIPT.match(/\$id\b/g)?.length, 4, "the id is read once and used for nothing but the comparison and the line");
+});
+
+test("every line but the failed one says how many command lines the script has read", () => {
+  assert.deepEqual(SCRIPT.match(/[^\n]*\$read\b[^\n]*/g), [
+    "$read = 0",
+    "    $read += 1",
+    "      $line = [ordered]@{ app = $other; status = 'Playing'; spotify = $status; commands = $read } | ConvertTo-Json -Compress",
+    "        commands = $read",
+    "    } else { $line = [ordered]@{ app = $null; commands = $read } | ConvertTo-Json -Compress }",
+  ]);
+  // It counts a line when it takes it from its input, in the same step, whatever the line says.
+  assert.ok(SCRIPT.includes("    if ($null -eq $pending.Result) { exit 0 }\n    $commands += $pending.Result\n    $read += 1\n    $pending = $stdin.ReadLineAsync()\n"));
+  assert.deepEqual(SCRIPT.match(/\$line = [^\n]*/g)?.length, 4, "the failed line, another app, the Spotify session, no session");
+  assert.ok(SCRIPT.includes(`  $line = '{"error":true}'\n`), "the failed line is fixed text");
 });
 
 test("the script's only calls on the system, and its only controls: play, pause and next", () => {
