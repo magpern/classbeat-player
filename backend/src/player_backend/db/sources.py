@@ -101,11 +101,13 @@ def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[Source
             else:
                 yield entry
             return
-        yield Refused(
-            "unknown",
-            same_token_over=_over(db, keys.same_token, SAME_TOKEN_WINDOW, SAME_TOKEN_MAX),
-            unknown_over=_over(db, keys.unknown_tokens, UNKNOWN_WINDOW, UNKNOWN_MAX),
+        # The address's counter first (section 10). An address over its limit of unknown tokens
+        # is refused by that alone, and gets no counter row for each further token it makes up.
+        unknown_over = _over(db, keys.unknown_tokens, UNKNOWN_WINDOW, UNKNOWN_MAX)
+        same_token_over = not unknown_over and _over(
+            db, keys.same_token, SAME_TOKEN_WINDOW, SAME_TOKEN_MAX
         )
+        yield Refused("unknown", same_token_over=same_token_over, unknown_over=unknown_over)
 
 
 @contextmanager

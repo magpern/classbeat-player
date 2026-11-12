@@ -89,11 +89,28 @@ def _no_constant(_: str) -> Any:
     raise _Rejected
 
 
+def _holds_nul(value: Any) -> bool:
+    # PostgreSQL's text and jsonb cannot hold U+0000, so no string of the envelope may carry it.
+    # A loop, not recursion: the parser already accepted the depth, and a walk must not fail on it.
+    stack: list[Any] = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return True
+        elif isinstance(item, dict):
+            stack.extend(item.items())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)  # pyright: ignore[reportUnknownArgumentType]
+    return False
+
+
 def _parse(raw: bytes) -> Any:
     try:
-        return json.loads(raw, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
+        parsed = json.loads(raw, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
     except (ValueError, RecursionError):
         return None
+    return None if _holds_nul(parsed) else parsed
 
 
 def _number(value: object) -> int | None:

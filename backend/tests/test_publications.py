@@ -147,6 +147,7 @@ def test_the_sync_cursor_moves_once_per_applied_publication(
         ({"source_class_id": "x" * 101}, "invalid_publication"),
         ({"removed": True}, "invalid_publication"),
         ({"source_id": "other"}, "invalid_publication"),
+        ({"source_class_id": "c\x00"}, "invalid_publication"),
         ({"document": {"format_version": "1.0"}}, "invalid_publication"),
     ],
 )
@@ -208,6 +209,33 @@ def test_a_source_reads_its_numbers_and_nothing_else(
     assert app.get(f"{sh.CLASSES}/nope", headers=sh.bearer(token)).status_code == 404
 
 
+def test_a_nul_in_a_document_string_is_refused(site: Site, linked: tuple[Browser, str]) -> None:
+    app, token = linked
+    doc = sh.document()
+    doc["intervals"][0]["cue"] = "a\x00b"
+    answer = sh.publish(app, token, sh.envelope("c1", 1, doc))
+    assert answer.status_code == 422 and answer.json() == {"error": "invalid_publication"}
+    assert site.su.execute("SELECT count(*) FROM player.classes").fetchone() == (0,)
+
+
+def test_a_source_never_reads_another_sources_numbers(
+    site: Site, linked: tuple[Browser, str]
+) -> None:
+    app, token = linked
+    sh.publish(app, token, sh.envelope("seed", 1, sh.document()))
+    # The same class id from another source in the same account.
+    site.su.execute(
+        "INSERT INTO player.classes (account_id, source_id, source_class_id, publication_number, "
+        "kind, content_hash, published_at, sync_position, document) "
+        "SELECT account_id, 'other', 'c1', 9, 'class', content_hash, now(), 1, document "
+        "FROM player.classes WHERE source_class_id = 'seed'"
+    )
+    assert app.get(f"{sh.CLASSES}/c1", headers=sh.bearer(token)).status_code == 404
+    sh.publish(app, token, sh.envelope("c1", 2, sh.document()))
+    read = app.get(f"{sh.CLASSES}/c1", headers=sh.bearer(token))
+    assert read.json()["highest_publication_number"] == 2
+
+
 def test_at_most_2000_classes_per_account(site: Site, linked: tuple[Browser, str]) -> None:
     app, token = linked
     sh.publish(app, token, sh.envelope("seed", 1, sh.document()))
@@ -217,8 +245,14 @@ def test_at_most_2000_classes_per_account(site: Site, linked: tuple[Browser, str
         "SELECT c.account_id, 'classbeat', 'bulk-' || n, 1, 'class', c.content_hash, now(), "
         "1, c.document FROM player.classes c, generate_series(1, 1999) n"
     )
+    cursor = "SELECT position FROM player.account_sync"
+    before = site.su.execute(cursor).fetchone()
     full = sh.publish(app, token, sh.envelope("one-more", 1, sh.document()))
     assert full.status_code == 409 and full.json()["error"] == "too_many_classes"
+    # The refusal is undone to its savepoint: no placeholder row, and the cursor stays.
+    held = "SELECT count(*) FROM player.classes WHERE source_class_id = 'one-more'"
+    assert site.su.execute(held).fetchone() == (0,)
+    assert site.su.execute(cursor).fetchone() == before
     # A class that is already held may still change, and a removal makes room.
     assert sh.publish(app, token, sh.envelope("seed", 2, sh.document("New"))).status_code == 200
     assert sh.publish(app, token, sh.envelope("bulk-1", 2, None)).status_code == 200
