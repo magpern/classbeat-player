@@ -24,6 +24,7 @@ from player_backend.login_policy import (
     retry_after,
     sign_in_mail,
 )
+from player_backend.mail_delivery import deliver
 from player_backend.site.cookies import login_cookie_token, put_login_cookie, put_session_cookie
 from player_backend.site.deps import TheCaller
 from player_backend.site.state import site_state
@@ -74,7 +75,7 @@ def request_link(
     if outcome == "mail":
         # Sent after the response, so the time taken tells nothing.
         mail = sign_in_mail(state.settings.site_origin, email, link_token)
-        response.background = BackgroundTask(state.mailer.send, mail)
+        response.background = BackgroundTask(deliver, state.mailer, mail)
     return response
 
 

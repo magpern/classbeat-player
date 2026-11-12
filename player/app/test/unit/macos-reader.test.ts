@@ -177,11 +177,18 @@ test("Spotify not running, or with nothing loaded: no reading, and nothing is do
     r.clock.t = 250;
     r.tick();
     r.calls[1].done(null, out);
-    assert.equal(r.mac.latest(250), null);
-    r.clock.t = 500;
+    // Stopped is also what Spotify says between two songs: held for one poll (issue #51, item 4).
+    if (out === "stopped\n") {
+      assert.equal(r.mac.latest(250)?.seenAt, 0, "the reading it had, as it was");
+      r.clock.t = 500;
+      r.tick();
+      r.calls[2].done(null, out);
+    }
+    assert.equal(r.mac.latest(r.clock.t), null);
+    r.clock.t += 250;
     r.tick();
-    assert.deepEqual(r.calls[2].args, READ_ARGS, "it keeps asking with the same read script only");
-    assert.equal(r.calls.length, 3);
+    assert.deepEqual(r.calls.at(-1)?.args, READ_ARGS, "it keeps asking with the same read script only");
+    assert.equal(r.calls.length, out === "stopped\n" ? 4 : 3);
   }
 });
 

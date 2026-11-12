@@ -88,7 +88,7 @@ def test_the_mailer_without_a_mail_service_logs_nothing_of_the_mail(
 ) -> None:
     configure_logging("INFO")
     token = new_token("ml")
-    NoMailer().send(sign_in_mail("https://player.test", EMAIL, token))
+    NoMailer().send(sign_in_mail("https://player.test", EMAIL, token), timeout=1.0)
     out = capsys.readouterr().out
     assert "mail.not_configured" in out
     assert token not in out and EMAIL not in out and "sign-in" not in out

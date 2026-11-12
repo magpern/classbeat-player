@@ -39,7 +39,10 @@ _CLEAN = (
 class RecordingMailer:
     sent: list[Mail] = field(default_factory=list[Mail])
 
-    def send(self, mail: Mail) -> None:
+    timeouts: list[float] = field(default_factory=list[float])
+
+    def send(self, mail: Mail, *, timeout: float) -> None:
+        self.timeouts.append(timeout)
         self.sent.append(mail)
 
 

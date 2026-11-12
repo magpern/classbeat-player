@@ -58,6 +58,7 @@ function renderLink(s: Snapshot): void {
   hide("link", k === null);
   if (!k) return;
   setText("link-state", k.state);
+  hide("link-unavailable", !k.unavailable);
   hide("link-guess", !k.guessing);
   hide("link-hold", !k.held);
   hide("link-announcement", k.announcement === null);

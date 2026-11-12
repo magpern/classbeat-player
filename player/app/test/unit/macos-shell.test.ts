@@ -195,7 +195,9 @@ test("the preload bridge is unchanged: the same four functions and no new channe
 });
 
 test("no Spotify token, sign-in or developer interface, and no network, in the reader", () => {
-  for (const path of ["main/macos-reader.ts", "main/select-music.ts", "core/link/macos-scripts.ts", "core/link/macos-parse.ts", "core/link/transport.ts"]) {
+  // The modules every reader shares (issue #51) are held to the same.
+  const shared = ["main/polled-reader.ts", "core/link/reader-lifecycle.ts", "core/link/call-slot.ts", "core/link/between-songs.ts"];
+  for (const path of ["main/macos-reader.ts", "main/select-music.ts", "core/link/macos-scripts.ts", "core/link/macos-parse.ts", "core/link/transport.ts", ...shared]) {
     assert.doesNotMatch(src(path), /token|oauth|client.?id|bearer|authoriz|https?:|fetch\(|node:net|node:http|node:dns|node:fs|process\.env/i, path);
   }
 });

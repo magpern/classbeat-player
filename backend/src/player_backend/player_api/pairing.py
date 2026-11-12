@@ -19,6 +19,7 @@ from player_backend.code_policy import code_hash, show_code
 from player_backend.db import pairing
 from player_backend.http_errors import ApiError, error_response
 from player_backend.login_policy import retry_after
+from player_backend.mail_delivery import deliver
 from player_backend.pairing_policy import (
     EXPIRES_IN,
     INTERVAL,
@@ -106,5 +107,5 @@ def token(body: PairingPoll, request: Request, who: TheCaller) -> JSONResponse:
     response = JSONResponse({"device_token": device_token, "email": email})
     # Section 6: the account is told, after the response.
     mail = paired_mail(state.settings.site_origin, email)
-    response.background = BackgroundTask(state.mailer.send, mail)
+    response.background = BackgroundTask(deliver, state.mailer, mail)
     return response
