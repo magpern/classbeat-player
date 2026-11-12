@@ -2,26 +2,18 @@
 // Main process only. It runs nothing until the instructor picks Follow, never starts Spotify,
 // uses no Spotify token and no network. Every call is one of the fixed scripts in
 // core/link/macos-scripts.ts, run without a shell, with a timeout; a failed, hung or unreadable
-// call leaves the last reading to age (rule 8) and never throws.
+// call leaves the last reading to age (rule 8) and never throws. This module holds only the
+// helper (osascript) and the parsing; when it runs, which reading it holds and when a command
+// may go are the shared lifecycle's (core/link/reader-lifecycle.ts, main/polled-reader.ts).
 import { execFile } from "node:child_process";
-import { performance } from "node:perf_hooks";
 import { parseMacOutput } from "../core/link/macos-parse.ts";
 import { MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../core/link/macos-scripts.ts";
-import type { MacScriptName } from "../core/link/macos-scripts.ts";
 import type { MusicReader } from "../core/link/reader.ts";
-import type { MusicTransport, TransportAction } from "../core/link/transport.ts";
-import type { Observation } from "../core/link/types.ts";
+import type { MusicTransport } from "../core/link/transport.ts";
+import { callWith, createPolledReader, systemEvery, systemNow } from "./polled-reader.ts";
+import type { ExecFileFn, ExecOptions, PollDeps } from "./polled-reader.ts";
 
-export interface ExecOptions {
-  readonly timeout: number;
-  readonly maxBuffer: number;
-  readonly killSignal: "SIGKILL";
-  readonly windowsHide: true;
-  readonly shell: false;
-  readonly encoding: "utf8";
-}
-
-export type ExecFileFn = (file: string, args: readonly string[], options: ExecOptions, done: (error: Error | null, stdout: string) => void) => void;
+export type { ExecFileFn, ExecOptions } from "./polled-reader.ts";
 
 export const EXEC_OPTIONS: ExecOptions = Object.freeze({
   timeout: MAC_TIMEOUT_MS,
@@ -39,111 +31,33 @@ const systemExec: ExecFileFn = (file, args, options, done) => {
   execFile(file, [...args], options, (error, stdout) => done(error, stdout));
 };
 
-const systemEvery = (fn: () => void, ms: number): (() => void) => {
-  const timer = setInterval(fn, ms);
-  timer.unref();
-  return () => clearInterval(timer);
-};
-
-export interface MacDeps {
-  readonly exec?: ExecFileFn;
-  readonly now?: () => number;
-  /** Starts a repeating timer and returns the function that stops it. */
-  readonly every?: (fn: () => void, ms: number) => () => void;
-}
+export type MacDeps = PollDeps;
 
 export interface MacMusic extends MusicReader, MusicTransport {
   readonly kind: "macos";
   setActive(on: boolean): void;
+  unavailable(): boolean;
 }
 
 export function createMacMusic(deps: MacDeps = {}): MacMusic {
-  const runFile = deps.exec ?? systemExec;
-  const now = deps.now ?? (() => performance.now());
-  const every = deps.every ?? systemEvery;
+  const now = deps.now ?? systemNow;
+  /** Runs one allowlisted script, by its name. */
+  const call = callWith(deps.exec ?? systemExec, OSASCRIPT, EXEC_OPTIONS, now);
 
-  let last: Observation | null = null;
-  let stopTimer: (() => void) | null = null;
-  // One call of each kind at a time. `since` is when the call in flight began; an answer to
-  // anything but the newest call (following stopped meanwhile, or the call was given up) is dropped.
-  let readSince: number | null = null;
-  let readCall = 0;
-  let sendSince: number | null = null;
-  let sendCall = 0;
-  // A command sent while another is in flight waits here: at most one, and a newer one replaces
-  // an older one (the instructor's latest intent wins). It is never dropped silently.
-  let waiting: TransportAction | null = null;
-  const inFlight = (since: number | null, t: number): boolean => since !== null && t - since < GIVE_UP_MS;
-
-  /** Runs one allowlisted script; `done` gets its output, or null on any failure or timeout. */
-  function run(name: MacScriptName, done: (stdout: string | null) => void): void {
-    let answered = false;
-    const once = (stdout: string | null): void => {
-      if (answered) return;
-      answered = true;
-      done(stdout);
-    };
-    const args = osascriptArgs(name);
-    if (args === null) return once(null);
-    try {
-      runFile(OSASCRIPT, args, EXEC_OPTIONS, (error, stdout) => once(error === null && typeof stdout === "string" ? stdout : null));
-    } catch {
-      once(null);
-    }
-  }
-
-  function poll(): void {
-    const before = now();
-    if (stopTimer === null || inFlight(readSince, before)) return;
-    readSince = before;
-    const mine = ++readCall;
-    run("read", (stdout) => {
-      if (mine !== readCall) return;
-      readSince = null;
-      if (stdout === null) return;
-      const after = now();
-      // The position was read somewhere inside the call: take the midpoint.
-      const parsed = parseMacOutput(stdout, (before + after) / 2, after);
-      if (parsed.kind === "reading") last = parsed.obs;
-      else if (parsed.kind === "closed") last = null;
-    });
-  }
-
-  function sendNow(action: TransportAction): void {
-    waiting = null;
-    sendSince = now();
-    const mine = ++sendCall;
-    run(action, () => {
-      if (mine !== sendCall) return;
-      sendSince = null;
-      const next = waiting;
-      if (next !== null && stopTimer !== null) sendNow(next);
-    });
-  }
-
-  return {
-    kind: "macos",
-    latest: () => last,
-    setActive(on) {
-      if (on === (stopTimer !== null)) return;
-      if (on) {
-        stopTimer = every(poll, MAC_POLL_MS);
-        poll();
-        return;
-      }
-      stopTimer?.();
-      stopTimer = null;
-      readCall += 1;
-      readSince = null;
-      sendCall += 1;
-      sendSince = null;
-      waiting = null;
-      last = null;
+  const life = createPolledReader(
+    {
+      pollMs: MAC_POLL_MS,
+      giveUpMs: GIVE_UP_MS,
+      read: (done) => call(osascriptArgs("read"), done),
+      parse(out, at, seenAt) {
+        const parsed = parseMacOutput(out, at, seenAt);
+        return parsed.kind === "garbage" ? null : parsed;
+      },
+      command: (action, done) => call(osascriptArgs(action), () => done()),
     },
-    send(action) {
-      if (stopTimer === null) return;
-      if (inFlight(sendSince, now())) waiting = action;
-      else sendNow(action);
-    },
-  };
+    now,
+    deps.every ?? systemEvery,
+  );
+
+  return { kind: "macos", latest: life.latest, setActive: life.setActive, send: life.send, unavailable: life.unavailable };
 }

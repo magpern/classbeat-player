@@ -8,6 +8,8 @@ export interface LinkView {
   readonly mode: "following" | "manual";
   /** False when no reader exists or the class is manual only: there is nothing to follow. */
   readonly available: boolean;
+  /** A reader exists but cannot work on this computer: the reason following is not offered. */
+  readonly unavailable: boolean;
   readonly state: LinkStateName;
   /** The clock is marked on screen while it only guesses (Coasting, Off the list). */
   readonly guessing: boolean;
@@ -32,13 +34,14 @@ export interface LinkView {
 /** A measured crossfade this close to the planned one is not worth a remark. */
 export const CROSSFADE_DIFF_MS = 1000;
 
-export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean): LinkView {
+export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean, unavailable = false): LinkView {
   const live = l.announce !== null && now <= l.announce.until;
   const holdRemaining = l.held && l.holdUntil !== null ? Math.max(0, l.holdUntil - now) : null;
   const measured = l.measuredCrossfadeMs;
   return {
     mode: l.mode,
     available,
+    unavailable,
     state: l.state,
     guessing: l.state === "Coasting" || l.state === "Off the list",
     songIndex: l.songIndex,

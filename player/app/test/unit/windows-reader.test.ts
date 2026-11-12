@@ -2,14 +2,16 @@
 // crash, garbage and no Spotify session all end as null or an ageing reading (rule 8), and the
 // helper is replaced after a growing wait; another app playing is a reading with that app's id
 // only; commands are bounded to one in flight and one waiting. Nothing here starts a process.
+// What the helper's count of commands read adds is in test/unit/windows-ack.test.ts, and a
+// helper that can never start in test/unit/reader-unavailable.test.ts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_LINK_CONFIG, isCurrent } from "../../src/core/link/index.ts";
 import { backoffMs } from "../../src/main/readers/helper-supervisor.ts";
-import { COMMAND_ANSWER_LINES, createWindowsMusic, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
+import { createWindowsMusic, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
 import type { WindowsMusic } from "../../src/main/readers/windows-reader.ts";
 import { MAX_LINE_LENGTH } from "../../src/core/link/windows-parse.ts";
-import { createHarness, NO_SESSION, OTHER_APP, sessionLine } from "./windows-harness.ts";
+import { createHarness, NO_SESSION, noSession, OTHER_APP, sessionLine } from "./windows-harness.ts";
 import type { Harness } from "./windows-harness.ts";
 
 function following(): { h: Harness; r: WindowsMusic } {
@@ -90,16 +92,23 @@ test("another app playing is a reading with that app's id and nothing of its own
   assert.equal(r.latest(h.now)?.title, "Back");
 });
 
-test("a playing position with no usable age gives no reading, and the helper is left running", () => {
+test("a playing position with no usable age gives no reading: the last good one ages (rule 8), and the helper is left running", () => {
   const { h, r } = following();
   h.child.line(sessionLine());
+  const good = r.latest(h.now);
+  assert.equal(good?.seenAt, h.now);
   for (let i = 0; i < 40; i++) {
     h.advance(250);
     h.child.line(sessionLine({ positionMs: 0, lastUpdatedUtcMs: -11_644_473_600_000 }));
-    assert.equal(r.latest(h.now), null);
+    assert.equal(r.latest(h.now), good, "the same old reading, never the undated one");
   }
+  assert.equal(good && isCurrent(good, h.now, DEFAULT_LINK_CONFIG.staleMs), false, "and it went stale by its own time");
   assert.equal(h.children.length, 1);
   assert.equal(h.child.killed, false);
+
+  const fresh = following();
+  fresh.h.child.line(sessionLine({ positionMs: 0, lastUpdatedUtcMs: -11_644_473_600_000 }));
+  assert.equal(fresh.r.latest(fresh.h.now), null, "before anything was read: no reading");
 });
 
 test("hang after readings: the old reading ages and goes stale, then the helper is replaced", () => {
@@ -153,12 +162,16 @@ test("a helper that cannot be started is retried with the same growing wait, and
   h.failSpawn = true;
   const r = createWindowsMusic(h.deps);
   assert.doesNotThrow(() => r.setActive(true));
-  h.advance(300_000);
+  // Tries at 0, 1, 3 and 7 s have failed; the fifth is due at 15 s.
+  h.advance(14_000);
   assert.equal(h.children.length, 0);
   assert.equal(r.latest(h.now), null);
+  assert.equal(r.unavailable(), false);
   h.failSpawn = false;
-  h.advance(30_000);
+  h.advance(1000);
   assert.equal(h.children.length, 1, "it starts once it can");
+  h.child.line(sessionLine());
+  assert.equal(r.latest(h.now)?.title, "Spike Song A");
 });
 
 test("a helper that has run well for a while starts again from the short wait", () => {
@@ -246,12 +259,10 @@ test("turning following off and on cannot start helpers faster than one a second
   assert.equal(h.children.length, 2, "a pending start is cancelled when following stops");
 });
 
-/** The helper answers: enough good lines for a written command to count as done. */
+/** The helper answers: a good line that says it has read every command written to it. */
 function answer(h: Harness): void {
-  for (let i = 0; i < COMMAND_ANSWER_LINES; i++) {
-    h.advance(250);
-    h.child.line(NO_SESSION);
-  }
+  h.advance(250);
+  h.child.line(noSession(h.child.written.length));
 }
 
 function ready(): { h: Harness; r: WindowsMusic } {
@@ -298,9 +309,9 @@ test("one in flight and one waiting: a double Next is two nexts, and a newer com
   assert.deepEqual(h.child.written, ["next\n"], "one at a time");
   h.advance(250);
   h.child.line(NO_SESSION);
-  assert.equal(h.child.written.length, 1, "the first line after a write may have been on its way already");
+  assert.equal(h.child.written.length, 1, "a line from before the helper read the command is not its answer");
   h.advance(250);
-  h.child.line(NO_SESSION);
+  h.child.line(noSession(1));
   assert.deepEqual(h.child.written, ["next\n", "next\n"]);
   answer(h);
   answer(h);

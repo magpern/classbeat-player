@@ -2,17 +2,19 @@
 // The answer is one `a{sv}` dictionary of the MPRIS player's properties, every value wrapped as
 // `{"type": <D-Bus signature>, "data": <value>}`. A value is used only when its signature is the
 // one MPRIS names; anything else is garbage and is never guessed at.
+import { readingOf, STOPPED } from "./between-songs.ts";
 import { isOtherPlayer, LINUX_MAX_OUTPUT_BYTES, MAX_OTHER_PLAYERS } from "./linux-calls.ts";
+import type { Answer } from "./reader-lifecycle.ts";
 import type { Observation } from "./types.ts";
 
-export type LinuxParse =
-  | { readonly kind: "reading"; readonly obs: Observation }
-  /** Spotify has nothing loaded. (Spotify not running is a failed call, not an answer.) */
-  | { readonly kind: "closed" }
-  | { readonly kind: "garbage" };
+/**
+ * A reading; "closed" when Spotify has nothing loaded (stopped, which it also is for a moment
+ * between two songs: marked `between`); or garbage. Spotify not running is a failed call, not
+ * an answer.
+ */
+export type LinuxParse = Answer | { readonly kind: "garbage" };
 
 const GARBAGE: LinuxParse = { kind: "garbage" };
-const CLOSED: LinuxParse = { kind: "closed" };
 
 /** Longer titles and artists are cut; they are only compared with the class's songs. */
 export const MAX_TEXT_LENGTH = 500;
@@ -61,7 +63,7 @@ export function parseLinuxOutput(stdout: string, at: number, seenAt: number): Li
   if (!isDict(props)) return GARBAGE;
 
   const status = value(props, "PlaybackStatus", ["s"]);
-  if (status === "Stopped") return CLOSED;
+  if (status === "Stopped") return STOPPED;
   if (status !== "Playing" && status !== "Paused") return GARBAGE;
   const position = count(value(props, "Position", ["x"]));
   if (position === null || position > MAX_POSITION_US) return GARBAGE;
@@ -74,20 +76,17 @@ export function parseLinuxOutput(stdout: string, at: number, seenAt: number): Li
   const length = count(value(meta, "mpris:length", ["x", "t"]));
   const id = text(value(meta, "mpris:trackid", ["o", "s"]));
 
-  return {
-    kind: "reading",
-    obs: {
-      title: title.slice(0, MAX_TEXT_LENGTH),
-      artist: artist.slice(0, MAX_TEXT_LENGTH),
-      lengthMs: length !== null && length > 0 ? Math.round(length / 1000) : null,
-      trackId: id === null || id === "" || id === NO_TRACK ? null : id.slice(0, MAX_TEXT_LENGTH),
-      app: "Spotify",
-      positionMs: Math.round(position / 1000),
-      playing: status === "Playing",
-      at,
-      seenAt,
-    },
-  };
+  return readingOf({
+    title: title.slice(0, MAX_TEXT_LENGTH),
+    artist: artist.slice(0, MAX_TEXT_LENGTH),
+    lengthMs: length !== null && length > 0 ? Math.round(length / 1000) : null,
+    trackId: id === null || id === "" || id === NO_TRACK ? null : id.slice(0, MAX_TEXT_LENGTH),
+    app: "Spotify",
+    positionMs: Math.round(position / 1000),
+    playing: status === "Playing",
+    at,
+    seenAt,
+  });
 }
 
 /**

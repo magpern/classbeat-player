@@ -40,7 +40,6 @@ export const LINUX_CALLS = Object.freeze({
   names: Object.freeze([...CALL, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames"]),
 } as const);
 
-
 /** A well-formed bus name of an MPRIS player: letters, digits, `_`, `-` and `.` only. */
 const PLAYER_NAME = /^org\.mpris\.MediaPlayer2\.[A-Za-z0-9_][A-Za-z0-9_.-]{0,100}$/;
 

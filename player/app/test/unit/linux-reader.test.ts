@@ -1,8 +1,9 @@
 // The Linux reader at its edge, with a fake execFile: nothing here starts a process or talks to
 // a D-Bus. It covers the exact calls (a fixed allowlist, no shell, nothing interpolated, one bus
 // name, no service start), a timeout, an error, Spotify not running, garbage output, a call that
-// never answers, and when it runs at all. Other players, the age of a reading and the gate on
-// commands are in test/unit/linux-others.test.ts.
+// never answers, and when it runs at all. Other players are in test/unit/linux-others.test.ts,
+// the age of a reading in test/unit/linux-age.test.ts and the gate on commands in
+// test/unit/linux-commands.test.ts.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -224,11 +225,16 @@ test("Spotify with nothing loaded: no reading, and nothing is done about it", ()
   r.clock.t = 250;
   r.tick();
   r.calls[1].done(null, STOPPED);
-  assert.equal(r.linux.latest(250), null);
+  // Stopped is also what Spotify says between two songs: held for one poll (issue #51, item 4).
+  assert.equal(r.linux.latest(250)?.seenAt, 0, "the reading it had, as it was");
   r.clock.t = 500;
   r.tick();
-  assert.deepEqual(r.calls[2].args, READ_ARGS, "it keeps asking with the same read call only");
-  assert.equal(r.calls.length, 3);
+  r.calls[2].done(null, STOPPED);
+  assert.equal(r.linux.latest(500), null);
+  r.clock.t = 750;
+  r.tick();
+  assert.deepEqual(r.calls[3].args, READ_ARGS, "it keeps asking with the same read call only");
+  assert.equal(r.calls.length, 4);
 });
 
 test("a call that never answers is given up, and a late answer to it is dropped", () => {

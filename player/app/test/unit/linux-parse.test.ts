@@ -31,8 +31,10 @@ for (const [file, want] of READINGS) {
   });
 }
 
+// Stopped is also what a player says for a moment between two songs, so it is marked
+// `between` (issue #51, item 4): the reader holds what it had for one poll.
 test("recorded output stopped.json: the music app has nothing loaded", () => {
-  assert.deepEqual(parseLinuxOutput(fx("stopped.json"), AT, SEEN), { kind: "closed" });
+  assert.deepEqual(parseLinuxOutput(fx("stopped.json"), AT, SEEN), { kind: "closed", between: true });
 });
 
 const s = (data: unknown): unknown => ({ type: "s", data });
@@ -106,8 +108,8 @@ test("garbage of another type than text is refused as well", () => {
 });
 
 test("a stopped player is closed whatever else it says", () => {
-  assert.deepEqual(parseLinuxOutput(answer({ PlaybackStatus: s("Stopped") }), AT, SEEN), { kind: "closed" });
-  assert.deepEqual(parseLinuxOutput(withProp("PlaybackStatus", s("Stopped")), AT, SEEN), { kind: "closed" });
+  assert.deepEqual(parseLinuxOutput(answer({ PlaybackStatus: s("Stopped") }), AT, SEEN), { kind: "closed", between: true });
+  assert.deepEqual(parseLinuxOutput(withProp("PlaybackStatus", s("Stopped")), AT, SEEN), { kind: "closed", between: true });
 });
 
 const obsOf = (out: string) => {
@@ -126,6 +128,18 @@ test("a title or artist the player does not state is empty, and matches nothing"
   const bare = obsOf(withProp("Metadata", { type: "a{sv}", data: {} }));
   assert.deepEqual([bare.title, bare.artist, bare.lengthMs, bare.trackId], ["", "", null, null]);
   assert.equal(obsOf(withMeta("xesam:artist", { type: "as", data: [] })).artist, "");
+});
+
+test("playing with neither a title nor an artist is what a player says between two songs: marked, and still a reading", () => {
+  const empty = { type: "a{sv}", data: {} };
+  const bare = parseLinuxOutput(withProp("Metadata", empty), AT, SEEN);
+  assert.deepEqual(bare, { kind: "reading", obs: { title: "", artist: "", lengthMs: null, trackId: null, app: "Spotify", positionMs: 1500, playing: true, at: AT, seenAt: SEEN }, between: true });
+  // Paused with nothing named, or playing with a title or an artist, is a reading as it stands.
+  for (const out of [answer({ ...PROPS, PlaybackStatus: s("Paused"), Metadata: empty }), withMeta("xesam:title", s("")), withMeta("xesam:artist", { type: "as", data: [] }), GOOD]) {
+    const r = parseLinuxOutput(out, AT, SEEN);
+    assert.equal(r.kind, "reading");
+    assert.ok(!("between" in r), out);
+  }
 });
 
 test("an unreadable length or id is left out, and long text is cut", () => {

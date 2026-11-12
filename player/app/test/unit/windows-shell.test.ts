@@ -12,7 +12,7 @@ import { createWindowsMusic } from "../../src/main/readers/windows-reader.ts";
 import { selectMusic } from "../../src/main/select-music.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import { converterExamples, EXAMPLES } from "./fixtures.ts";
-import { createHarness, NO_SESSION, OTHER_APP, sessionLine } from "./windows-harness.ts";
+import { createHarness, NO_SESSION, noSession, OTHER_APP, sessionLine } from "./windows-harness.ts";
 import { REPO } from "./fixtures.ts";
 
 const text = readFileSync(converterExamples()[0], "utf8");
@@ -91,10 +91,11 @@ test("music commands reach the helper only while following; stopping the shell s
   h.child.line(NO_SESSION);
   assert.deepEqual(h.child.written, ["pause\n"]);
   c.music("next");
-  for (let i = 0; i < 2; i++) {
-    h.advance(250);
-    h.child.line(NO_SESSION);
-  }
+  h.advance(250);
+  h.child.line(NO_SESSION);
+  assert.deepEqual(h.child.written, ["pause\n"], "the helper has not read the first command yet");
+  h.advance(250);
+  h.child.line(noSession(1));
   assert.deepEqual(h.child.written, ["pause\n", "next\n"]);
   c.command({ type: "manual" });
   h.advance(1000);
