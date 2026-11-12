@@ -556,12 +556,18 @@ It also has `EXECUTE` on the functions below. Nothing else.
 | `sessions`, `devices` | `SELECT`, `INSERT`, `UPDATE (last_used_at)`, `DELETE` |
 | `source_links` | `SELECT`, `INSERT`, `UPDATE (last_used_at)` |
 | `passkeys` | `SELECT`, `UPDATE (sign_count, last_used_at)` |
-| `audit_events` | `INSERT`, `DELETE` |
+| `audit_events` | `INSERT`, `SELECT (occurred_at)`, `DELETE` |
 | `classes`, `account_sync`, `passkey_registrations` | None |
 
 `player_auth` deletes from `sessions` for the cap of 20 and for expiry, from `devices` for old
 revoked and never-used rows, and from `audit_events` for retention. Those are the only ways an
 event is removed, apart from the deletion of its whole account.
+The retention purge's `DELETE … WHERE occurred_at < …` needs `SELECT` on that one column
+(amended 2026-11-12, from the review of PR #32).
+
+The migration ledger `player_meta.schema_migrations` is reachable by `player_owner` only; it is
+neither a tenant table nor a closed table, and the guard tests treat the `player_meta` schema as
+outside both lists (amended 2026-11-12).
 
 **Setting the account.** An `auth_enter_*` function looks a credential up by its hash, checks
 that it is valid, and then runs `set_config('app.account_id', <account id>, true)`. The value is
