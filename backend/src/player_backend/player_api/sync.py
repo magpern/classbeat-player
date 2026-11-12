@@ -9,7 +9,7 @@
 - `GET /api/player/cursor`: the account's current cursor.
 
 Everything is the device token's account (deps.py); nothing is written here. The parameters
-are taken as raw text and parsed by `sync_policy.py`, so that a malformed one is refused by the
+are taken as raw text and parsed by `sync_policy.py` and `param_policy.py`, so that a malformed one is refused by the
 route (`422 invalid_request`) and still counts as the token's use (section 10): a value the
 framework refused would roll back what `auth_enter_device` and the counters wrote.
 """
@@ -22,7 +22,8 @@ from fastapi.responses import JSONResponse
 from player_backend.db import class_sync
 from player_backend.http_errors import ApiError
 from player_backend.player_api.deps import DeviceToken
-from player_backend.sync_policy import class_id_of, needs_resync, page_request
+from player_backend.param_policy import uuid_of
+from player_backend.sync_policy import needs_resync, page_request
 
 router = APIRouter(prefix="/api/player")
 
@@ -65,7 +66,7 @@ def changes(
 @router.get("/classes/{class_id}")
 def held_class(class_id: str, context: DeviceToken) -> JSONResponse:
     # Raw text, parsed here, for the same reason as above.
-    parsed = class_id_of(class_id)
+    parsed = uuid_of(class_id)
     if parsed is None:
         raise ApiError(422, "invalid_request")
     found = class_sync.held_class(context, parsed)

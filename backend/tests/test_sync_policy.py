@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from uuid import UUID
-
 import pytest
 
 from player_backend.sync_policy import (
     CURSOR_MAX,
     PAGE_DEFAULT,
     PAGE_MAX,
-    class_id_of,
     is_page_request,
     needs_resync,
     page_of,
@@ -50,23 +47,6 @@ def test_a_page_request_from_the_querys_raw_text() -> None:
         (None, "1.5"),
     ):
         assert page_request(after, limit) is None, (after, limit)
-
-
-def test_a_class_id_in_its_canonical_form_only() -> None:
-    canonical = "1a2b3c4d-0000-4000-8000-00000000000f"
-    assert class_id_of(canonical) == UUID(canonical)
-    assert class_id_of(canonical.upper()) == UUID(canonical)
-    for raw in (
-        "",
-        "not-an-id",
-        canonical.replace("-", ""),
-        "{" + canonical + "}",
-        "urn:uuid:" + canonical,
-        canonical + "\n",
-        " " + canonical,
-        canonical[:-1] + "g",
-    ):
-        assert class_id_of(raw) is None, raw
 
 
 def test_only_a_cursor_above_the_current_one_needs_a_resync() -> None:

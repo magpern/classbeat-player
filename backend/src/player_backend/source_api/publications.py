@@ -7,20 +7,23 @@ end its own link.
   removal. Numbers only: no content.
 - `DELETE /api/source/link`: the source ends its own link. The classes stay.
 
-The source id is always the token's, never the request's.
+The source id is always the token's, never the request's. The body is read as bytes and the
+class key as text, both checked here, so a malformed request is refused by the route and still
+counts as the token's use (section 10; param_policy.py).
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
 from player_backend import publication_policy
 from player_backend.class_schemas import schemas
 from player_backend.db import classes, sources
 from player_backend.http_errors import ApiError
+from player_backend.param_policy import source_class_id_of
 from player_backend.publication_policy import BODY_MAX, Publication
 from player_backend.site.deps import TheCaller
 from player_backend.source_api.deps import AuditedRefusal, SourceToken
@@ -83,15 +86,17 @@ def publish(raw: PublicationBody, entry: SourceToken, who: TheCaller) -> JSONRes
 
 
 @router.get("/classes/{source_class_id}")
-def highest(
-    source_class_id: Annotated[str, Path(min_length=1, max_length=100)], entry: SourceToken
-) -> JSONResponse:
-    found = classes.highest(entry.context, entry.source_id, source_class_id)
+def highest(source_class_id: str, entry: SourceToken) -> JSONResponse:
+    # Raw text, checked here: a value the framework refused would roll back the token's count.
+    class_id = source_class_id_of(source_class_id)
+    if class_id is None:
+        raise ApiError(422, "invalid_request")
+    found = classes.highest(entry.context, entry.source_id, class_id)
     if found is None:
         raise ApiError(404, "not_found")
     return JSONResponse(
         {
-            "source_class_id": source_class_id,
+            "source_class_id": class_id,
             "highest_publication_number": found.number,
             "removed": found.removed,
         }

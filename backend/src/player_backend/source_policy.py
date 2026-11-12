@@ -22,8 +22,9 @@ from player_backend.token_policy import is_token
 
 # Section 7: at most 5 links per account (the function refuses above it as well).
 MAX_LINKS: Final = 5
-# Section 10: source code exchanges, 10 per address per minute; publications, 60 per source
-# token per minute. Every request with a source token is counted under that one limit.
+# Section 10: source code exchanges, 10 per address per minute; source API requests, 60 per
+# source token per minute. Every request with a source token counts under that one limit:
+# publications, number reads and ending the link, refused or not.
 EXCHANGE_WINDOW: Final = timedelta(minutes=1)
 EXCHANGE_MAX: Final = 10
 REQUEST_WINDOW: Final = timedelta(minutes=1)
