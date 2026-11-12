@@ -26,11 +26,8 @@ for name in postgres_password player_owner_password player_app_password player_s
   echo "PLACEHOLDER-$name" >"$tmp/secrets/$name"
   chmod 0440 "$tmp/secrets/$name"
 done
-cat >"$tmp/env" <<EOF
-PLAYER_SECRETS_DIR=$tmp/secrets
-PLAYER_SITE_ORIGIN=https://player.example.com
-PLAYER_TRUSTED_PROXIES=172.31.80.1
-EOF
+# The documented defaults (.env.example), with the secrets directory filled in.
+sed -e "s|^PLAYER_SECRETS_DIR=.*|PLAYER_SECRETS_DIR=$tmp/secrets|" "$root/docker/.env.example" >"$tmp/env"
 
 # --- 1 and 2: compose ------------------------------------------------------------------------
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
@@ -42,12 +39,53 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
   fi
   "${compose[@]}" config --format json >"$tmp/config.json" 2>/dev/null || true
 
-  # A required setting left out must stop the file, not become an empty value.
-  if docker compose -f "$root/docker/compose.backend.yml" --env-file /dev/null config >/dev/null 2>&1; then
-    bad "compose accepted a missing PLAYER_SECRETS_DIR and PLAYER_SITE_ORIGIN"
-  else
-    ok "compose refuses missing required settings"
-  fi
+  # A required setting left out must stop the file, not become an empty value: each on its own.
+  for required in PLAYER_SECRETS_DIR PLAYER_SITE_ORIGIN; do
+    grep -v "^$required=" "$tmp/env" >"$tmp/env.without"
+    if docker compose -f "$root/docker/compose.backend.yml" --env-file "$tmp/env.without" config >/dev/null 2>&1; then
+      bad "compose accepted a missing $required"
+    else
+      ok "compose refuses a missing $required"
+    fi
+  done
+
+  # The backend's own loaders accept the environment compose gives it, without mail (the
+  # documented defaults) and with mail: the real Settings and SmtpSettings read it.
+  load_env() { # load_env <env file> <without-mail|with-mail>
+    docker compose -f "$root/docker/compose.backend.yml" --env-file "$1" config --format json >"$tmp/$2.json" 2>/dev/null
+    python3 - "$root" "$tmp/$2.json" "$2" <<'PY' || fail=1
+import json
+import sys
+
+sys.path.insert(0, sys.argv[1] + "/backend/src")
+from player_backend.settings import Settings
+from player_backend.smtp_settings import SmtpSettings
+
+env = json.load(open(sys.argv[2], encoding="utf-8"))["services"]["backend"]["environment"]
+# Compose leaves out a name with no value; the entrypoint adds the database address.
+env = {key: value for key, value in env.items() if value is not None}
+env["PLAYER_DATABASE_URL"] = "postgresql://player_app:x@db/player"
+settings = Settings.from_env(env)
+smtp = SmtpSettings.from_env(env)
+want_mail = sys.argv[3] == "with-mail"
+if (smtp is not None) != want_mail:
+    sys.exit(f"FAIL: {sys.argv[3]}: mail is {'on' if smtp else 'off'}")
+if settings.site_origin != "https://player.example.com":
+    sys.exit("FAIL: the site origin did not arrive")
+print(f"ok: the backend's loaders accept the compose environment ({sys.argv[3]})")
+PY
+  }
+  load_env "$tmp/env" without-mail
+  printf 'smtp-pw\n' >"$tmp/smtp-pw"
+  {
+    cat "$tmp/env"
+    echo "PLAYER_SMTP_HOST=smtp.example.com"
+    echo "PLAYER_SMTP_FROM=login@player.example.com"
+    echo "PLAYER_SMTP_TLS=starttls"
+    echo "PLAYER_SMTP_USER=login@player.example.com"
+    echo "PLAYER_SMTP_PASSWORD_FILE=$tmp/smtp-pw"
+  } >"$tmp/env.mail"
+  load_env "$tmp/env.mail" with-mail
 
   if ! python3 -I - "$tmp/config.json" <<'PY'; then
 import json
@@ -117,6 +155,13 @@ for port in backend.get("ports", []):
 need(config["networks"]["data"].get("internal") is True, "data network is not internal")
 need(set(services["db"]["networks"]) == {"data"}, "db is not only on the internal network")
 need(set(services["purge"]["networks"]) == {"data"}, "purge is not only on the internal network")
+
+# The database starts as root and hands the init script its own copies (db-entrypoint.sh).
+db = services["db"]
+need(db["entrypoint"] == ["/bin/sh", "/usr/local/bin/db-entrypoint.sh"], "db entrypoint")
+need(not db.get("user"), "db must start as root (the entrypoint reads the secrets)")
+need("group_add" not in db, "db gets no extra group: it reads its secrets as root")
+need(any(t.startswith("/run/dbinit:") for t in db.get("tmpfs", [])), "no /run/dbinit tmpfs")
 
 # Hardening that the secret files' modes rely on.
 for name in ("backend", "migrate", "purge"):
@@ -201,6 +246,22 @@ check_out "migrate connects as player_owner" "OWNER=postgresql://player_owner:ow
 out="$(run_entry admin allowlist add a@b.c)"
 check_out "admin runs as player_owner" "ARGS=-m player_backend.admin allowlist add a@b.c" "$out"
 if run_entry nonsense >/dev/null 2>&1; then bad "an unknown mode started"; else ok "an unknown mode is refused"; fi
+# One password on both sides (the entrypoint's and psql's, in set-role-password.sh), CRLF or LF.
+printf 'crlf-pw\r\n' >"$tmp/mount/player_app_password"
+out="$(run_entry app)"
+check_out "a CRLF password file gives the same password as LF" "APP=postgresql://player_app:crlf-pw@db/player" "$out"
+rule="1{s/\\r\$//;p;q}"
+if [ "$(sed -n "$rule" "$tmp/mount/player_app_password")" = "crlf-pw" ] \
+  && grep -qF -- "sed -n '1{s/\\\\r\\$//;p;q}'" "$root/docker/postgres/set-role-password.sh"; then
+  ok "set-role-password.sh strips CRLF by the same rule"
+else
+  bad "set-role-password.sh does not strip CRLF like the entrypoint"
+fi
+if sh "$root/docker/postgres/set-role-password.sh" postgres /dev/null >/dev/null 2>&1; then
+  bad "set-role-password.sh accepted another role"
+else
+  ok "set-role-password.sh refuses another role"
+fi
 : >"$tmp/mount/player_app_password"
 if run_entry app >/dev/null 2>&1; then bad "an empty password file started the app"; else ok "an empty password file is refused"; fi
 

@@ -19,7 +19,9 @@ url() {
 import sys
 from urllib.parse import quote
 with open(sys.argv[2], encoding="utf-8") as handle:
-    password = handle.read().rstrip("\r\n")
+    # The first line, without its line break (LF or CRLF): the same rule as
+    # docker/postgres/set-role-password.sh, so both sides see one password.
+    password = handle.readline().rstrip("\n").removesuffix("\r")
 if not password:
     sys.exit("empty password file: " + sys.argv[2])
 print("postgresql://%s:%s@%s/%s" % (sys.argv[1], quote(password, safe=""), sys.argv[3], sys.argv[4]))

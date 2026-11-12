@@ -33,14 +33,15 @@ files, not settings.
 | `PLAYER_SECRETS_DIR` | yes | The directory with the four secret files below |
 | `PLAYER_SITE_ORIGIN` | yes | The website's origin, HTTPS, no path. It is what `Origin` must equal and the start of the link in a sign-in mail. The domain is the owner's |
 | `PLAYER_BACKEND_ORIGIN` | no, not read by the backend | The backend's address as the desktop app reaches it. It is the app's setting; kept here so it is set together with the site origin |
-| `PLAYER_TRUSTED_PROXIES` | yes, in practice | Addresses or networks whose `X-Forwarded-For` counts. The host's reverse proxy reaches the published port through the `edge` network (`172.31.80.0/24`), so a proxy on the same host shows up as `172.31.80.1`, which is the default in `.env.example`. If empty, every client looks like the proxy and the sign-in limits count everybody as one address |
+| `PLAYER_TRUSTED_PROXIES` | yes, in practice | Addresses or networks whose `X-Forwarded-For` counts. The host's reverse proxy reaches the published port through the `edge` network (`PLAYER_EDGE_SUBNET`, default `10.213.80.0/24`), so a proxy on the same host shows up as that network's `.1`, `10.213.80.1`, which is the default in `.env.example`. If empty, every client looks like the proxy and the sign-in limits count everybody as one address |
 | `PLAYER_SOURCES` | no | JSON list of the sources that may be linked (ADR 0002, section 7). Empty: none |
 | `PLAYER_LOG_LEVEL` | no | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
 | `PLAYER_BACKEND_PORT` | no | Host port on `127.0.0.1`, default 8000 |
 | `PLAYER_DB_NAME` | no | Database name, default `player`. Fixed at the first start |
 | `PLAYER_BACKEND_VERSION` | no | Tag of the image the compose file builds, default `local` |
+| `PLAYER_EDGE_SUBNET` | no | The `edge` network's range, default `10.213.80.0/24`, outside Docker's default pools (172.17 to 172.31, 192.168). If it collides with a network on the host, pick another free range and set `PLAYER_TRUSTED_PROXIES` to its `.1` in the same change; then `compose up -d` recreates the network |
 | `PLAYER_PURGE_MINUTE` | no | Minute of the hour for the purge, 0 to 59, default 17 |
-| `PLAYER_SMTP_HOST`, `PLAYER_SMTP_TLS`, `PLAYER_SMTP_PORT`, `PLAYER_SMTP_FROM`, `PLAYER_SMTP_USER`, `PLAYER_SMTP_PASSWORD_FILE`, `PLAYER_SMTP_HELO_NAME` | no | Mail (backend README, "Mail"). Without a host every mail is dropped. With one, set `PLAYER_SMTP_FROM`, and `PLAYER_SMTP_USER` together with `PLAYER_SMTP_PASSWORD_FILE=/run/secrets/player_smtp_password` |
+| `PLAYER_SMTP_HOST`, `PLAYER_SMTP_TLS`, `PLAYER_SMTP_PORT`, `PLAYER_SMTP_FROM`, `PLAYER_SMTP_USER`, `PLAYER_SMTP_PASSWORD_FILE`, `PLAYER_SMTP_HELO_NAME` | no | Mail (backend README, "Mail"). Leave all of them out (commented) and every mail is dropped; the backend refuses any `PLAYER_SMTP_` setting, even an empty one, unless the host is set, so never leave one blank. With a host, set `PLAYER_SMTP_FROM`, and `PLAYER_SMTP_USER` together with `PLAYER_SMTP_PASSWORD_FILE=/run/secrets/player_smtp_password` |
 
 ### Secrets
 
@@ -65,8 +66,13 @@ echo unused >player_smtp_password                           # replace with the m
 chgrp 10010 ./*; chmod 0440 ./*
 ```
 
-The containers run as user 10001 with the extra group 10010, so a file readable by group 10010
-(mode 0440) is what the compose file expects. Never make a secret file world-readable.
+The services run as user 10001 with the extra group 10010, so a file readable by group 10010
+(mode 0440) is what the compose file expects. `db` is the exception: the postgres image drops
+the extra group when it switches to the `postgres` user, so `db` starts as root, reads its
+files as root and gives the init script a copy of the two role passwords in a memory-only
+directory that only `postgres` can read (`docker/postgres/db-entrypoint.sh`). The copies are
+removed after the first start. Never make a secret file world-readable. A password is its
+file's first line without the line break (LF or CRLF), on both sides.
 A password may hold any characters; the entrypoint escapes it.
 
 ## First start
@@ -132,23 +138,23 @@ over, by design.
 ## Backup (owner)
 
 ```bash
-compose exec -T db pg_dump -U postgres -Fc player >player-$(date +%F).dump
+compose exec -T db sh -c 'pg_dump -U postgres -Fc "$POSTGRES_DB"' >player-$(date +%F).dump
 ```
 
 Store the dump encrypted and off the server. The dump holds hashes, never a token or a password.
 
 ## Rotating a database password
 
-1. Write the new value to the file in `PLAYER_SECRETS_DIR` (mode as above).
-2. Change the role, reading the file as the init script does:
+1. Overwrite the file in `PLAYER_SECRETS_DIR` **in place** (`cat >file`, not a new file that
+   replaces it): a container sees a replaced file only after it is recreated, and `db` too.
+   Keep mode 0440 and group 10010.
+2. Change the role from the same file, as root in the `db` container:
    ```bash
-   compose exec db psql -v ON_ERROR_STOP=1 -U postgres -d player <<'SQL'
-   \set pw `cat /run/secrets/player_app_password`
-   ALTER ROLE player_app PASSWORD :'pw';
-   SQL
+   compose exec db set-role-password.sh player_app /run/secrets/player_app_password
+   compose exec db set-role-password.sh player_owner /run/secrets/player_owner_password
    ```
-   (`player_owner_password` and `ALTER ROLE player_owner` for the other.)
-3. `compose up -d --force-recreate backend purge` so they read the file again.
+3. `compose up -d --force-recreate db backend purge` so every container mounts the new file and
+   reads it again (`migrate` reads it the next time it runs).
 
 ## Checklist of the owner's steps
 

@@ -7,8 +7,10 @@
 #
 # Rules this file keeps:
 # - No secret in a value. Every password is a file mounted at /run/secrets (`secrets:` below), read
-#   at start-up. The files are mode 0440 and group 10010 on the host, or 0400 and owned by the
-#   reading user's id (runbook, "Secrets"). Nothing secret is in the image.
+#   at start-up. The files are mode 0440 and group 10010 on the host (runbook, "Secrets").
+#   Nothing secret is in the image.
+# - The secret files are read by group 10010 (services run as 10001 with group_add) except by db,
+#   which reads them as root in db-entrypoint.sh.
 # - The database is on an internal network: no published port, no route out.
 # - The app runs as the role player_app. Migrations and the purge run as player_owner, from
 #   containers that never run the web server.
@@ -40,14 +42,20 @@ services:
       POSTGRES_DB: ${PLAYER_DB_NAME:-player}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
-    # postgres reads the password files as this extra group.
-    group_add: ["10010"]
+    # Starts as root on purpose: db-entrypoint.sh reads the secret files as root (they are not
+    # mounted with any group here), copies the two role passwords for the init script to a tmpfs
+    # that only postgres can read, and then hands over to the image's entrypoint.
+    entrypoint: ["/bin/sh", "/usr/local/bin/db-entrypoint.sh"]
+    command: ["postgres"]
+    tmpfs: ["/run/dbinit:mode=0700,uid=999,gid=999,size=64k"]
     secrets: [postgres_password, player_owner_password, player_app_password]
     volumes:
       - pgdata:/var/lib/postgresql/data
       # First start only (empty data directory): the three roles, then their passwords.
       - ../backend/db/init/10-roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
       - ./postgres/20-passwords.sh:/docker-entrypoint-initdb.d/20-passwords.sh:ro
+      - ./postgres/set-role-password.sh:/usr/local/bin/set-role-password.sh:ro
+      - ./postgres/db-entrypoint.sh:/usr/local/bin/db-entrypoint.sh:ro
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB}"]
@@ -86,14 +94,16 @@ services:
       PLAYER_TRUSTED_PROXIES: ${PLAYER_TRUSTED_PROXIES:-}
       PLAYER_SOURCES: ${PLAYER_SOURCES:-}
       PLAYER_LOG_LEVEL: ${PLAYER_LOG_LEVEL:-INFO}
-      # Mail: empty means no SMTP, and every mail is dropped (NoMailer).
-      PLAYER_SMTP_HOST: ${PLAYER_SMTP_HOST:-}
-      PLAYER_SMTP_TLS: ${PLAYER_SMTP_TLS:-implicit}
-      PLAYER_SMTP_PORT: ${PLAYER_SMTP_PORT:-}
-      PLAYER_SMTP_FROM: ${PLAYER_SMTP_FROM:-}
-      PLAYER_SMTP_USER: ${PLAYER_SMTP_USER:-}
-      PLAYER_SMTP_PASSWORD_FILE: ${PLAYER_SMTP_PASSWORD_FILE:-}
-      PLAYER_SMTP_HELO_NAME: ${PLAYER_SMTP_HELO_NAME:-localhost}
+      # Mail: no PLAYER_SMTP_HOST means no SMTP, and every mail is dropped (NoMailer).
+      # Passed only when set in docker/.env (a name with no value): the backend refuses any
+      # PLAYER_SMTP_ setting, even an empty default, unless PLAYER_SMTP_HOST is set.
+      PLAYER_SMTP_HOST:
+      PLAYER_SMTP_TLS:
+      PLAYER_SMTP_PORT:
+      PLAYER_SMTP_FROM:
+      PLAYER_SMTP_USER:
+      PLAYER_SMTP_PASSWORD_FILE:
+      PLAYER_SMTP_HELO_NAME:
     secrets: [player_app_password, player_smtp_password]
     depends_on:
       db: { condition: service_healthy }
@@ -132,13 +142,14 @@ networks:
   # No route out: the database, the migrations and the purge need none.
   data:
     internal: true
-  # The server's own network, with a fixed address range so that the proxy address the host's
-  # reverse proxy shows up as is known (PLAYER_TRUSTED_PROXIES, .env.example). Also lets the
+  # The server's own network, with a fixed address range so that the address the host's reverse
+  # proxy shows up as is known: the range's .1 (PLAYER_TRUSTED_PROXIES, .env.example). Outside
+  # Docker's default pools (172.17-31/16, 192.168/16); PLAYER_EDGE_SUBNET changes it. Also lets the
   # backend reach the mail server.
   edge:
     ipam:
       config:
-        - subnet: 172.31.80.0/24
+        - subnet: ${PLAYER_EDGE_SUBNET:-10.213.80.0/24}
 
 volumes:
   pgdata:
