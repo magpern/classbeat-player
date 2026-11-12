@@ -8,6 +8,7 @@ import { enableSandboxUnlessTest, hardenSession } from "./hardening.ts";
 import { registerIpc } from "./ipc.ts";
 import { installMenu } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
+import { selectMusic } from "./select-music.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
 const DIST = __dirname;
@@ -16,7 +17,9 @@ const PRESENTER_FILE = join(DIST, "presenter.html");
 const PRESENTER_URL = pathToFileURL(PRESENTER_FILE).href;
 
 let presenter: BrowserWindow | null = null;
-const controller = createController();
+// The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
+const music = selectMusic(process.platform);
+const controller = createController(undefined, music.reader, music.transport);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 

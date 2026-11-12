@@ -7,6 +7,8 @@ export { artistMatches, matchCandidates, norm, normalizeId } from "./match.ts";
 export { linkPlanFrom } from "./plan.ts";
 export { manualReader } from "./reader.ts";
 export type { MusicReader } from "./reader.ts";
+export { isTransportAction, TRANSPORT_ACTIONS } from "./transport.ts";
+export type { MusicTransport, TransportAction } from "./transport.ts";
 export { createScriptedReader } from "./scripted-reader.ts";
 export type { ScriptedReader, Segment } from "./scripted-reader.ts";
 export { holdRemainingMs, timeLeftMs } from "./totals.ts";
