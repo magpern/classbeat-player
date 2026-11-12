@@ -18,7 +18,9 @@
 //    time-in-zone list also carry the name; a score block shows its name if and only if the
 //    whole name fits in the block, and never draws it cut.
 // 6. Hue: any coloured (not grey) text, fill or border sits inside a zone (class z1..z7).
-// 7. Reduced motion: with prefers-reduced-motion, no transition or animation lasts longer than 0.
+// 7. Motion: with prefers-reduced-motion, no transition or animation lasts longer than 0; without
+//    it, nothing that repeats (an infinite animation, the beat dot) cycles more than three
+//    times a second. Screenshots are taken with animations stopped at their first frame.
 // 8. Coverage: every piece of text on the page sits inside a data-tier element, so 1 to 4 see it.
 // 9. Palette (once, from tokens.css): see palette.js.
 // Not covered here (say so when this becomes the PL4 CI check): hue in box-shadow and gradients.
@@ -71,10 +73,10 @@ async function inkOf(page, probe, s, it) {
   const clip = { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 };
   await paint(page, it, 'repaint');
   await settle(page);
-  const bg = await page.screenshot({ clip });
+  const bg = await page.screenshot({ clip, animations: 'disabled' });
   await paint(page, it, true);
   await settle(page);
-  const one = await page.screenshot({ clip });
+  const one = await page.screenshot({ clip, animations: 'disabled' });
   await paint(page, it, false);
   await settle(page); // the next screenshot must not show this text any more
   const r = await probe.evaluate(ink, [bg.toString('base64'), one.toString('base64'), it.colors, ink.INK]);
@@ -83,7 +85,7 @@ async function inkOf(page, probe, s, it) {
 }
 
 async function check(browser, probe, s) {
-  const page = await browser.newPage({ viewport: { width: s.w, height: s.h }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: s.w, height: s.h }, deviceScaleFactor: 1, reducedMotion: s.motion || 'no-preference' });
   await page.goto('file://' + path.join(__dirname, s.file));
   await page.evaluate(() => document.fonts.ready);
   const { items, zones, hues, loose } = await page.evaluate(collect);
@@ -131,6 +133,13 @@ async function check(browser, probe, s) {
     return long(c.transitionDuration) || (c.animationName !== 'none' && long(c.animationDuration));
   }).map((el) => el.className || el.tagName));
   await rm.close();
+  // Flash rate: a repeating animation cycles at most three times a second.
+  const fast = await page.evaluate(() => [...document.querySelectorAll('*')].filter((el) => {
+    const c = getComputedStyle(el);
+    if (c.animationName === 'none' || !c.animationIterationCount.includes('infinite')) return false;
+    return c.animationDuration.split(',').some((d) => parseFloat(d) * (d.trim().endsWith('ms') ? 0.001 : 1) < 1 / 3);
+  }).map((el) => el.className || el.tagName));
+  rows.push({ tier: 'motion', text: 'at most 3 flashes a second', lines: '', cap: '', contrast: '', result: fast.length ? 'FAIL repeats faster: ' + fast.join(', ') : 'ok' });
   rows.push({ tier: 'motion', text: 'reduced motion', lines: '', cap: '', contrast: '', result: moving.length ? 'FAIL still moves: ' + moving.join(', ') : 'ok' });
   await page.close();
   // The smallest margins, for the summary.
