@@ -34,7 +34,7 @@ const room = (state, w, h, save = true, motion = null) => ({
   file: `room-${state}.html`, png: `room-${state}${motion ? '-reduced' : ''}-${w}x${h}.png`, w, h, room: true, save, motion,
 });
 const KEEP_WORST = new Set(['worst-off-list-1280x1024', 'worst-off-list-1650x1080', 'worst-running-1280x720', 'worst-before-start-1280x1024', 'worst-before-start-1650x1080',
-  'worst-ambiguous-1650x1080', 'worst-wide-1650x1080', 'worst-wide-1280x1024', 'worst-wide-before-start-1650x1080']);
+  'worst-ambiguous-1650x1080', 'worst-wide-1650x1080', 'worst-wide-1440x1080', 'worst-wide-1280x1024', 'worst-wide-before-start-1650x1080']);
 
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
@@ -57,6 +57,8 @@ const SHOTS = [
   room('running', 480, 270), // the room preview inside the presenter window
   room('worst-running', 480, 270, false),
   { file: 'presenter.html', png: 'presenter-1280x800.png', w: 1280, h: 800, room: false, presenter: true, save: true },
+  // The player's default presenter window (1000x760 with its title bar).
+  { file: 'presenter.html', png: 'presenter-1000x720.png', w: 1000, h: 720, room: false, presenter: true, save: true },
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST };

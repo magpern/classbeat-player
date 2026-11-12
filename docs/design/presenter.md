@@ -3,7 +3,8 @@
 Status: proposed in the pull request for issue #78. The presenter window's full spec comes with
 PL5. Until then, this file sets one convention for its words, because the player already shows
 them (design notes on #65 and #69). Mock-up: [mockups/presenter.html](mockups/presenter.html)
-([1280×800](mockups/presenter-1280x800.png)).
+([1280×800](mockups/presenter-1280x800.png), and [1000×720](mockups/presenter-1000x720.png), the
+player's default 1000×760 window less its title bar).
 
 ## One convention
 
@@ -36,7 +37,7 @@ The same words as the room screen's plates (room-2d.md, "Link plates"):
 
 | Link state (ADR 0001) | Line | Room screen |
 |---|---|---|
-| Locked | Following Spotify (the music app's name) | Same, in grey |
+| Locked | Following Spotify: "Following" and the music app's name | Same, in grey with a round dot |
 | Before the first lock | Waiting for the first song | Same |
 | Paused | Music paused | Plate |
 | Coasting | Music not heard | Plate |
@@ -45,9 +46,18 @@ The same words as the room screen's plates (room-2d.md, "Link plates"):
 | Manual | Manual clock | Same, grey with a square marker |
 | Manual, before the start | Press Start | Same |
 
-Two lines in the player today are worded differently and change to the convention when the
-presenter is built: "manual clock: following stopped" becomes "Manual clock, following stopped",
-and the lowercase clock words ("paused", "running", "ended") take a capital.
+The presenter's lines carry no marker. The round dot (following) and the square marker (manual)
+belong to the room screen, where they tell the link states apart from across the room; on the
+presenter the words say it.
+
+Lines in the player today that are worded differently and change to the convention when the
+presenter is built:
+
+- "manual clock: following stopped" becomes "Manual clock, following stopped";
+- "ended (holding at the end)" becomes "Ended, holding at the end";
+- the lowercase clock words ("paused", "running", "ended") take a capital;
+- the details now in brackets after the link line ("the clock is guessing", "following the music
+  is unavailable on this computer") move to the grey second line.
 
 ## Controls
 
@@ -57,7 +67,10 @@ hands the clock over, "Next interval (stops following)" and "Previous interval (
 "Follow the music", "Manual clock", "Undo".
 
 The longest, "Previous interval (stops following)" (35 characters), takes a full row of the
-controls at 17 px bold in the 1280×800 mock-up and fits on one line. measure.js checks that no
-control wraps (C4). The presenter is read at arm's length, so the room-distance heights (C1)
-do not apply to it. A control row never shortens a label to make it fit: the row widens, or the
-label takes a full row.
+controls at 17 px bold and fits on one line at both sizes of the mock-up, including the
+player's default window, where the room preview shrinks to 560 px and the type stays the same.
+measure.js checks that no control wraps (C4). The presenter is read at arm's length, so the
+room-distance heights (C1) do not apply to it; the type is set in pixels, so a label that fits
+in the default window fits in any larger one. Windows smaller than the default come with the
+presenter's full spec in PL5. A control row never shortens a label to make it fit: the row
+widens, or the label takes a full row.

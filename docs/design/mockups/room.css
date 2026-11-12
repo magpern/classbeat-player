@@ -124,8 +124,8 @@ body {
 .metric .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; white-space: nowrap; }
 .metric .v small { font-size: var(--t-minor); font-weight: 600; color: var(--light-2); margin-left: 0.6vw; }
 /* The beat dot after the BPM: only while the link is locked and the song has beat anchors. It is
-   lit for about a third of the period on each beat (every second beat above 180 BPM, so never
-   more than three flashes a second) and drawn in the text colour, so the checks count it as part
+   lit for about a third of the period on each beat of the beat anchors, two lights at least
+   1/3 s apart (every second beat above 180 BPM in steady time) and drawn in the text colour, so the checks count it as part
    of the value. With reduced motion it is not shown. */
 .beat {
   display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-left: 0.18em;
@@ -258,20 +258,26 @@ body {
   .clock { top: 11vh; }
   .count { font-size: min(28vh, calc(61vw / var(--count-w))); }
   /* The row holds the widest case ("On the beat", "Standing", "Song, planned") down to 5:4: the
-     columns spread to the safe edge with at least 1.2 vw between them, and the values step down
+     columns spread to the safe edge with at least 1.6 vw between them, and the values step down
      with the width (7.4 vh at 4:3, 6.94 vh at 5:4, cap 5.6 %). */
-  .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; justify-content: space-between; gap: 1.2vw; }
+  .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; justify-content: space-between; gap: 1.6vw; }
   .metric .v { font-size: min(7.4vh, 5.55vw); }
   /* Full width: two lines at --t-text, three at --t-text-min. */
   .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
   .next { left: var(--safe-x); top: 78vh; }
   /* A cue that needs a fourth line (only wide capitals near 120 characters) takes the next row's
-     place for that interval: four lines at --t-text-min, line height 1.02, and the next row is
-     not shown (the score still shows the next interval). The product measures; the mock-ups mark
-     such a cue "four". */
-  .cue.four { max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); line-height: 1.02; }
-  body:has(.cue.four) .next { display: none; }
+     place for that interval: four lines at --t-text-min, line height 1.02. The next row moves up
+     beside the foot of the gel, short: "Next", the zone chip, the name and the length (cadence
+     and position are left out). The gaps around the countdown close up by 2.1 vh to make that
+     room; every size stays as it is. The product measures; the mock-ups mark such a cue "four". */
+  .cue.four { top: 62.8vh; max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); line-height: 1.02; }
+  body:has(.cue.four) .clock { top: 10.5vh; }
+  body:has(.cue.four) .count { margin-top: 0.4vh; }
+  body:has(.cue.four) .bars { margin-top: 0.6vh; }
+  body:has(.cue.four) .metrics { top: 44.4vh; }
+  body:has(.cue.four) .next { left: 34vw; top: 56.5vh; }
+  body:has(.cue.four) .next .v.dim { display: none; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
   .block .n { font-size: 4vh; }

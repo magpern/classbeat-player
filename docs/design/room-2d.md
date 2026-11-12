@@ -27,9 +27,15 @@ read from a bike up to about 12 m away, and nothing else.
 8. **Time in the class**: left and done; the segment name (warm-up, main set, ...).
 9. **The music-link state** (ADR 0001): quiet while following, a white plate otherwise.
 
-All nine are visible at once in every running state at every size below, with one exception:
-the segment name (part of item 8) is dropped at 3:2 and narrower, and hidden while a link plate
-shows, because the rail then holds only the class time and the plate. Nothing scrolls.
+All nine are visible at once in every running state at every size below, with two exceptions:
+
+- the segment name (part of item 8) is dropped at 3:2 and narrower, and hidden while a link plate
+  shows, because the rail then holds only the class time and the plate;
+- at 3:2 and narrower, for an interval whose cue needs a fourth line (see "Cue" below), the next
+  row (item 6) is shortened to the next zone's number, name and length; that interval's cadence
+  and position are left out. The next zone's number and name are always on screen.
+
+Nothing scrolls.
 
 ## Layout
 
@@ -100,10 +106,11 @@ layout, [FTP test at 1650×1080](mockups/room-ftp-test-1650x1080.png) (1.53 : 1)
 
 The gel is 30 vw by 60 vh; the numeral 31.5 vh; the countdown at most 28 vh; a zone name that
 needs two lines is set at 6.9 vh (at most 5.75 vw); the metrics sit in a row under the countdown,
-spread to the safe edge with at least 1.2 vw between them, values at min(7.4 vh, 5.55 vw) so
+spread to the safe edge with at least 1.6 vw between them, values at min(7.4 vh, 5.55 vw) so
 "On the beat", "Standing" and "Song, planned" fit on one line down to 5:4 (6.94 vh there, cap
 5.6 %); the cue (from 62 vh, two lines at `--t-text`, three at `--t-text-min`) and the next
-interval (78 vh) use the full width; the score is 83 to 95 vh; the segment name is dropped from
+interval (78 vh) use the full width (a four-line cue moves the next row up beside the gel: see
+"Cue" under "Fitting text"); the score is 83 to 95 vh; the segment name is dropped from
 the rail. Switch point: any aspect ratio of 3:2 or narrower. 5:4 screenshot:
 [last interval at 1280×1024](mockups/room-last-interval-1280x1024.png) ("On the beat") and the
 worst cases below.
@@ -175,9 +182,15 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   needs the fourth line near 3:2. At 3:2 and narrower it is full width: two lines at `--t-text`,
   three at `--t-text-min`. A word longer than a line breaks rather than being cut. A cue that
   still needs a fourth line there (only wide capitals near 120 characters, as in the
-  [wide-glyph worst case](mockups/room-worst-wide.html)) takes the next row's place for that
-  interval: four lines at `--t-text-min`, line height 1.02, and the next row is not shown (the
-  score still shows the next interval). The product measures; the mock-ups mark such a cue.
+  [wide-glyph worst case at 5:4](mockups/room-worst-wide-1280x1024.png)) takes the next row's
+  place for that interval: four lines at `--t-text-min`, line height 1.02, from 62.8 vh. The next
+  row moves up beside the foot of the gel (34 vw, 56.5 vh) and is shortened to "Next", the zone
+  chip, the name (ellipsis as usual) and the length; cadence and position are left out. To make
+  that room the gaps around the countdown close up (clock from 10.5 vh, 0.4 vh above the
+  countdown, 0.6 vh above the bars, metrics from 44.4 vh); no size changes. The product measures
+  whether three lines hold the cue; the wide-glyph fixture does the same, so at 3:2 and 4:3 it
+  shows three lines and the
+  [full next row](mockups/room-worst-wide-1440x1080.png).
 - **Score blocks**: the zone number always; the name if and only if the whole name fits beside
   it, never cut (the mock-ups do this with a wrapping row that hides a name that does not fit).
   A block or clip that began in the past keeps its label just right of "now". Blocks wholly in
@@ -208,8 +221,9 @@ slot and are checked at all ten sizes. Three were added for the #31 review: the
 occurrence marker, and two **width-based** fixtures, [running](mockups/room-worst-wide.html) and
 [before the start](mockups/room-worst-wide-before-start.html), with names, segment and titles made
 of the widest capitals (M, W) and single 80-character words, and a 120-character cue in wide
-capitals ([1650×1080](mockups/room-worst-wide-1650x1080.png), [5:4](mockups/room-worst-wide-1280x1024.png),
-[before the start](mockups/room-worst-wide-before-start-1650x1080.png)). The mock-ups choose
+capitals ([1650×1080](mockups/room-worst-wide-1650x1080.png), [4:3](mockups/room-worst-wide-1440x1080.png)
+with three cue lines and the full next row, [5:4](mockups/room-worst-wide-1280x1024.png) with
+four cue lines and the short next row, [before the start](mockups/room-worst-wide-before-start-1650x1080.png)). The mock-ups choose
 step-downs by character count; the width-based fixtures are the ones the product's own measuring
 must pass, and PL4 CI keeps them. The other five: [off the list](mockups/room-worst-off-list.html) (tag and "Interval
 left, estimated", plate "Not a class song", `58:58`, class time `1:58:58`, "On the beat",
@@ -268,8 +282,11 @@ The interval change is the one moment the screen moves on purpose: the gel's col
 700 ms and a white line runs down the gel's edge for 160 ms. The score moves continuously at
 0.28 vw per second. A small dot after the BPM marks the beat when the link is locked and the
 song has beat anchors (otherwise it is not shown; it never claims to hit a beat it cannot
-measure). It lights on every beat up to 180 BPM and on every second beat above, so it never
-flashes more than three times a second (200 BPM: 1.67 a second). With `prefers-reduced-motion` (and in the player's own reduced-motion setting, which
+measure). It follows the beats it marks: the tempo between the song's beat anchors where the
+song is playing, not the song's listed BPM. Two lights always start at least 1/3 s apart; a beat
+that comes sooner after the last light is skipped. In steady time that is every beat up to
+180 BPM and every second beat above (200 BPM: 1.67 lights a second), and tempo drift near 180
+can never give four lights in one second. With `prefers-reduced-motion` (and in the player's own reduced-motion setting, which
 the plain screen honours the same way): colour changes are instant, there is no flash and no
 beat dot, and the score steps once a second. No state relies on motion to be understood.
 
@@ -299,7 +316,7 @@ These are what a Developer builds against and what CI checks on the real screen'
 in PL4, at every supported size with the worst-case content. On the mock-ups,
 [mockups/shoot.js](mockups/shoot.js) takes the screenshots and then runs
 [mockups/measure.js](mockups/measure.js) on every shot in [mockups/shots.js](mockups/shots.js)
-(the states, four more states at three sizes, and the eight worst cases at all ten sizes: 117
+(the states, four more states at three sizes, and the eight worst cases at all ten sizes, and the presenter at two: 118
 shots, about twelve minutes with Playwright and Chromium, animations stopped at their first
 frame so every PNG reproduces); it exits non-zero on any failure and ends with a summary table of
 fixture by size. Every check passes on every shot.
@@ -312,7 +329,7 @@ fixture by size. Every check passes on every shot.
 | C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole |
 | C5. Zone | Every zone colour carries its number; the gel, the next row and the time-in-zone list also carry the name; a score block shows its name if and only if the whole name fits beside the number, and never draws it cut. Past score blocks carry no zone colour |
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
-| C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing, the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |
+| C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing (at least 1/3 s between the starts of two lights, including with tempo drift near 180 BPM), the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |
 | C8. Coverage | Every piece of text on the screen is inside an element the checks see (in the mock-ups: a `data-tier` element), so no text escapes C1 to C4 |
 | C9. Palette | From `tokens.css`, by [mockups/palette.js](mockups/palette.js): every zone at least 7 : 1 with black on it, on the stage and on the lights-down gel; neighbouring zones at least ΔE 30 apart for normal vision, 25 for protanopia and deuteranopia, 12 for tritanopia (system.md) |
 
