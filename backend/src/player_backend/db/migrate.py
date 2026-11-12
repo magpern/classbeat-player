@@ -50,21 +50,24 @@ def sha256(body: str) -> str:
 
 
 @contextmanager
-def _step(conn: Conn, done: list[str], name: str, body: str) -> Generator[bool]:
-    """One migration's transaction. Yields whether it is still to be applied."""
-    if body != sql_file(name):
-        raise MigrationError(f"step and file differ: {name}")
+def _step(conn: Conn, done: list[str], name: str) -> Generator[bool]:
+    """One migration's transaction. Yields whether it is still to be applied.
+
+    The step's body executes the file's constant of `queries.migrations`; a test checks that the
+    constant is the file's content and that the steps follow the files in order.
+    """
     version = int(name[:4])
+    digest = sha256(sql_file(name))
     with conn.transaction():
         conn.execute(q.LOCK)
         applied = {int(str(v)): str(h) for v, h in conn.execute(q.APPLIED).fetchall()}
         if version in applied:
-            if applied[version] != sha256(body):
+            if applied[version] != digest:
                 raise MigrationError(f"applied migration changed: {name}")
             yield False
             return
         yield True
-        conn.execute(q.RECORD, (version, name, sha256(body)))
+        conn.execute(q.RECORD, (version, name, digest))
         done.append(name)
 
 
@@ -74,13 +77,13 @@ def apply_migrations(conn: Conn) -> list[str]:
     with conn.transaction():
         conn.execute(q.LOCK)
         conn.execute(q.LEDGER)
-    with _step(conn, done, "0001_tables.sql", q.M0001_TABLES) as pending:
+    with _step(conn, done, "0001_tables.sql") as pending:
         if pending:
             conn.execute(q.M0001_TABLES)
-    with _step(conn, done, "0002_policies_and_grants.sql", q.M0002_POLICIES_AND_GRANTS) as pending:
+    with _step(conn, done, "0002_policies_and_grants.sql") as pending:
         if pending:
             conn.execute(q.M0002_POLICIES_AND_GRANTS)
-    with _step(conn, done, "0003_auth_functions.sql", q.M0003_AUTH_FUNCTIONS) as pending:
+    with _step(conn, done, "0003_auth_functions.sql") as pending:
         if pending:
             conn.execute(q.M0003_AUTH_FUNCTIONS)
     return done

@@ -58,9 +58,11 @@ def test_every_table_has_row_level_security_enabled_and_forced(su: Conn) -> None
     assert [(n, r) for n, r, _, rls, force in tables if not (rls and force)] == []
 
 
-def test_the_adr_tables_exist(su: Conn) -> None:
+def test_the_tables_are_exactly_the_adr_lists(su: Conn) -> None:
+    # ADR 0002, section 9: any table outside the tenant list, the closed list and the ledger
+    # fails, even one with the tenant policy. A new table is added to the list first.
     names = {(n, r) for n, r, _, _, _ in _tables(su)}
-    assert {(SCHEMA, t) for t in TENANT_TABLES | CLOSED_TABLES} | META_TABLES <= names
+    assert names == {(SCHEMA, t) for t in TENANT_TABLES | CLOSED_TABLES} | META_TABLES
 
 
 def test_every_table_not_closed_has_exactly_the_tenant_policy(su: Conn) -> None:

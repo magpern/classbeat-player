@@ -29,10 +29,10 @@ def test_bad_names_and_gaps_are_refused(tmp_path: Path) -> None:
         load_migrations(tmp_path)
 
 
-def _steps() -> list[tuple[str, str, str]]:
-    """(file, constant given to _step, constant executed) for each step of apply_migrations."""
+def _steps() -> list[tuple[str, str]]:
+    """(file, constant executed) for each step of apply_migrations."""
     tree = ast.parse(Path(migrate.__file__).read_text(encoding="utf-8"))
-    steps: list[tuple[str, str, str]] = []
+    steps: list[tuple[str, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.With):
             call = node.items[0].context_expr
@@ -45,16 +45,15 @@ def _steps() -> list[tuple[str, str, str]]:
                     if isinstance(c, ast.Call) and ast.unparse(c.func) == "conn.execute"
                 ]
                 assert len(executed) == 1
-                steps.append((str(name.value), ast.unparse(call.args[3]), executed[0]))
+                steps.append((str(name.value), executed[0]))
     return steps
 
 
 def test_every_file_has_one_step_in_order_executing_its_own_constant() -> None:
     steps = _steps()
-    assert [file for file, _, _ in steps] == load_migrations()
-    for file, given, executed in steps:
-        assert given == executed
-        assert vars(q)[given.removeprefix("q.")] == sql_file(file)
+    assert [file for file, _ in steps] == load_migrations()
+    for file, executed in steps:
+        assert vars(q)[executed.removeprefix("q.")] == sql_file(file)
 
 
 def test_a_second_run_applies_nothing(db_url: str) -> None:
