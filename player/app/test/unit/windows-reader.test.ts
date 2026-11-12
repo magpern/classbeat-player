@@ -247,14 +247,49 @@ test("play, pause and next are written to the helper as their fixed names, and n
   assert.deepEqual(h.child.written.length, 3, "only the three names ever reach the helper");
 });
 
-test("commands are dropped when they come too fast, and when no helper runs", () => {
+test("a command that comes too soon waits: at most one, the newest, and it is neither lost nor sent twice", () => {
   const { h, r } = following();
-  for (let i = 0; i < 100; i++) r.send("next");
-  assert.deepEqual(h.child.written, ["next\n"]);
-  h.advance(MIN_COMMAND_GAP_MS - 1);
   r.send("next");
+  r.send("next");
+  assert.deepEqual(h.child.written, ["next\n"], "one at a time");
+  h.advance(MIN_COMMAND_GAP_MS - 1);
   assert.equal(h.child.written.length, 1);
   h.advance(1);
+  assert.deepEqual(h.child.written, ["next\n", "next\n"], "a double Next is two nexts");
+  h.advance(10 * MIN_COMMAND_GAP_MS);
+  assert.equal(h.child.written.length, 2, "and not three");
+
+  r.send("pause");
+  for (let i = 0; i < 100; i++) r.send("next");
+  r.send("play");
+  h.advance(MIN_COMMAND_GAP_MS);
+  assert.deepEqual(h.child.written.slice(2), ["pause\n", "play\n"], "one waits, and the newest replaces the older");
+  h.advance(10 * MIN_COMMAND_GAP_MS);
+  assert.equal(h.child.written.length, 4);
+});
+
+test("a waiting command is forgotten when following stops or the helper goes; none reaches a later helper", () => {
+  const { h, r } = following();
+  r.send("pause");
+  r.send("next");
+  r.setActive(false);
+  r.setActive(true);
+  h.advance(5000);
+  assert.equal(h.children.length, 2);
+  assert.deepEqual(h.children.map((c) => c.written), [["pause\n"], []]);
+
+  r.send("pause");
+  r.send("next");
+  h.child.die();
+  h.advance(5000);
+  assert.equal(h.children.length, 3);
+  assert.deepEqual(h.child.written, []);
+});
+
+test("commands do nothing when no helper runs, and never start one", () => {
+  const { h, r } = following();
+  r.send("next");
+  h.advance(MIN_COMMAND_GAP_MS);
   r.send("pause");
   assert.deepEqual(h.child.written, ["next\n", "pause\n"]);
 

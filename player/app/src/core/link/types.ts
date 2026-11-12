@@ -67,6 +67,9 @@ export const DEFAULT_LINK_CONFIG: LinkConfig = {
   lengthToleranceMs: 2500,
 };
 
+/** The states in which the clock follows the music's own position. */
+export const FOLLOWING: readonly LinkStateName[] = ["Locked", "Paused", "Ambiguous"];
+
 export interface Ambiguity {
   readonly candidates: readonly number[];
   readonly index: number;
@@ -95,7 +98,8 @@ export interface LinkModel {
   /** Monotonic time the next song is expected, while the clock holds (rule 6). */
   readonly holdUntil: number | null;
   readonly announce: Announcement | null;
-  readonly undo: { readonly clockMs: number; readonly until: number } | null;
+  /** `clockMs` is where the clock was at monotonic time `at`, the moment of the resync. */
+  readonly undo: { readonly clockMs: number; readonly at: number; readonly until: number } | null;
   /** The last unambiguous reading, for measuring the crossfade at a song change. */
   readonly lastPlayed: { readonly songIndex: number; readonly obs: Observation } | null;
   readonly measuredCrossfadeMs: number | null;

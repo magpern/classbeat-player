@@ -146,7 +146,7 @@ test("an undo takes the clock back to the manual clock where it would have been 
   assert.equal(t.at(41_000).classMs, 10_000);
   assert.deepEqual(t.at(42_000).events, ["undo"]);
   assert.equal(t.at(42_000).state, "Manual");
-  assert.equal(t.at(42_000).classMs, 40_000);
-  assert.equal(t.at(46_000).classMs, 44_000, "the clock runs on by hand and the music no longer moves it");
+  assert.equal(t.at(42_000).classMs, 41_000, "where the manual clock would be now: 40 s at the resync, plus the 1 s since");
+  assert.equal(t.at(46_000).classMs, 45_000, "the clock runs on by hand and the music no longer moves it");
   assert.equal(t.at(46_000).view.canUndo, false);
 });

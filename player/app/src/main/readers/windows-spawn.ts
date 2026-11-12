@@ -68,7 +68,7 @@ export function spawnWindowsHelper(env: Readonly<Record<string, string | undefin
 /** The real dependencies. `now` must be the clock the controller uses, so readings share its time. */
 export function windowsHelperDeps(now: () => number = () => performance.now(), env: Readonly<Record<string, string | undefined>> = process.env): SupervisorDeps {
   return {
-    spawn: () => spawnWindowsHelper(env),
+    startHelper: () => spawnWindowsHelper(env),
     now,
     setTimer: (fn, ms) => setTimeout(fn, ms).unref(),
     clearTimer: (handle) => clearTimeout(handle as NodeJS.Timeout),

@@ -8,13 +8,16 @@ import { planFrom } from "./clock/plan.ts";
 import type { ClockPlan } from "./clock/plan.ts";
 import { viewAt } from "./clock/view.ts";
 import type { ClockCommand } from "./commands.ts";
-import { goManual, pickOccurrence, relink, undo } from "./link/commands.ts";
+import { goManual, handOver, pickOccurrence, relink, undo } from "./link/commands.ts";
 import type { CommandResult } from "./link/commands.ts";
 import { step } from "./link/follower.ts";
 import { linkPlanFrom } from "./link/plan.ts";
 import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
 import { linkViewAt } from "./link/view.ts";
+import { routeWhileFollowing } from "./link/while-following.ts";
+import type { Routed } from "./link/while-following.ts";
+import type { TransportAction } from "./link/transport.ts";
 import type { FileError, Snapshot } from "./snapshot.ts";
 
 export interface Loaded {
@@ -94,12 +97,33 @@ function applyToLink(l: Loaded, cmd: ClockCommand, now: number): CommandResult |
   }
 }
 
-export function command(s: PlayerState, cmd: ClockCommand, now: number): PlayerState {
+function routeOf(l: Loaded, cmd: ClockCommand, canSend: boolean): Routed | null {
+  return routeWhileFollowing(l.link, l.following && !l.linkPlan.manualOnly, cmd, canSend);
+}
+
+/**
+ * The music app command a clock control turns into while the clock follows the music, or null
+ * when the control is applied here. The shell sends it; the clock then follows the music's answer.
+ */
+export function transportFor(s: PlayerState, cmd: ClockCommand, canSend: boolean): TransportAction | null {
+  const r = s.loaded === null ? null : routeOf(s.loaded, cmd, canSend);
+  return r?.kind === "transport" ? r.action : null;
+}
+
+/**
+ * `canSend` says a transport exists. While following, Pause, Resume and Next are not applied to
+ * the clock (see `transportFor`), and the other moves (previous, plus or minus 5 s) switch the
+ * link to manual, announced, before they are applied.
+ */
+export function command(s: PlayerState, cmd: ClockCommand, now: number, canSend = false): PlayerState {
   const l = s.loaded;
   if (l === null) return s;
   const viaLink = applyToLink(l, cmd, now);
   if (viaLink) return { ...s, loaded: { ...l, link: viaLink.link, clock: viaLink.clock } };
-  return { ...s, loaded: { ...l, clock: applyToClock(l.clock, l.plan, cmd, now) } };
+  const route = routeOf(l, cmd, canSend);
+  if (route?.kind === "transport") return s;
+  const link = route?.kind === "manual" ? handOver(l.link, l.clock, now).link : l.link;
+  return { ...s, loaded: { ...l, link, clock: applyToClock(l.clock, l.plan, cmd, now) } };
 }
 
 /** One tick: follow the music (when there is a reader) and advance the clock. */

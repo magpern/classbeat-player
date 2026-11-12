@@ -8,7 +8,7 @@
 // supervisor replaces the helper after a growing wait.
 import type { MusicReader } from "../../core/link/reader.ts";
 import { isTransportAction } from "../../core/link/transport.ts";
-import type { MusicTransport } from "../../core/link/transport.ts";
+import type { MusicTransport, TransportAction } from "../../core/link/transport.ts";
 import type { Observation } from "../../core/link/types.ts";
 import { createSupervisor } from "./helper-supervisor.ts";
 import type { SupervisorDeps, SupervisorOptions } from "./helper-supervisor.ts";
@@ -26,7 +26,10 @@ export const WINDOWS_HELPER_LIMITS: Omit<SupervisorOptions, "onLine" | "onDown">
   minGapMs: 1000,
 };
 
-/** Never more than one command to the music app in this time; the rest are dropped. */
+/**
+ * Never more than one command to the helper in this time. A command that comes sooner waits: at
+ * most one, and a newer one replaces an older one (the instructor's latest intent wins).
+ */
 export const MIN_COMMAND_GAP_MS = 200;
 
 export interface WindowsMusic extends MusicReader, MusicTransport {
@@ -38,6 +41,14 @@ export interface WindowsMusic extends MusicReader, MusicTransport {
 export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): WindowsMusic {
   let latest: Observation | null = null;
   let lastCommandAt = Number.NEGATIVE_INFINITY;
+  let waiting: TransportAction | null = null;
+  let waitTimer: unknown = null;
+
+  const forget = (): void => {
+    waiting = null;
+    if (waitTimer !== null) deps.clearTimer(waitTimer);
+    waitTimer = null;
+  };
 
   const supervisor = createSupervisor(deps, {
     ...WINDOWS_HELPER_LIMITS,
@@ -49,8 +60,14 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
     },
     onDown() {
       latest = null;
+      forget();
     },
   });
+
+  /** Writes one of the three names to the running helper; a command never starts one. */
+  const sendNow = (action: TransportAction): void => {
+    if (supervisor.write(`${action}\n`)) lastCommandAt = deps.now();
+  };
 
   return {
     kind: "windows",
@@ -62,14 +79,24 @@ export function createWindowsMusic(deps: SupervisorDeps = windowsHelperDeps()): 
       }
       supervisor.stop();
       latest = null;
+      forget();
     },
     send(action) {
-      // The name is checked again here: only one of the three literals is ever written, and only
-      // to a helper that is already running (a command never starts one).
-      if (!isTransportAction(action)) return;
-      const now = deps.now();
-      if (now - lastCommandAt < MIN_COMMAND_GAP_MS) return;
-      if (supervisor.write(`${action}\n`)) lastCommandAt = now;
+      // The name is checked again here: only one of the three literals is ever written.
+      if (!isTransportAction(action) || !supervisor.running) return;
+      const wait = lastCommandAt + MIN_COMMAND_GAP_MS - deps.now();
+      if (wait <= 0) {
+        sendNow(action);
+        return;
+      }
+      waiting = action;
+      if (waitTimer !== null) return;
+      waitTimer = deps.setTimer(() => {
+        waitTimer = null;
+        const next = waiting;
+        waiting = null;
+        if (next !== null) sendNow(next);
+      }, wait);
     },
   };
 }

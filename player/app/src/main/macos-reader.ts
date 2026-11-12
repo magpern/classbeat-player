@@ -9,7 +9,7 @@ import { parseMacOutput } from "../core/link/macos-parse.ts";
 import { MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../core/link/macos-scripts.ts";
 import type { MacScriptName } from "../core/link/macos-scripts.ts";
 import type { MusicReader } from "../core/link/reader.ts";
-import type { MusicTransport } from "../core/link/transport.ts";
+import type { MusicTransport, TransportAction } from "../core/link/transport.ts";
 import type { Observation } from "../core/link/types.ts";
 
 export interface ExecOptions {
@@ -70,6 +70,9 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
   let readCall = 0;
   let sendSince: number | null = null;
   let sendCall = 0;
+  // A command sent while another is in flight waits here: at most one, and a newer one replaces
+  // an older one (the instructor's latest intent wins). It is never dropped silently.
+  let waiting: TransportAction | null = null;
   const inFlight = (since: number | null, t: number): boolean => since !== null && t - since < GIVE_UP_MS;
 
   /** Runs one allowlisted script; `done` gets its output, or null on any failure or timeout. */
@@ -106,6 +109,18 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
     });
   }
 
+  function sendNow(action: TransportAction): void {
+    waiting = null;
+    sendSince = now();
+    const mine = ++sendCall;
+    run(action, () => {
+      if (mine !== sendCall) return;
+      sendSince = null;
+      const next = waiting;
+      if (next !== null && stopTimer !== null) sendNow(next);
+    });
+  }
+
   return {
     kind: "macos",
     latest: () => last,
@@ -120,16 +135,15 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
       stopTimer = null;
       readCall += 1;
       readSince = null;
+      sendCall += 1;
+      sendSince = null;
+      waiting = null;
       last = null;
     },
     send(action) {
-      const t = now();
-      if (stopTimer === null || inFlight(sendSince, t)) return;
-      sendSince = t;
-      const mine = ++sendCall;
-      run(action, () => {
-        if (mine === sendCall) sendSince = null;
-      });
+      if (stopTimer === null) return;
+      if (inFlight(sendSince, now())) waiting = action;
+      else sendNow(action);
     },
   };
 }

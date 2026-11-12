@@ -2,7 +2,7 @@
 // The helper is untrusted: it may hang, die, flood or write anything. Whatever it does, the
 // outcome here is a dropped helper, a call to `onDown`, and a restart after a growing wait.
 // Nothing in this module throws, and it knows nothing about what the helper is: starting the
-// process is the caller's `spawn`, and judging a line is the caller's `onLine`.
+// process is the caller's `startHelper`, and judging a line is the caller's `onLine`.
 
 /** A started helper, as the supervisor sees it. None of these may throw. */
 export interface HelperChild {
@@ -15,7 +15,7 @@ export interface HelperChild {
 
 export interface SupervisorDeps {
   /** Starts the helper. May throw; that counts as a failed start. */
-  spawn(): HelperChild;
+  startHelper(): HelperChild;
   /** Monotonic time in ms. */
   now(): number;
   setTimer(fn: () => void, ms: number): unknown;
@@ -120,7 +120,7 @@ export function createSupervisor(deps: SupervisorDeps, opts: SupervisorOptions):
     notBefore = startedAt + opts.minGapMs;
     let c: HelperChild;
     try {
-      c = deps.spawn();
+      c = deps.startHelper();
     } catch {
       fail();
       return;

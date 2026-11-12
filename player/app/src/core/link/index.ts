@@ -1,5 +1,5 @@
 export { choose } from "./choose.ts";
-export { goManual, pickOccurrence, relink, undo } from "./commands.ts";
+export { goManual, handOver, pickOccurrence, relink, undo } from "./commands.ts";
 export { measureCrossfade } from "./crossfade.ts";
 export { isCurrent, step } from "./follower.ts";
 export type { StepResult } from "./follower.ts";
@@ -14,5 +14,7 @@ export type { ScriptedReader, Segment } from "./scripted-reader.ts";
 export { holdRemainingMs, timeLeftMs } from "./totals.ts";
 export { DEFAULT_LINK_CONFIG, initialLink } from "./types.ts";
 export type { LinkConfig, LinkEvent, LinkModel, LinkPlan, LinkSong, LinkStateName, Observation, TrackInfo } from "./types.ts";
+export { HANDOVER_TEXT, routeWhileFollowing } from "./while-following.ts";
+export type { Routed } from "./while-following.ts";
 export { linkViewAt } from "./view.ts";
 export type { LinkView } from "./view.ts";

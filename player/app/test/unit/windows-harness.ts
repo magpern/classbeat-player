@@ -1,5 +1,5 @@
 // A fake helper process and a hand-driven clock for the Windows reader's tests. Nothing here
-// starts a process: the reader gets a `spawn` that hands out fake children, which a test makes
+// starts a process: the reader gets a `startHelper` that hands out fake children, which a test makes
 // write lines, hang (write nothing) or die.
 import type { HelperChild, SupervisorDeps } from "../../src/main/readers/helper-supervisor.ts";
 
@@ -73,7 +73,7 @@ export function createHarness(): Harness {
       now = end;
     },
     deps: {
-      spawn() {
+      startHelper() {
         if (h.failSpawn) throw new Error("spawn failed");
         const c = new FakeChild();
         children.push(c);

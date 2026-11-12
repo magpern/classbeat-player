@@ -144,16 +144,23 @@ const sources = files(SRC).map((p) => ({ path: relative(SRC, p).split(sep).join(
 const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const src = (path: string): string => code(sources.find((s) => s.path === path)?.text ?? assert.fail(`missing ${path}`));
 
-test("only the macOS reader starts a process, with execFile and never a shell", () => {
+// The Windows helper (#42) is the one other process, started in main/readers/windows-spawn.ts;
+// test/unit/windows-script.test.ts pins how.
+const WINDOWS_SPAWN = "main/readers/windows-spawn.ts";
+
+test("only the macOS reader and the Windows helper start a process, the first with execFile, and never a shell", () => {
   const users = sources.filter((s) => /child_process/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(users, ["main/macos-reader.ts"]);
+  assert.deepEqual(users.sort(), ["main/macos-reader.ts", WINDOWS_SPAWN]);
   const reader = src("main/macos-reader.ts");
   assert.match(reader, /import \{ execFile \} from "node:child_process";/);
   assert.equal(reader.match(/\bexecFile\(/g)?.length, 1, "one call site");
   assert.match(reader, /shell: false/);
   for (const s of sources) {
-    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawn|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
+    assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
+    if (s.path !== WINDOWS_SPAWN) assert.doesNotMatch(code(s.text), /\bspawn\(/, s.path);
   }
+  assert.equal(src(WINDOWS_SPAWN).match(/\bspawn\(/g)?.length, 1, "one call site");
+  assert.match(src(WINDOWS_SPAWN), /shell: false/);
 });
 
 test("the scripts are constants: no template text, no joining with data, and one place names osascript", () => {
