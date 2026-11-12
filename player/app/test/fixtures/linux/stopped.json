@@ -1,0 +1,1 @@
+{"type":"a{sv}","data":[{"PlaybackStatus":{"type":"s","data":"Stopped"},"Position":{"type":"x","data":0},"Metadata":{"type":"a{sv}","data":{}},"Rate":{"type":"d","data":1.000000000000000000000e+00},"Volume":{"type":"d","data":1.000000000000000000000e+00},"CanGoNext":{"type":"b","data":true},"LoopStatus":{"type":"s","data":"None"},"Shuffle":{"type":"b","data":false}}]}

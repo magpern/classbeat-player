@@ -36,15 +36,20 @@ test("the reader is chosen by platform: the macOS one on macOS only", () => {
   assert.equal(chosen.reader.kind, "macos");
 });
 
-for (const platform of ["linux", "win32", "freebsd", "", "Darwin", "darwin "]) {
-  test(`on "${platform}" the macOS reader is never constructed and the clock is manual`, () => {
-    const chosen = selectMusic(platform, () => assert.fail("constructed"));
+for (const platform of ["win32", "freebsd", "", "Darwin", "darwin ", "Linux", "linux "]) {
+  test(`on "${platform}" no reader is ever constructed and the clock is manual`, () => {
+    const chosen = selectMusic(
+      platform,
+      () => assert.fail("constructed"),
+      () => assert.fail("constructed"),
+    );
     assert.equal(chosen.reader, manualReader);
     assert.equal(chosen.transport, null);
   });
 }
 
-test("the real selection on this machine: nothing is constructed unless it is a Mac", { skip: process.platform === "darwin" }, () => {
+// Linux has its own reader (test/unit/linux-shell.test.ts covers the selection there).
+test("the real selection on this machine: nothing is constructed unless it has a reader", { skip: process.platform === "darwin" || process.platform === "linux" }, () => {
   const chosen = selectMusic(process.platform);
   assert.equal(chosen.reader.kind, "manual");
   assert.equal(chosen.transport, null);
@@ -144,13 +149,16 @@ const sources = files(SRC).map((p) => ({ path: relative(SRC, p).split(sep).join(
 const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const src = (path: string): string => code(sources.find((s) => s.path === path)?.text ?? assert.fail(`missing ${path}`));
 
-test("only the macOS reader starts a process, with execFile and never a shell", () => {
+test("only the macOS and Linux readers start a process, with execFile and never a shell", () => {
   const users = sources.filter((s) => /child_process/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(users, ["main/macos-reader.ts"]);
-  const reader = src("main/macos-reader.ts");
-  assert.match(reader, /import \{ execFile \} from "node:child_process";/);
-  assert.equal(reader.match(/\bexecFile\(/g)?.length, 1, "one call site");
-  assert.match(reader, /shell: false/);
+  assert.deepEqual(users.sort(), ["main/linux-reader.ts", "main/macos-reader.ts"]);
+  for (const path of users) {
+    const reader = src(path);
+    assert.match(reader, /import \{ execFile \} from "node:child_process";/, path);
+    assert.equal(reader.match(/\bexecFile\(/g)?.length, 1, `${path}: one call site`);
+    assert.match(reader, /shell: false/, path);
+    assert.equal(reader.match(/\bshell:/g)?.length, reader.match(/\bshell: false\b/g)?.length, `${path}: never another value`);
+  }
   for (const s of sources) {
     assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawn|spawnSync|fork)\(|shell:\s*true|\bshell\.openExternal\b|\bopenPath\b/, s.path);
   }
