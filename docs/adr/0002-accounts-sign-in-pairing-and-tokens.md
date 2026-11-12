@@ -113,11 +113,11 @@ key everywhere. A later gym account that groups instructors adds a membership ta
 change this key.
 
 **Who can sign up.** Sign-up and sign-in are the same flow: the first sign-in for an email
-creates the account. The mode `SIGNUP_MODE` is `allowlist`, `open` or `closed`, held by the database
-(principle 7). It is `allowlist`: only emails in the table `signup_allowlist`, kept by the operator, can create an
-account. This is the safest reversible default. Who is let in is settled in the provider-terms
-ADR and by the owner. An address **can sign in** when it has an account or may create one. No
-mail is ever sent to an address that cannot sign in.
+creates the account. The mode `SIGNUP_MODE` is `allowlist`, `open` or `closed`, held by the
+database (principle 7). It is `allowlist`: only emails in the table `signup_allowlist`, kept by
+the operator, can create an account. This is the safest reversible default. Who is let in is
+settled in the provider-terms ADR and by the owner. An address **can sign in** when it has an
+account or may create one. No mail is ever sent to an address that cannot sign in.
 
 **The browser token.** When a browser asks for a sign-in link or starts a passkey sign-in, the
 site sets `__Host-cbp_login=<cbp_lgn_ token>`; `Secure`; `HttpOnly`; `SameSite=Lax`; `Path=/`;
@@ -807,11 +807,12 @@ One table, `audit_events`, owned by the account like any other: time, event name
 of the credential that acted, the client address shortened to its network (/24 or /48), the
 browser or app family, and a small detail object.
 
-Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out
-(with `current: false` when the user ends another of their sessions); all sessions ended;
-passkey added or removed; passkey refused by the counter rule; pairing approved or denied; device created; device revoked; source linked or revoked; publication applied,
-refused as stale or as a conflict; class deleted on the site; live session started or ended;
-controller added; control code cancelled after wrong tries; export made.
+Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out (with
+`current: false` when the user ends another of their sessions); all sessions ended; passkey
+added or removed; passkey refused by the counter rule; pairing approved or denied; device
+created; device revoked; source linked or revoked; publication applied, refused as stale or as a
+conflict; class deleted on the site; live session started or ended; controller added; control
+code cancelled after wrong tries; export made.
 
 Not events, because no account is set when they happen: a passkey sign-in whose signature
 fails, and a request with a revoked device token. Both are counted in the limits (section 10).
@@ -968,9 +969,11 @@ the database's log is covered too:
 - Riders see nothing of each other, not even how many they are. The handlebar companion shows
   no rider data.
 - An app with one display cannot offer a control code; the instructor signs in on the phone.
-- The limits, the link's 15 minutes, the session lifetimes and the cap of 20 sessions are
-  constants in the database functions (principle 7). Raising one is a migration in a normal
-  pull request; removing a guard test is not.
+- The limits counted inside the `auth_*` functions, the link's 15 minutes, the session
+  lifetimes and the cap of 20 sessions are constants in those functions (principle 7).
+  Changing one is a migration that replaces a function body, so it is a security-critical pull
+  request with a top-tier Reviewer. The other limits are settings, and raising one is a normal
+  change. Removing a guard test is never a normal change.
 
 **Defaults chosen here that the owner may want to change.** Each is a setting or a small,
 separate change; those held by the database (principle 7) change by migration. None needs
