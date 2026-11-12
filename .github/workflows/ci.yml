@@ -103,9 +103,52 @@ jobs:
       - name: Schema checks
         run: bash schema/ci.sh
 
+  # Runs backend/ci.sh against a throwaway PostgreSQL 17 service (the tests drop and create roles
+  # and a database on it, so it is never a real server). Skips cleanly while backend/ci.sh does
+  # not exist yet. The password is a throwaway for the job's own container, not a secret.
+  # The image digest is the current `postgres:17` multi-arch index, from the Docker Hub registry
+  # API (HEAD /v2/library/postgres/manifests/17, header Docker-Content-Digest).
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        env:
+          POSTGRES_PASSWORD: ci-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - id: present
+        run: |
+          if [ -f backend/ci.sh ]; then
+            echo "found=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "backend/ci.sh does not exist yet; skipping the backend checks"
+            echo "found=false" >>"$GITHUB_OUTPUT"
+          fi
+      - if: steps.present.outputs.found == 'true'
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/**/uv.lock
+      - if: steps.present.outputs.found == 'true'
+        name: Backend checks
+        env:
+          PLAYER_TEST_DATABASE_URL: postgresql://postgres:ci-throwaway@127.0.0.1:5432/postgres
+        run: bash backend/ci.sh
+
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, schema]
+    needs: [changes, repo-checks, node-packages, schema, backend]
     if: always()
     runs-on: ubuntu-latest
     steps:

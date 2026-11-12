@@ -46,6 +46,6 @@ commit scripts/other.sh
 check "unrelated file sets no flag" "" "$(flags push "$main_tip" HEAD)"
 before_wf="$(git rev-parse HEAD)"
 commit .github/workflows/ci.yml
-check "workflow change runs schema and desktop" "schema desktop" "$(flags push "$before_wf" HEAD)"
+check "workflow change runs backend, schema and desktop" "backend schema desktop" "$(flags push "$before_wf" HEAD)"
 
 exit "$fail"

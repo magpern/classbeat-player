@@ -100,7 +100,7 @@ Other choices where the ADR is silent (strictest safe reading unless noted):
   there by mistake.
 - `removed: false` is allowed and means an ordinary publication; a removal carries neither
   `document` nor `content_hash`, and anything else carries both.
-- Not in this PR: the reference converter of ADR 0003 section 8 (it is not in issue #20).
+- The reference converter of ADR 0003 section 8 is in `schema/converter/` (issue #26).
 - The generated types cannot state the conditional rules (`if`/`then`); the TypeScript `Class`
   type is an intersection with an index signature because of the top-level `allOf`. The
   validators, not the types, are the contract.
@@ -127,7 +127,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s4 intervals start at 0, no gaps or overlaps, end at class length | V | `intervals-start-not-zero`, `intervals-gap`, `intervals-overlap`, `intervals-end-before-class-length` |
 | s4 song windows contiguous, window at most song length | V | `songs-window-gap`, `songs-window-overlap`, `songs-window-longer-than-song`, `songs-window-empty` |
 | s4 (carried) first song at 0, last song ends at class length | V | `songs-first-start-not-zero`, `songs-last-end-not-class-end` |
-| s4 segments cover whole intervals | V | `segment-not-on-interval-boundary`, `segments-overlap`, `segment-empty` |
+| s4 segments cover whole intervals | V | `segment-not-on-interval-boundary` (start), `segment-end-not-on-interval-boundary` (end), `segments-overlap`, `segment-empty` |
 | s4 every interval zone exists in the scale | V | `zone-not-in-scale` |
 | s4 totals agree with intervals | V | `totals-length-mismatch`, `totals-zone-time-mismatch`, `totals-zone-key-missing` |
 | s4 cycling: cadence and position, no incline; running the reverse | S | `schema-cycling-interval-missing-cadence`, `...-missing-position`, `...-has-incline`, `schema-running-interval-has-cadence`, `schema-running-interval-missing-incline` |
@@ -139,4 +139,4 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s7 producers strict, readers lax, any minor of a known major | `check` modes | `reader/accepted-future-minor-unknown-fields`, `test_producer_is_strict_where_reader_is_lax` |
 | s7 unknown major refused | `check` reader mode | `reader/rejected-unknown-major` |
 | s7 backend conversion of the previous major | not in PL1 (no second major yet); see choice 6 | none |
-| s8 reference converter | not in this PR | none |
+| s8 reference converter | `schema/converter/` | `converter/test_converter.py`, `ts/test/converter-fixtures.test.ts` |
