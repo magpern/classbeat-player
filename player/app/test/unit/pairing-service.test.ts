@@ -164,6 +164,32 @@ test("a token the keychain refuses is given back to the server", async () => {
   assert.equal(last?.token, r.token);
 });
 
+test("Cancel while a poll is out: the token it brings back is given back to its server, never kept or shown", async () => {
+  const token = newToken("dev");
+  const holder: { cancel?: () => void } = {};
+  const r = rig({
+    answer: (q) => {
+      if (q.path === "/api/pairing/start") return { kind: "http", status: 200, body: { device_code: newToken("dc"), user_code: USER_CODE, verification_uri: PAGE, expires_in: 600, interval: 5 }, retryAfterS: null };
+      if (q.path === "/api/pairing/token") {
+        holder.cancel?.(); // The user clicks Cancel after the poll left and before its answer arrives.
+        return { kind: "http", status: 200, body: { device_token: token, email: "ann@example.test" }, retryAfterS: null };
+      }
+      return { kind: "http", status: 204, body: undefined, retryAfterS: null };
+    },
+  });
+  holder.cancel = () => void r.service.unpair();
+  r.service.start();
+  await flush();
+  await r.advance(20_000);
+  assert.deepEqual(r.service.view(), { state: "unpaired", message: null });
+  assert.equal(r.store.load(), null);
+  assert.deepEqual(
+    r.requests.filter((q) => q.token !== undefined).map((q) => [q.method, q.path, q.origin, q.token]),
+    [["DELETE", "/api/player/device", ORIGIN, token]],
+  );
+  assert.equal(r.requests.filter((q) => q.path === "/api/pairing/token").length, 1, "no poll after Cancel");
+});
+
 test("stop ends the wait: no poll after the app quits", async () => {
   const r = rig();
   r.service.start();

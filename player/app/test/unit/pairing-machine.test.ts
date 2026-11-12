@@ -31,7 +31,7 @@ const started = (attempt = 1, intervalMs = 5000, expiresInMs = 600_000): Pairing
 });
 /** Started at t=0 and waiting for the first poll. */
 const waitingAt0 = (): PairingState => run([[startEvent, 0], [started(), 0]]).state;
-const polledWith = (answer: PollAnswer): PairingEvent => ({ type: "polled", attempt: 1, answer });
+const polledWith = (answer: PollAnswer, attempt = 1): PairingEvent => ({ type: "polled", attempt, origin: ORIGIN, answer });
 
 test("start asks the server, then shows the code, opens the page and waits a full interval and a margin", () => {
   const r = run([[startEvent, 0], [started(), 100]]);
@@ -124,18 +124,51 @@ test("the wait ends at the pairing's end: the last wake is at expiry, and then n
   assert.deepEqual(r.state, { kind: "unpaired", attempt: 1, notice: "code_expired" });
 });
 
-test("cancel while waiting: back to unpaired, and the old attempt's answers and wakes are ignored", () => {
+test("cancel while waiting: back to unpaired, and the old attempt's other answers and wakes are ignored", () => {
+  for (const answer of [{ kind: "authorization_pending" }, { kind: "slow_down" }, { kind: "access_denied" }, { kind: "retry", afterMs: null }] as const) {
+    const r = run([[{ type: "poll_due", attempt: 1 }, 5500], [{ type: "unpair" }, 5600], [polledWith(answer), 5700], [{ type: "poll_due", attempt: 1 }, 11_000]], waitingAt0());
+    assert.deepEqual(r.state, { kind: "unpaired", attempt: 2, notice: null }, answer.kind);
+    assert.deepEqual(r.effects.slice(1), [[], [], []], answer.kind);
+  }
+});
+
+test("a token that arrives after Cancel is given back to its server, never kept and never shown", () => {
+  const token = newToken("dev");
   const r = run(
     [
       [{ type: "poll_due", attempt: 1 }, 5500],
       [{ type: "unpair" }, 5600],
-      [polledWith({ kind: "ok", token: newToken("dev"), email: "a@example.test" }), 5700],
+      [polledWith({ kind: "ok", token, email: "a@example.test" }), 5700],
       [{ type: "poll_due", attempt: 1 }, 11_000],
     ],
     waitingAt0(),
   );
+  assert.deepEqual(r.effects.slice(1), [[], [{ do: "revoke", record: { origin: ORIGIN, token, email: "a@example.test" } }], []]);
   assert.deepEqual(r.state, { kind: "unpaired", attempt: 2, notice: null });
-  assert.deepEqual(r.effects.slice(1), [[], [], []]);
+  assert.ok(!JSON.stringify(r.state).includes(token) && !JSON.stringify(pairingView(r.state, 5700)).includes(token));
+});
+
+test("a token for an attempt nobody waits for is given back, whatever the state; only the held token is kept", () => {
+  const token = newToken("dev");
+  const held = { origin: ORIGIN, token: newToken("dev"), email: "held@example.test" };
+  const ok = { kind: "ok", token, email: "late@example.test" } as const;
+  const revoke = [{ do: "revoke", record: { origin: ORIGIN, token, email: "late@example.test" } }];
+  const states: PairingState[] = [
+    INITIAL,
+    { kind: "unpaired", attempt: 1, notice: "code_expired" },
+    run([[startEvent, 0]]).state,
+    waitingAt0(),
+    run([[startEvent, 0], [started(), 0], [{ type: "unpair" }, 1], [startEvent, 2], [started(3), 2], [{ type: "poll_due", attempt: 3 }, 6000]]).state,
+    { kind: "paired", attempt: 1, record: held, deviceName: null, expired: false },
+    { kind: "paired", attempt: 2, record: held, deviceName: null, expired: true },
+  ];
+  for (const s of states) {
+    const out = step(s, polledWith(ok, 1), 7000);
+    assert.deepEqual(out, { state: s, effects: revoke }, JSON.stringify(s));
+  }
+  // The same token the state holds (a repeated answer) is never given back.
+  const paired: PairingState = { kind: "paired", attempt: 1, record: held, deviceName: null, expired: false };
+  assert.deepEqual(step(paired, polledWith({ kind: "ok", token: held.token, email: held.email }), 7000), { state: paired, effects: [] });
 });
 
 test("a second start while one runs, or while paired, does nothing", () => {
