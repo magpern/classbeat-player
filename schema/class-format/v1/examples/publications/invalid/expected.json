@@ -1,0 +1,74 @@
+{
+  "hash-mismatch.json": [
+    [
+      "hash_mismatch",
+      "/content_hash"
+    ]
+  ],
+  "hash-not-lowercase-hex.json": [
+    [
+      "schema",
+      "/content_hash"
+    ]
+  ],
+  "hash-missing-prefix.json": [
+    [
+      "schema",
+      "/content_hash"
+    ]
+  ],
+  "document-missing.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "removal-carries-document.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "removal-carries-hash.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "number-zero.json": [
+    [
+      "schema",
+      "/publication_number"
+    ]
+  ],
+  "number-not-integer.json": [
+    [
+      "schema",
+      "/publication_number"
+    ]
+  ],
+  "source-class-id-over-100.json": [
+    [
+      "schema",
+      "/source_class_id"
+    ]
+  ],
+  "source-class-id-empty.json": [
+    [
+      "schema",
+      "/source_class_id"
+    ]
+  ],
+  "unknown-envelope-field.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "document-breaks-a-semantic-rule.json": [
+    [
+      "totals_length_mismatch",
+      "/document/totals/length_ms"
+    ]
+  ]
+}

@@ -1,0 +1,204 @@
+[
+  {
+    "name": "first publication is accepted",
+    "stored": null,
+    "incoming": {
+      "number": 1,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "accepted"
+  },
+  {
+    "name": "higher number is accepted",
+    "stored": {
+      "number": 1,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 2,
+      "removed": false,
+      "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "expect": "accepted"
+  },
+  {
+    "name": "higher number with the same hash is accepted",
+    "stored": {
+      "number": 1,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 2,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "accepted"
+  },
+  {
+    "name": "same number, same hash is a repeat",
+    "stored": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "repeat"
+  },
+  {
+    "name": "same number, different hash is a conflict",
+    "stored": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "expect": "conflict"
+  },
+  {
+    "name": "lower number is stale",
+    "stored": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 2,
+      "removed": false,
+      "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "expect": "stale"
+  },
+  {
+    "name": "lower number with the same hash is stale",
+    "stored": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 2,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "stale"
+  },
+  {
+    "name": "removal with a higher number is accepted",
+    "stored": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "expect": "accepted"
+  },
+  {
+    "name": "same removal again is a repeat",
+    "stored": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "incoming": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "expect": "repeat"
+  },
+  {
+    "name": "same number, removal over a document is a conflict",
+    "stored": {
+      "number": 4,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "incoming": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "expect": "conflict"
+  },
+  {
+    "name": "same number, document over a removal is a conflict",
+    "stored": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "incoming": {
+      "number": 4,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "conflict"
+  },
+  {
+    "name": "higher number after a removal is accepted",
+    "stored": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "incoming": {
+      "number": 5,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "accepted"
+  },
+  {
+    "name": "lower number after a removal is stale",
+    "stored": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "incoming": {
+      "number": 3,
+      "removed": false,
+      "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "expect": "stale"
+  },
+  {
+    "name": "a removal that is older than the removal is stale",
+    "stored": {
+      "number": 5,
+      "removed": true,
+      "content_hash": null
+    },
+    "incoming": {
+      "number": 4,
+      "removed": true,
+      "content_hash": null
+    },
+    "expect": "stale"
+  },
+  {
+    "name": "first publication may be a removal",
+    "stored": null,
+    "incoming": {
+      "number": 1,
+      "removed": true,
+      "content_hash": null
+    },
+    "expect": "accepted"
+  }
+]

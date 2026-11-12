@@ -1,0 +1,15 @@
+{
+  "accepted-future-minor-unknown-fields.json": [],
+  "rejected-unknown-major.json": [
+    [
+      "unsupported_major",
+      "/format_version"
+    ]
+  ],
+  "rejected-bad-version-string.json": [
+    [
+      "schema",
+      "/format_version"
+    ]
+  ]
+}

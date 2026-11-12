@@ -1,0 +1,362 @@
+{
+  "schema-unknown-field-games.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "schema-unknown-nested-field-colour.json": [
+    [
+      "schema",
+      "/zone_scale/0"
+    ]
+  ],
+  "schema-strict-refuses-minor-1-1.json": [
+    [
+      "schema",
+      "/format_version"
+    ]
+  ],
+  "schema-missing-required-music.json": [
+    [
+      "schema",
+      ""
+    ]
+  ],
+  "schema-time-not-integer.json": [
+    [
+      "schema",
+      "/intervals/0/length_ms"
+    ]
+  ],
+  "schema-cue-over-120-chars.json": [
+    [
+      "schema",
+      "/intervals/0/cue"
+    ]
+  ],
+  "schema-title-over-80-chars.json": [
+    [
+      "schema",
+      "/class/title"
+    ]
+  ],
+  "schema-zone-out-of-1-to-7.json": [
+    [
+      "schema",
+      "/intervals/0/zone"
+    ]
+  ],
+  "schema-sport-unknown.json": [
+    [
+      "schema",
+      "/class/sport"
+    ]
+  ],
+  "schema-time-in-zone-key-not-zone-number.json": [
+    [
+      "schema",
+      "/totals/time_in_zone_ms"
+    ]
+  ],
+  "schema-time-in-zone-value-negative.json": [
+    [
+      "schema",
+      "/totals/time_in_zone_ms/1"
+    ]
+  ],
+  "schema-ftp-test-minutes-not-3-5-20.json": [
+    [
+      "schema",
+      "/intervals/0/test/minutes"
+    ]
+  ],
+  "schema-cycling-interval-missing-cadence.json": [
+    [
+      "schema",
+      "/intervals/1"
+    ]
+  ],
+  "schema-cycling-interval-missing-position.json": [
+    [
+      "schema",
+      "/intervals/1"
+    ]
+  ],
+  "schema-cycling-interval-has-incline.json": [
+    [
+      "schema",
+      "/intervals/1"
+    ]
+  ],
+  "schema-cadence-bad-word.json": [
+    [
+      "schema",
+      "/intervals/2/cadence"
+    ]
+  ],
+  "schema-source-none-with-songs.json": [
+    [
+      "schema",
+      "/songs"
+    ]
+  ],
+  "schema-source-none-timing-not-missing.json": [
+    [
+      "schema",
+      "/music/song_timing"
+    ]
+  ],
+  "schema-source-spotify-without-songs.json": [
+    [
+      "schema",
+      "/songs"
+    ]
+  ],
+  "schema-anchors-quality-missing-but-listed.json": [
+    [
+      "schema",
+      "/songs/0/beat_anchors/anchors"
+    ]
+  ],
+  "schema-moments-quality-measured-but-empty.json": [
+    [
+      "schema",
+      "/songs/0/moments/items"
+    ]
+  ],
+  "schema-moment-kind-unknown.json": [
+    [
+      "schema",
+      "/songs/0/moments/items/0/kind"
+    ]
+  ],
+  "schema-spotify-id-is-not-a-track-id.json": [
+    [
+      "schema",
+      "/songs/0/ids/spotify_track"
+    ]
+  ],
+  "schema-song-bpm-out-of-range.json": [
+    [
+      "schema",
+      "/songs/0/bpm"
+    ]
+  ],
+  "schema-running-interval-has-cadence.json": [
+    [
+      "schema",
+      "/intervals/0"
+    ]
+  ],
+  "schema-running-interval-missing-incline.json": [
+    [
+      "schema",
+      "/intervals/0"
+    ]
+  ],
+  "schema-running-interval-has-ftp-test.json": [
+    [
+      "schema",
+      "/intervals/0"
+    ]
+  ],
+  "intervals-start-not-zero.json": [
+    [
+      "intervals_end_mismatch",
+      "/intervals"
+    ],
+    [
+      "intervals_start_not_zero",
+      "/intervals/0/start_ms"
+    ]
+  ],
+  "intervals-gap.json": [
+    [
+      "intervals_end_mismatch",
+      "/intervals"
+    ],
+    [
+      "intervals_gap_or_overlap",
+      "/intervals/2/start_ms"
+    ]
+  ],
+  "intervals-overlap.json": [
+    [
+      "intervals_end_mismatch",
+      "/intervals"
+    ],
+    [
+      "intervals_gap_or_overlap",
+      "/intervals/2/start_ms"
+    ]
+  ],
+  "intervals-end-before-class-length.json": [
+    [
+      "intervals_end_mismatch",
+      "/intervals"
+    ],
+    [
+      "songs_last_end_mismatch",
+      "/songs/1/end_ms"
+    ],
+    [
+      "totals_length_mismatch",
+      "/totals/length_ms"
+    ]
+  ],
+  "songs-first-start-not-zero.json": [
+    [
+      "songs_first_start_not_zero",
+      "/songs/0/start_ms"
+    ]
+  ],
+  "songs-window-gap.json": [
+    [
+      "songs_not_contiguous",
+      "/songs/1/start_ms"
+    ]
+  ],
+  "songs-window-overlap.json": [
+    [
+      "songs_not_contiguous",
+      "/songs/1/start_ms"
+    ]
+  ],
+  "songs-last-end-not-class-end.json": [
+    [
+      "songs_last_end_mismatch",
+      "/songs/1/end_ms"
+    ]
+  ],
+  "songs-window-longer-than-song.json": [
+    [
+      "moment_outside_song",
+      "/songs/0/moments/items/2/at_ms"
+    ],
+    [
+      "moment_outside_song",
+      "/songs/0/moments/items/3/at_ms"
+    ],
+    [
+      "song_window_longer_than_song",
+      "/songs/0/end_ms"
+    ]
+  ],
+  "songs-window-empty.json": [
+    [
+      "song_window_empty",
+      "/songs/1/end_ms"
+    ],
+    [
+      "songs_not_contiguous",
+      "/songs/1/start_ms"
+    ]
+  ],
+  "segment-not-on-interval-boundary.json": [
+    [
+      "segment_not_on_interval_boundary",
+      "/segments/1/start_ms"
+    ],
+    [
+      "segments_overlap_or_unordered",
+      "/segments/1/start_ms"
+    ]
+  ],
+  "segments-overlap.json": [
+    [
+      "segments_overlap_or_unordered",
+      "/segments/1/start_ms"
+    ]
+  ],
+  "zone-not-in-scale.json": [
+    [
+      "totals_time_mismatch",
+      "/totals/time_in_zone_ms/3"
+    ],
+    [
+      "zone_not_in_scale",
+      "/intervals/1/zone"
+    ]
+  ],
+  "zone-scale-duplicate.json": [
+    [
+      "totals_zone_keys_mismatch",
+      "/totals/time_in_zone_ms"
+    ],
+    [
+      "zone_duplicate",
+      "/zone_scale/1/zone"
+    ]
+  ],
+  "zone-scale-range-inverted.json": [
+    [
+      "range_inverted",
+      "/zone_scale/2/ftp_pct"
+    ]
+  ],
+  "cadence-range-inverted.json": [
+    [
+      "range_inverted",
+      "/intervals/0/cadence"
+    ]
+  ],
+  "running-zone-above-5.json": [
+    [
+      "totals_zone_keys_mismatch",
+      "/totals/time_in_zone_ms"
+    ],
+    [
+      "zone_out_of_range_for_sport",
+      "/zone_scale/4/zone"
+    ]
+  ],
+  "totals-length-mismatch.json": [
+    [
+      "totals_length_mismatch",
+      "/totals/length_ms"
+    ]
+  ],
+  "totals-zone-time-mismatch.json": [
+    [
+      "totals_time_mismatch",
+      "/totals/time_in_zone_ms/3"
+    ]
+  ],
+  "totals-zone-key-missing.json": [
+    [
+      "totals_zone_keys_mismatch",
+      "/totals/time_in_zone_ms"
+    ]
+  ],
+  "anchor-outside-song.json": [
+    [
+      "anchor_outside_song",
+      "/songs/0/beat_anchors/anchors/1/at_ms"
+    ]
+  ],
+  "anchors-unordered.json": [
+    [
+      "anchor_unordered",
+      "/songs/0/beat_anchors/anchors/1/at_ms"
+    ]
+  ],
+  "moment-outside-song.json": [
+    [
+      "moment_outside_song",
+      "/songs/0/moments/items/3/at_ms"
+    ]
+  ],
+  "moments-unordered.json": [
+    [
+      "moment_unordered",
+      "/songs/0/moments/items/1/at_ms"
+    ]
+  ],
+  "segment-empty.json": [
+    [
+      "segment_empty",
+      "/segments/1/end_ms"
+    ]
+  ]
+}

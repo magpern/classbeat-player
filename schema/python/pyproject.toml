@@ -1,0 +1,37 @@
+[project]
+name = "classformat"
+version = "1.0.0"
+description = "Class format v1 (ADR 0003): schema checks, semantic validator, publication policy"
+requires-python = ">=3.12"
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "rfc8785>=0.1.4,<0.2",
+  "pydantic>=2.9,<3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<10",
+  "datamodel-code-generator==0.53.0",
+  "ruff>=0.8",
+  "pyright>=1.1.380",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/classformat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["tests", "../generated/python"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
