@@ -1,0 +1,12 @@
+{
+  "_spikeOnly": "SPIKE ONLY: a stand-in shape for spike 1. This is NOT the class format (that is PL1). Replace the songs with the ones you will really play, in order; keep a repeated recording (song 4 is song 2 again) if you want to test the same-recording row.",
+  "name": "Spike class (example)",
+  "crossfadeMs": 9000,
+  "songs": [
+    { "trackId": "spotify:track:SPIKEEXAMPLE0001", "title": "Spike Song A", "artist": "Spike Artist", "durationMs": 180000 },
+    { "trackId": "spotify:track:SPIKEEXAMPLE0002", "title": "Spike Song B", "artist": "Spike Artist", "durationMs": 200000 },
+    { "trackId": "spotify:track:SPIKEEXAMPLE0003", "title": "Spike Song C", "artist": "Other Artist", "durationMs": 190000 },
+    { "trackId": "spotify:track:SPIKEEXAMPLE0002", "title": "Spike Song B", "artist": "Spike Artist", "durationMs": 200000 },
+    { "trackId": "spotify:track:SPIKEEXAMPLE0005", "title": "Spike Song D", "artist": "Third Artist", "durationMs": 210000 }
+  ]
+}
