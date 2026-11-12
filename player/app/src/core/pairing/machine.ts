@@ -42,7 +42,8 @@ export type PairingEvent =
   | { readonly type: "start"; readonly origin: OriginResult; readonly keychain: boolean }
   | { readonly type: "started"; readonly attempt: number; readonly answer: StartAnswer }
   | { readonly type: "poll_due"; readonly attempt: number }
-  | { readonly type: "polled"; readonly attempt: number; readonly answer: PollAnswer }
+  /** `origin` is the server the poll went to, so a token nobody waits for can be given back to it. */
+  | { readonly type: "polled"; readonly attempt: number; readonly origin: string; readonly answer: PollAnswer }
   | { readonly type: "saved"; readonly attempt: number; readonly ok: boolean }
   | { readonly type: "checked"; readonly attempt: number; readonly answer: DeviceAnswer }
   | { readonly type: "unpair" };
@@ -111,6 +112,16 @@ function started(s: Extract<PairingState, { kind: "starting" }>, answer: StartAn
   return { state: next.state, effects: [{ do: "open_page", page: answer.page }, ...next.effects] };
 }
 
+/**
+ * A token that arrives when nothing waits for it (after Cancel, or for an older attempt) is never
+ * kept and never shown: it is given back to the server that issued it, as a failed save is, so no
+ * device row waits for a holder. The one exception is the token this state already holds.
+ */
+function late(s: PairingState, origin: string, answer: Extract<PollAnswer, { kind: "ok" }>): Step {
+  if (s.kind === "paired" && s.record.token === answer.token) return stay(s);
+  return { state: s, effects: [{ do: "revoke", record: { origin, token: answer.token, email: answer.email } }] };
+}
+
 export function step(s: PairingState, e: PairingEvent, now: number): Step {
   switch (e.type) {
     case "loaded":
@@ -132,7 +143,8 @@ export function step(s: PairingState, e: PairingEvent, now: number): Step {
       if (now >= s.expiresAt) return unpaired(s.attempt, "code_expired");
       return { state: { ...s, polling: true }, effects: [{ do: "poll", attempt: s.attempt, origin: s.origin, deviceCode: s.deviceCode }] };
     case "polled":
-      return s.kind === "waiting" && s.attempt === e.attempt && s.polling ? polled(s, e.answer, now) : stay(s);
+      if (s.kind === "waiting" && s.attempt === e.attempt && s.polling) return polled(s, e.answer, now);
+      return e.answer.kind === "ok" ? late(s, e.origin, e.answer) : stay(s);
     case "saved":
       if (s.kind !== "paired" || s.attempt !== e.attempt || e.ok) return stay(s);
       // The token could not be kept: it is given back, so no device row waits for a holder.

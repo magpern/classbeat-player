@@ -83,6 +83,7 @@ export function createPairingService(d: PairingDeps): PairingService {
         return ask({ origin: e.origin, method: "POST", path: "/api/pairing/token", body: { device_code: e.deviceCode } }, (a) => ({
           type: "polled",
           attempt: e.attempt,
+          origin: e.origin,
           answer: parsePollAnswer(a),
         }));
       case "save": {
@@ -109,7 +110,8 @@ export function createPairingService(d: PairingDeps): PairingService {
         return;
       case "revoke":
         // Sent after the local copy is gone, and its answer changes nothing here: offline or not, this
-        // computer is unpaired. A token never given back ends on the server after 180 days unused.
+        // computer is unpaired. A token never given back is deleted on the server 24 hours after
+        // pairing if it was never used (ADR 0002), or after 180 days without use if it was.
         return ask({ origin: e.record.origin, method: "DELETE", path: "/api/player/device", token: e.record.token }, () => null);
     }
   }

@@ -2,12 +2,12 @@
 // only a real keychain counts, what is written is the encrypted text only, readable by this user
 // only, and without a keychain nothing is written at all.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { keychainUsable } from "../../src/core/pairing/keychain-policy.ts";
-import { keychainStore, RECORD_FILE } from "../../src/main/pairing/keychain.ts";
+import { keychainStore, MAX_FILE_BYTES, RECORD_FILE } from "../../src/main/pairing/keychain.ts";
 import type { SafeStorageLike } from "../../src/main/pairing/keychain.ts";
 import { newToken } from "./pairing-tokens.ts";
 
@@ -66,4 +66,66 @@ test("a safeStorage that throws counts as no keychain; a broken file reads as no
   const broken = { ...fakeSafe(), decryptString: () => { throw new Error("bad"); } };
   keychainStore(fakeSafe(), d, "linux").save("x");
   assert.equal(keychainStore(broken, d, "linux").load(), null);
+});
+
+const notOnWindows = { skip: process.platform === "win32" ? "symbolic links need extra rights on Windows" : false };
+
+test("a link planted at the temporary file's name is removed, never followed", notOnWindows, () => {
+  const d = dir();
+  const target = join(dir(), "elsewhere");
+  writeFileSync(target, "untouched");
+  symlinkSync(target, join(d, `${RECORD_FILE}.tmp`));
+  keychainStore(fakeSafe(), d, "linux").save("x");
+  assert.equal(readFileSync(target, "utf8"), "untouched");
+  assert.ok(lstatSync(join(d, RECORD_FILE)).isFile());
+  assert.deepEqual(readdirSync(d), [RECORD_FILE]);
+});
+
+test("a link that appears at the temporary name after the removal makes the save fail, not follow it", notOnWindows, () => {
+  const d = dir();
+  const target = join(dir(), "elsewhere");
+  writeFileSync(target, "untouched");
+  const store = keychainStore(fakeSafe(), d, "linux");
+  store.save("first");
+  // encryptString runs between the removal and the exclusive create: the worst moment for a race.
+  const racing: SafeStorageLike = {
+    ...fakeSafe(),
+    encryptString: (t) => {
+      symlinkSync(target, join(d, `${RECORD_FILE}.tmp`));
+      return fakeSafe().encryptString(t);
+    },
+  };
+  assert.throws(() => keychainStore(racing, d, "linux").save("second"));
+  assert.equal(readFileSync(target, "utf8"), "untouched");
+  assert.equal(store.load(), "first");
+  assert.deepEqual(readdirSync(d), [RECORD_FILE]);
+});
+
+test("a file over the size limit is refused unread; one at the limit is read", () => {
+  const d = dir();
+  let decrypted = 0;
+  const counting: SafeStorageLike = {
+    ...fakeSafe(),
+    decryptString: () => {
+      decrypted += 1;
+      return "x";
+    },
+  };
+  writeFileSync(join(d, RECORD_FILE), Buffer.alloc(MAX_FILE_BYTES + 1));
+  assert.equal(keychainStore(counting, d, "linux").load(), null);
+  assert.equal(decrypted, 0);
+  writeFileSync(join(d, RECORD_FILE), Buffer.alloc(MAX_FILE_BYTES));
+  assert.equal(keychainStore(counting, d, "linux").load(), "x");
+  assert.equal(decrypted, 1);
+});
+
+test("a record file that is a link or not a plain file is read as nothing", notOnWindows, () => {
+  const real = dir();
+  keychainStore(fakeSafe(), real, "linux").save("x");
+  const linked = dir();
+  symlinkSync(join(real, RECORD_FILE), join(linked, RECORD_FILE));
+  assert.equal(keychainStore(fakeSafe(), linked, "linux").load(), null);
+  const folder = dir();
+  mkdirSync(join(folder, RECORD_FILE));
+  assert.equal(keychainStore(fakeSafe(), folder, "linux").load(), null);
 });
