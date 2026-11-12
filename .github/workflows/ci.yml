@@ -82,6 +82,56 @@ jobs:
       - name: npm ci and npm test in every package
         run: bash scripts/run-node-packages.sh .
 
+  # The desktop app on the three systems it ships for (plan section 12, PL4): lint, types, unit
+  # tests, then the e2e test (a display is present on the macOS and Windows runners; Linux runs
+  # it under xvfb), then an UNSIGNED package uploaded for a few days. No signing, no secrets.
+  # Runs only when player/ changes. The Linux leg overlaps node-packages on purpose: that job
+  # covers every package under player/, this one adds the package step.
+  desktop-app:
+    needs: changes
+    if: needs.changes.outputs.player == 'true'
+    name: desktop-app (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: linux }
+          - { os: macos-latest, label: macos }
+          - { os: windows-latest, label: windows }
+    defaults:
+      run:
+        shell: bash
+        working-directory: player/app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - name: Install xvfb
+        if: matrix.label == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
+      - name: e2e (Linux, under xvfb)
+        if: matrix.label == 'linux'
+        run: xvfb-run -a npm run test:e2e
+      - name: e2e (macOS and Windows)
+        if: matrix.label != 'linux'
+        run: npm run test:e2e
+      - name: Package (unsigned)
+        run: bash ../../scripts/package-desktop.sh . "$RUNNER_TEMP/package" ${{ matrix.label }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: classbeat-player-${{ matrix.label }}-unsigned
+          path: ${{ runner.temp }}/package/*.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
   # Runs schema/ci.sh: install from lockfiles, generated types current, Python and TypeScript
   # checks. A failure fails this job, and `ci` below fails when it fails.
   schema:
@@ -148,7 +198,7 @@ jobs:
 
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, schema, backend]
+    needs: [changes, repo-checks, node-packages, desktop-app, schema, backend]
     if: always()
     runs-on: ubuntu-latest
     steps:
