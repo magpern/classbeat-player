@@ -358,5 +358,11 @@
       "segment_empty",
       "/segments/1/end_ms"
     ]
+  ],
+  "segment-end-not-on-interval-boundary.json": [
+    [
+      "segment_not_on_interval_boundary",
+      "/segments/0/end_ms"
+    ]
   ]
 }

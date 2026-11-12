@@ -13,10 +13,10 @@ echo "== generated types are current =="
 "$here/check-generated.sh"
 
 echo "== python: lint, types, tests =="
-uv run --project "$here/python" --frozen ruff check "$here/python"
-uv run --project "$here/python" --frozen ruff format --check "$here/python"
+uv run --project "$here/python" --frozen ruff check "$here/python" "$here/converter"
+uv run --project "$here/python" --frozen ruff format --check "$here/python" "$here/converter"
 (cd "$here/python" && uv run --frozen pyright)
-uv run --project "$here/python" --frozen pytest -q "$here/python"
+uv run --project "$here/python" --frozen pytest -q "$here/python" "$here/converter"
 
 echo "== typescript: types, tests =="
 npm --prefix "$here/ts" run typecheck
