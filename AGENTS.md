@@ -90,7 +90,7 @@ milestone's last merge → Verifier → gaps become issues → milestone closes 
 ```
 
 If one finding survives three rounds, the Orchestrator reassesses the cause, revises the issue or
-the ADR, and the loop restarts with a fresh Reviewer. The Orchestrator does not stop for a `FAIL`
+the ADR, and the same Reviewer, resumed, reviews the revised work. The Orchestrator does not stop for a `FAIL`
 or at the end of a milestone.
 
 ## 5. The review gate (every merge)
@@ -98,8 +98,8 @@ or at the end of a milestone.
 1. The pull request has, for its **current head commit**, a comment starting
    `Agent review (<model>): PASS <head SHA>`. A `FAIL` is recorded the same way.
 2. The first review of a pull request is a **fresh context**. Later rounds resume that same
-   Reviewer with the new head. A fresh one is used only after a second `FAIL` or when it cannot
-   be resumed, and the comment says so.
+   Reviewer with the new head, however many `FAIL`s came before (owner, 2026-11-12). A fresh
+   one is used only when the Reviewer cannot be resumed, and the comment says so.
 3. **Top-tier Reviewer** for security-critical pull requests: accounts, sign-in and sessions;
    keeping one user's data from another; pairing and every kind of token; who may control a live
    class; the audio cache and its encryption; the desktop shell's hardening and its bridge to
