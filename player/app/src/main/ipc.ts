@@ -4,7 +4,7 @@
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { CH_COMMAND, CH_OPEN_DROPPED, CH_STATE } from "../core/channels.ts";
-import { parseClockCommand, parseDroppedFile } from "../core/commands.ts";
+import { parseClockCommand, parseDroppedFile, parseMusicCommand } from "../core/commands.ts";
 import { isTrustedSender } from "../core/ipc-policy.ts";
 import type { Trusted } from "../core/ipc-policy.ts";
 import type { Controller } from "./controller.ts";
@@ -19,6 +19,8 @@ export function registerIpc(controller: Controller, trusted: () => Trusted): voi
   ipcMain.handle(CH_STATE, (e) => (trustedEvent(e, trusted) ? controller.snapshot() : null));
   ipcMain.handle(CH_COMMAND, (e, raw: unknown) => {
     if (!trustedEvent(e, trusted)) return null;
+    const music = parseMusicCommand(raw);
+    if (music) return controller.music(music.action);
     const cmd = parseClockCommand(raw);
     return cmd ? controller.command(cmd) : null;
   });
