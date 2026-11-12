@@ -21,6 +21,7 @@ def _calls(site: Site) -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for route in routes_of(site.app):
         path = route.path.replace("{session_id}", str(uuid.uuid4()))
+        path = path.replace("{device_id}", str(uuid.uuid4()))
         assert "{" not in path, "a new path parameter needs a value here"
         found.append((route.method, path))
     return found
@@ -29,7 +30,7 @@ def _calls(site: Site) -> list[tuple[str, str]]:
 def _assert_headers(response: Response, path: str) -> None:
     assert response.headers["content-security-policy"] == CSP
     assert response.headers["referrer-policy"] == "no-referrer"
-    if path.startswith("/api/site/"):
+    if path.startswith(("/api/site/", "/api/pairing/", "/api/player/")):
         assert response.headers["cache-control"] == "no-store"
 
 
@@ -106,8 +107,14 @@ def test_a_cross_site_state_change_is_refused_on_every_route(
     site: Site, headers: dict[str, str | None]
 ) -> None:
     site.allow(EMAIL)
-    changing = [(m, p) for m, p in _calls(site) if m in {"POST", "PUT", "PATCH", "DELETE"}]
-    assert len(changing) >= 5
+    # The site's API: the routes that take a cookie. The app's routes (pairing, the player
+    # API) read none and are called without an `Origin`; the cookie-routes guard holds that.
+    changing = [
+        (m, p)
+        for m, p in _calls(site)
+        if m in {"POST", "PUT", "PATCH", "DELETE"} and p.startswith("/api/site/")
+    ]
+    assert len(changing) >= 8
     sent = {k: v for k, v in headers.items() if v is not None}
     for method, path in changing:
         signed_in = site.sign_in(EMAIL, site.browser(f"198.51.100.{len(changing)}"))

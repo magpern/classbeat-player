@@ -7,8 +7,10 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 |---|---|
 | `src/player_backend/app.py` | App factory (`create_app(settings)`); `app_from_env` for the server |
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
-| `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in and site sessions (ADR 0002, sections 4 and 5). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
-| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, the client address and what is kept of it, the request checks and response headers, sign-in |
+| `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in, site sessions, the user's side of pairing and the account's devices (ADR 0002, sections 4, 5 and 6). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
+| `src/player_backend/player_api/` | The app's side: pairing (`/api/pairing/`) and the player API (`/api/player/`). No cookie is read here. `deps.py` has the one dependency of the device token |
+| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits |
+| `src/player_backend/bearer_blocks.py` | What one process remembers about bearer tokens it refuses without a lookup (section 10). In memory only |
 | `src/player_backend/mail.py`, `no_mailer.py` | The mail interface. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the data-access modules, the migration runner and the operator's commands. The only place that may call a handle |
@@ -60,8 +62,41 @@ fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and
   `Sec-Fetch-Site: same-origin`. Every response has the page headers of section 5, and the
   site's API is `Cache-Control: no-store`.
 - Guards: `tests/guards/test_guard_cookie_routes.py` (the routes that read a cookie equal the
-  written list; cookies are read in `site/cookies.py` only) and
-  `tests/guards/test_guard_endpoint_isolation.py` (two accounts, every endpoint).
+  written list, every route is on one of the credential lists; cookies are read in
+  `site/cookies.py` only) and `tests/guards/test_guard_endpoint_isolation.py` (two accounts,
+  every endpoint that enters an account, by a session or by a device token).
+
+## Pairing a device and the device token (ADR 0002, sections 2, 3, 6, 10 and 11)
+
+| Route | Credential | Does |
+|---|---|---|
+| `POST /api/pairing/start` `{platform, version}` | None | Returns `device_code`, `user_code` (`XXXX-XXXX`), `verification_uri` (`<site>/pair`, without the code), `expires_in: 600`, `interval: 5`. `429` over 10 starts an hour per address |
+| `POST /api/pairing/token` `{device_code}` | The device code, in the body | `200 {device_token, email}` once, on the first poll after approval. Otherwise `400` with `authorization_pending`, `slow_down`, `access_denied` or `expired_token` (also for a used or unknown code, and for anything that is not a `cbp_dc_` token, which is refused before any lookup) |
+| `POST /api/site/pairing/find` `{code}` | Session cookie | `200 {platform, version}` of the pending pairing; changes nothing. `404 pairing_not_found` for a wrong code, an ended or decided pairing and a closed form alike |
+| `POST /api/site/pairing/decide` `{code, approve, name}` | Session cookie | `200 {"status": "approved" or "denied"}`. `404 pairing_not_found` as above; `409 too_many_devices` at 10 active devices; `422 invalid_name` |
+| `GET /api/site/devices`, `DELETE /api/site/devices/{id}` | Session cookie | List the devices that are not revoked (`last_used_at: null` is "never used"); revoke one |
+| `GET /api/player/device`, `DELETE /api/player/device` | `Authorization: Bearer cbp_dev_…` | The device's own name, platform, version and paired date; the app revokes its own token |
+
+- Migration `0006` gives `auth_start_pairing`, `auth_find_pairing`, `auth_decide_pairing`,
+  `auth_collect_pairing` and `auth_enter_device` their bodies, with ADR 0002's numbers as
+  constants in the SQL (principle 7). No grant, table or function is added.
+  `auth_device_active` still fails closed (PL8).
+- Wrong codes are counted inside the database, at the look-up and the decision together: the
+  fifth in 15 minutes closes the account's form for 15 minutes. The two site routes *return*
+  their `404` instead of raising it, so the request's transaction commits and the count stays.
+- A device-token request is one transaction: `device_token` (`player_api/deps.py`) calls
+  `auth_enter_device` as its first statement and yields an `AccountContext`. A token that does
+  not work is answered `401` with `token_revoked`, `token_unknown` or `token_expired` and
+  `WWW-Authenticate: Bearer`, after its transaction (and so its counters) has been committed.
+  Anything that is not a `cbp_dev_` bearer token is `401 invalid_token`, with nothing looked up.
+- Limits (section 10): 60 requests a minute per device token; the same unknown or revoked token
+  from one address 20 times in 5 minutes is then refused (`429`) for 5 minutes without a
+  lookup, from this process's memory; over 200 unknown tokens in 5 minutes from one address,
+  further unknown ones get `429` until the window ends, and valid tokens keep working.
+- A paired device sends the account a mail, after the response. Events: `pairing.approved`,
+  `pairing.denied`, `pairing.refused` (the cap) and `device.created` inside the functions;
+  `device.revoked` by the backend.
+- Responses under `/api/pairing/` and `/api/player/` are `Cache-Control: no-store`.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

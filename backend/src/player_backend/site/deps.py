@@ -69,7 +69,8 @@ def recent_sign_in(
     context: Annotated[AccountContext, Depends(site_session, scope="function")],
 ) -> AccountContext:
     """For sensitive actions: the user proved who they are within the last 10 minutes."""
-    if not is_recent_sign_in(context.signed_in_at, context.entered_at):
+    signed_in_at = context.signed_in_at
+    if signed_in_at is None or not is_recent_sign_in(signed_in_at, context.entered_at):
         raise ApiError(403, "recent_sign_in_required")
     return context
 
