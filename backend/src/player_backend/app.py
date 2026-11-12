@@ -22,6 +22,7 @@ from player_backend.request_policy import response_headers
 from player_backend.settings import Settings
 from player_backend.site import router as site_router
 from player_backend.site.state import SiteState
+from player_backend.smtp_mailer import mailer_from_env
 
 _access_log = logging.getLogger("player_backend.access")
 _log = logging.getLogger("player_backend.app")
@@ -86,5 +87,8 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
 
 
 def app_from_env() -> FastAPI:
-    """Entry point for the server: `uvicorn --factory player_backend.app:app_from_env`."""
-    return create_app(Settings.from_env())
+    """Entry point for the server: `uvicorn --factory player_backend.app:app_from_env`.
+
+    The SMTP mailer when `PLAYER_SMTP_HOST` is set (smtp_settings.py), else `NoMailer`.
+    """
+    return create_app(Settings.from_env(), mailer_from_env())

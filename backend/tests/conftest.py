@@ -24,6 +24,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from player_backend.db.executor import Handle, connect
 from player_backend.db.migrate import apply_migrations
 from tests.dbhelp import ROLES, Conn
+from tests.netguard import network_guard as network_guard  # autouse: no test reaches the network
 from tests.sitehelp import Site, running_site
 
 BACKEND = Path(__file__).resolve().parents[1]
