@@ -9,7 +9,7 @@ ADR that changes a decision says which one it replaces.
 | [0001](0001-application-stack-music-link-and-timing.md) | Application stack, music link and timing model | Accepted |
 | 0002 | Accounts, pairing and tokens | In progress (#3) |
 | [0003](0003-class-format.md) | Class format | Accepted |
-| 0004 | Provider terms | Planned |
+| [0004](0004-provider-terms.md) | Provider terms | Accepted |
 
 ## Template
 
