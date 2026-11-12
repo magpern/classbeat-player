@@ -20,6 +20,7 @@ from player_backend.settings import Settings, SettingsError
 
 # A fake URL: the password is a placeholder, never a real one.
 URL = "postgresql://player_app:placeholder@127.0.0.1:1/none"
+ENV = {"PLAYER_DATABASE_URL": URL, "PLAYER_SITE_ORIGIN": "https://player.test"}
 
 
 def _get(app: FastAPI, path: str, headers: dict[str, str] | None = None) -> httpx.Response:
@@ -32,7 +33,7 @@ def _get(app: FastAPI, path: str, headers: dict[str, str] | None = None) -> http
 
 
 def _app() -> FastAPI:
-    return create_app(Settings.from_env({"PLAYER_DATABASE_URL": URL}))
+    return create_app(Settings.from_env(ENV))
 
 
 def _token(kind: str) -> str:
@@ -45,16 +46,16 @@ def test_settings_require_the_database_url() -> None:
     with pytest.raises(SettingsError):
         Settings.from_env({})
     with pytest.raises(SettingsError):
-        Settings.from_env({"PLAYER_DATABASE_URL": "mysql://x"})
+        Settings.from_env({**ENV, "PLAYER_DATABASE_URL": "mysql://x"})
     with pytest.raises(SettingsError):
-        Settings.from_env({"PLAYER_DATABASE_URL": URL, "PLAYER_LOG_LEVEL": "loud"})
+        Settings.from_env({**ENV, "PLAYER_LOG_LEVEL": "loud"})
 
 
 def test_settings_never_show_the_database_url() -> None:
-    settings = Settings.from_env({"PLAYER_DATABASE_URL": URL})
+    settings = Settings.from_env(ENV)
     assert "placeholder" not in repr(settings)
     with pytest.raises(SettingsError) as raised:
-        Settings.from_env({"PLAYER_DATABASE_URL": "mysql://u:hidden@h/d"})
+        Settings.from_env({**ENV, "PLAYER_DATABASE_URL": "mysql://u:hidden@h/d"})
     assert "hidden" not in str(raised.value)
 
 

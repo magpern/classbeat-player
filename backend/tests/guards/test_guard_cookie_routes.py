@@ -1,0 +1,140 @@
+"""Guard: the routes that read a cookie equal the written list (ADR 0002, section 5).
+
+The session cookie is accepted by the site's API (`/api/site/`) and by exactly one live route,
+`POST /api/live/controller` (PL8, not built yet). Nowhere else. A new route that reads a cookie
+fails here until it is listed, and it can be listed only if the ADR allows it.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from player_backend.app import create_app
+from player_backend.settings import Settings
+from player_backend.site.cookies import login_cookie_token, session_cookie_token
+from player_backend.site.deps import same_origin, site_session
+from tests.guards.cookie_source_check import READERS, check_source, check_tree
+from tests.routehelp import RouteInfo, routes_of
+
+SRC = Path(__file__).resolve().parents[2] / "src"
+OUTSIDE = "player_backend/player_api.py"
+
+# The written lists. A change here is a change to where a cookie is accepted: security-critical.
+SESSION_COOKIE_ROUTES = frozenset(
+    {
+        ("GET", "/api/site/sessions"),
+        ("DELETE", "/api/site/sessions/{session_id}"),
+        ("POST", "/api/site/sign-out"),
+        ("POST", "/api/site/sessions/end-all"),
+    }
+)
+# The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
+LOGIN_COOKIE_ROUTES = frozenset(
+    {
+        ("POST", "/api/site/sign-in/link"),
+        ("POST", "/api/site/sign-in/complete"),
+    }
+)
+SITE_API = "/api/site/"
+LIVE_COOKIE_ROUTE = ("POST", "/api/live/controller")
+
+
+def _routes() -> list[RouteInfo]:
+    # A placeholder URL: making the app opens no connection.
+    settings = Settings(
+        database_url="postgresql://player_app:placeholder@127.0.0.1:1/none",
+        site_origin="https://player.test",
+    )
+    return routes_of(create_app(settings))
+
+
+def _using(dependency: object) -> set[tuple[str, str]]:
+    return {(r.method, r.path) for r in _routes() if dependency in r.dependencies}
+
+
+def test_the_routes_that_read_the_session_cookie_equal_the_list() -> None:
+    assert _using(session_cookie_token) == SESSION_COOKIE_ROUTES
+
+
+def test_the_routes_that_read_the_browser_tokens_cookie_equal_the_list() -> None:
+    assert _using(login_cookie_token) == LOGIN_COOKIE_ROUTES
+
+
+def test_the_readers_checked_here_are_all_the_readers() -> None:
+    assert {session_cookie_token.__name__, login_cookie_token.__name__} == READERS
+
+
+def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
+    # One dependency per credential type: no route reads the cookie beside it.
+    assert _using(session_cookie_token) == _using(site_session)
+
+
+def test_every_cookie_route_is_in_the_sites_api_or_is_the_one_live_route() -> None:
+    for method, path in SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES:
+        assert path.startswith(SITE_API) or (method, path) == LIVE_COOKIE_ROUTE
+
+
+def test_every_cookie_route_applies_the_origin_check() -> None:
+    cookie_routes = _using(session_cookie_token) | _using(login_cookie_token)
+    assert cookie_routes <= _using(same_origin)
+
+
+def test_no_route_takes_a_token_in_its_path() -> None:
+    # Principle 3. The one path parameter is a session's id, which is not a credential.
+    parameters = {r.path for r in _routes() if "{" in r.path}
+    assert parameters == {"/api/site/sessions/{session_id}"}
+
+
+def test_backend_source_reads_cookies_only_in_the_cookie_module() -> None:
+    assert check_tree(SRC) == []
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        'token = request.cookies.get("x")',
+        "jar = request.cookies",
+        "from fastapi import Cookie",
+        "import fastapi\ndef f(session: str = fastapi.Cookie()): ...",
+        "from http.cookies import SimpleCookie",
+        "import http.cookies",
+        "from http import cookies",
+        'value = request.headers.get("cookie")',
+        'value = request.headers["Cookie"]',
+        'value = scope_headers[b"cookie"]',
+        'NAME = "__Host-cbp_session"',
+        "from player_backend.site.cookies import SESSION_COOKIE\nvalue = jar[SESSION_COOKIE]\n"
+        'other = "__host-cbp_login"',
+        "from player_backend.site.cookies import session_cookie_token\n"
+        "token = session_cookie_token(request)",
+        "from player_backend.site.cookies import login_cookie_token\nread = login_cookie_token",
+        "from player_backend.site import cookies\ntoken = cookies.session_cookie_token(request)",
+        "from player_backend.site.cookies import session_cookie_token as read\n"
+        "token = session_cookie_token(request)",
+    ],
+)
+def test_reading_a_cookie_anywhere_else_fails(snippet: str) -> None:
+    assert check_source(snippet, OUTSIDE) != []
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "from player_backend.site.cookies import session_cookie_token\n"
+        "def dep(token: Annotated[str | None, Depends(session_cookie_token)]): ...",
+        "from player_backend.site.cookies import put_session_cookie\n"
+        "put_session_cookie(response, token)",
+        'pattern = "(authorization|cookie)"',
+    ],
+)
+def test_using_a_reader_as_a_dependency_and_writing_a_cookie_pass(snippet: str) -> None:
+    assert check_source(snippet, OUTSIDE) == []
+
+
+def test_a_route_that_is_not_listed_fails_the_comparison() -> None:
+    # The comparison is of sets, both ways: an unlisted reader and a listed non-reader differ.
+    extra = SESSION_COOKIE_ROUTES | {("GET", "/api/player/classes")}
+    assert _using(session_cookie_token) != extra
+    assert _using(session_cookie_token) != SESSION_COOKIE_ROUTES - {("POST", "/api/site/sign-out")}

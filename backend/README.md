@@ -7,9 +7,12 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 |---|---|
 | `src/player_backend/app.py` | App factory (`create_app(settings)`); `app_from_env` for the server |
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
+| `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in and site sessions (ADR 0002, sections 4 and 5). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
+| `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, the client address and what is kept of it, the request checks and response headers, sign-in |
+| `src/player_backend/mail.py`, `no_mailer.py` | The mail interface. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the data-access modules, the migration runner and the operator's commands. The only place that may call a handle |
-| `src/player_backend/db/executor/` | The executor: the only holder of the database driver. Makes every connection, hands out handles, owns `Query` and its registry |
+| `src/player_backend/db/executor/` | The executor: the only holder of the database driver. Makes every connection and the pool, hands out handles, owns `Query` and its registry |
 | `src/player_backend/db/queries/` | Query modules: every SQL statement, as `Final[Query]` constants (one string literal, or a committed `.sql` file of the fixed list) |
 | `src/player_backend/db/migrations/` | Ordered plain-SQL migrations, run as `player_owner` |
 | `db/init/10-roles.sql` | Database init, run once as the bootstrap superuser: the three roles, database rights, log settings |
@@ -25,7 +28,10 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
    `player_auth` never logs in.
 3. Migrations as `player_owner`: `PLAYER_DATABASE_OWNER_URL=... uv run python -m player_backend.db.migrate`.
 4. The server as `player_app`:
-   `PLAYER_DATABASE_URL=... uv run uvicorn --factory player_backend.app:app_from_env --no-access-log`.
+   `PLAYER_DATABASE_URL=... PLAYER_SITE_ORIGIN=https://<site host> uv run uvicorn --factory
+   player_backend.app:app_from_env --no-access-log --no-proxy-headers`. The client address
+   comes from `X-Forwarded-For` only for peers in `PLAYER_TRUSTED_PROXIES`, so uvicorn's own
+   proxy handling stays off.
 
 Migrations are plain ordered SQL (`NNNN_name.sql`), not Alembic: the security-relevant part is
 SQL that reviewers read as it runs, and the runner is small. Each file runs once, in its own
@@ -34,14 +40,38 @@ is refused. Never edit an applied migration; add the next number, its name in th
 fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and its step in
 `db/migrate.py` (tests fail until all three exist).
 
+## Sign-in and site sessions (ADR 0002, sections 4, 5, 10 and 11)
+
+| Route (all under `/api/site/`) | Does |
+|---|---|
+| `POST sign-in/link` `{email}` | Always `200 {"status":"accepted"}`, whether or not the address can sign in. Sets `__Host-cbp_login` when the browser has none. `429` only for the requester's own limit (10 an hour per address) |
+| `POST sign-in/complete` `{token}` | Uses a link: once, within 15 minutes, in the browser that asked. Sets `__Host-cbp_session`. Every refusal is `401 sign_in_refused` |
+| `GET sessions` | The account's live sessions |
+| `DELETE sessions/{id}`, `POST sign-out` | End one session, or this one |
+| `POST sessions/end-all` | Sign out everywhere. Needs a sign-in within the last 10 minutes (`403 recent_sign_in_required`) |
+
+- Migration `0004` gives `rate_limit_hit`, `auth_enter_session`, `auth_request_login` and
+  `auth_complete_login` their bodies, with ADR 0002's defaults written in the SQL, as in
+  `auth_purge_expired`. The other functions still fail closed.
+- A signed-in request is one transaction: `site_session` (`site/deps.py`) calls
+  `auth_enter_session` as its first statement and yields an `AccountContext` with the handle.
+  It is committed after the route's function returns and before the response is sent.
+- Every state change needs `Origin` equal to `PLAYER_SITE_ORIGIN` and, when present,
+  `Sec-Fetch-Site: same-origin`. Every response has the page headers of section 5, and the
+  site's API is `Cache-Control: no-store`.
+- Guards: `tests/guards/test_guard_cookie_routes.py` (the routes that read a cookie equal the
+  written list; cookies are read in `site/cookies.py` only) and
+  `tests/guards/test_guard_endpoint_isolation.py` (two accounts, every endpoint).
+
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 
 Two layers.
 
 **At run time: the executor and `Query`.**
 
-- `player_backend.db.executor` is the only code that imports `psycopg`. It makes every
-  connection. No connection, cursor, transaction object or driver exception leaves it: a driver
+- `player_backend.db.executor` is the only code that imports `psycopg` and `psycopg_pool`.
+  It makes every connection, and the pool of the running backend (`open_pool`), which
+  lends handles and nothing else. No connection, cursor, transaction object or driver exception leaves it: a driver
   error becomes a `DatabaseError` (SQLSTATE and the server's primary message), raised with no
   chain to the driver's exception.
 - A `Handle` has two methods: `rows(query, params)` runs a registered `Query` with bound

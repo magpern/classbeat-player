@@ -1,4 +1,4 @@
-"""The SECURITY DEFINER functions of this issue: stubs fail closed; the purge works."""
+"""The SECURITY DEFINER functions without a body yet fail closed; the purge works."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from psycopg import errors, sql
 from tests.dbhelp import Conn, as_role
 from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
 
-STUBS = sorted(SECURITY_DEFINER_FUNCTIONS - {"auth_purge_expired"})
+# Given their bodies by migration 0004 (tests/test_login_functions.py and the site tests).
+IMPLEMENTED = {"auth_enter_session", "auth_request_login", "auth_complete_login", "rate_limit_hit"}
+STUBS = sorted(SECURITY_DEFINER_FUNCTIONS - IMPLEMENTED - {"auth_purge_expired"})
 
 
 def _call_with_nulls(conn: Conn, name: str) -> None:
