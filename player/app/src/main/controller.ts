@@ -7,6 +7,8 @@ import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
 import { advance, command, INITIAL, openText, refuse, snapshotOf } from "../core/player-state.ts";
 import type { PlayerState } from "../core/player-state.ts";
+import { manualReader } from "../core/link/reader.ts";
+import type { MusicReader } from "../core/link/reader.ts";
 import type { Snapshot } from "../core/snapshot.ts";
 
 const PUSH_EVERY_MS = 100;
@@ -20,14 +22,20 @@ export interface Controller {
   stop(): void;
 }
 
-export function createController(now: () => number = () => performance.now()): Controller {
+/** The reader is the music link's source of readings; with the manual reader the clock is manual only. */
+export function createController(now: () => number = () => performance.now(), reader: MusicReader = manualReader): Controller {
   let state: PlayerState = INITIAL;
   let timer: NodeJS.Timeout | null = null;
   let target: () => WebContents | null = () => null;
 
-  const snapshot = (): Snapshot => snapshotOf(state, now());
+  // Every snapshot follows the music first, so a snapshot taken between ticks never shows a clock
+  // that ran past a window's end.
+  const snapshot = (): Snapshot => {
+    const t = now();
+    state = advance(state, t, reader.latest(t));
+    return snapshotOf(state, t);
+  };
   const push = (): void => {
-    state = advance(state, now());
     const wc = target();
     if (wc && !wc.isDestroyed() && !wc.isCrashed()) wc.send(CH_UPDATE, snapshot());
   };
@@ -35,7 +43,7 @@ export function createController(now: () => number = () => performance.now()): C
   return {
     snapshot,
     open(fileName, text) {
-      state = openText(state, fileName, text, classSchema, now());
+      state = openText(state, fileName, text, classSchema, now(), reader.kind !== "manual");
       push();
       return snapshot();
     },

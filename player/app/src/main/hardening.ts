@@ -13,6 +13,11 @@ function guardContents(contents: WebContents): void {
   contents.on("will-attach-webview", (e) => e.preventDefault());
 }
 
+/** Call before the app is ready. Production always runs sandboxed; only the test switch turns it off. */
+export function enableSandboxUnlessTest(): void {
+  if (!app.commandLine.hasSwitch("no-sandbox")) app.enableSandbox();
+}
+
 /** Call once the app is ready, before the first window. */
 export function hardenSession(appDirUrl: string): void {
   const ses = session.defaultSession;
