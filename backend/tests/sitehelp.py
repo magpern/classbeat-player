@@ -78,19 +78,26 @@ class Browser:
         path: str,
         *,
         json: object = None,
+        content: bytes | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
+        """`json` is sent as `application/json`; `content` as it is, with no `Content-Type`."""
         return self._loop.run_until_complete(
-            self._client.request(method, path, json=json, headers=headers)
+            self._client.request(method, path, json=json, content=content, headers=headers)
         )
 
     def get(self, path: str, *, headers: Mapping[str, str] | None = None) -> httpx.Response:
         return self.request("GET", path, headers=headers)
 
     def post(
-        self, path: str, *, json: object = None, headers: Mapping[str, str] | None = None
+        self,
+        path: str,
+        *,
+        json: object = None,
+        content: bytes | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
-        return self.request("POST", path, json=json, headers=headers)
+        return self.request("POST", path, json=json, content=content, headers=headers)
 
     def delete(self, path: str, *, headers: Mapping[str, str] | None = None) -> httpx.Response:
         return self.request("DELETE", path, headers=headers)

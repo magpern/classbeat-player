@@ -17,7 +17,7 @@ from fastapi import Depends, Request
 
 from player_backend.client_policy import ClientInfo, address_hash, client_address, client_info
 from player_backend.db import site_sessions
-from player_backend.db.context import AccountContext
+from player_backend.db.context import AccountContext, undone_on_error
 from player_backend.http_errors import ApiError
 from player_backend.request_policy import cross_site_refusal, is_recent_sign_in
 from player_backend.site.cookies import session_cookie_token
@@ -73,7 +73,7 @@ def site_session(
             raise NotSignedIn
         try:
             # What the route wrote is undone when it refuses, and nothing else is.
-            with site_sessions.undone_on_error(context):
+            with undone_on_error(context):
                 yield context
         except ApiError as error:
             refusal = error

@@ -1,5 +1,6 @@
-"""The pairing functions of migration 0006, called as player_app (ADR 0002, sections 6, 9, 10):
-what the database checks itself, whoever the caller is. The flows are tested through the API.
+"""The pairing functions of migrations 0006 and 0007, called as player_app (ADR 0002, sections
+6, 9, 10): what the database checks itself, whoever the caller is. The flows are tested through
+the API.
 
 Each test is one transaction, so `now()` stands still: time is moved by changing rows.
 """
@@ -176,6 +177,37 @@ def test_five_wrong_codes_at_the_look_up_and_the_decision_together_close_the_for
     assert _app(su, FIND, (user,), account) == [("linux", "1.2")]
 
 
+@pytest.mark.parametrize("approve", [True, False])
+def test_a_decision_as_the_fifth_wrong_code_closes_the_form(su: Conn, approve: bool) -> None:
+    account = _account(su)
+    _, user = _started(su)
+    for _ in range(4):
+        assert _app(su, FIND, (_h(),), account) == []
+    # Four wrong codes, all at the look-up: the form is open and the right code is found.
+    assert _app(su, FIND, (user,), account) == [("linux", "1.2")]
+    assert su.execute("SELECT count(*) FROM player.rate_limits").fetchone() == (1,)
+    # The fifth is a decision. It closes the form for 15 minutes, as a look-up would.
+    assert _app(su, DECIDE, (_h(), approve, "Studio PC"), account) == [(False,)]
+    closed = su.execute(
+        "SELECT expires_at - now() FROM player.rate_limits "
+        "WHERE key_hash = sha256(convert_to('pairing.closed:' || %s::text, 'UTF8'))",
+        (account,),
+    ).fetchall()
+    assert [str(row[0]) for row in closed] == ["0:15:00"]
+    # The right code now finds nothing and decides nothing, and is not counted either.
+    assert _app(su, FIND, (user,), account) == []
+    assert _app(su, DECIDE, (user, True, "Studio PC"), account) == [(False,)]
+    assert _app(su, DECIDE, (user, False, None), account) == [(False,)]
+    assert su.execute(PAIRING, (user,)).fetchall() == [("pending", None, None)]
+    assert _events(su, account) == []
+    wrong = su.execute(
+        "SELECT hits FROM player.rate_limits "
+        "WHERE key_hash = sha256(convert_to('pairing.wrong:' || %s::text, 'UTF8'))",
+        (account,),
+    ).fetchall()
+    assert wrong == [(5,)]
+
+
 def test_a_pairing_that_has_ended_or_is_decided_counts_as_a_wrong_code(su: Conn) -> None:
     account = _account(su)
     _, ended = _started(su)
@@ -215,12 +247,35 @@ def test_an_approval_above_ten_active_devices_is_refused(su: Conn) -> None:
     _, second = _started(su)
     assert _app(su, DECIDE, (first, True, "Tenth"), account) == [(True,)]
     # Nine devices and one approved pairing whose token is not collected yet: the cap is met.
-    assert _app(su, DECIDE, (second, True, "Eleventh"), account) == [(False,)]
+    # The refusal is NULL: neither decided (true) nor a wrong code (false).
+    assert _app(su, DECIDE, (second, True, "Eleventh"), account) == [(None,)]
     assert su.execute(PAIRING, (second,)).fetchall() == [("pending", None, None)]
-    assert ("pairing.refused", "pairing", {"reason": "device_limit"}) in _events(su, account)
-    # Not a wrong code: nothing was counted. A denial is still possible.
+    refused = ("pairing.refused", "pairing", {"reason": "device_limit"})
+    assert _events(su, account).count(refused) == 1
+    # Not a wrong code: nothing was counted.
     assert su.execute("SELECT count(*) FROM player.rate_limits").fetchone() == (0,)
+    # At the cap a wrong code is still a wrong code: false, counted, and no event.
+    assert _app(su, DECIDE, (_h(), True, "Eleventh"), account) == [(False,)]
+    assert su.execute("SELECT hits FROM player.rate_limits").fetchall() == [(1,)]
+    assert _events(su, account).count(refused) == 1
+    # A denial is still possible.
     assert _app(su, DECIDE, (second, False, None), account) == [(True,)]
+
+
+def test_an_approval_above_the_cap_is_refused_whatever_fills_it(su: Conn) -> None:
+    refused = ("pairing.refused", "pairing", {"reason": "device_limit"})
+    # Ten devices; ten approved pairings whose tokens are not collected yet.
+    with_devices, with_approvals = _account(su), _account(su, "other@example.test")
+    _devices(su, with_devices, 10)
+    for number in range(10):
+        _, user = _started(su)
+        assert _app(su, DECIDE, (user, True, f"Device {number}"), with_approvals) == [(True,)]
+    for account in (with_devices, with_approvals):
+        _, user = _started(su)
+        assert _app(su, DECIDE, (user, True, "Eleventh"), account) == [(None,)]
+        assert su.execute(PAIRING, (user,)).fetchall() == [("pending", None, None)]
+        assert _events(su, account).count(refused) == 1
+    assert su.execute("SELECT count(*) FROM player.rate_limits").fetchone() == (0,)
 
 
 @pytest.mark.parametrize(
