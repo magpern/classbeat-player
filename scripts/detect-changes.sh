@@ -34,8 +34,8 @@ flag() { # flag <name> <extended regex>
   fi
 }
 
-flag backend '^backend/'
-# A workflow change also runs the schema job, so a change to CI itself is exercised.
+# A workflow change also runs the backend and schema jobs, so a change to CI itself is exercised.
+flag backend '^(backend/|\.github/workflows/)'
 flag schema '^(schema/|\.github/workflows/)'
 flag player '^player/'
 flag web '^web/'
