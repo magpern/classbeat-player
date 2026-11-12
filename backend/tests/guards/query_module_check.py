@@ -1,4 +1,9 @@
-"""Rule 1 of the SQL source guard: what a query module may contain (see sql_source_check.py)."""
+"""Source guard, rule 5: where a `Query` is made (see sql_source_check.py).
+
+A query module holds a docstring, `from typing import Final`, `from player_backend.db.executor
+import Query`, and constants `NAME: Final[Query] = Query(<one string literal>)` or
+`Query.from_file(<one string literal>)`, each bound once. Nothing else.
+"""
 
 from __future__ import annotations
 
@@ -6,13 +11,12 @@ import ast
 import re
 from dataclasses import dataclass
 
+EXECUTOR = "player_backend.db.executor"
 QUERY_PACKAGE = "player_backend.db.queries"
 QUERY_DIR = "player_backend/db/queries/"
-_ALLOWED_IMPORTS = {
-    "typing": frozenset({"Final", "LiteralString"}),
-    "player_backend.db.sqlfile": frozenset({"sql_file"}),
-}
+_ALLOWED_IMPORTS = {"typing": frozenset({"Final"}), EXECUTOR: frozenset({"Query"})}
 _CONSTANT_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_MAKERS = ("Query", "Query.from_file")
 
 
 @dataclass(frozen=True)
@@ -26,45 +30,17 @@ class Violation:
 
 
 def module_name(rel: str) -> str:
-    name = rel.removesuffix(".py").replace("/", ".")
-    return name.removesuffix(".__init__")
+    return rel.removesuffix(".py").replace("/", ".").removesuffix(".__init__")
 
 
 def is_query_module(rel: str) -> bool:
     return rel.startswith(QUERY_DIR) and not rel.endswith("/__init__.py")
 
 
-def store_names(tree: ast.Module) -> dict[str, int]:
-    """How many times each name is bound anywhere in the file, by any means."""
-    counts: dict[str, int] = {}
-
-    def add(name: str) -> None:
-        counts[name] = counts.get(name, 0) + 1
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store | ast.Del):
-            add(node.id)
-        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            add(node.name)
-        elif isinstance(node, ast.arg):
-            add(node.arg)
-        elif isinstance(node, ast.Global | ast.Nonlocal):
-            for name in node.names:
-                add(name)
-        elif isinstance(node, ast.alias):
-            add(node.asname or node.name.split(".")[0])
-        elif isinstance(node, ast.ExceptHandler) and node.name:
-            add(node.name)
-        elif isinstance(node, ast.MatchAs | ast.MatchStar) and node.name:
-            add(node.name)
-    return counts
-
-
-def _from_file(value: ast.expr | None) -> bool:
+def _made_from_a_literal(value: ast.expr | None) -> bool:
     return (
         isinstance(value, ast.Call)
-        and isinstance(value.func, ast.Name)
-        and value.func.id == "sql_file"
+        and ast.unparse(value.func) in _MAKERS
         and len(value.args) == 1
         and not value.keywords
         and isinstance(value.args[0], ast.Constant)
@@ -73,7 +49,7 @@ def _from_file(value: ast.expr | None) -> bool:
 
 
 def query_constants(source: str, rel: str) -> tuple[frozenset[str], list[Violation]]:
-    """The constants of a query module, and every way it breaks rule 1."""
+    """The constants of a query module, and every way it breaks the rule."""
     tree = ast.parse(source, filename=rel)
     found: list[Violation] = []
     names: list[str] = []
@@ -86,33 +62,30 @@ def query_constants(source: str, rel: str) -> tuple[frozenset[str], list[Violati
             continue
         if isinstance(stmt, ast.ImportFrom) and stmt.level == 0:
             allowed = _ALLOWED_IMPORTS.get(stmt.module or "")
-            if allowed and all(a.name in allowed and a.asname is None for a in stmt.names):
-                continue
-            bad(stmt, f"import not allowed: {ast.unparse(stmt)}")
+            if not (allowed and all(a.name in allowed and a.asname is None for a in stmt.names)):
+                bad(stmt, f"import not allowed: {ast.unparse(stmt)}")
             continue
         if not isinstance(stmt, ast.AnnAssign) or not isinstance(stmt.target, ast.Name):
-            bad(stmt, f"only annotated constants are allowed: {ast.unparse(stmt)[:60]}")
+            bad(stmt, f"only Query constants are allowed: {ast.unparse(stmt)[:60]}")
             continue
         name = stmt.target.id
-        if ast.unparse(stmt.annotation) not in ("Final[str]", "Final[LiteralString]"):
-            bad(stmt, f"{name} is not Final[str] or Final[LiteralString]")
+        if ast.unparse(stmt.annotation) != "Final[Query]":
+            bad(stmt, f"{name} is not annotated Final[Query]")
         if not _CONSTANT_NAME.match(name):
             bad(stmt, f"{name} is not an upper-case constant name")
-        value = stmt.value
-        literal = isinstance(value, ast.Constant) and isinstance(value.value, str)
-        if not (literal or _from_file(value)):
-            bad(stmt, f"{name} is not one string literal or sql_file(<literal>)")
+        if not _made_from_a_literal(stmt.value):
+            bad(stmt, f"{name} is not Query(<literal>) or Query.from_file(<literal>)")
+        if name in names:
+            bad(stmt, f"{name} is bound more than once")
         names.append(name)
-    counts = store_names(tree)
-    for name in set(names):
-        if counts.get(name, 0) != 1:
-            bad(tree, f"{name} is bound more than once")
     return frozenset(names), found
 
 
 def package_init_violations(tree: ast.Module, rel: str) -> list[Violation]:
-    """The query package's __init__.py holds a docstring at most."""
-    extra = tree.body[1:] if ast.get_docstring(tree) is not None else tree.body
+    """The query package's __init__.py: a docstring and the import of the executor."""
+    body = tree.body[1:] if ast.get_docstring(tree) is not None else tree.body
     return [
-        Violation(rel, getattr(s, "lineno", 0), "query package: only a docstring") for s in extra
+        Violation(rel, stmt.lineno, "query package: only a docstring and the executor's import")
+        for stmt in body
+        if ast.unparse(stmt) != f"import {EXECUTOR}"
     ]

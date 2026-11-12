@@ -1,16 +1,17 @@
 """SQL of the migration runner (player_backend/db/migrate.py), and the migration files."""
 
-from typing import Final, LiteralString
+from typing import Final
 
-from player_backend.db.sqlfile import sql_file
+from player_backend.db.executor import Query
 
-M0001_TABLES: Final[LiteralString] = sql_file("0001_tables.sql")
-M0002_POLICIES_AND_GRANTS: Final[LiteralString] = sql_file("0002_policies_and_grants.sql")
-M0003_AUTH_FUNCTIONS: Final[LiteralString] = sql_file("0003_auth_functions.sql")
+M0001_TABLES: Final[Query] = Query.from_file("0001_tables.sql")
+M0002_POLICIES_AND_GRANTS: Final[Query] = Query.from_file("0002_policies_and_grants.sql")
+M0003_AUTH_FUNCTIONS: Final[Query] = Query.from_file("0003_auth_functions.sql")
 
 # The ledger lives in its own schema, with row-level security forced like every table, and one
 # policy for player_owner alone. No other role has any right on it.
-LEDGER: Final[LiteralString] = """
+LEDGER: Final[Query] = Query(
+    """
 CREATE SCHEMA IF NOT EXISTS player_meta;
 REVOKE ALL ON SCHEMA player_meta FROM PUBLIC;
 CREATE TABLE IF NOT EXISTS player_meta.schema_migrations (
@@ -31,11 +32,12 @@ BEGIN
 END
 $$;
 """
+)
 
-LOCK: Final[LiteralString] = "SELECT pg_advisory_xact_lock(7270001)"
+LOCK: Final[Query] = Query("SELECT pg_advisory_xact_lock(7270001)")
 
-APPLIED: Final[LiteralString] = "SELECT version, sha256 FROM player_meta.schema_migrations"
+APPLIED: Final[Query] = Query("SELECT version, sha256 FROM player_meta.schema_migrations")
 
-RECORD: Final[LiteralString] = (
+RECORD: Final[Query] = Query(
     "INSERT INTO player_meta.schema_migrations (version, name, sha256) VALUES (%s, %s, %s)"
 )

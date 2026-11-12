@@ -1,21 +1,40 @@
-"""Guard: every SQL statement is a constant of a query module, and every SQL-executing call takes
-a direct reference to one (ADR 0002, section 9, item 1). An allowlist: anything else fails.
-The checker's own cases below show that each rule fails, including every earlier bypass."""
+"""Guard: the six source rules of ADR 0002, section 9, item 1 (sql_source_check.py).
+
+Each rule has cases that must fail, the earlier reviewers' probes among them. What evasive
+source can still do is the run-time layer's to refuse (tests/test_executor_refusals.py).
+"""
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
 
-from tests.guards.sql_source_check import check_source, check_tree
+from player_backend.db.executor import QUERY_MODULES, SQL_DIR, SQL_FILES
+from tests.guards.query_module_check import is_query_module, module_name
+from tests.guards.sql_source_check import DRIVERS, check_source, check_tree, source_files
 
-SRC = Path(__file__).resolve().parents[2] / "src"
+BACKEND = Path(__file__).resolve().parents[2]
+SRC = BACKEND / "src"
 QUERIES = {"player_backend.db.queries.auth": frozenset({"FIND", "LOCK"})}
 DB = "player_backend/db/access.py"
+EXECUTOR = "player_backend/db/executor/_handle.py"
 OUTSIDE = "player_backend/routes.py"
 QUERY_MODULE = "player_backend/db/queries/auth.py"
 IMPORT = "from player_backend.db.queries import auth\n"
+FIND = "from player_backend.db.queries.auth import FIND\n"
+MAKE = "from typing import Final\nfrom player_backend.db.executor import Query\n"
+
+# Every distribution in the lockfile, sorted into drivers and the rest: a new dependency fails
+# here until someone has said which it is (and added a driver's import name to DRIVERS).
+LOCKED_DRIVERS = {"psycopg": "psycopg", "psycopg-binary": "psycopg_binary"}
+LOCKED_OTHERS = frozenset(
+    "annotated-doc annotated-types anyio certifi click colorama fastapi h11 httpcore httpx idna "
+    "iniconfig nodeenv opentelemetry-api packaging player-backend pluggy pydantic pydantic-core "
+    "pygments pyright pytest ruff starlette typing-extensions typing-inspection tzdata "
+    "uvicorn".split()
+)
 
 
 def _violations(snippet: str, rel: str = DB) -> list[str]:
@@ -26,215 +45,236 @@ def test_backend_source_passes_the_guard() -> None:
     assert [str(v) for v in check_tree(SRC)] == []
 
 
-def test_the_source_tree_and_its_query_modules_are_found() -> None:
-    assert (SRC / "player_backend" / "db" / "queries" / "migrations.py").is_file()
+def test_the_fixed_lists_are_the_files_in_the_repository() -> None:
+    modules = sorted(module_name(rel) for rel in source_files(SRC) if is_query_module(rel))
+    assert modules == sorted(QUERY_MODULES)
+    assert sorted(p.name for p in SQL_DIR.iterdir()) == sorted(SQL_FILES)
+
+
+def test_every_locked_distribution_is_a_listed_driver_or_listed_as_none() -> None:
+    lock = tomllib.loads((BACKEND / "uv.lock").read_text(encoding="utf-8"))
+    locked = {str(package["name"]) for package in lock["package"]}
+    assert locked == LOCKED_OTHERS | set(LOCKED_DRIVERS)
+    assert set(LOCKED_DRIVERS.values()) <= DRIVERS
 
 
 @pytest.mark.parametrize(
-    "snippet",
+    ("snippet", "rel"),
     [
-        IMPORT + "conn.execute(auth.FIND, (x,))",
-        IMPORT + "conn.execute(query=auth.FIND, params=(x,))",
-        IMPORT + "await conn.fetch(auth.FIND, x)",
-        IMPORT + "clause = text(auth.FIND)",
-        "from player_backend.db.queries.auth import FIND\nconn.execute(FIND, (x,))",
-        "from player_backend.db.queries.auth import FIND as F\nconn.execute(F)",
-        "from .queries import auth\nconn.execute(auth.LOCK)",
-        "from player_backend.db.queries import auth as a\nconn.execute(a.FIND)",
-        "from player_backend.db.queries.auth import FIND\nconn.execute(statement=FIND)",
-        "import re\nPATTERN = re.compile('x')",
-        "import psycopg",
-        'message = f"applied {name}"',
+        (IMPORT + "db.rows(auth.FIND, (x,))", DB),
+        (IMPORT + "with db.transaction():\n    found = db.rows(auth.LOCK)", DB),
+        (FIND + "db.rows(FIND, (x,))", DB),
+        ("from player_backend.db.queries.auth import FIND as F\ndb.rows(F)", DB),
+        ("from .queries import auth\ndb.rows(auth.LOCK)", DB),
+        ("from player_backend.db.queries import auth as a\ndb.rows(a.FIND)", DB),
+        (
+            "from player_backend.db.executor import Handle, Query\ndef f(d: Handle, q: Query): ...",
+            DB,
+        ),
+        ("from player_backend.db.executor import Handle\ndef dep() -> Handle: ...", OUTSIDE),
+        ("import re\nPATTERN = re.compile('x')", OUTSIDE),
+        ('message = f"applied {name}"', OUTSIDE),
+        ("import psycopg\ncursor.execute(text, params)\ncursor.fetchall()", EXECUTOR),
     ],
 )
-def test_direct_references_to_query_constants_pass(snippet: str) -> None:
-    assert _violations(snippet) == []
+def test_ordinary_code_passes(snippet: str, rel: str) -> None:
+    assert _violations(snippet, rel) == []
 
 
-# Every earlier bypass and every form that is not a direct reference to a query constant.
 FAILING = [
-    # Earlier blocklist cases (first and second review of #32).
-    ('q = f"SELECT * FROM t WHERE id = {x}"', OUTSIDE),
-    ('q = "SELECT * FROM t WHERE id = %s" % x', OUTSIDE),
-    ('q = "DELETE FROM t WHERE id = " + x', OUTSIDE),
-    ('q = "UPDATE t SET a = {}".format(x)', OUTSIDE),
-    ('q = " ".join(["SELECT a FROM t", w])', OUTSIDE),
+    # Rule 1: a driver import outside the executor, the data-access package included.
     ("import psycopg", OUTSIDE),
+    ("import psycopg", DB),
+    ("import psycopg_pool", DB),
+    ("from psycopg_pool import ConnectionPool", OUTSIDE),
     ("from sqlalchemy import text", OUTSIDE),
-    ("conn.execute(query_text)", OUTSIDE),
     ("from psycopg import sql", DB),
     ("import psycopg.sql", DB),
-    ('conn.execute(f"SELECT {c} FROM t")', DB),
-    ('Q = "SELECT 1"\nQ = "SELECT 2"\nconn.execute(Q)', DB),
+    ("from psycopg import pq", DB),
+    ("import psycopg.pq", DB),
+    ("import asyncpg", DB),
+    ("import sqlite3", OUTSIDE),
+    # Rule 2: a driver object, or the private parts of a handle and of the executor.
+    ("conn.execute(query_text)", DB),
     ("def f(q):\n    conn.execute(q)", DB),
-    ('q = "SELECT * FROM t WHERE id = \'"\nconn.execute(query=q + x)', DB),
     ("conn.execute(query=built)", DB),
-    ("conn.execute(statement=built)", DB),
-    ("conn.execute(sql=built, params=(1,))", DB),
-    (IMPORT + "conn.execute(auth.FIND, query=built)", DB),
     ("conn.execute(*parts)", DB),
-    (IMPORT + "conn.execute(auth.FIND, *params)", DB),
     ("conn.execute(**options)", DB),
-    ("conn.execute(params=(1,))", DB),
-    ('def f(x):\n    q = "DELETE FROM t WHERE id = "\n    return q + x', DB),
-    ('q = "SELECT a FROM t"\nconn.execute(f"{q} WHERE id = {x}")', DB),
-    ('q = "SELECT a FROM t"\nconn.execute("{} {}".format(q, x))', DB),
-    ("conn.execute(text(built))", DB),
-    ("conn.execute(statement=text(built))", DB),
-    ("conn.execute(sql.SQL(built))", DB),
-    ("conn.execute(SQL(text=built))", DB),
-    ("stmt = text(built)", DB),
+    ("ctx.conn.execute(x)", OUTSIDE),
+    ("cur.connection.execute(x)", DB),
+    ("pool.connection().execute(x)", DB),
+    ("conn.executemany(built, rows)", DB),
+    ("async def f():\n    await conn.fetchval(built)", DB),
+    ("row = cur.fetchone()", DB),
+    ("execute(built)", DB),
     ("run = conn.execute\nrun(q + x)", DB),
     ("functools.partial(conn.execute, query)", DB),
+    ("[conn.execute][0](q)", DB),
+    ('{"e": conn.execute}["e"](q)', DB),
+    ("f = lambda s: conn.execute(s)", DB),
+    ("psycopg.Connection.execute(conn, q)", DB),
+    ("conn.execute(sql.SQL(built))", DB),
+    ("stmt = SQL(built)", DB),
+    ("pgconn = conn.pgconn", DB),
+    ("conn.pgconn.exec_(x)", DB),
+    ("conn.pgconn.send_query(x)", DB),
+    ("conn.pgconn.exec_params(x, [])", DB),
     ('getattr(conn, "execute")(q)', DB),
-    ("execute(built)", DB),
-    ("async def f():\n    await conn.fetch(built)", DB),
-    ('Q = "SELECT a FROM t WHERE id = "\nQ += x\nconn.execute(Q)', DB),
-    ('def f(x):\n    q = "DELETE FROM t WHERE id = "\n    q += x\n    return q', DB),
-    ('Q = "SELECT 1"\nQ, R = x, 1\nconn.execute(Q)', DB),
-    ('Q = "SELECT 1"\nfor Q in xs:\n    pass\nconn.execute(Q)', DB),
-    ('Q = "SELECT 1"\nif (Q := x):\n    pass\nconn.execute(Q)', DB),
-    ('Q = "SELECT 1"\nfrom m import x as Q\nconn.execute(Q)', DB),
-    ('Q = "SELECT 1"\ndef f():\n    global Q\n    Q = x\nconn.execute(Q)', DB),
-    ('Q = "SELECT 1"\nconn.execute(operator.add(Q, x))', DB),
-    ('globals()["Q"] = x', DB),
-    # Allowlist: a literal, even a constant one, is not a query constant.
-    ('conn.execute("SELECT 1")', DB),
-    ('Q = "SELECT a FROM t WHERE id = %s"\nconn.execute(Q, (x,))', DB),
-    # Allowlist: anything but a direct reference to a query constant.
-    (IMPORT + "q = auth.FIND\nconn.execute(q)", DB),
-    (IMPORT + "conn.execute(auth.FIND + x)", DB),
-    (IMPORT + 'conn.execute(f"{auth.FIND}")', DB),
-    (IMPORT + "conn.execute(auth.FIND.replace('a', x))", DB),
-    (IMPORT + "conn.execute(str(auth.FIND))", DB),
-    (IMPORT + "conn.execute([auth.FIND][0])", DB),
-    (IMPORT + "conn.execute(auth.FIND if a else x)", DB),
-    (IMPORT + "conn.execute(auth.MISSING)", DB),
-    (IMPORT + "conn.execute(text(auth.FIND + x))", DB),
-    (IMPORT + "conn.execute(text(auth.FIND))", DB),
-    (IMPORT + "auth = other\nconn.execute(auth.FIND)", DB),
-    (IMPORT + "def f(auth):\n    conn.execute(auth.FIND)", DB),
+    ('builtins.getattr(conn, "execute")(q)', DB),
+    ('conn.__getattribute__("execute")(q)', DB),
+    ('operator.methodcaller("execute", q)(conn)', DB),
+    ('operator.attrgetter("execute")(conn)(q)', DB),
+    ('type(conn).__dict__["execute"](conn, q)', DB),
+    ('name = "exec_params"', DB),
+    ("conn = db._driver_connection", DB),
+    ('conn = getattr(db, "_driver_connection")', DB),
+    ("tx._driver_transaction.connection", OUTSIDE),
+    ("from player_backend.db.executor._query import REGISTRY", DB),
+    ("from player_backend.db.executor._handle import Handle", OUTSIDE),
+    ("from player_backend.db.executor import _registry", DB),
+    ("import player_backend.db.executor._driver", DB),
+    ("from .executor._query import registered_text", DB),
+    # Rule 3: a handle call outside the data-access package.
+    (IMPORT + "db.rows(auth.FIND, (x,))", OUTSIDE),
+    ("with db.transaction():\n    pass", OUTSIDE),
+    ("run = db.rows", OUTSIDE),
+    # Rule 4: a query constant anywhere but as the direct statement argument of a handle call.
+    (IMPORT + "q = auth.FIND\ndb.rows(q)", DB),
+    (IMPORT + "db.rows(auth.FIND + x)", DB),
+    (IMPORT + 'db.rows(f"{auth.FIND}")', DB),
+    (IMPORT + "db.rows(auth.FIND.replace('a', x))", DB),
+    (IMPORT + "db.rows(str(auth.FIND))", DB),
+    (IMPORT + "db.rows([auth.FIND][0])", DB),
+    (IMPORT + "db.rows(auth.FIND if a else x)", DB),
+    (IMPORT + "db.rows(auth.MISSING)", DB),
+    (IMPORT + "db.rows(x, auth.FIND)", DB),
+    (IMPORT + "db.rows(query=auth.FIND)", DB),
+    (IMPORT + "db.rows(*[auth.FIND])", DB),
     (IMPORT + "auth.FIND = x", DB),
     (IMPORT + 'setattr(auth, "FIND", x)', DB),
-    ("from player_backend.db.queries.auth import FIND\nFIND = x\nconn.execute(FIND)", DB),
-    ("from player_backend.db.queries.auth import NOPE\nconn.execute(NOPE)", DB),
-    ("from player_backend.db.queries import other\nconn.execute(other.FIND)", DB),
-    ("import player_backend.db.queries.auth\nconn.execute(player_backend.FIND)", DB),
-    (IMPORT + "e = conn.execute\ne(auth.FIND)", DB),
-    (IMPORT + "conn.execute(cursor_text(auth.FIND))", DB),
-    ('exec("conn.execute(x)")', DB),
-    # Third review of #32, finding 1: a query constant used anywhere but as the SQL argument.
     (IMPORT + "built = auth.FIND + x", DB),
     (IMPORT + 's = f"{auth.FIND} {x}"', DB),
     (IMPORT + "F = auth.FIND\nF += x", DB),
     (IMPORT + "conn.pgconn.exec_((auth.FIND + x).encode())", DB),
-    (IMPORT + "conn.pgconn.send_query(auth.FIND.encode())", DB),
-    (IMPORT + "conn.pgconn.exec_params(auth.FIND.encode(), [])", DB),
-    ("from player_backend.db.queries import auth as q\nconn.pgconn.exec_((q.FIND + x))", DB),
-    ("pgconn = conn.pgconn", DB),
-    ("conn.prepare(x)", DB),
-    ("from psycopg import pq", DB),
-    ("import psycopg.pq", DB),
     (IMPORT + "def f():\n    return auth.FIND", DB),
     (IMPORT + "log(auth.FIND)", DB),
     (IMPORT + "auth.FIND.format(x)", DB),
     (IMPORT + "s = auth.FIND % x", DB),
     (IMPORT + "helper(auth)", DB),
-    (IMPORT + "m = auth\nconn.execute(m.FIND)", DB),
-    (IMPORT + "conn.execute(auth.FIND)\nother(auth.FIND)", DB),
-    ("from player_backend.db.queries.auth import FIND\nkept = FIND", DB),
-    ("from player_backend.db.queries.auth import FIND\nconn.execute(FIND + x)", DB),
-    ("from player_backend.db.queries.auth import FIND\nlen(FIND)", DB),
-    # Finding 2: the root and every prefix of a dotted import.
-    (
-        "import player_backend.db.queries.auth\nconn.execute(player_backend.db.queries.auth.FIND)",
-        DB,
-    ),
-    ("import player_backend.db.queries.auth as a\nconn.execute(a.FIND)", DB),
-    (
-        "import player_backend.db.queries.migrations\nplayer_backend = fake\n"
-        "conn.execute(player_backend.db.queries.migrations.LOCK)",
-        DB,
-    ),
-    ("import player_backend.db.queries.migrations\nplayer_backend.db.queries = ns", DB),
-    ("import player_backend", DB),
-    ("from player_backend.db import queries", DB),
-    ("from player_backend import db", DB),
-    ("from . import queries", DB),
-    ("from .. import db", DB),
+    (IMPORT + "m = auth\ndb.rows(m.FIND)", DB),
+    (IMPORT + "db.rows(auth.FIND)\nother(auth.FIND)", DB),
+    (IMPORT + "STEPS = [(1, auth.FIND)]", DB),
+    (FIND + "kept = FIND", DB),
+    (FIND + "db.rows(FIND + x)", DB),
+    (FIND + "len(FIND)", DB),
+    (FIND + "FIND = x\ndb.rows(FIND)", DB),
+    ("from player_backend.db.queries.auth import NOPE\ndb.rows(NOPE)", DB),
+    ("from player_backend.db.queries import other\ndb.rows(other.FIND)", DB),
     ("from player_backend.db.queries import *", DB),
-    ("from player_backend.db.queries import nothing_here", DB),
-    ("player_backend = fake", DB),
-    # Probes of the third review that were already caught, kept as cases.
-    ('builtins.getattr(conn, "execute")(q)', DB),
-    ("[conn.execute][0](q)", DB),
-    ('{"e": conn.execute}["e"](q)', DB),
-    ("f = lambda s: conn.execute(s)", DB),
-    ("psycopg.Connection.execute(conn, q)", DB),
-    # N1: a string naming a SQL call, a libpq name or a forbidden name.
-    ('conn.__getattribute__("execute")(q)', DB),
-    ('operator.methodcaller("execute", q)(conn)', DB),
-    ('operator.attrgetter("execute")(conn)(q)', DB),
-    ('type(conn).__dict__["execute"](conn, q)', DB),
-    ('name = "fetch"', DB),
-    ('name = "exec_params"', DB),
-    # N2: monkeypatching through the module table or importlib.
-    ('import sys\nsys.modules["player_backend.db.queries.auth"].FIND = x', DB),
-    ('import importlib\nimportlib.import_module("m").FIND = x', DB),
-    ("from importlib import import_module", DB),
-    ('__import__("m")', DB),
+    ("from player_backend.db.queries.auth import *", DB),
+    ("from player_backend.db import queries\ndb.rows(queries.auth.FIND)", DB),
+    ("from . import queries", DB),
+    ("import player_backend.db.queries.auth\ndb.rows(player_backend.db.queries.auth.FIND)", DB),
+    ("import player_backend.db.queries.auth as a\ndb.rows(a.FIND)", DB),
+    ("import player_backend.db.queries", DB),
+    # Rule 5: a Query made outside a query module, and SQL text outside one.
+    (MAKE + 'FIND: Final[Query] = Query("SELECT 1")', DB),
+    ('q = Query("SELECT 1")', OUTSIDE),
+    ("q = Query(built)", DB),
+    ('q = Query.from_file("0001_tables.sql")', DB),
+    ('q = executor.Query("SELECT 1")', DB),
+    ('q = Query("SELECT 1")', EXECUTOR),
+    ('db.rows("SELECT 1")', DB),
+    ('Q = "SELECT a FROM t WHERE id = %s"\ndb.rows(Q, (x,))', DB),
+    ('Q = "SELECT 1"\nQ = "SELECT 2"', DB),
+    ('Q = b"DELETE FROM t"', OUTSIDE),
+    # Rule 6: SQL text built with an f-string, format, % or +.
+    ('q = f"SELECT * FROM t WHERE id = {x}"', OUTSIDE),
+    ('q = "SELECT * FROM t WHERE id = %s" % x', OUTSIDE),
+    ('q = "DELETE FROM t WHERE id = " + x', OUTSIDE),
+    ('q = "UPDATE t SET a = {}".format(x)', OUTSIDE),
+    ('q = " ".join(["SELECT a FROM t", w])', OUTSIDE),
+    ('db.rows(f"SELECT {c} FROM t")', DB),
+    ('q = f"SELECT {c} FROM t"', EXECUTOR),
+    ('q = "SELECT * FROM t WHERE id = \'"\nconn.execute(query=q + x)', DB),
+    ('def f(x):\n    q = "DELETE FROM t WHERE id = "\n    return q + x', DB),
+    ('q = "SELECT a FROM t"\ns = f"{q} WHERE id = {x}"', DB),
+    ('q = "SELECT a FROM t"\ns = "{} {}".format(q, x)', DB),
+    ('Q = "SELECT a FROM t WHERE id = "\nQ += x', DB),
+    ('def f(x):\n    q = "DELETE FROM t WHERE id = "\n    q += x\n    return q', DB),
+    ('q = base\nq += " WHERE id = " + x', DB),
+    ('Q = "SELECT 1"\ns = operator.add(Q, x)', DB),
 ]
 
 
 @pytest.mark.parametrize(("snippet", "rel"), FAILING)
-def test_every_other_form_fails(snippet: str, rel: str) -> None:
+def test_every_broken_rule_fails(snippet: str, rel: str) -> None:
     assert _violations(snippet, rel) != []
+
+
+@pytest.mark.parametrize(
+    ("snippet", "rule"),
+    [
+        ("import psycopg", "1"),
+        ("conn.execute(x)", "2"),
+        ("db._driver_connection", "2"),
+        (IMPORT + "db.rows(auth.FIND)", "3"),
+        (IMPORT + "s = auth.FIND", "4"),
+        ("q = Query(x)", "5"),
+        ("q = f'{y} WHERE a = {x}'", "6"),
+    ],
+)
+def test_each_rule_is_the_one_that_fails(snippet: str, rule: str) -> None:
+    assert [v.split(":")[0] for v in _violations(snippet, OUTSIDE)] == [rule]
 
 
 @pytest.mark.parametrize(
     "snippet",
     [
-        '"""SQL."""\nfrom typing import Final\nFIND: Final[str] = "SELECT 1"',
-        "from typing import Final, LiteralString\n"
-        "from player_backend.db.sqlfile import sql_file\n"
-        'M: Final[LiteralString] = sql_file("0001_tables.sql")',
-        'from typing import Final\nFIND: Final[str] = (\n    "SELECT a "\n    "FROM t"\n)',
+        '"""SQL."""\n' + MAKE + 'FIND: Final[Query] = Query("SELECT 1")',
+        MAKE + 'M: Final[Query] = Query.from_file("0001_tables.sql")',
+        MAKE + 'FIND: Final[Query] = Query(\n    "SELECT a "\n    "FROM t"\n)',
     ],
 )
-def test_a_query_module_of_constants_passes(snippet: str) -> None:
+def test_a_query_module_of_query_constants_passes(snippet: str) -> None:
     assert _violations(snippet, QUERY_MODULE) == []
 
 
 @pytest.mark.parametrize(
     "snippet",
     [
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\nFIND: Final[str] = "SELECT 2"',
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\nFIND += x',
-        'from typing import Final\nFIND: Final[str] = "SELECT " + x',
-        'from typing import Final\nFIND: Final[str] = f"SELECT {x}"',
-        'from typing import Final\nFIND: Final[str] = "SELECT {}".format(x)',
-        'FIND = "SELECT 1"',
-        'from typing import Final\nFIND: str = "SELECT 1"',
-        'from typing import Final\nfind: Final[str] = "SELECT 1"',
-        "from typing import Final\nFIND: Final[str] = OTHER",
-        "from typing import Final\nfrom player_backend.db.sqlfile import sql_file\n"
-        "M: Final[str] = sql_file(name)",
-        "from typing import Final\nfrom player_backend.db.sqlfile import sql_file\n"
-        'M: Final[str] = sql_file("a.sql", x)',
-        "from typing import Final\nM: Final[str] = open(p).read()",
-        'import os\nfrom typing import Final\nFIND: Final[str] = "SELECT 1"',
-        'from typing import Final as F\nFIND: F[str] = "SELECT 1"',
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\ndef f():\n    pass',
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\nprint(FIND)',
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\nif x:\n    FIND = y',
-        'from typing import Final\nFIND: Final[str] = "SELECT 1"\n"""late string"""',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\nFIND: Final[Query] = Query("SELECT 2")',
+        MAKE + 'FIND: Final[Query] = Query("SELECT " + x)',
+        MAKE + 'FIND: Final[Query] = Query(f"SELECT {x}")',
+        MAKE + 'FIND: Final[Query] = Query("SELECT {}".format(x))',
+        MAKE + 'FIND: Final[Query] = Query("SELECT %s" % x)',
+        MAKE + "FIND: Final[Query] = Query(OTHER)",
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1", x)',
+        MAKE + "M: Final[Query] = Query.from_file(name)",
+        MAKE + 'M: Final[Query] = Query.from_file("a.sql", x)',
+        MAKE + "M: Final[Query] = Query(open(p).read())",
+        MAKE + 'FIND = Query("SELECT 1")',
+        MAKE + 'FIND: Query = Query("SELECT 1")',
+        MAKE + 'find: Final[Query] = Query("SELECT 1")',
+        MAKE + 'FIND: Final[str] = "SELECT 1"',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\nFIND += x',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\ndef f():\n    pass',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\nprint(FIND)',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\nif x:\n    FIND = y',
+        MAKE + 'FIND: Final[Query] = Query("SELECT 1")\n"""late string"""',
+        "import os\n" + MAKE + 'FIND: Final[Query] = Query("SELECT 1")',
+        "import psycopg\n" + MAKE + 'FIND: Final[Query] = Query("SELECT 1")',
+        "from typing import Final as F\nFIND: F[Query] = Query('SELECT 1')",
+        "from player_backend.db.executor import Query as Q\nFIND: Final[Q] = Q('SELECT 1')",
     ],
 )
 def test_anything_else_in_a_query_module_fails(snippet: str) -> None:
     assert _violations(snippet, QUERY_MODULE) != []
 
 
-def test_the_query_package_init_holds_a_docstring_only() -> None:
+def test_the_query_package_init_holds_a_docstring_and_the_executors_import() -> None:
     init = "player_backend/db/queries/__init__.py"
+    assert _violations('"""Query modules."""\nimport player_backend.db.executor', init) == []
     assert _violations('"""Query modules."""', init) == []
     assert _violations('"""Query modules."""\nFIND = "SELECT 1"', init) != []
+    assert _violations('"""Query modules."""\nimport psycopg', init) != []
