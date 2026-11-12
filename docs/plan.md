@@ -73,7 +73,7 @@ direct reading), so treat the latter as indicative.
 | Planned load | Not confirmed | A load score under our own name, and time in zone | Actual against planned, with a sensor |
 | Music | Starts and controls the Spotify app; needs Premium and public playlists; also Swedebeat and others | Follows the Spotify desktop app; manual clock for anything else | Swedebeat, own files (section 4) |
 | Sensors | Bluetooth LE through each rider's phone | None | The instructor's bike, heart rate; treadmill (section 7) |
-| Running classes | RUN Player | Planned as phase PL7 | |
+| Running classes | RUN Player | No | Phase PL10 |
 | Riders' phones join the class | Yes, with a code | No | Yes, by scanning a code, nothing to install (section 7) |
 | Group displays (a circle or a bar per rider), games | Yes (commercial licence) | **No, by rule** (section 3) | No |
 | Platforms | iOS, Android, Mac, a desktop app | macOS, Windows | Linux; phones and tablets as a web app |
@@ -151,7 +151,8 @@ version and every later feature. A change to one of them is the owner's decision
 - It uses what a classbeat class carries and MOWL's screens do not show: the beat, the song
   boundaries, the song now playing and the coaching cue.
 - **Text stays text.** Numbers and cues are large type over the scene, sized to be read from the
-  back of a room. The zone is always a number and a name as well as a colour.
+  back of a room, never baked into the picture. The zone is always a number and a name as well
+  as a colour. Which part draws that text depends on the scene technology (section 9).
 - **Presenter view:** the room sees the scene on the projector while the instructor's own screen
   shows the cue, the next intervals and the controls.
 - **Plain mode:** a 2D screen with the same information, for weak studio computers and for
@@ -161,9 +162,11 @@ version and every later feature. A change to one of them is the owner's decision
 
 What the research found:
 
-- **Playing Spotify inside our app is not possible.** Spotify's Web Playback SDK needs a browser
-  with Widevine, which stock Electron lacks, and Spotify says the SDK "must not be used in
-  commercial projects" without written approval. Unofficial clients are against the terms.
+- **Playing Spotify inside our app is not open to us.** Spotify does offer playback in a browser
+  (its Web Playback SDK, for Premium users). But it needs a browser with Widevine, which stock
+  Electron lacks; Spotify says it "must not be used in commercial projects" without written
+  approval; and it falls under the 5-user developer limit below. Unofficial clients are against
+  the terms.
 - **The Spotify Web API is a narrow door.** Development Mode allows 5 named users per app and the
   owner must have Premium; the larger quota needs a registered business with 250,000 monthly
   users. The Developer Policy forbids commercial streaming integrations (IV.2), products aimed at
@@ -181,7 +184,7 @@ Options:
 |---|---|---|---|---|
 | A | **Follow the Spotify desktop app through the operating system** (macOS: Spotify's AppleScript interface; Windows: the system media session; Linux: MPRIS) | Yes | To be measured; reported good on macOS and Windows, poor on Linux | **Recommended, first version** |
 | B | Follow and control through the Spotify Web API | No: 5 users, non-commercial, Premium | A few seconds, by polling | Only as an optional extra for the beta circle |
-| C | Play Spotify inside the player | No | Exact | Rejected: not possible and not permitted |
+| C | Play Spotify inside the player | No | Exact | Rejected: not workable in our shell and not permitted for our use |
 | D | **Manual clock:** press Start with the music, nudge earlier or later | Yes | As good as the instructor's timing | **Always available**; the only mode for Swedebeat and soundless classes at first |
 | E | Play licensed audio files ourselves (the gym's own files, or a Swedebeat mix with Swedebeat's permission) | Yes | Exact | Later, needs its own ADR and a provider's agreement |
 
@@ -195,11 +198,52 @@ Options:
   class and no rate limit, and a downloaded playlist keeps working without a network.
 - Start, pause and next go through the same local interface (and the keyboard's media keys), so
   the instructor does not have to leave the player.
-- The measured crossfade is compared with the class's (9 s today) and the player says so when they
-  differ. At a song change the clock holds at the song's planned end until the next song starts,
-  so each song's intervals stay on that song whatever the crossfade is.
-- Songs are matched by title, artist and length; Spotify's own ids are used only where the
-  operating system gives them.
+- Songs are matched by title, artist and length, in the class's order; Spotify's own ids are used
+  only where the operating system gives them.
+
+**The timing model** (to be fixed in an ADR in PL0 and proved by spike 1)
+
+- **Each song owns a window of class time**, from its own start to the next song's start. The
+  class is designed for a set crossfade (9 s today), so a 180 s song followed by another owns
+  171 s, and the class format states that crossfade.
+- **While song k plays at position p, class time is the song's start plus p, but never beyond
+  the end of its window.** If the song plays on past its window, because the real crossfade is
+  shorter than planned or off, the clock **holds** at the window's end.
+- **The incoming song owns the overlap.** From the moment the music app reports the next song,
+  class time is that song's start plus its position. If it arrives early, because the real
+  crossfade is longer than planned, the clock **jumps forward** over the last seconds of the
+  previous window.
+- **The clock never moves backwards by itself.** In the example, with crossfade off the clock
+  holds at 171 s for nine seconds and then continues from 171 s with the second song: nothing
+  repeats and nothing is skipped. It moves backwards only when the instructor seeks or goes to an
+  earlier song, and then intervals replay on purpose. Backward corrections smaller than the
+  measuring error are smoothed out, not applied.
+- **The last interval under a song is elastic.** During a hold it stays on screen with its cue,
+  and its countdown is the time until the next song is expected, worked out from the song's
+  length and the crossfade measured so far (the planned one before the first song change).
+  A forward jump ends it early and the next interval starts with its cue as usual.
+- **Totals follow the measurement.** Time left in the class is the remaining windows plus the
+  hold expected at each remaining song change. The player shows the measured crossfade beside
+  the planned one and says when they differ.
+- **Positions carry their own time.** A reading says where playback was when the system last
+  updated it, not now (Windows gives that moment explicitly), so the player extrapolates from
+  the reading's time and never treats a stale reading as current.
+
+**Link states**
+
+| State | When | The class clock |
+|---|---|---|
+| Locked | A song of the class is playing and readings are fresh | Follows the music |
+| Paused | The music app reports pause | Stops |
+| Coasting | Readings stopped or went stale; the music app closed or restarted | Runs on by itself, marked on screen; locks again when readings return |
+| Off the list | Something plays that is not in the class (another song, an advert, another app) | Runs on by itself, marked on screen; the instructor can pause or pick the place |
+| Ambiguous | The same recording occurs twice in the class and the order does not settle which | Stays on the occurrence nearest the current class time; the instructor can pick the other |
+| Manual | No link, or the instructor chose it | Start, pause and nudge by hand |
+
+**Two accuracy targets, kept apart.** Interval timing needs the clock within about a second of
+the music. Effects on the beat need a few hundredths of a second, which the local interfaces may
+not give. Passing the first does not prove the second. If the beat target fails, the scene pulses
+at the song's tempo without claiming to hit each beat, and bursts are tied to interval changes.
 
 This still uses the instructor's personal Spotify in a room, which Spotify's terms do not allow for
 a business whichever player shows the class. That stays the instructor's and the gym's
@@ -217,20 +261,49 @@ MOWL or Swedebeat connection.
   link sent by email plus passkeys, with no passwords to store.
 - **Class library.** Each account's classes in the published class format, with a content hash
   and the source they came from.
-- **Source API (classes in).** A source such as classbeat sends a class with one idempotent
-  request keyed by the source's class id and the content hash, so sending twice changes nothing
-  and a lost answer is safe to repeat. A source can also remove a class it sent.
-- **Player API (classes out).** A paired device lists its account's classes and fetches what
-  changed since its last sync. Read-only.
+- **Source API (classes in).** A source such as classbeat sends a class as a **publication**:
+  the source's class id, a publication number that the source increases every time it sends that
+  class, and the content hash. The backend keeps the highest number it has seen.
+  - The same number with the same hash is a repeat: accepted, nothing changes, so a lost answer
+    is safe to retry.
+  - A lower number is refused as stale, so a delayed retry of an old send can never overwrite a
+    newer one. The number is the source's own counter, not classbeat's revision number, because
+    a user may deliberately send an older revision again.
+  - **Removing a class is a publication too**, with its own number. The backend keeps a marker
+    that the class was removed, so every device learns of it, and a late send of older content
+    cannot bring the class back.
+- **Player API (classes out).** Read-only. A device asks for "everything changed since this
+  cursor" and gets changed classes, removals and a new cursor. If the cursor is too old or the
+  format version changed, the backend says so and the device does a full resync.
+- **A class being played is pinned.** The player takes one complete snapshot when a class starts,
+  and sync never changes it underneath. A newer version is shown as available and applies after
+  the class.
 - **A small website.** Sign in, see the classes, see and revoke devices and linked sources,
   download the application, export or delete the account.
 
 **The class format** is this project's own: one versioned JSON document per class, published as
 a JSON Schema in the repository, with the Python and TypeScript types generated from it and
-contract tests on both sides. It holds the intervals with absolute start times, the songs (title,
-artist, start, end, BPM), totals (length, planned load, time in zone), the music source and the
-sport. The application can also open a class file from disk, which is how demos, tests and the
-first spike run before the backend exists.
+contract tests on both sides. **Each document is a complete snapshot**: everything needed to play
+the class offline, with no reference back to the source. It holds:
+
+- the intervals with absolute start times, and the totals (length, planned load, time in zone);
+- the songs: title, artist, length, start and end in class time, BPM;
+- the music source, the sport and **the crossfade the class was designed for**;
+- per song, optionally, **beat anchors**: points in the song where a bar starts, each with its
+  tempo, including any correction the instructor applied in classbeat. BPM alone cannot place a
+  beat, so without anchors there is no pulse on the beat;
+- per song, optionally, **marked moments** (a drop, a breakdown) with their times, used for
+  effects only;
+- for each optional part, whether it is measured, an estimate or missing.
+
+**When music detail is missing** the class still plays: no anchors means the scene pulses at the
+tempo only, no marked moments means bursts follow interval changes, and no song timing at all
+means the manual clock. Older classbeat revisions were stored without song timing; classbeat
+either refits such a class into a new revision before sending or sends it marked as manual-clock
+only. That policy belongs to the classbeat side (phase PL3).
+
+The application can also open a class file from disk, which is how demos, tests and the first
+spike run before the backend exists.
 
 **Pairing a device, no password in the app.** The application shows a short code and opens the
 website; the signed-in user confirms the code and names the device. The device receives a
@@ -245,8 +318,9 @@ That part is work in the classbeat repository, planned there once this API exist
 **Offline.** The application keeps its classes and asks only for changes. A studio with no
 network still runs the class.
 
-**Deletion and retention.** Deleting a class or an account removes it from the backend at once
-and from each device at its next sync; a revoked device is wiped when it next connects. Song
+**Deletion and retention.** Deleting a class or an account removes its content from the backend
+at once (only the marker that it was removed stays, with no titles in it) and from each device
+at its next sync; a revoked device is wiped when it next connects. Song
 titles and artists are Spotify-derived data, so they are kept only while the class exists.
 
 **Many users.** Every instructor has their own account and sees only their own classes,
@@ -273,8 +347,14 @@ factor, and there is no technical need for Java. Python is stable in production 
 here: the work is waiting on the database and the network, not computing, and nothing heavy
 (no audio, no model calls) runs in this backend. It is kept safe the way classbeat is: strict
 type checking, linting and tests on every change, and several server processes behind one
-address when one is not enough. PostgreSQL is the right database in every variant; live-session state
-lives in memory, and a message broker is added only when one backend process is no longer enough.
+address when one is not enough. PostgreSQL is the right database in every variant.
+
+**Deployment rule for live sessions.** Live-session state lives in the memory of one process.
+So the ordinary API may run as several processes, but **live sessions run as exactly one
+process** at first, or the instructor and the riders could land on different ones and never meet.
+Running more than one requires shared coordination first (a message broker, or routing every
+connection of a session to the same process). This is written into the deploy files, not left
+to memory.
 
 ## 6. Architecture
 
@@ -393,11 +473,30 @@ enhancements easier. A virtual world is ruled out (section 3), so Godot has to e
 the light show alone. What it does not make easier is anything on phones or the website, which
 stay web code either way.
 
-**The choice does not have to be made now.** The shell, the class clock and the plain 2D screen
-are built first and are the same in both cases (phases PL4 and PL5). Spike 2 builds the same rough
-light-show scene in Godot and in web 3D and compares how it looks, the frame rate on a studio-class
-computer, and how well agents could build and check each. Godot is the leading candidate; the
-spike confirms it or shows why not, before phase PL6 starts.
+**The scene is replaceable only once its join with the shell is settled.** With web 3D the scene
+is part of the shell's own window and the text is ordinary HTML over it. With Godot there are
+three ways to join, and they differ in who owns the projector window and who draws the text:
+
+| | Projector window | Text | Risk |
+|---|---|---|---|
+| Godot as its own program, started by the shell | Godot's | Drawn by Godot from what the shell sends | Two programs to keep in step: focus, window placement, crash recovery, two things to sign |
+| Godot's web export running inside the shell | The shell's | HTML over the scene | Godot's simpler web renderer, not its best one |
+| A transparent shell window laid over Godot's | Both | HTML | Fragile across systems and in full screen; not recommended |
+
+**The choice does not have to be made now**, but it is made on the integrated application, not on
+pictures alone. The shell, the class clock and the plain 2D screen are built first and are the
+same in every case (phases PL4 and PL5). Spike 2 builds the same rough light-show scene in web 3D
+and in Godot (as its own program and as a web export) and must show, for each:
+
+- the look, and the frame rate on a studio-class computer;
+- full screen on a second display while the presenter window keeps the keyboard and its controls;
+- large text placed and readable at room distance, and still right after a resize or a display
+  being plugged in or removed;
+- **recovery:** when the scene is killed, the room's screen falls back to the plain 2D screen
+  within two seconds and the class clock is unaffected;
+- how well agents could build it and check its pictures automatically.
+
+Godot is the leading candidate; the spike confirms it or shows why not, before phase PL6 starts.
 
 No choice here changes the music question: no engine can play Spotify itself, and all can follow it.
 
@@ -447,7 +546,7 @@ stronger developer and reviewer, as in classbeat.
 
 | Phase | What | Size | Needs the owner |
 |---|---|---|---|
-| **PL0** | Repository setup: working rules, CI skeleton, the decisions of section 13 written as ADRs (class format; accounts, pairing and tokens; application stack and music link; provider terms). **Spike 1:** a throwaway follower on the owner's Mac and Windows machine, measuring position accuracy over a full class at crossfade 0 and 9 s. **Spike 2:** the same rough light-show scene in Godot and in web 3D, on a typical studio computer. | About 5, 2 spikes | Creates the repository; decisions; runs both spikes (a live account and a real screen) |
+| **PL0** | Repository setup: working rules, CI skeleton, the decisions of section 13 written as ADRs (class format; accounts, pairing and tokens; application stack and music link; provider terms). **Spike 1** (music, pass criteria below) on the owner's Mac and Windows machine. **Spike 2** (scene and its join with the shell, section 9) on a typical studio computer. | About 5, 2 spikes | Creates the repository; decisions; runs both spikes (a live account and a real screen) |
 | **PL1** | The class format: schema, generated types, example classes, a converter test against classbeat's data shape | About 3 | |
 | **PL2** | Backend: accounts and sign-in, class library, source API, pairing and device tokens, player API, website, export and deletion, container image | About 10 | |
 | **PL3** | classbeat side, in the classbeat repository: the player connection and "Send to player" | About 4 | |
@@ -461,8 +560,22 @@ stronger developer and reviewer, as in classbeat.
 | **PL11** | Swedebeat or own audio files | Unknown | A provider's agreement; its own ADR |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
 
-PL0's first spike decides whether the music design stands. If following proves unreliable on
-Windows or macOS, the first version ships with the manual clock and option B for the beta circle,
+**Spike 1 pass criteria** (proposed; fixed in the timing ADR before the spike runs). A throwaway
+follower logs readings against a reference recording of the same playback, on macOS and Windows,
+for a full class at crossfade off, 5 s and 9 s.
+
+| What | Passes when |
+|---|---|
+| Interval timing | The class clock is within 1 s of the music for at least 95 % of the class, and never more than 2 s off for longer than 5 s |
+| Song changes | Every change is detected within 1 s, at each crossfade setting, and the clock never moves backwards |
+| Pause and resume, seek, next and previous | Locked again within 3 s, at the right place |
+| The same recording twice in one class | The right occurrence is chosen from the order; a cold start on such a song is reported as ambiguous, not guessed silently |
+| A song that is not in the class; an advert; another app playing | Reported as off the list within 3 s; the clock keeps running; locks again on return |
+| The music app closed and restarted; readings going stale | Coasting is entered within 3 s and left within 3 s of fresh readings; no stale reading is ever applied as current |
+| An hour of play | No drift beyond the interval target |
+| Beat effects (measured separately) | A flash on the beat is within 50 ms of the audible beat for at least 90 % of beats. If not, beat effects fall back to tempo-only (section 4) and the plan is otherwise unchanged |
+
+Spike 1 decides whether the music design stands. If interval timing fails on Windows or macOS, the first version ships with the manual clock and option B for the beta circle,
 and the rest of the plan is unchanged. PL4 can start in parallel with PL2 because the application
 opens class files from disk. After PL5 the player is usable in a class; PL6 makes it the product
 the owner described.
