@@ -11,6 +11,16 @@
 <p id="hint">Open a class with File, Open Class, or drop a class file on this window.</p>
 <p id="error" role="alert" hidden></p>
 <ul id="error-details" hidden></ul>
+<section id="pairing" aria-label="Pairing">
+  <p>Pairing: <output id="pairing-status">Not paired</output></p>
+  <p id="pairing-wait" hidden>Your code is <output id="pairing-code"></output>. Type it on <output id="pairing-page"></output> (opened in your browser). It works for <output id="pairing-left"></output> more.</p>
+  <p id="pairing-message" role="alert" hidden></p>
+  <p>
+    <button type="button" id="pair">Pair this computer</button>
+    <button type="button" id="pairing-cancel" hidden>Cancel</button>
+    <button type="button" id="unpair" hidden>Unpair this computer</button>
+  </p>
+</section>
 <section id="clock" hidden>
   <p>Status: <output id="status"></output></p>
   <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>
