@@ -12,7 +12,7 @@
     "screenshots:godot": "xvfb-run -a -s \"-screen 0 1920x1080x24\" node tools/screenshots.js --variants=godot-web,godot-native",
     "godot:setup": "node tools/godot.js setup",
     "godot:export": "node tools/godot.js export all",
-    "godot:check": "node tools/godot.js setup && xvfb-run -a -s \"-screen 0 1920x1080x24\" node --test --test-concurrency=1 \"test-godot/*.test.js\""
+    "godot:check": "node tools/godot.js setup && xvfb-run -a -s \"-screen 0 1920x1080x24\" node --test --test-concurrency=1 --test-timeout=600000 \"test-godot/*.test.js\""
   },
   "dependencies": {
     "three": "0.170.0",

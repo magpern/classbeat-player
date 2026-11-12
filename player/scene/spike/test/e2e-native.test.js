@@ -36,6 +36,21 @@ async function expectPlainScreen(app, clockBefore, wallStart) {
   return state;
 }
 
+test('move-room to the room\'s current display keeps the same Godot process, and keeps the room window hidden', { timeout: 60000 }, async () => {
+  const { app } = await start({});
+  try {
+    const pid = await app.evaluate(() => process.spikeTest.getNative().child.pid);
+    const bounds = await app.evaluate(() => process.spikeTest.getNativeBounds());
+    assert.ok(bounds, 'the launch display is known as soon as Godot is started');
+    await app.evaluate(() => process.spikeTest.command({ type: 'move-room', n: 1 }));
+    await sleep(500);
+    assert.equal(await app.evaluate(() => process.spikeTest.getNative().child.pid), pid, 'same process');
+    assert.deepEqual(await app.evaluate(() => process.spikeTest.getNativeBounds()), bounds);
+    assert.equal(alive(pid), true);
+    assert.equal(await app.evaluate(() => process.spikeTest.getRoom().isVisible()), false);
+  } finally { await app.close(); }
+});
+
 test('Godot killed: the room window shows the plain 2D screen within 2 s, clock continuous', { timeout: 60000 }, async () => {
   const { app } = await start({});
   try {

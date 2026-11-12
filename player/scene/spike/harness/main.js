@@ -9,6 +9,7 @@ const { CLASS_DEF, ZONES } = require('./class-def');
 const { createRecovery } = require('./recovery');
 const { parseCommand } = require('./commands');
 const { VARIANTS, parseVariant } = require('./variant');
+const { needsRestart } = require('./native-display');
 const { launchNative, buildArgs, defaultBinary } = require('./godot-native');
 const godotWeb = require('./godot-web');
 
@@ -23,6 +24,7 @@ let roomMode = 'scene';
 let roomDisplayId = null;
 let lastRecovery = null;
 let fpsLog = null;
+let nativeBounds = null; // where Godot runs or is being launched (set at launch, so a key pressed while it starts counts)
 let native = null; // the running Godot program (variant godot-native): { send, stop, bounds, child }
 let nativeGen = 0; // bumped on every start and stop, so a late event from an old launch is ignored
 let captureDir = null;
@@ -70,19 +72,20 @@ function startNative() {
   room.hide();
   const gen = ++nativeGen;
   const bounds = displayBounds();
+  nativeBounds = bounds;
   const extra = (process.env.SPIKE_GODOT_ARGS || '').split(' ').filter(Boolean);
   const size = ROOM_SIZE.length === 2 && ROOM_SIZE[0] ? ROOM_SIZE : null;
   launchNative({
     exe: process.env.SPIKE_GODOT_BIN || defaultBinary(), args: buildArgs({ bounds, size, extra }), captureDir, log,
     onMessage: (m) => { if (gen === nativeGen) onNativeMessage(m); },
-    onDead: (reason) => { if (gen !== nativeGen) return; native = null; log(`native scene gone: ${reason}`); recovery.onSceneGone(); },
+    onDead: (reason) => { if (gen !== nativeGen) return; native = null; nativeBounds = null; log(`native scene gone: ${reason}`); recovery.onSceneGone(); },
   }).then((n) => { if (gen === nativeGen) native = { ...n, bounds }; else n.stop(); })
-    .catch((e) => { if (gen === nativeGen) { log(`native launch failed: ${e.message}`); recovery.onSceneGone(); } });
+    .catch((e) => { if (gen === nativeGen) { nativeBounds = null; log(`native launch failed: ${e.message}`); recovery.onSceneGone(); } });
   // Keep the keyboard on the presenter whatever the new window does.
   setTimeout(() => { if (presenter && !presenter.isDestroyed()) presenter.focus(); }, 1500);
 }
 
-function stopNative() { nativeGen++; const n = native; native = null; if (n) n.stop(); }
+function stopNative() { nativeGen++; const n = native; native = null; nativeBounds = null; if (n) n.stop(); }
 
 function onNativeMessage(m) {
   if (m.type === 'fps' && Number.isFinite(m.v)) log(`fps mode=scene ${m.v.toFixed(1)}`);
@@ -150,7 +153,7 @@ function placeRoom(displayId) {
 
 // The Godot window cannot be moved from outside: when its display changed, start it again there.
 function restartNativeIfMoved() {
-  if (native && VARIANT === 'godot-native' && JSON.stringify(native.bounds) !== JSON.stringify(displayBounds())) startNative();
+  if (VARIANT === 'godot-native' && needsRestart(nativeBounds, displayBounds())) startNative();
 }
 
 function createWindows() {
@@ -237,6 +240,6 @@ app.whenReady().then(() => {
     for (const w of [presenter, room]) if (w && !w.isDestroyed() && !w.webContents.isCrashed()) w.webContents.send('state', s);
     if (native) native.send(sceneState());
   }, 100);
-  if (TEST) process.spikeTest = { getNative: () => native, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state };
+  if (TEST) process.spikeTest = { getNative: () => native, getNativeBounds: () => nativeBounds, restartNativeIfMoved, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state };
   app.on('window-all-closed', () => app.quit());
 });
