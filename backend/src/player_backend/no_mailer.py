@@ -13,5 +13,5 @@ _log = logging.getLogger("player_backend.mail")
 
 
 class NoMailer:
-    def send(self, mail: Mail) -> None:
+    def send(self, mail: Mail, *, timeout: float) -> None:
         _log.warning("mail dropped", extra={"fields": {"event": "mail.not_configured"}})

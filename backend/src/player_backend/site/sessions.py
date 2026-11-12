@@ -5,15 +5,18 @@ Ending a session deletes its row, so it takes effect on the next request.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from player_backend.db import site_sessions
 from player_backend.http_errors import ApiError
 from player_backend.site.cookies import clear_session_cookie
-from player_backend.site.deps import RecentSignIn, SiteSession, TheCaller
+from player_backend.site.deps import NotSignedIn, RecentSignIn, SiteSession, TheCaller
 
 router = APIRouter()
 
@@ -49,10 +52,35 @@ def end_session(session_id: UUID, context: SiteSession, who: TheCaller) -> Respo
     return _signed_out() if session_id == context.credential_id else Response(status_code=204)
 
 
-@router.post("/sign-out")
+class _SignedOutAlready(APIRoute):
+    """Signing out with no live session is done already: 204, and the stale cookie is cleared.
+
+    The route keeps the one session dependency, so the cookie is read and checked as everywhere
+    else, and the origin check has run before it. Only its "not signed in" is answered here.
+    """
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def signed_out_already(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except NotSignedIn:
+                return _signed_out()
+
+        return signed_out_already
+
+
+_sign_out_router = APIRouter(route_class=_SignedOutAlready)
+
+
+@_sign_out_router.post("/sign-out")
 def sign_out(context: SiteSession, who: TheCaller) -> Response:
     site_sessions.end_session(context, context.credential_id, who.info)
     return _signed_out()
+
+
+router.include_router(_sign_out_router)
 
 
 @router.post("/sessions/end-all")

@@ -15,6 +15,10 @@ class Mail:
 
 
 class Mailer(Protocol):
-    def send(self, mail: Mail) -> None:
-        """Hand one mail over for delivery. Called after the response has been sent."""
+    def send(self, mail: Mail, *, timeout: float) -> None:
+        """Hand one mail over for delivery. Called after the response has been sent.
+
+        Gives up and raises once `timeout` seconds have passed: a mail service that hangs must
+        not hold the thread that called. Called through `deliver` (mail_delivery.py) only.
+        """
         ...
