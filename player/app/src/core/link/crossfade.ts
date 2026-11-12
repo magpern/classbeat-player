@@ -6,7 +6,11 @@ import type { LinkSong, Observation } from "./types.ts";
 const MAX_ARRIVAL_MS = 10_000;
 /** The outgoing song's last reading must be this recent at the moment the new song started. */
 const MAX_PREVIOUS_AGE_MS = 10_000;
-const MAX_CROSSFADE_MS = 30_000;
+/**
+ * Spotify's longest crossfade is 12 s; with tolerance for the measuring error, anything longer
+ * is a skip, not a crossfade: it is not measured and the plan's crossfade stays in use.
+ */
+export const MAX_CROSSFADE_MS = 13_500;
 
 /**
  * How long the two songs overlapped: the outgoing song's length minus where it was when the

@@ -14,6 +14,11 @@ export const MAC_TIMEOUT_MS = 700;
 /** One line of text is expected; more than this is refused. */
 export const MAC_MAX_OUTPUT_BYTES = 8192;
 
+// Why the check and the `tell` are two statements: AppleScript has no form of `tell` that
+// refuses to launch an application that is not running, so the check cannot be folded into it.
+// Both sit in one script and run microseconds apart; the one way to lose the race is Spotify
+// quitting in that gap, which then starts it once, and the next poll sees it running. That window
+// is accepted: a `tell` with no check would start Spotify every time it is closed.
 const NOT_RUNNING = 'if application "Spotify" is not running then return "notrunning"';
 
 export const MAC_SCRIPTS = Object.freeze({

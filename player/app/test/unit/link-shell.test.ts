@@ -86,7 +86,7 @@ test("the scripted reader delivers what the music app does, as a real reader wou
 
 test("undo: available until its time is over, then refused and nothing changes", () => {
   const clock = createClock(600_000, 0);
-  const link = { ...initialLink(true), state: "Locked" as const, undo: { clockMs: 5000, until: 100 } };
+  const link = { ...initialLink(true), state: "Locked" as const, undo: { clockMs: 5000, at: 0, until: 100 } };
   const late = undo(link, clock, 101);
   assert.equal(late.event, "undo_unavailable");
   assert.equal(late.clock, clock);
@@ -94,5 +94,5 @@ test("undo: available until its time is over, then refused and nothing changes",
   const ok = undo(link, clock, 100);
   assert.equal(ok.event, "undo");
   assert.equal(ok.link.mode, "manual");
-  assert.equal(positionAt(ok.clock, 100), 5000);
+  assert.equal(positionAt(ok.clock, 100), 5100, "where it would have run to since the resync (at 0)");
 });

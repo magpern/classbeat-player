@@ -60,7 +60,7 @@ for (const [name, bStart, measured, differs] of [
   ["the planned 9 s", 1000 + 171_000, 9000, false],
   ["off", 1000 + 180_000, 0, true],
   ["5 s", 1000 + 175_000, 5000, true],
-  ["15 s", 1000 + 165_000, 15_000, true],
+  ["12 s, Spotify's longest", 1000 + 168_000, 12_000, true],
 ] as const) {
   test(`rule 7: the crossfade measured at a song change, ${name}, is shown beside the planned one`, () => {
     const t = run({ plan, segments: [play(1000, "A", 0), play(bStart, "B", 0)], until: bStart + 2000 });
@@ -70,6 +70,13 @@ for (const [name, bStart, measured, differs] of [
     assert.equal(t.at(bStart).view.crossfadeDiffers, differs, "the player says when they differ");
   });
 }
+
+test("over 13.5 s of overlap is a skip, not a crossfade: nothing is measured and the plan stands", () => {
+  // B starts when A is at 165 s: 15 s of overlap, more than Spotify's 12 s plus tolerance.
+  const t = run({ plan, segments: [play(1000, "A", 0), play(1000 + 165_000, "B", 0)], until: 1000 + 167_000 });
+  assert.equal(t.at(1000 + 167_000).view.measuredCrossfadeMs, null);
+  assert.equal(t.at(1000 + 167_000).view.crossfadeDiffers, false);
+});
 
 test("a skip is not a crossfade: nothing is measured", () => {
   const t = run({ plan, segments: [play(1000, "A", 0), play(51_000, "B", 0)], until: 53_000 });
@@ -103,6 +110,8 @@ test("rule 7: time left follows the measurement while the class plays", () => {
 });
 
 test("rule 7: a longer real crossfade shortens the time left", () => {
-  const t = run({ plan, segments: [play(1000, "A", 0), play(166_000, "B", 0)], until: 168_000 });
-  assert.equal(t.at(167_000).view.classRemainingMs, 693_000 - 172_000 - 2 * 6000);
+  // 12 s measured against 9 s planned: each of the two remaining changes skips 3 s.
+  const t = run({ plan, segments: [play(1000, "A", 0), play(169_000, "B", 0)], until: 171_000 });
+  assert.equal(t.at(170_000).view.measuredCrossfadeMs, 12_000);
+  assert.equal(t.at(170_000).view.classRemainingMs, 693_000 - 172_000 - 2 * 3000);
 });
