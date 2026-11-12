@@ -53,9 +53,10 @@ live sessions.
 7. All numbers below are settings with these values as defaults. A setting that bounds what
    the backend's role can do is held by the database, not passed in by the backend. That
    covers `SIGNUP_MODE`, `LOGIN_LINK_SAME_BROWSER` and the limits counted inside the `auth_*`
-   functions. Passing one in from `player_app` would undo the bound in section 9. Such a
-   setting is a constant in the function's body and is changed by a migration (amended
-   2026-11-12).
+   functions, and the other numbers those functions use: the link's 15 minutes, the session
+   lifetimes and the cap of 20 sessions. Passing one in from `player_app` would undo the bound
+   in section 9. Such a setting is a constant in the function's body and is changed by a
+   migration (amended 2026-11-12).
 
 ### 2. Token format and hashing
 
@@ -112,8 +113,8 @@ key everywhere. A later gym account that groups instructors adds a membership ta
 change this key.
 
 **Who can sign up.** Sign-up and sign-in are the same flow: the first sign-in for an email
-creates the account. The setting `SIGNUP_MODE` is `allowlist`, `open` or `closed`. The default is
-`allowlist`: only emails in the table `signup_allowlist`, kept by the operator, can create an
+creates the account. The mode `SIGNUP_MODE` is `allowlist`, `open` or `closed`, held by the database
+(principle 7). It is `allowlist`: only emails in the table `signup_allowlist`, kept by the operator, can create an
 account. This is the safest reversible default. Who is let in is settled in the provider-terms
 ADR and by the owner. An address **can sign in** when it has an account or may create one. No
 mail is ever sent to an address that cannot sign in.
@@ -137,8 +138,12 @@ proves only "the same browser".
    the row is marked unusable and no mail is sent. The mail is queued and sent after the
    response. The work differs by one row only: for an address that has an account the function
    also writes the "link requested" event (section 11), whether or not a mail is sent.
-   Nothing else in the time taken tells the cases apart: the function does the same lookups
-   and writes for every address.
+   Otherwise the function does the same lookups and writes for every address, with one
+   exception that section 10 requires: a request over its per-pair limits does not count
+   toward the per-email total of 30 a day, so it makes one counter write fewer. That depends
+   only on the requester's own earlier requests for that email, so it tells them nothing new.
+   Input that is not an email address is refused with `422` after the first call and makes
+   no second call.
 3. A newer link cancels older ones **only when asked from the same browser** (the same browser
    token). Links asked from other browsers stay valid: each works only in its own browser, so
    nothing is lost, and a stranger who knows the email cannot cancel the user's link.
@@ -802,9 +807,9 @@ One table, `audit_events`, owned by the account like any other: time, event name
 of the credential that acted, the client address shortened to its network (/24 or /48), the
 browser or app family, and a small detail object.
 
-Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out (with
-`current: false` when the user ends another of their sessions); all sessions ended; passkey added or removed; passkey refused by the counter rule; pairing approved
-or denied; device created; device revoked; source linked or revoked; publication applied,
+Events: sign-in link requested; signed in (link or passkey); sign-in refused; signed out
+(with `current: false` when the user ends another of their sessions); all sessions ended;
+passkey added or removed; passkey refused by the counter rule; pairing approved or denied; device created; device revoked; source linked or revoked; publication applied,
 refused as stale or as a conflict; class deleted on the site; live session started or ended;
 controller added; control code cancelled after wrong tries; export made.
 
@@ -873,7 +878,7 @@ the database's log is covered too:
 | A stolen session cookie | `HttpOnly`, `Secure`, `__Host-`. Sensitive actions need a recent sign-in. Sessions are listed and can be ended. 14 days idle, 60 days in total |
 | A forwarded, intercepted or pre-opened sign-in link | Single use, 15 minutes, bound to the browser that asked, token in the fragment and removed from the address bar, used only by a POST |
 | A stranger who knows an email blocking that account's link sign-in | A new link cancels older ones only from the same browser, so the stranger cancels nothing. The limits count per email and requesting address together, so the stranger uses up only their own. What is left: someone with several addresses can reach the total of 30 a day for one email, which stops new links to that mailbox until the next day and sends it up to 30 mails. Passkey sign-in and sessions already open are not affected |
-| Finding out who has an account | A link request always gives the same answer, makes the same one database call and sends mail after the response. The call writes one row more for an address with an account (its audit event); that small difference in time is not hidden. Over the per-email limits the answer is still the same. The only 429 depends on the requester's address alone. Passkey sign-in takes no email and lists no credentials. Unknown addresses write no audit event |
+| Finding out who has an account | A link request always gives the same answer, makes the same two database calls and sends mail after the response. The second call writes one row more for an address with an account (its audit event); that small difference in time is not hidden. A request over its per-pair limits writes one counter fewer, which tells the requester only about their own earlier requests. Over the per-email limits the answer is still the same. The only 429 depends on the requester's address alone. Passkey sign-in takes no email and lists no credentials. Unknown addresses write no audit event |
 | Cross-site requests and cross-site WebSocket use | `SameSite=Lax`, the `Origin` check, no cross-origin sharing. The cookie is read by a fixed, tested list of routes. The WebSocket takes no cookie and checks `Origin` for browser roles |
 | A token in a log, a link or a public repository | Long tokens are never in a path or query, and codes in links are in the fragment. The one exception, the source link code, lives 60 seconds and needs the PKCE verifier. Headers and token bodies are not logged. The prefix makes a leak findable; CI scans for it |
 | A copy of the database | It holds hashes of 256-bit tokens, which cannot be reversed, and public keys. Live codes and tokens are not in it. It does hold all content, so a copy is a full breach of stored data; the hashes only stop it from becoming a way in |
@@ -963,10 +968,13 @@ the database's log is covered too:
 - Riders see nothing of each other, not even how many they are. The handlebar companion shows
   no rider data.
 - An app with one display cannot offer a control code; the instructor signs in on the phone.
-- The limits are settings. Raising one is a normal change; removing a guard test is not.
+- The limits, the link's 15 minutes, the session lifetimes and the cap of 20 sessions are
+  constants in the database functions (principle 7). Raising one is a migration in a normal
+  pull request; removing a guard test is not.
 
 **Defaults chosen here that the owner may want to change.** Each is a setting or a small,
-separate change. None needs an answer for work to go on.
+separate change; those held by the database (principle 7) change by migration. None needs
+an answer for work to go on.
 
 | Default | Why the owner may care |
 |---|---|
