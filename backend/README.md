@@ -9,6 +9,7 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the only package that may import a database driver |
+| `src/player_backend/db/queries/` | Query modules: every SQL statement, as `Final` constants (string literals or committed `.sql` files) |
 | `src/player_backend/db/migrations/` | Ordered plain-SQL migrations, run as `player_owner` |
 | `db/init/10-roles.sql` | Database init, run once as the bootstrap superuser: the three roles, database rights, log settings |
 | `tests/guards/` | ADR 0002 guard tests: catalogue and source checks. Never weakened |
@@ -28,7 +29,12 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 Migrations are plain ordered SQL (`NNNN_name.sql`), not Alembic: the security-relevant part is
 SQL that reviewers read as it runs, and the runner is small. Each file runs once, in its own
 transaction, recorded with its SHA-256 in `player_meta.schema_migrations`; a changed applied file
-is refused. Never edit an applied migration; add the next number.
+is refused. Never edit an applied migration; add the next number, its constant in
+`queries/migrations.py` and its step in `db/migrate.py` (a test fails until both exist).
+
+**SQL in the source is an allowlist** (`tests/guards/sql_source_check.py`): every statement is a
+constant of a query module, and every call that executes SQL takes a direct reference to one
+(`queries_module.NAME`, or a `NAME` imported from it). Anything else fails the guard.
 
 ## Checks
 
