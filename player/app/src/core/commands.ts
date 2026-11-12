@@ -2,6 +2,8 @@
 // it is used. Pure. Anything not exactly one of these shapes is refused (null).
 import { JUMP_MS } from "./clock/clock.ts";
 import { MAX_CLASS_FILE_BYTES } from "./class-file.ts";
+import { isTransportAction } from "./link/transport.ts";
+import type { TransportAction } from "./link/transport.ts";
 
 export type ClockCommand =
   | { readonly type: "start" }
@@ -22,10 +24,10 @@ export interface DroppedFile {
   readonly text: string;
 }
 
-export const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
 
-export const hasOnly = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
+const hasOnly = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(v).every((k) => keys.includes(k)) && keys.every((k) => k in v);
 
 const SIMPLE = new Set(["start", "pause", "resume", "next", "previous", "undo", "manual", "follow"]);
@@ -42,6 +44,17 @@ export function parseClockCommand(v: unknown): ClockCommand | null {
     return i >= 0 && i <= MAX_SONG_INDEX ? { type: "pick", songIndex: i } : null;
   }
   return null;
+}
+
+/** A named command for the music app (ADR 0001): one of a fixed set of names, never free text. */
+export interface MusicCommand {
+  readonly type: "music";
+  readonly action: TransportAction;
+}
+
+export function parseMusicCommand(v: unknown): MusicCommand | null {
+  if (!isPlainObject(v) || v.type !== "music" || !hasOnly(v, ["type", "action"])) return null;
+  return isTransportAction(v.action) ? { type: "music", action: v.action } : null;
 }
 
 export const MAX_FILE_NAME_LENGTH = 255;

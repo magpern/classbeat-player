@@ -5,16 +5,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_LINK_CONFIG, isCurrent } from "../../src/core/link/index.ts";
 import { backoffMs } from "../../src/main/readers/helper-supervisor.ts";
-import { createWindowsReader, MIN_COMMAND_GAP_MS, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
-import type { WindowsReader } from "../../src/main/readers/windows-reader.ts";
+import { createWindowsMusic, MIN_COMMAND_GAP_MS, WINDOWS_HELPER_LIMITS as LIMITS } from "../../src/main/readers/windows-reader.ts";
+import type { WindowsMusic } from "../../src/main/readers/windows-reader.ts";
 import { MAX_LINE_LENGTH } from "../../src/main/readers/windows-parse.ts";
 import { createHarness, NO_SESSION, sessionLine } from "./windows-harness.ts";
 import type { Harness } from "./windows-harness.ts";
 
-function following(): { h: Harness; r: WindowsReader } {
+function following(): { h: Harness; r: WindowsMusic } {
   const h = createHarness();
-  const r = createWindowsReader(h.deps);
-  r.setFollowing(true);
+  const r = createWindowsMusic(h.deps);
+  r.setActive(true);
   return { h, r };
 }
 
@@ -26,19 +26,19 @@ test("the limits are fixed", () => {
 
 test("constructing the reader starts nothing; the helper runs only while following", () => {
   const h = createHarness();
-  const r = createWindowsReader(h.deps);
+  const r = createWindowsMusic(h.deps);
   assert.equal(r.kind, "windows");
   h.advance(60_000);
   assert.equal(r.latest(h.now), null);
   assert.equal(h.children.length, 0, "no helper before Follow");
 
-  r.setFollowing(true);
-  r.setFollowing(true);
+  r.setActive(true);
+  r.setActive(true);
   assert.equal(h.children.length, 1, "one helper, however often it is asked for");
   h.child.line(sessionLine());
   assert.equal(r.latest(h.now)?.title, "Spike Song A");
 
-  r.setFollowing(false);
+  r.setActive(false);
   assert.equal(h.child.killed, true);
   assert.equal(r.latest(h.now), null, "nothing is kept from a stopped helper");
   h.advance(120_000);
@@ -136,8 +136,8 @@ test("crash: null at once, and restarts wait 1 s, 2 s, 4 s … up to 30 s", () =
 test("a helper that cannot be started is retried with the same growing wait, and nothing throws", () => {
   const h = createHarness();
   h.failSpawn = true;
-  const r = createWindowsReader(h.deps);
-  assert.doesNotThrow(() => r.setFollowing(true));
+  const r = createWindowsMusic(h.deps);
+  assert.doesNotThrow(() => r.setActive(true));
   h.advance(300_000);
   assert.equal(h.children.length, 0);
   assert.equal(r.latest(h.now), null);
@@ -218,51 +218,51 @@ test("a flood without a line end is cut off and the helper replaced", () => {
 test("turning following off and on cannot start helpers faster than one a second", () => {
   const { h, r } = following();
   for (let i = 0; i < 50; i++) {
-    r.setFollowing(false);
-    r.setFollowing(true);
+    r.setActive(false);
+    r.setActive(true);
   }
   assert.equal(h.children.length, 1);
   h.advance(LIMITS.minGapMs);
   assert.equal(h.children.length, 2);
-  r.setFollowing(false);
-  r.setFollowing(true);
-  r.setFollowing(false);
+  r.setActive(false);
+  r.setActive(true);
+  r.setActive(false);
   h.advance(60_000);
   assert.equal(h.children.length, 2, "a pending start is cancelled when following stops");
 });
 
 test("play, pause and next are written to the helper as their fixed names, and nothing else is", () => {
   const { h, r } = following();
-  r.control("play");
+  r.send("play");
   h.advance(MIN_COMMAND_GAP_MS);
-  r.control("pause");
+  r.send("pause");
   h.advance(MIN_COMMAND_GAP_MS);
-  r.control("next");
+  r.send("next");
   assert.deepEqual(h.child.written, ["play\n", "pause\n", "next\n"]);
   h.advance(MIN_COMMAND_GAP_MS);
   for (const bad of ["previous", "next\nplay", "play; calc.exe", "", "PLAY", " play", 7, null, { toString: () => "play" }]) {
     h.advance(MIN_COMMAND_GAP_MS);
-    r.control(bad as never);
+    r.send(bad as never);
   }
   assert.deepEqual(h.child.written.length, 3, "only the three names ever reach the helper");
 });
 
 test("commands are dropped when they come too fast, and when no helper runs", () => {
   const { h, r } = following();
-  for (let i = 0; i < 100; i++) r.control("next");
+  for (let i = 0; i < 100; i++) r.send("next");
   assert.deepEqual(h.child.written, ["next\n"]);
   h.advance(MIN_COMMAND_GAP_MS - 1);
-  r.control("next");
+  r.send("next");
   assert.equal(h.child.written.length, 1);
   h.advance(1);
-  r.control("pause");
+  r.send("pause");
   assert.deepEqual(h.child.written, ["next\n", "pause\n"]);
 
   h.child.die();
   h.advance(MIN_COMMAND_GAP_MS);
-  r.control("play");
-  r.setFollowing(false);
-  r.control("play");
+  r.send("play");
+  r.setActive(false);
+  r.send("play");
   assert.equal(h.children.length, 1, "a command never starts a helper");
   assert.equal(h.child.written.length, 2);
 });
@@ -270,10 +270,10 @@ test("commands are dropped when they come too fast, and when no helper runs", ()
 test("close stops the helper for good", () => {
   const { h, r } = following();
   h.child.line(sessionLine());
-  r.close();
+  r.setActive(false);
   assert.equal(h.child.killed, true);
   assert.equal(r.latest(h.now), null);
   h.advance(120_000);
   assert.equal(h.children.length, 1);
-  assert.doesNotThrow(() => r.close());
+  assert.doesNotThrow(() => r.setActive(false));
 });

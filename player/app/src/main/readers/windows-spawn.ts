@@ -1,4 +1,4 @@
-// Starts the Windows helper process: the only place in the application that starts a process.
+// Starts the Windows helper process: the only place in the application that does.
 // No shell, a full path to Windows PowerShell, and a constant argument list (windows-script.ts);
 // nothing from a class file, the presenter or the music app is ever part of the command.
 //

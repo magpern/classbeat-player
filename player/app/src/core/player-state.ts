@@ -39,14 +39,15 @@ export const INITIAL: PlayerState = { loaded: null, error: null, loadId: 0 };
 /**
  * Opens a class file's text. A valid class replaces the open one with a fresh clock; a refused
  * file leaves the open class and its clock exactly as they were (ADR 0003 section 7: the player
- * keeps playing its other classes) and records the message.
+ * keeps playing its other classes) and records the message. `following` says a reader exists;
+ * with `followAtOnce` false the class opens on the manual clock until the instructor picks Follow.
  */
-export function openText(s: PlayerState, fileName: string, text: string, classSchema: unknown, now: number, following = false): PlayerState {
+export function openText(s: PlayerState, fileName: string, text: string, classSchema: unknown, now: number, following = false, followAtOnce = following): PlayerState {
   const r = readClassText(text, classSchema);
   if (!r.ok) return { ...s, error: { message: r.message, details: r.details } };
   const plan = planFrom(r.doc);
   const linkPlan = linkPlanFrom(r.doc);
-  const link = initialLink(following && !linkPlan.manualOnly);
+  const link = initialLink(following && followAtOnce && !linkPlan.manualOnly);
   const loaded: Loaded = { fileName, doc: r.doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following };
   return { loaded, error: null, loadId: s.loadId + 1 };
 }
@@ -107,6 +108,12 @@ export function advance(s: PlayerState, now: number, obs: Observation | null = n
   if (l === null) return s;
   const r = step(l.link, l.clock, l.linkPlan, obs, now);
   return { ...s, loaded: { ...l, link: r.link, clock: tick(r.clock, now) } };
+}
+
+/** True while the instructor follows the music: only then does the shell ask for readings. */
+export function isFollowing(s: PlayerState): boolean {
+  const l = s.loaded;
+  return l !== null && l.following && !l.linkPlan.manualOnly && l.link.mode === "following";
 }
 
 export function snapshotOf(s: PlayerState, now: number): Snapshot {

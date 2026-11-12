@@ -7,7 +7,7 @@ import { EventEmitter } from "node:events";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { MUSIC_ACTIONS } from "../../src/core/music-command.ts";
+import { TRANSPORT_ACTIONS } from "../../src/core/link/transport.ts";
 import { spawnWindowsHelper } from "../../src/main/readers/windows-spawn.ts";
 import type { HelperSpawnOptions, RawChild } from "../../src/main/readers/windows-spawn.ts";
 import { HELPER_CALL_TIMEOUT_MS, HELPER_POLL_MS, powershellPath, systemRoot, WINDOWS_HELPER_ARGS, WINDOWS_HELPER_ENCODED, WINDOWS_HELPER_SCRIPT as SCRIPT } from "../../src/main/readers/windows-script.ts";
@@ -60,7 +60,7 @@ test("the script only reads the Spotify session, and its only controls are play,
   const calls = [...SCRIPT.matchAll(/[.:](Try\w+|Request\w+|Get\w+)\(/g)].map((m) => m[1]).sort();
   assert.deepEqual(calls, ["GetMethods", "GetParameters", "GetParameters", "GetPlaybackInfo", "GetSessions", "GetTimelineProperties", "RequestAsync", "TryGetMediaPropertiesAsync", "TryPauseAsync", "TryPlayAsync", "TrySkipNextAsync"]);
   const names = [...SCRIPT.matchAll(/\$command -ceq '([^']*)'/g)].map((m) => m[1]);
-  assert.deepEqual(names, [...MUSIC_ACTIONS], "input lines are compared, case and all, with the three names");
+  assert.deepEqual(names, [...TRANSPORT_ACTIONS], "input lines are compared, case and all, with the three names");
   assert.equal(SCRIPT.match(/\$command\b/g)?.length, 4, "and used for nothing else");
   assert.doesNotMatch(SCRIPT, /Invoke-|iex\b|Start-Process|\bNet\b|Web|http|Download|Registry|Out-File|Set-Content|Remove-/i);
 });
@@ -150,11 +150,14 @@ test("a started helper cannot throw into the application", () => {
   assert.doesNotThrow(() => child.kill());
 });
 
-test("only windows-spawn.ts can start a process, and never through a shell", () => {
+test("the Windows helper is started only in windows-spawn.ts, and nothing starts a process through a shell", () => {
   const all = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(join(dir, e.name)) : [join(dir, e.name)]));
   const files = all(SRC).map((p) => ({ path: p.slice(SRC.length + 1).replaceAll("\\", "/"), text: readFileSync(p, "utf8") }));
   const starters = files.filter((f) => /child_process|\bworker_threads\b|\bcluster\b/.test(f.text)).map((f) => f.path);
-  assert.deepEqual(starters, ["main/readers/windows-spawn.ts"]);
+  // The macOS reader (#41) runs osascript; the Windows helper is the only other process.
+  assert.deepEqual(starters.sort(), ["main/macos-reader.ts", "main/readers/windows-spawn.ts"]);
+  const namers = files.filter((f) => /powershell\.exe|WINDOWS_HELPER_(ARGS|ENCODED|SCRIPT)/i.test(f.text)).map((f) => f.path);
+  assert.deepEqual(namers.sort(), ["main/readers/windows-script.ts", "main/readers/windows-spawn.ts"]);
   const spawn = source("windows-spawn.ts");
   assert.match(spawn, /import \{ spawn \} from "node:child_process";/, "spawn only: not exec, execFile with a shell, or fork");
   assert.doesNotMatch(spawn, /shell: true|\bexec\w*\(|\bfork\(/);
@@ -163,7 +166,7 @@ test("only windows-spawn.ts can start a process, and never through a shell", () 
 });
 
 test("the parser, the supervisor and the reader do no I/O of their own", () => {
-  for (const name of ["windows-parse.ts", "helper-supervisor.ts", "windows-reader.ts", "shell-reader.ts"]) {
+  for (const name of ["windows-parse.ts", "helper-supervisor.ts", "windows-reader.ts"]) {
     assert.doesNotMatch(source(name), /from\s+["'](node:[\w/]+|electron|fs|child_process)["']|\bprocess\.|\bsetTimeout\b|\bDate\.now\b/, name);
   }
   assert.deepEqual(source("windows-script.ts").match(/from\s+["'][^"']+["']/g), ['from "node:path"'], "the script module only joins a path");
