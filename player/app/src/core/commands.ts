@@ -9,7 +9,13 @@ export type ClockCommand =
   | { readonly type: "resume" }
   | { readonly type: "next" }
   | { readonly type: "previous" }
-  | { readonly type: "jump"; readonly deltaMs: 5000 | -5000 };
+  | { readonly type: "jump"; readonly deltaMs: 5000 | -5000 }
+  // The music link's controls (ADR 0001): undo a resync, choose the manual clock, follow the
+  // music again, pick one occurrence of a repeated recording.
+  | { readonly type: "undo" }
+  | { readonly type: "manual" }
+  | { readonly type: "follow" }
+  | { readonly type: "pick"; readonly songIndex: number };
 
 export interface DroppedFile {
   readonly name: string;
@@ -22,13 +28,18 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 const hasOnly = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(v).every((k) => keys.includes(k)) && keys.every((k) => k in v);
 
-const SIMPLE = new Set(["start", "pause", "resume", "next", "previous"]);
+const SIMPLE = new Set(["start", "pause", "resume", "next", "previous", "undo", "manual", "follow"]);
+const MAX_SONG_INDEX = 999;
 
 export function parseClockCommand(v: unknown): ClockCommand | null {
   if (!isPlainObject(v) || typeof v.type !== "string") return null;
   if (SIMPLE.has(v.type)) return hasOnly(v, ["type"]) ? ({ type: v.type } as ClockCommand) : null;
   if (v.type === "jump" && hasOnly(v, ["type", "deltaMs"]) && (v.deltaMs === JUMP_MS || v.deltaMs === -JUMP_MS)) {
     return { type: "jump", deltaMs: v.deltaMs === JUMP_MS ? 5000 : -5000 };
+  }
+  if (v.type === "pick" && hasOnly(v, ["type", "songIndex"]) && Number.isInteger(v.songIndex)) {
+    const i = v.songIndex as number;
+    return i >= 0 && i <= MAX_SONG_INDEX ? { type: "pick", songIndex: i } : null;
   }
   return null;
 }

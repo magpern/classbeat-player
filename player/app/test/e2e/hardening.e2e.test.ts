@@ -2,6 +2,7 @@
 // content, no permissions, and IPC from any other window is refused.
 import assert from "node:assert/strict";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { CSP } from "../../src/main/web-preferences.ts";
@@ -64,7 +65,9 @@ test("CSP is present and blocks inline scripts and network requests", async () =
 test("navigation and new windows are denied", async () => {
   const url = page.url();
   assert.match(url, /^file:.*\/dist\/presenter\.html$/);
-  for (const target of ["https://example.invalid/", "file:///etc/hostname"]) {
+  // A URL inside dist/ is app content for loading resources, but the page may not navigate to it.
+  const insideDist = pathToFileURL(join(APP_DIR, "dist", "presenter.js")).href;
+  for (const target of ["https://example.invalid/", "file:///etc/hostname", insideDist]) {
     await page.evaluate((t) => {
       window.location.href = t;
     }, target);

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow } from "electron";
 import { createController } from "./controller.ts";
-import { hardenSession } from "./hardening.ts";
+import { enableSandboxUnlessTest, hardenSession } from "./hardening.ts";
 import { registerIpc } from "./ipc.ts";
 import { installMenu } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
@@ -42,6 +42,10 @@ function createPresenter(): void {
   });
   void presenter.loadFile(PRESENTER_FILE);
 }
+
+// Chromium's sandbox for every renderer, unless the test-only --no-sandbox switch is present
+// (CI runs without the sandbox helper). Must run before the app is ready.
+enableSandboxUnlessTest();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

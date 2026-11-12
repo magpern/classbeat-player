@@ -27,13 +27,13 @@ export interface MusicLink {
 export const STALE_AFTER_MS = 3000;
 
 /** Rule 8: a stale reading is never treated as current. A reading from the future is not fresh either. */
-export function isFresh(r: MusicReading, now: number, staleAfterMs = STALE_AFTER_MS): boolean {
+export function isFresh(r: Pick<MusicReading, "at">, now: number, staleAfterMs = STALE_AFTER_MS): boolean {
   const age = now - r.at;
   return age >= 0 && age <= staleAfterMs;
 }
 
 /** Rule 8: the position extrapolated from the moment the system last updated it. */
-export function positionNow(r: MusicReading, now: number): number {
+export function positionNow(r: Pick<MusicReading, "positionMs" | "playing" | "at">, now: number): number {
   return r.playing ? r.positionMs + Math.max(0, now - r.at) : r.positionMs;
 }
 

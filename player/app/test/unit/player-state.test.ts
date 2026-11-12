@@ -12,7 +12,7 @@ const newer = readFileSync(join(EXAMPLES, "reader", "rejected-unknown-major.json
 
 test("before any class: no view, commands do nothing", () => {
   const s = command(INITIAL, { type: "start" }, 0);
-  assert.deepEqual(snapshotOf(s, 0), { loadId: 0, fileName: null, doc: null, view: null, error: null });
+  assert.deepEqual(snapshotOf(s, 0), { loadId: 0, fileName: null, doc: null, view: null, link: null, error: null });
 });
 
 test("opening a class gives a ready clock at 0", () => {

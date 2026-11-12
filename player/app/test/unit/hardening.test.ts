@@ -42,6 +42,16 @@ test("presenter.html carries exactly that CSP, before any script", () => {
   assert.doesNotMatch(html, /\son[a-z]+=/i, "inline event handler");
 });
 
+test("production enables Chromium's sandbox unless the test-only --no-sandbox switch is present", () => {
+  const main = readFileSync(join(APP, "src", "main", "main.ts"), "utf8");
+  const hardening = readFileSync(join(APP, "src", "main", "hardening.ts"), "utf8");
+  assert.match(hardening, /if \(!app\.commandLine\.hasSwitch\("no-sandbox"\)\) app\.enableSandbox\(\);/);
+  const call = main.indexOf("enableSandboxUnlessTest();");
+  assert.ok(call > 0, "main.ts does not call it");
+  assert.ok(call < main.indexOf("app.whenReady"), "it must run before the app is ready");
+  assert.doesNotMatch(main + hardening, /commandLine\.appendSwitch\(["']no-sandbox/, "the app never turns the sandbox off itself");
+});
+
 test("requests: only the application's own files", () => {
   const dir = "file:///opt/app/dist/";
   assert.equal(isAllowedRequest("file:///opt/app/dist/presenter.js", dir), true);
