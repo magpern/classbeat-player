@@ -1,0 +1,5 @@
+# Never commit binaries, export templates, the editor or built exports.
+.godot/
+.tools/
+build/*
+!build/.gdignore

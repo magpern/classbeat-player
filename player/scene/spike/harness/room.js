@@ -2,7 +2,7 @@
 // Room window: large HTML text over the scene (or the plain 2D screen). Text is never baked into the scene.
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') === 'plain' ? 'plain' : 'scene';
-const variant = /^[a-z]+$/.test(params.get('variant') || '') ? params.get('variant') : 'web';
+const variant = ['web', 'godot-web', 'godot-native'].includes(params.get('variant')) ? params.get('variant') : 'web';
 const $ = (id) => document.getElementById(id);
 const fmt = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 document.body.classList.add(mode);
@@ -44,7 +44,7 @@ function buildScore(s) {
 window.spike.getState().then(async (s) => {
   window.spike.onState(render);
   render(s);
-  if (mode === 'scene') {
+  if (mode === 'scene' && variant !== 'godot-native') { // godot-native draws in its own window, not here
     const m = await import(`../${variant}/scene.js`);
     m.mountScene($('scene'), () => window.__roomState, (fps) => window.spike.reportFps(fps));
   }
