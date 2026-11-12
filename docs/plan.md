@@ -52,6 +52,9 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
 6. **Spotify in a studio is a terms problem for every player, MOWL's included.** Spotify's own
    terms do not allow playing it publicly from a business. Swedebeat is the licensed route; the
    player could play its mixes itself, given a sanctioned source of the audio (section 4).
+7. **The niche is the instructor.** Every product in this field draws for the riders. This one
+   is built for the person teaching: it follows them when they improvise, and it puts their cues
+   and controls on their own handlebar (section 3).
 
 ## 2. What the MOWL player does, and what ours would do
 
@@ -139,6 +142,37 @@ version and every later feature. A change to one of them is the owner's decision
     other riders' data sent to a rider's phone.
 14. **The join code carries a session identifier only.**
 15. **No team games.**
+
+**The niche: the instructor's player** (added 2026-11-12 at the owner's request)
+
+On the room's screen MOWL is years ahead, and the rules above close off worlds, group displays
+and games. A nicer scene alone is not why a studio changes product. What nobody in this field
+serves well is the person teaching, who is also the person who chooses the product.
+
+- **It follows the instructor, not a plan.** Skip a song, replay a chorus, pause for a late
+  arrival: the class follows the music, so the instructor can improvise without the screen going
+  wrong. This is the music link of section 4, and it stands or falls with spike 1.
+- **It counts like an instructor.** Where a song has beat anchors, what is coming is counted in
+  bars and beats ("drop in 4 bars", "8 bars left"), not only in seconds. Without anchors it
+  counts in seconds.
+- **The handlebar companion.** The instructor teaches from a bike, metres from the computer.
+  Their phone on the handlebar is a teleprompter and a remote: the coaching cue in large type,
+  the next intervals, the next song change, and buttons to start, pause, skip and nudge. It is a
+  web page, nothing to install. classbeat already writes the cues, and they are never sent to
+  MOWL.
+  - It shows and steers the player. It never controls a bike or any equipment (rule 2).
+  - Controlling the class needs the instructor's own sign-in or a one-time code shown only on
+    the instructor's screen, never the riders' join code (rule 14).
+  - It comes before riders' phones in the phases (PL8): one phone, one role, the same live
+    session underneath.
+- **Open.** The class format is published, so other tools can produce classes for the player and
+  no gym is locked in. Recommended: release the player itself as open source as well
+  (decision 13). In a field of closed systems that is unusual, and it gives a small product a
+  trust it cannot buy.
+
+*Considered and not chosen:* studio lights that follow the zone and the beat. MOWL already
+drives studio lighting this way and so does at least one other product, so it would be catching
+up, not a niche. It can come later if studios ask for it.
 
 **Our own direction**
 
@@ -579,7 +613,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL5** | Music link: the interface and its fake, macOS and Windows followers, Linux best effort, lock and re-lock, transport control, crossfade check | About 6 | One authorized live check per system |
 | **PL6** | The 3D scene, in the technology spike 2 confirmed: design direction, the light show and the score, beat pulse, quality levels, reduced motion | About 6 to 8 | Reviews the design |
 | **PL7** | Release: signing, notarisation, updater, release workflow, download page, deploy runbook | About 5 | Signing accounts; domain; the first deploy |
-| **PL8** | Live sessions and the phone page: start a session, join by code, the rider's view in step with the room; the player as a web app on a phone or tablet | About 8 | |
+| **PL8** | Live sessions. First **the handlebar companion**: the instructor's phone as teleprompter and remote (section 3). Then riders: join by code, the rider's view in step with the room. Also the player as a web app on a phone or tablet | About 10 | |
 | **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session (Android in the browser, iPhone as a wrapped app) | About 8 | A bike to test on; an Apple Developer account for the iPhone app |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
@@ -636,7 +670,9 @@ the owner described.
     asking would be the first exception. Recommended: ask Swedebeat.
 12. **Name and look:** the product's name, and whether it shares classbeat's design or gets its
     own.
-13. **Repository:** public or private, and the licence.
+13. **Repository and openness:** public or private, and the licence. Recommended: the class
+    format under a permissive open licence, and the player as open source.
+14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
 
 ## 14. Not verified
 
