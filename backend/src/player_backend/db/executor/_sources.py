@@ -15,6 +15,7 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.site_sessions",
     "player_backend.db.queries.pairing",
     "player_backend.db.queries.devices",
+    "player_backend.db.queries.operator",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"
