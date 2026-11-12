@@ -459,20 +459,36 @@ tablet for an instructor without a computer. It cannot follow Spotify there, bec
 cannot read another app's playback, so it uses the manual clock, or joins a live session run from
 a computer.
 
-**Sensors (Bluetooth)**
+**Sensors (Bluetooth), from the web page only**
+
+Owner, 2026-11-12: sensors are wanted if a page opened from a link can read them. No phone app
+is planned. (The desktop player stays an installed application.)
+
+| Device | Can a web page read Bluetooth sensors? |
+|---|---|
+| The desktop player (Windows, macOS, Linux) | Yes, built in |
+| Android phone or tablet, in Chrome | Yes |
+| A computer's Chrome or Edge browser | Yes |
+| **iPhone and iPad** | **No.** Safari has no Web Bluetooth, and every browser on iPhone is built on Safari. iPhone riders get the targets and the timing, without their own sensor |
+
+Limits of reading from a web page, on every device:
+
+- the user picks the sensor in the browser's own dialog each time; a page cannot connect silently;
+- the page must stay open and the screen on, which the page can request;
+- many straps and bikes accept one connection at a time, so a watch or another app already
+  connected can block it;
+- only sensors using the standard services can be read. A bike that only broadcasts in its own
+  format (Keiser M3i) cannot.
 
 - The standard is the Bluetooth Fitness Machine Service (FTMS): Indoor Bike Data gives cadence,
   power and speed; Treadmill Data gives speed and incline. Older and simpler devices use the
   Cycling Power, Cycling Speed and Cadence, Running Speed and Cadence and Heart Rate services.
 - Studio bikes vary. Stages, ICG, Life Fitness, BodyBike, Matrix, Wattbike and Schwinn are
-  reported as Bluetooth-compatible; Technogym is closed. Keiser M3i broadcasts in its own format
-  and needs a native scanner. Each model has to be tried.
+  reported as Bluetooth-compatible; Technogym is closed; Keiser M3i is out, as above. Each model
+  has to be tried.
 - First step: the instructor's own bike and heart rate on the computer, shown against the target.
 - Second step: each rider's phone reads their own bike or strap, shows it to that rider against
-  their target, and sends it to the instructor's screen only (rule 13). Android's Chrome can do
-  this from the web page.
-  **iPhone cannot:** Safari has no Web Bluetooth, so iPhone riders need the same page wrapped as
-  an installed app with a Bluetooth plugin.
+  their target, and sends it to the instructor's screen only (rule 13). Android only, as above.
 - Treadmills: reading speed and incline is the same work. Controlling a treadmill is out of scope
   for safety.
 
@@ -489,12 +505,12 @@ strong at the scene and weak at the application; web technology is the reverse.
 |---|---|---|---|---|
 | Cost and licence | Free, open source | Free, open source (MIT) | Free below USD 200k revenue a year, then per seat; proprietary | Royalty or seat licence |
 | Windows, macOS, Linux | Yes, in a desktop shell | Yes | Yes | Yes |
-| iPhone, iPad, Android | Yes: in the browser, or wrapped as an app | Yes, as installed apps | Yes, as installed apps | Yes, very large apps |
+| iPhone, iPad, Android | Yes, in the browser | Yes, as installed apps | Yes, as installed apps | Yes, very large apps |
 | A rider joins by scanning a code, nothing to install | **Yes** | Not practical: the web export is a large download and has been unreliable on iPhone | Not practical | No |
 | Television or any other screen | Anything with a browser | Android TV; no Apple TV | Apple TV, Android TV, consoles | Consoles |
 | Virtual reality later | Yes (WebXR) | Yes | Yes | Yes |
 | A rich 3D scene | Good, built in code; fewer ready-made tools | Full engine with an editor | Full engine, largest ecosystem | Highest fidelity |
-| Bluetooth sensors | Built in on desktop and Android; iPhone through the app wrapper | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
+| Bluetooth sensors | Built in on desktop and Android; not on iPhone | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
 | Sign-in, forms, lists, the website | Native ground | Awkward | Awkward | Awkward |
 | One code base for the room's screen, the phone and the website | **Yes** | No: phone page and website are separate web code anyway | No | No |
 | Agents can build it, test it and check screenshots | Best | Good (text scenes, headless runs) | Harder (editor licence in CI, heavy asset files) | Poor |
@@ -507,8 +523,8 @@ strong at the scene and weak at the application; web technology is the reverse.
 - On the desktop it ships inside a shell. Recommended: Electron, because it brings the same
   browser engine to Windows, macOS and Linux and has Bluetooth built in. Tauri is the alternative
   for a much smaller download.
-- On phones it is a web page first and, when iPhone sensors are wanted, the same page wrapped as
-  an installed app.
+- On phones it is a web page. No phone app is planned (owner, 2026-11-12), so iPhones cannot
+  read sensors; that is accepted.
 - Unreal is excluded: it is probably MOWL's engine (not confirmed) and the heaviest to build.
 
 **The room's 3D scene is a separate, replaceable part.** The shell owns everything that is not
@@ -615,7 +631,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL6** | The 3D scene, in the technology spike 2 confirmed: design direction, the light show and the score, beat pulse, quality levels, reduced motion | About 6 to 8 | Reviews the design |
 | **PL7** | Release: signing, notarisation, updater, release workflow, download page, deploy runbook | About 5 | Signing accounts; domain; the first deploy |
 | **PL8** | Live sessions. First **the handlebar companion**: the instructor's phone as teleprompter and remote (section 3). Then riders: join by code, the rider's view in step with the room. Also the player as a web app on a phone or tablet | About 10 | |
-| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session (Android in the browser, iPhone as a wrapped app) | About 8 | A bike to test on; an Apple Developer account for the iPhone app |
+| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' Android phones sending theirs to the session, from the web page | About 6 | A bike to test on |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
