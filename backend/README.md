@@ -13,7 +13,9 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/class_schemas.py` | Reads the class format's schemas from `schema/class-format/v1/` (ADR 0003); the validators are the contract lane's `classformat` package |
 | `src/player_backend/*_policy.py` | Pure rules, no I/O: token shape and hash, short codes, the client address and what is kept of it, the request checks and response headers, sign-in, pairing, the bearer header and its limits, linking a source, a publication's checks |
 | `src/player_backend/bearer_blocks.py` | What one process remembers about bearer tokens it refuses without a lookup (section 10). In memory only |
-| `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. No mail service is chosen yet (owner): until then every mail is dropped, and tests use a fake |
+| `src/player_backend/mail.py`, `mail_delivery.py`, `no_mailer.py` | The mail interface. `send` takes a time limit; `deliver` is its one caller and logs a failed `send` by the error's type alone. Without an SMTP host every mail is dropped (`NoMailer`); tests use fakes |
+| `src/player_backend/smtp_mailer.py`, `smtp_deadline.py`, `smtp_settings.py` | The SMTP mailer (see "Mail"): TLS always and verified, one time limit for the whole conversation, the password from a file |
+| `src/player_backend/admin.py`, `db/operator.py` | The operator's commands, as `player_owner` (see "Operator commands") |
 | `src/player_backend/log_redaction.py`, `logging_setup.py` | JSON logs; tokens, hashes, codes and credential headers never reach a line |
 | `src/player_backend/db/` | Data access: the data-access modules, the migration runner and the operator's commands. The only place that may call a handle |
 | `src/player_backend/db/executor/` | The executor: the only holder of the database driver. Makes every connection and the pool, hands out handles, owns `Query` and its registry |
@@ -43,6 +45,59 @@ transaction, recorded with its SHA-256 in `player_meta.schema_migrations`; a cha
 is refused. Never edit an applied migration; add the next number, its name in the executor's
 fixed list (`executor/_sources.py`), its constant in `queries/migrations.py` and its step in
 `db/migrate.py` (tests fail until all three exist).
+
+## Mail
+
+`app_from_env` uses the SMTP mailer when `PLAYER_SMTP_HOST` is set, and `NoMailer` (every
+mail dropped, logged as `mail.not_configured`) when it is not. Which mail service is used is
+the owner's choice (`docs/owner.md`).
+
+| Setting | |
+|---|---|
+| `PLAYER_SMTP_HOST` | The server's host name. Without it no other `PLAYER_SMTP_` setting may be set |
+| `PLAYER_SMTP_TLS` | `implicit` (default; TLS from the first byte) or `starttls`. There is no plain mode |
+| `PLAYER_SMTP_PORT` | Default 465 for `implicit`, 587 for `starttls` |
+| `PLAYER_SMTP_FROM` | The sender, a plain `name@host` address |
+| `PLAYER_SMTP_USER`, `PLAYER_SMTP_PASSWORD_FILE` | Both or neither. The password is read once at start-up from that file (one line; a final line break is dropped). `PLAYER_SMTP_PASSWORD` is refused |
+| `PLAYER_SMTP_HELO_NAME` | The name given in `EHLO`, default `localhost`, so that no lookup of the local host is made |
+
+- The certificate and the host name are verified against the system's trust store, TLS 1.2 at
+  least. With `starttls`, a server that offers no STARTTLS gets no login and no mail. After
+  STARTTLS nothing read before it is kept.
+- `send` keeps to the limit `deliver` gives it (10 seconds) for the whole conversation: each step
+  gets the time that is left, and a watchdog shuts the connection when it runs out. Only the
+  name lookup of the host is the system's.
+- Nothing of a mail is logged or printed; a failure reaches the log as its type alone
+  (`mail not sent: SMTPAuthenticationError`).
+- Tests: a fake server on loopback with certificates made for the run (`tests/smtphelp.py`).
+  Every test runs under the network guard (`tests/netguard.py`): no lookup of a name but
+  `localhost` and no connect past loopback.
+
+## Operator commands
+
+Run on the server as `player_owner`, with `PLAYER_DATABASE_OWNER_URL` as for migrations. The
+commands check the role they connect as and refuse anything but `player_owner`; they never read
+`PLAYER_DATABASE_URL`.
+
+```bash
+python -m player_backend.admin allowlist add <email>     # trimmed and lower-cased first
+python -m player_backend.admin allowlist remove <email>
+python -m player_backend.admin allowlist list            # email, tab, when it was added
+python -m player_backend.admin purge                     # auth_purge_expired(), once
+```
+
+The allowlist is changed through its one policy (ADR 0002, section 9) and nothing else.
+`purge` calls `auth_purge_expired()` once, in its own transaction; the function returns
+nothing, so the command prints only that it ran. A database error is printed as its type and
+SQLSTATE, never its message. Exit status: 0 done, 1 refused or failed, 2 bad input or no URL.
+
+**The purge schedule.** `purge` runs every hour on the server, outside the web process. The
+deploy files are the infra lane's; until they exist, the schedule is this cron line, with the
+URL in an environment file that only the deploy user can read:
+
+```cron
+17 * * * *  set -a; . /etc/classbeat-player/owner.env; set +a; python -m player_backend.admin purge
+```
 
 ## Sign-in and site sessions (ADR 0002, sections 4, 5, 10 and 11)
 

@@ -34,7 +34,7 @@ def test_many_unknown_source_tokens_from_one_address_grow_no_table(site: Site) -
     # 205 made-up tokens: one row for the address and one for each of the first 200.
     after = site.su.execute(COUNT).fetchone()
     assert after == (rows[0], rows[1] + 4)
-    assert after[0] <= 201
+    assert isinstance(rows[0], int) and rows[0] <= 201
     # A valid token from the same address keeps working, and another address is not held back.
     assert sh.publish(app, token, sh.envelope("c1", 1, sh.document())).status_code == 200
     assert _unknown(site, "198.51.100.9") == 401

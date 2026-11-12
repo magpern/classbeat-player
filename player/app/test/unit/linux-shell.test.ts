@@ -9,6 +9,7 @@ import type { MusicReader, MusicTransport, TransportAction } from "../../src/cor
 import { BUSCTL, LINUX_CALLS } from "../../src/core/link/linux-calls.ts";
 import { createController } from "../../src/main/controller.ts";
 import { registerHandlers } from "../../src/main/ipc-handlers.ts";
+import type { PairingService } from "../../src/main/pairing/service.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { createLinuxMusic } from "../../src/main/linux-reader.ts";
 import type { ExecFileFn } from "../../src/main/linux-reader.ts";
@@ -129,7 +130,7 @@ test("music commands cross the bridge as names only, and reach busctl only while
   const handlers = new Map<string, (event: never, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (channel, listener) => void handlers.set(channel, listener as (event: never, raw: unknown) => unknown) };
   const trusted = { presenterId: 1, presenterUrl: "file:///app/presenter.html" };
-  registerHandlers(bus, s.c, () => trusted);
+  registerHandlers(bus, s.c, () => trusted, {} as PairingService);
   const event = { sender: { id: 1 }, senderFrame: { parent: null, url: trusted.presenterUrl } } as never;
   const send = (raw: unknown): unknown => handlers.get("player:command")?.(event, raw);
   const sent = (): readonly (readonly string[])[] => s.runs.map((r) => r.args).filter((a) => a !== LINUX_CALLS.read);

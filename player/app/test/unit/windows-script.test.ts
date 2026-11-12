@@ -222,7 +222,9 @@ test("the Windows helper is started only in windows-spawn.ts, and nothing starts
   assert.match(spawn, /import \{ spawn \} from "node:child_process";/, "spawn only: not exec, execFile with a shell, or fork");
   assert.doesNotMatch(spawn, /shell: true|\bexec\w*\(|\bfork\(/);
   assert.equal(spawn.match(/\bspawn\(/g)?.length, 1);
-  for (const f of files) assert.doesNotMatch(f.text, /shell: true|\bexecSync\b|\bshell\.openExternal\b|\bopenPath\b/, f.path);
+  for (const f of files) assert.doesNotMatch(f.text, /shell: true|\bexecSync\b|\bopenPath\b/, f.path);
+  // The pairing page (#74) is the one thing opened in the system, from one file; macos-shell.test.ts pins how.
+  assert.deepEqual(files.filter((f) => /\bopenExternal\b/.test(f.text)).map((f) => f.path), ["main/pairing/setup.ts"]);
 });
 
 test("the parser, the supervisor and the reader do no I/O of their own", () => {

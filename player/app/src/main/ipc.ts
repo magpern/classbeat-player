@@ -3,9 +3,10 @@ import { ipcMain } from "electron";
 import type { Trusted } from "../core/ipc-policy.ts";
 import type { Controller } from "./controller.ts";
 import { registerHandlers } from "./ipc-handlers.ts";
+import type { PairingService } from "./pairing/service.ts";
 
 export { trustedEvent } from "./ipc-handlers.ts";
 
-export function registerIpc(controller: Controller, trusted: () => Trusted): void {
-  registerHandlers(ipcMain, controller, trusted);
+export function registerIpc(controller: Controller, trusted: () => Trusted, pairing: PairingService): void {
+  registerHandlers(ipcMain, controller, trusted, pairing);
 }
