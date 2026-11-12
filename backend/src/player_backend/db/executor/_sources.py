@@ -25,4 +25,5 @@ SQL_FILES: Final = (
     "0004_login_and_sessions.sql",
     "0005_sign_in_hardening.sql",
     "0006_pairing_and_devices.sql",
+    "0007_pairing_hardening.sql",
 )

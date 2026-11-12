@@ -210,6 +210,22 @@ def test_five_wrong_codes_close_the_form_for_the_account_only(site: Site) -> Non
     assert pairhelp.approve(browser, pairing).status_code == 200
 
 
+@pytest.mark.parametrize("approve", [True, False])
+def test_a_decision_as_the_fifth_wrong_code_closes_the_form(site: Site, approve: bool) -> None:
+    browser = _signed_in(site)
+    pairing = pairhelp.start(site)
+    pairhelp.settle(site, 900)
+    for _ in range(4):
+        assert browser.post(FIND, json={"code": WRONG}).status_code == 404
+    assert browser.post(FIND, json={"code": pairing.user_code}).status_code == 200
+    wrong = browser.post(DECIDE, json={"code": WRONG, "approve": approve, "name": "x"})
+    assert wrong.status_code == 404 and wrong.json() == {"error": "pairing_not_found"}
+    # Closed by the decision: the right code is answered like a wrong one, at both calls.
+    assert browser.post(FIND, json={"code": pairing.user_code}).status_code == 404
+    assert pairhelp.approve(browser, pairing).status_code == 404
+    assert _pairings(site) == [("pending", None)]
+
+
 def test_ten_pairing_starts_an_hour_per_address(site: Site) -> None:
     app = pairhelp.app_client(site)
     pairhelp.settle(site, 3600)
@@ -233,6 +249,8 @@ def test_an_eleventh_device_is_refused(site: Site) -> None:
     refused = pairhelp.approve(browser, pairing, "Eleventh")
     assert refused.status_code == 409 and refused.json() == {"error": "too_many_devices"}
     assert _pairings(site) == [("pending", None)]
+    # The refusal is the account's event (tests/test_pairing_cap.py has the other cases).
+    assert site.events(EMAIL)[-1] == ("pairing.refused", {"reason": "device_limit"})
     # A denial is still possible, and after revoking one device an approval is too.
     first = browser.get(DEVICES).json()["devices"][0]["id"]
     assert browser.delete(f"{DEVICES}/{first}").status_code == 204

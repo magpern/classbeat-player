@@ -1,15 +1,16 @@
 """Pairing as the app sees it (ADR 0002, section 6): start a pairing, and poll for the token.
 
 Neither route takes a credential but the device code, in the body of a POST. No cookie is
-read. The device token is returned once, by the first poll after the approval, and is never
-stored in the clear.
+read. Both are for the desktop app alone (`app_only`): a request from a page in a browser is
+refused, and so is a body that is not sent as `application/json`. The device token is
+returned once, by the first poll after the approval, and is never stored in the clear.
 """
 
 from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
@@ -33,12 +34,13 @@ from player_backend.pairing_policy import (
     poll_refusal,
     start_limit_key,
 )
+from player_backend.player_api.deps import app_only
 from player_backend.site.deps import TheCaller
 from player_backend.site.state import site_state
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash
 
-router = APIRouter(prefix="/api/pairing")
+router = APIRouter(prefix="/api/pairing", dependencies=[Depends(app_only)])
 
 
 class PairingStart(BaseModel):
