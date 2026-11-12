@@ -8,7 +8,8 @@ import type { ClockCommand } from "../../src/core/commands.ts";
 import { HANDOVER_TEXT, initialLink, routeWhileFollowing } from "../../src/core/link/index.ts";
 import type { LinkModel, LinkStateName, MusicReader, MusicTransport, Observation, TransportAction } from "../../src/core/link/index.ts";
 import { createController } from "../../src/main/controller.ts";
-import { converterExamples } from "./fixtures.ts";
+import { advance, command, INITIAL, openText } from "../../src/core/player-state.ts";
+import { classSchema, converterExamples } from "./fixtures.ts";
 
 const linked = (state: LinkStateName, over: Partial<LinkModel> = {}): LinkModel => ({ ...initialLink(true), state, everLocked: true, ...over });
 
@@ -122,4 +123,11 @@ test("a manual clock keeps its own controls: Pause and Next never reach the musi
   c.command({ type: "pause" });
   c.command({ type: "next" });
   assert.deepEqual(sent, []);
+});
+
+test("the state is not touched by a control that goes to the music", () => {
+  let s = openText(INITIAL, "a.json", text, classSchema, 0, true);
+  s = advance(s, 1000, { title: first.title, artist: first.artist, lengthMs: first.length_ms, positionMs: 5000, playing: true, at: 1000, seenAt: 1000 });
+  for (const type of ["pause", "resume", "next"] as const) assert.equal(command(s, { type }, 1100, true), s, `${type} leaves the state as it is`);
+  assert.notEqual(command(s, { type: "pause" }, 1100, false), s, "without a transport it is applied, as manual");
 });
