@@ -7,7 +7,7 @@ import { statusText } from "../../src/core/status-text.ts";
 import { classLength, makePlan, pauseAt, play, run } from "./link-harness.ts";
 
 const clock = (over: Partial<ClockView>): ClockView => ({ status: "running", holding: false, ...over }) as ClockView;
-const link = (over: Partial<LinkView>): LinkView => ({ mode: "following", state: "Locked", held: false, ...over }) as LinkView;
+const link = (over: Partial<LinkView>): LinkView => ({ mode: "following", state: "Locked", held: false, playing: true, ...over }) as LinkView;
 
 test("held at a song window's end while following: holding, not paused", () => {
   assert.equal(statusText(clock({ status: "paused" }), link({ held: true })), "Holding at the end of the song");
@@ -27,7 +27,7 @@ test("a stale held flag in manual mode is ignored", () => {
 });
 
 test("music paused past the window end is a real pause", () => {
-  assert.equal(statusText(clock({ status: "paused" }), link({ state: "Paused", held: true })), "paused");
+  assert.equal(statusText(clock({ status: "paused" }), link({ state: "Paused", held: true, playing: false })), "paused");
 });
 
 test("the last song held and the clock ended keeps the class-end text", () => {
@@ -46,4 +46,17 @@ test("the issue's repro through the link: holding while the song plays past its 
   assert.equal(text(175_000), "Holding at the end of the song");
   assert.equal(t.at(181_000).state, "Paused");
   assert.equal(text(181_000), "paused");
+});
+
+test("Ambiguous while held: holding when the music plays, paused when it does not", () => {
+  const plan = makePlan(["A", "B", "C", "A", "D"]);
+  // Song A twice in the class; played 4 s past the end of its first window.
+  const t = run({ plan, segments: [play(1000, "A", 175_000), pauseAt(5000, "A", 179_000)], until: 6000 });
+  const text = (now: number): string => statusText(clock({ status: t.at(now).status }), t.at(now).view);
+  assert.equal(t.at(2000).state, "Ambiguous");
+  assert.equal(t.at(2000).view.held, true);
+  assert.equal(text(2000), "Holding at the end of the song");
+  assert.equal(t.at(6000).state, "Ambiguous");
+  assert.equal(t.at(6000).view.held, true);
+  assert.equal(text(6000), "paused");
 });

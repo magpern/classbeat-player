@@ -43,13 +43,13 @@ function coast(l: LinkModel, clock: ClockState, now: number): StepResult {
   if (!l.everLocked) return { link: { ...l, state: "Manual" }, clock, event: null };
   if (l.state === "Coasting") return { link: l, clock, event: null };
   const c = FOLLOWING.includes(l.state) ? runOn(clock, now) : clock;
-  return { link: { ...l, state: "Coasting", held: false, holdUntil: null }, clock: c, event: "coasting" };
+  return { link: { ...l, state: "Coasting", held: false, playing: false, holdUntil: null }, clock: c, event: "coasting" };
 }
 
 function offList(l: LinkModel, clock: ClockState, now: number): StepResult {
   if (l.state === "Off the list") return { link: l, clock, event: null };
   const c = l.everLocked && FOLLOWING.includes(l.state) ? runOn(clock, now) : clock;
-  return { link: { ...l, state: "Off the list", songIndex: null, held: false, holdUntil: null }, clock: c, event: "off_list" };
+  return { link: { ...l, state: "Off the list", songIndex: null, held: false, playing: false, holdUntil: null }, clock: c, event: "off_list" };
 }
 
 function follow(l: LinkModel, clock: ClockState, plan: LinkPlan, obs: Observation, cands: number[], now: number, cfg: LinkConfig): StepResult {
@@ -88,6 +88,7 @@ function follow(l: LinkModel, clock: ClockState, plan: LinkPlan, obs: Observatio
     pick: l.pick !== null && cands.length > 1 && cands.includes(l.pick) ? l.pick : null,
     force: false,
     held,
+    playing: obs.playing,
     holdUntil: held ? now + holdRemainingMs(song.lengthMs, posMs, measured ?? plan.plannedCrossfadeMs, isLast) : null,
     announce: announced ? { text: resyncText(deltaMs), deltaMs, until: now + cfg.undoWindowMs } : superseded ? null : l.announce,
     undo: announced ? { clockMs, at: now, until: now + cfg.undoWindowMs } : superseded ? null : l.undo,

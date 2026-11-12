@@ -55,6 +55,52 @@ test("before the first lock, Start asks the music to play and also starts the cl
   assert.equal(routeWhileFollowing(before, true, { type: "start" }, false), null, "no transport: just the clock");
 });
 
+test("before the first lock, in the states the app really reaches (Manual, Off the list), Start asks the music to play and also starts the clock", () => {
+  for (const state of ["Manual", "Off the list"] as const) {
+    const before = linked(state, { everLocked: false });
+    assert.deepEqual(routeWhileFollowing(before, true, { type: "start" }, true), { kind: "transport", action: "play", alsoClock: true }, state);
+    assert.equal(routeWhileFollowing(before, true, { type: "start" }, false), null, `${state}: no transport, just the clock`);
+    for (const cmd of [{ type: "pause" }, { type: "resume" }, { type: "next" }] as const) assert.equal(routeWhileFollowing(before, true, cmd, true), null, `${state} ${cmd.type}`);
+  }
+});
+
+test("Start before the first lock: the clock runs, and a different song on the music app (Off the list) changes nothing", () => {
+  const sent: TransportAction[] = [];
+  const self = { t: 0, obs: null as Observation | null };
+  const reader: MusicReader & MusicTransport = { kind: "fake", latest: () => self.obs, send: (a) => void sent.push(a) };
+  const c = createController(() => self.t, reader, reader);
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  self.obs = { title: "Not in the class", artist: "Nobody", lengthMs: 100_000, positionMs: 1000, playing: true, at: 0, seenAt: 0 };
+  assert.equal(c.snapshot().link?.state, "Off the list");
+  const snap = c.command({ type: "start" });
+  assert.deepEqual(sent, ["play"]);
+  assert.equal(snap.view?.status, "running");
+  assert.equal(snap.link?.state, "Off the list");
+});
+
+test("Start before the first lock sends play and starts the clock; the first lock then takes the clock over", () => {
+  const sent: TransportAction[] = [];
+  const self = { t: 0, obs: null as Observation | null };
+  const reader: MusicReader & MusicTransport = { kind: "fake", latest: () => self.obs, send: (a) => void sent.push(a) };
+  const c = createController(() => self.t, reader, reader);
+  c.open("a.json", text);
+  c.command({ type: "follow" });
+  self.t = 100;
+  assert.equal(c.command({ type: "start" }).view?.status, "running");
+  assert.deepEqual(sent, ["play"]);
+  self.t = 2100;
+  assert.equal(c.snapshot().view?.classMs, 2000, "the manual clock ran on its own meanwhile");
+  self.obs = { title: first.title, artist: first.artist, lengthMs: first.length_ms, positionMs: 5000, playing: true, at: self.t, seenAt: self.t };
+  const locked = c.snapshot();
+  assert.equal(locked.link?.state, "Locked");
+  assert.equal(locked.view?.status, "running");
+  assert.equal(locked.view?.classMs, 5000, "the music's position wins over the manual clock");
+  self.t = 3100;
+  assert.equal(c.snapshot().view?.classMs, 6000, "and the clock goes on with the music");
+  assert.deepEqual(sent, ["play"], "nothing more was sent to the music");
+});
+
 test("Start while following with no transport is done on the clock and goes manual", () => {
   assert.deepEqual(routeWhileFollowing(linked("Paused"), true, { type: "start" }, false), { kind: "manual" });
 });

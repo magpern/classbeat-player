@@ -2,7 +2,8 @@
 // shell holds the state and passes a monotonic `now`.
 import { readClassText } from "./class-file.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
-import { createClock, jump, nextInterval, pause, previousInterval, resume, start, tick } from "./clock/clock.ts";
+import { createClock, tick } from "./clock/clock.ts";
+import { applyToClock } from "./clock/apply.ts";
 import type { ClockState } from "./clock/clock.ts";
 import { planFrom } from "./clock/plan.ts";
 import type { ClockPlan } from "./clock/plan.ts";
@@ -62,26 +63,9 @@ export function refuse(s: PlayerState, message: string): PlayerState {
   return { ...s, error: { message, details: [] } };
 }
 
-function applyToClock(c: ClockState, plan: ClockPlan, cmd: ClockCommand, now: number): ClockState {
-  switch (cmd.type) {
-    case "undo":
-    case "manual":
-    case "follow":
-    case "pick":
-      return c;
-    case "start":
-      return start(c, now);
-    case "pause":
-      return pause(c, now);
-    case "resume":
-      return resume(c, now);
-    case "next":
-      return nextInterval(c, plan, now);
-    case "previous":
-      return previousInterval(c, plan, now);
-    case "jump":
-      return jump(c, cmd.deltaMs, now);
-  }
+/** A reader exists and the class has song timing: there is something to follow. */
+function canFollow(l: Loaded): boolean {
+  return l.following && !l.linkPlan.manualOnly;
 }
 
 function applyToLink(l: Loaded, cmd: ClockCommand, now: number): CommandResult | null {
@@ -91,7 +75,7 @@ function applyToLink(l: Loaded, cmd: ClockCommand, now: number): CommandResult |
     case "manual":
       return goManual(l.link, l.clock);
     case "follow":
-      return relink(l.link, l.clock, l.following && !l.linkPlan.manualOnly);
+      return relink(l.link, l.clock, canFollow(l));
     case "pick":
       return pickOccurrence(l.link, l.clock, cmd.songIndex);
     default:
@@ -100,7 +84,7 @@ function applyToLink(l: Loaded, cmd: ClockCommand, now: number): CommandResult |
 }
 
 function routeOf(l: Loaded, cmd: ClockCommand, canSend: boolean): Routed | null {
-  return routeWhileFollowing(l.link, l.following && !l.linkPlan.manualOnly, cmd, canSend);
+  return routeWhileFollowing(l.link, canFollow(l), cmd, canSend);
 }
 
 /**
@@ -113,7 +97,7 @@ export function transportFor(s: PlayerState, cmd: ClockCommand, canSend: boolean
 }
 
 /**
- * `canSend` says a transport exists. While following, Pause, Resume and Next are not applied to
+ * `canSend` says a transport exists. While following, Start, Pause, Resume and Next are not applied to
  * the clock (see `transportFor`), and the other moves (previous, plus or minus 5 s) switch the
  * link to manual, announced, before they are applied.
  */
@@ -151,7 +135,7 @@ export function withoutReader(s: PlayerState): PlayerState {
 /** True while the instructor follows the music: only then does the shell ask for readings. */
 export function isFollowing(s: PlayerState): boolean {
   const l = s.loaded;
-  return l !== null && l.following && !l.linkPlan.manualOnly && l.link.mode === "following";
+  return l !== null && canFollow(l) && l.link.mode === "following";
 }
 
 export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapshot {
@@ -161,8 +145,8 @@ export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapsh
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view: l ? viewAt(l.clock, l.plan, now) : null,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, l.following && !l.linkPlan.manualOnly, l.unavailable && !l.linkPlan.manualOnly) : null,
-    controls: l ? controlLabels(l.link, l.following && !l.linkPlan.manualOnly, canSend) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly) : null,
+    controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     error: s.error,
   };
 }
