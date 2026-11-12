@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Path detection. Lane jobs added later use, for example:
+  #   backend:
+  #     needs: changes
+  #     if: needs.changes.outputs.backend == 'true'
+  # and are then added to `needs:` of the `ci` job below. A job skipped by its
+  # filter counts as fine there; a failed or cancelled one fails `ci`.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      schema: ${{ steps.detect.outputs.schema }}
+      player: ${{ steps.detect.outputs.player }}
+      web: ${{ steps.detect.outputs.web }}
+      desktop: ${{ steps.detect.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: bash scripts/detect-changes.sh
+
+  repo-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Repository checks
+        run: bash scripts/check-repo.sh
+      - name: Script tests
+        run: |
+          bash scripts/test-check-repo.sh
+          bash scripts/test-check-pr-title.sh
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
+
+  # The single required check. Add lane jobs to `needs` as they appear.
+  ci:
+    needs: [changes, repo-checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any needed job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"result": "(failure|cancelled)"'; then
+            echo "a needed job did not succeed" >&2
+            exit 1
+          fi
+
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check Conventional Commits title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: bash scripts/check-pr-title.sh "$TITLE"
