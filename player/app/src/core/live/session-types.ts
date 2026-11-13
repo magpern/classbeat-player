@@ -2,7 +2,6 @@
 // takes and the effects it asks for. Pure: types and the state at each start of the app.
 import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
 import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
-import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";
 import type { MakeCode } from "../../../../../schema/generated/ts/live-make-code.d.ts";
 import type { CompanionAction } from "./actions.ts";
 import type { HostInbound, Slot, StartAnswer, StartRefusal, StartedSession } from "./host-wire.ts";
@@ -64,7 +63,13 @@ export type LiveEffect =
   /** The host is in: a fresh send budget, the state at once. */
   | { readonly kind: "welcomed"; readonly socket: number }
   | { readonly kind: "joined" }
-  | { readonly kind: "send"; readonly message: MakeCode | Drop | End }
+  | { readonly kind: "send"; readonly message: MakeCode | Drop }
+  /**
+   * The host is in and ends the session: `end` goes out on its own connection, within its send
+   * budget, and that connection is kept until the session is ended (main/live/farewell.ts). If it
+   * may not have arrived, the token goes to the ender, as in `end_session`.
+   */
+  | { readonly kind: "end_live"; readonly socket: number; readonly token: string }
   | { readonly kind: "close"; readonly socket: number }
   | { readonly kind: "retry_in"; readonly ms: number }
   | { readonly kind: "cancel_retry" }

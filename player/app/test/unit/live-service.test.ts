@@ -153,11 +153,17 @@ test("a command while the host is reconnecting is never applied later", async ()
   assert.equal(r.controller.snapshot().view?.status, "running");
 });
 
-test("End: end is sent, the socket closed, the panel offers a new one", async () => {
+test("End: end is sent, the socket closed on the server's answer, the panel offers a new one", async () => {
   const r = await started();
   const v = r.live.end();
   assert.deepEqual(ofType(r.socket().sent, "end"), [{ v: 1, type: "end" }]);
+  // Kept for the live process's answer (#211), then closed by the app.
+  assert.equal(r.socket().closedByApp, false);
+  assert.equal(r.live.busy(), true);
+  r.socket().server({ v: 1, type: "ended", reason: "host_ended" });
   assert.equal(r.socket().closedByApp, true);
+  await r.advance(0);
+  assert.equal(r.live.busy(), false);
   assert.equal(v.status, "Ended");
   assert.equal(v.canStart, true);
   assert.equal(v.classCode, null);

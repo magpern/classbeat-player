@@ -132,6 +132,8 @@ test("stopping from the room, and End class, end the live session over the host'
     const answer = x.call(how === "stop" ? CH_ROOM_REMOTE_STOP : CH_ROOM_END);
     assert.deepEqual(answer, how === "stop" ? { slot: "available", note: "ended" } : true, how);
     assert.ok(s.sent.some((m) => (m as { type?: string }).type === "end"), how);
+    // The host's connection is kept until the live process answers `ended` (#211, farewell.ts).
+    s.server({ v: 1, type: "ended", reason: "host_ended" });
     assert.equal(s.closedByApp, true, how);
     assert.deepEqual(x.call(CH_ROOM_REMOTE_STATE), { slot: "available", note: "ended" }, how);
     assert.equal(x.ended(), how === "end" ? 1 : 0);

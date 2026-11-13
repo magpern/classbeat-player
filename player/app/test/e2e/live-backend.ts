@@ -88,7 +88,11 @@ export async function startLiveBackend(doc: Record<string, unknown>): Promise<{ 
           host = socket;
           live.push({ v: 1, type: "welcome", role: "host" });
         }
-        if (m.type === "end" && host === socket) socket.end(frame(8, Buffer.from([0x03, 0xe8])));
+        // As the live process: the session ends, `ended` goes out and the connection closes with 4403.
+        if (m.type === "end" && host === socket) {
+          live.push({ v: 1, type: "ended", reason: "host_ended" });
+          socket.end(frame(8, Buffer.from([0x11, 0x33])));
+        }
       });
     });
     socket.on("close", () => {

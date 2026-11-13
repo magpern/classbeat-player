@@ -3,6 +3,7 @@
 // presenter's own path, all within the send budget. The decisions are the pure modules'
 // (companion-state.ts, intake.ts, send-budget.ts); this only carries them out, with one timer.
 // Nothing is buffered for a connection that is not there: a lost connection drops its queue.
+// The run's `end` is its last message (`last`): once it is sent, nothing more is.
 import type { ClockCommand } from "../../core/commands.ts";
 import type { PlayerState } from "../../core/player-state.ts";
 import type { CompanionAction } from "../../core/live/actions.ts";
@@ -12,6 +13,7 @@ import { intake, newIntake, recordPublished } from "../../core/live/intake.ts";
 import type { IntakeMemory } from "../../core/live/intake.ts";
 import { controllerJoined, enqueue, newBudget, stateChanged, take, wakeAt } from "../../core/live/send-budget.ts";
 import type { HostMessage, SendBudget } from "../../core/live/send-budget.ts";
+import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 
 /** The class as the live session reads it and steers it: the presenter's own controller. */
@@ -40,6 +42,11 @@ export interface Publisher {
   command(raw: unknown): void;
   /** The class may have changed (called with every snapshot). */
   tick(): void;
+  /**
+   * Queues the run's last message, within the budget; `sent` is told once it has gone, and nothing
+   * is sent after it. False, with nothing queued, when no connection is in.
+   */
+  last(message: End, sent: () => void): boolean;
   stop(): void;
 }
 
@@ -50,6 +57,7 @@ export function createPublisher(d: PublisherDeps): Publisher {
   let seq = 0;
   let lastShown = "";
   let timer: unknown = null;
+  let lastSent: (() => void) | null = null;
 
   const cancel = (): void => {
     if (timer !== null) d.clearTimer(timer);
@@ -71,6 +79,7 @@ export function createPublisher(d: PublisherDeps): Publisher {
     for (const s of out.sends) {
       if (s.kind === "message") {
         send(JSON.stringify(s.message));
+        if (s.message.type === "end" && lastSent !== null) return finished(lastSent);
         continue;
       }
       const state = companionStateOf(r.state, r.now, r.canSend, d.run, seq);
@@ -82,6 +91,17 @@ export function createPublisher(d: PublisherDeps): Publisher {
     }
     const wait = Math.max(0, wakeAt(budget, r.now) - r.now);
     timer = d.setTimer(pump, wait);
+  };
+
+  const stop = (): void => {
+    cancel();
+    send = null;
+    budget = null;
+    lastSent = null;
+  };
+  const finished = (sent: () => void): void => {
+    stop();
+    sent();
   };
 
   return {
@@ -96,17 +116,17 @@ export function createPublisher(d: PublisherDeps): Publisher {
       budget = null;
     },
     joined() {
-      if (budget === null) return;
+      if (budget === null || lastSent !== null) return;
       budget = controllerJoined(budget);
       pump();
     },
     queue(message) {
-      if (budget === null) return;
+      if (budget === null || lastSent !== null) return;
       budget = enqueue(budget, message);
       pump();
     },
     command(raw) {
-      if (budget === null) return;
+      if (budget === null || lastSent !== null) return;
       const r = d.host.read();
       const out = intake(memory, r.state, raw, r.now, r.canSend);
       memory = out.memory;
@@ -120,15 +140,18 @@ export function createPublisher(d: PublisherDeps): Publisher {
       pump();
     },
     tick() {
-      if (budget === null) return;
+      if (budget === null || lastSent !== null) return;
       if (picture() === lastShown) return;
       budget = stateChanged(budget);
       pump();
     },
-    stop() {
-      cancel();
-      send = null;
-      budget = null;
+    last(message, sent) {
+      if (budget === null || lastSent !== null) return false;
+      lastSent = sent;
+      budget = enqueue(budget, message);
+      pump();
+      return true;
     },
+    stop,
   };
 }

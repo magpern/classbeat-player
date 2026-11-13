@@ -166,11 +166,13 @@ test("Drop frees the place and ends the shown code; an empty place cannot be dro
   assert.deepEqual(step(r.model, { type: "drop", slot: 2 }, 0).effects, []);
 });
 
-test("End sends end, then closes; while reconnecting it only closes the retry", () => {
-  assert.deepEqual(step(live(), { type: "end" }, 0).effects, [
-    { kind: "send", message: { v: 1, type: "end" } },
-    { kind: "close", socket: 1 },
-  ]);
+test("End while live hands the host's connection to the farewell (#211); while reconnecting it only closes the retry", () => {
+  const ended = step(live(), { type: "end" }, 0);
+  assert.deepEqual(ended.effects, [{ kind: "end_live", socket: 1, token: TOKEN }]);
+  assert.equal(ended.model.phase, "ended");
+  assert.equal(ended.model.socket, 0);
+  assert.equal(ended.model.session, null);
+  assert.ok(!JSON.stringify(ended.model).includes(TOKEN));
   const away = step(live(), { type: "closed", socket: 1, code: 1006 }, 0).model;
   const r = step(away, { type: "end" }, 0);
   assert.deepEqual(r.effects, [{ kind: "end_session", token: TOKEN }, { kind: "cancel_retry" }]);
