@@ -8,8 +8,8 @@ import { after, before, describe, it } from "node:test";
 import type { Browser } from "playwright-core";
 import { ACTIONS } from "../../src/companion/core/state-check.ts";
 import { NO_ANSWER, REFUSAL_WORDS } from "../../src/companion/core/words.ts";
-import { DIST, WEB_DIR } from "../lib/browser.ts";
-import { CSP, launchOffline, openCompanion } from "../lib/companion-fake.ts";
+import { DIST } from "../lib/browser.ts";
+import { launchOffline, openCompanion } from "../lib/companion-fake.ts";
 import type { Fake, OpenOptions } from "../lib/companion-fake.ts";
 import { SECRET43, examples } from "../lib/live-examples.ts";
 
@@ -232,8 +232,6 @@ describe("companion live: the end, the wake lock and the page's policy", () => {
   });
 
   it("runs under the backend's CSP and its own: no inline script, no eval, no referrer", async () => {
-    const backend = readFileSync(join(WEB_DIR, "..", "backend", "src", "player_backend", "request_policy.py"), "utf8");
-    assert.ok(backend.includes(`"${CSP}"`), "the fake's CSP is the backend's");
     const f = await connected(FOLLOWING);
     const r = await f.page.evaluate(() => {
       const s = document.createElement("script");

@@ -1,6 +1,6 @@
 // A fake of the site and its live process for the companion page's checks: recorded messages and
 // answers, no network. Every request of the page goes through Playwright's router: the page's own
-// files are served from dist/control/ with the backend's page headers, /api/ routes answer from
+// files are served from dist/control/ with the backend's /control headers, /api/ routes answer from
 // the test's script, the live WebSocket is a scripted fake, and any other request is aborted and
 // recorded. Chrome itself is cut off from every network as well.
 import { readFileSync } from "node:fs";
@@ -11,8 +11,39 @@ import { DIST, chromePath } from "./browser.ts";
 
 export const ORIGIN = "https://site.test";
 export const PAGE_URL = `${ORIGIN}/control`;
-/** The backend's own page headers (backend/src/player_backend/request_policy.py). */
-export const CSP = "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+/** The website's own page headers (backend/src/player_backend/request_policy.py), for its sign-in stand-in. */
+const SITE_CSP = "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const FETCHED = ["/api/live/controller", "/api/live/control", "/api/site/sessions"];
+const LIVE_WS = "/api/live/ws";
+const ASSET_SEGMENT = /^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$/;
+
+/** The companion page's policy (backend/src/player_backend/control_page_policy.py, content_security_policy). */
+export function controlCsp(siteOrigin: string): string {
+  const socket = "wss://" + siteOrigin.replace(/^https:\/\//, "");
+  const connect = [...FETCHED.map((p) => siteOrigin + p), socket + LIVE_WS].join(" ");
+  return `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
+}
+
+function isAssetPath(path: string): boolean {
+  const rel = path.replace(/^\/control\//, "");
+  if (rel === path) return false;
+  const segments = rel.split("/");
+  if (segments.length > 2 || !segments.every((s) => ASSET_SEGMENT.test(s))) return false;
+  const name = segments[segments.length - 1];
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && [".js", ".css", ".woff2"].includes(name.slice(dot));
+}
+
+/** The headers of every answer under /control (backend control_page_policy.py, control_headers). */
+export function controlHeaders(path: string, siteOrigin: string = ORIGIN): Record<string, string> {
+  return {
+    "Content-Security-Policy": controlCsp(siteOrigin),
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": isAssetPath(path) ? "no-cache" : "no-store",
+  };
+}
 const CONTROL_DIR = join(DIST, "control");
 const TYPES: Readonly<Record<string, string>> = { ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".html": "text/html; charset=utf-8" };
 
@@ -176,7 +207,9 @@ export async function openCompanion(browser: Browser, o: OpenOptions): Promise<F
       return route.fulfill({ status: r.status, headers: { "content-type": "application/json", ...r.headers }, body: r.body === undefined ? "" : JSON.stringify(r.body) });
     }
     const f = serveFile(url.pathname);
-    return route.fulfill({ status: f.status, contentType: f.contentType, body: f.body, headers: { "content-security-policy": CSP, "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
+    const onControl = url.pathname === "/control" || url.pathname.startsWith("/control/");
+    const headers = onControl ? controlHeaders(url.pathname) : { "Content-Security-Policy": SITE_CSP, "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
+    return route.fulfill({ status: f.status, contentType: f.contentType, body: f.body, headers });
   });
   let ws: WebSocketRoute | null = null;
   const live = {
