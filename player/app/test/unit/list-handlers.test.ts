@@ -20,7 +20,7 @@ const event = (url: string, over: { id?: number; parent?: unknown } = {}): IpcMa
 const fromList = event(TRUSTED.listUrl);
 const HASH = `sha256:${"1".repeat(64)}`;
 
-function rig(startResult = true, pinned = false) {
+function rig(startResult = true, pinned = false, opened: { error: unknown } = { error: null }) {
   const calls: string[] = [];
   const v = view({ sync: { pinned: pinned ? { id: ID_A, after: "none" } : null } });
   const list: ListController = {
@@ -34,8 +34,8 @@ function rig(startResult = true, pinned = false) {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
   registerListHandlers(bus, () => TRUSTED, list, host);
-  const controller = { snapshot: () => (calls.push("snapshot"), {}), command: () => (calls.push("command"), {}), open: () => (calls.push("open"), {}) } as unknown as Controller;
-  registerHandlers(bus, controller, () => TRUSTED, {} as PairingService);
+  const controller = { snapshot: () => (calls.push("snapshot"), {}), command: () => (calls.push("command"), {}), open: () => (calls.push("open"), opened) } as unknown as Controller;
+  registerHandlers(bus, controller, () => TRUSTED, {} as PairingService, () => void calls.push("release"));
   return { calls, v, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw) };
 }
 
@@ -86,4 +86,17 @@ test("Back to the class shows the presenter only while a class is pinned; Open a
   await r.call(CH_LIST_OPEN_FILE, fromList);
   r.call(CH_LIST_DISMISS, fromList);
   assert.deepEqual(r.calls, ["openFile", "dismiss"]);
+});
+
+test("a class file dropped on the presenter releases the pin, but only after it opens", () => {
+  const dropped = { name: "a.json", text: "{}" };
+  const ok = rig();
+  ok.call(CH_OPEN_DROPPED, event(TRUSTED.presenterUrl), dropped);
+  assert.deepEqual(ok.calls, ["open", "release"]);
+  const bad = rig(true, false, { error: { message: "no", details: [] } });
+  bad.call(CH_OPEN_DROPPED, event(TRUSTED.presenterUrl), dropped);
+  assert.deepEqual(bad.calls, ["open"], "a drop that does not open keeps the pin");
+  const refused = rig();
+  refused.call(CH_OPEN_DROPPED, event(TRUSTED.presenterUrl), { name: "a.json" });
+  assert.deepEqual(refused.calls, [], "a malformed drop opens nothing");
 });

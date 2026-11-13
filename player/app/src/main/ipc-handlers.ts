@@ -27,7 +27,7 @@ export function pageEvent(e: IpcMainInvokeEvent, trusted: () => Trusted): Page |
 /** Either shipped page. */
 export const trustedEvent = (e: IpcMainInvokeEvent, trusted: () => Trusted): boolean => pageEvent(e, trusted) !== null;
 
-export function registerHandlers(bus: IpcBus, controller: Controller, trusted: () => Trusted, pairing: PairingService): void {
+export function registerHandlers(bus: IpcBus, controller: Controller, trusted: () => Trusted, pairing: PairingService, onDropOpened: () => void = () => undefined): void {
   const presenter = (e: IpcMainInvokeEvent): boolean => pageEvent(e, trusted) === "presenter";
   bus.handle(CH_STATE, (e) => (presenter(e) ? controller.snapshot() : null));
   bus.handle(CH_COMMAND, (e, raw) => {
@@ -40,7 +40,11 @@ export function registerHandlers(bus: IpcBus, controller: Controller, trusted: (
   bus.handle(CH_OPEN_DROPPED, (e, raw) => {
     if (!presenter(e)) return null;
     const file = parseDroppedFile(raw);
-    return file ? controller.open(file.name, file.text) : null;
+    if (!file) return null;
+    const snapshot = controller.open(file.name, file.text);
+    // Like "Open a class file": a class that opened replaces the one being played, and ends its pin.
+    if (snapshot.error === null) onDropOpened();
+    return snapshot;
   });
   // Pairing takes no argument from the page: whatever is sent with it is never read.
   bus.handle(CH_PAIRING_STATE, (e) => (trustedEvent(e, trusted) ? pairing.view() : null));

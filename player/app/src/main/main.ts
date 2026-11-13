@@ -16,6 +16,7 @@ import { pickClassFile } from "./open-file.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
 import { selectMusic } from "./select-music.ts";
+import { credentialOf } from "./sync/link.ts";
 import { setupSync } from "./sync/setup.ts";
 import type { SyncService } from "./sync/service.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
@@ -96,14 +97,15 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(() => {
     hardenSession(APP_DIR_URL);
-    pairing = setupPairing();
+    const paired = setupPairing();
+    pairing = paired;
     // Keeps the account's classes offline, and the class list shows them.
-    sync = setupSync(pairing);
-    list = createListController({ sync, pairing, open: (name, text) => controller.open(name, text) });
+    sync = setupSync(paired);
+    list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text) });
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
     // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
     controller.onEnded(() => list?.release());
-    registerIpc(controller, trusted, pairing);
+    registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     installMenu(() => void openClass(), showList);
     createPresenter();

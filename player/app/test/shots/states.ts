@@ -1,4 +1,4 @@
-// The 19 states of the class list (docs/design/class-list.md, "States"), as the views the shell would
+// The 20 states of the class list (docs/design/class-list.md, "States"), as the views the shell would
 // send, with the classes of the reference mock-ups. The screenshot run renders each at every size.
 import type { ListRow } from "../../src/core/list/rows.ts";
 import type { ListView } from "../../src/core/list/view.ts";
@@ -30,7 +30,8 @@ const make = (m: Mock, n: number, over: Partial<ListRow> = {}): ListRow =>
 const TWELVE = MOCKS.map((m, i) => make(m, i + 1));
 
 const WORDS = ["Climb", "Sprint", "Endurance", "Tempo", "Threshold", "Cadence", "Recovery", "Pyramid", "Rolling hills", "Steady", "Over-unders", "Spin-up", "Long road"];
-const FORTY_TWO: ListRow[] = Array.from({ length: 42 }, (_, i) => make([`${WORDS[i % WORDS.length]} ${Math.floor(i / WORDS.length) + 1}`, 6 + (i % 12), 30 + (i % 4) * 15, `2026-0${1 + (i % 9)}-1${i % 9}`], i + 1));
+// A to Z, as the list shows it (the core sorts; the fixture is fed in that order).
+const FORTY_TWO: ListRow[] = Array.from({ length: 42 }, (_, i) => make([`${WORDS[i % WORDS.length]} ${Math.floor(i / WORDS.length) + 1}`, 6 + (i % 12), 30 + (i % 4) * 15, `2026-0${1 + (i % 9)}-1${i % 9}`], i + 1)).sort((a, b) => a.title.localeCompare(b.title));
 
 const WIDE = "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW".slice(0, 80);
 const LONG_TITLES: ListRow[] = [
@@ -74,5 +75,6 @@ export const STATES: readonly State[] = [
   { name: "pinned-newer", view: view({ rows: playing(TWELVE, thursday.title, { newer: true }), sync: synced(TWELVE, { pinned: { id: thursday.id, after: "newer" } }) }) },
   { name: "file-error", view: view({ rows: TWELVE, sync: synced(TWELVE), fileError: { message: "This class file is not valid.", fileName: "thursday-threshold.json", details: ["unknown_zone at /intervals/3/zone", "missing_field at /songs/4/title"] } }) },
   { name: "unavailable", view: view({ sync: synced([], { status: "unavailable", unavailable: "passing" }) }) },
+  { name: "unavailable-lasting", view: view({ sync: synced([], { status: "unavailable", unavailable: "lasting" }) }) },
   { name: "not-updated", view: view({ rows: TWELVE.map((r) => (r.title.startsWith("Hill") ? { ...r, notUpdated: true } : r)), sync: synced(TWELVE, { notUpdated: [TWELVE[3].id] }) }) },
 ];
