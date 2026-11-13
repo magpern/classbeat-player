@@ -831,7 +831,7 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | Wrong pairing codes, at the look-up and at the decision together | 5 per account per 15 minutes | The form is closed for 15 minutes |
 | Source code exchanges | 10 per address per minute | 429 |
 | Source API requests (publications, number reads, ending the link) | 60 per source token per minute | 429 |
-| Player API requests | 60 per device token per minute, plus a separate 600 per device token per minute for class document reads (`GET /api/player/classes/{id}`) | 429 |
+| Player API requests | 60 per device token per minute, plus a separate 600 per device token per minute for class document reads (`GET /api/player/classes/{class_id}`) | 429 |
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
 | Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |
