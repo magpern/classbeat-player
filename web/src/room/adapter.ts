@@ -142,15 +142,18 @@ function metricsFor(iv: Class["intervals"][number], song: Song | null, link: Lin
 }
 
 function beatFor(view: View, link: LinkInput | null, song: Song | null): BeatModel | null {
-  // Only while the link is locked and the song has its own beat anchors.
+  // Only while the link is locked and the song has its own beat anchors; the beats come from the
+  // anchors (the anchor in force now), not from the song's listed BPM.
   if (link?.state !== "Locked" || link.held || !song) return null;
   const anchors = song.beat_anchors;
-  const bpm = songBpm(song);
-  if (!anchors || anchors.quality === "missing" || anchors.anchors.length === 0 || !canShowBeat(bpm, true) || bpm === null) return null;
-  const beat = 60_000 / bpm;
-  const sinceAnchor = view.classMs - (song.start_ms + anchors.anchors[0].at_ms);
+  if (!anchors || anchors.quality === "missing" || anchors.anchors.length === 0) return null;
+  const rel = view.classMs - song.start_ms;
+  const anchor = [...anchors.anchors].reverse().find((x) => x.at_ms <= rel) ?? anchors.anchors[0];
+  if (!canShowBeat(anchor.bpm, true)) return null;
+  const beat = 60_000 / anchor.bpm;
+  const sinceAnchor = rel - anchor.at_ms;
   const toNext = beat - (((sinceAnchor % beat) + beat) % beat);
-  return { periodMs: beatPeriodMs(bpm), phaseMs: Math.round(toNext), key: `${song.start_ms}:${bpm}` };
+  return { periodMs: beatPeriodMs(anchor.bpm), phaseMs: Math.round(toNext), key: `${song.start_ms}:${anchor.at_ms}:${anchor.bpm}` };
 }
 
 function nextFor(doc: Class, view: View): NextModel {
