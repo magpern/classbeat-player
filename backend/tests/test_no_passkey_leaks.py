@@ -1,5 +1,5 @@
 """No challenge, credential id, public key, signature or their hashes in a log line, an audit
-event or a URL (ADR 0002, principles 3 and 4, section 11), over registering, signing in,
+event, a mail or a URL (ADR 0002, principles 3 and 4, section 11), over registering, signing in,
 renaming and removing passkeys, refusals included."""
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def _flow(site: Site, browser: Browser) -> tuple[list[bytes], list[str]]:
     return values, urls
 
 
-def test_no_challenge_credential_key_or_signature_reaches_a_log_an_event_or_a_url(
+def test_no_challenge_credential_key_or_signature_reaches_a_log_an_event_a_mail_or_a_url(
     site: Site, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
 ) -> None:
     # Bind the app's log handler to the output this test captures, at the most talkative level.
@@ -109,7 +109,9 @@ def test_no_challenge_credential_key_or_signature_reaches_a_log_an_event_or_a_ur
         "login.signed_in",
     } <= names
     stored = " ".join(str(row[0]) for row in events)
-    for text in (logged, stored, " ".join(urls)):
+    mails = " ".join(mail.subject + " " + mail.body for mail in site.mailer.sent[1:])
+    assert "A new passkey was added" in mails
+    for text in (logged, stored, mails, " ".join(urls)):
         for value in values:
             for form in _forms(value):
                 assert form not in text

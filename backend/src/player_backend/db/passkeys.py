@@ -87,6 +87,13 @@ def start_registration(ctx: AccountContext, challenge_hash: bytes) -> Registrati
     return RegistrationUser(cast(str, email), cast(bytes, user_handle), existing)
 
 
+def account_email(ctx: AccountContext) -> str | None:
+    """The account's email, for the notice of a new passkey."""
+    found = ctx.db.rows(q.ACCOUNT_USER, (ctx.account_id,))
+    email = found[0][0] if len(found) == 1 else None
+    return email if isinstance(email, str) else None
+
+
 def finish_registration(
     ctx: AccountContext,
     *,

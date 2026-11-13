@@ -285,3 +285,56 @@ def test_a_registration_without_a_name_is_refused_before_its_challenge_is_used(
     assert answer.status_code == 422 and answer.json() == {"error": "invalid_name"}
     assert _registrations(site) == 1
     assert browser.post(PASSKEYS, json={"name": "Key", "credential": credential}).status_code == 201
+
+
+def test_adding_a_passkey_sends_one_notice_with_no_credential_in_it(site: Site) -> None:
+    browser = _signed_in(site)
+    before = len(site.mailer.sent)
+    authenticator = Authenticator()
+    options = options_of(browser.post(OPTIONS))
+    credential = authenticator.create(options)
+    added = browser.post(PASSKEYS, json={"name": "Secret laptop", "credential": credential})
+    assert added.status_code == 201
+    (mail,) = site.mailer.sent[before:]
+    assert mail.to == A and mail.subject == "A new passkey was added"
+    assert "https://player.test" in mail.body
+    text = mail.subject + " " + mail.body
+    response = credential["response"]
+    assert isinstance(response, dict)
+    secrets = [
+        b64(authenticator.credential_id),
+        authenticator.credential_id.hex(),
+        b64(authenticator.cose_key()),
+        str(options["challenge"]),
+        str(response["clientDataJSON"]),  # pyright: ignore[reportUnknownArgumentType]
+        str(response["attestationObject"]),  # pyright: ignore[reportUnknownArgumentType]
+        "Secret laptop",
+        str(added.json()["id"]),
+    ]
+    for value in secrets:
+        assert value not in text
+
+
+def test_a_refused_addition_sends_no_notice(site: Site) -> None:
+    theirs = Authenticator()
+    assert register(_signed_in(site, B), theirs).status_code == 201
+    browser = _signed_in(site)
+    before = len(site.mailer.sent)
+    copy = Authenticator()
+    copy.credential_id = theirs.credential_id
+    assert register(browser, Authenticator("ES384")).status_code == 400
+    assert register(browser, copy).status_code == 409
+    assert register(browser, Authenticator(), "​").status_code == 422
+    _no_longer_recent(site, A)
+    assert browser.post(OPTIONS).status_code == 403
+    assert site.mailer.sent[before:] == []
+
+
+@pytest.mark.parametrize("size", [15, 1024])
+def test_a_credential_id_the_table_cannot_hold_is_refused(site: Site, size: int) -> None:
+    browser = _signed_in(site)
+    authenticator = Authenticator()
+    authenticator.credential_id = b"x" * size
+    refused = register(browser, authenticator)
+    assert refused.status_code == 400 and refused.json() == REFUSED
+    assert _rows(site, A) == [] and _registrations(site) == 0

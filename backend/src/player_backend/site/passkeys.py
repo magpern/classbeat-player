@@ -14,15 +14,18 @@ import secrets
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from player_backend.db import passkeys
 from player_backend.db.passkeys import PasskeyInfo
 from player_backend.http_errors import ApiError, error_response
+from player_backend.mail_delivery import deliver
 from player_backend.param_policy import uuid_of
 from player_backend.passkey_policy import (
     CHALLENGE_BYTES,
     NAME_MAX,
     NewPasskey,
+    added_mail,
     challenge_hash,
     challenge_of,
     clean_name,
@@ -127,7 +130,13 @@ def register(raw: RawBody, request: Request, context: RecentSignIn, who: TheCall
         return error_response(409, "too_many_passkeys")
     if outcome == "exists":
         return error_response(409, "passkey_exists")
-    return JSONResponse(_shown(outcome), status_code=201)
+    response = JSONResponse(_shown(outcome), status_code=201)
+    email = passkeys.account_email(context)
+    if email is not None:
+        # Section 6: a new passkey sends the account a notice, after the response.
+        state = site_state(request)
+        response.background = BackgroundTask(deliver, state.mailer, added_mail(origin, email))
+    return response
 
 
 @router.patch("/passkeys/{passkey_id}")

@@ -28,7 +28,14 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from player_backend.passkey_policy import CHALLENGE_SECONDS, RP_NAME, NewPasskey, rp_id_of
+from player_backend.passkey_policy import (
+    CHALLENGE_SECONDS,
+    CREDENTIAL_ID_MAX,
+    CREDENTIAL_ID_MIN,
+    RP_NAME,
+    NewPasskey,
+    rp_id_of,
+)
 
 ALGORITHMS: Final = [
     COSEAlgorithmIdentifier.ECDSA_SHA_256,
@@ -96,6 +103,9 @@ def verified_registration(
         )
         transports = _transports(credential)
     except Exception:  # Any failure is a refusal; the reason is never kept.
+        return None
+    # The library checks no length: an id the table cannot hold is refused here, not at insert.
+    if not CREDENTIAL_ID_MIN <= len(found.credential_id) <= CREDENTIAL_ID_MAX:
         return None
     return NewPasskey(
         credential_id=found.credential_id,

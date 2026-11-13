@@ -17,6 +17,7 @@ from datetime import timedelta
 from typing import Final
 from urllib.parse import urlsplit
 
+from player_backend.mail import Mail
 from player_backend.pairing_policy import LABEL_MAX, clean_label
 
 # A challenge is 32 random bytes, used once, for 5 minutes (section 4). The sign-in
@@ -68,7 +69,8 @@ def from_base64url(text: object) -> bytes | None:
     if not isinstance(text, str) or not text.isascii():
         return None
     try:
-        # Strict: a character outside the alphabet is refused, not skipped.
+        # A character outside base64 is refused, not skipped. `+`, `/`, padding and unused
+        # trailing bits are accepted: the library compares `id` with `rawId` re-encoded.
         return base64.b64decode(text + "=" * (-len(text) % 4), altchars=b"-_", validate=True)
     except (binascii.Error, ValueError):
         return None
@@ -105,6 +107,16 @@ def challenge_of(client_data_json: object) -> bytes | None:
     if challenge is None or len(challenge) != CHALLENGE_BYTES:
         return None
     return challenge
+
+
+def added_mail(site_origin: str, email: str) -> Mail:
+    """The notice that a passkey was added (section 6). It holds no challenge, no credential
+    id and no key, and not the name the user typed."""
+    body = (
+        "A new passkey was added to your account and can now sign in to it.\n\n"
+        "If this was not you, sign in at " + site_origin + " and remove it under Passkeys.\n"
+    )
+    return Mail(to=email, subject="A new passkey was added", body=body)
 
 
 def clean_name(raw: object) -> str | None:
