@@ -171,7 +171,7 @@ test("first sync, an incremental sync and a removal", async () => {
   linkAndStart(pairing, sync);
   await settled();
   // Two pages of two: every class fetched once, the cursor kept on disk.
-  assert.deepEqual(sync.view(), { status: "synced", classes: 3, pinned: null });
+  assert.deepEqual(sync.view(), { status: "synced", unavailable: null, wiping: false, classes: 3, notUpdated: [], pinned: null });
   assert.deepEqual(listedAfter(), ["0", "2"]);
   assert.deepEqual(fetchedIds(), [ID_A, ID_B, ID_C]);
   assert.deepEqual(files(), [`${ID_A}.json`, `${ID_B}.json`, `${ID_C}.json`]);
@@ -228,7 +228,7 @@ test("revoked: the cache and the token are wiped, after the class being played h
   assert.deepEqual(files(), [`${ID_A}.json`, `${ID_B}.json`]);
   sync.unpin();
   assert.equal(existsSync(dir), false);
-  assert.deepEqual(sync.view(), { status: "unpaired", classes: 0, pinned: null });
+  assert.deepEqual(sync.view(), { status: "unpaired", unavailable: null, wiping: false, classes: 0, notUpdated: [], pinned: null });
   nothingLeaked();
 });
 
@@ -339,7 +339,7 @@ test("a wipe that failed: the next account to pair syncs nothing until it is don
   await settled();
   assert.deepEqual(listedAfter(), ["0"]);
   assert.deepEqual(files(), [`${ID_C}.json`]);
-  assert.deepEqual(sync.view(), { status: "synced", classes: 1, pinned: null });
+  assert.deepEqual(sync.view(), { status: "synced", unavailable: null, wiping: false, classes: 1, notUpdated: [], pinned: null });
   assert.equal(sync.pin(ID_A), null);
   assert.equal(sync.pin(ID_B), null);
   assert.ok(sync.pin(ID_C) !== null);
@@ -351,7 +351,7 @@ test("a restart with a wipe left unfinished wipes first, with or without a pairi
   // Restarted with no pairing, the files still locked: nothing loads, the marker stays.
   freshApp(null, lockable);
   linkAndStart(pairing, sync);
-  assert.deepEqual(sync.view(), { status: "unpaired", classes: 0, pinned: null });
+  assert.deepEqual(sync.view(), { status: "unpaired", unavailable: null, wiping: true, classes: 0, notUpdated: [], pinned: null });
   assert.equal(sync.pin(ID_A), null);
   assert.equal(existsSync(join(dir, WIPE_FILE)), true);
   // Restarted again, paired to account B, the files free: the wipe is done at start, before B syncs.

@@ -36,8 +36,8 @@ export interface Credential {
 /** `unavailable`: the cache could not be read; it is kept, and read again later. */
 export type Status = "unpaired" | "syncing" | "synced" | "offline" | "waiting" | "expired" | "unavailable";
 
-type Applied = { readonly set: readonly [string, string] } | { readonly drop: readonly string[] } | { readonly cursor: number };
-type Wait = { readonly for: "list" } | { readonly for: "fetch"; readonly id: string } | { readonly for: "write"; readonly then: Applied };
+type Applied = { readonly set: readonly [id: string, hash: string, publishedAt: string] } | { readonly drop: readonly string[] } | { readonly cursor: number };
+type Wait = { readonly for: "list" } | { readonly for: "fetch"; readonly id: string; readonly publishedAt: string } | { readonly for: "write"; readonly then: Applied };
 
 interface Run {
   readonly id: number;
@@ -63,6 +63,12 @@ export interface SyncState {
   readonly cursor: number;
   /** The cached classes: id to content hash. */
   readonly held: ReadonlyMap<string, string>;
+  /** When each cached class was published, where known (an older cache file has no stamp). */
+  readonly published: ReadonlyMap<string, string>;
+  /** Classes whose newer version the server answered `unusable` for: skipped, the older copy kept. */
+  readonly notUpdated: ReadonlySet<string>;
+  /** The cache could not be read, and a retry will not change that (see fault-policy.ts). */
+  readonly lasting: boolean;
   readonly run: Run | null;
   readonly runs: number;
   readonly failures: number;
@@ -80,7 +86,7 @@ export interface SyncState {
 export type Effect =
   | { readonly do: "list"; readonly run: number; readonly after: number }
   | { readonly do: "fetch"; readonly run: number; readonly id: string }
-  | { readonly do: "keep"; readonly run: number; readonly account: string; readonly id: string; readonly hash: string; readonly document: Readonly<Record<string, unknown>> }
+  | { readonly do: "keep"; readonly run: number; readonly account: string; readonly id: string; readonly hash: string; readonly publishedAt: string; readonly document: Readonly<Record<string, unknown>> }
   | { readonly do: "remove"; readonly run: number; readonly ids: readonly string[] }
   | { readonly do: "commit"; readonly run: number; readonly account: string; readonly cursor: number }
   /** Read the cache; the result goes back in as `loaded` or `unreadable`. */
@@ -94,9 +100,9 @@ export type Effect =
 
 export type SyncEvent =
   /** The cache on disk at start; `wipePending` when an earlier wipe did not finish. */
-  | { readonly type: "loaded"; readonly account: string | null; readonly cursor: number; readonly held: ReadonlyMap<string, string>; readonly wipePending: boolean }
+  | { readonly type: "loaded"; readonly account: string | null; readonly cursor: number; readonly held: ReadonlyMap<string, string>; readonly published: ReadonlyMap<string, string>; readonly wipePending: boolean }
   /** The cache could not be read: a disk fault, not a cache shown to be another account's. */
-  | { readonly type: "unreadable" }
+  | { readonly type: "unreadable"; readonly lasting: boolean }
   | { readonly type: "due"; readonly credential: Credential | null }
   | { readonly type: "listed"; readonly run: number; readonly answer: ListResult }
   | { readonly type: "fetched"; readonly run: number; readonly id: string; readonly answer: FetchResult }
@@ -115,13 +121,15 @@ export interface Step {
 }
 
 const EMPTY: ReadonlyMap<string, string> = new Map();
-export const INITIAL: SyncState = { account: null, cursor: 0, held: EMPTY, run: null, runs: 0, failures: 0, status: "unpaired", pinned: null, wipeAfterPin: false, wipePending: false, unread: true };
+const NONE: ReadonlySet<string> = new Set();
+const NO_STAMPS: ReadonlyMap<string, string> = new Map();
+export const INITIAL: SyncState = { account: null, cursor: 0, held: EMPTY, published: NO_STAMPS, notUpdated: NONE, lasting: false, run: null, runs: 0, failures: 0, status: "unpaired", pinned: null, wipeAfterPin: false, wipePending: false, unread: true };
 
 const stay = (state: SyncState): Step => ({ state, effects: [] });
 const later = (state: SyncState, at: number, effects: readonly Effect[] = []): Step => ({ state, effects: [...effects, { do: "wake", at }] });
 
 /** The cache emptied: nothing held, no account, no cursor. The pin and the counters stay. */
-const emptied = (s: SyncState): SyncState => ({ ...s, account: null, cursor: 0, held: EMPTY, run: null, wipeAfterPin: false });
+const emptied = (s: SyncState): SyncState => ({ ...s, account: null, cursor: 0, held: EMPTY, published: NO_STAMPS, notUpdated: NONE, run: null, wipeAfterPin: false });
 
 /** Forget the cache now and ask the edge to delete it; it counts as gone only once `wiped` says so. */
 const wiping = (s: SyncState): Step => ({ state: { ...emptied(s), wipePending: true }, effects: [{ do: "wipe" }] });
@@ -182,7 +190,7 @@ function advance(s: SyncState, run: Run, now: number): Step {
     const c = run.todo[i];
     const rest = { ...run, todo: run.todo.slice(i + 1) };
     if (c.removed) return waiting(s, rest, { for: "write", then: { drop: [c.id] } }, { do: "remove", run: run.id, ids: [c.id] });
-    if (s.held.get(c.id) !== c.hash) return waiting(s, rest, { for: "fetch", id: c.id }, { do: "fetch", run: run.id, id: c.id });
+    if (s.held.get(c.id) !== c.hash) return waiting(s, rest, { for: "fetch", id: c.id, publishedAt: c.publishedAt }, { do: "fetch", run: run.id, id: c.id });
   }
   const page = run.page;
   if (page === null) return stay(s);
@@ -210,9 +218,21 @@ function applied(s: SyncState, run: Run, then: Applied): [SyncState, Run] {
     return [{ ...s, account: run.account, cursor: then.cursor, run: committed }, committed];
   }
   const held = new Map(s.held);
-  if ("set" in then) held.set(then.set[0], then.set[1]);
-  else for (const id of then.drop) held.delete(id);
-  return [{ ...s, held, run: free }, free];
+  const published = new Map(s.published);
+  const notUpdated = new Set(s.notUpdated);
+  if ("set" in then) {
+    const [id, hash, at] = then.set;
+    held.set(id, hash);
+    published.set(id, at);
+    notUpdated.delete(id);
+  } else {
+    for (const id of then.drop) {
+      held.delete(id);
+      published.delete(id);
+      notUpdated.delete(id);
+    }
+  }
+  return [{ ...s, held, published, notUpdated, run: free }, free];
 }
 
 function listed(s: SyncState, run: Run, a: ListResult, now: number): Step {
@@ -222,12 +242,12 @@ function listed(s: SyncState, run: Run, a: ListResult, now: number): Step {
   return advance(s, { ...run, page: { cursor: a.cursor, more: a.more }, todo: a.changes, committed: false, seen }, now);
 }
 
-function fetched(s: SyncState, run: Run, id: string, a: FetchResult, now: number): Step {
-  if (a.kind === "class") return waiting(s, run, { for: "write", then: { set: [id, a.hash] } }, { do: "keep", run: run.id, account: run.account, id, hash: a.hash, document: a.document });
+function fetched(s: SyncState, run: Run, id: string, publishedAt: string, a: FetchResult, now: number): Step {
+  if (a.kind === "class") return waiting(s, run, { for: "write", then: { set: [id, a.hash, publishedAt] } }, { do: "keep", run: run.id, account: run.account, id, hash: a.hash, publishedAt, document: a.document });
   // Removed since the page was listed: the cached copy goes now; its removal comes in a later page.
   if (a.kind === "not_found") return waiting(s, run, { for: "write", then: { drop: [id] } }, { do: "remove", run: run.id, ids: [id] });
-  // Not a class to keep: skipped, and any cached copy stays as it is.
-  if (a.kind === "unusable") return advance(s, run, now);
+  // Not a class to keep: skipped, and any cached copy stays as it is (and is marked not updated).
+  if (a.kind === "unusable") return advance({ ...s, notUpdated: new Set(s.notUpdated).add(id) }, run, now);
   return refused(s, a, now);
 }
 
@@ -236,23 +256,24 @@ export function step(s: SyncState, e: SyncEvent, now: number): Step {
   switch (e.type) {
     case "loaded": {
       if (!s.unread || run !== null) return stay(s);
-      const read: SyncState = { ...s, unread: false, status: "unpaired" };
+      // A read that worked ends the run of faults: the next fault waits only the first step.
+      const read: SyncState = { ...s, unread: false, status: "unpaired", failures: 0, lasting: false };
       // A wipe asked before the cache was read, or left unfinished on disk, holds nothing.
       if (s.wipePending || e.wipePending) return stay({ ...emptied(read), wipePending: true });
-      return stay({ ...read, account: e.account, cursor: e.cursor, held: e.held });
+      return stay({ ...read, account: e.account, cursor: e.cursor, held: e.held, published: e.published });
     }
     case "unreadable": {
       // The files stay as they are; the read is tried again after the fault backoff.
       if (!s.unread) return stay(s);
       const failures = s.failures + 1;
-      return later({ ...s, failures, status: "unavailable" }, now + backoffMs(failures));
+      return later({ ...s, failures, lasting: e.lasting, status: "unavailable" }, now + backoffMs(failures));
     }
     case "due":
       return due(s, e.credential, now);
     case "listed":
       return run !== null && run.id === e.run && run.wait.for === "list" ? listed(s, run, e.answer, now) : stay(s);
     case "fetched":
-      return run !== null && run.id === e.run && run.wait.for === "fetch" && run.wait.id === e.id ? fetched(s, run, e.id, e.answer, now) : stay(s);
+      return run !== null && run.id === e.run && run.wait.for === "fetch" && run.wait.id === e.id ? fetched(s, run, e.id, run.wait.publishedAt, e.answer, now) : stay(s);
     case "written":
       if (run === null || run.id !== e.run || run.wait.for !== "write") return stay(s);
       // Nothing that failed to reach the disk is counted as held; the page is repeated later.

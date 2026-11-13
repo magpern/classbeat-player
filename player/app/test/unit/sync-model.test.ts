@@ -8,7 +8,7 @@ import { backoffMs, FIRST_BACKOFF_MS, MAX_BACKOFF_MS, MAX_RETRY_AFTER_MS, retryW
 import { INITIAL, step } from "../../src/core/sync/sync-model.ts";
 import type { Credential, Effect, SyncEvent, SyncState } from "../../src/core/sync/sync-model.ts";
 import { syncView } from "../../src/core/sync/view.ts";
-import { ID_A, ID_B, ID_C } from "./sync-fixtures.ts";
+import { ID_A, ID_B, ID_C, STAMP } from "./sync-fixtures.ts";
 
 const ACCOUNT = "a".repeat(64);
 const OTHER = "b".repeat(64);
@@ -17,8 +17,8 @@ const H2 = `sha256:${"2".repeat(64)}`;
 const DOC = { format_version: "1.0" };
 const PAIRED: Credential = { account: ACCOUNT, expired: false };
 
-const cls = (id: string, position: number, hash = H1): Change => ({ id, removed: false, hash, position });
-const gone = (id: string, position: number): Change => ({ id, removed: true, hash: null, position });
+const cls = (id: string, position: number, hash = H1): Change => ({ id, removed: false, hash, publishedAt: STAMP, position });
+const gone = (id: string, position: number): Change => ({ id, removed: true, hash: null, publishedAt: STAMP, position });
 const pageOf = (changes: Change[], cursor: number, more = false): ListResult => ({ kind: "page", changes, cursor, more });
 const kept = (hash = H1): FetchResult => ({ kind: "class", hash, document: DOC });
 
@@ -49,7 +49,7 @@ function rig(held: [string, string][] = [], cursor = 0, account: string | null =
     wiped: (ok = true) => r.send({ type: "wiped", ok }),
     held: () => Object.fromEntries(state.held),
   };
-  r.send({ type: "loaded", account, cursor, held: new Map(held), wipePending });
+  r.send({ type: "loaded", account, cursor, held: new Map(held), published: new Map(), wipePending });
   return r;
 }
 
@@ -57,7 +57,7 @@ test("a first sync pages through the changes, applies each in order and commits 
   const r = rig();
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
   assert.deepEqual(r.listed(pageOf([cls(ID_A, 1), gone(ID_B, 2)], 2, true)), [{ do: "fetch", run: 1, id: ID_A }]);
-  assert.deepEqual(r.fetched(ID_A, kept()), [{ do: "keep", run: 1, account: ACCOUNT, id: ID_A, hash: H1, document: DOC }]);
+  assert.deepEqual(r.fetched(ID_A, kept()), [{ do: "keep", run: 1, account: ACCOUNT, id: ID_A, hash: H1, publishedAt: STAMP, document: DOC }]);
   // A removal deletes the cached document at once, before the cursor passes it.
   assert.deepEqual(r.written(), [{ do: "remove", run: 1, ids: [ID_B] }]);
   assert.deepEqual(r.written(), [{ do: "commit", run: 1, account: ACCOUNT, cursor: 2 }]);
@@ -69,7 +69,7 @@ test("a first sync pages through the changes, applies each in order and commits 
   assert.deepEqual(r.written(), [{ do: "commit", run: 1, account: ACCOUNT, cursor: 3 }]);
   assert.deepEqual(r.written(), [{ do: "wake", at: r.now + SYNC_EVERY_MS }]);
   assert.deepEqual(r.held(), { [ID_A]: H1, [ID_C]: H2 });
-  assert.deepEqual(syncView(r.state), { status: "synced", classes: 2, pinned: null });
+  assert.deepEqual(syncView(r.state), { status: "synced", unavailable: null, wiping: false, classes: 2, notUpdated: [], pinned: null });
   assert.equal(r.state.account, ACCOUNT);
 });
 
@@ -246,7 +246,7 @@ test("a wipe left unfinished on disk, or asked before the cache was read, is don
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
   // The pairing ended before the cache was read: what is on disk is not loaded as held.
   let state = step(INITIAL, { type: "forgotten" }, 0).state;
-  state = step(state, { type: "loaded", account: ACCOUNT, cursor: 3, held: new Map([[ID_A, H1]]), wipePending: false }, 0).state;
+  state = step(state, { type: "loaded", account: ACCOUNT, cursor: 3, held: new Map([[ID_A, H1]]), published: new Map(), wipePending: false }, 0).state;
   assert.equal(state.held.size, 0);
   assert.equal(state.wipePending, true);
   assert.deepEqual(step(state, { type: "due", credential: PAIRED }, 0).effects, [{ do: "wipe" }]);
@@ -336,6 +336,6 @@ test("answers for another run, another class or nothing asked are ignored; one s
   r.listed(pageOf([cls(ID_A, 1)], 1));
   assert.deepEqual(r.fetched(ID_B, kept()), []);
   assert.deepEqual(r.written(), []);
-  assert.deepEqual(r.send({ type: "loaded", account: OTHER, cursor: 9, held: new Map(), wipePending: false }), []);
+  assert.deepEqual(r.send({ type: "loaded", account: OTHER, cursor: 9, held: new Map(), published: new Map(), wipePending: false }), []);
   assert.equal(r.state.cursor, 0);
 });

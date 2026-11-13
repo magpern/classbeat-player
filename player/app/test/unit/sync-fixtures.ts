@@ -21,6 +21,8 @@ export const OFFLINE: HttpAnswer = { kind: "unreachable" };
 export const ID_A = "11111111-1111-4111-8111-111111111111";
 export const ID_B = "22222222-2222-4222-8222-222222222222";
 export const ID_C = "33333333-3333-4333-8333-333333333333";
+/** The publication time every `changeOf` carries. */
+export const STAMP = "2026-11-01T10:00:00+00:00";
 
 /** The example class's document, retitled so each version has its own hash. */
 export function document(title = "Quick spin"): Record<string, unknown> {
@@ -42,7 +44,7 @@ export function changeOf(id: string, position: number, doc: Record<string, unkno
     publication_number: position,
     removed: doc === null,
     content_hash: doc === null ? null : contentHash(doc),
-    published_at: "2026-11-01T10:00:00+00:00",
+    published_at: STAMP,
     position,
   };
 }

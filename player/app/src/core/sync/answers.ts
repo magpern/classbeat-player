@@ -10,6 +10,8 @@ export interface Change {
   readonly removed: boolean;
   /** Null for a removal. */
   readonly hash: string | null;
+  /** When the server published this version (an ISO 8601 stamp, checked). */
+  readonly publishedAt: string;
   readonly position: number;
 }
 
@@ -42,6 +44,7 @@ const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 const MAX_SOURCE = 10_000;
 export const PAGE_MAX = 500;
 
+export const isStamp = (v: unknown): v is string => typeof v === "string" && STAMP.test(v);
 export const isClassId = (v: unknown): v is string => typeof v === "string" && UUID.test(v);
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -70,7 +73,7 @@ function change(v: unknown): Change | null {
   if (!text(v.source, MAX_SOURCE) || !text(v.source_class_id, 100) || typeof v.published_at !== "string" || !STAMP.test(v.published_at)) return null;
   // A removal has no hash; a class always has one.
   if (removed ? hash !== null : typeof hash !== "string" || !HASH.test(hash)) return null;
-  return { id, removed, hash: removed ? null : (hash as string), position };
+  return { id, removed, hash: removed ? null : (hash as string), publishedAt: v.published_at, position };
 }
 
 /**

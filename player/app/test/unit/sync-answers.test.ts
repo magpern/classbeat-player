@@ -16,13 +16,13 @@ const held = (body: unknown, id = ID_A): FetchResult => parseClass(ok(body), id,
 const READINGS: Record<string, () => void> = {
   "changes/valid/empty.json": () => assert.deepEqual(changes("changes/valid/empty.json"), { kind: "page", changes: [], cursor: 0, more: false }),
   "changes/valid/more-follow.json": () =>
-    assert.deepEqual(changes("changes/valid/more-follow.json"), { kind: "page", changes: [{ id: ID_A, removed: false, hash: `sha256:${"a".repeat(64)}`, position: 1 }], cursor: 1, more: true }),
+    assert.deepEqual(changes("changes/valid/more-follow.json"), { kind: "page", changes: [{ id: ID_A, removed: false, hash: `sha256:${"a".repeat(64)}`, publishedAt: "2026-11-01T10:00:00+00:00", position: 1 }], cursor: 1, more: true }),
   "changes/valid/page-with-class-and-removal.json": () =>
     assert.deepEqual(changes("changes/valid/page-with-class-and-removal.json"), {
       kind: "page",
       changes: [
-        { id: ID_A, removed: false, hash: `sha256:${"a".repeat(64)}`, position: 1 },
-        { id: ID_B, removed: true, hash: null, position: 2 },
+        { id: ID_A, removed: false, hash: `sha256:${"a".repeat(64)}`, publishedAt: "2026-11-01T10:00:00+00:00", position: 1 },
+        { id: ID_B, removed: true, hash: null, publishedAt: "2026-11-02T10:00:00.123456+00:00", position: 2 },
       ],
       cursor: 2,
       more: false,

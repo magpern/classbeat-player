@@ -3,7 +3,8 @@
 // cursor with the key of the account it belongs to. Readable by this user only. Nothing here logs.
 //
 //   <dir>/sync.json          {"v":1,"account":"<key>","cursor":<n>}
-//   <dir>/classes/<id>.json  {"v":1,"account":"<key>","hash":"sha256:…","document":{…}}
+//   <dir>/classes/<id>.json  {"v":1,"account":"<key>","hash":"sha256:…","document":{…},"published_at":"<stamp>"}
+//                            (published_at is optional: a file kept before it existed still loads, its time unknown)
 //   <dir>/wipe.pending       written before a wipe deletes anything, deleted only once all else is
 //
 // Every class file names its account. A file that does not read back as exactly this is dropped,
@@ -17,7 +18,7 @@ import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readd
 import type { RmOptions } from "node:fs";
 import { join } from "node:path";
 import { contentHash } from "classformat/src/index.ts";
-import { isClassId } from "../../core/sync/answers.ts";
+import { isClassId, isStamp } from "../../core/sync/answers.ts";
 import { readCapped } from "../capped-read.ts";
 
 export interface StoredSync {
@@ -25,6 +26,8 @@ export interface StoredSync {
   readonly cursor: number;
   /** Class id to content hash. */
   readonly held: ReadonlyMap<string, string>;
+  /** When each class was published, for the classes whose file says so. */
+  readonly published: ReadonlyMap<string, string>;
   /** A wipe is unfinished, or the cache is not one account's: it must be wiped before use. */
   readonly wipePending: boolean;
 }
@@ -32,6 +35,8 @@ export interface StoredSync {
 export interface CachedClass {
   readonly account: string;
   readonly hash: string;
+  /** Null when the file has no publication time (kept by an older version). */
+  readonly publishedAt: string | null;
   readonly document: Readonly<Record<string, unknown>>;
 }
 
@@ -39,7 +44,7 @@ export interface ClassCache {
   /** Throws on a fault reading the folder or a file other than its absence; nothing is deleted then. */
   load(): StoredSync;
   /** Throws when the class could not be kept, or while a wipe is unfinished. */
-  keep(account: string, id: string, hash: string, document: Readonly<Record<string, unknown>>): void;
+  keep(account: string, id: string, hash: string, document: Readonly<Record<string, unknown>>, publishedAt: string): void;
   /** Throws when one of them could not be deleted. */
   remove(ids: readonly string[]): void;
   /** Throws when the cursor could not be kept, or while a wipe is unfinished. */
@@ -143,12 +148,13 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
     const raw = readJson(read, classFile(id), MAX_CACHED_FILE_BYTES);
     if (raw === MISSING) return MISSING;
     if (!isObject(raw) || raw.v !== 1 || typeof raw.account !== "string" || !KEY.test(raw.account) || typeof raw.hash !== "string" || !HASH.test(raw.hash) || !isObject(raw.document)) return null;
-    return { account: raw.account, hash: raw.hash, document: raw.document };
+    // A missing or malformed time only leaves the time unknown; the class itself is good.
+    return { account: raw.account, hash: raw.hash, publishedAt: isStamp(raw.published_at) ? raw.published_at : null, document: raw.document };
   };
 
   return {
     load() {
-      const none = { account: null, cursor: 0, held: new Map<string, string>() };
+      const none = { account: null, cursor: 0, held: new Map<string, string>(), published: new Map<string, string>() };
       if (unfinished()) return { ...none, wipePending: true };
       try {
         tighten();
@@ -160,6 +166,7 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
       const account = ok ? (meta.account as string) : null;
       const cursor = ok ? (meta.cursor as number) : 0;
       const held = new Map<string, string>();
+      const published = new Map<string, string>();
       let foreign = false;
       let names: string[] = [];
       try {
@@ -174,7 +181,10 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
         // Gone since the folder was listed: nothing to hold.
         if (found === MISSING) continue;
         if (id !== undefined && found !== null) {
-          if (found.account === account) held.set(id, found.hash);
+          if (found.account === account) {
+            held.set(id, found.hash);
+            if (found.publishedAt !== null) published.set(id, found.publishedAt);
+          }
           else foreign = true;
         }
         // A leftover temporary file or a class file shown not to read back is dropped (if it
@@ -189,13 +199,13 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
       }
       // Nothing of another account, or of no account on record, is ever loaded as this one's.
       if (foreign) return { ...none, wipePending: true };
-      return account === null ? { ...none, wipePending: false } : { account, cursor, held, wipePending: false };
+      return account === null ? { ...none, wipePending: false } : { account, cursor, held, published, wipePending: false };
     },
-    keep(account, id, hash, document) {
-      if (!KEY.test(account) || !HASH.test(hash)) throw new Error("not a class to keep");
+    keep(account, id, hash, document, publishedAt) {
+      if (!KEY.test(account) || !HASH.test(hash) || !isStamp(publishedAt)) throw new Error("not a class to keep");
       const file = classFile(id);
       ensure();
-      writeAtomic(file, JSON.stringify({ v: 1, account, hash, document }));
+      writeAtomic(file, JSON.stringify({ v: 1, account, hash, document, published_at: publishedAt }));
     },
     remove(ids) {
       for (const id of ids) remove(classFile(id), { force: true });
