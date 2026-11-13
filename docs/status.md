@@ -39,8 +39,13 @@ the live publisher and listener hardening (#222, #224), the contract tests (#228
 backend hardening (#227, #230), the body cap in the live contract (#234, #235; #237, #238; #236,
 #239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
 #245), the companion page (#174, #261; network calls in web code allowed by the owner, #252,
-#253). In progress: sign-in returns to the companion page (#263), a `/me` answer in the contract
-(#264), the backend serving `/control` (#266), the companion and site specs as built (#269). Next: the backend `/me` route (#265, after #264).
+#253), sign-in returning to the companion page (#263, #274), the `/me` answer in the contract
+(#264, #272) and its backend route (#265, #283) with its account-filter test (#295, in review
+#299), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
+and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
+#292), the companion fake on the `/control` headers (#278, #286) and wider markup and stylesheet
+guards (#267, #276). In progress: companion CI states (#282, #297), the sink trap's iframe and
+attribute-node gaps (#293).
 
 ## PL2: backend and sign-in
 
@@ -79,8 +84,10 @@ only (memory keychain, one xvfb display).
 
 Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
 (#75, #76); the backend job also runs for changes under `schema/` (#88, #93); the class list
-screenshots are uploaded whenever the shot tests exist (#139, #140). In progress: the `web` job
-also runs for the shared design tokens (#268). Next: wider markup and stylesheet guards (#267).
+screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` job also runs for
+the shared design tokens and the request policy (#268, #271); the backend image ships
+`web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
+check compares the whole file in order (#289, #291; #294, #296; #298, #300).
 
 ## Scene spike
 
@@ -146,6 +153,14 @@ Merged: #30 and its findings (#53).
 - Player: from the #165 review, the hardening and wiring checks are source regexes; the #165
   Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
+
+- PL8 notes: from #274, `RETURN_ENTRIES` could use `satisfies`, a sign-in by email link opened
+  in a new tab lands on `/classes` (needs a return entry in the mailed link), and `site.md`
+  wording; from #275, `companion-pages.js:117` still shows a sample signed-in address; from #273,
+  HEAD on `/control` answers 405; from #286, the fake's header check ignores headers with constant
+  values, copies the asset rule, and the socket entry is only text-checked; from #292, the
+  private-import scan misses dynamic forms; from #300, an empty dockerignore fails without a
+  message.
 
 ## Carried into PL8
 
