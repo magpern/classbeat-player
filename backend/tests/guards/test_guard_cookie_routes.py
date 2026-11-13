@@ -30,6 +30,8 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("DELETE", "/api/site/sessions/{session_id}"),
         ("POST", "/api/site/sign-out"),
         ("POST", "/api/site/sessions/end-all"),
+        # Section 4: the signed-in account's own email (#265).
+        ("GET", "/api/site/me"),
         # Section 6, step 3 and "The site lists devices": the signed-in user's side of pairing.
         ("POST", "/api/site/pairing/find"),
         ("POST", "/api/site/pairing/decide"),

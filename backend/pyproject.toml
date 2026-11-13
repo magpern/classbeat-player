@@ -52,5 +52,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S608", "S105", "S106", "S107"]
 
 [tool.pyright]
 include = ["src", "tests"]
+# The contract lane's generated models (site/answers.py loads them from there at run time).
+extraPaths = ["src", "../schema/generated/python"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"

@@ -1,7 +1,9 @@
-"""Data access of the account's export and its deletion (ADR 0002, sections 9, 11 and 12).
+"""Data access of the account's email, its export and its deletion (ADR 0002, sections 9, 11
+and 12).
 
 Every read filters by the account in the code; the policy is the backstop.
 
+- `email` reads the account's own email for `GET /api/site/me`, in the request's transaction.
 - `export_head` runs in the signed-in request's transaction: it writes the "export made" event
   and reads the account's small parts, column by column.
 - `class_pages` reads the classes after that transaction has committed, while the answer is
@@ -54,6 +56,14 @@ def _email(ctx: AccountContext) -> tuple[str, object] | None:
     if len(found) != 1 or not isinstance(found[0][0], str):
         return None
     return found[0][0], found[0][1]
+
+
+def email(ctx: AccountContext) -> str | None:
+    """The account's own email, as stored, or None when the account is gone."""
+    found = ctx.db.rows(q.EMAIL, (ctx.account_id,))
+    if len(found) != 1 or not isinstance(found[0][0], str):
+        return None
+    return found[0][0]
 
 
 def export_head(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
