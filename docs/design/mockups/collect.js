@@ -6,6 +6,8 @@
 //   data-tier="hero|gel|value|text|minor|label"  the type tier (C1, C2)
 //   data-lines="N"   the element may take up to N lines (default 1: any wrap fails)
 //   data-clamp="N"   the element ends in an ellipsis after N lines by design (not "cut off")
+//   data-min-cap="N"  a window screen (class-list.md): the cap height must be at least N px
+//   data-scroll      a scrolling region (class-list.md): text scrolled out of it is not checked
 //   data-fit="hide"  the element is shown only if it fits whole (wraps onto a hidden row
 //                    otherwise); checked both ways: shown if and only if it fits
 'use strict';
@@ -104,6 +106,12 @@ module.exports = function collect() {
     for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
       if (!clips(getComputedStyle(a))) continue;
       const r = a.getBoundingClientRect();
+      // A scrolling region (data-scroll) legitimately hides what is scrolled out of it, wholly or
+      // in part: such text is not checked in this state (the same rows are checked where they show).
+      if (a.hasAttribute('data-scroll')) {
+        if (box.y0 < r.top - 4 || box.y1 > r.bottom + 4) return;
+        continue;
+      }
       const outside = box.y0 >= r.bottom - 1 || box.x0 >= r.right - 1 || box.y1 <= r.top + 1 || box.x1 <= r.left + 1;
       if (outside) {
         if (el.dataset.fit === 'hide') return;
@@ -145,7 +153,7 @@ module.exports = function collect() {
     items.push({
       // A fitting step-down may move an element to a lower tier in some layouts (--tier).
       i, tier: cs.getPropertyValue('--tier').trim() || el.dataset.tier, text: el.textContent.trim().replace(/\s+/g, ' ').slice(0, 30),
-      cap: ctx.measureText('H').actualBoundingBoxAscent / innerHeight, colors, box, problems, lines,
+      cap: ctx.measureText("H").actualBoundingBoxAscent / innerHeight, minpx: Number(el.dataset.minCap) || 0, colors, box, problems, lines,
       anc: els.filter((o) => o !== el && (o.contains(el) || el.contains(o))).map((o) => els.indexOf(o)),
     });
   });

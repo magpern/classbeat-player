@@ -36,6 +36,14 @@ const room = (state, w, h, save = true, motion = null) => ({
 const KEEP_WORST = new Set(['worst-off-list-1280x1024', 'worst-off-list-1650x1080', 'worst-running-1280x720', 'worst-before-start-1280x1024', 'worst-before-start-1650x1080',
   'worst-ambiguous-1650x1080', 'worst-wide-1650x1080', 'worst-wide-1440x1080', 'worst-wide-1280x1024', 'worst-wide-before-start-1650x1080']);
 
+// The class list (class-list.md): the instructor's own window, read at arm's length (presenter
+// checks: contrast, collisions, hue, motion, and data-min-cap in pixels). Window client sizes:
+// 1920x1080, 1280x800, and 1000x720, the player's default and the smallest (the presenter's minimum).
+const LIST_SIZES = [[1920, 1080], [1280, 800], [1000, 720]];
+const LIST_STATES = ['synced', 'syncing', 'first-sync', 'offline', 'waiting', 'expired', 'wiping', 'revoked', 'not-paired', 'pairing-start', 'pairing', 'empty', 'long-list', 'no-match', 'long-titles', 'pinned-newer', 'file-error', 'unavailable', 'not-updated'];
+const KEEP_LIST = new Set(['synced-1920x1080', 'synced-1280x800', 'long-list-1000x720', ...LIST_STATES.map((s) => `${s}-1000x720`)]);
+const list = (state, w, h) => ({ file: `class-list-${state}.html`, png: `class-list-${state}-${w}x${h}.png`, w, h, room: false, presenter: true, save: KEEP_LIST.has(`${state}-${w}x${h}`) });
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -59,6 +67,7 @@ const SHOTS = [
   { file: 'presenter.html', png: 'presenter-1280x800.png', w: 1280, h: 800, room: false, presenter: true, save: true },
   // The player's default presenter window (1000x760 with its title bar).
   { file: 'presenter.html', png: 'presenter-1000x720.png', w: 1000, h: 720, room: false, presenter: true, save: true },
+  ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST };
