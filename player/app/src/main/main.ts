@@ -13,6 +13,8 @@ import { registerListHandlers } from "./list/list-handlers.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
+import { electronBlocker } from "./electron-blocker.ts";
+import { createKeepAwake } from "./keep-awake.ts";
 import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
@@ -42,6 +44,7 @@ let pairing: PairingService | null = null;
 let sync: SyncService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
+const keepAwake = createKeepAwake(electronBlocker);
 const controller = createController(undefined, music.reader, music.transport);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
@@ -119,6 +122,7 @@ function createPresenter(): void {
     presenter = null;
     // The class goes with the presenter, and the application quits once both windows are gone.
     room.close();
+    keepAwake.release();
   });
   void presenter.loadFile(LIST_FILE);
 }
@@ -155,6 +159,7 @@ if (!app.requestSingleInstanceLock()) {
     controller.onOpened(() => room.open());
     controller.watch((s) => room.send(s));
     controller.watch(() => refreshRoomItem());
+    controller.watch((s) => keepAwake.update(s.view));
     registerRoomHandlers(ipcMain, () => room.trusted(), controller);
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
@@ -164,6 +169,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   // Quitting from the menu skips window-all-closed; a follower's helper must stop either way.
   app.on("will-quit", () => controller.stop());
+  app.on("will-quit", () => keepAwake.release());
   app.on("will-quit", () => pairing?.stop());
   app.on("will-quit", () => sync?.stop());
   app.on("window-all-closed", () => {
