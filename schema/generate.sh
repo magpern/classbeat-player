@@ -46,3 +46,19 @@ for name in changes cursor error class; do
     --input "$api/$name.schema.json" --output "$out/ts/player-api-$name.d.ts" \
     --cwd "$api" --no-additionalProperties --declareExternallyReferenced
 done
+
+# The live sessions' HTTP bodies and WebSocket messages (ADR 0005, section 4). One module per
+# schema: schema/live/v1/<name>.schema.json -> live_<name>.py and live-<name>.d.ts.
+live="$here/live/v1"
+for path in "$live"/*.schema.json; do
+  name="$(basename "$path" .schema.json)"
+  uv run --project "$here/python" --frozen datamodel-codegen \
+    --input "$path" --input-file-type jsonschema \
+    --output "$out/python/live_${name//-/_}.py" \
+    --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 \
+    --use-standard-collections --use-union-operator --use-annotated --field-constraints \
+    --disable-timestamp --use-title-as-name --extra-fields forbid --formatters black isort
+  npm --prefix "$here/ts" exec --no -- json2ts \
+    --input "$path" --output "$out/ts/live-$name.d.ts" \
+    --cwd "$live" --no-additionalProperties
+done

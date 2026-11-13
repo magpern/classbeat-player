@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/ack.schema.json",
+  "title": "Ack",
+  "description": "Server to the one controller that sent the command: the host's command_result passed on, or the server's own answer when it forwarded nothing (host_away, rate).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "result",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "ack"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "description": "The command's id: 16 random bytes, base64url without padding, new for each tap."
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "applied",
+        "duplicate",
+        "refused"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "stale",
+        "stale_run",
+        "invalid",
+        "not_allowed",
+        "would_stop_following",
+        "host_away",
+        "rate",
+        null
+      ],
+      "description": "Null unless refused."
+    }
+  },
+  "if": {
+    "required": [
+      "result"
+    ],
+    "properties": {
+      "result": {
+        "const": "refused"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "reason": {
+        "type": "string"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "reason": {
+        "type": "null"
+      }
+    }
+  }
+}

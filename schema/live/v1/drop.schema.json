@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/drop.schema.json",
+  "title": "Drop",
+  "description": "Host to server: drop the controller in this slot (its token ends).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "slot"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "drop"
+    },
+    "slot": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "The controller's place, 1 or 2, given by the server."
+    }
+  }
+}

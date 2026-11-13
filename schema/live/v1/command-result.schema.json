@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/command-result.schema.json",
+  "title": "CommandResult",
+  "description": "Host to server: the answer to one forwarded command; the server passes it on as ack to that slot only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "slot",
+    "id",
+    "result",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "command_result"
+    },
+    "slot": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "The controller's place, 1 or 2, given by the server."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "description": "The command's id: 16 random bytes, base64url without padding, new for each tap."
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "applied",
+        "duplicate",
+        "refused"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "stale",
+        "stale_run",
+        "invalid",
+        "not_allowed",
+        "would_stop_following",
+        null
+      ],
+      "description": "Null unless refused."
+    }
+  },
+  "if": {
+    "required": [
+      "result"
+    ],
+    "properties": {
+      "result": {
+        "const": "refused"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "reason": {
+        "type": "string"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "reason": {
+        "type": "null"
+      }
+    }
+  }
+}

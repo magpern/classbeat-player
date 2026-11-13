@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/end.schema.json",
+  "title": "End",
+  "description": "Host to server: end the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "end"
+    }
+  }
+}

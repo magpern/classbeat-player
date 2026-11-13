@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "type": "companion_state",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "seq": 41,
+  "status": "paused",
+  "classMs": 754000,
+  "lengthMs": 2700000,
+  "classRemainingMs": 1946000,
+  "now": {
+    "index": 4,
+    "zone": {
+      "number": 4,
+      "name": "Threshold"
+    },
+    "cue": "Stay seated, push through the climb",
+    "remainingMs": 46000
+  },
+  "next": [],
+  "nextSong": null,
+  "link": {
+    "mode": "manual",
+    "state": "manual",
+    "canUndo": false,
+    "announcement": {
+      "kind": "following_stopped",
+      "seconds": null
+    }
+  },
+  "allowed": [
+    "resume",
+    "skip",
+    "nudge"
+  ]
+}

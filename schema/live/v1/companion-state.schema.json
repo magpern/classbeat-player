@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/companion-state.schema.json",
+  "title": "CompanionState",
+  "description": "Host to controllers only: what the teleprompter shows (ADR 0005 section 4). No rider field of any kind, no token or code, no account or device name.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "run",
+    "seq",
+    "status",
+    "classMs",
+    "lengthMs",
+    "classRemainingMs",
+    "now",
+    "next",
+    "nextSong",
+    "link",
+    "allowed"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "companion_state"
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "description": "The class run's id: 16 random bytes, base64url without padding, new for each class run."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Increases by 1 per state message within the run."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "running",
+        "paused",
+        "holding",
+        "ended"
+      ]
+    },
+    "classMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000,
+      "description": "Class time now."
+    },
+    "lengthMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400000,
+      "description": "The class's length."
+    },
+    "classRemainingMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000,
+      "description": "Time left in the class."
+    },
+    "now": {
+      "title": "NowInterval",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The current interval.",
+      "required": [
+        "index",
+        "zone",
+        "cue",
+        "remainingMs"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86399999,
+          "description": "The interval's index in the class."
+        },
+        "zone": {
+          "$ref": "#/$defs/zone"
+        },
+        "cue": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "The interval's coaching cue (ADR 0003: at most 120 characters)."
+        },
+        "remainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000,
+          "description": "Time left in this interval."
+        }
+      }
+    },
+    "next": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "title": "ComingInterval",
+        "type": "object",
+        "additionalProperties": false,
+        "description": "A coming interval.",
+        "required": [
+          "startMs",
+          "lengthMs",
+          "zone",
+          "cue"
+        ],
+        "properties": {
+          "startMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000,
+            "description": "Where it starts in class time."
+          },
+          "lengthMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400000,
+            "description": "Its length."
+          },
+          "zone": {
+            "$ref": "#/$defs/zone"
+          },
+          "cue": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "The interval's coaching cue (ADR 0003: at most 120 characters)."
+          }
+        }
+      },
+      "description": "Up to 3 coming intervals."
+    },
+    "nextSong": {
+      "anyOf": [
+        {
+          "title": "NextSong",
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The coming song change and the incoming song (held in memory only, for the session).",
+          "required": [
+            "atMs",
+            "title",
+            "artist"
+          ],
+          "properties": {
+            "atMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 86400000,
+              "description": "The class time of the song change."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "artist": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "link": {
+      "title": "LinkState",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The music link as the presenter shows it.",
+      "required": [
+        "mode",
+        "state",
+        "canUndo",
+        "announcement"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "following",
+            "manual"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "locked",
+            "paused",
+            "coasting",
+            "off_the_list",
+            "ambiguous",
+            "manual"
+          ],
+          "description": "The music link's state (ADR 0001): Locked, Paused, Coasting, Off the list, Ambiguous, Manual."
+        },
+        "canUndo": {
+          "type": "boolean",
+          "description": "The one-touch undo of an announced resync is available."
+        },
+        "announcement": {
+          "anyOf": [
+            {
+              "title": "Announcement",
+              "type": "object",
+              "additionalProperties": false,
+              "description": "What the presenter announces now (ADR 0001 rule 5). No free text crosses the relay.",
+              "required": [
+                "kind",
+                "seconds"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "resynced_back",
+                    "resynced_forward",
+                    "following_stopped"
+                  ],
+                  "description": "One of the player's fixed announcements; the phone writes the words."
+                },
+                "seconds": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 86400,
+                  "description": "How far a resync moved the clock, in whole seconds; null for following_stopped."
+                }
+              },
+              "if": {
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "resynced_back",
+                      "resynced_forward"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "seconds": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "seconds": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "allowed": {
+      "type": "array",
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "start",
+          "pause",
+          "resume",
+          "skip",
+          "nudge",
+          "undo_resync"
+        ],
+        "description": "A command action."
+      },
+      "description": "The actions that do something now without stopping the following of the music (ADR 0005 section 5)."
+    }
+  },
+  "not": {
+    "anyOf": [
+      {
+        "description": "nudge listed while following the music",
+        "required": [
+          "link",
+          "allowed"
+        ],
+        "properties": {
+          "link": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "following"
+              }
+            }
+          },
+          "allowed": {
+            "contains": {
+              "const": "nudge"
+            }
+          }
+        }
+      },
+      {
+        "description": "undo_resync listed while there is nothing to undo",
+        "required": [
+          "link",
+          "allowed"
+        ],
+        "properties": {
+          "link": {
+            "required": [
+              "canUndo"
+            ],
+            "properties": {
+              "canUndo": {
+                "const": false
+              }
+            }
+          },
+          "allowed": {
+            "contains": {
+              "const": "undo_resync"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "$defs": {
+    "zone": {
+      "title": "Zone",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The interval's zone, always as a number and a name (the class's zone scale).",
+      "required": [
+        "number",
+        "name"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    }
+  }
+}

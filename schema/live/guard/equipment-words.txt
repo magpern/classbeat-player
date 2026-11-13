@@ -1,0 +1,37 @@
+# Equipment words (rule 2, ADR 0005 section 7). No property name, enum or const value in any
+# schema under schema/live/ contains one of these as a whole word (names split at "_", "-",
+# spaces and case changes). Read by schema/python/tests/test_live_guards.py and
+# schema/ts/test/live.test.ts. One lowercase word per line; # starts a comment.
+# The list only grows: removing a word is a rule-sensitive pull request.
+resistance
+incline
+decline
+brake
+braking
+speed
+power
+gear
+gears
+level
+levels
+erg
+target
+targets
+slope
+gradient
+grade
+watt
+watts
+torque
+tension
+cadence
+rpm
+ftms
+fec
+trainer
+treadmill
+belt
+elevation
+difficulty
+magnet
+flywheel

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/welcome.schema.json",
+  "title": "Welcome",
+  "description": "Server to the connection after a good hello: its role; for a controller its slot and whether the host is connected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "role"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "welcome"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "host",
+        "controller"
+      ]
+    },
+    "slot": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "The controller's place, 1 or 2, given by the server."
+    },
+    "hostConnected": {
+      "type": "boolean"
+    }
+  },
+  "if": {
+    "required": [
+      "role"
+    ],
+    "properties": {
+      "role": {
+        "const": "controller"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "slot",
+      "hostConnected"
+    ]
+  },
+  "else": {
+    "not": {
+      "anyOf": [
+        {
+          "required": [
+            "slot"
+          ]
+        },
+        {
+          "required": [
+            "hostConnected"
+          ]
+        }
+      ]
+    }
+  }
+}

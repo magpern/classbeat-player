@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/hello.schema.json",
+  "title": "Hello",
+  "description": "The first message on wss://<site>/api/live/ws, within 5 s (ADR 0002 section 8). The token's prefix gives the role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "token"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "hello"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$"
+    }
+  }
+}
