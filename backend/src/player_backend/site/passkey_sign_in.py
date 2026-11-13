@@ -2,8 +2,9 @@
 
 Neither route takes a session or an email, and the challenge's options list no credentials: the
 browser offers the passkeys it has. Both read the browser token's cookie, which binds the
-challenge to the browser that asked. A refused sign-in is counted per address (section 10)
-and answered the same way whatever was wrong; over the limit the answer is 429.
+challenge to the browser that asked. Challenge starts and refused sign-ins are counted per
+address (section 10); a refused sign-in is answered the same way whatever was wrong; over
+either limit the answer is 429.
 """
 
 from __future__ import annotations
@@ -21,12 +22,17 @@ from player_backend.http_errors import ApiError
 from player_backend.login_policy import retry_after
 from player_backend.passkey_policy import (
     CHALLENGE_BYTES,
+    FAILED_LOCK,
     FAILED_MAX,
     FAILED_WINDOW,
+    STARTS_MAX,
+    STARTS_WINDOW,
     challenge_hash,
     challenge_of,
     credential_id_of,
     failed_limit_key,
+    failed_lock_key,
+    sign_in_starts_key,
 )
 from player_backend.site.cookies import login_cookie_token, put_login_cookie, put_session_cookie
 from player_backend.site.deps import TheCaller
@@ -62,14 +68,22 @@ class PasskeySignIn(BaseModel):
 
 
 @router.post("/sign-in/passkey/options")
-def options(request: Request, browser: BrowserToken) -> JSONResponse:
+def options(request: Request, who: TheCaller, browser: BrowserToken) -> JSONResponse:
     """A new challenge for this browser, replacing its older one, and the options to use it."""
     state = site_state(request)
     browser_token = browser or new_token("lgn")
     challenge = secrets.token_bytes(CHALLENGE_BYTES)
-    passkey_login.new_challenge(
-        state.pool, challenge_hash=challenge_hash(challenge), browser_hash=token_hash(browser_token)
+    stored = passkey_login.new_challenge(
+        state.pool,
+        starts_key=sign_in_starts_key(who.address_hash),
+        starts_window=STARTS_WINDOW,
+        starts_max=STARTS_MAX,
+        challenge_hash=challenge_hash(challenge),
+        browser_hash=token_hash(browser_token),
     )
+    if not stored:
+        after = retry_after(time.time(), STARTS_WINDOW)
+        raise ApiError(429, "too_many_requests", {"Retry-After": str(after)})
     response = JSONResponse(sign_in_options(state.settings.site_origin, challenge=challenge))
     if browser is None:
         put_login_cookie(response, browser_token)
@@ -94,9 +108,11 @@ def sign_in(
     session_token = new_token("ses")
     # Without the browser's own token nothing can match: a token made here is in no challenge.
     browser_token = browser or new_token("lgn")
+    failed_key = failed_limit_key(who.address_hash)
     outcome = passkey_login.sign_in(
         state.pool,
-        failed_key=failed_limit_key(who.address_hash),
+        failed_key=failed_key,
+        failed_lock=(FAILED_LOCK, failed_lock_key(failed_key)),
         failed_window=FAILED_WINDOW,
         failed_max=FAILED_MAX,
         credential_id=credential_id_of(body.credential.rawId),

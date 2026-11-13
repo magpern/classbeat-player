@@ -58,6 +58,9 @@ class Authenticator:
         else:
             self._rsa = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
+    def cose_alg(self) -> int:
+        return {"ES256": -7, "ES384": -35, "EdDSA": -8, "RS256": -257}[self.algorithm]
+
     def cose_key(self) -> bytes:
         if self.algorithm in ("ES256", "ES384"):
             numbers = self._ec.public_key().public_numbers()
@@ -95,8 +98,14 @@ class Authenticator:
         origin: str = ORIGIN,
         rp_id: str | None = None,
         verified: bool = True,
+        fmt: str = "none",
     ) -> dict[str, object]:
-        """The answer to `navigator.credentials.create()` with `options` (attestation `none`)."""
+        """The answer to `navigator.credentials.create()` with `options`.
+
+        Attestation `none` unless `fmt` names another format. `packed` is a valid self
+        attestation, signed with the passkey's own key, which the library itself accepts; any
+        other format gets a statement that is only shaped like one.
+        """
         rp = options["rp"]
         user = options["user"]
         assert isinstance(rp, dict) and isinstance(user, dict)
@@ -113,7 +122,13 @@ class Authenticator:
             + self.credential_id
             + self.cose_key()
         )
-        attestation = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth_data})
+        statement: dict[str, object] = {}
+        if fmt == "packed":
+            signed = auth_data + hashlib.sha256(client_data).digest()
+            statement = {"alg": self.cose_alg(), "sig": self._sign(signed)}
+        elif fmt != "none":
+            statement = {"alg": self.cose_alg(), "sig": b"\x00" * 8, "x5c": [b"\x30\x00"]}
+        attestation = cbor2.dumps({"fmt": fmt, "attStmt": statement, "authData": auth_data})
         return {
             "id": b64(self.credential_id),
             "rawId": b64(self.credential_id),

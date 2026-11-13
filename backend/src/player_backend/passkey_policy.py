@@ -2,8 +2,9 @@
 
 The sign-in challenge's 5 minutes, its single use, its browser and the counter rule are checked
 inside `auth_complete_passkey`. Here: the relying party, the numbers the backend uses, the
-challenge as a client's data names it, the one limit counted by the request (failed sign-ins
-per address) and the passkey's name. No I/O, and nothing here is ever logged.
+challenge as a client's data names it, the limits counted by the request (failed sign-ins per
+address, challenge starts per address and per account) and the passkey's name. No I/O, and
+nothing here is ever logged.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Final
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from player_backend.mail import Mail
 from player_backend.pairing_policy import LABEL_MAX, clean_label
@@ -29,6 +31,13 @@ PASSKEYS_MAX: Final = 10
 # Section 10: failed passkey sign-ins, 10 per address per 10 minutes, then 429.
 FAILED_WINDOW: Final = timedelta(minutes=10)
 FAILED_MAX: Final = 10
+# The failed sign-ins of one address are counted one attempt at a time, under this advisory
+# lock (its first key; the second comes from the counter's key).
+FAILED_LOCK: Final = 7270012
+# Section 10: challenge starts, 30 per 10 minutes per address (sign-in) and per account
+# (registration), then 429.
+STARTS_WINDOW: Final = timedelta(minutes=10)
+STARTS_MAX: Final = 30
 # A credential id as the table holds it (0001_tables.sql).
 CREDENTIAL_ID_MIN: Final = 16
 CREDENTIAL_ID_MAX: Final = 1023
@@ -62,6 +71,22 @@ def challenge_hash(challenge: bytes) -> bytes:
 def failed_limit_key(address_hash: bytes) -> bytes:
     """The counter of failed passkey sign-ins from one address."""
     return hashlib.sha256(b"passkey.failed:" + address_hash).digest()
+
+
+def failed_lock_key(failed_key: bytes) -> int:
+    """The second key of the advisory lock on one address's failed sign-ins: a 32-bit integer
+    from the counter's key. Two addresses that share it only wait for each other."""
+    return int.from_bytes(failed_key[:4], "big", signed=True)
+
+
+def sign_in_starts_key(address_hash: bytes) -> bytes:
+    """The counter of passkey sign-in challenges started from one address."""
+    return hashlib.sha256(b"passkey.sign_in_starts:" + address_hash).digest()
+
+
+def registration_starts_key(account_id: UUID) -> bytes:
+    """The counter of one account's passkey registration starts: a hash, never the id."""
+    return hashlib.sha256(b"passkey.registration_starts:" + account_id.bytes).digest()
 
 
 def from_base64url(text: object) -> bytes | None:

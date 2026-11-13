@@ -19,13 +19,20 @@ from player_backend.client_policy import ClientInfo
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Row
 from player_backend.db.queries import passkeys as q
-from player_backend.passkey_policy import PASSKEYS_MAX, NewPasskey
+from player_backend.passkey_policy import (
+    PASSKEYS_MAX,
+    STARTS_MAX,
+    STARTS_WINDOW,
+    NewPasskey,
+    registration_starts_key,
+)
 
 # Section 11: passkey added or removed.
 ADDED = "passkey.added"
 REMOVED = "passkey.removed"
 
 type AddOutcome = Literal["refused", "too_many", "exists"]
+type StartRefusal = Literal["limited", "too_many"]
 
 
 @dataclass(frozen=True)
@@ -69,17 +76,27 @@ def list_passkeys(ctx: AccountContext) -> list[PasskeyInfo]:
     return [_info(row) for row in ctx.db.rows(q.LIST_PASSKEYS, (ctx.account_id,))]
 
 
-def start_registration(ctx: AccountContext, challenge_hash: bytes) -> RegistrationUser | None:
-    """Store a registration challenge for this session, replacing its older one.
+def start_registration(
+    ctx: AccountContext, challenge_hash: bytes
+) -> RegistrationUser | StartRefusal:
+    """Count one registration start for the account, then store a registration challenge for
+    this session, replacing its older one.
 
-    None when the account holds its 10 passkeys already: nothing is stored then.
+    Nothing but the count is stored when the account is over its limit of starts (`limited`,
+    section 10) or holds its 10 passkeys already (`too_many`). The caller returns these
+    refusals rather than raising them: raising would roll the count back.
     """
+    limited = ctx.db.rows(
+        q.STARTS_LIMIT_HIT, (registration_starts_key(ctx.account_id), STARTS_WINDOW, STARTS_MAX)
+    )
+    if limited[0][0] is not False:
+        return "limited"
     count = ctx.db.rows(q.COUNT_PASSKEYS, (ctx.account_id,))[0][0]
     if not isinstance(count, int) or count >= PASSKEYS_MAX:
-        return None
+        return "too_many"
     user = ctx.db.rows(q.ACCOUNT_USER, (ctx.account_id,))
     if len(user) != 1:
-        return None
+        return "too_many"
     email, user_handle = user[0]
     existing = [cast(bytes, row[0]) for row in ctx.db.rows(q.CREDENTIAL_IDS, (ctx.account_id,))]
     ctx.db.rows(q.DROP_REGISTRATIONS, (ctx.account_id, ctx.credential_id))

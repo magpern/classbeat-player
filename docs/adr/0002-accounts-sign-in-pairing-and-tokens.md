@@ -170,7 +170,9 @@ proves only "the same browser".
 - The relying-party id is the site's host name and the origin must match exactly. Both come from
   one setting, because the domain is the owner's (decision 10).
 - Registration needs a signed-in session with a recent sign-in. Discoverable credentials, user
-  verification required, attestation `none`, algorithms ES256, EdDSA and RS256.
+  verification required, attestation `none`, algorithms ES256, EdDSA and RS256. A registration
+  whose attestation has any other format is refused before its statement is parsed (amended
+  2026-11-13, #136).
 - Stored per passkey: credential id, public key, signature counter, transports, a name, dates.
   At most 10 per account.
 - A challenge is 32 random bytes, single use, valid 5 minutes, stored server-side. A sign-in
@@ -583,7 +585,7 @@ It also has `EXECUTE` on the functions below. Nothing else.
 |---|---|---|
 | `accounts` | `SELECT`, `DELETE` | Showing the account, export; deleting the account. No `INSERT` and no `UPDATE`: accounts are made by `auth_complete_login`, and the email cannot be changed |
 | `sessions` | `SELECT`, `DELETE` | Listing; sign out, ending one or all. Sessions are made only by the sign-in functions |
-| `passkeys` | `SELECT`, `INSERT`, `DELETE` | Listing, adding and removing a passkey |
+| `passkeys` | `SELECT`, `INSERT`, `DELETE` | Listing, adding and removing a passkey. Renaming is a delete and a re-insert of the same row with its new name, in one statement; id, key, counter, transports and dates are kept (amended 2026-11-13, #136) |
 | `passkey_registrations` | `SELECT`, `INSERT`, `DELETE` | The registration challenge, used once |
 | `devices` | `SELECT`, `UPDATE (revoked_at)` | Listing; revoking. Devices are made only by `auth_collect_pairing` |
 | `source_links` | `SELECT`, `DELETE` | Listing; revoking, by the user or by the source. Links are made only by `auth_exchange_link_code` |
@@ -830,6 +832,8 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | Sign-in link requests, per email from all addresses | 30 per day | The usual answer; no mail |
 | Sign-in link requests, per address whatever the email | 10 per hour | 429 |
 | Failed passkey sign-ins | 10 per address per 10 minutes | 429 |
+| Passkey sign-in challenges started | 30 per address per 10 minutes | 429; no challenge is stored |
+| Passkey registration challenges started | 30 per account per 10 minutes | 429; no challenge is stored |
 | Pairing starts | 10 per address per hour | 429 |
 | Pairing polls | One per 5 seconds per device code | `slow_down` |
 | Wrong pairing codes, at the look-up and at the decision together | 5 per account per 15 minutes | The form is closed for 15 minutes |
@@ -844,6 +848,13 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | Control codes made | 30 per session per hour | 429 to the host |
 | WebSocket connections | 300 per address per minute; 100 waiting for `hello` per address; one per token; 63 per session (60 riders, 2 controllers, the host) | Refused |
 | Account exports | 3 per account per day | 429 |
+
+Passkey limits (amended 2026-11-13, #136). A sign-in challenge start needs no sign-in, and
+without a browser token each one stores a row until the purge, so starts are counted per
+address; registration starts are counted per account. Both are 30 per 10 minutes, constants in
+`passkey_policy.py` (`STARTS_MAX`, `STARTS_WINDOW`). The failed sign-ins of one address are
+checked and counted one attempt at a time, under an advisory lock held from the check to the
+commit, so parallel attempts cannot pass the check together.
 
 The live limits are sized for a class of 40 to 60 riders who join in the same minute from one
 studio address: nothing that a rider with the right code does is counted per address.

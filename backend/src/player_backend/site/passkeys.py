@@ -1,8 +1,10 @@
-"""The account's passkeys on the site (ADR 0002, sections 4 and 11): list, add, rename, remove.
+"""The account's passkeys on the site (ADR 0002, sections 4, 10 and 11): list, add, rename,
+remove.
 
 Adding (both its steps) and removing need a recent sign-in; listing and renaming need a
-session. Adding uses up this session's registration challenge whatever the check of the
-credential says, so its refusals are returned, not raised: raising would roll the use back.
+session. Starting a registration is counted per account (section 10). Adding uses up this
+session's registration challenge whatever the check of the credential says, so its refusals
+are returned, not raised: raising would roll the use back.
 What the site is told of a passkey is its id, its name and its dates: never its credential
 id or its key.
 """
@@ -10,6 +12,7 @@ id or its key.
 from __future__ import annotations
 
 import secrets
+import time
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
@@ -19,11 +22,13 @@ from starlette.background import BackgroundTask
 from player_backend.db import passkeys
 from player_backend.db.passkeys import PasskeyInfo
 from player_backend.http_errors import ApiError, error_response
+from player_backend.login_policy import retry_after
 from player_backend.mail_delivery import deliver
 from player_backend.param_policy import uuid_of
 from player_backend.passkey_policy import (
     CHALLENGE_BYTES,
     NAME_MAX,
+    STARTS_WINDOW,
     NewPasskey,
     added_mail,
     challenge_hash,
@@ -89,8 +94,12 @@ def registration_start(request: Request, context: RecentSignIn) -> JSONResponse:
     """A registration challenge for this session, and the options to use it."""
     challenge = secrets.token_bytes(CHALLENGE_BYTES)
     user = passkeys.start_registration(context, challenge_hash(challenge))
-    if user is None:
-        raise ApiError(409, "too_many_passkeys")
+    # Returned, not raised: raising would roll the count of starts back.
+    if user == "limited":
+        after = retry_after(time.time(), STARTS_WINDOW)
+        return error_response(429, "too_many_requests", {"Retry-After": str(after)})
+    if user == "too_many":
+        return error_response(409, "too_many_passkeys")
     return JSONResponse(
         registration_options(
             site_state(request).settings.site_origin,
