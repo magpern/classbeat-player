@@ -5,7 +5,7 @@
 // a phone but its place. Sentence case, one fact a line (presenter.md).
 import { clockText } from "../format.ts";
 import type { Slot } from "./host-wire.ts";
-import type { Applied, EndReason, LiveModel, Place, Refusal } from "./session-model.ts";
+import type { Applied, EndReason, LiveModel, Place, Refusal } from "./session-types.ts";
 
 export interface SlotView {
   readonly slot: Slot;
@@ -124,7 +124,8 @@ export function livePanelView(m: LiveModel, f: PanelFacts): LivePanelView {
     status: statusOf(m),
     detail: detailOf(m, f),
     canStart: f.classOpen && (m.phase === "idle" || m.phase === "ended" || m.phase === "refused"),
-    canEnd: running,
+    // While starting, End cancels: the answer, when it comes, is ended on the backend (#203).
+    canEnd: running || m.phase === "starting",
     canMakeCode: live && f.secondDisplay && code === null,
     classCode: running ? (m.session?.joinCode ?? null) : null,
     controlCode: code?.code ?? null,

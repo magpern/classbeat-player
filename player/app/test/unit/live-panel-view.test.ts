@@ -6,8 +6,8 @@ import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { lineText, livePanelView } from "../../src/core/live/panel-view.ts";
 import type { PanelFacts } from "../../src/core/live/panel-view.ts";
-import { OFF } from "../../src/core/live/session-model.ts";
-import type { LiveModel } from "../../src/core/live/session-model.ts";
+import { OFF } from "../../src/core/live/session-types.ts";
+import type { LiveModel } from "../../src/core/live/session-types.ts";
 import { RUN } from "./live-rig.ts";
 
 const TOKEN = `cbp_hst_${randomBytes(32).toString("base64url")}`;
@@ -94,4 +94,13 @@ test("the line names the phone and what it did, in the presenter's words", () =>
     ["Phone 2: start", "Phone 2: pause", "Phone 2: resume", "Phone 2: skip", "Phone 2: forward 5 s", "Phone 2: back 5 s", "Phone 2: undo"],
   );
   assert.equal(livePanelView(LIVE, { ...FACTS, now: 5000 }).line, null);
+});
+
+test("End is offered while starting, and Start is not (#203)", () => {
+  const v = livePanelView({ ...OFF, phase: "starting" }, FACTS);
+  assert.equal(v.status, "Starting…");
+  assert.equal(v.canEnd, true);
+  assert.equal(v.canStart, false);
+  assert.equal(v.classCode, null);
+  for (const phase of ["idle", "ended", "refused"] as const) assert.equal(livePanelView({ ...OFF, phase }, FACTS).canEnd, false, phase);
 });
