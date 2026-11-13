@@ -71,6 +71,8 @@ controls at 17 px bold and fits on one line at both sizes of the mock-up, includ
 player's default window, where the room preview shrinks to 560 px and the type stays the same.
 measure.js checks that no control wraps (C4). The presenter is read at arm's length, so the
 room-distance heights (C1) do not apply to it; the type is set in pixels, so a label that fits
-in the default window fits in any larger one. Windows smaller than the default come with the
-presenter's full spec in PL5. A control row never shortens a label to make it fit: the row
+in the default window fits in any larger one. **Minimum size: 1000×720** (content area, the
+smaller of the two mock-up sizes): the window does not shrink below it, so no control row wraps and
+the room preview never drops below 560 px. PL5's full spec may set another minimum with its own
+mock-up and checks. A control row never shortens a label to make it fit: the row
 widens, or the label takes a full row.
