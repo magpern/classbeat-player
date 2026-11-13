@@ -42,6 +42,7 @@ test("the phone remote slot: a button when off, a disabled one while starting, t
   assert.equal(sub(ABSENT), null);
   assert.deepEqual(sub({ slot: "available", note: "none" }), { id: "remote", word: "Phone remote", sub: "Show the class code", disabled: false });
   assert.equal(sub({ slot: "available", note: "in_use" })?.sub, "In use elsewhere");
+  assert.deepEqual(sub({ slot: "available", note: "unreachable" }), { id: "remote", word: "Phone remote", sub: "Can't reach site", disabled: false });
   assert.equal(sub({ slot: "available", note: "ended" })?.sub, "Phone remote ended");
   assert.deepEqual(sub({ slot: "starting" }), { id: "remote", word: "Phone remote", sub: "Getting a code", disabled: true });
   const on = (phones: 0 | 1 | 2, reconnecting = false, site?: string) => buttons(bandView("running", null, { slot: "on", joinCode: "KXPD-RMTB", phones, reconnecting, ...(site ? { site } : {}) }, false)).code;

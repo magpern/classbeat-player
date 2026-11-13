@@ -42,10 +42,10 @@ test("each phase gives the spec's state: Off, Starting, On and Reconnecting", ()
   for (const [label, m, want] of rows) assert.deepEqual(roomSlotOf(m, FACTS), want, label);
 });
 
-test("refusals: in use elsewhere is said; no answer and a broken pairing take the slot away; the rest can be tried again", () => {
+test("refusals: in use elsewhere and no answer are said; a broken pairing takes the slot away; the rest can be tried again", () => {
   const want: Readonly<Record<Refusal, RemoteView>> = {
     sessions_full: { slot: "available", note: "in_use" },
-    unreachable: { slot: "absent" },
+    unreachable: { slot: "available", note: "unreachable" },
     not_paired: { slot: "absent" },
     pair_again: { slot: "absent" },
     too_many: { slot: "available", note: "none" },
@@ -53,6 +53,26 @@ test("refusals: in use elsewhere is said; no answer and a broken pairing take th
     no_class: { slot: "available", note: "none" },
   };
   for (const [refusal, v] of Object.entries(want)) assert.deepEqual(roomSlotOf({ ...OFF, phase: "refused", refusal: refusal as Refusal }, FACTS), v, refusal);
+});
+
+test("no answer is Can't reach site whether a class is open or not, and Absent when not paired; it holds nothing of the session", () => {
+  const away = (over: Partial<LiveModel> = {}): LiveModel => full("refused", { refusal: "unreachable", ...over });
+  assert.deepEqual(roomSlotOf(away(), FACTS), { slot: "available", note: "unreachable" });
+  assert.deepEqual(roomSlotOf(away(), { ...FACTS, site: null }), { slot: "available", note: "unreachable" });
+  assert.deepEqual(roomSlotOf(away(), { ...FACTS, classOpen: false }), { slot: "available", note: "unreachable" });
+  assert.deepEqual(roomSlotOf(away(), { ...FACTS, paired: false }), { slot: "absent" });
+  // What the room window is sent is the same view, through its filter.
+  assert.deepEqual(remoteViewOf(roomSlotOf(away(), FACTS)), { slot: "available", note: "unreachable" });
+});
+
+test("the phone count is 0, 1 or 2, counted from the places, never anything else", () => {
+  const rows: readonly [LiveModel["places"], 0 | 1 | 2][] = [
+    [["none", "none"], 0],
+    [["away", "connected"], 1],
+    [["connected", "away"], 1],
+    [["connected", "connected"], 2],
+  ];
+  for (const [places, phones] of rows) assert.deepEqual(roomSlotOf(full("live", { places }), FACTS), ON(phones), JSON.stringify(places));
 });
 
 test("endings: Phone remote ended, except for a new class, which starts Off", () => {
@@ -78,13 +98,18 @@ test("the site goes with the code only as the room's filter allows: HTTPS origin
 
 test("isolation: no phase, refusal or ending puts the host token, the session id, the control code or the run in the slot", () => {
   const phases: readonly Phase[] = ["idle", "starting", "connecting", "live", "reconnecting", "ended", "refused"];
+  const refusals: readonly Refusal[] = ["sessions_full", "unreachable", "not_paired", "pair_again", "too_many", "server", "no_class"];
   const allowed = new Set(["slot", "note", "joinCode", "phones", "reconnecting", "site"]);
+  const notes = new Set(["none", "in_use", "unreachable", "ended"]);
   for (const p of phases) {
-    for (const facts of [FACTS, { ...FACTS, site: null }, { ...FACTS, classOpen: false }]) {
-      const v = roomSlotOf(full(p, { refusal: "sessions_full", ended: "host_ended" }), facts);
-      for (const k of Object.keys(v)) assert.ok(allowed.has(k), `${p}: ${k}`);
-      const text = JSON.stringify(v);
-      for (const secret of [HOST_TOKEN, SESSION_ID, CONTROL_CODE, CONTROL_CODE.replace("-", ""), RUN, "cbp_"]) assert.ok(!text.includes(secret), `${p}: ${secret}`);
+    for (const refusal of refusals) {
+      for (const facts of [FACTS, { ...FACTS, site: null }, { ...FACTS, classOpen: false }]) {
+        const v = roomSlotOf(full(p, { refusal, ended: "host_ended" }), facts);
+        for (const k of Object.keys(v)) assert.ok(allowed.has(k), `${p}, ${refusal}: ${k}`);
+        if (v.slot === "available") assert.ok(notes.has(v.note), `${p}, ${refusal}: note ${v.note}`);
+        const text = JSON.stringify(v);
+        for (const secret of [HOST_TOKEN, SESSION_ID, CONTROL_CODE, CONTROL_CODE.replace("-", ""), RUN, "cbp_"]) assert.ok(!text.includes(secret), `${p}, ${refusal}: ${secret}`);
+      }
     }
   }
 });

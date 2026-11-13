@@ -232,3 +232,23 @@ test("the class code comes from the start answer only: a control code, of the sa
   assert.equal(r.live.view().classCode, JOIN_CODE);
   assert.equal(r.live.view().controlCode, "WXZB-CDFG");
 });
+
+test("a change listener that throws never reaches start(), the socket callbacks or the stop at quit, and is logged without its text", async () => {
+  const r = rig();
+  let others = 0;
+  r.live.onChange(() => {
+    throw new TypeError(`listener broke ${HOST_TOKEN}`);
+  });
+  r.live.onChange(() => void (others += 1));
+  assert.doesNotThrow(() => r.live.start());
+  await r.advance(0);
+  const s = r.socket();
+  assert.doesNotThrow(() => s.open());
+  assert.doesNotThrow(() => s.server({ v: 1, type: "welcome", role: "host" }));
+  assert.equal(r.live.view().classCode, JOIN_CODE);
+  assert.doesNotThrow(() => s.drop(1006));
+  assert.doesNotThrow(() => r.live.stop());
+  assert.ok(others >= 4, `the other listener was called ${others} times`);
+  assert.ok(r.logs.length >= 4);
+  for (const line of r.logs) assert.equal(line, "live session: a change listener failed (TypeError)");
+});

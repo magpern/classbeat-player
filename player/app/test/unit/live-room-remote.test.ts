@@ -107,7 +107,47 @@ test("in use elsewhere, and no answer from the site, as the spec has them", asyn
   away.r.answer = { kind: "unreachable" };
   away.call(CH_ROOM_REMOTE_START);
   await away.r.advance(0);
-  assert.deepEqual(away.call(CH_ROOM_REMOTE_STATE), { slot: "absent" });
+  assert.deepEqual(away.call(CH_ROOM_REMOTE_STATE), { slot: "available", note: "unreachable" });
+});
+
+test("Can't reach site: nothing tries again by itself; each press of the button makes exactly one new start", async () => {
+  const x = roomRig();
+  const answers = x.r.answer;
+  x.r.answer = { kind: "unreachable" };
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_START), { slot: "starting" });
+  await x.r.advance(0);
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_STATE), { slot: "available", note: "unreachable" });
+  assert.deepEqual(x.pushed, [{ slot: "starting" }, { slot: "available", note: "unreachable" }]);
+  assert.equal(sessionPosts(x.r).length, 1);
+  // No press: asking for the slot, snapshots, room commands, refreshes, ticks and ten minutes start nothing.
+  for (let i = 0; i < 20; i++) {
+    x.call(CH_ROOM_REMOTE_STATE);
+    x.call(CH_ROOM_STATE);
+    x.call(CH_ROOM_COMMAND, { type: "pause" });
+    x.remote.refresh();
+    x.r.live.tick();
+    await x.r.advance(30_000);
+  }
+  assert.equal(sessionPosts(x.r).length, 1, "a start without a press");
+  assert.deepEqual(x.r.sockets, []);
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_STATE), { slot: "available", note: "unreachable" });
+  // A press that again gets no answer: one new start, and the note again.
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_START), { slot: "starting" });
+  assert.equal(sessionPosts(x.r).length, 2);
+  await x.r.advance(0);
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_STATE), { slot: "available", note: "unreachable" });
+  await x.r.advance(600_000);
+  assert.equal(sessionPosts(x.r).length, 2);
+  // A press once the site answers: one new start, and the session runs.
+  x.r.answer = answers;
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_START), { slot: "starting" });
+  assert.equal(sessionPosts(x.r).length, 3);
+  await x.r.advance(0);
+  x.r.socket().open();
+  x.r.socket().server({ v: 1, type: "welcome", role: "host" });
+  assert.deepEqual(x.call(CH_ROOM_REMOTE_STATE), ON(0));
+  assert.equal(sessionPosts(x.r).length, 3);
+  for (const v of x.pushed) assert.ok(!JSON.stringify(v).includes(HOST_TOKEN) && !JSON.stringify(v).includes(SESSION_ID), JSON.stringify(v));
 });
 
 test("not paired: the slot is absent and the button starts nothing on the backend", async () => {

@@ -46,11 +46,12 @@ export interface LiveDeps {
   readonly log?: (line: string) => void;
 }
 
-/** The line for a tracked step that failed: only a plain error name, never a message or a stack (#211). */
-export const failedLine = (e: unknown): string => {
-  const name = e instanceof Error && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "error";
-  return `live session: a step after a backend answer failed (${name})`;
-};
+/** Only a plain error name, never a message or a stack (#211). */
+const errorName = (e: unknown): string => (e instanceof Error && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "error");
+/** The line for a tracked step that failed. */
+export const failedLine = (e: unknown): string => `live session: a step after a backend answer failed (${errorName(e)})`;
+/** The line for a change listener that threw. */
+export const listenerLine = (e: unknown): string => `live session: a change listener failed (${errorName(e)})`;
 
 export interface LiveService {
   view(): LivePanelView;
@@ -121,7 +122,15 @@ export function createLiveService(d: LiveDeps): LiveService {
       if (model.run !== null) publisher = createPublisher({ run: model.run, host: d.host, setTimer: d.setTimer, clearTimer: d.clearTimer, applied: (slot, action, deltaMs) => dispatch({ type: "applied", slot, action, deltaMs }) });
     }
     if (model.phase === "idle" || model.phase === "ended" || model.phase === "refused") origin = null;
-    if (model !== before) for (const l of listeners) l();
+    // A listener that throws never reaches the socket callback, start() or the stop at quit.
+    if (model !== before)
+      for (const l of listeners) {
+        try {
+          l();
+        } catch (err) {
+          log(listenerLine(err));
+        }
+      }
   };
 
   const run = (x: LiveEffect, at: string | null): void => {

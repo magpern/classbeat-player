@@ -3,8 +3,8 @@
 // Pure. Nothing else of the live session reaches the room window: never a control code, a token,
 // an account, a device or anything about a rider (ADR 0005 sections 2 and 3, rules 13 and 14).
 
-/** The second line under the Phone remote button: none, "In use elsewhere" or "Phone remote ended". */
-export type RemoteNote = "none" | "in_use" | "ended";
+/** The second line under the Phone remote button: none, "In use elsewhere", "Can't reach site" or "Phone remote ended". */
+export type RemoteNote = "none" | "in_use" | "unreachable" | "ended";
 
 /** The slot's states: the spec's Absent, Off (`available`, with its second line), Starting, and On with Phone connected and Reconnecting. */
 export type RemoteView =
@@ -18,7 +18,11 @@ export const REMOTE_ABSENT: RemoteView = { slot: "absent" };
 /** The join code's form (schema/live/v1/session-answer.schema.json, `joinCode`). */
 export const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 
-const NOTES: readonly string[] = ["none", "in_use", "ended"];
+const NOTES: readonly string[] = ["none", "in_use", "unreachable", "ended"];
+
+/** The notes the band shows only until it next hides (room-2d.md, "No answer" and "Ended"). */
+export const lastsUntilHidden = (v: RemoteView): v is { readonly slot: "available"; readonly note: "unreachable" | "ended" } =>
+  v.slot === "available" && (v.note === "unreachable" || v.note === "ended");
 
 /** The site the QR code points at: an HTTPS origin and nothing more (no path, user, query or fragment). */
 export function siteOf(v: unknown): string | null {

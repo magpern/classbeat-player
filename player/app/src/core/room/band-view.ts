@@ -56,7 +56,7 @@ function codeLine(v: Extract<RemoteView, { slot: "on" }>): string {
   return v.phones === 0 ? "Phone remote on" : v.phones === 1 ? "Phone connected" : "2 phones connected";
 }
 
-const REMOTE_SUB = { none: "Show the class code", in_use: "In use elsewhere", ended: "Phone remote ended" } as const;
+const REMOTE_SUB = { none: "Show the class code", in_use: "In use elsewhere", unreachable: "Can't reach site", ended: "Phone remote ended" } as const;
 
 export function bandView(status: ClockStatus, routes: BandRoutes | null, remote: RemoteView, asking: boolean): BandView {
   if (status === "ended") return { mode: "finished", close: button("close", "Close class", "Back to the class list") };

@@ -27,15 +27,19 @@ export function roomSlotOf(m: LiveModel, f: SlotFacts): RemoteView {
     case "reconnecting": {
       const joinCode = m.session?.joinCode;
       if (joinCode === undefined) return { slot: "absent" };
-      const phones = m.places.filter((p) => p === "connected").length as 0 | 1 | 2;
+      const n = m.places.filter((p) => p === "connected").length;
+      const phones = n >= 2 ? 2 : n === 1 ? 1 : 0;
       const on = { slot: "on", joinCode, phones, reconnecting: m.phase === "reconnecting" } as const;
       return f.site === null ? on : { ...on, site: f.site };
     }
     case "refused":
-      // No answer from the site, or the pairing does not work: Absent, as the spec has it; the
-      // presenter, when there is one, says why. Every other refusal can be tried again.
+      // A pairing that no longer works: Absent, as the spec has it; the presenter, when there is
+      // one, says why. No answer from the site (the request failed or timed out) is "Can't reach
+      // site": the instructor's press tries again, nothing here does. Every other refusal can be
+      // tried again as well.
+      if (m.refusal === "not_paired" || m.refusal === "pair_again") return { slot: "absent" };
       if (m.refusal === "sessions_full") return { slot: "available", note: "in_use" };
-      if (m.refusal === "unreachable" || m.refusal === "not_paired" || m.refusal === "pair_again") return { slot: "absent" };
+      if (m.refusal === "unreachable") return { slot: "available", note: "unreachable" };
       return f.classOpen ? { slot: "available", note: "none" } : { slot: "absent" };
     case "ended":
       if (!f.classOpen) return { slot: "absent" };

@@ -9,6 +9,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Browser, Page } from "playwright-core";
+import { HIDE_AFTER_MS } from "../../src/core/room/band-model.ts";
+import { lastsUntilHidden } from "../../src/core/room/remote.ts";
 import type { RemoteView } from "../../src/core/room/remote.ts";
 import { launchChrome, SHOT_DIR } from "./page.ts";
 import { frameOf, on, openRoom, ROUTES, wiggle } from "./room-page.ts";
@@ -46,6 +48,7 @@ const SHOTS: readonly BandShot[] = [
   { name: "slot-starting", sizes: TWO, open: { frame: frameOf("running", ROUTES.following), remote: { slot: "starting" } }, show: showByMove },
   { name: "slot-reconnecting", sizes: TWO, open: { frame: frameOf("running", ROUTES.following), remote: on(1, true) }, show: showByMove },
   { name: "slot-refused", sizes: TWO, open: { frame: frameOf("running", ROUTES.following), remote: { slot: "available", note: "in_use" } }, show: showByMove },
+  { name: "slot-unreachable", sizes: TWO, open: { frame: frameOf("running", ROUTES.following), remote: { slot: "available", note: "unreachable" } }, show: showByMove },
   { name: "slot-ended", sizes: TWO, open: { frame: frameOf("running", ROUTES.following), remote: { slot: "available", note: "ended" } }, show: showByMove },
   { name: "end-question", sizes: ALL_SIZES, open: { frame: frameOf("running", ROUTES.following), remote: on(1) }, show: showByMove, ask: true },
   { name: "finished", sizes: TWO, open: { frame: frameOf("finished"), remote: on(1) } },
@@ -72,8 +75,8 @@ for (const shot of SHOTS) {
     for (const size of shot.sizes) {
       const name = `${shot.name}-${size[0]}x${size[1]}`;
       if (only && !only.test(name)) continue;
-      // An "ended" note shows only when it arrives while the room window is open.
-      const late = shot.open.remote?.slot === "available" && shot.open.remote.note === "ended";
+      // An "ended" or "Can't reach site" note shows only when it arrives while the room window is open.
+      const late = shot.open.remote !== undefined && lastsUntilHidden(shot.open.remote);
       const o = await openRoom(browser, { ...shot.open, size, remote: late ? on(1) : shot.open.remote });
       try {
         if (late) await o.pushRemote(shot.open.remote!);
@@ -125,5 +128,32 @@ test("hidden: the screen is the screen without the band, pixel for pixel, with n
     } finally {
       await o.close();
     }
+  }
+});
+
+test("Can't reach site: shown until the band next hides; nothing starts by itself; one press makes one start", { timeout: 120_000 }, async () => {
+  if (only && !only.test("unreachable-press")) return;
+  const o = await openRoom(browser, { size: WIDE, frame: frameOf("running", ROUTES.following), remote: AVAILABLE });
+  const sub = (): Promise<string | null> => o.page.textContent('.band [data-id="remote"] .sub');
+  try {
+    await o.pushRemote({ slot: "available", note: "unreachable" });
+    await wiggle(o.page);
+    assert.equal(await sub(), "Can't reach site");
+    // Time passing and the band hiding and showing again start nothing; the note is gone.
+    await o.run(HIDE_AFTER_MS + 2000);
+    assert.equal(await o.phase(), "hidden");
+    await o.run(60_000);
+    await wiggle(o.page);
+    assert.equal(await o.phase(), "shown");
+    assert.equal(await sub(), "Show the class code");
+    assert.deepEqual(await o.calls(), [], "nothing started without a press");
+    await o.page.click('.band [data-id="remote"]');
+    await o.run(20);
+    assert.deepEqual(await o.calls(), ["startRemote"], "one press, one start");
+    await o.run(60_000);
+    assert.deepEqual(await o.calls(), ["startRemote"], "no start after the press by itself");
+    assert.deepEqual(o.errors, []);
+  } finally {
+    await o.close();
   }
 });
