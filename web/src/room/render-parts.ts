@@ -11,7 +11,7 @@ export function renderRail(rail: RailModel): HTMLElement {
   if (rail.done !== null) parts.push(el("span", { class: "val", tier: "minor" }, digits(rail.done)), el("span", { class: "lbl", tier: "label", text: "done" }));
   // The segment name takes the space that is left and ends in an ellipsis.
   parts.push(rail.segment ? el("span", { class: "lbl seg", tier: "label", clamp: 1, text: rail.segment }) : el("span", { class: "lbl seg" }));
-  if (rail.link) parts.push(el("span", { class: `link${rail.link.look === "quiet" ? "" : ` ${rail.link.look}`}`, tier: "label", text: rail.link.text }));
+  if (rail.link) parts.push(el("span", { class: `link${rail.link.look === "quiet" ? "" : ` ${rail.link.look}`}${rail.link.news ? " handover" : ""}`, tier: "label", text: rail.link.text }));
   return el("header", { class: "rail" }, parts);
 }
 

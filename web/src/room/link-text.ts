@@ -10,7 +10,7 @@ export function linkPlate(doc: Class, link: LinkInput | null, view: View, starte
   if (!started) {
     return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "manual" };
   }
-  if (!link || link.mode === "manual" || link.state === "Manual") return { text: "Manual clock", look: "manual" };
+  if (!link || link.mode === "manual" || link.state === "Manual") return manualPlate(link, view);
   switch (link.state) {
     case "Paused":
       return { text: "Music paused", look: "alert" };
@@ -23,6 +23,19 @@ export function linkPlate(doc: Class, link: LinkInput | null, view: View, starte
     default:
       return { text: followingText(doc), look: "quiet" };
   }
+}
+
+/**
+ * The manual clock's words (room-2d.md, "Back to following the music"): "Following stopped" in white
+ * for as long as the frame carries the hand-over announcement (30 s, kept by the player's clock),
+ * then "Manual · F to follow" while the music could be followed, else "Manual clock". Fixed words
+ * only: nothing from the announcement's own text, a rider or a command reaches the rail.
+ */
+function manualPlate(link: LinkInput | null, view: View): LinkPlate {
+  const live = link?.mode === "manual" && (view.status === "running" || view.status === "paused");
+  if (live && link.announcement !== null) return { text: "Following stopped", look: "manual", news: true };
+  if (live && link.available) return { text: "Manual · F to follow", look: "manual" };
+  return { text: "Manual clock", look: "manual" };
 }
 
 function followingText(doc: Class): string {
