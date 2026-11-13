@@ -69,7 +69,7 @@ export interface FakeSite {
   /**
    * Every other realm the page opened, seen from the browser's side, so no script in the page can
    * hide one: a frame (an iframe, even one removed at once), another page (a popup) or a dedicated
-   * worker. Shared and service workers are noted by the trap (kind `realm`).
+   * worker, or a service worker (#307). Shared and service workers are noted by the trap too (kind `realm`).
    * The trap is installed in the page's own realm only, so the checks require none (#293).
    */
   readonly realms: string[];
@@ -95,12 +95,14 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   await context.addInitScript("globalThis.__name = (f) => f;");
   if (o.before) await context.addInitScript(o.before);
   await context.addInitScript(instrument, o.passkey ?? "ok");
+  const realms: string[] = [];
+  context.on("serviceworker", (w) => realms.push(`serviceworker ${w.url()}`));
   const page = await context.newPage();
   if (o.fontSize && o.fontSize !== 16) {
     const cdp = await context.newCDPSession(page);
     await cdp.send("Page.setFontSizes", { fontSizes: { standard: o.fontSize, fixed: Math.round(o.fontSize * 0.8125) } });
   }
-  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], realms: [], release: async () => undefined };
+  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
   page.on("console", (m) => site.console.push(`${m.type()} ${m.text()}`));
@@ -187,6 +189,28 @@ function serveFile(route: Route, pathname: string): Promise<void> {
 /** What the instrumentation recorded in the page. */
 export function traps(page: Page): Promise<{ kind: string; detail: string }[]> {
   return page.evaluate(() => (globalThis as unknown as { __traps: { kind: string; detail: string }[] }).__traps.slice());
+}
+
+/**
+ * Waits until the page has settled, so a realm, request or trap that comes late is still seen
+ * (#307): until nothing new is recorded for `quietMs` after two frames and a task in the page, or
+ * `maxMs` has passed.
+ */
+export async function settled(site: FakeSite, quietMs = 300, maxMs = 3000): Promise<void> {
+  const mark = async (): Promise<string> => {
+    const n = await site.page.evaluate(
+      () => new Promise<number>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done((globalThis as unknown as { __traps: unknown[] }).__traps.length), 0)))),
+    );
+    return [n, site.realms.length, site.urls.length, site.api.length, site.console.length].join(",");
+  };
+  const end = Date.now() + maxMs;
+  let last = await mark();
+  let since = Date.now();
+  while (Date.now() < end && Date.now() - since < quietMs) {
+    await site.page.waitForTimeout(50);
+    const now = await mark();
+    if (now !== last) [last, since] = [now, Date.now()];
+  }
 }
 
 /** Waits until the page has made `n` API requests and they were answered. */

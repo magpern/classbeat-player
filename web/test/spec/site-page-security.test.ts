@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
-import { CSP, ORIGIN, crossSite, launchOffline, openSite, traps } from "../lib/site-fake.ts";
+import { CSP, ORIGIN, crossSite, launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
@@ -45,6 +45,7 @@ describe("the page's CSP", () => {
     const js = readFileSync(join(DIST, "site", "site.js"), "utf8");
     assert.doesNotMatch(js, /\beval\s*\(|new Function\s*\(|setTimeout\s*\(\s*["'`]/);
     assert.doesNotMatch(js, /https?:\/\/|wss?:\/\//);
+    assert.doesNotMatch(js, /javascript:/i, "a javascript: address (#307)");
     const css = readFileSync(join(DIST, "site", "site.css"), "utf8");
     assert.doesNotMatch(css, /url\(\s*["']?(https?:|\/\/)|@import/);
   });
@@ -91,6 +92,8 @@ describe("nothing secret leaves the page, in any state", () => {
   for (const state of STATES) {
     it(state.name, async () => {
       const site = await reach(browser, { state, width: 390, zoom: 1, ink: false });
+      // Read only once the page has settled, so a realm or trap that comes late is not missed (#307).
+      await settled(site);
       const seen = await traps(site.page);
       // The session is the server's HttpOnly cookie: the page never reads or writes a cookie, and
       // keeps nothing in storage, IndexedDB or the cache. Nothing is turned into markup or an event
@@ -139,6 +142,11 @@ describe("the markup trap", () => {
     ["Attr.value srcdoc", "const f = document.createElement('iframe'); f.toggleAttribute('srcdoc'); f.getAttributeNode('srcdoc').value = '<p>x</p>'"],
     ["Attr.nodeValue srcdoc", "document.createAttribute('srcdoc').nodeValue = '<p>x</p>'"],
     ["Attr.textContent srcdoc", "document.createAttribute('srcdoc').textContent = '<p>x</p>'"],
+    // A response parsed as a document, and an XSLT transform's output (#307).
+    ["XMLHttpRequest responseType document", "const x = new XMLHttpRequest(); x.open('GET', '/sign-in'); x.responseType = 'document'"],
+    ["XMLHttpRequest.responseXML", "void new XMLHttpRequest().responseXML"],
+    ["XSLTProcessor.transformToFragment", "try { new XSLTProcessor().transformToFragment(document, document); } catch {}"],
+    ["XSLTProcessor.transformToDocument", "try { new XSLTProcessor().transformToDocument(document); } catch {}"],
   ];
   // An event handler written as an attribute, by each route (#293).
   const handlers: [string, string][] = [
@@ -152,6 +160,24 @@ describe("the markup trap", () => {
     ["Attr.value onclick", "const h = document.createAttribute('onclick'); h.value = 'go()'"],
     ["Attr.nodeValue onclick", "document.createAttribute('onclick').nodeValue = 'go()'"],
     ["Attr.textContent onclick", "document.createAttribute('onclick').textContent = 'go()'"],
+    // A javascript: address in a URL attribute or property, read as the URL parser reads it (#307).
+    ["setAttribute href javascript:", "document.createElement('a').setAttribute('HREF', ' \\u0001JaVa\\tScRiPt:go()')"],
+    ["setAttribute src javascript:", "document.createElement('iframe').setAttribute('src', '\\njavascript:go()')"],
+    ["setAttributeNS href javascript:", "document.createElementNS('http://www.w3.org/2000/svg', 'a').setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', 'javascript:go()')"],
+    ["setAttributeNode src javascript:", "const a = document.createAttribute('src'); a.value = 'javascript:go()'; document.createElement('iframe').setAttributeNode(a)"],
+    ["setAttributeNodeNS href javascript:", "const a = document.createAttributeNS(null, 'href'); a.value = 'javascript:go()'; document.createElement('a').setAttributeNodeNS(a)"],
+    ["setNamedItem href javascript:", "const a = document.createAttribute('href'); a.value = 'javascript:go()'; document.createElement('a').attributes.setNamedItem(a)"],
+    ["setNamedItemNS src javascript:", "const a = document.createAttributeNS(null, 'src'); a.value = 'javascript:go()'; document.createElement('img').attributes.setNamedItemNS(a)"],
+    ["Attr.value href javascript:", "const a = document.createElement('a'); a.toggleAttribute('href'); a.getAttributeNode('href').value = 'javascript:go()'"],
+    ["Attr.nodeValue src javascript:", "document.createAttribute('src').nodeValue = 'javascript:go()'"],
+    ["Attr.textContent action javascript:", "document.createAttribute('action').textContent = 'javascript:go()'"],
+    ["HTMLAnchorElement.href javascript:", "document.createElement('a').href = 'JAVASCRIPT:go()'"],
+    ["HTMLIFrameElement.src javascript:", "document.createElement('iframe').src = ' java\\nscript:go()'"],
+    ["HTMLScriptElement.src javascript:", "document.createElement('script').src = 'javascript:go()'"],
+    ["HTMLFormElement.action javascript:", "document.createElement('form').action = 'javascript:go()'"],
+    ["HTMLButtonElement.formAction javascript:", "document.createElement('button').formAction = 'javascript:go()'"],
+    ["HTMLObjectElement.data javascript:", "document.createElement('object').data = 'javascript:go()'"],
+    ["SVGAnimatedString.baseVal javascript:", "document.createElementNS('http://www.w3.org/2000/svg', 'a').href.baseVal = 'javascript:go()'"],
   ];
   for (const [kind, table] of [["markup", calls], ["script", handlers]] as const) {
     for (const [detail, code] of table) {
@@ -165,13 +191,23 @@ describe("the markup trap", () => {
     }
   }
 
+  it("leaves an ordinary address in a URL attribute alone (#307)", async () => {
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+    await site.page.evaluate(`(() => {
+      const a = document.createElement('a');
+      for (const v of ['/sign-in', './javascript:x', 'java%73cript:x', '#javascript:x', 'https://x.test/javascript:x']) { a.setAttribute('href', v); a.href = v; }
+    })()`);
+    assert.deepEqual((await traps(site.page)).filter((t) => t.kind === "script"), []);
+    await site.context.close();
+  });
+
   it("has every hook in place, and a hook whose API is missing is noted, not skipped", async () => {
     const whole = await openSite(browser, "/sign-in", { width: 390, height: 844 });
     assert.deepEqual((await traps(whole.page)).filter((t) => t.kind === "missing"), []);
     await whole.context.close();
-    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "delete Element.prototype.setAttributeNode; delete Document.parseHTML;" });
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "delete Element.prototype.setAttributeNode; delete Document.parseHTML; delete XMLHttpRequest.prototype.responseXML; delete globalThis.XSLTProcessor; delete HTMLAnchorElement.prototype.href;" });
     const missing = (await traps(site.page)).filter((t) => t.kind === "missing").map((t) => t.detail);
-    assert.ok(missing.includes("setAttributeNode") && missing.includes("Document.parseHTML"), missing.join(", "));
+    for (const m of ["setAttributeNode", "Document.parseHTML", "XMLHttpRequest.responseXML", "XSLTProcessor.transformToFragment", "HTMLAnchorElement.href"]) assert.ok(missing.includes(m), `${m}: ${missing.join(", ")}`);
     await site.context.close();
   });
 });
@@ -199,6 +235,24 @@ describe("the realm check (#293)", () => {
       await site.context.close();
     });
   }
+
+  it("records a service worker from the browser's side, even one registered past the trap (#307)", async () => {
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "globalThis.__register = ServiceWorkerContainer.prototype.register;" });
+    await site.page.evaluate("globalThis.__register.call(navigator.serviceWorker, '/site.js').catch(() => undefined)");
+    for (let i = 0; i < 100 && !site.realms.some((r) => r.startsWith("serviceworker ")); i += 1) await site.page.waitForTimeout(20);
+    assert.ok(site.realms.includes(`serviceworker ${ORIGIN}/site.js`), site.realms.join(", "));
+    assert.deepEqual((await traps(site.page)).filter((t) => t.kind === "realm"), [], "the trap's wrapper was passed by");
+    await site.context.close();
+  });
+
+  it("waits for the page to settle, so a realm opened late is still seen (#307)", async () => {
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+    await site.page.evaluate("setTimeout(() => document.body.append(document.createElement('iframe')), 250)");
+    assert.equal(site.realms.length, 0, "not yet opened");
+    await settled(site);
+    assert.ok(site.realms.some((r) => r.startsWith("frame ")), site.realms.join(", "));
+    await site.context.close();
+  });
 });
 
 describe("the keyboard (site.md, S8)", () => {

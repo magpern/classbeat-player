@@ -10,4 +10,10 @@ export const MARKUP: readonly RegExp[] = [
   /\bsetHTML(Unsafe)?\b/,
   /\bparseHTML(Unsafe)?\b/,
   /\bsrcdoc\b/,
+  // Pasting markup into an editable part, a response parsed as a document, an XSLT transform (#307).
+  /\bexecCommand\b/,
+  /\bresponseXML\b/,
+  /\bresponseType\s*=\s*["'`]document\b/,
+  /\bXSLTProcessor\b/,
+  /\btransformTo(Fragment|Document)\b/,
 ];

@@ -154,6 +154,45 @@ describe("the web lane stands alone", () => {
       assert.deepEqual(remoteFontRefs(text), [], JSON.stringify(text));
   });
 
+  it("src() counts as url(), and only a same-origin relative address or data: is local (#307)", () => {
+    const sheet = (css: string): string => `data:text/css;base64,${Buffer.from(css).toString("base64")}`;
+    const remote: readonly (readonly [string, string])[] = [
+      // The CSS src() function, its keyword escaped or not, in @font-face and after @import.
+      ['@font-face{src:src("https://x.test/a.woff2")}', "https://x.test/a.woff2"],
+      ["@font-face{src:SRC('//x.test/a.woff2')}", "//x.test/a.woff2"],
+      ["@font-face{src:\\73 rc('https://x.test/a.woff2')}", "https://x.test/a.woff2"],
+      ["@font-face{src:s\\72\\63(\"https://x.test/a.woff2\")}", "https://x.test/a.woff2"],
+      ['@import src("https://fonts.test/css");', "https://fonts.test/css"],
+      ['@import \\73rc("https://fonts.test/css");', "https://fonts.test/css"],
+      // Any scheme but data: is remote, not only http(s).
+      ["@font-face{src:url(ftp://x.test/a.woff2)}", "ftp://x.test/a.woff2"],
+      ["@font-face{src:url(blob:https://site.test/1)}", "blob:https://site.test/1"],
+      ["@font-face{src:url(a:b.woff2)}", "a:b.woff2"],
+      ['@import "file:///fonts.css";', "file:///fonts.css"],
+      ['<link rel="stylesheet" href="wss://fonts.test/css">', "wss://fonts.test/css"],
+      ['<link rel="stylesheet" href="JavaScript:void(0)">', "JavaScript:void(0)"],
+      ['<link rel="stylesheet" href="/\\fonts.test/css">', "/\\fonts.test/css"],
+      // A data: sheet or page is read in turn, percent- or base64-encoded.
+      ['@import url("data:text/css,@import%20url(https://fonts.test/css);");', "https://fonts.test/css"],
+      [`<link rel="stylesheet" href="${sheet("@font-face{src:url(https://x.test/a.woff2)}")}">`, "https://x.test/a.woff2"],
+      [`@import "${sheet(`@import "${sheet("@font-face{src:src('//x.test/a.woff2')}")}";`)}";`, "//x.test/a.woff2"],
+    ];
+    for (const [text, url] of remote) assert.deepEqual(remoteFontRefs(text), [url], JSON.stringify(text));
+    for (const text of [
+      "@font-face{src:url(fonts/a.woff2)}",
+      "@font-face{src:url(/fonts/a.woff2)}",
+      "@font-face{src:url(?v=1)}",
+      "@font-face{src:url(#a)}",
+      '@font-face{src:url("")}',
+      '@font-face{src:src("./fonts/a.woff2")}',
+      "@font-face{src:url(data:font/woff2;base64,d09GMgABAAAA)}",
+      '@import "data:text/css,body%7Bcolor:red%7D";',
+      '<link rel="stylesheet" href="/site.css">',
+      '<link rel="stylesheet" href="harness.css">',
+    ])
+      assert.deepEqual(remoteFontRefs(text), [], JSON.stringify(text));
+  });
+
   it("nothing from a class file becomes markup", () => {
     for (const p of sources.filter((f) => f.endsWith(".ts"))) assert.doesNotMatch(readFileSync(p, "utf8"), /innerHTML|outerHTML|insertAdjacentHTML|eval\(|new Function/, relative(WEB, p));
   });

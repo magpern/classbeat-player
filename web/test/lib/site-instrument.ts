@@ -27,6 +27,19 @@ export function instrument(mode: Passkey): void {
       return (orig as Fn).apply(this, a);
     };
   };
+  /** Calls `before` ahead of every read of the accessor `proto[prop]`; writing is unchanged. */
+  const onGet = (proto: object, prop: string, label: string, before: (self: unknown) => void): void => {
+    const d = Object.getOwnPropertyDescriptor(proto, prop);
+    const get = d?.get;
+    if (!d || !get) return note("missing", label);
+    Object.defineProperty(proto, prop, {
+      ...d,
+      get(this: unknown) {
+        before(this);
+        return get.call(this);
+      },
+    });
+  };
   /** Calls `before` ahead of every write of the accessor `proto[prop]`; reading is unchanged. */
   const onSet = (proto: object, prop: string, label: string, before: (self: unknown, v: unknown) => void): void => {
     const d = Object.getOwnPropertyDescriptor(proto, prop);
@@ -70,22 +83,60 @@ export function instrument(mode: Passkey): void {
   wrap(Document.prototype, "execCommand", "execCommand", (_s, a) => {
     if (String(a[0]).toLowerCase() === "inserthtml") note("markup", "execCommand insertHTML");
   });
-  // An attribute that is markup (an iframe's srcdoc) or script (an on… event handler), on every
-  // way an attribute is written: by name, by namespace, as an Attr node, or through the Attr (#293).
-  const attr = (route: string, name: unknown): void => {
+  // A response parsed as a document, and an XSLT transform's output (#307).
+  onSet(XMLHttpRequest.prototype, "responseType", "XMLHttpRequest.responseType", (_s, v) => {
+    if (String(v) === "document") note("markup", "XMLHttpRequest responseType document");
+  });
+  onGet(XMLHttpRequest.prototype, "responseXML", "XMLHttpRequest.responseXML", () => note("markup", "XMLHttpRequest.responseXML"));
+  const xslt = (globalThis as { XSLTProcessor?: { prototype: object } }).XSLTProcessor;
+  for (const name of ["transformToFragment", "transformToDocument"] as const) {
+    if (!xslt) note("missing", `XSLTProcessor.${name}`);
+    else wrap(xslt.prototype, name, `XSLTProcessor.${name}`, () => note("markup", `XSLTProcessor.${name}`));
+  }
+  // An attribute that is markup (an iframe's srcdoc) or script (an on… event handler, or a
+  // `javascript:` address in a URL attribute), on every way an attribute is written: by name, by
+  // namespace, as an Attr node, or through the Attr (#293, #307). The address is read as the URL
+  // parser reads it: C0 controls and spaces trimmed in front, tab and newline dropped, any case.
+  const jsUrl = (v: unknown): boolean => {
+    const s = String(v);
+    let i = 0;
+    while (i < s.length && (s.charCodeAt(i) <= 0x20 || /\s/.test(s[i]))) i += 1;
+    return /^javascript:/i.test(s.slice(i).replace(/[\t\n\r]/g, ""));
+  };
+  const URL_ATTRS = ["src", "href", "action", "formaction", "data"];
+  const attr = (route: string, name: unknown, value: unknown): void => {
     const n = String(name).toLowerCase().replace(/^[^:]*:/, "");
     if (n === "srcdoc") note("markup", `${route} srcdoc`);
     else if (n.startsWith("on")) note("script", `${route} ${n}`);
+    else if (URL_ATTRS.includes(n) && jsUrl(value)) note("script", `${route} ${n} javascript:`);
   };
   const attrName = (a: unknown): unknown => (a instanceof Attr ? a.name : a);
-  for (const name of ["setAttribute", "toggleAttribute"] as const) wrap(Element.prototype, name, name, (_s, a) => attr(name, a[0]));
-  wrap(Element.prototype, "setAttributeNS", "setAttributeNS", (_s, a) => attr("setAttributeNS", a[1]));
-  for (const name of ["setAttributeNode", "setAttributeNodeNS"] as const) wrap(Element.prototype, name, name, (_s, a) => attr(name, attrName(a[0])));
-  for (const name of ["setNamedItem", "setNamedItemNS"] as const) wrap(NamedNodeMap.prototype, name, name, (_s, a) => attr(name, attrName(a[0])));
-  onSet(Attr.prototype, "value", "Attr.value", (self) => attr("Attr.value", attrName(self)));
+  const attrValue = (a: unknown): unknown => (a instanceof Attr ? a.value : "");
+  wrap(Element.prototype, "setAttribute", "setAttribute", (_s, a) => attr("setAttribute", a[0], a[1]));
+  wrap(Element.prototype, "toggleAttribute", "toggleAttribute", (_s, a) => attr("toggleAttribute", a[0], ""));
+  wrap(Element.prototype, "setAttributeNS", "setAttributeNS", (_s, a) => attr("setAttributeNS", a[1], a[2]));
+  for (const name of ["setAttributeNode", "setAttributeNodeNS"] as const) wrap(Element.prototype, name, name, (_s, a) => attr(name, attrName(a[0]), attrValue(a[0])));
+  for (const name of ["setNamedItem", "setNamedItemNS"] as const) wrap(NamedNodeMap.prototype, name, name, (_s, a) => attr(name, attrName(a[0]), attrValue(a[0])));
+  onSet(Attr.prototype, "value", "Attr.value", (self, v) => attr("Attr.value", attrName(self), v));
   for (const prop of ["nodeValue", "textContent"] as const) {
-    onSet(Node.prototype, prop, `Node.${prop}`, (self) => {
-      if (self instanceof Attr) attr(`Attr.${prop}`, self.name);
+    onSet(Node.prototype, prop, `Node.${prop}`, (self, v) => {
+      if (self instanceof Attr) attr(`Attr.${prop}`, self.name, v);
+    });
+  }
+  // The same address written through an element's URL property, or an SVG link's href (#307).
+  const urlProps: [string, string][] = [
+    ["HTMLAnchorElement", "href"], ["HTMLAreaElement", "href"], ["HTMLLinkElement", "href"], ["HTMLBaseElement", "href"],
+    ["HTMLIFrameElement", "src"], ["HTMLFrameElement", "src"], ["HTMLScriptElement", "src"], ["HTMLImageElement", "src"],
+    ["HTMLEmbedElement", "src"], ["HTMLSourceElement", "src"], ["HTMLMediaElement", "src"], ["HTMLInputElement", "src"],
+    ["HTMLTrackElement", "src"], ["HTMLObjectElement", "data"], ["HTMLFormElement", "action"], ["HTMLButtonElement", "formAction"],
+    ["HTMLInputElement", "formAction"], ["SVGAnimatedString", "baseVal"],
+  ];
+  for (const [type, prop] of urlProps) {
+    const label = `${type}.${prop}`;
+    const C = (globalThis as unknown as Record<string, { prototype: object } | undefined>)[type];
+    if (!C) note("missing", label);
+    else onSet(C.prototype, prop, label, (_s, v) => {
+      if (jsUrl(v)) note("script", `${label} javascript:`);
     });
   }
   // Realms the browser does not report to the fake: a shared worker and a service worker.
