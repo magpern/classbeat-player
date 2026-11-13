@@ -38,10 +38,10 @@ const KEEP_WORST = new Set(['worst-off-list-1280x1024', 'worst-off-list-1650x108
 
 // The class list (class-list.md): the instructor's own window, read at arm's length (presenter
 // checks: contrast, collisions, hue, motion, and data-min-cap in pixels). Window client sizes:
-// 1920x1080, 1280x800, the player's default 1000x720, and the smallest, 800x600.
-const LIST_SIZES = [[1920, 1080], [1280, 800], [1000, 720], [800, 600]];
+// 1920x1080, 1280x800, and 1000x720, the player's default and the smallest (the presenter's minimum).
+const LIST_SIZES = [[1920, 1080], [1280, 800], [1000, 720]];
 const LIST_STATES = ['synced', 'syncing', 'first-sync', 'offline', 'waiting', 'expired', 'wiping', 'revoked', 'not-paired', 'pairing-start', 'pairing', 'empty', 'long-list', 'no-match', 'long-titles', 'pinned-newer', 'file-error', 'unavailable', 'not-updated'];
-const KEEP_LIST = new Set(['synced-1920x1080', 'synced-1280x800', 'synced-800x600', 'long-list-1000x720', 'long-titles-800x600', ...LIST_STATES.map((s) => `${s}-1000x720`)]);
+const KEEP_LIST = new Set(['synced-1920x1080', 'synced-1280x800', 'long-list-1000x720', ...LIST_STATES.map((s) => `${s}-1000x720`)]);
 const list = (state, w, h) => ({ file: `class-list-${state}.html`, png: `class-list-${state}-${w}x${h}.png`, w, h, room: false, presenter: true, save: KEEP_LIST.has(`${state}-${w}x${h}`) });
 
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;

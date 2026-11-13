@@ -70,22 +70,6 @@ button.primary[disabled] { background: var(--stage-raised); color: var(--light-3
 .list.focus .row.sel { outline: 3px solid var(--light-1); outline-offset: -3px; }
 .row.off .t, .row.off .len { color: var(--light-2); }
 .tag { font-size: 14px; font-weight: 700; color: var(--light-1); border: 2px solid var(--light-1); border-radius: 4px; padding: 1px 8px; line-height: 1.25; white-space: nowrap; }
-.compact-upd { display: none; }
-@media (max-width: 900px) {
-  .app { padding: 16px 24px 0; }
-  .cols, .row { grid-template-columns: minmax(0, 1fr) 92px; }
-  .cols .lbl:nth-child(3), .row .upd { display: none; }
-  .compact-upd { display: inline; }
-}
-@media (max-height: 660px) {
-  .app { padding-top: 12px; }
-  h1 { font-size: 34px; }
-  .status { min-height: 44px; margin-top: 8px; }
-  .filter { margin-top: 8px; }
-  .cols { margin-top: 8px; }
-  .row { min-height: 58px; padding-top: 6px; padding-bottom: 6px; }
-  .foot { padding: 10px 0 !important; }
-}
 
 /* ---------- Footer: what Start will do ---------- */
 .foot { flex: none; padding: 14px 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }

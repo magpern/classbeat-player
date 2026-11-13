@@ -52,7 +52,7 @@ the window is behind a menu.
 ## Layout
 
 All sizes are CSS pixels of the window's client area. The content column is at most 1280 px
-wide, centred; side padding 32 px (24 px under 900 px wide); vertical order is fixed.
+wide, centred; side padding 32 px; vertical order is fixed.
 
 ```
 +--------------------------------------------------------------------+
@@ -77,22 +77,21 @@ wide, centred; side padding 32 px (24 px under 900 px wide); vertical order is f
 |---|---|---|
 | 1920×1080 | As drawn; column 1280 px, centred | 12 / 11 |
 | 1280×800 | As drawn | 8 / 7 |
-| 1000×720 (the player's default window less its title bar) | As drawn | 7 / 6 |
-| 800×600 (the smallest) | The Updated column moves into the second line of each row ("Spotify, 11 songs  9 Nov"); header, status, list and footer paddings tighten (below 660 px tall) | 6 / 5 |
+| 1000×720 (the player's default window less its title bar, and the smallest) | As drawn | 7 / 6 |
 
-Below 800×600 is not supported; the shell sets that minimum window size.
+The class list keeps the presenter's minimum window size, 1000×720, because both use the same window; nothing smaller is a design size. The shell does not enforce that minimum today: setting it is a gap covered by #123 (open PR #126).
 
 | Region | Content | Behaviour |
 |---|---|---|
-| Header | "Classes" (Big Shoulders 800, 40 px; 34 px under 660 px tall), the count in grey, "Open a class file…" with its shortcut | Always there; the count is the number of cached classes, or "1 class" |
+| Header | "Classes" (Big Shoulders 800, 40 px), the count in grey, "Open a class file…" with its shortcut | Always there; the count is the number of cached classes, or "1 class" |
 | Status | A marker and one line of words, a grey detail line; or a white plate with a button | See "States" |
 | Filter | A text field and, once typed in, "n of N" | Only from 8 classes; absent otherwise |
 | List header | "Class", "Length", "Updated" in grey 14 px | Fixed, outside the scrolling region |
 | List | Rows, sorted by title A to Z | The only region that scrolls (always-visible scroll bar, `scrollbar-width: auto`) |
 | Footer | The selected class's title (at most two lines, then an ellipsis; the full title is in its row) and the Start button | Fixed; absent where there is no list |
 
-Rows grow with their content: a title may take up to four lines before it would be cut, which
-only the worst case at 800 px wide needs (mock-up "Long titles"). Nothing else changes size.
+Rows grow with their content: a title may take up to four lines before it would be cut (the worst case, 80 wide capitals, takes
+three at 1000 px wide: mock-up "Long titles"). Nothing else changes size.
 
 ### A row
 
@@ -117,8 +116,8 @@ carries no zone.
 with the keyboard focus in the list it also has a 3 px white outline. Selection is never colour
 alone.
 
-**Order:** title A to Z, compared without regard to case or accents; equal titles by newest
-update, then by id. The order does not change when a sync adds or updates a class, except that
+**Order:** title A to Z, compared without regard to case or accents; equal titles by id. No
+row is ever moved because of when it was updated, started or played. The order does not change when a sync adds or updates a class, except that
 the class appears where its title puts it; the selection stays on the same class (by id), and
 the row is scrolled into view only when the instructor moved the selection.
 
@@ -152,7 +151,7 @@ states that need the instructor (the system's only alert form, as on the room sc
 | Long list | `classes ≥ 8` | As the state of the sync | Filter, scrolling list, a scroll bar that is always visible | [long list](mockups/class-list-long-list.html) |
 | Filter with no match | filter text, no rows | unchanged | Panel "No class matches “*text*”": "Check the spelling, or press Esc to clear the filter." | [no match](mockups/class-list-no-match.html) |
 | Long titles | 80-character titles, wide capitals, one unbroken word | unchanged | Rows grow to the lines they need; footer clamps to two lines | [long titles](mockups/class-list-long-titles.html) |
-| Class playing | `SyncView.pinned` is set | As the state of the sync | The pinned row first marked "Playing now", with "Newer version after this class" when `after: "newer"` or "Removed: plays to the end" when `after: "removed"`; every other row greyed (light-2) and not startable; the footer button reads "Back to the class" and the line under the title "Other classes can start when this one has ended" | [class playing](mockups/class-list-pinned-newer.html) |
+| Class playing | `SyncView.pinned` is set | As the state of the sync | The pinned row, in its own A to Z place, marked "Playing now" and carrying the bar and outline of the selection (it is not moved to the top), with "Newer version after this class" when `after: "newer"` or "Removed: plays to the end" when `after: "removed"`; every other row greyed (light-2) and not startable; the footer button reads "Back to the class" and the line under the title "Other classes can start when this one has ended" | [class playing](mockups/class-list-pinned-newer.html) |
 | Class could not be updated | The server answered `unusable` for the class (#113): it is skipped, the older cached copy stays and nothing is marked newer (`SyncView` has no flag for it today, see "Data") | Unchanged ("Up to date": sync itself went well) | That row's second line carries the outlined tag "Could not be updated: older copy shown"; the class still starts, as the copy it is. The tag goes when a later sync keeps a version. No ranking, no rider data, no count of failures | [not updated](mockups/class-list-not-updated.html) |
 | Class file not opened | a failed read | A **second plate** under the status: the message (`INVALID_MESSAGE`, `NOT_JSON_MESSAGE`, `TOO_LARGE_MESSAGE` or `NEWER_VERSION_MESSAGE`), the file's name, up to five `details` lines, "Close" (Esc) | The list as it was | [file error](mockups/class-list-file-error.html) |
 
@@ -195,14 +194,14 @@ is still there); with no classes, the primary button of the panel.
 ## Measurable criteria
 
 Checked by the mock-up checks in [mockups/measure.js](mockups/measure.js) on every state at
-every window size below (76 renderings); the product's CI screenshots are held to the same
+every window size below (57 renderings: 19 states at three sizes); the product's CI screenshots are held to the same
 numbers.
 
 | # | Check | Number |
 |---|---|---|
 | L1 | Cap height of text (a capital H in its face), as pixels and as a share of the window height at 1000×720 | Row title and the selected class's title in the footer (22 px type): at least 15 px (2.1 %). Status line and plate headline (20 px): at least 14 px (1.9 %). Buttons (17 px; Start 22 px): at least 12 px (1.7 %); Start at least 15 px. The code in the pairing state: at least 40 px (5.6 %). Length (Big Shoulders 26 px): at least 18 px (2.5 %). Second lines, details, dates (16 px): at least 11 px (1.5 %). Labels, column heads, shortcuts, tags (14 px): at least 9.5 px (1.3 %). **No text is set below 14 px** |
 | L2 | Contrast of text against the pixels behind it, worst pixel | Titles, lengths, status line, buttons, details, dates: at least 7 : 1. Labels (14 px grey, `--light-3`): at least 4.5 : 1. The measured worst pixel on the mock-ups is 19.1 : 1 for primary text |
-| L3 | What is visible at once | Header with count and Open, status, list header, at least **5 full rows** and the footer with Start, at every size (the table above: 5 to 12 rows); the selected row always fully visible |
+| L3 | What is visible at once | Header with count and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 6 to 12 rows; the worst case of wide capitals at 1000×720 shows 4); the selected row always fully visible |
 | L4 | Colour | **No hue anywhere** on this screen (the checker's "hue outside a zone" test, which every element must pass): it shows no zone, so it uses no zone colour (rule 7). States are carried by words and by the marker shapes |
 | L5 | Words with every marker | Every marker, plate and tag has its words beside it; the selected row also carries the bar and the outline |
 | L6 | Nothing is cut | No title, status, detail or button text is cut or ellipsised, except the footer's title (two lines, then an ellipsis, with the full title in the selected row) |
@@ -236,7 +235,7 @@ no token, no document body beyond the fields below, no account key.
 
 | Element | Source today | Missing |
 |---|---|---|
-| Status line (paired) | `SyncView.status` (`unpaired`, `syncing`, `synced`, `offline`, `waiting`, `expired`, and `unavailable` from #121) | |
+| Status line (paired) | `SyncView.status` (`unpaired`, `syncing`, `synced`, `offline`, `waiting`, `expired`, and `unavailable`, on main since #121) | |
 | Pairing, code, countdown, notices | `PairingView` (`state`, `userCode`, `page`, `secondsLeft`, `message`, `email`, `deviceName`, `pairAgain`), `NOTICE_TEXT`, `clockText` | |
 | Header count | `SyncView.classes` | |
 | Pinned row, "Newer version", "Removed" | `SyncView.pinned.{id, after}` | |
