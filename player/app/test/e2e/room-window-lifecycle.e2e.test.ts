@@ -66,7 +66,7 @@ const roomItemEnabled = (): Promise<boolean | undefined> =>
 
 const HARDENED = {
   prefs: { ci: true, ni: false, sb: true, wv: false, ws: true, ownMenu: false },
-  page: { csp: ROOM_CSP, require: "undefined", player: "undefined", api: ["onUpdate", "state"] },
+  page: { csp: ROOM_CSP, require: "undefined", player: "undefined", api: ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"] },
 };
 
 test("the class ends while the instructor is on the class list: the room window closes then", T, async () => {
