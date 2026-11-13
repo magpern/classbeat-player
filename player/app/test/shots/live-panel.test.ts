@@ -27,6 +27,10 @@ const shot = (name: string, r: Rig): Shot => ({ name, view: r.live.view(), state
 async function states(): Promise<Shot[]> {
   const out: Shot[] = [];
   out.push(shot("off", rig()));
+  // The start request still pending: End is offered and cancels it (#203).
+  const starting = rig();
+  starting.live.start();
+  out.push(shot("starting", starting));
   const on = await started();
   out.push(shot("on", on));
   on.live.makeCode();
@@ -92,7 +96,7 @@ after(async () => {
 test("the phone-remote panel in each state: rendered, the control code only where it is offered", { timeout: 180_000 }, async () => {
   assert.deepEqual(
     shots.map((s) => s.name),
-    ["off", "on", "control-code", "two-phones-line", "one-display", "reconnecting", "ended", "refused"],
+    ["off", "starting", "on", "control-code", "two-phones-line", "one-display", "reconnecting", "ended", "refused"],
   );
   for (const s of shots) {
     for (const size of SIZES) {
@@ -130,6 +134,7 @@ test("the phone-remote panel in each state: rendered, the control code only wher
   const by = new Map(shots.map((s) => [s.name, s.view]));
   assert.equal(by.get("control-code")!.controlCode, CONTROL_CODE);
   assert.equal(by.get("one-display")!.controlCode, null);
+  assert.equal(by.get("starting")!.canEnd, true);
   assert.equal(by.get("two-phones-line")!.line, "Phone 1: pause");
   assert.deepEqual(
     by.get("two-phones-line")!.slots.map((x) => x.text),

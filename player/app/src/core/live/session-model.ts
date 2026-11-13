@@ -7,18 +7,19 @@
 // - Started only on the instructor's request, while a class is open, by a paired app. Off at each
 //   start of the app. The class run ending (another class opened, the window closed) ends it.
 // - The host token lives in this state, in the main process's memory, and leaves it only in the
-//   `hello` effect. The presenter's view (panel-view.ts) never holds it.
+//   `hello` and `end_session` effects, each of which puts it in a `hello`. The presenter's view
+//   (panel-view.ts) never holds it.
+// - A session the host is not in is still ended on the backend (#203): End, the app quitting or
+//   another class while starting, connecting or reconnecting, and a late start answer for a run
+//   that is no longer waiting for it, each give `end_session`. None leaves it for 15 minutes.
 // - A connection lost is tried again after 1, 2, 4, 8 and then every 15 s, for the 15 minutes the
 //   live process keeps the session. A `hello` refused on reconnect (4401: the live process
 //   restarted), the session ended (4403) or a newer connection with the token (4409) end it here.
 // - The control code is offered only with a second display, and is only ever in this state and the
 //   presenter's view. A `drop` frees a phone's place and ends the shown code (ADR 0005 section 3).
-import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
-import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
-import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";
-import type { MakeCode } from "../../../../../schema/generated/ts/live-make-code.d.ts";
-import type { CompanionAction } from "./actions.ts";
-import type { HostInbound, Slot, StartAnswer, StartRefusal, StartedSession } from "./host-wire.ts";
+import type { HostInbound, Slot } from "./host-wire.ts";
+import { OFF } from "./session-types.ts";
+import type { EndReason, LiveEffect, LiveEvent, LiveModel, Place, Refusal, Step } from "./session-types.ts";
 
 export const BACKOFF_MS: readonly number[] = [1000, 2000, 4000, 8000, 15_000];
 /** How long the live process keeps a session after the host's connection is lost. */
@@ -31,95 +32,30 @@ export const CLOSE_HELLO_REFUSED = 4401;
 export const CLOSE_ENDED = 4403;
 export const CLOSE_REPLACED = 4409;
 
-export type Phase = "idle" | "starting" | "connecting" | "live" | "reconnecting" | "ended" | "refused";
-export type Refusal = StartRefusal | "not_paired" | "no_class";
-/** Why a session ended, as the presenter tells it. */
-export type EndReason = "host_ended" | "revoked" | "expired" | "lost" | "gone" | "replaced" | "class_changed";
-/** A phone's place: never held, held and connected, or held by a phone that is away. */
-export type Place = "none" | "connected" | "away";
-
-export interface Applied {
-  readonly slot: Slot;
-  readonly action: CompanionAction;
-  readonly deltaMs: number | null;
-  readonly until: number;
-}
-
-export interface LiveModel {
-  readonly phase: Phase;
-  readonly refusal: Refusal | null;
-  readonly ended: EndReason | null;
-  readonly session: StartedSession | null;
-  /** The class run's random id, sent in every state message. */
-  readonly run: string | null;
-  /** The current connection's number, 0 when there is none; events of older ones are ignored. */
-  readonly socket: number;
-  readonly sockets: number;
-  readonly attempt: number;
-  readonly lostAt: number | null;
-  readonly places: readonly [Place, Place];
-  readonly code: { readonly code: string; readonly expiresAt: number } | null;
-  readonly codeNote: Exclude<CodeCancelled["reason"], "replaced"> | null;
-  readonly line: Applied | null;
-}
-
-export type Credential = "ok" | "none" | "expired";
-
-export type LiveEvent =
-  | { readonly type: "start"; readonly run: string; readonly credential: Credential; readonly classOpen: boolean }
-  | { readonly type: "answer"; readonly answer: StartAnswer }
-  | { readonly type: "open"; readonly socket: number }
-  | { readonly type: "message"; readonly socket: number; readonly message: HostInbound }
-  | { readonly type: "closed"; readonly socket: number; readonly code: number }
-  | { readonly type: "retry" }
-  | { readonly type: "make_code"; readonly secondDisplay: boolean }
-  | { readonly type: "drop"; readonly slot: Slot }
-  | { readonly type: "end" }
-  | { readonly type: "class_changed" }
-  | { readonly type: "applied"; readonly slot: Slot; readonly action: CompanionAction; readonly deltaMs: number | null };
-
-export type LiveEffect =
-  | { readonly kind: "post_session" }
-  | { readonly kind: "connect"; readonly socket: number }
-  | { readonly kind: "hello"; readonly socket: number; readonly token: string }
-  /** The host is in: a fresh send budget, the state at once. */
-  | { readonly kind: "welcomed"; readonly socket: number }
-  | { readonly kind: "joined" }
-  | { readonly kind: "send"; readonly message: MakeCode | Drop | End }
-  | { readonly kind: "close"; readonly socket: number }
-  | { readonly kind: "retry_in"; readonly ms: number }
-  | { readonly kind: "cancel_retry" };
-
-export const OFF: LiveModel = {
-  phase: "idle",
-  refusal: null,
-  ended: null,
-  session: null,
-  run: null,
-  socket: 0,
-  sockets: 0,
-  attempt: 0,
-  lostAt: null,
-  places: ["none", "none"],
-  code: null,
-  codeNote: null,
-  line: null,
-};
-
-export interface Step {
-  readonly model: LiveModel;
-  readonly effects: readonly LiveEffect[];
-}
-
 const same = (model: LiveModel): Step => ({ model, effects: [] });
 const isRunning = (m: LiveModel): boolean => m.phase === "connecting" || m.phase === "live" || m.phase === "reconnecting";
+
+/** The state at rest, keeping the request and connection counters so a late event is never taken. */
+const rest = (m: LiveModel, over: Partial<LiveModel>): LiveModel => ({ ...OFF, sockets: m.sockets, requests: m.requests, ...over });
 
 /** Ends the session here: the token is forgotten, the connection closed, no retry left. */
 function finish(m: LiveModel, reason: EndReason, extra: readonly LiveEffect[] = []): Step {
   const effects: LiveEffect[] = [...extra];
   if (m.socket !== 0) effects.push({ kind: "close", socket: m.socket });
   if (m.phase === "reconnecting") effects.push({ kind: "cancel_retry" });
-  return { model: { ...OFF, phase: "ended", ended: reason, sockets: m.sockets }, effects };
+  return { model: rest(m, { phase: "ended", ended: reason }), effects };
+}
+
+/**
+ * The instructor ends it, the app quits or the class run ends. Live, `end` goes over the host's
+ * connection; connecting or reconnecting, over one of its own (`end_session`). While starting
+ * there is no session yet: the answer, when it comes, is ended (`answer` below).
+ */
+function endHere(m: LiveModel, reason: EndReason): Step {
+  if (m.phase === "starting") return same(rest(m, { phase: "ended", ended: reason }));
+  if (!isRunning(m)) return same(m);
+  if (m.phase === "live") return finish(m, reason, [{ kind: "send", message: { v: 1, type: "end" } }]);
+  return finish(m, reason, m.session === null ? [] : [{ kind: "end_session", token: m.session.hostToken }]);
 }
 
 function connect(m: LiveModel): Step {
@@ -170,12 +106,14 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
     case "start": {
       if (m.phase === "starting" || isRunning(m)) return same(m);
       const refusal: Refusal | null = !e.classOpen ? "no_class" : e.credential === "none" ? "not_paired" : e.credential === "expired" ? "pair_again" : null;
-      if (refusal !== null) return same({ ...OFF, phase: "refused", refusal, sockets: m.sockets });
-      return { model: { ...OFF, phase: "starting", run: e.run, sockets: m.sockets }, effects: [{ kind: "post_session" }] };
+      if (refusal !== null) return same(rest(m, { phase: "refused", refusal }));
+      const request = m.requests + 1;
+      return { model: rest(m, { phase: "starting", run: e.run, request, requests: request }), effects: [{ kind: "post_session", request }] };
     }
     case "answer": {
-      if (m.phase !== "starting") return same(m);
-      if (!e.answer.ok) return same({ ...OFF, phase: "refused", refusal: e.answer.refusal, sockets: m.sockets });
+      // A late answer (ended, the class changed, or a newer start since): its session is ended.
+      if (m.phase !== "starting" || e.request !== m.request) return { model: m, effects: e.answer.ok ? [{ kind: "end_session", token: e.answer.session.hostToken }] : [] };
+      if (!e.answer.ok) return same(rest(m, { phase: "refused", refusal: e.answer.refusal }));
       return connect({ ...m, phase: "connecting", session: e.answer.session });
     }
     case "open":
@@ -195,12 +133,9 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
       // A drop ends the current control code too: the shown code goes at once (ADR 0005 section 3).
       return { model: { ...m, places: setPlace(m, e.slot, "none"), code: null, codeNote: null }, effects: [{ kind: "send", message: { v: 1, type: "drop", slot: e.slot } }] };
     case "end":
-      if (!isRunning(m)) return same(m);
-      return finish(m, "host_ended", m.phase === "live" ? [{ kind: "send", message: { v: 1, type: "end" } }] : []);
+      return endHere(m, "host_ended");
     case "class_changed":
-      if (m.phase === "starting") return same({ ...OFF, phase: "ended", ended: "class_changed", sockets: m.sockets });
-      if (!isRunning(m)) return same(m);
-      return finish(m, "class_changed", m.phase === "live" ? [{ kind: "send", message: { v: 1, type: "end" } }] : []);
+      return endHere(m, "class_changed");
     case "applied":
       if (m.phase !== "live") return same(m);
       return same({ ...m, line: { slot: e.slot, action: e.action, deltaMs: e.deltaMs, until: now + LINE_MS } });

@@ -1,15 +1,18 @@
 // Runs the host's live session (core/live/session-model.ts) in the main process: the start request
 // with the device token, the one WebSocket, the reconnect timer and the class run's publisher.
-// The host token stays in this process's memory, in the model, and leaves it only in `hello`; it
-// is never stored, logged or sent to a window. The presenter gets `view()` and nothing else.
+// The host token stays in this process's memory, in the model, and leaves it only in `hello` (on
+// the host's connection, or on the ender's when a session the host is not in is ended: ender.ts);
+// it is never stored, logged or sent to a window. The presenter gets `view()` and nothing else.
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
 import type { LivePanelView } from "../../core/live/panel-view.ts";
-import { OFF, step } from "../../core/live/session-model.ts";
-import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-model.ts";
+import { step } from "../../core/live/session-model.ts";
+import { OFF } from "../../core/live/session-types.ts";
+import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-types.ts";
 import type { BackendCall } from "../pairing/http.ts";
-import type { Connect, LiveSocket } from "./live-socket.ts";
+import { endSession } from "./ender.ts";
+import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
 import type { LiveHost, Publisher } from "./publisher.ts";
 
@@ -56,6 +59,8 @@ export function createLiveService(d: LiveDeps): LiveService {
   let publisher: Publisher | null = null;
   let retry: unknown = null;
 
+  /** Every connection, the host's and the ender's, goes to the live socket of the session's backend. */
+  const dial = (at: string, on: SocketEvents): LiveSocket => d.connect(liveSocketUrl(at), on);
   const cancelRetry = (): void => {
     if (retry !== null) d.clearTimer(retry);
     retry = null;
@@ -65,12 +70,13 @@ export function createLiveService(d: LiveDeps): LiveService {
     publisher = null;
   };
 
-  const dispatch = (e: LiveEvent): void => {
+  /** `at`: the backend a start answer came from, which a late answer's session is ended on. */
+  const dispatch = (e: LiveEvent, at: string | null = origin): void => {
     const before = model;
     const out = step(model, e, d.now());
     model = out.model;
     // Effects first: an `end` goes out through the ending run's publisher before it is dropped.
-    for (const effect of out.effects) run(effect);
+    for (const effect of out.effects) run(effect, at);
     if (before.run !== model.run) {
       dropPublisher();
       if (model.run !== null) publisher = createPublisher({ run: model.run, host: d.host, setTimer: d.setTimer, clearTimer: d.clearTimer, applied: (slot, action, deltaMs) => dispatch({ type: "applied", slot, action, deltaMs }) });
@@ -78,22 +84,29 @@ export function createLiveService(d: LiveDeps): LiveService {
     if (model.phase === "idle" || model.phase === "ended" || model.phase === "refused") origin = null;
   };
 
-  const run = (x: LiveEffect): void => {
+  const run = (x: LiveEffect, at: string | null): void => {
     switch (x.kind) {
       case "post_session": {
+        const { request } = x;
         const c = d.credential();
-        if (c === null) return dispatch({ type: "answer", answer: { ok: false, refusal: "pair_again" } });
+        if (c === null) return dispatch({ type: "answer", request, answer: { ok: false, refusal: "pair_again" } });
         origin = c.origin;
         void d
           .call({ origin: c.origin, method: "POST", path: "/api/live/sessions", token: c.token })
           .catch(() => ({ kind: "unreachable" }) as const)
-          .then((a) => dispatch({ type: "answer", answer: parseStartAnswer(a) }));
+          .then((a) => dispatch({ type: "answer", request, answer: parseStartAnswer(a) }, c.origin));
+        return;
+      }
+      case "end_session": {
+        // Only to the backend the session was started on, never to another address.
+        if (at === null) return;
+        endSession({ open: (on) => dial(at, on), setTimer: d.setTimer, clearTimer: d.clearTimer }, x.token);
         return;
       }
       case "connect": {
         if (origin === null) return;
         const n = x.socket;
-        socket = d.connect(liveSocketUrl(origin), {
+        socket = dial(origin, {
           open: () => dispatch({ type: "open", socket: n }),
           message: (text) => onFrame(n, text),
           closed: (code) => {

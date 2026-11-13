@@ -5,8 +5,9 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import type { HostInbound } from "../../src/core/live/host-wire.ts";
-import { BACKOFF_MS, CLOSE_ENDED, CLOSE_HELLO_REFUSED, CLOSE_REPLACED, KEEP_MS, OFF, step } from "../../src/core/live/session-model.ts";
-import type { LiveEffect, LiveEvent, LiveModel } from "../../src/core/live/session-model.ts";
+import { BACKOFF_MS, CLOSE_ENDED, CLOSE_HELLO_REFUSED, CLOSE_REPLACED, KEEP_MS, step } from "../../src/core/live/session-model.ts";
+import { OFF } from "../../src/core/live/session-types.ts";
+import type { LiveEffect, LiveEvent, LiveModel } from "../../src/core/live/session-types.ts";
 import { RUN } from "./live-rig.ts";
 
 const TOKEN = `cbp_hst_${randomBytes(32).toString("base64url")}`;
@@ -23,7 +24,7 @@ function run(events: readonly LiveEvent[], m: LiveModel = OFF, now = 0): { model
 }
 
 const start: LiveEvent = { type: "start", run: RUN, credential: "ok", classOpen: true };
-const answered: LiveEvent = { type: "answer", answer: { ok: true, session: SESSION } };
+const answered: LiveEvent = { type: "answer", request: 1, answer: { ok: true, session: SESSION } };
 const msg = (message: HostInbound, socket = 1): LiveEvent => ({ type: "message", socket, message });
 const live = (): LiveModel => run([start, answered, { type: "open", socket: 1 }, msg({ type: "welcome" })]).model;
 
@@ -33,20 +34,20 @@ test("off at first; a start needs an open class and a pairing that works", () =>
   assert.deepEqual(run([{ ...start, credential: "none" }]).model.refusal, "not_paired");
   assert.deepEqual(run([{ ...start, credential: "expired" }]).model.refusal, "pair_again");
   for (const e of [{ ...start, classOpen: false }, { ...start, credential: "none" as const }]) assert.deepEqual(run([e]).effects, []);
-  assert.deepEqual(run([start]).effects, [{ kind: "post_session" }]);
+  assert.deepEqual(run([start]).effects, [{ kind: "post_session", request: 1 }]);
 });
 
 test("a refused start says why and connects nothing", () => {
-  const r = run([start, { type: "answer", answer: { ok: false, refusal: "sessions_full" } }]);
+  const r = run([start, { type: "answer", request: 1, answer: { ok: false, refusal: "sessions_full" } }]);
   assert.equal(r.model.phase, "refused");
   assert.equal(r.model.refusal, "sessions_full");
   assert.equal(r.model.session, null);
-  assert.deepEqual(r.effects, [{ kind: "post_session" }]);
+  assert.deepEqual(r.effects, [{ kind: "post_session", request: 1 }]);
 });
 
 test("the host token leaves the model only in hello, on the connection it opened", () => {
   const r = run([start, answered, { type: "open", socket: 1 }]);
-  assert.deepEqual(r.effects, [{ kind: "post_session" }, { kind: "connect", socket: 1 }, { kind: "hello", socket: 1, token: TOKEN }]);
+  assert.deepEqual(r.effects, [{ kind: "post_session", request: 1 }, { kind: "connect", socket: 1 }, { kind: "hello", socket: 1, token: TOKEN }]);
   // An older connection's open says nothing.
   assert.deepEqual(step(r.model, { type: "open", socket: 7 }, 0).effects, []);
 });
@@ -172,8 +173,56 @@ test("End sends end, then closes; while reconnecting it only closes the retry", 
   ]);
   const away = step(live(), { type: "closed", socket: 1, code: 1006 }, 0).model;
   const r = step(away, { type: "end" }, 0);
-  assert.deepEqual(r.effects, [{ kind: "cancel_retry" }]);
+  assert.deepEqual(r.effects, [{ kind: "end_session", token: TOKEN }, { kind: "cancel_retry" }]);
   assert.equal(r.model.ended, "host_ended");
+});
+
+// #203: a session the host is not in is ended on the backend, never left there for 15 minutes.
+test("End while starting cancels: the late answer's session is ended, nothing connects", () => {
+  for (const ending of [{ type: "end" }, { type: "class_changed" }] as const) {
+    const r = run([start, ending]);
+    assert.equal(r.model.phase, "ended");
+    assert.equal(r.model.ended, ending.type === "end" ? "host_ended" : "class_changed");
+    const late = step(r.model, answered, 0);
+    assert.deepEqual(late.effects, [{ kind: "end_session", token: TOKEN }]);
+    assert.equal(late.model, r.model);
+    assert.equal(late.model.session, null);
+    // A late refusal has no session to end.
+    assert.deepEqual(step(r.model, { type: "answer", request: 1, answer: { ok: false, refusal: "server" } }, 0).effects, []);
+  }
+});
+
+test("an answer for an older start request is ended, the current one connects", () => {
+  const r = run([start, { type: "end" }, start]);
+  assert.equal(r.model.phase, "starting");
+  assert.deepEqual(r.effects, [{ kind: "post_session", request: 1 }, { kind: "post_session", request: 2 }]);
+  const old = step(r.model, answered, 0);
+  assert.deepEqual(old.effects, [{ kind: "end_session", token: TOKEN }]);
+  assert.equal(old.model.phase, "starting");
+  const now = step(old.model, { ...answered, request: 2 }, 0);
+  assert.equal(now.model.phase, "connecting");
+  assert.deepEqual(now.effects, [{ kind: "connect", socket: 1 }]);
+});
+
+test("End or another class while connecting closes the connection and ends the session", () => {
+  for (const before of [[start, answered], [start, answered, { type: "open", socket: 1 }]] as LiveEvent[][]) {
+    for (const ending of [{ type: "end" }, { type: "class_changed" }] as const) {
+      const r = step(run(before).model, ending, 0);
+      assert.equal(r.model.phase, "ended");
+      assert.equal(r.model.session, null);
+      assert.deepEqual(r.effects, [{ kind: "end_session", token: TOKEN }, { kind: "close", socket: 1 }]);
+    }
+  }
+});
+
+test("another class while reconnecting ends the session; a session already gone is not ended again", () => {
+  const away = step(live(), { type: "closed", socket: 1, code: 1006 }, 0).model;
+  assert.deepEqual(step(away, { type: "class_changed" }, 0).effects, [{ kind: "end_session", token: TOKEN }, { kind: "cancel_retry" }]);
+  for (const code of [CLOSE_HELLO_REFUSED, CLOSE_ENDED, CLOSE_REPLACED]) {
+    assert.ok(!step(live(), { type: "closed", socket: 1, code }, 0).effects.some((e) => e.kind === "end_session"));
+  }
+  assert.ok(!step(live(), msg({ type: "ended", reason: "expired" }), 0).effects.some((e) => e.kind === "end_session"));
+  assert.ok(!step(live(), { type: "end" }, 0).effects.some((e) => e.kind === "end_session"));
 });
 
 test("another class ends the run's session; a new one is only on request", () => {
