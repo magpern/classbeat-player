@@ -483,8 +483,9 @@ stay on the phone (plan section 7).
   the live session's account.
   - The join code names the session and gives nothing: without the host account's sign-in the
     call fails.
-  - Every failure gets one answer, `cannot_control`. An unknown code counts as a join with an
-    unknown code for the caller's address (section 10).
+  - Every failure gets one answer, `cannot_control`. An unknown code counts against the signed-in
+    account, 60 a minute, not against the caller's address (amended 2026-11-13, ADR 0005
+    section 10).
   - So no route lists an account's live sessions, and the list of cookie routes stays at one.
 - *By control code.* The host asks the live process for a control code for its session. The app
   shows it in the presenter window only, never on the room screen, as text and as a QR code of
@@ -848,7 +849,8 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
 | Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |
-| Live joins, control exchanges and controller requests with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
+| Live joins and control exchanges with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
+| Controller requests by sign-in with an unknown code (amended 2026-11-13, ADR 0005) | 60 per account per minute | `cannot_control` for that account until the minute ends |
 | Wrong control codes | 5 per session and code | The code is cancelled; the host is told and may make a new one |
 | Control codes made | 30 per session per hour | 429 to the host |
 | WebSocket connections | 300 per address per minute; 100 waiting for `hello` per address; one per token; 63 per session (60 riders, 2 controllers, the host) | Refused |
@@ -959,10 +961,10 @@ the database's log is covered too:
 | A second host connection taking over a session | Needs the host token. A new host connection replaces the old one, so there is always exactly one receiver of rider data |
 | **A guessed pairing code** | 2.6 × 10^10 values, 10 minutes, 5 wrong tries per account per 15 minutes, and a signed-in session is needed to try at all. A hit only attaches someone else's waiting device to the guesser's own account; the token goes to the holder of the device code. The app shows which account it joined |
 | A pairing code pushed on a user by an attacker | The code is typed, never in a link. The page says to confirm only a code on the user's own screen and shows the asking platform and version before anything is decided (`auth_find_pairing`). A mail tells the user a device was paired. The token is read-only and revocable |
-| **A guessed join code** | Same code space; 60 joins with an unknown code per address per minute. A hit makes the guesser a rider in a stranger's class: they receive the clock and class state, never anyone's data. The host sees them, can remove them, lock the session or make a new code. At most 60 riders |
+| **A guessed join code** | Same code space; 60 joins with an unknown code per address per minute, and 60 per signed-in account per minute on the sign-in controller route (amended 2026-11-13, ADR 0005). A hit makes the guesser a rider in a stranger's class: they receive the clock and class state, never anyone's data. The host sees them, can remove them, lock the session or make a new code. At most 60 riders |
 | A guessed control code | The exchange names a session, so a guess is tried against one session's code only. 2 minutes, single use, cancelled after 5 wrong tries, at most 30 codes an hour per session: 150 tries an hour against 2.6 × 10^10 values. A controller can only start, pause, resume, skip, nudge and undo a resync (amended 2026-11-13, ADR 0005), and stops following the music only by that undo; the host can drop it |
 | A rider on the studio's Wi-Fi cancelling control codes on purpose | They know the join code, so they can burn each control code with 5 wrong tries. The count is per session, never per address, so the instructor's phone on the same Wi-Fi is not locked out: the host makes a new code, and a right code is accepted whatever was tried before. Someone who keeps burning codes can stop control by code for that class. Control by sign-in does not use the code and always works |
-| A rider on the studio's Wi-Fi blocking joins on purpose | 60 joins with unknown codes a minute from the studio's address stop further joins from that address for the rest of that minute. Riders already in are not affected, nor are phones on mobile data. It lasts only while the person keeps it up |
+| A rider on the studio's Wi-Fi blocking joins on purpose | 60 joins with unknown codes a minute from the studio's address stop further joins from that address for the rest of that minute. Riders already in are not affected, nor are phones on mobile data, nor the signed-in instructor's controller sign-in (amended 2026-11-13, ADR 0005). It lasts only while the person keeps it up |
 | **A replayed publication** | Needs the source token. The same number and hash is a repeat and changes nothing. The same number with other content is refused |
 | **An out-of-order publication** | A lower number is refused as stale. The check and the write are one transaction under a row lock that exists from the first publication, so two sends cannot cross. Markers of removed classes keep their number, so old content cannot return |
 | A stolen source token | It writes classes for one account and reads nothing but publication numbers. The user or the source revokes it. Publications are audited. It ends after 365 days without use |

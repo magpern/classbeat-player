@@ -61,6 +61,15 @@ const site = (name, w) => ({
   save: w === 390 || w === 1280 || (w === 820 && SITE_MAIN.includes(name)),
 });
 
+// The handlebar companion (companion.md): every state in portrait and landscape at the reference
+// phone (kept) and at the smallest supported size of each orientation (checked; one kept).
+const { NAMES: COMPANION_NAMES } = require('./companion-pages');
+const COMPANION_SIZES = [[390, 844], [844, 390], [360, 640], [640, 360]];
+const companion = (name, w, h) => ({
+  file: `companion-${name}.html`, png: `companion-${name}-${w}x${h}.png`, w, h, room: false, companion: true,
+  save: (w === 390 && h === 844) || (w === 844 && h === 390) || (name === 'running' && w === 360 && h === 640),
+});
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -91,6 +100,7 @@ const SHOTS = [
   ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
+  ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS };

@@ -12,6 +12,8 @@ dependencies = [
   "classformat",
   # Passkeys (ADR 0002, section 4): the WebAuthn verification library, pinned.
   "webauthn==3.0.1",
+  # The live WebSocket (ADR 0002, section 8): the server side uvicorn serves it with.
+  "websockets>=15,<17",
 ]
 
 [tool.uv.sources]

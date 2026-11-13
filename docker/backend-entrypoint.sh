@@ -39,8 +39,13 @@ case "$mode" in
     # One process, on purpose: live sessions keep their state in the memory of one process
     # (plan section 5). Never add --workers or run a second replica. The client address comes
     # from X-Forwarded-For only for PLAYER_TRUSTED_PROXIES, so uvicorn's own handling is off.
+    # The live WebSocket: `--ws websockets` is pinned (closing a peer that does not read relies
+    # on its send waiting for the peer), and `--ws-max-size` is MESSAGE_MAX_BYTES of
+    # live_limit_policy.py (16 KiB), so uvicorn never buffers more than the app would accept.
+    # scripts/test-backend-deploy.sh keeps the number equal to the code.
     exec uvicorn --factory player_backend.app:app_from_env \
-      --host 0.0.0.0 --port 8000 --no-access-log --no-proxy-headers "$@"
+      --host 0.0.0.0 --port 8000 --no-access-log --no-proxy-headers \
+      --ws websockets --ws-max-size 16384 "$@"
     ;;
   migrate | purge | admin)
     PLAYER_DATABASE_OWNER_URL="$(url player_owner "$SECRETS/player_owner_password")"

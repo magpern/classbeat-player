@@ -17,7 +17,6 @@ import inspect
 from collections.abc import Callable
 
 from fastapi.dependencies.models import Dependant
-from fastapi.routing import iter_route_contexts
 
 from player_backend.app import create_app
 from player_backend.player_api.deps import device_token
@@ -29,6 +28,7 @@ from tests.guards.test_guard_cookie_routes import (
     SESSION_COOKIE_ROUTES,
     SOURCE_TOKEN_ROUTES,
 )
+from tests.routehelp import http_contexts
 
 # (method, path) → the raw parameters of each route that holds a transaction and has any.
 RAW_PARAMETERS = {
@@ -73,7 +73,7 @@ def _routes() -> list[tuple[str, str, Dependant, set[Callable[..., object]]]]:
         site_origin="https://player.test",
     )
     found: list[tuple[str, str, Dependant, set[Callable[..., object]]]] = []
-    for context in iter_route_contexts(create_app(settings).routes):
+    for context in http_contexts(create_app(settings)):
         assert context.path is not None and context.methods
         calls: set[Callable[..., object]] = set()
         _calls(context.dependant, calls)

@@ -19,7 +19,6 @@ from collections.abc import Callable
 
 from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
-from fastapi.routing import iter_route_contexts
 
 from player_backend.app import create_app
 from player_backend.player_api.deps import DeviceToken
@@ -27,6 +26,7 @@ from player_backend.settings import Settings
 from player_backend.site.bodies import RawBody, request_body
 from player_backend.site.deps import SiteSession
 from player_backend.source_api.publications import PublicationBody, publication_body
+from tests.routehelp import http_contexts
 
 BODY_READERS: frozenset[Callable[..., object]] = frozenset({request_body, publication_body})
 # Every route that reads its body through a reader: a new one is looked at here first.
@@ -40,6 +40,9 @@ READS_BODY = frozenset(
         ("POST", "/api/site/passkeys"),
         ("PATCH", "/api/site/passkeys/{passkey_id}"),
         ("POST", "/api/source/publications"),
+        # ADR 0002, section 8: becoming a controller, by sign-in and by control code.
+        ("POST", "/api/live/controller"),
+        ("POST", "/api/live/control"),
     }
 )
 
@@ -66,7 +69,7 @@ def solve_order(dependant: Dependant) -> list[Callable[..., object]]:
 def late_bodies(app: FastAPI) -> dict[tuple[str, str], list[str]]:
     """(method, path) → the body readers solved after a dependency that holds a transaction."""
     found: dict[tuple[str, str], list[str]] = {}
-    for context in iter_route_contexts(app.routes):
+    for context in http_contexts(app):
         assert context.path is not None and context.methods
         order = solve_order(context.dependant)
         first = next((n for n, call in enumerate(order) if _holds_transaction(call)), len(order))
@@ -92,7 +95,7 @@ def test_every_route_reads_its_body_before_its_transaction() -> None:
 
 def test_the_routes_that_read_a_body_equal_the_list() -> None:
     seen: set[tuple[str, str]] = set()
-    for context in iter_route_contexts(_app().routes):
+    for context in http_contexts(_app()):
         assert context.path is not None and context.methods
         if any(call in BODY_READERS for call in solve_order(context.dependant)):
             seen.update((method, context.path) for method in context.methods)

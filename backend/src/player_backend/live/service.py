@@ -10,7 +10,16 @@
   `auth_session_active` for every controller got by sign-in. Not active: the session ends
   (`revoked`), or that controller is dropped. A re-check the database does not answer changes
   nothing; the sweep ends a session left unconfirmed too long (live_session_policy.py).
-- `sweep`: the lifetimes.
+- `sweep`: the lifetimes, of the sessions and of their control codes.
+- `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
+  `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
+  transaction; if writing it or committing that transaction fails, the place is freed again
+  (`release`; the route calls it for the commit, control_routes.py). By a code, and "control
+  code cancelled" after wrong tries, after `auth_enter_device` with the session's stored
+  hash. On `by_code`, a join code that names no session is counted for the caller's address
+  (live_code_policy.py, `UnknownSessions`). On `by_sign_in`, one that names no session of the
+  account is counted for the account, and calls without a site session for the address
+  (live_signin_policy.py).
 
 A database error is logged by its type alone and never stops the caller. Logs name an event, an
 error type, an end reason or a device state, never a token, code or hash; the log formatter
@@ -20,6 +29,7 @@ keeps only its allowed fields, so those values are in the message.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from uuid import UUID
@@ -28,8 +38,11 @@ from player_backend.client_policy import ClientInfo
 from player_backend.db import live
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import DatabaseError, HandleClosed, Pool
+from player_backend.live.events import Exchange, Granted
 from player_backend.live.registry import Ended, Registry, Started
+from player_backend.live_code_policy import UnknownSessions
 from player_backend.live_session_policy import EndReason, audited
+from player_backend.live_signin_policy import SignInLimits
 
 _log = logging.getLogger("player_backend.live")
 
@@ -46,6 +59,9 @@ class LiveService:
         self.registry = registry
         self.pool = pool
         self.clock = clock
+        self._unknown = UnknownSessions()
+        self._unknown_lock = threading.Lock()
+        self._sign_in = SignInLimits()
 
     def start(self, ctx: AccountContext, device_hash: bytes, client: ClientInfo) -> Started | None:
         """Start a session for the request's device; None when the account has 3 elsewhere."""
@@ -82,8 +98,101 @@ class LiveService:
             _logged("live.end_not_recorded", state, logging.WARNING)
 
     def sweep(self) -> None:
-        for ended in self.registry.end_due(self.clock()):
+        now = self.clock()
+        for ended in self.registry.end_due(now):
             self._record(ended)
+        self.registry.codes_due(now)
+
+    # -- becoming a controller ------------------------------------------------------------
+
+    def refused_for(self, address_hash: bytes) -> int | None:
+        """Seconds until this address is taken again after too many unknown join codes."""
+        with self._unknown_lock:
+            return self._unknown.refused_for(address_hash, self.clock())
+
+    def _unknown_session(self, address_hash: bytes) -> None:
+        with self._unknown_lock:
+            self._unknown.count(address_hash, self.clock())
+
+    def signed_out_refused(self, address_hash: bytes) -> bool:
+        """Whether a sign-in call without a site session from this address is refused unseen."""
+        with self._unknown_lock:
+            return self._sign_in.signed_out_refused(address_hash, self.clock())
+
+    def signed_out(self, address_hash: bytes) -> None:
+        """A sign-in call from this address had no valid site session."""
+        with self._unknown_lock:
+            self._sign_in.signed_out(address_hash, self.clock())
+
+    def _session_of_account(self, raw_session: object, account_id: UUID) -> UUID | None:
+        """The account's session the join code names, or None; a refused account looks up
+        nothing, and a code that names no session of the account is counted for it."""
+        key = account_id.bytes
+        with self._unknown_lock:
+            if self._sign_in.account_refused(key, self.clock()):
+                return None
+        session_id = self.registry.session_of_code(raw_session)
+        owned = {r.session_id for r in self.registry.running(account_id)}
+        if session_id is None or session_id not in owned:
+            with self._unknown_lock:
+                self._sign_in.unknown_code(key, self.clock())
+            return None
+        return session_id
+
+    def by_sign_in(
+        self, ctx: AccountContext, raw_session: object, site_hash: bytes, client: ClientInfo
+    ) -> Granted | None:
+        """A controller for a sign-in of the session's own account, or None (`cannot_control`).
+        Both places held is None too, and counts nothing."""
+        session_id = self._session_of_account(raw_session, ctx.account_id)
+        if session_id is None:
+            return None
+        granted = self.registry.sign_in_controller(
+            session_id, ctx.account_id, site_hash, self.clock()
+        )
+        if granted is None:
+            return None
+        try:
+            live.add_event(ctx, live.CONTROLLER_ADDED, session_id, client, via="sign_in")
+        except BaseException:
+            self.release(granted)
+            raise
+        _logged("live.controller_added", "sign_in")
+        return granted
+
+    def release(self, granted: Granted) -> None:
+        """Free the place of a grant whose token is never given out (its audit write or the
+        site session's commit failed)."""
+        if self.registry.release(granted):
+            _logged("live.controller_taken_back", "sign_in")
+
+    def by_code(
+        self, raw_session: object, raw_code: object, address_hash: bytes, client: ClientInfo
+    ) -> Exchange:
+        exchanged = self.registry.exchange(raw_session, raw_code, self.clock())
+        if exchanged.refusal == "unknown":
+            self._unknown_session(address_hash)
+        cancelled = exchanged.cancelled
+        if cancelled is not None and cancelled.reason == "wrong_tries":
+            detail = {"session_id": str(cancelled.session_id), "reason": "wrong_tries"}
+            self._event(exchanged.device_hash, live.CODE_CANCELLED, detail, client)
+        granted = exchanged.granted
+        if granted is not None:
+            detail = {"session_id": str(granted.session_id), "via": "code"}
+            self._event(exchanged.device_hash, live.CONTROLLER_ADDED, detail, client)
+        return exchanged
+
+    def _event(
+        self, device_hash: bytes, event: str, detail: dict[str, str], client: ClientInfo
+    ) -> None:
+        _logged(event, detail.get("reason") or detail.get("via") or "-")
+        try:
+            state = live.record_event(self.pool, device_hash, event, detail, client)
+        except (DatabaseError, HandleClosed) as error:
+            _logged("live.event_not_recorded", type(error).__name__, logging.WARNING)
+            return
+        if state != live.RECORDED:
+            _logged("live.event_not_recorded", state, logging.WARNING)
 
     def recheck(self, account_id: UUID | None = None) -> bool:
         """Re-check the sessions (of one account, or all). False: the database did not answer."""
