@@ -14,6 +14,7 @@ import { selectMusic } from "./select-music.ts";
 import { setupSync } from "./sync/setup.ts";
 import type { SyncService } from "./sync/service.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
+import { PRESENTER_SIZE } from "./window-size.ts";
 
 const DIST = __dirname;
 const APP_DIR_URL = `${pathToFileURL(DIST).href}/`;
@@ -40,8 +41,7 @@ async function openClass(): Promise<void> {
 
 function createPresenter(): void {
   presenter = new BrowserWindow({
-    width: 1000,
-    height: 760,
+    ...PRESENTER_SIZE,
     title: "Class player",
     show: true,
     webPreferences: secureWebPreferences(join(DIST, "preload.cjs")),
