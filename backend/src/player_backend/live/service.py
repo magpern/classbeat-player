@@ -10,7 +10,10 @@
   `auth_session_active` for every controller got by sign-in. Not active: the session ends
   (`revoked`), or that controller is dropped. A re-check the database does not answer changes
   nothing; the sweep ends a session left unconfirmed too long (live_session_policy.py).
-- `sweep`: the lifetimes, of the sessions and of their control codes.
+- `sweep`: the lifetimes, of the sessions and of their control codes. A session found past its
+  lifetime outside the sweep (a host's or controller's `hello`, the control-code exchange, a
+  sign-in) ends there and is recorded the same way: the registry hands its end to `_record`
+  (`record_expiries`, live/table.py), so every path writes one `live.session_ended`.
 - `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
   `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
   transaction; if writing it or committing that transaction fails, the place is freed again
@@ -62,6 +65,7 @@ class LiveService:
         self._unknown = UnknownSessions()
         self._unknown_lock = threading.Lock()
         self._sign_in = SignInLimits()
+        registry.record_expiries(self._record)
 
     def start(self, ctx: AccountContext, device_hash: bytes, client: ClientInfo) -> Started | None:
         """Start a session for the request's device; None when the account has 3 elsewhere."""

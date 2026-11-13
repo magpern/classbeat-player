@@ -6,7 +6,9 @@ sections 3 and 4).
   the site session's transaction; every refusal is 403 `cannot_control`: no sign-in, an ended
   one, another origin, another account, an unknown session, both places held (its limits are in
   tests/test_live_controller_limits.py); the end of the site session drops the controller at
-  the re-check; a grant whose site session transaction fails at its commit holds no place;
+  the re-check; a grant whose site session transaction fails at its commit holds no place; a
+  grant whose answer fails to send after the commit still holds its place, and the host's
+  `drop` frees it;
 - `POST /api/live/control`: "controller added" (`code`) and "control code cancelled" after
   wrong tries are written after `auth_enter_device` with the session's stored hash, and nothing
   once the device is revoked.
@@ -20,12 +22,13 @@ from typing import Any, cast
 
 import httpx
 from jsonschema import Draft202012Validator
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from player_backend.code_policy import ALPHABET
 from player_backend.live.service import LiveService
 from tests import pairhelp
 from tests.pairhelp import bearer
-from tests.sitehelp import ORIGIN, Browser, Site
+from tests.sitehelp import ADDRESS, ORIGIN, SAME_ORIGIN, Browser, Site
 
 SCHEMA = Path(__file__).resolve().parents[2] / "schema" / "live" / "v1"
 EMAIL = "host@example.test"
@@ -219,3 +222,40 @@ def test_nothing_is_written_once_the_device_is_revoked(site: Site) -> None:
     answer = phone.post(CONTROL, json={"session": live["joinCode"], "code": code})
     assert answer.status_code == 200  # the re-check ends the session; the event is not written
     assert _live_events(site) == []
+
+
+def _answer_never_sent(app: ASGIApp) -> ASGIApp:
+    """The app, with the answer to `POST /api/live/controller` failing as it is sent (a client
+    gone), after the route has returned and its site session's transaction has committed."""
+
+    async def wrapped(scope: Scope, receive: Receive, send: Send) -> None:
+        async def failing(message: Message) -> None:
+            if scope.get("path") == CONTROLLER and message["type"] == "http.response.start":
+                raise OSError("the client is gone")
+            await send(message)
+
+        await app(scope, receive, failing)
+
+    return wrapped
+
+
+def test_a_place_held_when_the_answer_fails_after_the_commit_is_freed_by_drop(
+    site: Site,
+) -> None:
+    browser, live = _hosting(site)
+    gone = Browser(cast(Any, _answer_never_sent(site.app)), site.loop, ADDRESS, SAME_ORIGIN, False)
+    gone.take_cookies(browser)
+    assert _ask(gone, live["joinCode"]).status_code == 500  # no answer reached the phone
+    # The commit came first: "controller added" is written and the place stays held.
+    added = {"session_id": live["sessionId"], "via": "sign_in"}
+    assert _live_events(site) == [("live.controller_added", added)]
+    registry = _service(site).registry
+    held = registry.signed_in_controllers()
+    assert [(str(c.session_id), c.slot) for c in held] == [(live["sessionId"], 1)]
+    # The host drops it, and both places are free for the next sign-ins.
+    assert registry.host_drop(held[0].session_id, held[0].slot)
+    assert registry.signed_in_controllers() == []
+    for slot in (1, 2):
+        body = _valid("controller-answer", _ask(browser, live["joinCode"]), 200)
+        seat = registry.controller_seat(body["controllerToken"], _service(site).clock())
+        assert seat is not None and seat.slot == slot

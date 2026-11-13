@@ -5,7 +5,7 @@ live/service.py; ADR 0002, section 8; #190).
   again and no watcher hears of a phone that never had the token;
 - taking a grant back frees its place only while that grant's token still holds it;
 - a session past its lifetime gives no controller, by sign-in or by code, and ends then, as
-  `host_session` and `controller_seat` end it.
+  `host_session` and `controller_seat` end it, with one `live.session_ended` recorded.
 The failed commit of the site session's transaction is in tests/test_live_controller_routes.py.
 """
 
@@ -57,6 +57,18 @@ def _service(clock: Clock) -> tuple[LiveService, Started, list[Event]]:
     seen: list[Event] = []
     service.registry.watch(seen.append)
     return service, started, seen
+
+
+def _recorded(monkeypatch: pytest.MonkeyPatch) -> list[tuple[uuid.UUID, str]]:
+    """The ends written as `live.session_ended` (`record_end`, faked)."""
+    ends: list[tuple[uuid.UUID, str]] = []
+
+    def record_end(_pool: Pool, _hash: bytes, session_id: uuid.UUID, reason: str) -> str:
+        ends.append((session_id, reason))
+        return live.RECORDED
+
+    monkeypatch.setattr(live, "record_end", record_end)
+    return ends
 
 
 def _written(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -121,7 +133,7 @@ def test_a_session_past_its_lifetime_gives_no_controller_by_sign_in(
 ) -> None:
     clock = Clock()
     service, started, seen = _service(clock)
-    written = _written(monkeypatch)
+    written, ends = _written(monkeypatch), _recorded(monkeypatch)
     if host_connected:
         service.registry.host_connected(started.session_id)
     # The re-check confirms the session as it runs, except when that limit is the one tested.
@@ -140,6 +152,10 @@ def test_a_session_past_its_lifetime_gives_no_controller_by_sign_in(
         (started.session_id, reason)
     ]
     assert written == [live.CONTROLLER_ADDED]  # the first grant's only
+    assert ends == [(started.session_id, reason)]
+    # Asked again, the session is gone: nothing ends and nothing more is recorded.
+    assert service.by_sign_in(CTX, started.join_code, SITE, CLIENT) is None
+    assert ends == [(started.session_id, reason)]
 
 
 def test_another_account_does_not_end_a_session_past_its_lifetime() -> None:
@@ -151,9 +167,12 @@ def test_another_account_does_not_end_a_session_past_its_lifetime() -> None:
     assert seen == [] and len(service.registry.running()) == 1
 
 
-def test_a_session_past_its_lifetime_gives_no_controller_by_code() -> None:
+def test_a_session_past_its_lifetime_gives_no_controller_by_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     clock = Clock()
     service, started, seen = _service(clock)
+    ends = _recorded(monkeypatch)
     registry = service.registry
     made = registry.make_code(started.session_id, clock())
     assert made is not None
@@ -164,6 +183,7 @@ def test_a_session_past_its_lifetime_gives_no_controller_by_code() -> None:
     assert [(e.session_id, e.reason) for e in seen if isinstance(e, Ended)] == [
         (started.session_id, "unconfirmed")
     ]
+    assert ends == [(started.session_id, "unconfirmed")]
 
 
 def test_a_session_just_inside_its_lifetime_gives_a_controller_by_code() -> None:

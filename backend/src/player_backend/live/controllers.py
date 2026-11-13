@@ -27,7 +27,6 @@ from player_backend.live.events import (
     SignedInController,
 )
 from player_backend.live.table import HeldController, HeldSession, Table
-from player_backend.live_session_policy import expiry
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash
 
@@ -67,7 +66,7 @@ class Controllers(Table):
             ended = self._expired(session, now)
             if ended is None:
                 return self._grant(session, site_session_hash)
-        self._tell([ended])
+        self._expiry_told(ended)
         return None
 
     def release(self, granted: Granted) -> bool:
@@ -109,7 +108,8 @@ class Controllers(Table):
                 exchanged = Exchange(None, "unknown", None, b"")
             else:
                 exchanged = self._tried(session, code, now)
-        self._tell([e for e in (ended, exchanged.cancelled) if e is not None])
+        self._expiry_told(ended)
+        self._tell([] if exchanged.cancelled is None else [exchanged.cancelled])
         return exchanged
 
     def _tried(self, session: HeldSession, code: str | None, now: float) -> Exchange:
@@ -144,13 +144,12 @@ class Controllers(Table):
             held = session.controllers.get(found[1])
             if held is None or held.token_hash != hashed:
                 return None
-            reason = expiry(session.clocks(), now)
-            if reason is None:
+            ended = self._expired(session, now)
+            if ended is None:
                 return Seat(
                     found[0], found[1], "code" if held.site_session_hash is None else "sign_in"
                 )
-            ended = self._remove(session.id, reason)
-        self._tell([ended] if ended else [])
+        self._expiry_told(ended)
         return None
 
     def signed_in_controllers(self, account_id: UUID | None = None) -> list[SignedInController]:

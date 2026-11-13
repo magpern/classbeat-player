@@ -6,7 +6,8 @@ alone (live/hub.py, live/registry.py; ADR 0005, sections 3, 5 and 7; ADR 0002, s
   slot in both;
 - a dropped controller's token is refused once its slot is given to a new controller, and the
   new one stays connected;
-- a controller's `hello` to a session past its lifetime is refused, and the session ends;
+- a controller's or host's `hello` to a session past its lifetime is refused, and the session
+  ends with one `live.session_ended` recorded;
 - answers to commands sent before the host left reach no one once it is back.
 """
 
@@ -127,6 +128,21 @@ def test_a_controllers_hello_to_a_session_past_its_lifetime_is_refused(live: Any
         ws.send_json(hello(token))
         assert closed(ws) == 4401
     assert live.registry.running() == []
+    # Ended there, as the sweep would have ended it, and recorded once.
+    assert live.ends == [(started.session_id, "host_away")]
+
+
+def test_a_hosts_hello_to_a_session_past_its_lifetime_is_refused_and_recorded(
+    live: Any,
+) -> None:
+    started = live.session()
+    live.clock.now += HOST_AWAY_LIMIT  # the host never connected
+    for _ in range(2):
+        with live.connect() as ws:
+            ws.send_json(hello(started.host_token))
+            assert closed(ws) == 4401
+    assert live.registry.running() == []
+    assert live.ends == [(started.session_id, "host_away")]
 
 
 def test_answers_to_commands_sent_before_the_host_left_reach_no_one(live: Any) -> None:
