@@ -23,6 +23,8 @@ export interface ClockInput {
 
 export interface LinkInput {
   readonly mode: "following" | "manual";
+  /** False when no reader exists or the class is manual only: there is nothing to follow. */
+  readonly available: boolean;
   readonly state: LinkStateName;
   /** The clock only guesses (Coasting, Off the list). */
   readonly guessing: boolean;
@@ -32,6 +34,8 @@ export interface LinkInput {
   readonly holdRemainingMs: number | null;
   /** Ambiguous: the song indexes the same recording could be. */
   readonly candidates: readonly number[];
+  /** The announcement text while it lasts (the player keeps it for 30 s); only whether there is one is read. */
+  readonly announcement: string | null;
   /** Time left in the class follows the measurement. */
   readonly classRemainingMs: number;
 }

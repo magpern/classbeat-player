@@ -18,6 +18,8 @@ export interface GelModel {
 export interface LinkPlate {
   readonly text: string;
   readonly look: "quiet" | "alert" | "manual";
+  /** White instead of grey: the clock was just handed over to the instructor (news, not a fault). */
+  readonly news?: true;
 }
 
 export interface RailModel {
