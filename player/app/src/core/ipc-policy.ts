@@ -4,7 +4,7 @@
 // presenter. Each page may use only its own channels (the handlers ask `pageOf`).
 // The room screen has a window of its own and is never one of those pages: it is recognised only
 // by `isRoomSender`, and may use only ROOM_CHANNELS.
-import { CH_ROOM_STATE } from "./channels.ts";
+import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "./channels.ts";
 
 export interface SenderFacts {
   /** webContents id of the sender. */
@@ -45,8 +45,14 @@ export interface RoomTrusted {
   readonly roomUrl: string;
 }
 
-/** The only channels the room page may invoke. It sends no command and reads no pairing. */
-export const ROOM_CHANNELS: readonly string[] = [CH_ROOM_STATE];
+/**
+ * The only channels the room page may invoke: its state, the room's clock commands, End class, and
+ * the phone remote's slot with its start and stop (room-2d.md). It reads no pairing and no file.
+ */
+export const ROOM_CHANNELS: readonly string[] = [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP];
+
+/** The only channels the shell pushes to the room window: its frame and the phone remote's slot. */
+export const ROOM_PUSH_CHANNELS: readonly string[] = [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE];
 
 /** The room window's own web contents, its top frame, on the room page. */
 export function isRoomSender(s: SenderFacts, t: RoomTrusted): boolean {
