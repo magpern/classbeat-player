@@ -10,9 +10,11 @@ import { ROOM_CSP } from "../../src/main/web-preferences.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
 import { launch, sleep } from "./launch.ts";
 import { startBackend } from "./room-backend.ts";
-import { closeRoomByHand, menu, onPage, openClassFile, roomPage, theRoom, waitFor, windowCount } from "./room-helpers.ts";
+import { closeRoomByHand, menu, onPage, openClassFile, roomPage, theRoom, waitFor, windowCount, within } from "./room-helpers.ts";
 
 const TITLE = "Room window lifecycle";
+/** Each test's own limit, so a hang fails that test by name instead of the whole CI job. */
+const T = { timeout: 60_000 };
 let server: Server;
 let app: ElectronApplication;
 let page: Page;
@@ -24,12 +26,12 @@ before(async () => {
   await app.evaluate(({ shell }) => {
     shell.openExternal = async () => undefined;
   });
-});
+}, T);
 after(async () => {
   await app?.close();
   server?.closeAllConnections();
   server?.close();
-});
+}, T);
 
 interface Shown {
   view: { status: string; classRemainingMs: number } | null;
@@ -46,27 +48,28 @@ const startFromList = async (): Promise<void> => {
 async function hardening(room: Page) {
   // macOS has one menu bar for the application, not one per window: there the room window's own
   // menu (removed with removeMenu) cannot be read from isMenuBarVisible.
-  const prefs = await app.evaluate(({ BrowserWindow }) => {
+  const prefs = await within(10_000, "read the room window's preferences", app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))!;
     const p = (w.webContents as unknown as { getLastWebPreferences(): Record<string, unknown> | null }).getLastWebPreferences() ?? {};
     return { ci: p.contextIsolation, ni: p.nodeIntegration, sb: p.sandbox, wv: p.webviewTag, ws: p.webSecurity, ownMenu: process.platform !== "darwin" && w.isMenuBarVisible() };
-  });
-  const page = await room.evaluate(() => ({
+  }));
+  const page = await within(10_000, "read the room page", room.evaluate(() => ({
     csp: document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
     require: typeof (globalThis as Record<string, unknown>).require,
     player: typeof (window as unknown as { player?: unknown }).player,
     api: Object.keys((window as unknown as { room: object }).room).sort(),
-  }));
+  })));
   return { prefs, page };
 }
-const roomItemEnabled = (): Promise<boolean | undefined> => app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("show-room")?.enabled);
+const roomItemEnabled = (): Promise<boolean | undefined> =>
+  within(10_000, "read Show the room screen", app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("show-room")?.enabled));
 
 const HARDENED = {
   prefs: { ci: true, ni: false, sb: true, wv: false, ws: true, ownMenu: false },
   page: { csp: ROOM_CSP, require: "undefined", player: "undefined", api: ["onUpdate", "state"] },
 };
 
-test("the class ends while the instructor is on the class list: the room window closes then", async () => {
+test("the class ends while the instructor is on the class list: the room window closes then", T, async () => {
   await page.waitForSelector('#app[data-body="not-paired"]');
   assert.equal(await roomItemEnabled(), false, "no class open: Show the room screen is off");
   await page.locator('[data-action="pair"]').first().click();
@@ -93,7 +96,7 @@ test("the class ends while the instructor is on the class list: the room window 
   assert.equal(await roomItemEnabled(), false, "the class is closed: off");
 });
 
-test("a pinned class: the room window closed by hand comes back from the presenter's menu", async () => {
+test("a pinned class: the room window closed by hand comes back from the presenter's menu", T, async () => {
   await startFromList();
   await theRoom(app);
   await closeRoomByHand(app);
@@ -113,7 +116,7 @@ test("a pinned class: the room window closed by hand comes back from the present
   await onPage(page, "presenter.html");
 });
 
-test("a class from a file: the room window closed by hand comes back, with the same hardening; not once the class is closed", async () => {
+test("a class from a file: the room window closed by hand comes back, with the same hardening; not once the class is closed", T, async () => {
   const title = await openClassFile(app);
   await onPage(page, "presenter.html");
   let room = await theRoom(app);
@@ -136,7 +139,7 @@ test("a class from a file: the room window closed by hand comes back, with the s
   assert.equal(await windowCount(app), 1, "no class open: nothing to show");
 });
 
-test("Show the room screen right after Class list, before the list page has loaded, opens nothing", async () => {
+test("Show the room screen right after Class list, before the list page has loaded, opens nothing", T, async () => {
   await openClassFile(app);
   await onPage(page, "presenter.html");
   await theRoom(app);

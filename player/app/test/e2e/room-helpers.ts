@@ -16,7 +16,25 @@ export async function waitFor(cond: () => Promise<boolean>, ms: number, what: st
   assert.fail(`timed out waiting for ${what}`);
 }
 
-export const windowCount = (app: ElectronApplication): Promise<number> => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
+/**
+ * `promise`, or a failure naming `what` after `ms`. Playwright puts no limit on evaluate (in the
+ * app or a page), so a call that never answers would otherwise hang the whole CI job unnamed.
+ */
+export async function within<T>(ms: number, what: string, promise: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms: ${what}`)), ms);
+  });
+  try {
+    return await Promise.race([promise, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const STEP_MS = 10_000;
+
+export const windowCount = (app: ElectronApplication): Promise<number> =>
+  within(STEP_MS, "count the windows", app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length));
 export const roomPage = (app: ElectronApplication): Page | undefined => app.windows().find((w) => !w.isClosed() && w.url().endsWith("/dist/room.html"));
 export async function theRoom(app: ElectronApplication): Promise<Page> {
   await waitFor(async () => roomPage(app) !== undefined, 10_000, "the room window");
@@ -24,11 +42,16 @@ export async function theRoom(app: ElectronApplication): Promise<Page> {
   await room.waitForLoadState("domcontentloaded");
   return room;
 }
-export const menu = (app: ElectronApplication, id: string): Promise<void> => app.evaluate(({ Menu }, i) => Menu.getApplicationMenu()?.getMenuItemById(i)?.click(), id);
+export const menu = (app: ElectronApplication, id: string): Promise<void> =>
+  within(STEP_MS, `the menu item ${id}`, app.evaluate(({ Menu }, i) => Menu.getApplicationMenu()?.getMenuItemById(i)?.click(), id));
 export const onPage = (page: Page, name: string): Promise<unknown> => page.waitForFunction((n) => location.pathname.endsWith(`/${n}`), name);
 /** Closes the room window the way the instructor's window manager does. */
 export const closeRoomByHand = (app: ElectronApplication): Promise<void> =>
-  app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.close());
+  within(
+    STEP_MS,
+    "close the room window by hand",
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.close()),
+  );
 
 /** File > Open a class file, with the dialog answering the first converter example. Returns its title. */
 export async function openClassFile(app: ElectronApplication): Promise<string> {

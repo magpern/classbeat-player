@@ -1,7 +1,7 @@
 // The runtime guard (hardening.ts, refuseLoose): a renderer made with anything but the full
 // hardening, however it was made, is destroyed before it loads anything.
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -20,7 +20,8 @@ const T = { timeout: 30_000 };
 // A session preload that tells the main process it ran (#156 review, N-1): registered after a
 // window loaded, it must never run, because the window is refused as its next load starts.
 const PROBE_CHANNEL = "loose-renderer-probe";
-const probe = join(mkdtempSync(join(tmpdir(), "player-probe-")), "probe-preload.cjs");
+const probeDir = mkdtempSync(join(tmpdir(), "player-probe-"));
+const probe = join(probeDir, "probe-preload.cjs");
 writeFileSync(probe, `require("electron").ipcRenderer.send(${JSON.stringify(PROBE_CHANNEL)});\n`);
 
 interface Seen {
@@ -49,7 +50,11 @@ before(async () => {
   });
 }, T);
 after(async () => {
-  await app?.close();
+  try {
+    await app?.close();
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
 }, T);
 
 async function makeWindow(webPreferences: Record<string, unknown>): Promise<Seen> {
