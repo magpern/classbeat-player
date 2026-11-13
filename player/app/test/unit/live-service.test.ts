@@ -200,3 +200,29 @@ test("the host sends only its own messages, within its budget: under 8 a second,
     assert.ok(inSecond.filter((b) => b.type === "companion_state").length <= 4);
   }
 });
+
+test("the class code comes from the start answer only: a control code, of the same shape, never changes it", async () => {
+  const r = await started();
+  assert.equal(r.live.view().classCode, JOIN_CODE);
+  r.live.makeCode();
+  for (const code of [CONTROL_CODE, "MNPQ-RSTV"]) {
+    r.socket().server({ v: 1, type: "control_code", code, expiresInMs: 120_000 });
+    assert.equal(r.live.view().classCode, JOIN_CODE);
+    assert.equal(r.live.view().controlCode, code);
+  }
+  // Messages that are not the start answer cannot carry a class code in: each is dropped or read
+  // without it.
+  r.socket().server({ v: 1, type: "control_code", code: "MNPQ-RSTV", expiresInMs: 120_000, joinCode: "WXZB-CDFG" });
+  r.socket().server({ v: 1, type: "welcome", role: "host", joinCode: "WXZB-CDFG" });
+  r.socket().server({ v: 1, type: "code_cancelled", reason: "used" });
+  r.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
+  assert.equal(r.live.view().classCode, JOIN_CODE);
+  // A reconnect keeps the class code of the session it resumes.
+  r.socket().drop(1006);
+  await r.advance(1000);
+  r.socket().open();
+  r.socket().server({ v: 1, type: "welcome", role: "host" });
+  r.socket().server({ v: 1, type: "control_code", code: "WXZB-CDFG", expiresInMs: 120_000 });
+  assert.equal(r.live.view().classCode, JOIN_CODE);
+  assert.equal(r.live.view().controlCode, "WXZB-CDFG");
+});

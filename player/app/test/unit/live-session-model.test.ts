@@ -193,3 +193,20 @@ test("events of an older connection change nothing", () => {
   const m = live();
   for (const e of [msg({ type: "ended", reason: "expired" }, 9), { type: "closed", socket: 9, code: 1006 } as const]) assert.deepEqual(step(m, e, 0), { model: m, effects: [] });
 });
+
+test("the session (and its join code) is set only by the start answer, never by a message", () => {
+  const before = live();
+  const messages: HostInbound[] = [
+    { type: "control_code", code: "MNPQ-RSTV", expiresInMs: 120_000 },
+    { type: "code_cancelled", reason: "used" },
+    { type: "controller_joined", slot: 1, via: "code" },
+    { type: "controller_left", slot: 1, via: "code" },
+    { type: "welcome" },
+  ];
+  let m = before;
+  for (const message of messages) {
+    m = step(m, msg(message), 0).model;
+    assert.equal(m.session, before.session, message.type);
+  }
+  assert.equal(m.session?.joinCode, "BCDF-GHJK");
+});
