@@ -295,7 +295,7 @@ Link states are white, grey and black only, never a hue (rule 7).
 | Coasting | Readings stopped or stale | Link plate "Music not heard"; label "Interval left, estimated"; the countdown itself dims to `--light-2` with a dashed rule under it, the same dash as the "now" line, which is dashed too; no bar count (a guess is not counted in bars) | [html](mockups/room-coasting.html) | [16:9](mockups/room-coasting-1920x1080.png) |
 | Off the list | Something not in the class plays | Link plate "Not a class song"; "estimated"; the dimmed, dashed countdown; dashed "now"; BPM labelled "Song, planned"; no bar count | [html](mockups/room-off-list.html) | [16:9](mockups/room-off-list-1920x1080.png) |
 | Ambiguous | The same recording is in the class twice | Link plate "Song is in twice"; the clip carries the marker "1st of 2", never cut; the presenter offers the other | [html](mockups/room-ambiguous.html) | [16:9](mockups/room-ambiguous-1920x1080.png) |
-| Manual clock | No link, or chosen | Link "Manual clock" in grey with a square marker (a choice, not a fault, so no plate); no bar count | [html](mockups/room-manual.html) | [16:9](mockups/room-manual-1920x1080.png) |
+| Manual clock | No link, or chosen | Link "Manual clock" in grey with a square marker (a choice, not a fault, so no plate); no bar count. Where the music could be followed, "Manual · F to follow", and "Following stopped" in white for 30 s after a hand-over ("Back to following the music") | [html](mockups/room-manual.html) | [16:9](mockups/room-manual-1920x1080.png) |
 | Last interval | The class's final interval | Label "Last interval"; "bars to the end"; next row "End of class"; an "End" mark in the score | [html](mockups/room-last-interval.html) | [16:9](mockups/room-last-interval-1920x1080.png), [4:3](mockups/room-last-interval-1440x1080.png) |
 | Finished | Class time reached the end | House lights up: a white gel, "Class Complete" and the length; title, time ridden, songs, class load (planned) and time in each zone; score at "End", the past in grey. The room window stays on this state until the instructor leaves the class (class-list.md, "When the room window closes, and how it comes back") | [html](mockups/room-finished.html) | [16:9](mockups/room-finished-1920x1080.png), [4:3](mockups/room-finished-1440x1080.png) |
 | Interval of 100 minutes or more | More than 99:59 left | The countdown reads `99+` (sized as `MM:SS`) until 99:59 remain | [html](mockups/room-long-interval.html) | [16:9](mockups/room-long-interval-1920x1080.png) |
@@ -351,15 +351,17 @@ One **control band**, in priority order:
 3. **End**, at the right end of the band, apart from the others.
 4. **The class code**, between Next and End, only while a phone remote is on (see "The class code").
 
-Nothing else. Back 5 s and Forward 5 s, Follow the music, Manual clock, Undo, picking an
+Nothing else. The class code slot's **Phone remote** button (state Off, below) is part of item 4,
+not a sixth control. Back 5 s and Forward 5 s, Follow the music, Manual clock, Undo, picking an
 occurrence of a repeated song and the phone remote's own settings are **not** on the band: they
 stay on the keyboard (below) and on the presenter window when there is a second display
 (presenter.md). The owner named these five as the useful ones; the rest are rare or for a
-rehearsal.
+rehearsal. The way back to following the music with one screen is a key named in the rail
+("Back to following the music", below), not a band control.
 
 ### What a press does: the same routing as the presenter
 
-The band adds no behaviour. Each button sends the presenter's existing command
+The band adds no clock or music behaviour: each button sends the presenter's existing command
 (`ClockCommand` in `player/app/src/core/commands.ts`) through the same routing
 (`routeWhileFollowing` in `core/link/while-following.ts`, ADR 0001: "start, pause and next go
 through the same local interface"). Its second line says where the press goes, from the same
@@ -372,6 +374,7 @@ route):
 | Pause, Resume | `pause`, `resume` | Sent to the music app; the clock follows its answer (room screen "Paused" when the music app reports pause) | The clock pauses or resumes and the link goes to the manual clock: second line "Stops following" | The clock pauses or resumes |
 | Next | `next` | **Next song**: the music app skips to the next track and the clock follows it there. Second line "Song" | The clock goes to the next interval and the link goes manual: "Stops following" | **Next interval**: the start of the next interval. Second line "Interval" |
 | Previous | `previous` | Always on the clock, so it hands over: "Stops following" | The same: "Stops following" | **Previous interval**: back to the start of this interval, or to the start of the one before when this one began less than 3 s ago (`PREVIOUS_RESTART_MS`, as a music player's "previous" does). Second line "Interval" |
+| Previous, Next before the start | `previous`, `next` | Not following yet (no first lock), so the right-hand column applies | | On the clock, which stays at rest (`moveTo` keeps a ready clock ready): Next moves the start point to the next interval's start, Previous back to the start of the current one, or of the one before when this one began less than 3 s ago. Nothing is sent to the music app. Second line "Interval" |
 | End | none (it leaves the class) | See "End" | | |
 
 Previous and Next therefore step over **intervals** on the clock, and Next steps over **songs**
@@ -380,20 +383,72 @@ the clock over is never silent: its button says "Stops following" before the pre
 then shows "Manual clock" with the square marker. Where the presenter says "(stops following)" in
 brackets after the label, the band puts the same words on the second line.
 
+### What the room window needs from the desktop shell
+
+Today the room window only **receives**: the desktop shell's bridge gives it one channel, the
+room state (`ROOM_CHANNELS = [CH_ROOM_STATE]` in `player/app/src/core/ipc-policy.ts`), and it
+sends nothing. The band needs the bridge to grow:
+
+- room window to the shell: the band's `ClockCommand`s (start, pause, resume, next, previous) and
+  the keyboard's (jump, undo, follow; below); start and stop the phone remote; end (close) the
+  class;
+- shell to the room window: the class code slot's state and the **join code**, nothing else of
+  the live session.
+
+That is **its own security-critical issue** (the desktop shell's bridge, AGENTS.md section 5),
+built and merged before the band. The shell checks every message from the room window against a
+fixed list of commands, as it does the presenter's. ADR 0005's guard ("the control code is sent
+only on the presenter's channel, never on the room window's") must cover **every new room
+channel**: no control code, token or controller detail on any of them, checked by a test. This
+spec does not name the channels; the issue does.
+
+### Back to following the music
+
+A press that hands the clock over (Previous, a nudge, or any press the music app cannot be sent)
+leaves the clock manual until the instructor follows the music again. With a second display that
+is the presenter's "Follow the music". With one screen it is the **F key**, and the rail says so
+with the band hidden, in the link state's place (no sixth band control):
+
+| When | The rail's link state | Mock-up |
+|---|---|---|
+| The 30 s after a hand-over (the announcement of ADR 0001, `undoWindowMs`) | "Following stopped", **white**, with the manual clock's square marker: news, not a fault, so no plate | [html](mockups/room-handover.html), [16:9](mockups/room-handover-1920x1080.png); worst case [5:4](mockups/room-worst-handover-1280x1024.png) |
+| After that, while the clock is manual and the music could be followed (the music link is available: a music app the player can hear and a class with song timing) | "Manual · F to follow", grey, square marker | [html](mockups/room-manual-follow.html), [16:9](mockups/room-manual-follow-1920x1080.png); worst case [4:3](mockups/room-worst-manual-follow-1024x768.png), [5:4](mockups/room-worst-manual-follow-1280x1024.png) |
+| Manual with no music link (no reader on this computer, Swedebeat, `song_timing: missing`) | "Manual clock", as today: no key, since F could do nothing | [html](mockups/room-manual.html) |
+
+**F** sends `follow` (the presenter's "Follow the music"): the next fresh reading puts the clock
+where the music is, as ADR 0001's relink does. It works at any time the music could be followed,
+including during the 30 s notice, with the band shown or hidden, and does not show the band.
+Where the music cannot be followed it does nothing. Both lines fit the rail beside `H:MM:SS`
+class times at every size (the worst cases are checked at all ten); a longer line ("Following
+stopped · F to follow") does not fit at 4:3 and 5:4, which is why the key is named only after the
+notice.
+
 ### When it shows and when it hides
 
 - **Shows** on a pointer move of at least 6 px over the room window (a nudged table is not a
   move), on a tap on a touch screen, on Tab, and on the End key. A key that does something else
-  (Space, the arrows) works without showing it: its effect is on the screen already (the
-  "Paused" plate, the new interval).
-- **Hides** 3 s after the last pointer move, unless the pointer is over the band, the keyboard
-  focus is in it, or the End question is open. Esc hides it at once. The pointer is hidden with
-  it.
+  (Space, the arrows, F) works without showing it: its effect is on the screen already (the
+  "Paused" plate, the new interval, the rail's link state).
+- **Hides 3 s after the last input of any kind**: a pointer move, a click, a tap or a key press
+  each restart the 3 s. Only two things hold it: **keyboard focus reached by Tab** (or Shift+Tab)
+  inside the band, and the **End question** while it is open. A pointer resting over the band
+  does not hold it, and a click does not leave it held: a button pressed with the pointer or by a
+  tap does its job and the band hides 3 s later (a pointer press never counts as keyboard focus;
+  the shell drops the focus from a button pressed that way). Esc hides it at once and drops the
+  focus. The pointer is hidden with it.
+- **The fade.** Buttons take presses from the first frame the band starts to appear. From the
+  first frame of the fade-out (300 ms, or at once with reduced motion) the band counts as hidden:
+  it takes no presses, and a click or tap then only shows it again (next item).
 - **With one display it does not hide before the start, nor on "Class Complete"**: Start (or
   Close class) is always in sight there, which is what the owner missed on the first Mac run.
   With a second display it hides before the start too (the presenter has Start).
 - **A click or tap while it is hidden presses nothing.** The first one only shows the band, so a
   click on the screen can never pause or end a class by accident.
+- **Touch** (a touch screen or a projector's touch layer): there is no hover and no pointer
+  move, so a tap is the only way in. A tap while hidden shows the band and presses nothing; a tap
+  on a button while shown presses it; a tap elsewhere while shown restarts the 3 s. No swipe,
+  long press or double tap does anything. The buttons (at least 9.4 vh, 72 px at 768 lines) are
+  large enough for a finger at every size.
 - It never takes the keyboard focus by itself; Tab moves into it.
 
 ### What it covers
@@ -420,7 +475,7 @@ While hidden, the band covers nothing: the screen is pixel for pixel the state w
 
 | Part | Size (16:9 to 3:2) | At 3:2 and narrower | Type |
 |---|---|---|---|
-| Buttons | 11 vh high, at least 11 vw wide (Start / Pause / Resume 13 vw, End 9 vw), 1 vw apart, `--stage-raised` with a 0.3 vh `--stage-line` border, radius 0.8 vh; the main one a 0.5 vh `--light-1` border | 9.4 vh high, as wide as the words, 0.8 vw apart; main 11 vw, End 8 vw | Word: Atkinson 700, 3.6 vh, `--light-1`. Second line: Big Shoulders 600, `--t-label`, `--light-2` (the condensed face so that three "Stops following" fit at 5:4) |
+| Buttons | 11 vh high, at least 11 vw wide (Start / Pause / Resume 13 vw, End 9 vw), 1 vw apart, `--stage-raised` with a 0.3 vh `--stage-line` border, radius 0.8 vh; the main one a 0.5 vh `--light-1` border | 9.4 vh high, as wide as the words, 0.8 vw apart; main 11 vw, End 8 vw | Word: `--t-control` (Atkinson 700, 3.6 vh), `--light-1`. Second line: Big Shoulders 600, `--t-label`, `--light-2` (the condensed face so that three "Stops following" fit at 5:4) |
 | Class code | QR code 12.4 vh square; beside it "Class code" (label), the code, one state line | QR 10.8 vh, the three lines 0.2 vh apart | Code: Big Shoulders 800, `--t-minor`, `--light-1`. Label and state line: `--t-label` |
 | Focus | 0.4 vh `--light-1` outline, 0.4 vh outside the button (the class list's ring) | the same | |
 
@@ -458,11 +513,11 @@ control by sign-in only, as ADR 0002 section 8 already says for one display.
 
 **Where and when.** Only in the band, between Next and End, so only while the band shows, and
 never over the numbers. With one display that means always before the start (the band does not
-hide then) and on a mouse move during the class. It is not on "Class Complete". The QR code
-encodes `https://<site>/j#<join code>` (ADR 0002, "Joining as a rider"): the code in the fragment
-and nothing else. It is shown **only once the site has that page** (the riders' part of PL8);
-until then the slot shows the code as text without a QR code, and the instructor, signed in on
-the phone, types it on the companion page.
+hide then) and on a mouse move during the class. It is not on "Class Complete". Whenever the code
+is on, it is shown **as text and as a QR code** of `https://<site>/control#<join code>` (ADR 0005
+section 2; companion.md): the join code in the fragment and nothing else. Opening it on a phone
+fills in the class code on the companion page and offers sign-in; control still needs the
+instructor's sign-in.
 
 **The slot's states.** The live client is not built yet (ADR 0005, issue 8), so today the slot
 is always absent.
@@ -472,7 +527,7 @@ is always absent.
 | Absent | No live client in this build; the app is not paired (class files only); no network or no answer from the site | Nothing, and no gap or explanation on the room screen (riders need none): Next is followed by End. The presenter, when there is one, says why (ADR 0005, section 2) | [no code](mockups/room-controls-no-code.html) |
 | Off | Paired and online, no phone remote for this class (the default at each start of the app) | A button "Phone remote", second line "Show the class code". Pressing it starts the live session (ADR 0005: on the instructor's request, never automatically) | [manual, before the start](mockups/room-controls-manual.html) |
 | Starting | `POST /api/live/sessions` sent | The same button, disabled, second line "Getting a code" | |
-| On | Session running | "Class code", the code, state line "Phone remote on"; the QR code once the riders' page exists | [before the start](mockups/room-controls-before-start.html) (text only), [running](mockups/room-controls-running.html) (with QR) |
+| On | Session running | The QR code, "Class code", the code, state line "Phone remote on" | [before the start](mockups/room-controls-before-start.html), [running](mockups/room-controls-running.html) |
 | Phone connected | `controller_joined` | State line "Phone connected", or "2 phones connected". Nothing else about the phones (no names, no list) | [paused](mockups/room-controls-paused.html), [worst case](mockups/room-controls-worst.html) |
 | Reconnecting | The host connection dropped (ADR 0005 section 6) | The code stays; state line "Reconnecting" | |
 | Refused | 409 `sessions_full` | The Off button, second line "In use elsewhere" | |
@@ -497,12 +552,13 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | End | Opens the End question (shows the band); Enter then answers the focused "Keep going" | Yes |
 | Shift+Right, Shift+Left | Forward 5 s, Back 5 s (`jump`, ±`JUMP_MS`; while following this hands the clock over, and the rail shows "Manual clock") | No: keyboard and presenter only |
 | Ctrl+Z (Cmd+Z) | Undo an announced resync while it can be undone (ADR 0001, item 5) | No |
+| F | Follow the music (`follow`), when the music could be followed; otherwise nothing. Named in the rail while the clock is manual ("Back to following the music") | No: the rail names it |
 | Tab, Shift+Tab | Shows the band and moves through its buttons | |
 | Enter | The focused button | |
 | Esc | Closes the End question ("Keep going"); otherwise hides the band at once | |
 
-Follow the music, Manual clock and picking an occurrence stay on the presenter and the
-application menu; they are not keys.
+Manual clock and picking an occurrence stay on the presenter and the application menu; they are
+not keys. Follow the music is both: the presenter's button and F.
 
 ### Motion
 
@@ -517,10 +573,10 @@ is a placeholder of the right size, not a real code ([qr-placeholder.svg](mockup
 
 | State | Mock-up | Screenshot |
 |---|---|---|
-| Before the start, following, code as text | [html](mockups/room-controls-before-start.html) | [16:9](mockups/room-controls-before-start-1920x1080.png) |
+| Before the start, following, code with QR | [html](mockups/room-controls-before-start.html) | [16:9](mockups/room-controls-before-start-1920x1080.png) |
 | Before the start, manual clock, phone remote off | [html](mockups/room-controls-manual.html) | [16:9](mockups/room-controls-manual-1920x1080.png) |
 | Running, following: Next is "Song", Previous "Stops following"; code with QR | [html](mockups/room-controls-running.html) | [16:9](mockups/room-controls-running-1920x1080.png), [4:3](mockups/room-controls-running-1440x1080.png), [reduced motion](mockups/room-controls-running-reduced-1920x1080.png) |
-| Paused: Resume; a phone connected | [html](mockups/room-controls-paused.html) | [16:9](mockups/room-controls-paused-1920x1080.png) |
+| Paused: Resume; code with QR, a phone connected | [html](mockups/room-controls-paused.html) | [16:9](mockups/room-controls-paused-1920x1080.png) |
 | Running, manual clock, no phone remote (slot absent) | [html](mockups/room-controls-no-code.html) | [16:9](mockups/room-controls-no-code-1920x1080.png) |
 | The End question | [html](mockups/room-controls-end.html) | [16:9](mockups/room-controls-end-1920x1080.png) |
 | Class Complete: Close class | [html](mockups/room-controls-finished.html) | [16:9](mockups/room-controls-finished-1920x1080.png) |
@@ -533,7 +589,7 @@ The state with the band hidden is the state mock-up itself (for example
 
 | Rule | How this screen keeps it |
 |---|---|
-| 1. Displays a finished class only | No editing, no reordering, no song choice on this screen or the presenter. The room screen's only controls are Start, Pause, Resume, Previous, Next and End, which move through the class as written; Next while following asks the music app for the next track of the instructor's own playlist and chooses nothing |
+| 1. Displays a finished class only | No editing, no reordering, no song choice on this screen or the presenter. The room screen's only controls are Start, Pause, Resume, Previous, Next and End, which move through the class as written, the class code slot's Phone remote button, which starts or stops the phone remote, and the F key, which follows the music again; Next while following asks the music app for the next track of the instructor's own playlist and chooses nothing |
 | 2. Software only, never controls equipment | No control of resistance, incline, brake or speed anywhere; "Standing" and "Seated" are words for the rider. The band's buttons reach only the class clock and the music app's play, pause and next |
 | 3. Spotify's music stays in Spotify's app | The screen only names the song and shows the link state; nothing here plays, stores or downloads audio |
 | 4. No road, ribbon, track, terrain or world | The score is a flat strip of equal-height blocks moving sideways like a music editor; no block has a height, slope or shape from an interval; no perspective, no horizon, nothing travelled along |
@@ -556,8 +612,9 @@ in PL4, at every supported size with the worst-case content. On the mock-ups,
 [mockups/shoot.js](mockups/shoot.js) takes the screenshots and then runs
 [mockups/measure.js](mockups/measure.js) on every shot in [mockups/shots.js](mockups/shots.js)
 (the states, four more states at three sizes, the eight worst cases at all ten sizes, the control
-band in its states and its worst case at all ten sizes, and the presenter at two: 137
-room and presenter shots, about fourteen minutes with Playwright and Chromium, animations stopped at their first
+band in its states and its worst case at all ten sizes, the way back to following the music and
+its two worst cases at all ten sizes, and the presenter at two: 159 room and presenter shots,
+about sixteen minutes with Playwright and Chromium, animations stopped at their first
 frame so every PNG reproduces); it exits non-zero on any failure and ends with a summary table of
 fixture by size. Every check passes on every shot.
 
@@ -571,7 +628,7 @@ fixture by size. Every check passes on every shot.
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
 | C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing (at least 1/3 s between the starts of two lights, including with tempo drift near 180 BPM), the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |
 | C8. Coverage | Every piece of text on the screen is inside an element the checks see (in the mock-ups: a `data-tier` element), so no text escapes C1 to C4 |
-| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. The band hides 3 s after the last pointer move (not before the start or on "Class Complete" with one display); a click or tap while hidden presses nothing; with reduced motion it appears and hides in 0 ms. No control code reaches the room window (ADR 0005's guard) |
+| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. **Behaviour, PL4 CI only** (the mock-ups are static and cannot check it): the band hides 3 s after the last input of each kind (pointer move, click, tap, key press); a pointer resting over the band does not hold it; after a button is pressed by click or tap the band still hides 3 s later; keyboard focus reached by Tab holds it, and so does the End question, until Esc or an answer; with one display it does not hide before the start or on "Class Complete"; a click or tap while hidden, or during the fade-out, presses nothing and only shows the band; on touch a tap is the only way in; with reduced motion it appears and hides in 0 ms; F follows the music without showing the band. No control code reaches the room window on any room channel (ADR 0005's guard, extended to the new channels) |
 | C9. Palette | From `tokens.css`, by [mockups/palette.js](mockups/palette.js): every zone at least 7 : 1 with black on it, on the stage and on the lights-down gel; neighbouring zones at least ΔE 30 apart for normal vision, 25 for protanopia and deuteranopia, 12 for tritanopia (system.md) |
 
 How the mock-up script finds ink ([mockups/ink.js](mockups/ink.js)): a pixel is ink when it differs

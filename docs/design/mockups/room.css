@@ -239,6 +239,11 @@ body {
 /* Manual clock: chosen, not a fault. A square instead of a dot, no plate. */
 .link.manual { color: var(--light-2); }
 .link.manual::before { border-radius: 0; background: var(--light-2); }
+/* Just handed over from the music by a control (the 30 s of ADR 0001's announcement): the same
+   square, in white, so it reads as news; then back to grey. "F to follow" names the way back
+   whenever the music could be followed (room-2d.md, "Back to following the music"). */
+.link.manual.handover { color: var(--light-1); }
+.link.manual.handover::before { background: var(--light-1); }
 
 /* ---------- 4:3 and other narrow screens ---------- */
 @media (max-aspect-ratio: 3/2) {

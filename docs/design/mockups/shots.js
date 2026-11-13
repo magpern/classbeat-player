@@ -31,6 +31,12 @@ const SIZES = [
 const CONTROLS = ['controls-before-start', 'controls-running', 'controls-paused', 'controls-manual', 'controls-no-code', 'controls-end', 'controls-finished'];
 const KEEP_CONTROLS = new Set(['controls-worst-1650x1080', 'controls-worst-1280x1024', 'controls-worst-1024x768', 'controls-worst-2560x1080', 'controls-worst-1280x720']);
 
+// The way back to following the music with one screen (room-2d.md, "Back to following the
+// music"): the rail right after a hand-over and later; their worst cases at every size.
+const FOLLOW = ['handover', 'manual-follow'];
+const WORST_FOLLOW = ['worst-handover', 'worst-manual-follow'];
+const KEEP_FOLLOW = new Set(['worst-handover-1280x1024', 'worst-manual-follow-1024x768', 'worst-manual-follow-1280x1024']);
+
 const WORST = ['worst-off-list', 'worst-running', 'worst-paused', 'worst-before-start', 'worst-finished', 'worst-ambiguous', 'worst-wide', 'worst-wide-before-start'];
 
 // save: false = checked by measure.js, not kept as a PNG in the repository. motion: 'reduce'
@@ -92,6 +98,8 @@ const SHOTS = [
   room('controls-running', 1440, 1080), // 4:3
   room('controls-running', 1920, 1080, true, 'reduce'), // the band appears and fades at once
   ...SIZES.map(([w, h]) => room('controls-worst', w, h, KEEP_CONTROLS.has(`controls-worst-${w}x${h}`))),
+  ...FOLLOW.map((s) => room(s, 1920, 1080)),
+  ...WORST_FOLLOW.flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_FOLLOW.has(`${s}-${w}x${h}`)))),
   room('running', 480, 270), // the room preview inside the presenter window
   room('worst-running', 480, 270, false),
   { file: 'presenter.html', png: 'presenter-1280x800.png', w: 1280, h: 800, room: false, presenter: true, save: true },
@@ -103,4 +111,4 @@ const SHOTS = [
   ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
-module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS };
+module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS, FOLLOW };

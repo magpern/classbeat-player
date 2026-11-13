@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="controls.css">
 </head>
 <body class="shown">
-<!-- Controls shown (one display: they stay until the start). Following the music, not locked yet: Start asks the music app to play and starts the clock. Phone remote on, before the riders' page exists: the class code as text, no QR code.
+<!-- Controls shown (one display: they stay until the start). Following the music, not locked yet: Start asks the music app to play and starts the clock. Phone remote on: the class code as text and its QR code (https://<site>/control#<join code>, ADR 0005 section 2).
      Base:  State: before the start. Class loaded, waiting for the first song or Start. Lights down on the first zone. Seven zones, two long names. -->
 <aside class="gel z1 down">
   <div class="gel-head"><span class="gel-num n" data-tier="gel">1</span><span class="lbl" data-tier="label" data-lines="2">First zone</span></div>
@@ -54,6 +54,6 @@
   <div class="past"></div>
   <div class="now"></div>
 </section>
-<nav class="controls" aria-label="Class controls"><div class="transport"><button class="btn"><span class="w" data-tier="label">Previous</span><span class="sub" data-tier="label">Interval</span></button><button class="btn main"><span class="w" data-tier="label">Start</span></button><button class="btn"><span class="w" data-tier="label">Next</span><span class="sub" data-tier="label">Interval</span></button></div><div class="code"><div class="code-t"><span class="lbl" data-tier="label">Class code</span><span class="v n" data-tier="minor">KXPD-RMTB</span><span class="dt" data-tier="label">Phone remote on</span></div></div><button class="btn quit"><span class="w" data-tier="label">End</span></button></nav>
+<nav class="controls" aria-label="Class controls"><div class="transport"><button class="btn"><span class="w" data-tier="label">Previous</span><span class="sub" data-tier="label">Interval</span></button><button class="btn main"><span class="w" data-tier="label">Start</span></button><button class="btn"><span class="w" data-tier="label">Next</span><span class="sub" data-tier="label">Interval</span></button></div><div class="code"><img class="qr" src="qr-placeholder.svg" alt="QR code of the class address"><div class="code-t"><span class="lbl" data-tier="label">Class code</span><span class="v n" data-tier="minor">KXPD-RMTB</span><span class="dt" data-tier="label">Phone remote on</span></div></div><button class="btn quit"><span class="w" data-tier="label">End</span></button></nav>
 </body>
 </html>
