@@ -205,7 +205,7 @@ test("fixedWidth reads the live pattern forms", () => {
 // The error set of each route, pinned in full (schema/python/tests/test_live_guards.py too).
 const ROUTE_ERRORS: Record<string, string[]> = {
   "POST /api/live/sessions": [
-    "invalid_request",
+    "body_too_large",
     "invalid_token",
     "token_unknown",
     "token_expired",
@@ -214,8 +214,8 @@ const ROUTE_ERRORS: Record<string, string[]> = {
     "too_many_requests",
     "internal_error",
   ],
-  "POST /api/live/controller": ["invalid_request", "cannot_control", "internal_error"],
-  "POST /api/live/control": ["invalid_request", "invalid_code", "controllers_full", "too_many_requests", "internal_error"],
+  "POST /api/live/controller": ["invalid_request", "body_too_large", "cannot_control", "internal_error"],
+  "POST /api/live/control": ["invalid_request", "body_too_large", "invalid_code", "controllers_full", "too_many_requests", "internal_error"],
 };
 
 test("each route's error set in routing.json is pinned, and is inside the error enum", () => {
