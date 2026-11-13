@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
 import { checkPalette } from "../lib/palette.ts";
+import { impurities } from "../lib/core-purity.ts";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokens = readFileSync(join(WEB, "src", "design", "tokens.css"), "utf8");
@@ -116,11 +117,29 @@ describe("the web lane stands alone", () => {
     const dir = join(WEB, "src", "companion", "core");
     const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
     assert.ok(files.length >= 10);
-    for (const f of files) {
-      const text = readFileSync(join(dir, f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
-      // Only other core modules, the room's pure formatting, and the contract's generated types.
-      for (const m of text.matchAll(/from\s+["']([^"']+)["']/g)) assert.match(m[1], /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/, `${f}: ${m[1]}`);
-      assert.doesNotMatch(text, /\b(document|window|localStorage|sessionStorage|location|history|navigator|fetch|WebSocket|XMLHttpRequest|setTimeout|setInterval|requestAnimationFrame|console|crypto|performance|Date)\b/, f);
-    }
+    for (const f of files) assert.deepEqual(impurities(f, readFileSync(join(dir, f), "utf8")), [], f);
+  });
+
+  it("the purity check sees every way in to a module and every DOM or I/O global", () => {
+    const caught: readonly (readonly [string, string])[] = [
+      ['import "../store.ts";', 'import "../store.ts"'],
+      ['import { x } from "../net.ts";', 'import "../net.ts"'],
+      ['export { y } from "../socket.ts";', 'export from "../socket.ts"'],
+      ['export * from "node:fs";', 'export from "node:fs"'],
+      ['const m = await import("./clock.ts");', "dynamic import()"],
+      ['import fs = require("node:fs");', 'import = require "node:fs"'],
+      ['type T = import("../app.ts").App;', 'import type "../app.ts"'],
+      ["const u = import.meta.url;", "import.meta"],
+      ["const g = globalThis;", "global globalThis"],
+      ["const d = document.body;", "global document"],
+      ["const w = window;", "global window"],
+      ["void fetch('/x');", "global fetch"],
+      ["localStorage.getItem('k');", "global localStorage"],
+      ["const t = Date.now();", "global Date"],
+      ["setTimeout(() => 0, 1);", "global setTimeout"],
+    ];
+    for (const [src, problem] of caught) assert.ok(impurities("probe.ts", src).includes(problem), `${src} -> ${JSON.stringify(impurities("probe.ts", src))}`);
+    // Names in member and key positions are not references to the globals.
+    assert.deepEqual(impurities("probe.ts", 'import { a } from "./shape.ts";\nconst o = { fetch: 1, document: 2 };\nconst v = o.fetch + a.history;'), []);
   });
 });

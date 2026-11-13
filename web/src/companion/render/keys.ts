@@ -33,6 +33,12 @@ function holdKey(b: HTMLButtonElement, k: KeyModel, h: KeyHandlers): void {
   };
   const loop = (): void => {
     if (!hold) return;
+    // The keys were drawn again (another key's ack, a notice, a new state): this button and its
+    // pointer are gone, so the lift or a slide would never reach it. The hold ends unfired.
+    if (!b.isConnected) {
+      hold = null;
+      return;
+    }
     const r = due(hold, h.now());
     hold = r.hold;
     if (r.fire) {

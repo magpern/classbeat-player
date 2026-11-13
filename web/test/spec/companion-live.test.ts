@@ -145,6 +145,28 @@ describe("companion live: keys, pending and ack", () => {
     await f.context.close();
   });
 
+  // The keys are drawn again when another key's ack comes; a hold on the old button ends with it
+  // and never fires (review B1 on #261).
+  for (const [how, liftAt] of [["a short tap", 250], ["a hold past 0.8 s", 900]] as const) {
+    it(`a redraw of the keys during a hold ends it: ${how} on skip sends nothing`, async () => {
+      const f = await connected(MANUAL);
+      await f.page.click("[data-action=nudge][data-delta='5000']");
+      const [nudge] = commands(f);
+      const box = await f.page.locator("[data-action=skip]").boundingBox();
+      assert.ok(box);
+      await f.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await f.page.mouse.down();
+      await f.page.clock.runFor(100);
+      f.live.send({ v: 1, type: "ack", id: nudge.id, result: "applied", reason: null });
+      await f.page.waitForSelector("[data-action=nudge][data-delta='5000']:not([aria-busy])");
+      await f.page.clock.runFor(liftAt - 100);
+      await f.page.mouse.up();
+      await f.page.clock.runFor(1500);
+      assert.deepEqual(commands(f).map((c) => c.action), ["nudge"]);
+      await f.context.close();
+    });
+  }
+
   it("refused: the reason's words in skip's place for 4 s", async () => {
     const f = await connected(MANUAL);
     await f.page.click("[data-action=pause]");

@@ -1,7 +1,9 @@
 // The phone's one WebSocket to the live process, `wss://<site>/api/live/ws` (ADR 0005 section 1).
 // The token goes only in the first message, `hello`, never in the address. After a dropped
 // connection it tries again by itself with the same token: after 1 and 2 s, then every 5 s
-// (companion.md, "Not connected"). A token refused, a session ended or a newer connection with
+// (companion.md, "Not connected"). The waits start again from 1 s only after a connection that
+// was welcomed and stayed up for STABLE_MS, so a server that welcomes and then closes at once is
+// tried every 5 s, not every second. A token refused, a session ended or a newer connection with
 // the same token is final: no new try. Nothing here logs.
 import { CLOSE_ENDED, CLOSE_REFUSED, CLOSE_REPLACED } from "./core/session.ts";
 import type { Event } from "./core/session.ts";
@@ -10,6 +12,8 @@ import type { CommandParts } from "./core/wire.ts";
 
 const RETRY_MS = [1000, 2000];
 const RETRY_AFTER_MS = 5000;
+/** How long a welcomed connection stays up before a later drop starts the waits again. */
+export const STABLE_MS = 10_000;
 const FINAL = new Set([CLOSE_REFUSED, CLOSE_ENDED, CLOSE_REPLACED]);
 
 export function liveUrl(): string {
@@ -19,6 +23,8 @@ export function liveUrl(): string {
 export class LiveSocket {
   private ws: WebSocket | null = null;
   private tries = 0;
+  /** When the open connection was welcomed, if it was. */
+  private upSince: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private readonly token: string;
@@ -97,7 +103,7 @@ export class LiveSocket {
       if (typeof m.data !== "string" || m.data.length > MAX_FRAME_CHARS) return;
       const msg = parseInbound(m.data);
       if (!msg) return;
-      if (msg.type === "welcome") this.tries = 0;
+      if (msg.type === "welcome" && this.upSince === null) this.upSince = this.now();
       this.emit({ type: "message", msg, at: this.now() });
     };
     ws.onclose = (c: CloseEvent) => {
@@ -107,7 +113,10 @@ export class LiveSocket {
   }
 
   private closed(code: number): void {
-    this.emit({ type: "closed", code, at: this.now() });
+    const at = this.now();
+    if (this.upSince !== null && at - this.upSince >= STABLE_MS) this.tries = 0;
+    this.upSince = null;
+    this.emit({ type: "closed", code, at });
     if (this.stopped || FINAL.has(code)) {
       this.stopped = true;
       return;
