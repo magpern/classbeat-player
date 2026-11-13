@@ -18,6 +18,9 @@ import { createKeepAwake } from "./keep-awake.ts";
 import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
+import { registerLiveHandlers } from "./live/live-handlers.ts";
+import type { LiveService } from "./live/live-service.ts";
+import { setupLive } from "./live/setup.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
 import { selectMusic } from "./select-music.ts";
@@ -42,6 +45,8 @@ let presenter: BrowserWindow | null = null;
 let list: ListController | null = null;
 let pairing: PairingService | null = null;
 let sync: SyncService | null = null;
+// The phone remote: off until the instructor starts it in the presenter, and only for the open class run.
+let phoneRemote: LiveService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
 const keepAwake = createKeepAwake(electronBlocker);
@@ -123,6 +128,7 @@ function createPresenter(): void {
     // The class goes with the presenter, and the application quits once both windows are gone.
     room.close();
     keepAwake.release();
+    phoneRemote?.stop();
   });
   void presenter.loadFile(LIST_FILE);
 }
@@ -157,12 +163,17 @@ if (!app.requestSingleInstanceLock()) {
       refreshRoomItem();
     });
     controller.onOpened(() => room.open());
+    // A new class is a new run: the session of the class before ends (ADR 0005 section 2).
+    controller.onOpened(() => phoneRemote?.classChanged());
     controller.watch((s) => room.send(s));
     controller.watch(() => refreshRoomItem());
     controller.watch((s) => keepAwake.update(s.view));
+    controller.watch(() => phoneRemote?.tick());
     registerRoomHandlers(ipcMain, () => room.trusted(), controller);
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
+    phoneRemote = setupLive(controller, paired);
+    registerLiveHandlers(ipcMain, trusted, phoneRemote);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();
     controller.attach(() => live()?.webContents ?? null);
@@ -172,6 +183,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("will-quit", () => keepAwake.release());
   app.on("will-quit", () => pairing?.stop());
   app.on("will-quit", () => sync?.stop());
+  app.on("will-quit", () => phoneRemote?.stop());
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

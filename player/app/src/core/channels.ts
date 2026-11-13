@@ -19,3 +19,11 @@ export const CH_LIST_BACK = "list:back";
 // with a RoomFrame; `room:update` is the shell's push of the same. Nothing else is the room's.
 export const CH_ROOM_STATE = "room:state";
 export const CH_ROOM_UPDATE = "room:update";
+// The presenter's phone-remote panel (ADR 0005): `live:view`, `live:start`, `live:end` and
+// `live:code` take no argument; `live:drop` takes a phone's place, 1 or 2. Each answers with a
+// LivePanelView. They are the presenter page's only: the room window has no way to them.
+export const CH_LIVE_VIEW = "live:view";
+export const CH_LIVE_START = "live:start";
+export const CH_LIVE_END = "live:end";
+export const CH_LIVE_CODE = "live:code";
+export const CH_LIVE_DROP = "live:drop";

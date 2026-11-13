@@ -21,6 +21,24 @@
     <button type="button" id="unpair" hidden>Unpair this computer</button>
   </p>
 </section>
+<section id="live" aria-label="Phone remote" hidden>
+  <p>Phone remote: <output id="live-status">Off</output></p>
+  <p id="live-detail" hidden></p>
+  <p id="live-page" hidden>On the phone: <output id="live-page-url"></output></p>
+  <p id="live-class" hidden>Class code: <output id="live-class-code"></output></p>
+  <p id="live-control" hidden>Control code: <output id="live-control-code"></output>, works once, for <output id="live-control-left"></output> more</p>
+  <p id="live-code-note" role="status" hidden></p>
+  <ul id="live-slots" hidden>
+    <li id="live-slot-1"><output id="live-slot-1-text"></output> <button type="button" id="live-drop-1" hidden>Drop</button></li>
+    <li id="live-slot-2"><output id="live-slot-2-text"></output> <button type="button" id="live-drop-2" hidden>Drop</button></li>
+  </ul>
+  <p id="live-line" role="status" hidden></p>
+  <p>
+    <button type="button" id="live-start" hidden>Start phone remote</button>
+    <button type="button" id="live-make-code" hidden>Get a control code</button>
+    <button type="button" id="live-end" hidden>End phone remote</button>
+  </p>
+</section>
 <section id="clock" hidden>
   <p>Status: <output id="status"></output></p>
   <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>

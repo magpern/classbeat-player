@@ -16,6 +16,8 @@ const PUSH_EVERY_MS = 100;
 
 export interface Controller {
   snapshot(): Snapshot;
+  /** The live session's view of the class (main process only): the state after the music was read, and when. */
+  read(): { readonly state: PlayerState; readonly now: number; readonly canSend: boolean };
   open(fileName: string, text: string): Snapshot;
   refuse(message: string): Snapshot;
   command(cmd: ClockCommand): Snapshot;
@@ -73,6 +75,12 @@ export function createController(now: () => number = () => performance.now(), re
 
   return {
     snapshot,
+    read() {
+      const t = now();
+      if (reader.unavailable?.() === true) state = withoutReader(state);
+      state = advance(state, t, reader.latest(t));
+      return { state, now: t, canSend: transport !== null };
+    },
     open(fileName, text) {
       state = openText(state, fileName, text, classSchema, now(), reader.kind !== "manual", !onDemand);
       sync();
