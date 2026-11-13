@@ -239,6 +239,31 @@ default: no source can be linked.
 - The document is checked in readers' mode (any minor of major 1) and stored in its RFC 8785
   form; the envelope takes no field beyond its five.
 
+## Export and account deletion (ADR 0002, sections 10, 11 and 12)
+
+| Route (all under `/api/site/`) | Does |
+|---|---|
+| `POST account/export` | `200`, a JSON download (`Content-Disposition: attachment`) streamed for this request: the account's email and creation time, its classes with their documents and removal markers, devices, source links, passkey names, sessions and audit events. No hash, token, key, account id or passkey user handle. Writes `account.exported` first, so the export holds its own event. `429` over 3 a day per account |
+| `POST account/delete` `{confirm}` | `confirm` is the account's email as typed (case and surrounding spaces aside); anything else is `422 confirmation_mismatch`. `204`, and the cookie is cleared. Writes no event |
+
+- Both need a sign-in within the last 10 minutes (`403 recent_sign_in_required`) and are
+  POSTs, so the origin check applies. A refusal keeps the session's "last used".
+- The deletion is one statement in the request's transaction: the account row, and by cascade
+  every row with its owner column (`account_id`): sessions, passkeys and registrations,
+  devices, approved pairings, source links and link codes, classes and markers, the sync
+  cursor and audit events. From the next request on, its sessions are `401 not_signed_in` and
+  its device and source tokens `401 token_unknown`; the app forgets a device token on
+  `token_unknown`. What has no owner column stays until it expires: pending sign-in links for
+  the address (15 minutes) and counters, which hold hashes only. The operator's allowlist is
+  not changed.
+- The export count is kept by `rate_limit_hit` under a hash of the account id, with the
+  number passed in like the source API's: it bounds a client, not the backend's role.
+- The export is streamed. The checks, the count and the event commit with the request; the
+  account's small parts come first, then its classes, read in sync order a page of 16 at a
+  time, each page in its own short transaction that enters the session again. If the session
+  has ended or the account is gone before a page, the stream stops there and the download is
+  not valid JSON. No connection is held between pages.
+
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 
 Two layers.

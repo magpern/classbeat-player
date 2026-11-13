@@ -20,6 +20,7 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.class_sync",
     "player_backend.db.queries.library",
     "player_backend.db.queries.operator",
+    "player_backend.db.queries.account",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"

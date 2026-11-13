@@ -18,6 +18,7 @@ from tests.sitehelp import Browser, Site
 
 EMAIL = "rider@example.test"
 SESSIONS = "/api/site/sessions"
+DELETE_ACCOUNT = "/api/site/account/delete"
 SITE_CLASSES = "/api/site/classes"
 FRESH = "SELECT last_used_at > now() - interval '1 minute' FROM player.sessions"
 JSON = {"Content-Type": "application/json"}
@@ -56,6 +57,9 @@ SESSION_CASES = [
     Malformed("POST", sh.CHECK, b'{"source": 1, "redirect_uri": "x"}', JSON),
     Malformed("POST", sh.APPROVE, b'{"source": "classbeat"}', JSON),
     Malformed("POST", sh.APPROVE, b"[" * 10000, JSON),
+    Malformed("POST", DELETE_ACCOUNT, b"not json", JSON),
+    Malformed("POST", DELETE_ACCOUNT, b'{"confirm": 5}', JSON),
+    Malformed("POST", DELETE_ACCOUNT, b'{"confirm": "rider@example.test"}', TEXT),
 ]
 
 

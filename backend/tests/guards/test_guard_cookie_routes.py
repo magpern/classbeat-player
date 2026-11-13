@@ -40,6 +40,9 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("POST", "/api/site/source-links/approve"),
         ("GET", "/api/site/source-links"),
         ("DELETE", "/api/site/source-links/{link_id}"),
+        # Section 12: the account's export and its deletion, both behind a recent sign-in.
+        ("POST", "/api/site/account/export"),
+        ("POST", "/api/site/account/delete"),
         # Plan, section 5, "Class library", and section 12: the account's classes on the site.
         ("GET", "/api/site/classes"),
         ("GET", "/api/site/classes/{class_id}"),
