@@ -100,6 +100,12 @@ const STATES: Readonly<Record<string, StateDef>> = {
   running: { open: live, stage: inState(FOLLOWING) },
   manual: { open: live, stage: inState(MANUAL) },
   "off-list": { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "off_the_list", canUndo: false, announcement: null } })) },
+  "paused-following": {
+    open: live,
+    stage: inState(variant(FOLLOWING, { status: "paused", link: { mode: "following", state: "paused", canUndo: false, announcement: null }, allowed: ["resume", "skip"] })),
+  },
+  coasting: { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "coasting", canUndo: false, announcement: null } })) },
+  ambiguous: { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "ambiguous", canUndo: false, announcement: null } })) },
   "last-interval": { open: live, stage: inState(variant(FOLLOWING, { next: [], nextSong: null })) },
   paused: { open: live, stage: inState(recorded("manual-paused-last-interval")) },
   "before-start": { open: live, stage: inState(recorded("not-started")) },
