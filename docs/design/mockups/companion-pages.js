@@ -55,6 +55,13 @@ add('off-list', 'Companion: not a class song', 'State: link state off_the_list. 
   run(top('Not a class song', 'alert', '23:41') + GEL4 + clock('1:10', { ...SONG, when: 'in about 1:22', dim: true }, { label: 'Interval left, estimated', est: true })
     + cue(CUE) + coming(NEXT3) + runKeys({ follow: true })));
 
+add('coasting', 'Companion: music not heard', 'State: link state coasting (the music is not heard). The clock runs on by itself, so the countdown and the song change are marked as estimates, as for a song that is not a class song.',
+  run(top('Music not heard', 'alert', '23:41') + GEL4 + clock('1:10', { ...SONG, when: 'in about 1:22', dim: true }, { label: 'Interval left, estimated', est: true })
+    + cue(CUE) + coming(NEXT3) + runKeys({ follow: true })));
+
+add('ambiguous', 'Companion: song is in twice', 'State: link state ambiguous (the same recording is in the class twice). The clock is not estimated; the choice is made on the computer.',
+  run(top('Song is in twice', 'alert', '23:41') + GEL4 + CLOCK + cue(CUE) + coming(NEXT3) + runKeys({ follow: true })));
+
 add('manual', 'Companion: manual clock', 'State: link mode manual. allowed: pause, skip, nudge. The nudges work; skip goes to the next interval.',
   run(top('Manual clock', 'manual', '23:41') + GEL4 + CLOCK + cue(CUE) + coming(NEXT3) + runKeys()));
 
@@ -71,11 +78,11 @@ add('last-interval', 'Companion: last interval', 'State: next is empty and nextS
     + cue('Easy spin. Shake out the legs and drink. Thank you, everyone.') + coming([])
     + runKeys({ noSkip: 'Last interval' })));
 
-add('before-start', 'Companion: before the start', 'State: status not_started. Lights down on the first interval\'s zone, its cue and countdown. Start is a hold.',
+add('before-start', 'Companion: before the start', 'State: status not_started. Lights down on the first interval\'s zone, its cue and countdown. Start is a hold: the key says "Hold" ("Hold to start" shows only for 2 s after a short tap).',
   run(top('Not started', 'manual', '42:00', 'class') + gel(2, 'Endurance', [], { down: true, label: 'First zone' })
     + clock('5:00', { label: 'First song', when: 'at the start', title: 'Neon Avenue', artist: 'Glass Coast' }, { label: 'First interval' })
     + cue('Easy spin to warm up. Find your seat and settle in.') + coming([[3, 'Tempo', '4:00'], [4, 'Threshold', '6:00']])
-    + keys(key('start', 'Start', { main: true, full: true, guard: 'hold', hint: 'Hold to start' }))));
+    + keys(key('start', 'Start', { main: true, full: true, guard: 'hold', hint: 'Hold' }))));
 
 add('finished', 'Companion: class complete', 'State: status ended. Nothing left to steer; the computer ends the session.',
   run(top('Ended', 'manual', '42:00', 'ridden') + gel(0, 'Class complete', [], { blank: true, sub: '42:00 ridden' })

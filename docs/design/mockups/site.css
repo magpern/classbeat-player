@@ -84,7 +84,7 @@ p.small { margin-bottom: 12px; }
 .panel { border: 2px solid var(--light-3); border-radius: 6px; padding: 16px; margin: 16px 0; max-width: 40em; background: var(--stage-raised); }
 .panel h2 { margin-top: 0; }
 .status { display: flex; gap: 10px; align-items: baseline; font-size: 18px; margin: 12px 0; }
-.or { display: flex; align-items: center; gap: 12px; margin: 20px 0; max-width: 28em; }
+.or { display: flex; align-items: center; gap: 12px; margin: 20px 0; max-width: 28em; font-size: 14px; color: var(--light-3); }
 .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--stage-line); }
 
 /* ---------- Lists ---------- */

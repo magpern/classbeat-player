@@ -47,7 +47,7 @@ const plate = (head, detail, buttons = '') => `<div class="plate" role="alert"><
 const note = (head, detail = '') => `<div class="note" role="status"><div class="head2"><span class="mark ok"></span>${T('title', head, 3)}</div>${detail ? `<p class="dt">${T('small', detail)}</p>` : ''}</div>`;
 const status = (text, kind = 'work') => `<div class="status" role="status"><span class="mark ${kind}"></span>${T('body', text, 3)}</div>`;
 
-// The page frame. nav: 'classes' | 'devices' | 'account' | null (signed out).
+// The page frame. nav: 'classes' | 'devices' | 'account' (that one is current), 'none' (signed in, no section current) | null (signed out).
 function frame({ title, nav, body, narrow, comment }) {
   const link2 = (key, text) => `<span class="a${nav === key ? ' cur' : ''}"${nav === key ? ' aria-current="page"' : ''}>${T('btn', text, 1)}</span>`;
   const navHtml = nav === null ? '' : `<nav class="nav" aria-label="Main">${link2('classes', 'Classes')}${link2('devices', 'Devices')}${link2('account', 'Account')}<span class="navbtn out ul" role="button">${T('body', 'Sign out', 1)}</span></nav>`;
