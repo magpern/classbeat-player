@@ -1,4 +1,4 @@
-// Every state of the class list at the three window sizes (19 states, 57 renderings): the real page
+// Every state of the class list at the three window sizes (20 states, 60 renderings): the real page
 // in headless Chrome over the fixture views, screenshots written to screenshots/ (CI keeps them
 // for the Designer), and the spec's measurable checks on each. Needs `npm run build` first.
 //   npm run test:shots            (SHOTS_ONLY=<regex> limits it to matching "<state>-<w>x<h>")

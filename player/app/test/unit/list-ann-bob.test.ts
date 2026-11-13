@@ -57,7 +57,7 @@ test("Ann's classes are never shown to Bob, before or after sync has wiped them"
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, open: () => EMPTY_SNAPSHOT });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => EMPTY_SNAPSHOT });
   /** Everything the window is sent and everything it would paint at this moment. */
   const shown = (): string => {
     const v = list.view();
@@ -106,7 +106,7 @@ test("Ann plays a class, the server removes it, then Bob pairs: nothing of Ann's
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
   const shown = (): string => {
     const v = list.view();
     return JSON.stringify([v, screenOf(v, { filter: "", selectedId: null, lastStartedId: null }, NOW)]);
@@ -160,7 +160,7 @@ test("a newer version of the class being played applies once it ends", async () 
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
   sync.start();
   await settle();
   list.view();

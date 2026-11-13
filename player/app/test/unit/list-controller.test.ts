@@ -27,6 +27,7 @@ function rig() {
     opened: [] as [string, string][],
     openResult: OPENED,
     listener: (): void => undefined,
+    account: "a".repeat(64) as string | null,
   };
   const controller = createListController({
     sync: {
@@ -37,6 +38,7 @@ function rig() {
       watch: (l) => void (r.listener = l),
     },
     pairing: { view: () => r.pairing },
+    account: () => r.account,
     open: (name, text) => (r.opened.push([name, text]), r.openResult),
   });
   return { r, controller };
@@ -197,4 +199,21 @@ test("the view holds only the fields of a view: no token, no document, no accoun
   controller.start(r.rows[0].id, r.rows[0].hash);
   const text = JSON.stringify(controller.view());
   assert.doesNotMatch(text, /secret document body|cbp_|token|account/);
+});
+
+test("the snapshot is tied to the account key: a new account with the same email never sees it", () => {
+  const { r, controller } = rig();
+  controller.view();
+  r.pinResult = {};
+  const played = r.rows[1];
+  controller.start(played.id, played.hash);
+  r.rows = [r.rows[0], r.rows[2]];
+  r.sync = { ...r.sync, pinned: { id: played.id, after: "removed" } };
+  r.listener();
+  assert.equal(controller.view().rows.length, 3, "the account that played it still sees it");
+  // The same email, paired again as another account: the pairing view is identical.
+  r.account = "b".repeat(64);
+  assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"]);
+  r.account = "a".repeat(64);
+  assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"], "and it does not come back");
 });

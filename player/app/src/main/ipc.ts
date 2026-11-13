@@ -7,6 +7,6 @@ import type { PairingService } from "./pairing/service.ts";
 
 export { trustedEvent } from "./ipc-handlers.ts";
 
-export function registerIpc(controller: Controller, trusted: () => Trusted, pairing: PairingService): void {
-  registerHandlers(ipcMain, controller, trusted, pairing);
+export function registerIpc(controller: Controller, trusted: () => Trusted, pairing: PairingService, onDropOpened: () => void): void {
+  registerHandlers(ipcMain, controller, trusted, pairing, onDropOpened);
 }

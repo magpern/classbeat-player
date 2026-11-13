@@ -54,7 +54,8 @@ export interface Head {
   readonly counted: boolean;
 }
 
-export const LASTING_TEXT = "Classes on this computer can't be updated. Restart the app; if it keeps happening, reinstall it.";
+export const LASTING_HEADLINE = "The saved classes cannot be reached";
+export const LASTING_TEXT = "They are still on this computer, but the player cannot reach them. Restart the app; if it keeps happening, reinstall it.";
 const PASSING_TEXT = "They are still on this computer. Trying again soon. You can still open a class file.";
 const MINUTES = SYNC_EVERY_MS / 60_000;
 
@@ -120,7 +121,7 @@ export function headOf(v: ListView): Head {
     const lasting = sync.unavailable === "lasting";
     return {
       status: null,
-      plate: plate("The saved classes could not be read", lasting ? LASTING_TEXT : PASSING_TEXT),
+      plate: lasting ? plate(LASTING_HEADLINE, LASTING_TEXT) : plate("The saved classes could not be read", PASSING_TEXT),
       counted: false,
       panel: panel("unavailable", "Classes not available", { text: "Nothing was deleted. If this stays, restart the player or check the computer’s disk." }),
     };

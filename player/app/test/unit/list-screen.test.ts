@@ -8,7 +8,7 @@ import { listRows, snapshotOf } from "../../src/core/list/rows.ts";
 import { screenOf } from "../../src/core/list/screen.ts";
 import type { Screen } from "../../src/core/list/screen.ts";
 import { jumpToLetter, keepSelection, moveSelection } from "../../src/core/list/selection.ts";
-import { LASTING_TEXT } from "../../src/core/list/states.ts";
+import { LASTING_HEADLINE, LASTING_TEXT } from "../../src/core/list/states.ts";
 import type { ListUi } from "../../src/core/list/view.ts";
 import { NOTICE_TEXT } from "../../src/core/pairing/view.ts";
 import { NOW, PAIRED, row, rows, view } from "./list-fixtures.ts";
@@ -179,7 +179,8 @@ test("every state shows its words, and the body is chosen in the spec's order", 
   }
   // A cache that cannot be read wins over a wipe, a wipe over pairing, pairing over everything else.
   const all = view({ rows: some, sync: { status: "unavailable", unavailable: "lasting", wiping: true }, pairing: { state: "starting" } });
-  assert.equal(screen(all).plate?.headline, "The saved classes could not be read");
+  assert.equal(screen(all).plate?.headline, LASTING_HEADLINE);
+  assert.equal(screen({ ...all, sync: { ...all.sync, unavailable: "passing" } }).plate?.headline, "The saved classes could not be read");
   assert.equal(screen({ ...all, sync: { ...all.sync, status: "unpaired", unavailable: null } }).status?.text, "Clearing the saved classes");
   assert.equal(screen({ ...all, sync: { ...all.sync, status: "synced", unavailable: null, wiping: false } }).status?.text, "Asking the server for a code…");
 });
@@ -187,7 +188,10 @@ test("every state shows its words, and the body is chosen in the spec's order", 
 test("a lasting fault says what to do; a passing one says it will be tried again", () => {
   const lasting = screen(view({ sync: { status: "unavailable", unavailable: "lasting" } }));
   assert.equal(lasting.plate?.detail, LASTING_TEXT);
-  assert.equal(LASTING_TEXT, "Classes on this computer can't be updated. Restart the app; if it keeps happening, reinstall it.");
+  assert.equal(lasting.plate?.headline, LASTING_HEADLINE);
+  assert.equal(LASTING_TEXT, "They are still on this computer, but the player cannot reach them. Restart the app; if it keeps happening, reinstall it.");
+  assert.equal(LASTING_HEADLINE, "The saved classes cannot be reached");
+  assert.doesNotMatch(LASTING_TEXT + LASTING_HEADLINE, /read|updated|'/, "one fault, no straight apostrophe");
   const passing = screen(view({ sync: { status: "unavailable", unavailable: "passing" } }));
   assert.match(passing.plate?.detail ?? "", /Trying again soon/);
   assert.equal(lasting.body.kind === "panel" && lasting.body.panel.buttons.length, 0, "no pairing button, no start");

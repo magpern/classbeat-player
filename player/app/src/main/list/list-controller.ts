@@ -14,6 +14,8 @@ import type { SyncService } from "../sync/service.ts";
 export interface ListDeps {
   readonly sync: Pick<SyncService, "view" | "list" | "pin" | "unpin" | "watch">;
   readonly pairing: Pick<PairingService, "view">;
+  /** The key of the account the pairing's token reads (not the email), or null when not paired. */
+  readonly account: () => string | null;
   /** Opens a class's document for play (the clock's own open); the snapshot carries the error, if any. */
   readonly open: (name: string, text: string) => Snapshot;
 }
@@ -44,8 +46,10 @@ export function createListController(d: ListDeps): ListController {
     view() {
       const sync = d.sync.view();
       const pairing = d.pairing.view();
-      // Another pairing, another account's list: read it again.
-      const account = pairing.state === "paired" ? `paired:${pairing.email}` : pairing.state;
+      // Another pairing or account, another list: read it again. The key is the account's, not the
+      // email's: a new account with the same email is another account.
+      const key = d.account();
+      const account = pairing.state === "paired" ? `paired:${key ?? ""}:${pairing.email}` : pairing.state;
       if (account !== who) {
         who = account;
         stale();
