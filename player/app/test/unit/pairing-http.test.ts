@@ -80,6 +80,15 @@ test("a body over the cap, or not JSON, is not read", async () => {
   assert.equal(html.kind === "http" && html.body, undefined);
 });
 
+test("a request may raise the cap for an answer with a class document, and is held to it", async () => {
+  const text = "a".repeat(MAX_BODY_BYTES);
+  handler = (_q, s) => s.writeHead(200, { "content-type": "application/json" }).end(`"${text}"`);
+  const raised = await createBackendCall()({ origin, method: "GET", path: "/api/player/device", token: newToken("dev"), maxBodyBytes: 2 * MAX_BODY_BYTES });
+  assert.equal(raised.kind === "http" && raised.body, text);
+  const held = await createBackendCall()({ origin, method: "GET", path: "/api/player/device", token: newToken("dev"), maxBodyBytes: MAX_BODY_BYTES });
+  assert.equal(held.kind === "http" && held.body, undefined);
+});
+
 test("a server that does not answer in time, and a closed port, are unreachable", async () => {
   handler = () => undefined;
   assert.deepEqual(await createBackendCall(fetch, 200)({ origin, method: "GET", path: "/api/player/device", token: newToken("dev") }), { kind: "unreachable" });

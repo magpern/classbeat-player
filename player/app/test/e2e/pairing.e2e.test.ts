@@ -118,7 +118,9 @@ test("polls went no faster than the server's 5 s, and only to the fake backend",
   assert.ok(tokenPolls[0].at - start.at >= 5000, `first poll after ${tokenPolls[0].at - start.at} ms`);
   assert.ok(tokenPolls[1].at - tokenPolls[0].at >= 5000, `second poll after ${tokenPolls[1].at - tokenPolls[0].at} ms`);
   for (const p of tokenPolls) assert.deepEqual(JSON.parse(p.body), { device_code: DEVICE_CODE });
-  assert.ok(seen.every((s) => s.auth === undefined || s.url === "/api/player/device"), "the token went to another route");
+  // The token goes to the device check and to class sync (#111), which starts once paired.
+  const tokenRoute = (url: string): boolean => url === "/api/player/device" || /^\/api\/player\/changes\?after=\d+&limit=\d+$/.test(url) || /^\/api\/player\/classes\/[0-9a-f-]{36}$/.test(url);
+  assert.ok(seen.every((s) => s.auth === undefined || tokenRoute(s.url)), "the token went to another route");
 });
 
 test("unpair: the server is told, and the app is unpaired", async () => {

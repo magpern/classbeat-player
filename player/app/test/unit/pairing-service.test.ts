@@ -198,3 +198,27 @@ test("stop ends the wait: no poll after the app quits", async () => {
   await r.advance(60_000);
   assert.equal(r.requests.filter((q) => q.path === "/api/pairing/token").length, 0);
 });
+
+test("class sync's hooks: the credential while paired, told when saved and when deleted, refusals as the check's", async () => {
+  const r = rig();
+  const changes: string[] = [];
+  r.service.watch((c) => void changes.push(c));
+  assert.equal(r.service.credential(), null);
+  assert.equal(r.service.keychainAvailable(), true);
+  r.service.start();
+  await flush();
+  await r.advance(20_000);
+  assert.deepEqual(changes, ["paired"]);
+  assert.deepEqual(r.service.credential(), { record: { origin: ORIGIN, token: r.token, email: "ann@example.test" }, expired: false });
+  r.service.tokenRefused("expired");
+  assert.equal(r.service.credential()?.expired, true);
+  assert.equal(r.store.load() !== null, true, "an expired token is kept");
+  r.service.tokenRefused("gone");
+  assert.deepEqual(changes, ["paired", "forgotten"]);
+  assert.equal(r.service.credential(), null);
+  assert.equal(r.store.load(), null);
+  // Not paired: a refusal changes nothing.
+  r.service.tokenRefused("gone");
+  assert.deepEqual(changes, ["paired", "forgotten"]);
+  assert.equal(r.service.view().state, "unpaired");
+});

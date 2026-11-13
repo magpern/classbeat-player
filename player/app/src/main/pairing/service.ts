@@ -8,6 +8,7 @@ import type { OriginResult } from "../../core/pairing/origin.ts";
 import { parseDeviceAnswer, parsePollAnswer, parseStartAnswer } from "../../core/pairing/protocol.ts";
 import type { HttpAnswer } from "../../core/pairing/protocol.ts";
 import { parseRecord, recordText } from "../../core/pairing/record.ts";
+import type { PairingRecord } from "../../core/pairing/record.ts";
 import { pairingView } from "../../core/pairing/view.ts";
 import type { PairingView } from "../../core/pairing/view.ts";
 import type { BackendCall, BackendRequest } from "./http.ts";
@@ -34,6 +35,14 @@ export interface PairingService {
   /** Reads a saved pairing, once, at startup, and asks the server whether it still works. */
   load(): void;
   stop(): void;
+  /** Main process only (class sync): the saved pairing and whether the server said it ran out; null when not paired. */
+  credential(): { readonly record: PairingRecord; readonly expired: boolean } | null;
+  /** What the player API answered to the token: taken as the startup check's answer would be. */
+  tokenRefused(kind: "gone" | "expired"): void;
+  /** Called once the pairing is saved in the keychain ("paired") or deleted from it ("forgotten"). */
+  watch(listener: (change: "paired" | "forgotten") => void): void;
+  /** Whether the keychain could hold a pairing now. */
+  keychainAvailable(): boolean;
 }
 
 export function createPairingService(d: PairingDeps): PairingService {
@@ -42,6 +51,16 @@ export function createPairingService(d: PairingDeps): PairingService {
   let stopped = false;
   const queue: PairingEvent[] = [];
   let running = false;
+  const listeners: ((change: "paired" | "forgotten") => void)[] = [];
+  const notify = (change: "paired" | "forgotten"): void => {
+    for (const l of listeners) {
+      try {
+        l(change);
+      } catch {
+        // A listener's failure changes nothing about the pairing.
+      }
+    }
+  };
 
   const cancelTimer = (): void => {
     if (timer !== null) d.clearTimer(timer);
@@ -93,6 +112,7 @@ export function createPairingService(d: PairingDeps): PairingService {
         } catch {
           ok = false;
         }
+        if (ok) notify("paired");
         return dispatch({ type: "saved", attempt: e.attempt, ok });
       }
       case "check":
@@ -107,7 +127,7 @@ export function createPairingService(d: PairingDeps): PairingService {
         } catch {
           // Nothing more can be done; the state no longer holds the token either way.
         }
-        return;
+        return notify("forgotten");
       case "revoke":
         // Sent after the local copy is gone, and its answer changes nothing here: offline or not, this
         // computer is unpaired. A token never given back is deleted on the server 24 hours after
@@ -155,6 +175,22 @@ export function createPairingService(d: PairingDeps): PairingService {
     stop() {
       stopped = true;
       cancelTimer();
+    },
+    credential() {
+      return state.kind === "paired" ? { record: state.record, expired: state.expired } : null;
+    },
+    tokenRefused(kind) {
+      if (state.kind === "paired") dispatch({ type: "checked", attempt: state.attempt, answer: { kind } });
+    },
+    watch(listener) {
+      listeners.push(listener);
+    },
+    keychainAvailable() {
+      try {
+        return d.store.available();
+      } catch {
+        return false;
+      }
     },
   };
 }
