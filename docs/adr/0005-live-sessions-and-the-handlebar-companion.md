@@ -25,9 +25,10 @@ What this ADR takes as given:
   every 30 s with `auth_device_active` and `auth_session_active`, the `live_revocations` hint,
   control by sign-in or by control code, controller tokens `cbp_ctl_`, at most 2 controllers,
   the WebSocket `hello`, the message limits and the routing allowlist. Section 10 holds the live
-  limits, section 13 the threats. **This ADR does not change any of it.** It decides what 0002
-  left to PL8: the transport in practice, the run of a session, the messages, the command
-  semantics, failure behaviour and the issue split.
+  limits, section 13 the threats. This ADR keeps all of it except the controller's command
+  set, which section 10 amends (two actions added). It decides what 0002 left to PL8: the
+  transport in practice, the run of a session, the contract, the command semantics, failure
+  behaviour and the issue split.
 - [ADR 0003](0003-class-format.md): an interval has `start_ms`, `length_ms`, `zone` and a `cue`
   of at most 120 characters; songs have title, artist and their window in class time.
 - What exists: the player's pure `core/commands.ts` (`ClockCommand`: start, pause, resume, next,
@@ -83,48 +84,81 @@ What this ADR takes as given:
 
 ### 3. Control authority
 
-Exactly ADR 0002 section 8, restated so the issues can check it:
+ADR 0002 section 8, restated so the issues can check it, with the one change of section 10:
 
 - *By sign-in.* The phone is signed in on the site with the host's account and sends the join
   code to `POST /api/live/controller`. The controller token ends with that site session.
-- *By control code.* The presenter, never the room window, shows a control code and a QR code of
+- *By control code.* The host asks for a code over its connection (`make_code`, section 4); the
+  live process answers `control_code` to the host only, and the app passes it to the presenter
+  window only, never to the room window. The presenter shows it and a QR code of
   `https://<site>/control#<join code>.<control code>`. 2 minutes, single use, 5 wrong tries per
-  session cancel it, 30 codes per session per hour. An app with one display offers no control
-  code: sign-in only.
+  session cancel it (the host gets `code_cancelled`), 30 codes per session per hour. An app with
+  one display offers no control code: sign-in only.
 - The phone gets a controller token `cbp_ctl_`, hashed in the live process's memory, kept on the
   phone in `sessionStorage` of the site's origin only, the fragment removed from the address bar
   at once. It ends with the session, when the host drops it, or with its site session.
-- **At most 2 controllers** (a phone and a spare). Their commands reach the host in arrival
-  order and the host applies each against its current state (section 5). The presenter lists
-  the connected controllers as "phone 1" and "phone 2", with "Drop" beside each; the server
-  stamps the slot on each forwarded command and nothing else about the phone.
+- **At most 2 controllers** (a phone and a spare), counted as controller tokens held. A third
+  request by sign-in gets `cannot_control`, like every failure there. A right control code while
+  both places are held gets `controllers_full`, is not used up and is not counted as a wrong try;
+  a wrong code is counted as before, whatever the places. The host frees a place with `drop`.
+- The server gives each controller its `slot` (1 or 2) and stamps it on what it forwards to the
+  host. The phone's `command` schema has no `slot`, so a phone-sent one fails validation and the
+  message is dropped. The presenter lists "phone 1" and "phone 2" with "Drop" beside each, and
+  nothing else about the phones.
 - **Nothing a join code or a rider token can do grants control.** The controller routes need a
   sign-in of the host account or the current control code; the WebSocket gives the role by the
   token's prefix; commands are routed only from controller connections; a rider token is refused
   by every controller route by prefix. The control code is in no message the room window or a
   rider can receive. Guard tests hold each of these (section 7).
 
-### 4. The messages (contract lane)
+### 4. The contract (contract lane)
 
-New schemas in `schema/live/v1/`, one JSON Schema per message, every object closed
-(`additionalProperties: false`), with generated Python and TypeScript types like the class
+New schemas in `schema/live/v1/`, one JSON Schema per message and per HTTP body, every object
+closed (`additionalProperties: false`), with generated Python and TypeScript types like the class
 format. Every message has `"v": 1` and a `type`. Strings have maximum lengths; arrays have
-maximum items; numbers are integers in milliseconds.
+maximum items; numbers are integers (times in milliseconds). Issues 5, 8 and 9 build only
+against the merged contract.
+
+**HTTP routes** (bodies and answers; credentials as in ADR 0002):
+
+| Route | Caller, credential | Body | Answer |
+|---|---|---|---|
+| `POST /api/live/sessions` | App, device token | none | session id, join code, host token |
+| `POST /api/live/controller` | Phone, site cookie | `session` | controller token |
+| `POST /api/live/control` | Phone, none | `session`, `code` | controller token |
+
+`session` is the join code, naming the session only. Refusals: `cannot_control` (controller);
+`invalid_code`, `controllers_full` (control). They share ADR 0002's error shape as a closed
+enum, plus 429 with `Retry-After` from section 10 of ADR 0002.
+
+**WebSocket messages.** The table is the routing allowlist for the companion; the server checks
+each message against the schema for its sender's role and drops (and counts) anything else.
 
 | Type | From → to | Holds |
 |---|---|---|
 | `hello` | any → server | The token (ADR 0002) |
 | `welcome` | server → the connection | `role`; a controller's `slot`; whether the host is in |
 | `host_status` | server → controllers | `connected`: true or false |
-| `controller_joined`, `controller_left` | server → host | `slot` only |
+| `controller_joined`, `controller_left` | server → host | `slot`; `via`: `sign_in` or `code` |
+| `make_code` | host → server | nothing |
+| `control_code` | server → host | `code`, `expiresInMs` |
+| `code_cancelled` | server → host | `reason`: `wrong_tries`, `expired`, `used`, `replaced` |
+| `drop` | host → server | `slot` |
 | `companion_state` | host → controllers | Below |
-| `command` | controller → host | Below; the server adds `slot` |
-| `ack` | host → controllers | `id`, `result`, `reason` |
-| `end` | host → server | Nothing |
+| `command` | controller → server | Below, without `slot` |
+| `command` (forwarded) | server → host | The same, with the `slot` the server stamped |
+| `command_result` | host → server | `slot`, `id`, `result`, `reason` |
+| `ack` | server → the one controller in `slot` | `id`, `result`, `reason` |
+| `end` | host → server | nothing |
 | `ended` | server → the connection | `reason`: `host_ended`, `revoked`, `expired`, `dropped` |
 
-**`companion_state`** is sent by the host on every change and at least once a second, and at
-once on `controller_joined`. It holds only what the teleprompter shows:
+**`ack` has one sender, the server**, and goes only to the controller that sent the command. It
+is either the host's `command_result` passed on, or the server's own answer when it forwards
+nothing (`host_away`, `rate`). `result` is `applied`, `duplicate` or `refused`; `reason` is null
+or one of `stale`, `stale_run`, `invalid`, `not_allowed`, `would_stop_following`, `host_away`,
+`rate`.
+
+**`companion_state`** holds only what the teleprompter shows:
 
 - `run`, and `seq`: an integer the host increases by 1 per state message within the run;
 - `status`: `not_started`, `running`, `paused`, `holding`, `ended`; `classMs`, `lengthMs`,
@@ -133,9 +167,12 @@ once on `controller_joined`. It holds only what the teleprompter shows:
 - `next`: up to 3 coming intervals, each with `startMs`, `lengthMs`, `zone`, `cue`;
 - `nextSong`: the coming song change, `atMs` and the incoming song's `title` and `artist`, or
   null (song titles are held in memory only, for the session, like the class itself);
-- `link`: `mode` (`following` or `manual`), the state name of ADR 0001, `announcement` (one of
-  the player's fixed texts, at most 80 characters) and `canUndo`;
-- `allowed`: the command actions that do something now (so the phone greys the rest).
+- `link`: `mode` (`following` or `manual`), the state name of ADR 0001, `canUndo`, and
+  `announcement`: null or a `kind` from a closed enum (taken in issue 1 from the player's fixed
+  texts, for example `resynced_back`, `resynced_forward`) with an integer `seconds` or null. The
+  phone writes the words; no free text crosses the relay;
+- `allowed`: the command actions that do something now without stopping the following of the
+  music (section 5); the phone greys the rest and says why.
 
 It holds no rider field of any kind (no count, nickname, reading or presence), no token or code,
 no account or device name. It is routed to controllers only. Riders, when they come, get their
@@ -150,12 +187,11 @@ own closed `rider_state`; whether it carries the cue is decided in the riders' i
 | `pause` | `pause` | |
 | `resume` | `resume` | |
 | `skip` | `next` | To the next song while following, the next interval on the manual clock |
-| `previous` | `previous` | |
-| `nudge` | `jump` | `deltaMs` exactly `5000` or `-5000` (`JUMP_MS`); other steps: contract |
-| `undo_resync` | `undo` | Only while `canUndo` |
+| `nudge` | `jump` | `deltaMs` exactly `5000` or `-5000` (`JUMP_MS`); never while followed |
+| `undo_resync` | `undo` | Only while `canUndo`; ADR 0001's undo, back to the manual clock |
 
-Manual, follow and picking an occurrence stay on the presenter in this part; adding them is a
-contract pull request.
+`previous`, manual, follow and picking an occurrence stay on the presenter; adding one is a
+contract pull request and an amendment of ADR 0002.
 
 **The equipment allowlist.** The action list above is the whole set of things a phone can ask.
 No schema in `schema/live/` has a field or value that sets resistance, incline, brake, speed,
@@ -163,25 +199,41 @@ power, gear, level, a target on a machine, or a mode of a machine; the player ha
 from a live message to any device other than its own clock and the music app's play, pause and
 next (`core/link/transport.ts`).
 
-### 5. Command semantics: idempotent, never late
+### 5. Command semantics: idempotent, never late, never off the music
 
-- The host keeps the last 64 command ids of the run. A repeated `id` gets the first `ack` again
-  and is not applied twice, so a phone may resend after a lost `ack`.
-- A command whose `run` is not the current run is refused `stale_run`. A command whose `basis`
-  names a state the host published more than 3 s ago is refused `stale` (default, a player
-  setting): a tap made on an old picture, or held up by the network, never fires late.
-- An accepted command goes through the same path as the presenter's button: `parseClockCommand`,
-  then `routeWhileFollowing`, then the clock or the music app. So a phone can do nothing the
-  presenter cannot, and while following, pause and skip go to the music app as ADR 0001 says.
-  `ack` results: `applied`, `duplicate`, `refused` with `reason` one of `stale`, `stale_run`,
-  `not_allowed`, `invalid`.
-- An applied phone command shows a short line on the presenter ("phone 1: pause") so anyone at
-  the computer sees what happened.
+- **The host checks in this order**, after the server's schema check:
+  1. `(slot, id)` seen in the run's last 64 commands: the first answer again, `duplicate`, and
+     nothing applied. Keyed by slot as well, so one phone's ids never answer for the other's.
+     This comes first so a resend after a lost `ack` gets its answer even if it is now late.
+  2. `run` not the current run: `stale_run`.
+  3. `basis` above the current `seq`: `invalid`.
+  4. `basis` names a state published more than 3 s ago: `stale` (default, a player setting). A
+     tap made on an old picture, or held up by the network, never fires late.
+  5. `action` not in the current `allowed`: `not_allowed`.
+  6. The route at this moment (`routeWhileFollowing`) would hand the clock over to manual (for
+     example the music app cannot be sent the pause now): `would_stop_following`, and the clock
+     and the link stay exactly as they were.
+  7. Otherwise applied through the presenter's path: `parseClockCommand`, `routeWhileFollowing`,
+     the clock or the music app. A phone can do nothing the presenter cannot.
+- **A phone command never stops the following of the music, with one exception.** `allowed` is
+  computed from the same routing: while following, an action whose route is a handover (`nudge`
+  always; `pause`, `resume` and `skip` when the music app cannot be sent them) is left out, and
+  step 6 catches a change between the state and the tap. The exception is `undo_resync`: ADR
+  0001 defines it as the return to the manual clock at the earlier place, and the phone then
+  shows "manual clock". Following again is chosen on the presenter.
+- The phone shows `would_stop_following` and `not_allowed` as "Not while following the music:
+  use the computer", and the other refusals as "Too late, try again" or "Not connected".
+- An applied phone command shows a short line on the presenter ("phone 1: pause").
 - The phone shows a pressed button as pending until its `ack` or a later state; it never queues a
   command while disconnected (the buttons are disabled then) and never retries a command with a
   new `id` by itself.
-- The server answers a command with `ack` `refused`, `reason` `host_away`, when no host is
-  connected, and forwards nothing.
+- **Message budget.** ADR 0002 lets a connection send 10 messages a second and closes it beyond.
+  The server lets each controller send at most 2 commands a second and answers more with `ack`
+  `rate` itself, so at most 4 commands a second reach the host. The host sends `companion_state`
+  on a change, coalesced to at most 4 a second, at least once a second and at once on
+  `controller_joined`; `command_result`s
+  go first; the host's own sender holds its total under 8 a second. Controller traffic can
+  never get the host's connection closed.
 
 ### 6. Failure behaviour
 
@@ -207,19 +259,25 @@ next (`core/link/transport.ts`).
 
 - **Rule guard, contract lane:** the `command` schema's `action` enum equals the table in section
   4 exactly and `deltaMs` equals ±`JUMP_MS`; every live schema is closed; no property name or
-  enum value in `schema/live/` matches an equipment vocabulary (resistance, incline, brake,
-  speed, power, gear, level, erg, target, control point). A change to the expected list is a
-  rule-sensitive pull request.
-- **Rule guard, rider data:** `companion_state` has no field from the rider vocabulary
-  (nickname, reading, rider, presence, count), and the server's router sends it only to
-  controller connections.
+  enum value in `schema/live/` contains, as a whole word (names split at `_`, `-` and case
+  changes), a word from `schema/live/guard/equipment-words.txt` (resistance, incline, brake,
+  speed, power, gear, level, erg, target, slope, watts, and the like). The issue and the test
+  name that one file. A change to the expected action list is a rule-sensitive pull request.
+- **Rule guard, rider data:** `companion_state` has no whole word from
+  `schema/live/guard/rider-words.txt` (nickname, reading, rider, presence, count), and the
+  server's router sends it only to controller connections.
 - **Backend:** routing is the allowlist (anything else dropped and counted); commands are
-  accepted only from controller connections; rider and host tokens are refused by the
-  controller routes; a schema-invalid message is dropped; deleting the account and revoking the
-  device end the session (with and without the notification).
+  accepted only from controller connections and a `slot` from a phone fails validation; the
+  control code goes only to the host; rider and host tokens are refused by the controller
+  routes; the third controller's answers; the per-controller command limit; deleting the
+  account and revoking the device end the session (with and without the notification).
 - **Player:** the live command intake returns a `ClockCommand` or nothing (a type test and a
-  table test of every `action`); the control code is sent only on the presenter's channel, never
-  on the room window's (`room-preload`); a dropped connection leaves the clock state unchanged.
+  table test of every `action`); a table test over every link state, `canSend` true and false,
+  and every action shows that no phone command except `undo_resync` changes the link's mode,
+  that `allowed` never lists an action whose route is a handover, and that a refused command
+  leaves the clock and link unchanged; the check order of section 5; the control code is sent
+  only on the presenter's channel, never on the room window's (`room-preload`); the host's
+  send budget; a dropped connection leaves the clock state unchanged.
 
 ### 8. Security-critical parts (top-tier Developer and Reviewer)
 
@@ -228,40 +286,65 @@ the revoking transactions; the live process's sessions, host token and re-check 
 listening connection; the WebSocket `hello`, `Origin` check, limits and router; the controller
 routes (the cookie route, control codes and their counting, controller tokens, dropping); the
 app's host-token handling and command intake; the phone page's token handling (fragment,
-`sessionStorage`, content security policy). The contract and its guards are rule-sensitive
-(top-tier Reviewer). The phone's and presenter's layouts are not security-critical; they get a
-design review.
+`sessionStorage`, content security policy). The contract and its guards are rule-sensitive and
+define who may control a class (top-tier Reviewer). The phone's and presenter's layouts are not
+security-critical; they get a design review.
 
 ### 9. Issue outline for the companion (contract first)
 
 Each item: lane, scope, dependencies, and whether it is security-critical (S) or
 rule-sensitive (R).
 
-1. **contract**: `schema/live/v1` messages, generated types, the rule guards of section 7.
-   Depends on this ADR. R.
+1. **contract**: `schema/live/v1`: the HTTP bodies and answers and every WebSocket message of
+   section 4, generated types, the guard word files and the rule guards of section 7. Depends on
+   this ADR. S, R.
 2. **backend**: implement `auth_device_active` and `auth_session_active`; `pg_notify` on device
-   revocation, "sign out everywhere" and account deletion. Depends on this ADR. S.
-3. **backend**: live sessions in memory: start with a device token, the host token, one per
+   revocation, "sign out everywhere" and account deletion. The lifetimes they use stay constants
+   in the function bodies (ADR 0002 principle 7); any advisory lock goes in `lock_registry.py`.
+   Depends on this ADR. S.
+3. **backend**: live sessions in memory: `POST /api/live/sessions`, the host token, one per
    device, 3 per account, lifetimes, `end`, the re-check loop and its listener, audit events;
-   account deletion ends sessions. Depends on 2. S.
-4. **backend**: the WebSocket: `hello`, `Origin`, limits, the router on the schemas,
-   `host_status`, `controller_joined` and `controller_left`, `host_away`. Depends on 1 and 3. S.
-5. **backend**: controller routes: by sign-in, control codes (make, exchange, counting), at most
-   2 controllers, Drop. Depends on 3. S.
+   account deletion ends sessions. Depends on 1 and 2. S.
+4. **backend**: the WebSocket: `hello`, `Origin`, limits, the router on the schemas, slots,
+   `host_status`, `controller_joined` and `controller_left`, `ack` with `host_away` and `rate`.
+   Depends on 1 and 3. S.
+5. **backend**: controller routes and host operations: by sign-in, control codes (`make_code`,
+   `control_code`, exchange, counting, `code_cancelled`), at most 2 controllers and the third's
+   answers, `drop`. Depends on 1 and 4. S.
 6. **docs**: the Designer's spec of the companion page and the presenter's phone-remote panel.
    Depends on this ADR. Design review.
-7. **player**: pure modules: `companion_state` from the snapshot; the command intake (ids, run,
-   basis, mapping to `ClockCommand`); against fakes. Depends on 1. R.
+7. **player**: pure modules: `companion_state` from the snapshot with `allowed`; the command
+   intake (check order, ids, run, basis, `would_stop_following`, mapping to `ClockCommand`);
+   the send budget; against fakes. Depends on 1. S, R.
 8. **player**: the live client in the main process: start and end the session, host token in
-   memory, reconnect; the presenter panel (control code, slots, Drop, the "phone 1: pause"
-   line). Depends on 4, 5, 6 and 7. S, R.
+   memory, reconnect, host operations; the presenter panel (control code, slots, Drop, the
+   "phone 1: pause" line). Depends on 1, 6 and 7, built against the contract and a fake relay.
+   S, R.
 9. **screens**: the companion page in `web/`: both ways in, token handling, interpolation, the
-   stale and ended states, buttons with pending and `ack`, wake lock; against recorded
-   messages. Depends on 1 and 6. S.
+   stale and ended states, buttons with pending and `ack`, the refusal texts, wake lock; against
+   recorded messages. Depends on 1 and 6. S.
 
 Then the Verifier runs the companion's "done when" on fakes: app, backend and a headless phone
-page, with a fake music link. Issues 2, 6 and 1 start together; 3 after 2; 4, 5 and 7 after their
-inputs; 8 and 9 last. That keeps within two open pull requests per lane.
+page, with a fake music link. Issues 1, 2 and 6 start together; then 3, 7 and 9; then 4 and 8;
+then 5. That keeps within two open pull requests per lane.
+
+### 10. Amends ADR 0002 sections 8 and 13
+
+ADR 0002 lets a controller send start, pause, skip and nudge, and the plan's companion text names
+the same buttons. This ADR adds two actions and drops none; the plan's button list is extended by
+this amendment. ADR 0002's roles table, routing table and "guessed control code" threat row are
+edited in the same pull request (marked "amended 2026-11-13, ADR 0005"), and its routing table
+points to section 4 here for the companion's messages.
+
+- **`resume`:** a pause the phone cannot end would leave the class stopped until the instructor
+  gets off the bike, so pause without resume strands the class.
+- **`undo_resync`:** plan section 4 and ADR 0001 put the one-touch undo of an announced resync
+  "on the instructor's screen and the companion". It is the one phone action that stops the
+  following of the music, by ADR 0001's definition of the undo.
+
+What a guessed or stolen controller token can do grows by these two: resume a paused class and
+undo a resync while one is announced. Neither changes an interval, reaches a rider or a device,
+or outlasts the session; the host can drop the controller.
 
 ## Alternatives
 
@@ -279,6 +362,10 @@ inputs; 8 and 9 last. That keeps within two open pull requests per lane.
   code would outlive the class it names. Kept as a later option behind the session interface.
 - **Free nudge steps or a "seek to" command:** more power on a phone on a moving bike for little
   gain; the fixed ±5 s matches the presenter. A seek would be a contract change.
+- **Letting a phone command hand the clock over to manual** (as the presenter's do): the phone
+  could stop following with one tap and could not start it again. Rejected; only the undo does.
+- **`previous` on the phone:** replays intervals on purpose, a rare act better done at the
+  computer, and while following it hands the clock over. Left on the presenter.
 - **Optimistic updates on the phone:** faster feel, but the phone could show a state the player
   is not in. Rejected; a pending mark instead.
 
