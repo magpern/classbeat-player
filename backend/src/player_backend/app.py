@@ -10,7 +10,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from starlette._utils import get_route_path
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
@@ -29,6 +28,7 @@ from player_backend.mail import Mailer
 from player_backend.no_mailer import NoMailer
 from player_backend.player_api import router as player_router
 from player_backend.request_policy import response_headers
+from player_backend.route_path_policy import routed_path
 from player_backend.settings import Settings
 from player_backend.site import router as site_router
 from player_backend.site.state import SiteState
@@ -113,12 +113,11 @@ def create_app(
         # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
         # ADR 0005, section 8: the companion page's own, under /control.
         # The path as the router matches it: `root_path` taken off at a `/` boundary only.
-        path = request.url.path
-        routed = get_route_path(request.scope)
+        routed = routed_path(request.scope["path"], request.scope.get("root_path", ""))
         if is_control_path(routed):
             response.headers.update(control_headers(routed, settings.site_origin))
         else:
-            response.headers.update(response_headers(path))
+            response.headers.update(response_headers(routed))
         # Method, path and status only: never the query string, a header or a body.
         _access_log.info(
             "request",
