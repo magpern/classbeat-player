@@ -3,12 +3,15 @@
 // RoomFrame with every snapshot, and closed with the class (`roomCloses`, core/room/lifecycle.ts) or with
 // the presenter. "Show the room screen" (menu.ts) opens it again through the same `open`.
 // It has the presenter's hardening (web-preferences.ts, hardening.ts), its own page and policy
-// (room.html, ROOM_CSP) and its own preload, which can only read frames.
+// (room.html, ROOM_CSP) and its own preload, which reads frames and the phone remote's slot and
+// sends only the room's fixed controls.
 import { BrowserWindow, screen } from "electron";
-import { CH_ROOM_UPDATE } from "../../core/channels.ts";
+import { CH_ROOM_REMOTE_UPDATE, CH_ROOM_UPDATE } from "../../core/channels.ts";
 import type { RoomTrusted } from "../../core/ipc-policy.ts";
 import { roomFrameOf } from "../../core/room/frame.ts";
 import { placeRoom } from "../../core/room/placement.ts";
+import { remoteViewOf } from "../../core/room/remote.ts";
+import type { RemoteView } from "../../core/room/remote.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import { secureWebPreferences } from "../web-preferences.ts";
 
@@ -19,6 +22,8 @@ export interface RoomWindow {
   isOpen(): boolean;
   /** Sends the window what to draw; nothing when it is not open. */
   send(s: Snapshot): void;
+  /** Sends the window the phone remote's slot, as remoteViewOf leaves it; nothing when it is not open. */
+  sendRemote(v: RemoteView): void;
   trusted(): RoomTrusted;
 }
 
@@ -46,6 +51,10 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
   // The display the room window was last on: the next class opens there while it is connected.
   let lastDisplay: number | null = null;
   const live = (): BrowserWindow | null => (win && !win.isDestroyed() ? win : null);
+  const push = (channel: string, message: unknown): void => {
+    const wc = live()?.webContents;
+    if (wc && !wc.isDestroyed() && !wc.isCrashed()) wc.send(channel, message);
+  };
 
   const placement = () => {
     const p = d.presenter();
@@ -91,10 +100,8 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
       live()?.close();
     },
     isOpen: () => live() !== null,
-    send(s) {
-      const wc = live()?.webContents;
-      if (wc && !wc.isDestroyed() && !wc.isCrashed()) wc.send(CH_ROOM_UPDATE, roomFrameOf(s));
-    },
+    send: (s) => push(CH_ROOM_UPDATE, roomFrameOf(s)),
+    sendRemote: (v) => push(CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)),
     trusted: () => ({ roomId: live()?.webContents.id ?? null, roomUrl: d.url }),
   };
 }
