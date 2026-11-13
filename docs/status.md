@@ -30,14 +30,18 @@ pairing hardening (#71, #79), pairing in the app (#74, #84; hardening #87, #89),
 backend deploy files with the hourly purge (#95, #97, #99, #100), the body size cap, a budget of
 600 document reads a minute, counted oversized publications and the SMTP deadline over DNS and
 connect (#103, #104), the player API answers in `schema/` (#106, #109), the class library on the
-site (#107, #110), account export and deletion (#108, #112). In progress: hardening from those
-reviews (#115). Next: the website pages, passkeys, purge counts (needs a migration).
+site (#107, #110), account export and deletion (#108, #112), cursors bound to an account, the
+body cap keyed on the route and the class paging index (#115, #127). In progress: passkeys (#130,
+PR #134), the website pages spec (#131). Next: the website pages, purge counts (needs a
+migration).
 
 ## PL4: screens
 
 Merged: the design system and the plain 2D room screen spec (#22, #31), and its follow-ups (#78,
-#91); class sync and the offline cache (#111, #113). In progress: the room screen (#77, PR #85),
-sync hardening (#114), the class list spec (#116).
+#91); class sync and the offline cache (#111, #113); the room screen (#77, #85), its spec as
+built (#124) and its hardening (#119, #128, which also settles #122); sync hardening (#114, #121);
+the presenter window's minimum size (#123, #126); the class list spec (#116, #125) and its data
+(#129, #132). In progress: the class list screen (#133).
 
 ## Infra
 
@@ -64,16 +68,20 @@ Merged: #30 and its findings (#53).
   stopping the native scene clears its state (#53); one capitalisation convention for status
   texts (#65 design review).
 - Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); packaging of `schema/`
-  (#86); cursors bound to an account, a resync on a format-version change (#96); the body cap
-  keyed on the request path, which would cap publications at 16 KiB if the app were served under
-  a path prefix (#104 review). These are in #115. Also: the inner-document 413 counted as use, and
-  one long line (#102 notes).
-- Docs: the presenter spec's minimum window size; the short next row's dropped fields called a
-  choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
+  (#86); a resync on a format-version change (#96); the inner-document 413 counted as use, and
+  one long line (#102 notes). From the #127 review: two accounts' cursor ranges almost never
+  overlap, but nothing forbids it (N1); rows created with base 0 before migration 0010 keep it
+  and need a re-basing migration (N2); N3 and N4 are in the review comment.
+- Docs: the short next row's dropped fields called a choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
   section 6 bullet on one device token per account against one pairing at a time).
 - Player: a class answered `unusable` is skipped and the cursor moves past it, so an older cached
-  copy stays with nothing marked newer, by design; the class list should say so (#113 N2).
+  copy stays with nothing marked newer, by design; the class list marks it "not updated" (#113
+  N2, #132).
   Positions above 2^53 are refused, which stalls sync rather than corrupting it (#113 N4).
+- Player: `sync-model.ts` is at 296 lines, so its next change splits it; `list()` reads and
+  hashes every cached file, so the screen calls it only when the sync view changes (#132 review).
+- Screens: the zone-word check skips words over 16 letters; the next-row gap check has a 0.5 px
+  tolerance (#128 review).
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
 

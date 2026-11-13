@@ -4,7 +4,7 @@ Status: proposed in the pull request for issue #78. The presenter window's full 
 PL5. Until then, this file sets one convention for its words, because the player already shows
 them (design notes on #65 and #69). Mock-up: [mockups/presenter.html](mockups/presenter.html)
 ([1280×800](mockups/presenter-1280x800.png), and [1000×720](mockups/presenter-1000x720.png), the
-player's default 1000×760 window less its title bar).
+smallest content area the window allows; the player opens with a 1000×760 content area, #126).
 
 ## One convention
 
@@ -68,10 +68,10 @@ hands the clock over, "Next interval (stops following)" and "Previous interval (
 
 The longest, "Previous interval (stops following)" (35 characters), takes a full row of the
 controls at 17 px bold and fits on one line at both sizes of the mock-up, including the
-player's default window, where the room preview shrinks to 560 px and the type stays the same.
+smallest window, where the room preview shrinks to 560 px and the type stays the same.
 measure.js checks that no control wraps (C4). The presenter is read at arm's length, so the
 room-distance heights (C1) do not apply to it; the type is set in pixels, so a label that fits
-in the default window fits in any larger one. **Minimum size: 1000×720** (content area, the
+in the smallest window fits in any larger one. **Minimum size: 1000×720** (content area, the
 smaller of the two mock-up sizes): the window does not shrink below it, so no control row wraps and
 the room preview never drops below 560 px. PL5's full spec may set another minimum with its own
 mock-up and checks. A control row never shortens a label to make it fit: the row

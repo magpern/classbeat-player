@@ -158,6 +158,8 @@ compose exec -T db sh -c 'pg_restore -U postgres --clean --if-exists -d "$POSTGR
 compose up -d --wait
 ```
 
+The restore expects the database and its roles to exist already, as they do on a server that
+has run `compose up` once; on a new server, run `compose up -d --wait` first, then the steps above.
 `compose up` runs `migrate` again, which applies only the migrations the dump does not have.
 
 ## Rotating a database password
