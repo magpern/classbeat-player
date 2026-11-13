@@ -11,7 +11,7 @@ import hashlib
 import re
 from typing import Final, Literal
 
-type TokenKind = Literal["lgn", "ml", "ses", "dc", "dev", "lc", "src"]
+type TokenKind = Literal["lgn", "ml", "ses", "dc", "dev", "lc", "src", "hst", "ctl", "rdr"]
 
 PREFIX: Final = "cbp"
 SECRET_BYTES: Final = 32

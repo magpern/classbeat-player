@@ -7,10 +7,12 @@ have a case below: a new one fails until it has.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import LiteralString
+from typing import LiteralString, cast
 
+from player_backend.live.service import LiveService
 from player_backend.player_api.deps import device_token
 from player_backend.site.deps import site_session
 from player_backend.source_api.deps import source_token
@@ -30,6 +32,7 @@ CURSOR = "/api/player/cursor"
 EXPORT = "/api/site/account/export"
 DELETE_ACCOUNT = "/api/site/account/delete"
 SITE_CLASSES = "/api/site/classes"
+LIVE_SESSIONS = "/api/live/sessions"
 
 
 @dataclass(frozen=True)
@@ -340,6 +343,24 @@ def _delete_account(site: Site, a: Actor) -> None:
     assert gone.fetchone() == (0,)
 
 
+def _start_live_session(site: Site, a: Actor) -> None:
+    # B runs a live session on its device, in the live process's memory (no row of B's is
+    # written for it). A starting sessions (the second ends A's first) never ends B's.
+    registry = cast(LiveService, site.app.state.live).registry
+    b_account = uuid.UUID(_one(site, "SELECT id FROM player.accounts WHERE email = %s", B))
+    b_last = registry.start(b_account, uuid.UUID(a.other.device_id), bytes(32), 0.0)
+    assert b_last is not None
+    a_account = uuid.UUID(_one(site, "SELECT id FROM player.accounts WHERE email = %s", A))
+    for _ in range(2):
+        answer = a.app.post(LIVE_SESSIONS, headers=bearer(a.token))
+        assert answer.status_code == 200, answer.text
+    running = registry.running()
+    assert {r.session_id for r in running if r.account_id == b_account} == {b_last.session_id}
+    assert [r.account_id for r in running].count(a_account) == 1
+    assert {r.account_id for r in running} == {a_account, b_account}
+    registry.end(b_last.session_id, "host_ended")
+
+
 # In this order: the third and second last end A's device and A's sessions, and the last one
 # deletes A.
 CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
@@ -361,6 +382,7 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/player/changes"): _changes,
     ("GET", "/api/player/classes/{class_id}"): _held_class,
     ("GET", "/api/player/cursor"): _cursor,
+    ("POST", LIVE_SESSIONS): _start_live_session,
     # After the player API's cases: the last of these deletes A's class "shared".
     ("GET", "/api/site/classes"): _list_library,
     ("GET", "/api/site/classes/{class_id}"): _read_library_class,

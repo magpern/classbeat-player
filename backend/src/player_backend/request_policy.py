@@ -17,7 +17,7 @@ from http import HTTPMethod
 from typing import Final, Literal
 
 SITE_API: Final = "/api/site/"
-NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/", "/api/source/")
+NEVER_STORED: Final = (SITE_API, "/api/pairing/", "/api/player/", "/api/source/", "/api/live/")
 STATE_CHANGING: Final = frozenset(
     {HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE}
 )

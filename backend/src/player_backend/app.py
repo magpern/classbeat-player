@@ -15,6 +15,10 @@ from player_backend.body_cap import install_body_cap
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
+from player_backend.live import router as live_router
+from player_backend.live.recheck import RecheckLoop, RecheckTiming
+from player_backend.live.registry import Registry
+from player_backend.live.service import LiveService
 from player_backend.logging_setup import configure_logging
 from player_backend.mail import Mailer
 from player_backend.no_mailer import NoMailer
@@ -30,16 +34,29 @@ _access_log = logging.getLogger("player_backend.access")
 _log = logging.getLogger("player_backend.app")
 
 
-def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
+def create_app(
+    settings: Settings,
+    mailer: Mailer | None = None,
+    live_recheck: RecheckTiming | None = RecheckTiming(),  # noqa: B008 (frozen)
+) -> FastAPI:
+    """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand."""
     configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         pool = open_pool(settings.database_url)
         app.state.site = SiteState(settings=settings, pool=pool, mailer=mailer or NoMailer())
+        # ADR 0002, section 8: the live sessions, in this process's memory only.
+        app.state.live = service = LiveService(Registry(), pool)
+        loop = None
+        if live_recheck is not None:
+            loop = RecheckLoop(service, settings.database_url, live_recheck)
+            loop.start()
         try:
             yield
         finally:
+            if loop is not None:
+                loop.stop()
             pool.close()
 
     app = FastAPI(
@@ -57,6 +74,7 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
     app.include_router(site_router)
     app.include_router(player_router)
     app.include_router(source_router)
+    app.include_router(live_router)
     # Before the access log: a middleware added later runs outside it.
     install_body_cap(app)
 

@@ -18,6 +18,7 @@ from fastapi import FastAPI
 
 from player_backend.app import create_app
 from player_backend.client_policy import Network
+from player_backend.live.recheck import RecheckTiming
 from player_backend.mail import Mail
 from player_backend.settings import Settings
 from player_backend.source_policy import KnownSource
@@ -170,12 +171,19 @@ def link_token(mail: Mail) -> str:
 
 
 @contextmanager
-def running_site(app_url: str, db_url: str, proxies: tuple[Network, ...] = ()) -> Generator[Site]:
+def running_site(
+    app_url: str,
+    db_url: str,
+    proxies: tuple[Network, ...] = (),
+    live_recheck: RecheckTiming | None = None,
+) -> Generator[Site]:
+    """The app under test. Without `live_recheck` it runs no live re-check loop: a test that
+    needs one passes its timing (tests/test_live_recheck_loop.py)."""
     mailer = RecordingMailer()
     settings = Settings(
         database_url=app_url, site_origin=ORIGIN, trusted_proxies=proxies, sources=(SOURCE,)
     )
-    app = create_app(settings, mailer)
+    app = create_app(settings, mailer, live_recheck)
     loop = asyncio.new_event_loop()
     started = app.router.lifespan_context(app)  # the app's start and stop: the pool
     with psycopg.connect(db_url, autocommit=True) as su:

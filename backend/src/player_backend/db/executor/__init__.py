@@ -18,6 +18,7 @@ from player_backend.db.executor._errors import (
     RegistryNotFrozen,
 )
 from player_backend.db.executor._handle import Handle, Params, Row, connect
+from player_backend.db.executor._listen import Listener, listen
 from player_backend.db.executor._pool import Pool, open_pool
 from player_backend.db.executor._query import REGISTRY as _REGISTRY
 from player_backend.db.executor._query import Query
@@ -31,6 +32,7 @@ __all__ = [
     "ExecutorError",
     "Handle",
     "HandleClosed",
+    "Listener",
     "NotAQuery",
     "Params",
     "Pool",
@@ -40,6 +42,7 @@ __all__ = [
     "RegistryNotFrozen",
     "Row",
     "connect",
+    "listen",
     "open_pool",
 ]
 

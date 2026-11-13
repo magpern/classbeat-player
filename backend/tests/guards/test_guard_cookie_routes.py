@@ -66,6 +66,8 @@ DEVICE_TOKEN_ROUTES = frozenset(
         ("GET", "/api/player/changes"),
         ("GET", "/api/player/classes/{class_id}"),
         ("GET", "/api/player/cursor"),
+        # Section 8: the app starts a live session with its device token (ADR 0005, s. 4).
+        ("POST", "/api/live/sessions"),
     }
 )
 # The source API (section 7): a source token in `Authorization: Bearer`, never a cookie.
@@ -98,6 +100,8 @@ LOGIN_COOKIE_ROUTES = frozenset(
 )
 SITE_API = "/api/site/"
 LIVE_COOKIE_ROUTE = ("POST", "/api/live/controller")
+# The one device-token route outside the player API (section 8).
+LIVE_SESSIONS_ROUTE = ("POST", "/api/live/sessions")
 
 
 def _routes() -> list[RouteInfo]:
@@ -133,8 +137,8 @@ def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
 def test_the_routes_that_take_a_device_token_equal_the_list_and_read_no_cookie() -> None:
     assert _using(device_token) == DEVICE_TOKEN_ROUTES
     assert not _using(device_token) & (_using(session_cookie_token) | _using(login_cookie_token))
-    for _, path in DEVICE_TOKEN_ROUTES:
-        assert path.startswith("/api/player/")
+    for method, path in DEVICE_TOKEN_ROUTES:
+        assert path.startswith("/api/player/") or (method, path) == LIVE_SESSIONS_ROUTE
 
 
 def test_the_routes_that_take_a_source_token_equal_the_list_and_read_no_cookie() -> None:

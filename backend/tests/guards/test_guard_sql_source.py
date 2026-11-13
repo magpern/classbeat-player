@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from player_backend.db.executor import QUERY_MODULES, SQL_DIR, SQL_FILES, Handle, Pool
+from player_backend.db.executor import QUERY_MODULES, SQL_DIR, SQL_FILES, Handle, Listener, Pool
 from player_backend.db.executor._handle import _Transaction  # pyright: ignore[reportPrivateUsage]
 from tests.guards.query_module_check import is_query_module, module_name
 from tests.guards.sql_source_check import DRIVERS, check_source, check_tree, source_files
@@ -60,11 +60,11 @@ def test_the_fixed_lists_are_the_files_in_the_repository() -> None:
     assert sorted(p.name for p in SQL_DIR.iterdir()) == sorted(SQL_FILES)
 
 
-def test_a_handle_its_transaction_and_a_pool_have_no_private_attribute() -> None:
+def test_a_handle_its_transaction_a_pool_and_a_listener_have_no_private_attribute() -> None:
     # Rule 2 forbids every `_name` attribute outside the executor. This pins that the handle
     # keeps nothing there to reach in the first place: the driver's objects are in the
     # executor's own module, not on the handle.
-    for cls in (Handle, _Transaction, Pool):
+    for cls in (Handle, _Transaction, Pool, Listener):
         assert cls.__slots__ == ()
         private = [n for n in vars(cls) if n.startswith("_") and not n.startswith("__")]
         assert private == []
