@@ -21,6 +21,13 @@ export const CSP = [
 /** The class list page's policy: the presenter's, and the page's own style sheet and fonts. */
 export const LIST_CSP = CSP.replace("style-src 'none'", "style-src 'self'").replace("font-src 'none'", "font-src 'self'");
 
+/**
+ * The room screen's policy (room.html): the class list's. The room screen's style sheet and fonts
+ * are the application's own files; it sets no inline style (only through the CSSOM) and runs no
+ * inline script.
+ */
+export const ROOM_CSP = LIST_CSP;
+
 export interface SecureWebPreferences {
   readonly preload: string;
   readonly contextIsolation: true;

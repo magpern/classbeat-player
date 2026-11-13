@@ -23,3 +23,15 @@ test("Open a class file releases the pin", () => {
 test("the list's account key is the credential's, not the pairing email", () => {
   assert.match(main, /createListController\(\{[^}]*account:\s*\(\)\s*=>\s*credentialOf\(paired\)\?\.account/);
 });
+
+test("the room window opens with every class that opens, and is sent every snapshot", () => {
+  assert.match(main, /controller\.onOpened\(\(\)\s*=>\s*room\.open\(\)\)/);
+  assert.match(main, /controller\.watch\(\(s\)\s*=>\s*room\.send\(s\)\)/);
+  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller\)/);
+});
+
+test("the room window closes with the class: on the class list unpinned, at the end on the list, with the presenter", () => {
+  assert.match(main, /function showList\(\): void \{\s*showPage\(LIST_FILE\);\s*if \(roomCloses\(true, pinned\(\)\)\) room\.close\(\);/);
+  assert.match(main, /controller\.onEnded\(\(\) => \{\s*if \(roomCloses\(onListPage\(\), pinned\(\)\)\) room\.close\(\);/);
+  assert.match(main, /presenter\.on\("closed", \(\) => \{\s*presenter = null;\s*room\.close\(\);/);
+});
