@@ -859,13 +859,16 @@ address; registration starts are counted per account. Both are 30 per 10 minutes
 `passkey_policy.py` (`STARTS_MAX`, `STARTS_WINDOW`). The failed sign-ins of one address are
 checked and counted one attempt at a time, under an advisory lock held from the check to the
 commit, so parallel attempts cannot pass the check together. The lock is only tried, never waited
-for (#146): an attempt that finds it held answers 429 with `Retry-After: 1` at once, reads and
-writes nothing and uses up nothing, so it holds no pool connection while another attempt is
-checked. A client resends the same signed answer after `Retry-After`; riders signing in from one
-studio address at the start of a class may see one such retry. The lock's key is 64 bits of the
-address's counter key, in the one-key space it shares with the migration lock and the prefix
-locks; a clash is a one in 2^64 chance and costs at most one retry. Every advisory lock number
-and key form is listed in `lock_registry.py`.
+for (#146): an attempt that finds it held answers 429 with `Retry-After: 1` at once. It reads
+and writes no row and uses up nothing, and it holds its pool connection only for the try, never
+while waiting. The website's client (#144) resends the same signed answer after `Retry-After`;
+riders signing in from one studio address at the start of a class may see a retry or two. The
+lock's key is 64 bits of the address's counter key, in the one-key space it shares with the
+migration lock and the prefix locks (pairing codes, source links). Any two of those keys clash
+by a chance of about one in 2^64. While a clashing key is held, a passkey sign-in from that
+address answers `busy` again, and a pairing or source-link call that takes the clashing prefix
+lock waits for that transaction to end. Every advisory lock number and key form is listed in
+`lock_registry.py`.
 
 The live limits are sized for a class of 40 to 60 riders who join in the same minute from one
 studio address: nothing that a rider with the right code does is counted per address.
@@ -1052,9 +1055,10 @@ the database's log is covered too:
   lifetimes and the cap of 20 sessions are constants in those functions (principle 7).
   Changing one is a migration that replaces a function body, so it is a security-critical pull
   request with a top-tier Reviewer. The per-address limit on link requests (10 an hour) is a
-  constant in the backend's sign-in rules (`login_policy.py`), and the passkey limits
-  (`STARTS_MAX`, `STARTS_WINDOW`, `FAILED_MAX`) are constants in `passkey_policy.py`; changing
-  one of them is also a security-critical pull request. The other limits are settings, and
+  constant in the backend's sign-in rules (`login_policy.py`), and every limit and lifetime in
+  `passkey_policy.py` is a constant there (among them `STARTS_MAX`, `STARTS_WINDOW`,
+  `FAILED_MAX`, `FAILED_WINDOW`, `PASSKEYS_MAX` and `CHALLENGE_SECONDS`); changing any of them
+  is also a security-critical pull request. The other limits are settings, and
   raising one is a normal change. Removing a guard test is never a normal change.
 
 **Defaults chosen here that the owner may want to change.** Each is a setting or a small,

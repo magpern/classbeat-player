@@ -39,8 +39,9 @@ choice, no zone profile, no rider data, no ranking (rule 13).
 - **Where the room window goes.** On the display the instructor last moved it to in this session,
   while that display is still connected and is not the presenter's; otherwise on the largest
   display other than the presenter's, in full screen. With one display, the room screen is a
-  16:9 window beside the presenter inside the work area, between 640 and 1280 px wide, and it is
-  a rehearsal view: room-2d.md's room-distance heights (C1) and its 720-line minimum do not
+  16:9 window inside the work area, at most 1280 px wide, beside the presenter where a side has
+  room for it; on a small work area it may be narrower than 640 px and may cover part of the
+  presenter (#149 tracks keeping the presenter's controls clear). It is a rehearsal view: room-2d.md's room-distance heights (C1) and its 720-line minimum do not
   apply to it, while contrast, overlap and zone checks still do. The window is shown without
   taking the keyboard from the presenter. There is no display picker in this version; the
   instructor moves the window.
@@ -157,7 +158,7 @@ states that need the instructor (the system's only alert form, as on the room sc
 | Offline | `status: offline` | Hollow square, "Offline", detail "Showing the classes saved on this computer. Trying again later." Not a plate: offline is a normal state (plan, "Offline") | List, footer | [offline](mockups/class-list-offline.html) |
 | Refused or failing | `status: waiting` (a 429 with its Retry-After, a 5xx, or an answer the player does not understand) | Hollow square, "Sync is waiting", detail "The server is busy or not answering well. Trying again later. Saved classes still play." No number of seconds is shown | List, footer | [waiting](mockups/class-list-waiting.html) |
 | Saved classes cannot be read | `status: unavailable` (a local disk fault reading the cache; the files are kept and the read is retried with the fault backoff, #121); `classes: 0` | **Plate** "The saved classes could not be read", detail "They are still on this computer. Trying again soon. You can still open a class file." | Panel "Classes not available": "Nothing was deleted. If this stays, restart the player or check the computer's disk." No list, no Start; Open a class file still works. It never says "no classes" or offers pairing: the classes are there | [unavailable](mockups/class-list-unavailable.html) |
-| Saved classes cannot be reached (lasting) | `status: unavailable`, the fault is lasting (the retries with the fault backoff have not cleared it); `classes: 0` | **Plate** "The saved classes cannot be reached", detail "They are still on this computer, but the player cannot reach them. Restart the app; if it keeps happening, reinstall it." | Same panel as above: "Classes not available": "Nothing was deleted. If this stays, restart the player or check the computer's disk." No list, no Start; Open a class file still works | unavailable-lasting (screenshot state) |
+| Saved classes cannot be reached (lasting) | `status: unavailable` with `SyncView.unavailable: "lasting"`: the read failed with a fault that reading again finds unchanged (`ENOTDIR`, `EISDIR`; `core/sync/fault-policy.ts`), shown from the first failed read; the read is still retried; `classes: 0` | **Plate** "The saved classes cannot be reached", detail "They are still on this computer, but the player cannot reach them. Restart the app; if it keeps happening, reinstall it." | Same panel as above: "Classes not available": "Nothing was deleted. If this stays, restart the player or check the computer's disk." No list, no Start; Open a class file still works | unavailable-lasting (screenshot state) |
 | Pairing ran out | `status: expired`; `PairingView.paired.pairAgain` | **Plate** "The pairing with *email* has run out", detail "Pair again to get new and changed classes. Saved classes still play.", button "Pair again" | List, footer (the cache is kept) | [expired](mockups/class-list-expired.html) |
 | Not paired | `PairingView.unpaired`, no message | Hollow square, "Not paired", detail "Your classes are on the player website. Pair this computer to bring them here." | Panel "No classes on this computer", primary "Pair this computer" | [not paired](mockups/class-list-not-paired.html) |
 | Asking for a code | `PairingView.starting` | Hollow circle, "Asking the server for a code…" | Panel, Cancel (Esc) | [asking](mockups/class-list-pairing-start.html) |
@@ -218,7 +219,7 @@ numbers.
 |---|---|---|
 | L1 | Cap height of text (a capital H in its face), as pixels and as a share of the window height at 1000×720 | Row title and the selected class's title in the footer (22 px type): at least 15 px (2.1 %). Status line and plate headline (20 px): at least 14 px (1.9 %). Buttons (17 px; Start 22 px): at least 12 px (1.7 %); Start at least 15 px. The code in the pairing state: at least 40 px (5.6 %). Length (Big Shoulders 26 px): at least 18 px (2.5 %). Second lines, details, dates (16 px): at least 11 px (1.5 %). Labels, column heads, shortcuts, tags (14 px): at least 9.5 px (1.3 %). **No text is set below 14 px** |
 | L2 | Contrast of text against the pixels behind it, worst pixel | Titles, lengths, status line, buttons, details, dates: at least 7 : 1. Labels (14 px grey, `--light-3`): at least 4.5 : 1. The measured worst pixel on the mock-ups is 19.1 : 1 for primary text |
-| L3 | What is visible at once | Header with count and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 6 to 12 rows; the worst case of wide capitals at 1000×720 shows 4); the selected row always fully visible |
+| L3 | What is visible at once | Header with count and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 5 to 11 rows; 5 rows is the minimum when a plate is shown (expired, file error) at 1000×720; the worst case of wide capitals at 1000×720 shows 4); the selected row always fully visible |
 | L4 | Colour | **No hue anywhere** on this screen (the checker's "hue outside a zone" test, which every element must pass): it shows no zone, so it uses no zone colour (rule 7). States are carried by words and by the marker shapes |
 | L5 | Words with every marker | Every marker, plate and tag has its words beside it; the selected row also carries the bar and the outline |
 | L6 | Nothing is cut | No title, status, detail or button text is cut or ellipsised, except the footer's title (two lines, then an ellipsis, with the full title in the selected row) |
@@ -252,14 +253,14 @@ fields below, no account key. The gaps this spec first listed were closed by #13
 
 | Element | Source |
 |---|---|
-| Status line (paired) | `SyncView.status` (`unpaired`, `syncing`, `synced`, `offline`, `waiting`, `expired`, `unavailable`), with the lasting fault from `SyncState.lasting` |
+| Status line (paired) | `SyncView.status` (`unpaired`, `syncing`, `synced`, `offline`, `waiting`, `expired`, `unavailable`), with `SyncView.unavailable` (`passing` or `lasting`) |
 | Pairing, code, countdown, notices | `PairingView` (`state`, `userCode`, `page`, `secondsLeft`, `message`, `email`, `deviceName`, `pairAgain`), `NOTICE_TEXT`, `clockText` |
 | Header count | `SyncView.classes` |
 | Pinned row, "Newer version", "Removed" | `SyncView.pinned.{id, after}` |
 | Rows | `classListView` in `core/sync/class-list.ts`: `{id, hash, title, lengthMs, sport, source, songs, updated, playing, newer, notUpdated}`, only those fields, sorted A to Z |
-| Row: updated | `published_at` kept with each cached class (`SyncState.published`, an optional field in the cache file), shown through `updatedText` in `core/sync/updated-text.ts` |
-| "Could not be updated" tag | `SyncState.notUpdated`, cleared for an id when a version is kept again or the class is removed |
-| Cache being wiped | `SyncState.wipePending` |
+| Row: updated | `published_at` kept with each cached class (an optional field in the cache file), in the row's `updated`, shown through `updatedText` in `core/sync/updated-text.ts` |
+| "Could not be updated" tag | `SyncView.notUpdated` and the row's `notUpdated`, cleared for an id when a version is kept again or the class is removed |
+| Cache being wiped | `SyncView.wiping` |
 | Start | `pin` event (`id`, `hash`): the pin is of the version the instructor saw |
 | Open a class file | `readPicked`, `readClassText`, and the four messages in `core/class-file.ts` |
 
