@@ -152,6 +152,20 @@ const SHOTS: Shot[] = Object.keys(STATES)
   .flatMap((state) => SIZES.map(([width, height]) => ({ state, width, height })))
   .filter((s) => !ONLY || ONLY.test(nameOf(s)));
 
+/** Per size and tier, the smallest cap height over its floor across every state. */
+const MARGINS = new Map<string, Record<string, number>>();
+function noteMargins(s: Shot, m: Readonly<Record<string, number>>): void {
+  const size = `${s.width}x${s.height}`;
+  const t = MARGINS.get(size) ?? {};
+  for (const [tier, v] of Object.entries(m)) t[tier] = Math.min(t[tier] ?? Infinity, v);
+  MARGINS.set(size, t);
+}
+function marginTable(): string {
+  const tiers = ["gel", "hero", "value", "text", "textmin", "minor", "label"];
+  const rows = [...MARGINS].map(([size, t]) => `| ${size} | ${tiers.map((k) => (t[k] === undefined ? "-" : `${((t[k] - 1) * 100).toFixed(1)} %`)).join(" | ")} |`);
+  return `Smallest cap height over its K1 floor, per size and tier\n\n| Size | ${tiers.join(" | ")} |\n|---|${tiers.map(() => "---").join("|")}|\n${rows.join("\n")}`;
+}
+
 async function shoot(browser: Browser, s: Shot): Promise<Row[]> {
   const def = STATES[s.state];
   const f = await openCompanion(browser, { width: s.width, height: s.height, clock: true, ...def.open });
@@ -160,6 +174,7 @@ async function shoot(browser: Browser, s: Shot): Promise<Row[]> {
     await def.stage(f);
     const r = await checkCompanion(f.page, probe, s.width, s.height);
     writeFileSync(join(SHOT_DIR, `${nameOf(s)}.png`), r.png);
+    noteMargins(s, r.margins);
     const external = f.external.map((u) => ({ tier: "network", text: u.slice(0, 40), result: "FAIL external request" }));
     return [...r.rows, ...external];
   } catch (e) {
@@ -183,6 +198,7 @@ describe("companion page: the spec's measurable checks (companion.md K1 to K10)"
         for (let i = next++; i < SHOTS.length; i = next++) results.set(nameOf(SHOTS[i]), await shoot(browser, SHOTS[i]));
       }),
     );
+    console.log(`\n${marginTable()}\n`);
   });
 
   after(async () => {

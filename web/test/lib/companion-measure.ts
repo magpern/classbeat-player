@@ -17,6 +17,8 @@ const flush = (page: Page): Promise<void> => page.evaluate(() => void document.b
 export interface CompanionResult {
   readonly rows: Row[];
   readonly png: Buffer;
+  /** Per tier, the smallest cap height over its K1 floor (share and pixels both): 1.03 is 3 % above. */
+  readonly margins: Readonly<Record<string, number>>;
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */
@@ -69,6 +71,7 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
   }
   await page.evaluate(() => void (document.adoptedStyleSheets = document.adoptedStyleSheets.slice(0, -1)));
   const land = width > height;
+  const margins: Record<string, number> = {};
   const rows: Row[] = items.length ? [] : [{ tier: "text", text: "(none)", result: "FAIL no text was measured" }];
   for (const it of items) {
     const floor = FLOORS[it.tier];
@@ -79,6 +82,8 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
     else {
       const [portrait, landscape, px] = floor;
       const share = land ? landscape : portrait;
+      const m = Math.min(it.cap / share, (it.cap * height) / px);
+      margins[it.tier] = Math.min(margins[it.tier] ?? Infinity, m);
       if (it.cap < share - 0.00005) problems.push(`cap ${(it.cap * 100).toFixed(2)}% < ${(share * 100).toFixed(1)}%`);
       if (it.cap * height < px - 0.05) problems.push(`cap ${(it.cap * height).toFixed(1)} px < ${px} px`);
       if ((it.worst ?? Infinity) < CONTRAST) problems.push(`contrast ${(it.worst ?? 0).toFixed(1)} < ${CONTRAST} in ink ${[k.x0, k.y0, k.x1, k.y1].map(Math.round).join(",")}`);
@@ -100,5 +105,5 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
   for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" });
   for (const [text, result] of pageRows) rows.push({ tier: "companion", text, result });
   rows.push(...(await motion(page)));
-  return { rows, png };
+  return { rows, png, margins };
 }

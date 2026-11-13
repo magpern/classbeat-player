@@ -9,10 +9,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* Portrait (the default): sizes in vh, capped by vw so a narrow phone keeps its line lengths. */
 :root {
-  --c-gel: min(10.6dvh, 23vw); /* zone numeral */
-  --c-hero: min(10.5dvh, 23vw); /* time left in the interval; cap clears K1 8 % with margin across font rasterisers */
-  --c-value: min(4.6dvh, 9.4vw); /* zone name, cadence, position */
-  --c-text: min(4.2dvh, 8.6vw); /* the cue, up to 60 characters */
+  --c-gel: min(11.2dvh, 24.5vw); /* zone numeral */
+  --c-hero: min(10.5dvh, 23vw); /* time left in the interval */
+  --c-value: min(4.75dvh, 9.8vw); /* zone name, cadence, position */
+  --c-text: min(4.35dvh, 8.9vw); /* the cue, up to 60 characters */
   --c-text-min: min(3.4dvh, 7vw); /* a longer cue */
   --c-minor: min(3.2dvh, 6.6vw); /* next intervals, next song, class time, key labels */
   --c-label: min(2.4dvh, 5vw); /* labels, hints */
@@ -23,12 +23,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 }
 @media (orientation: landscape) {
   :root {
-    --c-gel: min(21dvh, 11vw);
-    --c-hero: min(18dvh, 9.6vw);
+    --c-gel: min(22dvh, 11.6vw);
+    --c-hero: min(18dvh, 10.1vw);
     --c-value: min(8.2dvh, 4.3vw);
-    --c-text: min(7.4dvh, 3.9vw);
-    --c-text-min: min(6dvh, 3.2vw);
-    --c-minor: min(5.6dvh, 3vw);
+    --c-text: min(7.4dvh, 4.1vw);
+    --c-text-min: min(6dvh, 3.35vw);
+    --c-minor: min(5.6dvh, 3.1vw);
     --c-label: min(4.4dvh, 2.35vw);
     --c-pad: 2.4vw;
     --c-gap: 2dvh;
