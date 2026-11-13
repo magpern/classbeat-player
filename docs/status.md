@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #256).
+Updated 2026-11-13 (after #261).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -38,8 +38,9 @@ expiry outside the sweep (#220, #225), the tighter routing table and string boun
 the live publisher and listener hardening (#222, #224), the contract tests (#228, #229), the
 backend hardening (#227, #230), the body cap in the live contract (#234, #235; #237, #238; #236,
 #239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
-#245). The companion page (#174) is in progress; the owner allowed network calls in web code
-(#252, #253).
+#245), the companion page (#174, #261; network calls in web code allowed by the owner, #252,
+#253). In progress: sign-in returns to the companion page (#263), a `/me` answer in the contract
+(#264), the backend serving `/control` (#266), the companion and site specs as built (#269). Next: the backend `/me` route (#265, after #264).
 
 ## PL2: backend and sign-in
 
@@ -55,8 +56,8 @@ site (#107, #110), account export and deletion (#108, #112), cursors bound to an
 body cap keyed on the route and the class paging index (#115, #127), passkeys (#130, #134) and
 their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry; #158,
 #160: the account-sessions and passkey-additions locks wait at most 2 s), the
-website pages spec (#131, #137), the website shell, sign-in and error pages (#144, #256). In
-progress: sign-in hardening from its review (#257). Next: the other website pages, purge counts (needs a
+website pages spec (#131, #137), the website shell, sign-in and error pages (#144, #256), sign-in hardening from its review
+(#257, #259) and the passkey busy retry (#260, #262). Next: the other website pages, purge counts (needs a
 migration).
 
 ## PL4: screens
@@ -78,7 +79,8 @@ only (memory keychain, one xvfb display).
 
 Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
 (#75, #76); the backend job also runs for changes under `schema/` (#88, #93); the class list
-screenshots are uploaded whenever the shot tests exist (#139, #140).
+screenshots are uploaded whenever the shot tests exist (#139, #140). In progress: the `web` job
+also runs for the shared design tokens (#268). Next: wider markup and stylesheet guards (#267).
 
 ## Scene spike
 
