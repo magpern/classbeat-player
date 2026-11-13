@@ -111,10 +111,13 @@ class LiveService:
 
     async def drain(self, within: float) -> bool:
         """Wait at most `within` seconds for the writes handed off the loop. True: none is left.
-        A write still running afterwards finds the pool closed, and is logged by its type."""
+        Each write still running afterwards is logged as `live.end_not_recorded` (a fixed word, no
+        session, device or token); it then finds the pool closed and is logged again by its type."""
         pending = set(self._writes)
         if pending:
             await asyncio.wait(pending, timeout=within)
+        for _ in self._writes:
+            _logged("live.end_not_recorded", "shutdown_bound", logging.WARNING)
         return not self._writes
 
     def _record_guarded(self, ended: Ended) -> None:
