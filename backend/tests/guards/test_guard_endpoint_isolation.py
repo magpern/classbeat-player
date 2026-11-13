@@ -26,6 +26,7 @@ SESSIONS = "/api/site/sessions"
 CHANGES = "/api/player/changes"
 PLAYER_CLASSES = "/api/player/classes"
 CURSOR = "/api/player/cursor"
+SITE_CLASSES = "/api/site/classes"
 
 
 @dataclass(frozen=True)
@@ -207,6 +208,40 @@ def _cursor(site: Site, a: Actor) -> None:
     assert answer.status_code == 200 and answer.json() == {"cursor": 2}
 
 
+def _list_library(site: Site, a: Actor) -> None:
+    answer = a.browser.get(SITE_CLASSES)
+    assert answer.status_code == 200
+    listed = [(c["source_class_id"], c["removed"], c["title"]) for c in answer.json()["classes"]]
+    # Only A's own rows, the latest change first; B's class of the same key is not one.
+    assert listed == [("b-only", True, None), ("shared", False, "A")]
+    for class_id in a.other.class_ids:
+        assert class_id not in answer.text
+
+
+def _read_library_class(site: Site, a: Actor) -> None:
+    # B's class ids are known to A here; they are still not A's to read.
+    for class_id in a.other.class_ids:
+        refused = a.browser.get(f"{SITE_CLASSES}/{class_id}")
+        assert refused.status_code == 404 and refused.json() == {"error": "not_found"}
+    own = _own_class_id(a, "shared")
+    answer = a.browser.get(f"{SITE_CLASSES}/{own}")
+    assert answer.status_code == 200 and answer.json()["document"]["class"]["title"] == "A"
+
+
+def _delete_library_class(site: Site, a: Actor) -> None:
+    # B's class ids are known to A here; they are still not A's to delete.
+    for class_id in a.other.class_ids:
+        refused = a.browser.delete(f"{SITE_CLASSES}/{class_id}")
+        assert refused.status_code == 404 and refused.json() == {"error": "not_found"}
+    own = _own_class_id(a, "shared")
+    assert a.browser.delete(f"{SITE_CLASSES}/{own}").status_code == 204
+
+
+def _own_class_id(a: Actor, source_class_id: str) -> str:
+    listed = a.browser.get(SITE_CLASSES).json()["classes"]
+    return next(c["class_id"] for c in listed if c["source_class_id"] == source_class_id)
+
+
 def _revoke_own_device(site: Site, a: Actor) -> None:
     assert a.app.delete(DEVICE, headers=bearer(a.token)).status_code == 204
     assert a.app.get(DEVICE, headers=bearer(a.token)).status_code == 401
@@ -232,6 +267,10 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/player/changes"): _changes,
     ("GET", "/api/player/classes/{class_id}"): _held_class,
     ("GET", "/api/player/cursor"): _cursor,
+    # After the player API's cases: the last of these deletes A's class "shared".
+    ("GET", "/api/site/classes"): _list_library,
+    ("GET", "/api/site/classes/{class_id}"): _read_library_class,
+    ("DELETE", "/api/site/classes/{class_id}"): _delete_library_class,
     ("DELETE", "/api/player/device"): _revoke_own_device,
     ("POST", "/api/site/sessions/end-all"): _end_all,
 }
@@ -341,11 +380,12 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
         b_sync = b_app.get(CHANGES, headers=bearer(other.token)).json()
         assert [c["class_id"] for c in b_sync["changes"]] == list(other.class_ids)
         assert b_sync["cursor"] == other.cursor
-    # And the cases did act on A's own rows: A's classes are A's, A's source ended its own link,
-    # and the last two revoked A's device and ended every session of A.
-    assert sorted(row[:3] for row in sh.class_rows(site, A)) == [
-        ("b-only", 9, "removal"),
-        ("shared", 1, "class"),
+    # And the cases did act on A's own rows: A's classes are A's, the site deleted A's "shared"
+    # at its number, A's source ended its own link, and the last two revoked A's device and
+    # ended every session of A.
+    assert sorted(row[:4] for row in sh.class_rows(site, A)) == [
+        ("b-only", 9, "removal", None),
+        ("shared", 1, "removal", None),
     ]
     assert site.su.execute(
         "SELECT count(*) FROM player.source_links l JOIN player.accounts a "
