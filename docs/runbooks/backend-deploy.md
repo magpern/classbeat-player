@@ -126,14 +126,18 @@ The command prints only that it ran, and a database error as its type and SQLSTA
 
 1. Read the release notes for changes to settings; add new ones to `docker/.env`.
 2. Back up the database first (below).
-3. Check out the new release, then `compose up -d --build --wait`. `migrate` runs before the new
+3. Check out the new release and stop the old server first: `compose stop backend`. An old
+   server running against a newer database can answer requests wrongly (for example the change
+   of rate-limit counting in migration 0009, which an old server reads as an unknown token, and
+   the player then forgets its pairing). Then `compose up -d --build --wait`. `migrate` runs before the new
    server starts; each migration runs once, in its own transaction, and a changed applied
    migration is refused (backend README). A failed `migrate` leaves the old server running.
 4. `compose ps` and `/healthz` as in "First start". To go back, check out the old release and
-   start it; migrations are not reversed, so restore the backup if a migration must be undone.
+   start it (stop `backend` first here too); migrations are not reversed, so restore the
+   backup if a migration must be undone.
 
-The server is down for the few seconds the container restarts; there is no second process to take
-over, by design.
+The server is down from `compose stop backend` until the new one is healthy (the build, the
+migrations and the start); there is no second process to take over, by design.
 
 ## Backup (owner)
 

@@ -27,7 +27,9 @@ sign-in hardening (#60), ADR 0002 as built (#57, #68 and this update), device pa
 pairing hardening (#71, #79), pairing in the app (#74, #84; hardening #87, #89), the source API
 (#73, #86), the SMTP mailer and operator commands (#83, #90), the player API with class sync
 (#92, #96), refused requests counted on every credentialed route and review notes (#98, #101),
-backend deploy files with the hourly purge (#95, #97, #99, #100). Next: the class library,
+backend deploy files with the hourly purge (#95, #97, #99, #100), the body size cap, a budget of
+600 document reads a minute, counted oversized publications and the SMTP deadline over DNS and
+connect (#103, #104). Next: the class library,
 passkeys; purge counts (needs a migration); the player API answers in `schema/`.
 
 ## PL4: screens
@@ -60,10 +62,9 @@ Merged: #30 and its findings (#53).
   stopping the native scene clears its state (#53); one capitalisation convention for status
   texts (#65 design review).
 - Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); packaging of `schema/`
-  (#86); a size cap on site request bodies and a guard that the raw body is read before the
-  session, a test that the SMTP conversation releases its deadline, the DNS lookup inside the
-  deadline (#101 review); a separate budget for document reads so a first sync of 2,000 classes
-  does not take 34 minutes, cursors bound to an account, a resync on a format-version change (#96).
+  (#86); cursors bound to an account, a resync on a format-version change (#96); the body cap
+  keyed on the request path, which would cap publications at 16 KiB if the app were served under
+  a path prefix (#104 review).
 - Docs: the presenter spec's minimum window size; the short next row's dropped fields called a
   choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
   section 6 bullet on one device token per account against one pairing at a time).
