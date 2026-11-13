@@ -59,6 +59,8 @@ async function hardening(room: Page) {
   }));
   return { prefs, page };
 }
+const roomItemEnabled = (): Promise<boolean | undefined> => app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("show-room")?.enabled);
+
 const HARDENED = {
   prefs: { ci: true, ni: false, sb: true, wv: false, ws: true, ownMenu: false },
   page: { csp: ROOM_CSP, require: "undefined", player: "undefined", api: ["onUpdate", "state"] },
@@ -66,8 +68,10 @@ const HARDENED = {
 
 test("the class ends while the instructor is on the class list: the room window closes then", async () => {
   await page.waitForSelector('#app[data-body="not-paired"]');
+  assert.equal(await roomItemEnabled(), false, "no class open: Show the room screen is off");
   await page.locator('[data-action="pair"]').first().click();
   await startFromList();
+  assert.equal(await roomItemEnabled(), true, "a class open: on");
   await theRoom(app);
   await command({ type: "start" });
   // Close to the end, running: about 3 s left.
@@ -82,9 +86,11 @@ test("the class ends while the instructor is on the class list: the room window 
   await onPage(page, "classlist.html");
   await page.waitForSelector('footer [data-action="back"]');
   assert.equal(await windowCount(app), 2, "the pinned class can be gone back to: the room stays");
+  assert.equal(await roomItemEnabled(), true, "on the list, pinned: still on");
   // The clock runs out on its own while the list shows: the pin ends and the room window goes.
   await waitFor(async () => (await windowCount(app)) === 1, 15_000, "the room window to close at the end");
   await page.waitForSelector('footer [data-action="start"]');
+  assert.equal(await roomItemEnabled(), false, "the class is closed: off");
 });
 
 test("a pinned class: the room window closed by hand comes back from the presenter's menu", async () => {
@@ -124,7 +130,31 @@ test("a class from a file: the room window closed by hand comes back, with the s
   await menu(app, "class-list");
   await onPage(page, "classlist.html");
   await waitFor(async () => (await windowCount(app)) === 1, 5000, "the room window to close");
+  assert.equal(await roomItemEnabled(), false, "the file class is closed: off");
   await menu(app, "show-room");
   await sleep(500);
   assert.equal(await windowCount(app), 1, "no class open: nothing to show");
+});
+
+test("Show the room screen right after Class list, before the list page has loaded, opens nothing", async () => {
+  await openClassFile(app);
+  await onPage(page, "presenter.html");
+  await theRoom(app);
+  await closeRoomByHand(app);
+  await waitFor(async () => (await windowCount(app)) === 1, 5000, "the room window to close by hand");
+  assert.equal(await roomItemEnabled(), true);
+  // Both in one turn of the main process: the list's load has started, not committed.
+  const sameTurn = await app.evaluate(({ Menu, BrowserWindow }) => {
+    const m = Menu.getApplicationMenu()!;
+    const main = BrowserWindow.getAllWindows().find((x) => !x.webContents.getURL().endsWith("/dist/room.html"))!;
+    m.getMenuItemById("class-list")!.click();
+    const before = main.webContents.getURL();
+    m.getMenuItemById("show-room")!.click();
+    return before;
+  });
+  assert.match(sameTurn, /\/presenter\.html$/, "the list had not committed yet");
+  await onPage(page, "classlist.html");
+  await sleep(1000);
+  assert.equal(await windowCount(app), 1, "the room window stays closed");
+  assert.equal(await roomItemEnabled(), false);
 });

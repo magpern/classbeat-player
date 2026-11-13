@@ -30,10 +30,15 @@ export interface RoomWindowDeps {
   readonly presenter: () => BrowserWindow | null;
 }
 
+// Raises the presenter above a room window it shares the display with. It takes the keyboard only
+// when the application already has it: a class opened while another application has the focus
+// (a file dropped from it) leaves that focus where it is.
 function raise(p: BrowserWindow | null): void {
   if (!p || p.isDestroyed() || p.isMinimized()) return;
+  const appFocused = BrowserWindow.getFocusedWindow() !== null;
   p.moveTop();
-  p.focus();
+  // Where the system has no stacking request of its own, focus is what raises the window.
+  if (appFocused) p.focus();
 }
 
 export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
@@ -72,11 +77,10 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
         if (win === w) win = null;
       });
       w.once("ready-to-show", () => {
-        // On the presenter's own display the presenter is raised above the room window once it
-        // shows, so no control is ever covered, also where there is no free room beside it
-        // (`behindPresenter`). Focus raises it where the system has no stacking request of its
-        // own; the presenter is where the instructor works, so it keeps the keyboard either way.
-        if (!place?.fullScreen) w.once("show", () => raise(d.presenter()));
+        // With no free room beside the presenter the room window is under it (`behindPresenter`):
+        // the presenter is raised above it once it shows, so no control is ever covered. Beside
+        // it, nothing overlaps and nothing is raised or focused.
+        if (place?.behindPresenter) w.once("show", () => raise(d.presenter()));
         // The presenter keeps the keyboard and its controls (plan, section 9).
         w.showInactive();
         if (place?.fullScreen) w.setFullScreen(true);

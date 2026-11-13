@@ -36,13 +36,26 @@ const overlap = (a: Rect, b: Rect): Rect => {
   return { x, y, width: Math.max(0, Math.min(a.x + a.width, b.x + b.width) - x), height: Math.max(0, Math.min(a.y + a.height, b.y + b.height) - y) };
 };
 
-/** Moves the presenter, opens a class file and returns where both windows are and where the rule put the room. */
-async function openWithPresenterAt(bounds: Rect | "centre") {
-  await app.evaluate(({ BrowserWindow }, b) => {
+/**
+ * Moves the presenter, opens a class file and returns where both windows are, where the rule put
+ * the room, how often the presenter was raised and which window has the focus. `elsewhere`: the
+ * focus is in another application (the presenter is blurred) when the class opens.
+ */
+async function openWithPresenterAt(bounds: Rect | "centre", elsewhere = false) {
+  await app.evaluate(({ BrowserWindow }, { b, elsewhere }) => {
     const w = BrowserWindow.getAllWindows()[0]!;
     if (b === "centre") w.center();
     else w.setBounds(b);
-  }, bounds);
+    const g = globalThis as unknown as { raised: number; moveTop?: () => void };
+    g.raised = 0;
+    g.moveTop ??= w.moveTop.bind(w);
+    w.moveTop = () => {
+      g.raised++;
+      g.moveTop!();
+    };
+    if (elsewhere) w.blur();
+    else w.focus();
+  }, { b: bounds, elsewhere });
   await sleep(200);
   await openClassFile(app);
   await onPage(page, "presenter.html");
@@ -58,6 +71,8 @@ async function openWithPresenterAt(bounds: Rect | "centre") {
       presenterDisplay: screen.getDisplayMatching(main.getBounds()).id,
       room: room.getBounds(),
       full: room.isFullScreen(),
+      raised: (globalThis as unknown as { raised: number }).raised,
+      focused: BrowserWindow.getFocusedWindow() === main ? "presenter" : BrowserWindow.getFocusedWindow() === null ? "none" : "room",
     };
   });
   const want = placeRoom(f.displays as DisplayFacts[], f.presenterDisplay, f.presenter as Rect, null);
@@ -78,6 +93,7 @@ test("one display with free room below the presenter: the room window is there, 
   assert.equal(f.full, false);
   assert.equal(f.want.behindPresenter, false);
   assert.deepEqual(f.room, f.want.bounds);
+  assert.equal(f.raised, 0, "nothing overlaps: the presenter is not raised");
   assert.equal(overlap(f.room, f.presenter).width * overlap(f.room, f.presenter).height, 0, `${JSON.stringify(f.room)} over ${JSON.stringify(f.presenter)}`);
   const s = await captureScreen(app);
   writeFileSync(join(SHOTS, "room-window-shared-beside.png"), s.png);
@@ -94,9 +110,24 @@ test("one display with no free room: the room window goes under the presenter, w
   assert.deepEqual(f.room, f.want.bounds);
   const both = overlap(f.room, f.presenter);
   assert.ok(both.width * both.height > 0, "they overlap");
+  assert.ok(f.raised > 0, "the presenter is raised");
+  assert.equal(f.focused, "presenter", "the application had the focus: the presenter keeps it");
   const s = await captureScreen(app);
   writeFileSync(join(SHOTS, "room-window-shared-under.png"), s.png);
   // Where both are, the screen shows the presenter's page (white), not the room screen (dark).
   assert.ok(whiteShare(s, both) > 0.8, `the presenter covers the room window: ${whiteShare(s, both)}`);
+  await backToList();
+});
+
+test("the class opens while another application has the focus: the presenter is raised but takes no focus", async (t) => {
+  if (!LINUX) return t.skip("Linux under xvfb only");
+  const beside = await openWithPresenterAt({ x: 0, y: 0, width: 1000, height: 720 }, true);
+  assert.equal(beside.want.behindPresenter, false);
+  assert.deepEqual([beside.raised, beside.focused], [0, "none"], "beside: nothing raised, no focus taken");
+  await backToList();
+  const under = await openWithPresenterAt("centre", true);
+  assert.equal(under.want.behindPresenter, true);
+  assert.ok(under.raised > 0, "under: the presenter is raised");
+  assert.equal(under.focused, "none", "under: the other application keeps the focus");
   await backToList();
 });

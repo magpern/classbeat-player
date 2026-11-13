@@ -19,7 +19,7 @@ export function installMenu(a: MenuActions): void {
       submenu: [
         { id: "open-class", label: "Open a class file…", accelerator: "CmdOrCtrl+O", click: a.openClass },
         { id: "class-list", label: "Class list", accelerator: "CmdOrCtrl+L", click: a.showList },
-        { id: "show-room", label: "Show the room screen", accelerator: "CmdOrCtrl+Shift+R", click: a.showRoom },
+        { id: "show-room", label: "Show the room screen", accelerator: "CmdOrCtrl+Shift+R", enabled: false, click: a.showRoom },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
       ],
@@ -27,4 +27,10 @@ export function installMenu(a: MenuActions): void {
     { label: "Edit", submenu: [{ role: "copy" }, { role: "selectAll" }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+/** Enables or disables File > Show the room screen (main.ts keeps it equal to `roomMayOpen`). */
+export function setRoomItemEnabled(enabled: boolean): void {
+  const item = Menu.getApplicationMenu()?.getMenuItemById("show-room");
+  if (item && item.enabled !== enabled) item.enabled = enabled;
 }

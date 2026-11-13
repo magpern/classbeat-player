@@ -11,7 +11,7 @@ import { createListController } from "./list/list-controller.ts";
 import type { ListController } from "./list/list-controller.ts";
 import { registerListHandlers } from "./list/list-handlers.ts";
 import { openClassFile } from "./list/open-class-file.ts";
-import { installMenu } from "./menu.ts";
+import { installMenu, setRoomItemEnabled } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
 import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
@@ -46,12 +46,29 @@ const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() 
 // The room screen's own window: it opens with every class that opens, and closes with the class.
 const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: join(DIST, "room-preload.cjs"), presenter: live });
 const pinned = (): boolean => (sync?.view().pinned ?? null) !== null;
-const onListPage = (): boolean => (live()?.webContents.getURL().split(/[?#]/, 1)[0] ?? "") === LIST_URL;
+// Whether the main window is on the class list, as the shell asked for it: set when the shell starts
+// a page load, so a command right after "Class list" already sees the list (the URL changes only
+// when the load commits). A navigation the shell did not ask for updates it when it commits.
+let onList = true;
+let requested: string | null = null;
+const onListPage = (): boolean => onList;
+const pageUrl = (url: string): string => url.split(/[?#]/, 1)[0] ?? "";
+// File > Show the room screen is enabled exactly when it would open the room window.
+const refreshRoomItem = (): void => setRoomItemEnabled(roomMayOpen(controller.snapshot().doc !== null, onList, pinned()));
 
 function showPage(file: string): void {
   const win = live();
   if (!win) return;
+  requested = pathToFileURL(file).href;
+  onList = requested === LIST_URL;
+  refreshRoomItem();
   void win.loadFile(file);
+}
+function committed(url: string): void {
+  if (requested !== null && pageUrl(url) !== requested) return;
+  requested = null;
+  onList = pageUrl(url) === LIST_URL;
+  refreshRoomItem();
 }
 function showPresenter(): void {
   showPage(PRESENTER_FILE);
@@ -95,6 +112,7 @@ function createPresenter(): void {
   const [outerW, outerH] = presenter.getSize();
   const [contentW, contentH] = presenter.getContentSize();
   presenter.setMinimumSize(PRESENTER_SIZE.minWidth + (outerW! - contentW!), PRESENTER_SIZE.minHeight + (outerH! - contentH!));
+  presenter.webContents.on("did-navigate", (_e, url) => committed(url));
   presenter.on("closed", () => {
     presenter = null;
     // The class goes with the presenter, and the application quits once both windows are gone.
@@ -130,9 +148,11 @@ if (!app.requestSingleInstanceLock()) {
     // screen stays on "Class Complete" until the instructor leaves it.
     controller.onEnded(() => {
       if (roomCloses(onListPage(), pinned())) room.close();
+      refreshRoomItem();
     });
     controller.onOpened(() => room.open());
     controller.watch((s) => room.send(s));
+    controller.watch(() => refreshRoomItem());
     registerRoomHandlers(ipcMain, () => room.trusted(), controller);
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
