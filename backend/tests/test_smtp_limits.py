@@ -10,6 +10,7 @@ from __future__ import annotations
 import socket
 import ssl
 import time
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -43,6 +44,18 @@ def _mail() -> Mail:
     return sign_in_mail("https://player.example.test", "rider@example.test", new_token("ml"))
 
 
+type _Address = tuple[socket.AddressFamily, socket.SocketKind, int, str, tuple[str, int]]
+
+
+def _resolving(addresses: list[_Address]) -> Callable[..., list[_Address]]:
+    """A name lookup that answers these addresses, whatever it is asked."""
+
+    def getaddrinfo(*args: object, **kwargs: object) -> list[_Address]:
+        return addresses
+
+    return getaddrinfo
+
+
 class _NeverAnswers(socket.socket):
     """A connect that waits out its whole timeout, as an address that drops the SYN does."""
 
@@ -61,7 +74,7 @@ def test_several_addresses_that_do_not_answer_keep_to_the_one_limit(
     addresses = [
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", (f"127.0.0.{n}", 25)) for n in range(2, 6)
     ]
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *_, **__: addresses)
+    monkeypatch.setattr(socket, "getaddrinfo", _resolving(addresses))
     monkeypatch.setattr(socket, "socket", _NeverAnswers)
     _NeverAnswers.tried = []
     started = time.monotonic()
@@ -83,7 +96,7 @@ def test_an_address_that_refuses_is_passed_over_for_the_next(
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", refusing)),
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", server.port)),
         ]
-        monkeypatch.setattr(socket, "getaddrinfo", lambda *_, **__: addresses)
+        monkeypatch.setattr(socket, "getaddrinfo", _resolving(addresses))
         SmtpMailer(_settings(server.port), certs.client_context()).send(_mail(), timeout=5)
         assert len(server.messages) == 1
 

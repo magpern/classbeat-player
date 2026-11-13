@@ -279,6 +279,24 @@ def test_publications_are_limited_per_token(site: Site, linked: tuple[Browser, s
     assert sh.class_rows(site, EMAIL)[0][1] == 60
 
 
+def test_every_request_with_a_source_token_counts_under_the_one_limit(
+    site: Site, linked: tuple[Browser, str]
+) -> None:
+    # Not publications alone (source_policy.py): number reads and their refusals count too.
+    app, token = linked
+    settle(site, 60, margin=10.0)
+    for number in range(1, 31):
+        assert sh.publish(app, token, sh.envelope("c1", number, None)).status_code == 200
+    for n in range(30):
+        path = f"{sh.CLASSES}/c1" if n % 2 else f"{sh.CLASSES}/nope"
+        assert app.get(path, headers=sh.bearer(token)).status_code in (200, 404)
+    assert sh.publish(app, token, sh.envelope("c1", 99, None)).status_code == 429
+    assert app.get(f"{sh.CLASSES}/c1", headers=sh.bearer(token)).status_code == 429
+    # Ending the link is a request of the token as well: refused, and the link stays.
+    assert app.delete(sh.OWN_LINK, headers=sh.bearer(token)).status_code == 429
+    assert site.su.execute("SELECT count(*) FROM player.source_links").fetchone() == (1,)
+
+
 def test_a_token_of_another_type_is_refused_before_any_lookup(
     site: Site, linked: tuple[Browser, str]
 ) -> None:
