@@ -8,10 +8,10 @@ html, body { height: 100%; }
 
 /* Portrait (the default): sizes in vh, capped by vw so a narrow phone keeps its line lengths. */
 :root {
-  --c-gel: min(10.6vh, 23vw); /* zone numeral */
-  --c-hero: min(10vh, 21.5vw); /* time left in the interval */
-  --c-value: min(4.6vh, 9.4vw); /* zone name, cadence, position */
-  --c-text: min(4.2vh, 8.6vw); /* the cue, up to 60 characters */
+  --c-gel: min(11.2vh, 24.5vw); /* zone numeral */
+  --c-hero: min(10.5vh, 23vw); /* time left in the interval */
+  --c-value: min(4.75vh, 9.8vw); /* zone name, cadence, position */
+  --c-text: min(4.35vh, 8.9vw); /* the cue, up to 60 characters */
   --c-text-min: min(3.4vh, 7vw); /* a longer cue */
   --c-minor: min(3.2vh, 6.6vw); /* next intervals, next song, class time, key labels */
   --c-label: min(2.4vh, 5vw); /* labels, hints */
@@ -22,12 +22,12 @@ html, body { height: 100%; }
 }
 @media (orientation: landscape) {
   :root {
-    --c-gel: min(21vh, 11vw);
-    --c-hero: min(18vh, 9.6vw);
+    --c-gel: min(22vh, 11.6vw);
+    --c-hero: min(18vh, 10.1vw);
     --c-value: min(8.2vh, 4.3vw);
-    --c-text: min(7.4vh, 3.9vw);
-    --c-text-min: min(6vh, 3.2vw);
-    --c-minor: min(5.6vh, 3vw);
+    --c-text: min(7.4vh, 4.1vw);
+    --c-text-min: min(6vh, 3.35vw);
+    --c-minor: min(5.6vh, 3.1vw);
     --c-label: min(4.4vh, 2.35vw);
     --c-pad: 2.4vw;
     --c-gap: 2vh;

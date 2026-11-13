@@ -3,7 +3,14 @@
 Status: proposed in the pull request for issue #131. Design system: [system.md](system.md).
 Neighbouring specs: [class-list.md](class-list.md) (the same class list, in the computer's own
 window) and [presenter.md](presenter.md) (wording convention). Reference mock-ups and screenshots:
-[mockups/](mockups/), files `site-*.html` (57 states) and `site-*-<width>.png`.
+[mockups/](mockups/), files `site-*.html` (57 mock-ups) and `site-*-<width>.png`. **Where a mock-up and this text
+differ, the text wins**; the mock-ups are layout references, and the rows below say where one
+shows something older. The product's CI shoots 23 states of the first website issue (sign-in,
+the shell and the errors). Seven have no mock-up of their own and are held to the row that
+names them: `sign-in-no-passkey` (the start state without the "or" and the passkey button),
+`sign-in-passkey-limited`, `sign-in-passkey-wait` and `sign-in-passkey-busy` (the three
+passkey 429 plates below), `sign-in-server` and `sign-in-offline` (the server and offline
+plates over the sign-in form) and `shell-signed-in` (the header with a signed-in page).
 
 ## Purpose
 
@@ -89,15 +96,15 @@ The email link, a passkey, and the pages around them. One narrow column.
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
-| Start | "Sign in", an email field, "Email me a sign-in link", "or", "Sign in with a passkey" | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
+| Start | "Sign in", an email field, "Email me a sign-in link", the label "or", "Sign in with a passkey" and the line "A passkey uses this device's fingerprint, face or screen lock." | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
 | Not an email | Field error "That does not look like an email address", the typed text kept | 422 `invalid_email` | [invalid](mockups/site-sign-in-invalid-email.html) |
-| Too many requests | Plate "Too many sign-in requests", "try again in about N minutes" from `Retry-After`; the form stays | 429 `too_many_requests` | [limited](mockups/site-sign-in-limited.html) |
+| Too many requests | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "One network connection can ask for 10 sign-in links an hour, whatever the email address"; the form stays | 429 `too_many_requests` | [limited](mockups/site-sign-in-limited.html) |
 | Check your mail | Note "A link is on its way if *address* can sign in", how long it works (once, 15 minutes, this browser), a hint about spam and spelling, "Send the link again", "Use a different address" | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
 | **Not on the allowlist** | **The same "Check your mail" page, word for word.** ADR 0002 section 4 fixes that the answer for an address that cannot sign in never differs from one that can, so no page may say "not allowed" (it would tell anyone whether an address has an account). The hint on the page ("Only addresses that have been let in can sign in") is there for every visitor and is how the person learns the reason | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
 | Link opened | "Finish signing in", a "Sign in" button, "This works only in the browser where you asked for the link". The token is read from the fragment and removed from the address bar; opening the page signs nobody in | `POST sign-in/complete` on the button | [link](mockups/site-sign-in-link.html) |
 | Signing in | The button disabled, "Signing you in…" | pending | [working](mockups/site-sign-in-link-working.html) |
 | Link expired, used or refused | Plate "This link cannot be used" with the three possible reasons, and the sign-in form to ask for a new link. One page for every refusal (expired, used, unknown, other browser) | 401 `sign_in_refused` | [refused](mockups/site-sign-in-link-refused.html) |
-| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button and "Email me a sign-in link" both disabled, so only one request is under way (disabled text keeps 7 : 1, S2). It lasts until the answer is in, through the one resend after a busy answer (below) | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
+| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button, now reading "Waiting for your passkey…", and "Email me a sign-in link" both disabled, so only one request is under way (disabled text keeps 7 : 1, S2). It lasts until the answer is in, through the one resend after a busy answer (below) | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
 | Passkey failed | Plate "That passkey could not be used", "Try again", and the email form | 401 from `POST sign-in/passkey` | [failed](mockups/site-sign-in-passkey-failed.html) |
 | Passkey limit | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "After 10 passkey sign-ins that fail within 10 minutes, this network connection has to wait"; the form stays | 429 from `POST sign-in/passkey` with a `Retry-After` over 1 second | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-limited-*` show them |
 | Passkey wait | Plate "Too many sign-in requests", then only "Please try again in about N minutes" from `Retry-After`, or "Please try again in a moment" when it is 1 second. Nothing about failed sign-ins: the person may have made none. The form stays | 429 from `POST sign-in/passkey/options` (sign-ins started); 429 from `POST sign-in/passkey` with no `Retry-After`; 429 from `POST sign-in/passkey` with `Retry-After: 1` (another attempt still being checked) on the one resend too | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-wait-*` and `site-sign-in-passkey-busy-*` show them |
@@ -235,7 +242,7 @@ person: they press it again.
 | Too many requests | Plate "Please wait a little", the wait from `Retry-After` in minutes, "Nothing was changed", "Try again" | 429 with `Retry-After` | [429](mockups/site-error-too-many.html) |
 | Offline | Plate "You are offline": what is shown may be out of date, changes wait; the page tries again by itself when the browser says it is online, and "Try again". Content already shown stays; a button that needs the server is disabled and says so. Until the classes page lands (the second website issue) there is no content to keep, so the plate sits under the page title alone; this state is checked again with the class list shown when it does | A request fails with no answer | [offline](mockups/site-error-offline.html) |
 | Server fault | Plate "That did not work, and it was not your doing", "Try again in a moment. If you were changing something, check that it happened before you repeat it." No code, no technical word | 5xx, or an answer the page does not understand | [server](mockups/site-error-server.html) |
-| Not found | "That page is not here", a button to Classes. No section of the header is marked: no 3 px bar and no `aria-current`, because the page is none of them. The mock-up marks Classes; this row holds | An address the site does not have | [404](mockups/site-error-not-found.html) |
+| Not found | "That page is not here", a button to Classes. No section of the header is marked: no 3 px bar and no `aria-current`, because the page is none of them. The mock-up shows the header with no section marked, as this row says | An address the site does not have | [404](mockups/site-error-not-found.html) |
 
 A 403 `cross_site_request` is not shown as such: it is the server-fault page.
 
