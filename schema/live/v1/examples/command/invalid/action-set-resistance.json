@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "type": "command",
+  "id": "dGFwLTAwMDAwMDAwMDAwMQ",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "basis": 41,
+  "action": "set_resistance"
+}

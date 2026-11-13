@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/command.schema.json",
+  "title": "Command",
+  "description": "Controller to server: one tap on the phone. It has no slot: the server stamps it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "run",
+    "basis",
+    "action"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "command"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "description": "The command's id: 16 random bytes, base64url without padding, new for each tap."
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "description": "The class run's id: 16 random bytes, base64url without padding, new for each class run."
+    },
+    "basis": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "The seq of the companion_state the phone showed."
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "start",
+        "pause",
+        "resume",
+        "skip",
+        "nudge",
+        "undo_resync"
+      ],
+      "description": "Exactly one of the companion's actions (ADR 0005 section 4)."
+    },
+    "deltaMs": {
+      "type": "integer",
+      "enum": [
+        5000,
+        -5000
+      ],
+      "description": "Only with nudge: exactly +5000 or -5000 ms (the presenter's JUMP_MS)."
+    }
+  },
+  "if": {
+    "required": [
+      "action"
+    ],
+    "properties": {
+      "action": {
+        "const": "nudge"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "deltaMs"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "deltaMs"
+      ]
+    }
+  }
+}

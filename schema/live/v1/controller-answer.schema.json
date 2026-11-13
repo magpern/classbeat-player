@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/controller-answer.schema.json",
+  "title": "ControllerAnswer",
+  "description": "The answer of POST /api/live/controller and POST /api/live/control: a controller token, kept on the phone in sessionStorage only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "controllerToken"
+  ],
+  "properties": {
+    "controllerToken": {
+      "type": "string",
+      "pattern": "^cbp_ctl_[A-Za-z0-9_-]{43}$"
+    }
+  }
+}

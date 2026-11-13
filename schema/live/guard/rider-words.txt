@@ -1,0 +1,27 @@
+# Rider words (rule 13, ADR 0005 section 7). No property name, enum or const value of a message
+# the server delivers to a controller (companion_state among them; schema/live/v1/routing.json
+# says which) contains one of these as a whole word. Same splitting and readers as
+# equipment-words.txt. One lowercase word per line; # starts a comment. The list only grows.
+nickname
+nicknames
+reading
+readings
+rider
+riders
+presence
+present
+count
+counts
+roster
+participant
+participants
+attendee
+attendees
+member
+members
+heart
+hr
+ftp
+leaderboard
+rank
+ranking

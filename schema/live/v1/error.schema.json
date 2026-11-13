@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/error.schema.json",
+  "title": "LiveErrorBody",
+  "description": "The body of every error answer of the live HTTP routes (ADR 0002's error shape, closed). 429 answers carry Retry-After (seconds).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "error"
+  ],
+  "properties": {
+    "error": {
+      "type": "string",
+      "enum": [
+        "invalid_request",
+        "invalid_token",
+        "token_unknown",
+        "token_expired",
+        "token_revoked",
+        "sessions_full",
+        "cannot_control",
+        "invalid_code",
+        "controllers_full",
+        "too_many_requests",
+        "internal_error"
+      ],
+      "description": "POST /api/live/sessions: 401 invalid_token, token_unknown, token_expired or token_revoked (the device token), 409 sessions_full (3 per account). POST /api/live/controller: 403 cannot_control, for every failure. POST /api/live/control: 403 invalid_code (unknown session or wrong code), 409 controllers_full. Any route: 422 invalid_request, 429 too_many_requests, 500 internal_error."
+    }
+  }
+}

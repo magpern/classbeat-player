@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/session-answer.schema.json",
+  "title": "SessionAnswer",
+  "description": "The answer of POST /api/live/sessions (ADR 0002 section 8, ADR 0005 section 4): the session id, the join code and the host token. The host token is given out only here and kept in the app's memory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sessionId",
+    "joinCode",
+    "hostToken"
+  ],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "joinCode": {
+      "type": "string",
+      "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "description": "Short code, shown as XXXX-XXXX."
+    },
+    "hostToken": {
+      "type": "string",
+      "pattern": "^cbp_hst_[A-Za-z0-9_-]{43}$"
+    }
+  }
+}

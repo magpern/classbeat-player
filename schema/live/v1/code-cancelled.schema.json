@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/code-cancelled.schema.json",
+  "title": "CodeCancelled",
+  "description": "Server to host: the control code no longer works.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "code_cancelled"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "wrong_tries",
+        "expired",
+        "used",
+        "replaced"
+      ]
+    }
+  }
+}

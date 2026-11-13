@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/controller-joined.schema.json",
+  "title": "ControllerJoined",
+  "description": "Server to host: a controller connected in this slot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "slot",
+    "via"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "controller_joined"
+    },
+    "slot": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "The controller's place, 1 or 2, given by the server."
+    },
+    "via": {
+      "type": "string",
+      "enum": [
+        "sign_in",
+        "code"
+      ],
+      "description": "How the controller got its token."
+    }
+  }
+}

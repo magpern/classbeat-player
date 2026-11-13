@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/control-code.schema.json",
+  "title": "ControlCode",
+  "description": "Server to the host only: the new control code, for the presenter window only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "code",
+    "expiresInMs"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "control_code"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "description": "The control code as XXXX-XXXX."
+    },
+    "expiresInMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120000
+    }
+  }
+}

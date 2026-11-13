@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/controller-request.schema.json",
+  "title": "ControllerRequest",
+  "description": "The body of POST /api/live/controller (by sign-in, with the site cookie). `session` is the join code and only names the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session"
+  ],
+  "properties": {
+    "session": {
+      "type": "string",
+      "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "description": "The join code as XXXX-XXXX; the page normalises what was typed (case, spaces, hyphens) before sending."
+    }
+  }
+}

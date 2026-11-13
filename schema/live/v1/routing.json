@@ -1,0 +1,28 @@
+{
+  "description": "The live contract's routing allowlist for the handlebar companion (ADR 0005 section 4, ADR 0002 section 8). Each WebSocket message names its schema, the role that may send it and the roles it is delivered to; the server checks a message against the schema for its sender's role and drops (and counts) anything else. `server` is the live process itself. Each HTTP route names its body and answer schemas and its error codes.",
+  "roles": ["host", "controller", "rider"],
+  "messages": [
+    { "type": "hello", "schema": "hello.schema.json", "from": ["host", "controller", "rider"], "to": ["server"] },
+    { "type": "welcome", "schema": "welcome.schema.json", "from": ["server"], "to": ["host", "controller"] },
+    { "type": "host_status", "schema": "host-status.schema.json", "from": ["server"], "to": ["controller"] },
+    { "type": "controller_joined", "schema": "controller-joined.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "controller_left", "schema": "controller-left.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "make_code", "schema": "make-code.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "control_code", "schema": "control-code.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "code_cancelled", "schema": "code-cancelled.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "drop", "schema": "drop.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "companion_state", "schema": "companion-state.schema.json", "from": ["host"], "to": ["controller"] },
+    { "type": "command", "schema": "command.schema.json", "from": ["controller"], "to": ["server"] },
+    { "type": "command", "schema": "command-forwarded.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "command_result", "schema": "command-result.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "ack", "schema": "ack.schema.json", "from": ["server"], "to": ["controller"] },
+    { "type": "end", "schema": "end.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "ended", "schema": "ended.schema.json", "from": ["server"], "to": ["host", "controller"] }
+  ],
+  "http": [
+    { "route": "POST /api/live/sessions", "credential": "device_token", "body": null, "answer": "session-answer.schema.json", "errors": ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "too_many_requests", "internal_error"] },
+    { "route": "POST /api/live/controller", "credential": "site_cookie", "body": "controller-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "cannot_control", "too_many_requests", "internal_error"] },
+    { "route": "POST /api/live/control", "credential": "none", "body": "control-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "invalid_code", "controllers_full", "too_many_requests", "internal_error"] }
+  ],
+  "errorSchema": "error.schema.json"
+}

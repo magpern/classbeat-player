@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/ended.schema.json",
+  "title": "Ended",
+  "description": "Server to the connection: the session ended for it; the connection is then closed with 4403.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "ended"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "host_ended",
+        "revoked",
+        "expired",
+        "dropped"
+      ]
+    }
+  }
+}

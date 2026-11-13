@@ -1,0 +1,54 @@
+{
+  "v": 1,
+  "type": "companion_state",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "seq": 41,
+  "status": "running",
+  "classMs": 754000,
+  "lengthMs": 2700000,
+  "classRemainingMs": 1946000,
+  "now": {
+    "index": 4,
+    "zone": {
+      "number": 8,
+      "name": "Threshold"
+    },
+    "cue": "Stay seated, push through the climb",
+    "remainingMs": 46000
+  },
+  "next": [
+    {
+      "startMs": 800000,
+      "lengthMs": 60000,
+      "zone": {
+        "number": 2,
+        "name": "Endurance"
+      },
+      "cue": "Recover, shoulders down"
+    },
+    {
+      "startMs": 860000,
+      "lengthMs": 120000,
+      "zone": {
+        "number": 5,
+        "name": "VO2 max"
+      },
+      "cue": ""
+    }
+  ],
+  "nextSong": {
+    "atMs": 830000,
+    "title": "Example Song",
+    "artist": "Example Artist"
+  },
+  "link": {
+    "mode": "following",
+    "state": "locked",
+    "canUndo": false,
+    "announcement": null
+  },
+  "allowed": [
+    "pause",
+    "skip"
+  ]
+}
