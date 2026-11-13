@@ -13,7 +13,7 @@
       "type": "string",
       "minLength": 3,
       "maxLength": 254,
-      "pattern": "^[^@\\sA-Z]+@[^@\\sA-Z]+$"
+      "pattern": "^[^\\sA-Z]+@[^@\\sA-Z]+$"
     }
   }
 }

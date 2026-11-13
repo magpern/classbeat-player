@@ -50,7 +50,12 @@ test("the me answer is the email only", () => {
   assert.deepEqual(schema.required, ["email"]);
   assert.deepEqual(Object.keys(schema.properties), ["email"]);
   const validate = validator("me");
-  for (const extra of [{ account_id: "x" }, { id: "x" }, { other_email: "o@example.com" }]) {
+  for (const extra of [
+    { account_id: "x" },
+    { id: "x" },
+    { other_email: "o@example.com" },
+    { sessions: [] },
+  ]) {
     assert.equal(validate({ email: "rider@example.com", ...extra }), false);
   }
 });
