@@ -228,3 +228,41 @@ def test_the_additions_lock_puts_the_callers_lock_timeout_back(site: Site, db_ur
         db.rows(passkeys.q.SET_LOCK_WAIT, ("7s",))
         assert passkeys.lock_additions(ctx) is True
         assert db.rows(passkeys.q.LOCK_WAIT_NOW) == [("7s",)]
+
+
+def test_a_timed_out_additions_lock_leaves_the_callers_transaction_going_on(
+    site: Site, holder: Conn, db_url: str
+) -> None:
+    """`lock_additions` waits in a savepoint of its own: when the wait runs out, only that
+    savepoint is rolled back. What the caller wrote before stays and its next statement runs."""
+    site.allow(EMAIL)
+    site.sign_in(EMAIL)
+    account = _account(site)
+    _hold(holder, PASSKEY_ADDITIONS, account)
+    result: list[object] = []
+
+    def call() -> None:
+        with connect(db_url) as db, db.transaction():
+            ctx = AccountContext(
+                account_id=account,
+                credential_kind="session",
+                credential_id=uuid.uuid4(),
+                signed_in_at=None,
+                entered_at=datetime.now(UTC),
+                db=db,
+            )
+            # Written by the caller before the lock: kept after the wait runs out.
+            db.rows(passkeys.q.SET_LOCK_WAIT, ("7s",))
+            taken = passkeys.lock_additions(ctx)
+            # The transaction is not aborted: the next statement runs and sees the caller's write.
+            result.append((taken, db.rows(passkeys.q.LOCK_WAIT_NOW)))
+
+    thread = threading.Thread(target=call, daemon=True)
+    thread.start()
+    try:
+        thread.join(LIMIT)
+        assert not thread.is_alive(), "the wait for the lock was not bounded"
+    finally:
+        holder.commit()
+        thread.join(10)
+    assert result == [(False, [("7s",)])]

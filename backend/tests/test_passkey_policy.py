@@ -12,16 +12,14 @@ import pytest
 
 from player_backend.passkey_policy import (
     challenge_hash,
-    challenge_of,
     clean_name,
-    credential_id_of,
     failed_limit_key,
     failed_lock_key,
-    from_base64url,
     registration_starts_key,
     rp_id_of,
     sign_in_starts_key,
 )
+from player_backend.webauthn_data_policy import challenge_of, credential_id_of, from_base64url
 
 
 def _b64(data: bytes) -> str:

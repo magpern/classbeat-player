@@ -31,14 +31,11 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from player_backend.passkey_policy import (
-    CHALLENGE_SECONDS,
+from player_backend.passkey_policy import CHALLENGE_SECONDS, RP_NAME, NewPasskey, rp_id_of
+from player_backend.webauthn_data_policy import (
     CREDENTIAL_ID_MAX,
     CREDENTIAL_ID_MIN,
-    RP_NAME,
-    NewPasskey,
     from_base64url,
-    rp_id_of,
 )
 
 ALGORITHMS: Final = [
