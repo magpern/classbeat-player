@@ -42,7 +42,9 @@ LOCKED_OTHERS = frozenset(
     # The class format's validators (ADR 0003, section 4) and what they need: no database client.
     "classformat jsonschema jsonschema-specifications referencing rpds-py attrs rfc8785 "
     # The passkey check (ADR 0002, section 4): the WebAuthn library and what it needs.
-    "webauthn cbor2 cryptography cffi pycparser pyopenssl pyasn1 pyasn1-modules".split()
+    "webauthn cbor2 cryptography cffi pycparser pyopenssl pyasn1 pyasn1-modules "
+    # The live WebSocket (ADR 0002, section 8): the protocol library uvicorn serves it with.
+    "websockets".split()
 )
 
 

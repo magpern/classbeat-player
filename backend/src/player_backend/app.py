@@ -16,6 +16,7 @@ from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
 from player_backend.live import router as live_router
+from player_backend.live.hub import Hub
 from player_backend.live.recheck import RecheckLoop, RecheckTiming
 from player_backend.live.registry import Registry
 from player_backend.live.service import LiveService
@@ -48,6 +49,8 @@ def create_app(
         app.state.site = SiteState(settings=settings, pool=pool, mailer=mailer or NoMailer())
         # ADR 0002, section 8: the live sessions, in this process's memory only.
         app.state.live = service = LiveService(Registry(), pool)
+        # Its WebSocket connections (live/ws.py), told by the registry of ends and drops.
+        app.state.live_hub = Hub(service)
         loop = None
         if live_recheck is not None:
             loop = RecheckLoop(service, settings.database_url, live_recheck)
