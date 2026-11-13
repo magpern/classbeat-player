@@ -18,6 +18,7 @@ from tests.sitehelp import Browser, Site
 
 EMAIL = "rider@example.test"
 SESSIONS = "/api/site/sessions"
+SITE_CLASSES = "/api/site/classes"
 FRESH = "SELECT last_used_at > now() - interval '1 minute' FROM player.sessions"
 JSON = {"Content-Type": "application/json"}
 TEXT = {"Content-Type": "text/plain"}
@@ -36,6 +37,15 @@ SESSION_CASES = [
     Malformed("DELETE", f"{SESSIONS}/11111111111141118111111111111111"),
     Malformed("DELETE", f"{DEVICES}/not-an-id"),
     Malformed("DELETE", f"{sh.LINKS}/not-an-id"),
+    Malformed("GET", f"{SITE_CLASSES}/not-an-id"),
+    Malformed("DELETE", f"{SITE_CLASSES}/not-an-id"),
+    Malformed("DELETE", f"{SITE_CLASSES}/{'1' * 32}"),
+    Malformed("GET", f"{SITE_CLASSES}?limit=0"),
+    Malformed("GET", f"{SITE_CLASSES}?limit=201"),
+    Malformed("GET", f"{SITE_CLASSES}?limit=-1"),
+    Malformed("GET", f"{SITE_CLASSES}?before=x"),
+    Malformed("GET", f"{SITE_CLASSES}?before={2**63}"),
+    Malformed("GET", f"{SITE_CLASSES}?before=%EF%BC%91"),
     Malformed("POST", FIND, b"not json", JSON),
     Malformed("POST", FIND, b'{"code": 5}', JSON),
     Malformed("POST", FIND, b"{}", JSON),
