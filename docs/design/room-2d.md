@@ -526,12 +526,12 @@ is always absent.
 |---|---|---|---|
 | Absent | No live client in this build; the app is not paired (class files only); no network or no answer from the site | Nothing, and no gap or explanation on the room screen (riders need none): Next is followed by End. The presenter, when there is one, says why (ADR 0005, section 2) | [no code](mockups/room-controls-no-code.html) |
 | Off | Paired and online, no phone remote for this class (the default at each start of the app) | A button "Phone remote", second line "Show the class code". Pressing it starts the live session (ADR 0005: on the instructor's request, never automatically). With one display this button is ADR 0005 section 2's instructor request, which the presenter makes with a second display | [manual, before the start](mockups/room-controls-manual.html) |
-| Starting | `POST /api/live/sessions` sent | The same button, disabled, second line "Getting a code" | |
+| Starting | `POST /api/live/sessions` sent | The same button, disabled, second line "Getting a code" | [html](mockups/room-controls-slot-starting.html) |
 | On | Session running | The QR code, "Class code", the code, state line "Phone remote on" | [before the start](mockups/room-controls-before-start.html), [running](mockups/room-controls-running.html) |
 | Phone connected | `controller_joined` | State line "Phone connected", or "2 phones connected". Nothing else about the phones (no names, no list) | [paused](mockups/room-controls-paused.html), [worst case](mockups/room-controls-worst.html) |
-| Reconnecting | The host connection dropped (ADR 0005 section 6) | The code stays; state line "Reconnecting" | |
-| Refused | 409 `sessions_full` | The Off button, second line "In use elsewhere" | |
-| Ended | `ended`, or the reconnect is refused | Back to Off, second line "Phone remote ended" until the band next hides | |
+| Reconnecting | The host connection dropped (ADR 0005 section 6) | The code stays; state line "Reconnecting" | [html](mockups/room-controls-slot-reconnecting.html) |
+| Refused | 409 `sessions_full` | The Off button, second line "In use elsewhere" | [html](mockups/room-controls-slot-refused.html) |
+| Ended | `ended`, or the reconnect is refused | Back to Off, second line "Phone remote ended" until the band next hides | [html](mockups/room-controls-slot-ended.html) |
 
 State lines are at most 18 characters ("2 phones connected"), so the slot fits at 5:4 beside three
 "Stops following" buttons (the worst case). The slot never shows a rider count, nickname or any
@@ -552,10 +552,15 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | End | Opens the End question (shows the band); Enter then answers the focused "Keep going" | Yes |
 | Shift+Right, Shift+Left | Forward 5 s, Back 5 s (`jump`, ±`JUMP_MS`; while following this hands the clock over, and the rail shows "Manual clock") | No: keyboard and presenter only |
 | Ctrl+Z (Cmd+Z) | Undo an announced resync while it can be undone (ADR 0001, item 5) | No |
+| F5, Shift+F5 | A presentation clicker's "start the show" key: Start, only before the start; after it, nothing, so a clicker that sends F5 and Esc by turns never pauses a running class | No |
+| B, . (period) | A clicker's "black screen" keys: nothing. The room screen never goes blank | No |
 | F | Follow the music (`follow`), when the music could be followed; otherwise nothing. Named in the rail while the clock is manual ("Back to following the music") | No: the rail names it |
 | Tab, Shift+Tab | Shows the band and moves through its buttons | |
 | Enter | The focused button | |
 | Esc | Closes the End question ("Keep going"); otherwise hides the band at once | |
+
+A held key repeats nothing: one press, one command (Ctrl+Z too). None of the clicker keys (Page Up,
+Page Down, F5, Shift+F5, B, period) shows the band.
 
 Manual clock and picking an occurrence stay on the presenter and the application menu; they are
 not keys. Follow the music is both: the presenter's button and F.

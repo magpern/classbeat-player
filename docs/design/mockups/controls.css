@@ -43,6 +43,8 @@ body.shown .score { visibility: hidden; }
 .code-t .dt { font-size: var(--t-label); line-height: 1; color: var(--light-2); }
 /* Off: the code is offered, not shown. A plain button. */
 .btn.phone { min-width: 0; }
+/* Starting: the button is disabled and its word drops to --light-2 (10.8 : 1 on --stage-raised, above C2's 7 : 1). */
+.btn[disabled] .w { color: var(--light-2); }
 
 .quit { flex: none; min-width: 9vw; }
 .transport + .quit { margin-left: auto; }
