@@ -11,6 +11,8 @@ import { pickClassFile } from "./open-file.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
 import { selectMusic } from "./select-music.ts";
+import { setupSync } from "./sync/setup.ts";
+import type { SyncService } from "./sync/service.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
 const DIST = __dirname;
@@ -20,6 +22,7 @@ const PRESENTER_URL = pathToFileURL(PRESENTER_FILE).href;
 
 let presenter: BrowserWindow | null = null;
 let pairing: PairingService | null = null;
+let sync: SyncService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
 const controller = createController(undefined, music.reader, music.transport);
@@ -65,6 +68,8 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     hardenSession(APP_DIR_URL);
     pairing = setupPairing();
+    // Keeps the account's classes offline; the window does not show them yet.
+    sync = setupSync(pairing);
     registerIpc(controller, () => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL }), pairing);
     installMenu(() => void openClass());
     createPresenter();
@@ -73,6 +78,7 @@ if (!app.requestSingleInstanceLock()) {
   // Quitting from the menu skips window-all-closed; a follower's helper must stop either way.
   app.on("will-quit", () => controller.stop());
   app.on("will-quit", () => pairing?.stop());
+  app.on("will-quit", () => sync?.stop());
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

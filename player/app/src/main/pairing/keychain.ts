@@ -1,9 +1,10 @@
 // Where the pairing record (core/pairing/record.ts) is kept: encrypted by Electron's safeStorage
 // with the operating system's keychain, in one file in the app's own folder, readable by this user
 // only. No plain-text fallback: without a keychain nothing is written and pairing is refused.
-import { chmodSync, closeSync, constants, fstatSync, openSync, readSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { keychainUsable } from "../../core/pairing/keychain-policy.ts";
+import { readCapped } from "../capped-read.ts";
 import { MAX_RECORD_BYTES } from "../../core/pairing/record.ts";
 
 export interface SecretStore {
@@ -27,27 +28,6 @@ export interface SafeStorageLike {
 export const RECORD_FILE = "device-pairing.bin";
 /** The encrypted record is never larger than this; a bigger file is refused unread. */
 export const MAX_FILE_BYTES = 4 * MAX_RECORD_BYTES;
-
-/**
- * The file's bytes, or null when it is not a plain file or is over `max`. The size is checked
- * before anything is read, a symbolic link is not followed where the system can refuse one (not
- * Windows, where only this user can write the folder), and
- * never more than `max` bytes are read, even if the file grows meanwhile.
- */
-function readCapped(file: string, max: number): Buffer | null {
-  // O_NONBLOCK: a pipe planted in the file's place cannot hang the open; it is then not a file.
-  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-  try {
-    const st = fstatSync(fd);
-    if (!st.isFile() || st.size > max) return null;
-    const buf = Buffer.alloc(max + 1);
-    let n = 0;
-    for (let got = -1; got !== 0 && n <= max; n += got) got = readSync(fd, buf, n, buf.length - n, null);
-    return n > max ? null : buf.subarray(0, n);
-  } finally {
-    closeSync(fd);
-  }
-}
 
 export function keychainStore(safe: SafeStorageLike, dir: string, platform: string): SecretStore {
   const file = join(dir, RECORD_FILE);

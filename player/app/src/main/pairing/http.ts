@@ -10,6 +10,8 @@ export interface BackendRequest {
   readonly path: `/api/${string}`;
   readonly body?: Readonly<Record<string, string>>;
   readonly token?: string;
+  /** A larger cap than `MAX_BODY_BYTES`, for an answer that carries a class document. */
+  readonly maxBodyBytes?: number;
 }
 
 export type BackendCall = (req: BackendRequest) => Promise<HttpAnswer>;
@@ -25,7 +27,7 @@ function retryAfter(raw: string | null): number | null {
 }
 
 /** The body as JSON, or undefined when it is not JSON or is larger than the cap. */
-async function readJson(res: Response): Promise<unknown> {
+async function readJson(res: Response, max: number): Promise<unknown> {
   if (res.body === null) return undefined;
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -34,7 +36,7 @@ async function readJson(res: Response): Promise<unknown> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
+    if (size > max) {
       await reader.cancel();
       return undefined;
     }
@@ -63,7 +65,7 @@ export function createBackendCall(fetchImpl: typeof fetch = fetch, timeoutMs = T
         credentials: "omit",
         signal: AbortSignal.timeout(timeoutMs),
       });
-      const body = await readJson(res);
+      const body = await readJson(res, req.maxBodyBytes ?? MAX_BODY_BYTES);
       return { kind: "http", status: res.status, body, retryAfterS: retryAfter(res.headers.get("retry-after")) };
     } catch {
       // Nothing from the error is kept: it could quote the request.
