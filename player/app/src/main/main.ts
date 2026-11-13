@@ -21,6 +21,7 @@ import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
 import { registerLiveHandlers } from "./live/live-handlers.ts";
 import type { LiveService } from "./live/live-service.ts";
+import { quitAfterLive } from "./live/quit.ts";
 import { setupLive } from "./live/setup.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
@@ -196,7 +197,8 @@ if (!app.requestSingleInstanceLock()) {
   app.on("will-quit", () => keepAwake.release());
   app.on("will-quit", () => pairing?.stop());
   app.on("will-quit", () => sync?.stop());
-  app.on("will-quit", () => phoneRemote?.stop());
+  // Last, so the rest has stopped: ends the phone remote's session, waiting a little for it (#205).
+  app.on("will-quit", quitAfterLive({ live: () => phoneRemote, exit: () => app.exit(0), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as NodeJS.Timeout) }));
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

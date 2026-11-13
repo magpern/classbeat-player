@@ -104,3 +104,14 @@ test("End is offered while starting, and Start is not (#203)", () => {
   assert.equal(v.classCode, null);
   for (const phase of ["idle", "ended", "refused"] as const) assert.equal(livePanelView({ ...OFF, phase }, FACTS).canEnd, false, phase);
 });
+
+test("the End button reads Cancel while starting and End phone remote once a session runs (#205)", () => {
+  assert.equal(livePanelView({ ...OFF, phase: "starting" }, FACTS).endText, "Cancel");
+  for (const phase of ["connecting", "live", "reconnecting"] as const) assert.equal(livePanelView({ ...LIVE, phase }, FACTS).endText, "End phone remote", phase);
+});
+
+test("a refusal for three running remotes says where to end one (#205)", () => {
+  const v = livePanelView({ ...OFF, phase: "refused", refusal: "sessions_full" }, FACTS);
+  assert.equal(v.status, "Not started");
+  assert.equal(v.detail, "Three phone remotes already run on this account: end one on that computer");
+});

@@ -31,6 +31,8 @@ export const LINE_MS = 5000;
 export const CLOSE_HELLO_REFUSED = 4401;
 export const CLOSE_ENDED = 4403;
 export const CLOSE_REPLACED = 4409;
+/** A connection that failed or dropped without a close frame (the runtime's own code). */
+export const CLOSE_ABNORMAL = 1006;
 
 const same = (model: LiveModel): Step => ({ model, effects: [] });
 const isRunning = (m: LiveModel): boolean => m.phase === "connecting" || m.phase === "live" || m.phase === "reconnecting";

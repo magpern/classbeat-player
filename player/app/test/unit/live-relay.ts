@@ -13,6 +13,8 @@ import type { SocketEvents } from "../../src/main/live/live-socket.ts";
 import { converterExamples } from "./fixtures.ts";
 
 export const ORIGIN = "https://player.example.test";
+/** Another backend, for a computer paired again elsewhere. */
+export const OTHER_ORIGIN = "https://other.example.test";
 export const DEVICE_TOKEN = `cbp_dev_${randomBytes(32).toString("base64url")}`;
 export const HOST_TOKEN = `cbp_hst_${randomBytes(32).toString("base64url")}`;
 export const JOIN_CODE = "BCDF-GHJK";
@@ -42,6 +44,11 @@ export interface Rig {
   classOpen: boolean;
   answer: HttpAnswer;
   paired: boolean;
+  /** The pairing's backend; set it to pair the computer again with another one. */
+  origin: string;
+  /** The fake clock's timers, for what the tests build beside the live client. */
+  readonly setTimer: (fn: () => void, ms: number) => unknown;
+  readonly clearTimer: (handle: unknown) => void;
 }
 
 export function rig(): Rig {
@@ -50,12 +57,21 @@ export function rig(): Rig {
   let ids = 0;
   const requests: BackendRequest[] = [];
   const sockets: FakeSocket[] = [];
+  const setTimer = (fn: () => void, ms: number): number => {
+    ids += 1;
+    timers.push({ at: now + ms, fn, id: ids });
+    return ids;
+  };
+  const clearTimer = (h: unknown): void => void (timers = timers.filter((t) => t.id !== h));
   const controller = createController(() => now);
   controller.open("class.json", readFileSync(converterExamples()[0], "utf8"));
   const r: Rig = {
     secondDisplay: true,
     classOpen: true,
     paired: true,
+    origin: ORIGIN,
+    setTimer,
+    clearTimer,
     answer: { kind: "http", status: 200, body: { sessionId: SESSION_ID, joinCode: JOIN_CODE, hostToken: HOST_TOKEN }, retryAfterS: null },
     controller,
     requests,
@@ -81,7 +97,7 @@ export function rig(): Rig {
   (r as { live: LiveService }).live = createLiveService({
     now: () => now,
     runId: () => randomBytes(16).toString("base64url"),
-    credential: () => (r.paired ? { origin: ORIGIN, token: DEVICE_TOKEN, expired: false } : null),
+    credential: () => (r.paired ? { origin: r.origin, token: DEVICE_TOKEN, expired: false } : null),
     call: async (req) => {
       requests.push(req);
       return r.answer;
@@ -104,12 +120,8 @@ export function rig(): Rig {
     host: { read: () => controller.read(), apply: (cmd) => void controller.command(cmd) },
     classOpen: () => r.classOpen,
     secondDisplay: () => r.secondDisplay,
-    setTimer: (fn, ms) => {
-      ids += 1;
-      timers.push({ at: now + ms, fn, id: ids });
-      return ids;
-    },
-    clearTimer: (h) => void (timers = timers.filter((t) => t.id !== h)),
+    setTimer,
+    clearTimer,
   });
   return r;
 }
