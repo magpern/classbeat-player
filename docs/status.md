@@ -45,9 +45,10 @@ backend hardening (#227, #230), the body cap in the live contract (#234, #235; #
 and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
 #292), the companion fake on the `/control` headers (#278, #286) and wider markup and stylesheet
 guards (#267, #276), the companion CI states for paused-following, music not heard and song twice
-(#282, #297), and the sink trap's iframe realms and attribute-node writes (#293, #302). In
-progress: the companion spec asserting each state's words (#303, #306) and the sink trap's
-remaining gaps: CSS `src()`, service workers, XHR and XSLT documents (#307).
+(#282, #297), the companion spec asserting each state's words, the paused pill, live nudges and
+token and zone colours on every border (#303, #306; #310, #311), and the sink trap's iframe
+realms and attribute-node writes (#293, #302), CSS `src()`, service workers, XHR and XSLT
+documents (#307, #309), and URL part setters with each value converted once (#312, #313).
 
 ## PL2: backend and sign-in
 
