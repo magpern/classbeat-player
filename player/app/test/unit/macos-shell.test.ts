@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { test } from "node:test";
+import { JUMP_MS } from "../../src/core/clock/clock.ts";
 import { parseClockCommand, parseMusicCommand } from "../../src/core/commands.ts";
 import { manualReader } from "../../src/core/link/index.ts";
 import type { MusicReader, MusicTransport, Observation, TransportAction } from "../../src/core/link/index.ts";
@@ -217,9 +218,41 @@ test("the preload bridge: the same four functions, those of pairing (#74), of th
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "room:state", "room:update", "live:view", "live:start", "live:end", "live:code", "live:drop"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "live:view", "live:start", "live:end", "live:code", "live:drop"],
   );
   // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
+});
+
+test("the room preload bridge: exactly its functions, and none takes an argument from the page; every one sends fixed text", () => {
+  const preload = src("preload/room-preload.ts");
+  const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
+  assert.deepEqual(exposed, ["state", "onUpdate", "start", "pause", "resume", "previous", "next", "forward", "back", "undo", "follow", "endClass", "remoteState", "startRemote", "stopRemote", "onRemote"]);
+  const invoke = (name: string, args: string): RegExp => new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${args}\\),$`, "m");
+  // The clock commands: one fixed object each, the 5 s steps with the clock's own JUMP_MS.
+  assert.equal(JUMP_MS, 5000);
+  for (const [name, args] of [
+    ["state", "CH_ROOM_STATE"],
+    ["start", 'CH_ROOM_COMMAND, \\{ type: "start" \\}'],
+    ["pause", 'CH_ROOM_COMMAND, \\{ type: "pause" \\}'],
+    ["resume", 'CH_ROOM_COMMAND, \\{ type: "resume" \\}'],
+    ["previous", 'CH_ROOM_COMMAND, \\{ type: "previous" \\}'],
+    ["next", 'CH_ROOM_COMMAND, \\{ type: "next" \\}'],
+    ["forward", 'CH_ROOM_COMMAND, \\{ type: "jump", deltaMs: 5000 \\}'],
+    ["back", 'CH_ROOM_COMMAND, \\{ type: "jump", deltaMs: -5000 \\}'],
+    ["undo", 'CH_ROOM_COMMAND, \\{ type: "undo" \\}'],
+    ["follow", 'CH_ROOM_COMMAND, \\{ type: "follow" \\}'],
+    ["endClass", "CH_ROOM_END"],
+    ["remoteState", "CH_ROOM_REMOTE_STATE"],
+    ["startRemote", "CH_ROOM_REMOTE_START"],
+    ["stopRemote", "CH_ROOM_REMOTE_STOP"],
+  ]) {
+    assert.match(preload, invoke(name, args), name);
+  }
+  // The two pushes take only a callback, and pass the page only what the shell sent.
+  assert.match(preload, /^ {2}onUpdate: \(cb: \(frame: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_UPDATE, \(_e, frame: unknown\) => cb\(frame\)\);\n {2}\},$/m);
+  assert.match(preload, /^ {2}onRemote: \(cb: \(slot: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_REMOTE_UPDATE, \(_e, slot: unknown\) => cb\(slot\)\);\n {2}\},$/m);
+  // Every ipcRenderer call is one of the lines above.
+  assert.equal([...preload.matchAll(/ipcRenderer\./g)].length, exposed.length);
 });
 
 test("no Spotify token, sign-in or developer interface, and no network, in the reader", () => {

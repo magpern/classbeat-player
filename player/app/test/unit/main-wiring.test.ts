@@ -27,7 +27,7 @@ test("the list's account key is the credential's, not the pairing email", () => 
 test("the room window opens with every class that opens, and is sent every snapshot", () => {
   assert.match(main, /controller\.onOpened\(\(\)\s*=>\s*room\.open\(\)\)/);
   assert.match(main, /controller\.watch\(\(s\)\s*=>\s*room\.send\(s\)\)/);
-  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller\)/);
+  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller,\s*\{ endClass, remote \}\)/);
 });
 
 test("the room window closes with the class: on the class list unpinned, at the end on the list, with the presenter", () => {
@@ -47,4 +47,11 @@ test("the display-sleep blocker follows every snapshot and is released with the 
   assert.match(main, /presenter\.on\("closed", \(\) => \{[^}]*\bkeepAwake\.release\(\);[^}]*\}\);/);
   assert.match(main, /app\.on\("will-quit", \(\) => keepAwake\.release\(\)\);/);
   assert.match(main, /const keepAwake = createKeepAwake\(electronBlocker\);/);
+});
+
+test("End class from the room window ends the phone remote and the pin, and the class list comes back", () => {
+  assert.match(main, /function endClass\(\): void \{\s*remote\.stop\(\);\s*list\?\.release\(\);\s*showList\(\);\s*\}/);
+  // This build has no live client: the phone remote's slot is absent, and each change reaches the room window.
+  assert.match(main, /const remote = NO_REMOTE;/);
+  assert.match(main, /remote\.watch\(\(v\)\s*=>\s*room\.sendRemote\(v\)\)/);
 });

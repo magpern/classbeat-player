@@ -16,6 +16,7 @@ import { pickClassFile } from "./open-file.ts";
 import { electronBlocker } from "./electron-blocker.ts";
 import { createKeepAwake } from "./keep-awake.ts";
 import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
+import { NO_REMOTE } from "../core/room/remote.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
 import { registerLiveHandlers } from "./live/live-handlers.ts";
@@ -55,6 +56,9 @@ const controller = createController(undefined, music.reader, music.transport);
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 // The room screen's own window: it opens with every class that opens, and closes with the class.
 const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: ROOM_PRELOAD, presenter: live });
+// The room window's phone-remote slot: the live client runs from the presenter only so far (#173);
+// joining it to the room screen's slot is later work, so the slot is absent.
+const remote = NO_REMOTE;
 const pinned = (): boolean => (sync?.view().pinned ?? null) !== null;
 // Whether the main window is on the class list, as the shell asked for it: set when the shell starts
 // a page load, so a command right after "Class list" already sees the list (the URL changes only
@@ -92,6 +96,14 @@ function showRoom(): void {
 function showList(): void {
   showPage(LIST_FILE);
   if (roomCloses(true, pinned())) room.close();
+}
+
+// End class, from the room window: the phone remote ends, the pin ends and the class list comes
+// back, so the room window closes with the class (showList). Nothing is sent to the music app.
+function endClass(): void {
+  remote.stop();
+  list?.release();
+  showList();
 }
 
 async function openClass(): Promise<void> {
@@ -169,7 +181,8 @@ if (!app.requestSingleInstanceLock()) {
     controller.watch(() => refreshRoomItem());
     controller.watch((s) => keepAwake.update(s.view));
     controller.watch(() => phoneRemote?.tick());
-    registerRoomHandlers(ipcMain, () => room.trusted(), controller);
+    remote.watch((v) => room.sendRemote(v));
+    registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     phoneRemote = setupLive(controller, paired);

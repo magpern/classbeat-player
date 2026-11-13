@@ -6,10 +6,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_ROOM_STATE } from "../../src/core/channels.ts";
+import { CH_ROOM_REMOTE_STATE, CH_ROOM_STATE } from "../../src/core/channels.ts";
 import * as channels from "../../src/core/channels.ts";
 import { ROOM_CHANNELS } from "../../src/core/ipc-policy.ts";
 import { roomFrameOf } from "../../src/core/room/frame.ts";
+import { NO_REMOTE } from "../../src/core/room/remote.ts";
 import { registerLiveHandlers, LIVE_CHANNELS } from "../../src/main/live/live-handlers.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
@@ -34,7 +35,7 @@ async function withCode() {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
   registerLiveHandlers(bus, () => TRUSTED, r.live);
-  registerRoomHandlers(bus, () => ROOM, r.controller);
+  registerRoomHandlers(bus, () => ROOM, r.controller, { endClass: () => undefined, remote: NO_REMOTE });
   return { r, handlers };
 }
 
@@ -58,6 +59,7 @@ test("what the room window is sent and what it can ask for never holds the contr
     r.live.tick();
   }
   seen.push(JSON.stringify(handlers.get(CH_ROOM_STATE)!(event(9, ROOM_URL), undefined)));
+  seen.push(JSON.stringify(handlers.get(CH_ROOM_REMOTE_STATE)!(event(9, ROOM_URL), undefined)));
   assert.ok(seen.length > 0 && seen.every((s) => s.length > 2));
   for (const s of seen) {
     assert.ok(!s.includes(CONTROL_CODE), "the control code in a room frame");
@@ -75,9 +77,9 @@ test("the room's door has no live channel: its preload, its channel list and its
   for (const source of [roomPreload, roomPage]) {
     assert.ok(!/CH_LIVE_|live:|live-panel|core\/live\//.test(source), "the room's door reaches the live session");
   }
-  // The room preload's own channels are exactly the room state and its push.
+  // The room preload's own channels are the room's (#199), none of them a live channel.
   const used = [...roomPreload.matchAll(/\bCH_[A-Z_]+\b/g)].map((m) => m[0]);
-  assert.deepEqual([...new Set(used)].sort(), ["CH_ROOM_STATE", "CH_ROOM_UPDATE"]);
+  assert.deepEqual([...new Set(used)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_STATE", "CH_ROOM_UPDATE"]);
 });
 
 test("Drop takes exactly 1 or 2 from the presenter; anything else is not read", async () => {

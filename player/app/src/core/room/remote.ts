@@ -1,0 +1,62 @@
+// The phone remote's slot as the room window sees it (room-2d.md, "The class code"): its state and,
+// while it is on, the riders' join code and how many of the instructor's phones are connected.
+// Pure. Nothing else of the live session reaches the room window: never a control code, a token,
+// an account, a device or anything about a rider (ADR 0005 sections 2 and 3, rules 13 and 14).
+
+/** The second line under the Phone remote button: none, "In use elsewhere" or "Phone remote ended". */
+export type RemoteNote = "none" | "in_use" | "ended";
+
+/** The slot's states: the spec's Absent, Off (`available`, with its second line), Starting, and On with Phone connected and Reconnecting. */
+export type RemoteView =
+  | { readonly slot: "absent" }
+  | { readonly slot: "available"; readonly note: RemoteNote }
+  | { readonly slot: "starting" }
+  | { readonly slot: "on"; readonly joinCode: string; readonly phones: 0 | 1 | 2; readonly reconnecting: boolean };
+
+export const REMOTE_ABSENT: RemoteView = { slot: "absent" };
+
+/** The join code's form (schema/live/v1/session-answer.schema.json, `joinCode`). */
+export const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
+
+const NOTES: readonly string[] = ["none", "in_use", "ended"];
+
+/**
+ * What the room window is sent: the view rebuilt field by field, so whatever else the object holds
+ * stays behind. A view that is not exactly one of the shapes above is sent as Absent.
+ */
+export function remoteViewOf(v: RemoteView): RemoteView {
+  const r = v as unknown as Record<string, unknown> | null;
+  if (r === null || typeof r !== "object") return REMOTE_ABSENT;
+  switch (r.slot) {
+    case "available":
+      return typeof r.note === "string" && NOTES.includes(r.note) ? { slot: "available", note: r.note as RemoteNote } : REMOTE_ABSENT;
+    case "starting":
+      return { slot: "starting" };
+    case "on": {
+      const { joinCode, phones, reconnecting } = r;
+      if (typeof joinCode !== "string" || !JOIN_CODE.test(joinCode)) return REMOTE_ABSENT;
+      if ((phones !== 0 && phones !== 1 && phones !== 2) || typeof reconnecting !== "boolean") return REMOTE_ABSENT;
+      return { slot: "on", joinCode, phones, reconnecting };
+    }
+    default:
+      return REMOTE_ABSENT;
+  }
+}
+
+/** Where the slot comes from: the live client (ADR 0005, issue 8), which takes the join code from the session's answer. */
+export interface RoomRemote {
+  view(): RemoteView;
+  /** The instructor's request to start the phone remote (ADR 0005 section 2); never automatic. */
+  start(): void;
+  stop(): void;
+  /** Calls the listener with the slot each time it changes. */
+  watch(listener: (v: RemoteView) => void): void;
+}
+
+/** This build has no live client: the slot is always absent, and starting or stopping does nothing. */
+export const NO_REMOTE: RoomRemote = {
+  view: () => REMOTE_ABSENT,
+  start: () => undefined,
+  stop: () => undefined,
+  watch: () => undefined,
+};

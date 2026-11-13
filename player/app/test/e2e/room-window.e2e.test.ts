@@ -114,7 +114,7 @@ test("the room window is hardened: its own policy and preload, no Node, no netwo
     player: typeof (window as unknown as { player?: unknown }).player,
     api: Object.keys((window as unknown as { room: object }).room).sort(),
   }));
-  assert.deepEqual(r, { require: "undefined", process: "undefined", player: "undefined", api: ["onUpdate", "state"] });
+  assert.deepEqual(r, { require: "undefined", process: "undefined", player: "undefined", api: ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"] });
   assert.equal(await room.evaluate(async () => fetch("https://example.invalid/").then(() => "fetched", () => "blocked")), "blocked");
   const fonts = await room.evaluate(async () => {
     await document.fonts.ready;

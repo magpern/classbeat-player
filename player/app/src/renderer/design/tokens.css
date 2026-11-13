@@ -61,6 +61,7 @@
   --t-text-min: 4.6vh;
   --t-minor: 4.6vh; /* next interval, class time */
   --t-label: 3.1vh; /* labels, link state, score text */
+  --t-control: 3.6vh; /* words on the room screen's control buttons (room-2d.md) */
 
   /* Space */
   --safe-x: 5vw;
