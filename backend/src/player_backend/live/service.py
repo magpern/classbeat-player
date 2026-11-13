@@ -19,6 +19,8 @@
   Any failure of that write is logged by its type and never fails the caller.
   On the sign-in path the write takes a second pool connection while the request holds the site
   session's; a full pool waits at most the pool's 5 seconds and is then a `DatabaseError`, logged.
+- `drain`: at shutdown (app.py), the writes still on a worker thread are waited for, for a
+  bounded time, before the pool closes, so an end recorded off the loop still gets its event.
 - `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
   `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
   transaction; if writing it or committing that transaction fails, the place is freed again
@@ -106,6 +108,14 @@ class LiveService:
         write = loop.run_in_executor(None, self._record_guarded, ended)
         self._writes.add(write)
         write.add_done_callback(self._writes.discard)
+
+    async def drain(self, within: float) -> bool:
+        """Wait at most `within` seconds for the writes handed off the loop. True: none is left.
+        A write still running afterwards finds the pool closed, and is logged by its type."""
+        pending = set(self._writes)
+        if pending:
+            await asyncio.wait(pending, timeout=within)
+        return not self._writes
 
     def _record_guarded(self, ended: Ended) -> None:
         try:
