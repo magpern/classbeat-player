@@ -246,17 +246,28 @@ class Registry:
             self._by_controller[token_hash] = (session_id, free[0])
             return free[0]
 
-    def controller_seat(self, token: object) -> Seat | None:
-        """The place a controller token holds, or None. Only `cbp_ctl_` is looked up at all."""
+    def controller_seat(self, token: object, now: float) -> Seat | None:
+        """The place a controller token holds, or None. Only `cbp_ctl_` is looked up; the slot's
+        holder must be this token, and a session past its lifetime ends, as in `host_session`."""
         if not is_token("ctl", token):
             return None
+        hashed = token_hash(cast(str, token))
         with self._lock:
-            found = self._by_controller.get(token_hash(cast(str, token)))
+            found = self._by_controller.get(hashed)
             session = None if found is None else self._sessions.get(found[0])
-            held = None if found is None or session is None else session.controllers.get(found[1])
-            if found is None or held is None:
+            if found is None or session is None:
                 return None
-            return Seat(found[0], found[1], "code" if held.site_session_hash is None else "sign_in")
+            held = session.controllers.get(found[1])
+            if held is None or held.token_hash != hashed:
+                return None
+            reason = expiry(session.clocks(), now)
+            if reason is None:
+                return Seat(
+                    found[0], found[1], "code" if held.site_session_hash is None else "sign_in"
+                )
+            ended = self._remove(session.id, reason)
+        self._tell([ended] if ended else [])
+        return None
 
     def signed_in_controllers(self, account_id: UUID | None = None) -> list[SignedInController]:
         with self._lock:

@@ -12,7 +12,11 @@ ADR 0005, sections 1 and 3 to 6).
   message the hub sends is checked against the allowlist and its schema for the receiver's
   role first; one that fails is not sent (counted in `refused`).
 - Commands and their answers follow live_relay_policy.py. A command for a host that is away is
-  answered `host_away` at once and kept nowhere.
+  answered `host_away` at once and kept nowhere. Each command id a controller's connection
+  sent is answered once: the same id sent twice gets one `ack` (the host's answer to the second,
+  `duplicate`, is dropped as `unmatched_result`); a phone never resends by itself (ADR 0005,
+  section 5). A host that leaves takes its unanswered commands with it: their answers from a
+  returning host reach no one.
 - A session that ends, or a controller that is dropped (the registry's watchers, called on any
   thread: the re-check's, a route's, the event loop's), gets `ended` and is closed with 4403.
 

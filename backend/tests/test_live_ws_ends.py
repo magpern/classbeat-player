@@ -104,7 +104,7 @@ def test_a_signed_out_controller_is_dropped_and_the_session_goes_on(
         nothing(one)
         one.send_json(command(1))
         assert recv(host)["slot"] == 1
-    assert live.registry.controller_seat(by_sign_in) is None
+    assert live.registry.controller_seat(by_sign_in, live.clock()) is None
     assert live.registry.signed_in_controllers() == []
 
 

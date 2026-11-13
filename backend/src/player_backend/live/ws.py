@@ -97,7 +97,7 @@ async def _hello(hub: Hub, websocket: WebSocket, origin: str | None, site: str) 
         if session_id is not None:
             return hub.attach_host(websocket, session_id)
     else:
-        seat = registry.controller_seat(token)
+        seat = registry.controller_seat(token, hub.service.clock())
         if seat is not None:
             return hub.attach_controller(websocket, seat)
     await _refuse(websocket, HELLO_REFUSED)
