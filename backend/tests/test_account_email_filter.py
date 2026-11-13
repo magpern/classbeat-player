@@ -3,8 +3,9 @@
 
 Here the data access runs on a handle of the bootstrap superuser, which row-level security does
 not hold: whatever keeps one account's email from another in these tests is the query's own
-`WHERE id = %s`. `GET /api/site/me` reads `own_email`; the export and the deletion read
-`_email_and_created_at`.
+`WHERE id = %s`. `GET /api/site/me` reads `own_email`; the export (`export_head`) and the
+deletion (`delete`) read the email with the creation time. The deletion's own `DELETE` keeps to
+the account by the same filter.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from datetime import UTC, datetime
 import psycopg
 import pytest
 
+from player_backend.account_policy import when
+from player_backend.client_policy import ClientInfo
 from player_backend.db import account
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Handle, connect
@@ -24,6 +27,12 @@ from tests.dbhelp import Conn
 A = "a@example.test"
 B = "b@example.test"
 _CLEAN = "TRUNCATE player.accounts CASCADE"
+CLIENT = ClientInfo(network=None, family="")
+# Creation times far apart, so an answer from the wrong row cannot match by chance.
+CREATED = {
+    A: datetime(2020, 1, 2, 3, 4, 5, tzinfo=UTC),
+    B: datetime(2023, 6, 7, 8, 9, 10, tzinfo=UTC),
+}
 
 
 @pytest.fixture
@@ -39,9 +48,9 @@ def unheld(db_url: str) -> Iterator[tuple[Handle, Conn]]:
 
 def _account(su: Conn, email: str) -> uuid.UUID:
     found = su.execute(
-        "INSERT INTO player.accounts (email, passkey_user_handle) "
-        "VALUES (%s, sha256(convert_to(%s, 'UTF8'))) RETURNING id",
-        (email, email),
+        "INSERT INTO player.accounts (email, passkey_user_handle, created_at) "
+        "VALUES (%s, sha256(convert_to(%s, 'UTF8')), %s) RETURNING id",
+        (email, email, CREATED[email]),
     ).fetchone()
     assert found is not None and isinstance(found[0], uuid.UUID)
     return found[0]
@@ -71,13 +80,42 @@ def test_the_me_email_keeps_to_its_account_without_the_policy(
     assert account.own_email(_context(db, uuid.uuid4())) is None
 
 
-def test_the_export_and_deletion_email_keeps_to_its_account_without_the_policy(
+def _emails(su: Conn) -> set[object]:
+    return {row[0] for row in su.execute("SELECT email FROM player.accounts").fetchall()}
+
+
+def test_the_export_head_keeps_to_its_account_without_the_policy(
     unheld: tuple[Handle, Conn],
 ) -> None:
     db, su = unheld
     a, b = _account(su, A), _account(su, B)
-    read = account._email_and_created_at  # pyright: ignore[reportPrivateUsage]
-    found_a, found_b = read(_context(db, a)), read(_context(db, b))
-    assert found_a is not None and found_a[0] == A
-    assert found_b is not None and found_b[0] == B
-    assert read(_context(db, uuid.uuid4())) is None
+    for account_id, email in ((a, A), (b, B)):
+        head = account.export_head(_context(db, account_id), CLIENT)
+        assert head is not None
+        assert head["account"] == {"email": email, "created_at": when(CREATED[email])}
+    # An id that is no account's exports nothing, not some other account's email.
+    assert account.export_head(_context(db, uuid.uuid4()), CLIENT) is None
+
+
+def test_the_deletion_confirms_against_its_own_email_without_the_policy(
+    unheld: tuple[Handle, Conn],
+) -> None:
+    db, su = unheld
+    a, b = _account(su, A), _account(su, B)
+    # Another account's email does not confirm: the confirmation reads this account's own.
+    assert account.delete(_context(db, a), B) == "not_confirmed"
+    assert account.delete(_context(db, b), A) == "not_confirmed"
+    assert account.delete(_context(db, uuid.uuid4()), A) == "gone"
+    assert _emails(su) == {A, B}
+
+
+def test_the_delete_removes_only_its_account_without_the_policy(
+    unheld: tuple[Handle, Conn],
+) -> None:
+    db, su = unheld
+    a, b = _account(su, A), _account(su, B)
+    assert account.delete(_context(db, a), A) == "deleted"
+    # The other account is still there, and only it.
+    assert _emails(su) == {B}
+    found = su.execute("SELECT id FROM player.accounts").fetchall()
+    assert found == [(b,)]
