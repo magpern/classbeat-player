@@ -5,6 +5,7 @@ process on purpose (docker/backend-entrypoint.sh): the sessions live in its memo
 
 from __future__ import annotations
 
-from player_backend.live.routes import router
+# The routes' router, with the WebSocket route (live/ws.py) registered on it.
+from player_backend.live.ws import router
 
 __all__ = ["router"]

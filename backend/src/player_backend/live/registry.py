@@ -24,59 +24,27 @@ from uuid import UUID
 
 from player_backend.code_issue import new_code
 from player_backend.code_policy import normalise_code, show_code
+from player_backend.live.events import Dropped, Ended, Running, Seat, SignedInController, Started
 from player_backend.live_session_policy import Clocks, EndReason, Held, expiry, plan_start
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash
+
+__all__ = [
+    "SLOTS",
+    "Dropped",
+    "Ended",
+    "Registry",
+    "Running",
+    "Seat",
+    "SignedInController",
+    "Started",
+    "Watcher",
+]
 
 _log = logging.getLogger("player_backend.live")
 
 # ADR 0002, section 8: at most 2 controllers per session, in slots 1 and 2.
 SLOTS: Final = (1, 2)
-
-
-@dataclass(frozen=True)
-class Ended:
-    """A session that has ended, and why. Its connections are closed with 4403."""
-
-    session_id: UUID
-    account_id: UUID
-    device_id: UUID
-    device_hash: bytes = field(repr=False)
-    reason: EndReason
-
-
-@dataclass(frozen=True)
-class Dropped:
-    """A controller dropped from a session that goes on. Its connection is closed with 4403."""
-
-    session_id: UUID
-    slot: int
-
-
-@dataclass(frozen=True)
-class Started:
-    session_id: UUID
-    join_code: str  # as shown: XXXX-XXXX
-    host_token: str = field(repr=False)  # given out once, here
-    replaced: tuple[Ended, ...]
-
-
-@dataclass(frozen=True)
-class Running:
-    """A running session, as the re-check sees it."""
-
-    session_id: UUID
-    account_id: UUID
-    device_hash: bytes = field(repr=False)
-
-
-@dataclass(frozen=True)
-class SignedInController:
-    """A controller got by sign-in, as the re-check sees it."""
-
-    session_id: UUID
-    slot: int
-    site_session_hash: bytes = field(repr=False)
 
 
 @dataclass
@@ -111,6 +79,8 @@ class Registry:
         self._sessions: dict[UUID, _Session] = {}
         self._by_host: dict[bytes, UUID] = {}
         self._by_code: dict[str, UUID] = {}
+        # A controller token's hash -> its session and slot (the WebSocket's `hello`).
+        self._by_controller: dict[bytes, tuple[UUID, int]] = {}
         self._watchers: list[Watcher] = []
 
     def watch(self, watcher: Watcher) -> None:
@@ -138,6 +108,8 @@ class Registry:
             return None
         del self._by_host[session.host_hash]
         del self._by_code[session.join_code]
+        for held in session.controllers.values():
+            self._by_controller.pop(held.token_hash, None)
         return Ended(session.id, session.account_id, session.device_id, session.device_hash, reason)
 
     def _new_code(self) -> str:
@@ -268,8 +240,23 @@ class Registry:
             free = [slot for slot in SLOTS if slot not in session.controllers]
             if not free:
                 return None
+            if token_hash in self._by_controller:
+                return None
             session.controllers[free[0]] = _Controller(token_hash, site_session_hash)
+            self._by_controller[token_hash] = (session_id, free[0])
             return free[0]
+
+    def controller_seat(self, token: object) -> Seat | None:
+        """The place a controller token holds, or None. Only `cbp_ctl_` is looked up at all."""
+        if not is_token("ctl", token):
+            return None
+        with self._lock:
+            found = self._by_controller.get(token_hash(cast(str, token)))
+            session = None if found is None else self._sessions.get(found[0])
+            held = None if found is None or session is None else session.controllers.get(found[1])
+            if found is None or held is None:
+                return None
+            return Seat(found[0], found[1], "code" if held.site_session_hash is None else "sign_in")
 
     def signed_in_controllers(self, account_id: UUID | None = None) -> list[SignedInController]:
         with self._lock:
@@ -291,8 +278,9 @@ class Registry:
             dropped = held is not None and (
                 site_session_hash is None or held.site_session_hash == site_session_hash
             )
-            if dropped and session is not None:
+            if dropped and session is not None and held is not None:
                 del session.controllers[slot]
+                self._by_controller.pop(held.token_hash, None)
         if dropped:
             self._tell([Dropped(session_id, slot)])
         return dropped

@@ -11,7 +11,7 @@ from typing import get_args
 import pytest
 
 from player_backend import live_session_policy as p
-from player_backend.live_token_policy import hello_role
+from player_backend.live_token_policy import hello_role, origin_allowed
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_string
 
@@ -110,3 +110,20 @@ def test_hello_gives_the_host_and_the_controller_a_role_and_a_rider_none() -> No
         assert hello_role(new_token(kind)) is None  # pyright: ignore[reportArgumentType]
     for value in (None, 1, "", token_string("hst", "short"), new_token("hst") + "x"):
         assert hello_role(value) is None
+
+
+def test_only_a_controller_needs_the_sites_origin() -> None:
+    site = "https://player.example.test"
+    assert origin_allowed("controller", site, site)
+    for other in (
+        None,
+        "",
+        "null",
+        "https://evil.example",
+        site + "/",
+        "http://player.example.test",
+    ):
+        assert not origin_allowed("controller", other, site)
+    # The host is the app: its handshake's Origin is not checked.
+    for any_origin in (None, "", "https://evil.example", site):
+        assert origin_allowed("host", any_origin, site)
