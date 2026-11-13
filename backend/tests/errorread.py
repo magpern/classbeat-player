@@ -80,6 +80,14 @@ def _skipped(tree: ast.AST) -> set[int]:
     return {id(n) for root in roots for n in ast.walk(root)}
 
 
+def _dynamic_import(call: ast.Call) -> bool:
+    """`__import__(...)` or `<anything>.import_module(...)`: names bound at run time."""
+    func = call.func
+    return (isinstance(func, ast.Name) and func.id == "__import__") or (
+        isinstance(func, ast.Attribute) and func.attr == "import_module"
+    )
+
+
 class Reader:
     def __init__(self) -> None:
         # The functions and error classes read.
@@ -100,6 +108,8 @@ class Reader:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 # A name bound inside the function is not in its globals: it would go unseen.
                 raise Unreadable(f"{fn.__qualname__}: an import inside the function")
+            if isinstance(node, ast.Call) and _dynamic_import(node):
+                raise Unreadable(f"{fn.__qualname__}: a dynamic import in the function")
             if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Name):
                 target = names.get(node.exc.id)
                 if _is_form(target):

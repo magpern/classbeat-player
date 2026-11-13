@@ -3,6 +3,7 @@ fails it, and the forms it reads are read (#223 N1, #227). No database."""
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 
 import pytest
@@ -117,3 +118,25 @@ def _local_import() -> None:
 def test_an_import_inside_a_function_is_unreadable() -> None:
     with pytest.raises(Unreadable, match="import inside"):
         Reader().function(_local_import)
+
+
+def _plain_import() -> None:
+    import player_backend.http_errors as h
+
+    raise h.ApiError(410, "gone")
+
+
+def _dunder_import() -> None:
+    raise __import__("player_backend.http_errors").http_errors.ApiError(410, "gone")
+
+
+def _import_module_call() -> None:
+    raise importlib.import_module("player_backend.http_errors").ApiError(410, "gone")
+
+
+@pytest.mark.parametrize("fn", [_plain_import, _dunder_import, _import_module_call])
+def test_a_dynamic_or_plain_import_inside_a_function_is_unreadable(
+    fn: Callable[[], None],
+) -> None:
+    with pytest.raises(Unreadable, match="import"):
+        Reader().function(fn)

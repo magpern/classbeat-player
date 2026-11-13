@@ -88,7 +88,7 @@ def test_a_write_that_misses_the_bound_is_logged_with_a_fixed_line(
         finally:
             release.set()  # let the worker thread go
 
-    with caplog.at_level(logging.INFO, logger="player_backend.live.service"):
+    with caplog.at_level(logging.DEBUG, logger="player_backend.live"):
         assert asyncio.run(scenario()) is False
     lines = [
         r
@@ -100,3 +100,44 @@ def test_a_write_that_misses_the_bound_is_logged_with_a_fixed_line(
     shown = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
     for secret in (str(ended.session_id), str(ended.device_id), str(ended.account_id), "secret"):
         assert secret not in shown
+
+
+def test_a_drain_that_finishes_in_time_logs_no_missed_write(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    release = threading.Event()
+    service = _service(monkeypatch, release)
+
+    async def scenario() -> bool:
+        service._expired(_ended())  # pyright: ignore[reportPrivateUsage]
+        asyncio.get_running_loop().call_later(0.1, release.set)
+        return await service.drain(3.0)
+
+    try:
+        with caplog.at_level(logging.DEBUG, logger="player_backend.live"):
+            assert asyncio.run(scenario())
+    finally:
+        release.set()
+    assert [
+        r
+        for r in caplog.records
+        if getattr(r, "fields", {}).get("event") == "live.end_not_recorded"
+    ] == []
+
+
+def test_every_record_is_captured_at_all_levels(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The INFO `live.session_ended` line is among the records the no-id check reads."""
+    release = threading.Event()
+    release.set()
+    service = _service(monkeypatch, release)
+
+    async def scenario() -> None:
+        service._expired(_ended())  # pyright: ignore[reportPrivateUsage]
+        await service.drain(3.0)
+
+    with caplog.at_level(logging.DEBUG, logger="player_backend.live"):
+        asyncio.run(scenario())
+    events = [getattr(r, "fields", {}).get("event") for r in caplog.records]
+    assert "live.session_ended" in events
