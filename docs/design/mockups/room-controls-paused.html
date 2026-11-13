@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room screen: controls, paused</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="room.css">
+<link rel="stylesheet" href="controls.css">
+</head>
+<body class="shown">
+<!-- Controls shown while paused. Resume goes to the music app. Phone remote on, a phone connected.
+     Base:  State: paused. The music app reports pause; the clock stops. Lights down. -->
+<aside class="gel z4 down">
+  <div class="gel-head"><span class="gel-num n" data-tier="gel">4</span><span class="lbl" data-tier="label" data-lines="2">Zone</span></div>
+  <span class="gel-name n" data-tier="value" data-lines="2">Threshold</span>
+  <div class="gel-targets" data-tier="minor" data-lines="3"><span>88–94% FTP</span><span>RPE 7–8</span></div>
+</aside>
+
+<header class="rail">
+  <span class="val" data-tier="minor"><span class="d">2</span><span class="d">3</span>:<span class="d">4</span><span class="d">1</span></span><span class="lbl" data-tier="label">left</span>
+  <span class="val" data-tier="minor"><span class="d">1</span><span class="d">8</span>:<span class="d">1</span><span class="d">9</span></span><span class="lbl" data-tier="label">done</span>
+  <span class="lbl seg" data-tier="label" data-clamp="1">Main set</span>
+  <span class="link alert" data-tier="label">Music paused</span>
+</header>
+
+<section class="clock">
+  <span class="lbl"><span class="pill" data-tier="label">Paused</span></span>
+  <div class="count n" data-tier="hero"><span class="d">1</span>:<span class="d">1</span><span class="d">0</span></div>
+  <div class="bars" data-tier="minor">Starts again with the music</div>
+</section>
+
+<section class="metrics">
+  <div class="metric"><span class="lbl" data-tier="label">Cadence</span><span class="v n" data-tier="value">90–100<small data-tier="minor">rpm</small></span></div>
+  <div class="metric"><span class="lbl" data-tier="label">Position</span><span class="v n" data-tier="value">Seated</span></div>
+  <div class="metric"><span class="lbl" data-tier="label">Song</span><span class="v n" data-tier="value">128<small data-tier="minor">bpm</small></span></div>
+</section>
+
+<p class="cue" data-tier="text" data-lines="4">Find the beat and hold it. Breathe out on every second bar.</p>
+
+<div class="next">
+  <span class="lbl" data-tier="label">Next</span>
+  <span class="chip z2" data-tier="minor">2</span>
+  <span class="v nm" data-tier="minor" data-clamp="1">Endurance</span>
+  <span class="v" data-tier="minor">0:45</span>
+  <span class="v dim" data-tier="minor">85–95 rpm</span>
+  <span class="v dim" data-tier="minor">Seated</span>
+</div>
+
+<section class="score">
+  <div class="track iv">
+    <div class="block gone" style="left:-5.56vw;width:25.00vw"></div>
+    <div class="block z4" style="left:19.44vw;width:25.00vw;padding-left:6.36vw"><span class="n" data-tier="minor">4</span><span class="t" data-tier="label" data-fit="hide">Threshold</span></div>
+    <div class="block z2" style="left:44.44vw;width:12.50vw"><span class="n" data-tier="minor">2</span><span class="t" data-tier="label" data-fit="hide">Endurance</span></div>
+    <div class="block z5" style="left:56.94vw;width:25.00vw"><span class="n" data-tier="minor">5</span><span class="t" data-tier="label" data-fit="hide">VO2 max</span></div>
+    <div class="block z3" style="left:81.94vw;width:25.00vw;padding-right:11.94vw"><span class="n" data-tier="minor">3</span><span class="t" data-tier="label" data-fit="hide">Tempo</span></div>
+  </div>
+  <div class="track songs">
+    <div class="clip" style="left:-15.83vw;width:60.28vw;--phrase:2.083vw;padding-left:41.63vw"><span class="head"><b data-tier="label" data-clamp="1">Neon Avenue</b></span><span class="a" data-tier="label" data-fit="hide">The Midnight Riders</span><span class="bpm" data-tier="label" data-fit="hide">128 bpm</span></div>
+    <div class="clip" style="left:44.44vw;width:69.17vw;--phrase:2.020vw;padding-right:18.61vw"><span class="head"><b data-tier="label" data-clamp="1">Pulse Theory</b></span><span class="a" data-tier="label" data-fit="hide">Aurora Lane</span><span class="bpm" data-tier="label" data-fit="hide">132 bpm</span></div>
+    <div class="moment" style="left:56.94vw"><span data-tier="label">Drop</span></div>
+  </div>
+  <div class="past"></div>
+  <div class="now"></div>
+</section>
+<nav class="controls" aria-label="Class controls"><div class="transport"><button class="btn"><span class="w" data-tier="label">Previous</span><span class="sub" data-tier="label">Stops following</span></button><button class="btn main"><span class="w" data-tier="label">Resume</span></button><button class="btn"><span class="w" data-tier="label">Next</span><span class="sub" data-tier="label">Song</span></button></div><div class="code"><img class="qr" src="qr-placeholder.svg" alt="QR code of the class address"><div class="code-t"><span class="lbl" data-tier="label">Class code</span><span class="v n" data-tier="minor">KXPD-RMTB</span><span class="dt" data-tier="label">Phone connected</span></div></div><button class="btn quit"><span class="w" data-tier="label">End</span></button></nav>
+</body>
+</html>

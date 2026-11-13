@@ -129,6 +129,7 @@ and on any projector. Cap height is the measured height of a capital H in that f
 | `--t-text-min` | 4.6 vh | Atkinson 700 | 3.1 % | A long cue (over 60 characters) |
 | `--t-minor` | 4.6 vh | Big Shoulders 600/800 | 3.7 % | Class time, next interval, targets |
 | `--t-label` | 3.1 vh | Atkinson 400/700 | 2.1 % | Labels, link state, score text |
+| `--t-control` | 3.6 vh | Atkinson 700 | 2.4 % | The words on the room screen's control buttons, shown only while the band is (room-2d.md, "Controls on the room screen") |
 
 Nothing on a room screen is smaller than `--t-label`. Everything a rider acts on (the
 countdown, the zone, cadence, position, the cue, the next interval) is at least 3 % cap height;

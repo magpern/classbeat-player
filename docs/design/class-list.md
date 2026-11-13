@@ -38,17 +38,17 @@ choice, no zone profile, no rider data, no ranking (rule 13).
   (state "Class file not opened").
 - **Where the room window goes.** On the display the instructor last moved it to in this session,
   while that display is still connected and is not the presenter's; otherwise on the largest
-  display other than the presenter's, in full screen. With one display, the room screen is a 16:9
-  window inside the work area, at most 1280 px wide and at least 480x270 (smaller only when the
-  work area is), in the largest free part to the right, left, below or above the presenter, so it
-  never covers the presenter. When no free part holds 480x270, the window goes behind the
-  presenter, which is raised above it so none of its controls is covered. The presenter is raised
-  only in that case, and it takes the keyboard only when the application already has it: a class
-  opened while another application has the focus leaves that focus where it is. Beside the
-  presenter nothing is raised or focused. It is a rehearsal view: room-2d.md's room-distance
-  heights (C1) and its 720-line minimum do not apply to it, while contrast, overlap and zone
-  checks still do. The window is shown without taking the keyboard from the presenter. There is no
-  display picker in this version; the instructor moves the window.
+  display other than the presenter's, in full screen. **With one display** (plan section 3, "One
+  screen first", owner 2026-11-13) the room window fills that display in full screen, above this
+  window, and takes the keyboard if the application already has it (a class opened while another
+  application has the focus leaves that focus where it is). The class runs from the room
+  screen's own controls (room-2d.md, "Controls on the room screen"); its End, or Close class,
+  brings this window back. This replaces the earlier one-display rule (a 16:9 window beside the
+  presenter, never covering it), under which the room window could hide the presenter's Start.
+  With two displays the room window is shown without taking the keyboard from the presenter.
+  There is no display picker in this version; the instructor moves the window. A room window the
+  instructor shrinks by hand is a rehearsal view: room-2d.md's room-distance heights (C1) and its
+  720-line minimum do not apply to it, while contrast, overlap and zone checks still do.
 - **When the room window closes, and how it comes back.** It closes when the instructor is on the
   class list with no class pinned. While a class is pinned the list offers "Back to the class" and
   the room stays. When the class ends it stays on "Class Complete" for as long as the instructor

@@ -1,0 +1,66 @@
+/* The room screen's own controls (docs/design/room-2d.md, "Controls on the room screen").
+   Reference mock-up only. The band lies exactly over the score's box and is opaque; it covers
+   nothing else. The mock-ups hide the score under it (visibility), as the opaque band does. */
+
+body.shown .score { visibility: hidden; }
+
+.controls {
+  position: absolute; left: 0; right: 0; top: 79.5vh; height: 15.5vh;
+  background: var(--stage);
+  border-top: 0.3vh solid var(--stage-line);
+  padding: 0 var(--safe-x);
+  display: flex; align-items: center; gap: 1vw;
+  transition: opacity var(--m-state);
+}
+@media (prefers-reduced-motion: reduce) { .controls { transition: none; } }
+
+/* A button: words, never an icon alone. White, grey and black only (rule 7). */
+.btn {
+  flex: none; height: 11vh; min-width: 11vw; padding: 0 1.2vw;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.6vh;
+  background: var(--stage-raised); color: var(--light-1);
+  border: 0.3vh solid var(--stage-line); border-radius: 0.8vh;
+  font-family: var(--face-text); white-space: nowrap;
+}
+.btn .w { font-size: var(--t-control); font-weight: 700; line-height: 1; }
+/* The second line says where the press goes: "Interval", "Song", or "Stops following" when it
+   hands the clock over from the music (presenter.md, "Controls say what the press does"). Set
+   in the condensed face, like the rail's values, so that three "Stops following" fit at 5:4. */
+.btn .sub { font-family: var(--face-number); font-size: var(--t-label); font-weight: 600; line-height: 1; color: var(--light-2); }
+/* Start, Pause or Resume: the one main control, a white outline (not a white plate: the white
+   plates are the link alerts and "Paused"). */
+.btn.main { border: 0.5vh solid var(--light-1); min-width: 13vw; }
+/* Keyboard focus: the class list's ring, 3 px light-1 outside the button. */
+.btn.focus { outline: 0.4vh solid var(--light-1); outline-offset: 0.4vh; }
+
+.transport { display: flex; gap: 1vw; flex: none; }
+
+/* The class code (the riders' join code, ADR 0002): never a control code. */
+.code { margin-left: auto; display: flex; align-items: center; gap: 1vw; min-width: 0; }
+.qr { width: 12.4vh; height: 12.4vh; flex: none; display: block; }
+.code-t { display: flex; flex-direction: column; gap: 0.6vh; white-space: nowrap; }
+.code-t .v { font-size: var(--t-minor); line-height: 1; letter-spacing: 0.04em; }
+.code-t .dt { font-size: var(--t-label); line-height: 1; color: var(--light-2); }
+/* Off: the code is offered, not shown. A plain button. */
+.btn.phone { min-width: 0; }
+
+.quit { flex: none; min-width: 9vw; }
+.transport + .quit { margin-left: auto; }
+
+/* The End question replaces the buttons. "Keep going" takes End's place, so a second click on
+   End lands on it; "End class" sits further left, at least 5 vw away. */
+.ask { margin-left: auto; display: flex; align-items: center; gap: 1vw; }
+.ask .q { font-size: var(--t-text-min); font-weight: 700; line-height: 1; margin-right: 1vw; white-space: nowrap; }
+.ask .gap { width: 5vw; flex: none; }
+
+/* ---------- 3:2 and narrower: the band is the score's box there too ---------- */
+@media (max-aspect-ratio: 3/2) {
+  .controls { top: 83vh; height: 12vh; gap: 0.8vw; }
+  .transport { gap: 0.8vw; }
+  .btn { height: 9.4vh; min-width: 0; padding: 0 1vw; gap: 0.5vh; }
+  .btn.main { min-width: 11vw; }
+  .quit { min-width: 8vw; }
+  .qr { width: 10.8vh; height: 10.8vh; }
+  .code { gap: 0.8vw; }
+  .code-t { gap: 0.2vh; }
+}
