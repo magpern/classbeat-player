@@ -13,11 +13,13 @@
     "session": {
       "type": "string",
       "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "maxLength": 9,
       "description": "The join code as XXXX-XXXX; the page normalises what was typed (case, spaces, hyphens) before sending."
     },
     "code": {
       "type": "string",
       "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "maxLength": 9,
       "description": "The control code as XXXX-XXXX."
     }
   }

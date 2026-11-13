@@ -13,16 +13,19 @@
   "properties": {
     "sessionId": {
       "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "maxLength": 36
     },
     "joinCode": {
       "type": "string",
       "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "maxLength": 9,
       "description": "Short code, shown as XXXX-XXXX."
     },
     "hostToken": {
       "type": "string",
-      "pattern": "^cbp_hst_[A-Za-z0-9_-]{43}$"
+      "pattern": "^cbp_hst_[A-Za-z0-9_-]{43}$",
+      "maxLength": 51
     }
   }
 }

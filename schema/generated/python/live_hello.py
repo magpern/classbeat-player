@@ -14,4 +14,6 @@ class Hello(BaseModel):
     )
     v: Annotated[Literal[1], Field(description="The live contract's version.")]
     type: Literal['hello']
-    token: Annotated[str, Field(pattern='^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$')]
+    token: Annotated[
+        str, Field(max_length=51, pattern='^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$')
+    ]

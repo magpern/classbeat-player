@@ -32,6 +32,7 @@
     "id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22}$",
+      "maxLength": 22,
       "description": "The command's id: 16 random bytes, base64url without padding, new for each tap."
     },
     "result": {

@@ -11,7 +11,9 @@ let a value through that its author did not spell out:
   of the root's `$defs`, or an `anyOf` whose branches are all typed (an empty `{}` is not);
 - a shape that has `properties`, or whose `type` allows `object`, has `type` allowing `object`,
   `properties`, and `additionalProperties` exactly `false`;
-- a shape whose `type` allows `array` has `items` (a typed shape) and `maxItems`.
+- a shape whose `type` allows `array` has `items` (a typed shape) and `maxItems`;
+- a shape whose `type` allows `string` has `maxLength`, or a `const` or `enum`, which bound it by
+  themselves (ADR 0005: every string has a maximum length).
 
 The Python and TypeScript suites implement the same check (`ts/test/live-shape.ts`).
 """
@@ -41,6 +43,7 @@ CONSTRAINTS = frozenset(
 )
 NARROWING = frozenset({"if", "then", "else", "not"})
 SHAPE = ANNOTATIONS | CONSTRAINTS | NARROWING | {"properties", "items", "$defs", "anyOf", "$ref"}
+_BOUNDED = frozenset({"maxLength", "const", "enum"})
 CONDITION = ANNOTATIONS | CONSTRAINTS | NARROWING | {"properties", "anyOf", "contains"}
 
 
@@ -115,6 +118,8 @@ def problems(root: Any) -> list[str]:
                 out.append(f"{path}: an array must have maxItems")
         elif "items" in node:
             out.append(f"{path}: items on a shape that is not an array")
+        if types is not None and "string" in types and not (_BOUNDED & set(node)):
+            out.append(f"{path}: a string must have maxLength")
         for name, sub in (node.get("properties") or {}).items():
             shape(sub, f"{path}/properties/{name}")
         if "items" in node:

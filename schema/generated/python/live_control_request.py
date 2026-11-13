@@ -16,6 +16,7 @@ class ControlRequest(BaseModel):
         str,
         Field(
             description='The join code as XXXX-XXXX; the page normalises what was typed (case, spaces, hyphens) before sending.',
+            max_length=9,
             pattern='^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$',
         ),
     ]
@@ -23,6 +24,7 @@ class ControlRequest(BaseModel):
         str,
         Field(
             description='The control code as XXXX-XXXX.',
+            max_length=9,
             pattern='^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$',
         ),
     ]
