@@ -40,12 +40,14 @@ backend hardening (#227, #230), the body cap in the live contract (#234, #235; #
 #239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
 #245), the companion page (#174, #261; network calls in web code allowed by the owner, #252,
 #253), sign-in returning to the companion page (#263, #274), the `/me` answer in the contract
-(#264, #272) and its backend route (#265, #283) with its account-filter test (#295, in review
-#299), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
+(#264, #272) and its backend route (#265, #283) with its account-filter tests (#295, #299;
+#304, #305), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
 and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
 #292), the companion fake on the `/control` headers (#278, #286) and wider markup and stylesheet
-guards (#267, #276). In progress: companion CI states (#282, #297), the sink trap's iframe and
-attribute-node gaps (#293).
+guards (#267, #276), the companion CI states for paused-following, music not heard and song twice
+(#282, #297), and the sink trap's iframe realms and attribute-node writes (#293, #302). In
+progress: the companion spec asserting each state's words (#303, #306) and the sink trap's
+remaining gaps: CSS `src()`, service workers, XHR and XSLT documents (#307).
 
 ## PL2: backend and sign-in
 
