@@ -23,6 +23,7 @@
 //    times a second. Screenshots are taken with animations stopped at their first frame.
 // 8. Coverage: every piece of text on the page sits inside a data-tier element, so 1 to 4 see it.
 // 9. Palette (once, from tokens.css): see palette.js.
+// 10. Window screens (class-list.md): data-min-cap, a minimum cap height in pixels.
 // Not covered here (say so when this becomes the PL4 CI check): hue in box-shadow and gradients.
 'use strict';
 const path = require('path');
@@ -105,6 +106,8 @@ async function check(browser, probe, s) {
     if (!it.ink) problems.push('no visible ink');
     else {
       if (!preview && it.cap < t.cap) problems.push(`cap ${(it.cap * 100).toFixed(2)}% < ${t.cap * 100}%`);
+      // A window screen (class-list.md) states its minimum in pixels: data-min-cap.
+      if (it.minpx && it.cap * s.h < it.minpx - 0.05) problems.push(`cap ${(it.cap * s.h).toFixed(1)} px < ${it.minpx} px`);
       if (it.worst < t.contrast) problems.push(`contrast ${it.worst.toFixed(1)} < ${t.contrast}`);
       const k = it.ink;
       if (s.room && (k.x0 < s.w * SAFE - 0.5 || k.y0 < s.h * SAFE - 0.5 || k.x1 > s.w * (1 - SAFE) + 0.5 || k.y1 > s.h * (1 - SAFE) + 0.5)) problems.push('outside safe area');
