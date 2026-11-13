@@ -64,8 +64,8 @@ in its own window (#141, #148) and its follow-ups (#149, #151: the presenter kep
 Show the room screen, a run-time check that refuses any renderer with loose web preferences);
 shell hardening (#152, #154; #155, #156: preloads, spell checker, shell handlers, re-checked on
 every navigation; #162, #165: a refusal never throws out of the shell listeners, keep-awake wiring
-tested); keep-awake while a class runs (#157, #159). **Done on fakes:** the Verifier's run on
-`e2d7c6c` found no gaps. The lasting-fault plate and the display removal are covered by unit tests
+tested); keep-awake while a class runs (#157, #159). **Done on fakes:** the Verifier ran the PL4 "done when" on
+`main` at `e2d7c6c` (#159) and filed no gap issues; #165 merged after it. The lasting-fault plate and the display removal are covered by unit tests
 only (memory keychain, one xvfb display).
 
 ## Infra
@@ -135,8 +135,8 @@ Merged: #30 and its findings (#53).
 - Contract: from the #176 reviews, the shape check should require `maxLength` on strings (ADR
   0005 says strings are bounded; all are today); the TS suite covers 16 of the Python suite's 21
   ways of opening a schema; `duplicate` always has a null reason.
-- Player: from the #165 review, the hardening and wiring checks are source regexes; one outer
-  `try` in `refuse-loose.ts` is unreachable. A one-off macOS hang in `room-window-lifecycle`
+- Player: from the #165 review, the hardening and wiring checks are source regexes; the #165
+  Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
 
 ## Carried into PL8

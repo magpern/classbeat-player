@@ -68,8 +68,8 @@ What this ADR takes as given:
   with new codes. The app gives each run a random `run` id (16 bytes, base64url) sent in every
   state message. The rest of the lifetime is ADR 0002's: one per device (a new one ends the
   earlier), 3 per account, 15 minutes after the host connection is lost, 12 hours at most.
-  A fourth session on one account is refused with 409 `sessions_full` (amended 2026-11-13,
-  #176: neither ADR named the answer).
+  A start that would make a fourth session on one account (3 already running on other devices)
+  is refused with 409 `sessions_full` (amended 2026-11-13, #176: neither ADR named the answer).
   *Default behind the app's live-session interface:* carrying one session into the next class is
   a later, reviewed change; nothing in the messages assumes either way.
 - **Ending.** The host sends `end` over its connection, or the live process ends the session by
@@ -103,8 +103,10 @@ ADR 0002 section 8, restated so the issues can check it, with the one change of 
   request by sign-in gets `cannot_control`, like every failure there. A right control code while
   both places are held gets `controllers_full`, is not used up and is not counted as a wrong try;
   a wrong code is counted as before, whatever the places. The host frees a place with `drop`;
-  a `drop` also cancels the current control code, so the freed place needs a new one (amended
-  2026-11-13, #166 review). A malformed code, on the sign-in route or the code route, gets 422
+  a `drop` also ends the current control code, so the freed place needs a new one (amended
+  2026-11-13, #166 review). The host is sent nothing for it: the app clears the shown code and
+  its QR code when it sends `drop`, and `code_cancelled` keeps its four reasons (`used`,
+  `expired`, `wrong_tries`, `replaced`). A malformed code, on the sign-in route or the code route, gets 422
   `invalid_request` like any malformed body; it tells nothing about the session (#176 review).
 - The server gives each controller its `slot` (1 or 2) and stamps it on what it forwards to the
   host. The phone's `command` schema has no `slot`, so a phone-sent one fails validation and the
@@ -133,7 +135,8 @@ against the merged contract.
 | `POST /api/live/control` | Phone, none | `session`, `code` | controller token |
 
 `session` is the join code, naming the session only. Refusals: `cannot_control` (controller);
-`invalid_code`, `controllers_full` (control). They share ADR 0002's error shape as a closed
+`invalid_code`, `controllers_full` (control); `sessions_full` (409, sessions); a malformed body
+on any of them, `invalid_request` (422). They share ADR 0002's error shape as a closed
 enum, plus 429 with `Retry-After` from section 10 of ADR 0002.
 
 **WebSocket messages.** The table is the routing allowlist for the companion; the server checks
@@ -351,9 +354,12 @@ What a guessed or stolen controller token can do grows by these two: resume a pa
 undo a resync while one is announced. Neither changes an interval, reaches a rider or a device,
 or outlasts the session; the host can drop the controller.
 
-This ADR also refines three points ADR 0002 left open, without changing its rules: the
-controller token ends with the site session it came from; a right code while both places are held
-is `controllers_full` and not a wrong try; and the server, not the phone, gives the `slot`.
+This ADR also refines four points ADR 0002 left open, without changing its rules: a right code
+while both places are held is `controllers_full` and not a wrong try (section 3); the server, not
+the phone, gives the `slot` (section 3); each controller may send at most 2 commands a second,
+answered `rate` beyond that (section 4); and the host asks for, and is told about, control codes
+by WebSocket messages (`make_code`, `control_code`, `code_cancelled`, section 4). It adds one
+way a control code ends, the host's `drop` (section 3), marked in ADR 0002's token table.
 
 ## Alternatives
 

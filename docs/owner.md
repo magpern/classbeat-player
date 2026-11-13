@@ -14,8 +14,8 @@ with other work; nothing in the development loop waits for an answer.
   mail (ADR 0002). Which service, and the sending domain.
 - **Signing accounts** (before PL7): an Apple Developer membership and a Windows signing identity.
   On a company-managed Mac that blocks apps from unknown sources, a signed and notarised build is
-  enough only if the policy allows identified developers; otherwise the company's IT must allow
-  our Developer Team ID in its device management. Until then the unsigned CI build
+  enough only if the policy allows apps from identified developers; if it allows only the App
+  Store, the company's IT has to make an exception for the app in its device management. Until then the unsigned CI build
   (`classbeat-player-macos-unsigned`) runs only on a Mac that is not managed.
 
 ## Decisions waiting
