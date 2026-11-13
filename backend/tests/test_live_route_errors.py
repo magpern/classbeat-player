@@ -18,8 +18,9 @@ Added to the codes read:
   neither never does (tests/routetable.py).
 
 The body cap's 413 `body_too_large` is answered before any route is matched (body_cap.py), for
-every route of the app. The table lists it for every live route or for none (tests/routetable.py,
-both shapes in tests/test_live_route_table.py) and each route is requested below to answer it.
+every route of the app. The table lists it for every live route and the error enum holds it
+(tests/routetable.py, its rules in tests/test_live_route_table.py) and each route is requested
+below to answer it.
 Requests below check, on fakes, a sample of the codes as answered.
 """
 
@@ -125,8 +126,8 @@ def test_a_routes_error_codes_are_its_entry_in_routing_json(name: str) -> None:
     assert route_problems(name, TABLE[name], _answered(_live_routes(_app())[name])) == []
 
 
-def test_the_body_cap_is_listed_for_every_live_route_or_none() -> None:
-    assert table_problems(TABLE, ERROR_ENUM) == []
+def test_the_body_cap_is_in_the_error_enum() -> None:
+    assert table_problems(ERROR_ENUM) == []
 
 
 def test_no_live_or_database_module_but_the_routes_names_an_error_form() -> None:
