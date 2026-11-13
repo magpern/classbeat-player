@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
-import { STATE_NAMES, WORST_NAMES } from "../../src/fixtures/index.ts";
+import { FOLLOW_NAMES, STATE_NAMES, WORST_NAMES } from "../../src/fixtures/index.ts";
 import { WEB_DIR, launch, newPage } from "../lib/browser.ts";
 import { checkShot, shotName } from "../lib/measure.ts";
 import type { Shot, ShotResult } from "../lib/measure.ts";
@@ -34,7 +34,7 @@ const JOBS = Number(process.env.SPEC_JOBS ?? 4);
 const SHOT_DIR = join(WEB_DIR, "screenshots");
 
 const SHOTS: Shot[] = [
-  ...[...STATE_NAMES, ...WORST_NAMES].flatMap((fixture) => SIZES.map(([width, height]) => ({ fixture, width, height, room: true }))),
+  ...[...STATE_NAMES, ...WORST_NAMES, ...FOLLOW_NAMES].flatMap((fixture) => SIZES.map(([width, height]) => ({ fixture, width, height, room: true }))),
   // The room preview in the presenter window (room-2d.md, "Narrow presenter preview").
   { fixture: "running", width: 480, height: 270, room: false },
   { fixture: "worst-running", width: 480, height: 270, room: false },

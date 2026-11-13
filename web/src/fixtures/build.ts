@@ -88,12 +88,14 @@ export function linkAt(view: ClockInput, state: LinkStateName, overrides: Partia
   const manual = state === "Manual";
   return {
     mode: manual ? "manual" : "following",
+    available: !manual,
     state,
     guessing: state === "Coasting" || state === "Off the list",
     songIndex: manual || state === "Off the list" ? null : view.songIndex,
     held: false,
     holdRemainingMs: null,
     candidates: [],
+    announcement: null,
     classRemainingMs: view.classRemainingMs,
     ...overrides,
   };
