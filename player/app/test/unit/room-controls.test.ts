@@ -185,7 +185,7 @@ const HOSTILE = {
   deviceToken: "cbp_dev_x",
   account: "secret-account@example.invalid",
 } as unknown as RemoteView;
-const HOSTILE_SNAP = { ...SNAP, controlCode: "QQQQ-QQQQ", hostToken: "cbp_hst_y", live: HOSTILE, controls: { code: "QQQQ-QQQQ" } } as unknown as Snapshot;
+const HOSTILE_SNAP = { ...SNAP, controlCode: "QQQQ-QQQQ", hostToken: "cbp_hst_y", live: HOSTILE, controls: { code: "QQQQ-QQQQ" }, band: { next: "QQQQ-QQQQ", code: "QQQQ-QQQQ" } } as unknown as Snapshot;
 
 test("no control code, token or controller detail reaches the room window on any room channel", () => {
   const r = rig(() => HOSTILE, HOSTILE_SNAP);
@@ -195,10 +195,11 @@ test("no control code, token or controller detail reaches the room window on any
   const sent = JSON.stringify(answers);
   for (const s of SECRETS) assert.ok(!sent.includes(s), s);
   assert.deepEqual(remoteViewOf(HOSTILE), { slot: "on", joinCode: "BCDF-GHJK", phones: 1, reconnecting: false });
-  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link });
+  const clock = { start: "clock", pause: "clock", resume: "clock", next: "clock", previous: "clock" };
+  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock });
 });
 
-const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "renderer/room.ts"];
+const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts"];
 
 test("the room's sources name no control code, token or controller, and each push goes through its filter", () => {
   for (const p of ROOM_SOURCES) assert.doesNotMatch(code(read("src", ...p.split("/"))), /control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, p);

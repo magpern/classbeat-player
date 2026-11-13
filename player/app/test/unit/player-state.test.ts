@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { NEWER_VERSION_MESSAGE } from "../../src/core/class-file.ts";
-import { advance, command, INITIAL, openText, refuse, snapshotOf, withoutReader } from "../../src/core/player-state.ts";
+import { advance, command, INITIAL, openText, refuse, routeFor, snapshotOf, withoutReader } from "../../src/core/player-state.ts";
 import { classSchema, converterExamples, EXAMPLES } from "./fixtures.ts";
 
 const good = readFileSync(converterExamples()[0], "utf8");
@@ -12,7 +12,7 @@ const newer = readFileSync(join(EXAMPLES, "reader", "rejected-unknown-major.json
 
 test("before any class: no view, commands do nothing", () => {
   const s = command(INITIAL, { type: "start" }, 0);
-  assert.deepEqual(snapshotOf(s, 0), { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, error: null });
+  assert.deepEqual(snapshotOf(s, 0), { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, band: null, error: null });
 });
 
 test("opening a class gives a ready clock at 0", () => {
@@ -76,4 +76,16 @@ test("a reader that cannot work is reported as the reason, but not for a class t
   const noMusic = readFileSync(join(EXAMPLES, "valid", "short-class-no-music.json"), "utf8");
   const manualOnly = snapshotOf(withoutReader(openText(INITIAL, "b.json", noMusic, classSchema, 0, true)), 0);
   assert.equal(manualOnly.link?.unavailable, false, "nothing was to be followed, so there is nothing to explain");
+});
+
+test("the snapshot's band routes come from the same link and transport as the commands (issue #198)", () => {
+  const s = openText(INITIAL, "a.json", good, classSchema, 0);
+  for (const canSend of [true, false]) {
+    const snap = snapshotOf(s, 0, canSend);
+    for (const type of ["start", "pause", "resume", "next", "previous"] as const) {
+      const r = routeFor(s, { type }, canSend);
+      const expected = r === null || (r.kind === "transport" && r.alsoClock === true) ? "clock" : r.kind === "manual" ? "handover" : "music";
+      assert.equal(snap.band?.[type], expected, `${type} ${canSend}`);
+    }
+  }
 });

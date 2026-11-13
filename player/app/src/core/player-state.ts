@@ -17,6 +17,7 @@ import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
 import { linkViewAt } from "./link/view.ts";
 import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
+import { bandRoutes } from "./room/band-routes.ts";
 import type { Routed } from "./link/while-following.ts";
 import type { TransportAction } from "./link/transport.ts";
 import type { FileError, Snapshot } from "./snapshot.ts";
@@ -152,6 +153,7 @@ export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapsh
     view: l ? viewAt(l.clock, l.plan, now) : null,
     link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
+    band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
     error: s.error,
   };
 }

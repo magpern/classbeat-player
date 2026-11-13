@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { placeRoom } from "../../src/core/room/placement.ts";
-import type { DisplayFacts, Rect } from "../../src/core/room/placement.ts";
+import type { DisplayFacts } from "../../src/core/room/placement.ts";
 import { ROOM_CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { converterExamples } from "../unit/fixtures.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
@@ -146,7 +146,7 @@ test("the room page's channel answers only the room window: the same preload and
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());
   assert.equal(own?.doc.class.title, TITLE);
-  assert.deepEqual(Object.keys(own ?? {}).sort(), ["doc", "link", "view"], "a frame, not the presenter's snapshot");
+  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "view"], "a frame, not the presenter's snapshot");
 });
 
 test("the room window is on the display the rule picks, and the presenter keeps its window", async () => {
@@ -162,7 +162,7 @@ test("the room window is on the display the rule picks, and the presenter keeps 
       mainUrl: main.webContents.getURL(),
     };
   });
-  const want = placeRoom(facts.displays as DisplayFacts[], facts.presenterDisplay, facts.presenter as Rect, null);
+  const want = placeRoom(facts.displays as DisplayFacts[], facts.presenterDisplay, null);
   assert.ok(want);
   assert.equal(facts.roomDisplay, want.displayId);
   assert.match(facts.mainUrl, /\/dist\/presenter\.html$/);

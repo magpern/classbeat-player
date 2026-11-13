@@ -1,0 +1,80 @@
+/* The room screen's control band (docs/design/room-2d.md, "Controls on the room screen"). It lies
+   exactly over the score's box and is opaque; it covers nothing else. While hidden it is not drawn
+   at all, so the screen is pixel for pixel the state without it. White, grey and black only (rule 7). */
+
+/* The control words' size (system.md, Type). The room screen's own tokens are the web lane's and
+   do not have it yet; the value is the player's design token (design/tokens.css), checked equal by
+   test/unit/room-band-view.test.ts. */
+:root { --t-control: 3.6vh; }
+
+.band {
+  position: fixed; left: 0; right: 0; top: 79.5vh; height: 15.5vh; z-index: 10;
+  box-sizing: border-box;
+  background: var(--stage);
+  border-top: 0.3vh solid var(--stage-line);
+  padding: 0 var(--safe-x);
+  display: flex; align-items: center; gap: 1vw;
+  font-family: var(--face-text); color: var(--light-1);
+  opacity: 1;
+}
+/* It appears whole on its first frame (it takes presses from then); only the fade out is animated. */
+.band[data-phase="fading"] { opacity: 0; pointer-events: none; transition: opacity var(--m-state); }
+.band[data-phase="hidden"] { visibility: hidden; opacity: 0; pointer-events: none; }
+:root[data-reduced-motion] .band[data-phase="fading"] { transition: none; }
+@media (prefers-reduced-motion: reduce) { .band[data-phase="fading"] { transition: none; } }
+
+/* The pointer is hidden with the band. */
+body[data-band="hidden"], body[data-band="fading"] { cursor: none; }
+
+/* A button: words, never an icon alone. */
+.band .btn {
+  flex: none; box-sizing: border-box; height: 11vh; min-width: 11vw; padding: 0 1.2vw; margin: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.6vh;
+  background: var(--stage-raised); color: var(--light-1);
+  border: 0.3vh solid var(--stage-line); border-radius: 0.8vh;
+  font-family: var(--face-text); white-space: nowrap; cursor: default;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
+}
+.band .btn:focus { outline: none; }
+/* Keyboard focus: the class list's ring, outside the button. */
+.band .btn:focus-visible { outline: 0.4vh solid var(--light-1); outline-offset: 0.4vh; }
+.band .btn .w { font-size: var(--t-control); font-weight: 700; line-height: 1; }
+/* The second line says where the press goes, in the condensed face so three "Stops following" fit at 5:4. */
+.band .btn .sub { font-family: var(--face-number); font-size: var(--t-label); font-weight: 600; line-height: 1; color: var(--light-2); }
+/* Start, Pause or Resume: the one main control, a white outline. */
+.band .btn.main { border: 0.5vh solid var(--light-1); min-width: 13vw; }
+.band .btn:disabled { color: var(--light-2); }
+
+.band .transport { display: flex; gap: 1vw; flex: none; }
+
+/* The class code: the riders' join code only. */
+.band .code { margin-left: auto; display: flex; align-items: center; gap: 1vw; min-width: 0; }
+.band .qr { width: 12.4vh; height: 12.4vh; flex: none; display: block; }
+.band .code-t { display: flex; flex-direction: column; gap: 0.6vh; white-space: nowrap; }
+.band .code-t .v { font-family: var(--face-number); font-weight: 800; font-size: var(--t-minor); line-height: 1; letter-spacing: 0.04em; color: var(--light-1); }
+.band .code-t .lbl, .band .code-t .dt { font-size: var(--t-label); line-height: 1; color: var(--light-2); }
+.band .code + .quit, .band .phone + .quit { margin-left: 0; }
+.band .btn.phone { min-width: 0; margin-left: auto; }
+
+.band .quit { min-width: 9vw; }
+.band .transport + .quit { margin-left: auto; }
+
+/* The End question replaces the buttons. "Keep going" takes End's place; "End class" sits at least 5 vw left of it. */
+.band .ask { margin-left: auto; display: flex; align-items: center; gap: 1vw; }
+.band .ask .q { font-size: var(--t-text-min); font-weight: 700; line-height: 1; margin-right: 1vw; white-space: nowrap; }
+.band .ask .gap { width: 5vw; flex: none; }
+
+/* Class Complete: Close class, in End's place. */
+.band .finished { margin-left: auto; }
+
+/* 3:2 and narrower: the band is the score's box there too. */
+@media (max-aspect-ratio: 3/2) {
+  .band { top: 83vh; height: 12vh; gap: 0.8vw; }
+  .band .transport { gap: 0.8vw; }
+  .band .btn { height: 9.4vh; min-width: 0; padding: 0 1vw; gap: 0.5vh; }
+  .band .btn.main { min-width: 11vw; }
+  .band .quit { min-width: 8vw; }
+  .band .qr { width: 10.8vh; height: 10.8vh; }
+  .band .code { gap: 0.8vw; }
+  .band .code-t { gap: 0.2vh; }
+}

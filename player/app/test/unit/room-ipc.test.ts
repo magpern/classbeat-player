@@ -59,9 +59,13 @@ const SNAP = {
   error: { message: "m", details: [] },
 } as unknown as Snapshot;
 
-test("a frame carries the class, the clock view and the link view, and nothing else of the snapshot", () => {
-  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["doc", "link", "view"]);
-  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link });
+test("a frame carries the class, the clock view, the link view and the band's routes, and nothing else of the snapshot", () => {
+  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "view"]);
+  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null });
+  // The routes are rebuilt from closed values: nothing else the snapshot holds there goes along.
+  const band = { start: "music", pause: "handover", resume: "clock", next: "music", previous: "nope", extra: "QQQQ-QQQQ" };
+  const framed = roomFrameOf({ ...SNAP, band } as unknown as Snapshot);
+  assert.deepEqual(framed.band, { start: "music", pause: "handover", resume: "clock", next: "music", previous: "clock" });
 });
 
 function rig() {
@@ -121,8 +125,19 @@ test("room.html carries exactly the room's policy, before any script, and no inl
   for (const k of ["connect-src", "media-src", "object-src", "frame-src", "worker-src", "img-src"]) assert.match(ROOM_CSP, new RegExp(`${k} 'none'`), k);
 });
 
-test("the room page sends nothing: it only reads its state and its pushes", () => {
+test("the room page uses only the room's fixed calls (issue #198: the band's commands, End class, the phone remote)", () => {
   const src = code(read("src", "renderer", "room.ts"));
-  assert.deepEqual([...src.matchAll(/api\.(\w+)\(/g)].map((m) => m[1]).sort(), ["onUpdate", "state"]);
-  assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\./);
+  const used = [...new Set([...src.matchAll(/api\.(\w+)/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(used, ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
+});
+
+test("the preload is reached once, by name, in room.ts only: no other way round the list of calls", () => {
+  const room = code(read("src", "renderer", "room.ts"));
+  // The one place the preload is taken, and the only bare `api` (no alias, no passing it on).
+  assert.deepEqual([...room.matchAll(/\.room\b|\["room"\]|\['room'\]/g)].map((m) => m[0]), [".room"]);
+  assert.deepEqual([...room.matchAll(/\bapi\b(?!\.\w)/g)].length, 1);
+  assert.match(room, /const api = \(window as unknown as \{ room: RoomApi \}\)\.room;/);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, f);
+  for (const f of ["room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, f);
 });
