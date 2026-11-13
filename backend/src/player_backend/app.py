@@ -61,12 +61,14 @@ def create_app(
         try:
             yield
         finally:
-            if loop is not None:
-                loop.stop()
-            # Before the pool closes: an end handed off the loop (a `hello`) is still written.
-            if not await service.drain(LIVE_DRAIN_WITHIN):
-                _log.warning("live writes left at shutdown")
-            pool.close()
+            try:
+                if loop is not None:
+                    loop.stop()
+                # Before the pool closes: an end handed off the loop (a `hello`) is still written.
+                if not await service.drain(LIVE_DRAIN_WITHIN):
+                    _log.warning("live writes left at shutdown")
+            finally:
+                pool.close()
 
     app = FastAPI(
         title="Class player backend",

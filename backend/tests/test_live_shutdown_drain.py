@@ -5,7 +5,8 @@ ADR 0002, section 8; #225 N4, #227).
 - an end a `hello` handed off the loop, still being written when the server stops, is written
   before the pool closes;
 - a write that does not finish within the bound does not hold the shutdown: the pool is closed
-  once the bound has passed.
+  once the bound has passed;
+- the pool is closed even when waiting for the writes fails.
 """
 
 from __future__ import annotations
@@ -69,9 +70,9 @@ def writes(monkeypatch: pytest.MonkeyPatch) -> Iterator[Writes]:
     held.go.set()  # never leave a worker thread waiting
 
 
-def _stop_with_a_write_running(writes: Writes) -> None:
+def _stop_with_a_write_running(writes: Writes, release_after: float) -> None:
     """Start the app, have a `hello` find its session expired, and stop the app while the end's
-    write is still running."""
+    write is still running; the write is let finish `release_after` seconds after it began."""
     settings = Settings(database_url="postgresql://unused", site_origin=SITE)
     app = create_app(settings, live_recheck=None)
     with TestClient(app) as client:
@@ -84,14 +85,14 @@ def _stop_with_a_write_running(writes: Writes) -> None:
             ws.send_json(hello(started.host_token))
             assert closed(ws) == 4401
         assert writes.started.wait(3.0)
+        threading.Timer(release_after, writes.go.set).start()
 
 
 def test_an_end_being_written_at_shutdown_is_written_before_the_pool_closes(
     writes: Writes,
 ) -> None:
     # The write finishes a moment after the stop began.
-    threading.Timer(0.3, writes.go.set).start()
-    _stop_with_a_write_running(writes)
+    _stop_with_a_write_running(writes, release_after=0.3)
     assert writes.done == [False]
     assert writes.pool.closed
 
@@ -101,8 +102,20 @@ def test_a_write_that_does_not_finish_does_not_hold_the_shutdown(
 ) -> None:
     monkeypatch.setattr(app_module, "LIVE_DRAIN_WITHIN", 0.2)
     # The write would finish long after the bound: the pool is closed before it does.
-    threading.Timer(1.5, writes.go.set).start()
-    _stop_with_a_write_running(writes)
+    _stop_with_a_write_running(writes, release_after=1.5)
     assert until(lambda: writes.done != [])
     assert writes.done == [True]  # it found the pool closed (a real one raises HandleClosed)
+    assert writes.pool.closed
+
+
+def test_the_pool_is_closed_even_when_waiting_for_the_writes_fails(
+    writes: Writes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def failing(_self: LiveService, _within: float) -> bool:
+        raise RuntimeError("the wait failed")
+
+    monkeypatch.setattr(LiveService, "drain", failing)
+    settings = Settings(database_url="postgresql://unused", site_origin=SITE)
+    with pytest.raises(RuntimeError), TestClient(create_app(settings, live_recheck=None)):
+        assert not writes.pool.closed
     assert writes.pool.closed

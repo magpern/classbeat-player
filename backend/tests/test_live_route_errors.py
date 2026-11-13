@@ -1,10 +1,15 @@
 """Each live HTTP route answers exactly the error codes its entry in
 `schema/live/v1/routing.json` lists (ADR 0005, section 4; #223 N1, #227). No database.
 
-The codes a route can answer are read from its code: every `ApiError` its function and each of
-its dependencies raise, following the module-level functions and `ApiError` classes they call,
-as FastAPI's dependency tree for the route gives them. A code the reading cannot resolve fails
-the test, so a new kind of raise is never passed over silently. Added to those:
+The codes a route can answer are read from its code (tests/errorread.py): every `ApiError` its
+function and each of its dependencies raise, following the functions of this package they call
+by name or through a module, as FastAPI's dependency tree for the route gives them. The reading
+fails closed: any error form it cannot read (an `ApiError` through a module, `error_response`,
+a response with a status, `HTTPException`, a code it cannot resolve, an `ApiError` subclass that
+sets its code another way) fails the test. What it does not follow is checked apart: no live or
+database module but the routes, and no class the read code names, names an error form; and in
+each module it went into, every definition naming one was read or is listed as on no live route.
+Added to the codes read:
 
 - the sign-in route's class (`_OneRefusal`) answers every 401 and 403 as 403 `cannot_control`
   (checked by requests below too);
@@ -20,28 +25,31 @@ codes as answered.
 
 from __future__ import annotations
 
-import ast
 import inspect
 import json
-import textwrap
+import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.dependencies.models import Dependant
+from fastapi.responses import JSONResponse
 from fastapi.routing import RouteContext
 from starlette.testclient import TestClient
 
 from player_backend import app as app_module
+from player_backend import http_errors
 from player_backend.app import create_app
 from player_backend.db import live as db_live
 from player_backend.db.executor import Pool
-from player_backend.http_errors import ApiError
+from player_backend.http_errors import ApiError, error_response
 from player_backend.live import control_routes
 from player_backend.settings import Settings
+from player_backend.site.deps import NotSignedIn
+from tests.errorread import FORM_WORDS, Reader, Unreadable, naming_forms
 from tests.livehelp import SCHEMA, SITE
 from tests.routehelp import http_contexts
 
@@ -49,6 +57,21 @@ ROUTING = json.loads((SCHEMA / "routing.json").read_text(encoding="utf-8"))
 TABLE: dict[str, set[str]] = {r["route"]: set(r["errors"]) for r in ROUTING["http"]}
 APP_WIDE = {"invalid_request", "internal_error"}
 BEFORE_ROUTING = {"body_too_large"}
+# Definitions that name an error form in a module the reading goes into, and are on no live
+# route (`_OneRefusal` is the sign-in route's class, applied in `_answered`).
+NOT_ON_A_LIVE_ROUTE: dict[str, set[str]] = {
+    "player_backend.live.control_routes": {"_OneRefusal"},
+    "player_backend.site.deps": {"recent_sign_in"},
+    "player_backend.player_api.deps": {"app_only"},
+    "player_backend.site.bodies": {"parsed"},
+    # These put a cookie on a response; none answers an error.
+    "player_backend.site.cookies": {
+        "_put",
+        "put_session_cookie",
+        "clear_session_cookie",
+        "put_login_cookie",
+    },
+}
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "player_backend"
 
 
@@ -72,75 +95,15 @@ def _calls(dependant: Dependant) -> Iterator[Callable[..., Any]]:
         yield from _calls(sub)
 
 
-def _ours(value: object) -> bool:
-    return getattr(value, "__module__", "").startswith("player_backend.")
-
-
-class _Reader:
-    """The (status, code) pairs of every `ApiError` a function can raise, as written."""
-
-    def __init__(self) -> None:
-        self.seen: set[object] = set()
-        self.raised: set[tuple[int, str]] = set()
-
-    def function(self, fn: Callable[..., Any]) -> None:
-        fn = inspect.unwrap(fn)
-        if fn in self.seen:
-            return
-        self.seen.add(fn)
-        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-        names: dict[str, Any] = getattr(fn, "__globals__", {})
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Name):
-                self._name(names.get(node.exc.id))
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                target = names.get(node.func.id)
-                if target is ApiError:
-                    self._api_error(node, names)
-                else:
-                    self._name(target)
-
-    def _name(self, target: object) -> None:
-        if inspect.isclass(target) and issubclass(target, ApiError) and target is not ApiError:
-            self._subclass(target)
-        elif inspect.isfunction(target) and _ours(target):
-            self.function(target)
-
-    def _subclass(self, cls: type[ApiError]) -> None:
-        tree = ast.parse(textwrap.dedent(inspect.getsource(cls)))
-        names = vars(inspect.getmodule(cls))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "__init__"
-            ):
-                self._api_error(node, names)
-
-    def _api_error(self, call: ast.Call, names: dict[str, Any]) -> None:
-        status, code = call.args[0], call.args[1]
-        assert isinstance(status, ast.Constant) and isinstance(status.value, int)
-        for value in _codes(code, names):
-            self.raised.add((status.value, value))
-
-
-def _codes(node: ast.expr, names: dict[str, Any]) -> set[str]:
-    """The codes an expression can be: a string, or a subscript of a module-level dict."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return {node.value}
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
-        table = names.get(node.value.id)
-        if isinstance(table, dict):
-            values = list(cast(dict[object, object], table).values())
-            assert all(isinstance(v, str) for v in values)
-            return {cast(str, v) for v in values}
-    raise AssertionError(f"a code this test cannot read: {ast.dump(node)}")
+def _read(route: RouteContext) -> Reader:
+    reader = Reader()
+    for fn in _calls(route.dependant):
+        reader.function(fn)
+    return reader
 
 
 def _answered(route: RouteContext) -> set[str]:
-    reader = _Reader()
-    for fn in _calls(route.dependant):
-        reader.function(fn)
+    reader = _read(route)
     one_refusal = isinstance(route.original_route, control_routes._OneRefusal)  # pyright: ignore[reportPrivateUsage]
     codes = {
         "cannot_control" if one_refusal and status in (401, 403) else code
@@ -159,16 +122,131 @@ def test_a_routes_error_codes_are_its_entry_in_routing_json(name: str) -> None:
     assert not BEFORE_ROUTING & TABLE[name]
 
 
-def test_the_live_code_that_raises_api_errors_is_what_the_reading_covers() -> None:
-    """The routes' other calls (the service, the registry, the database) go through attributes,
-    which the reading does not follow: none of those modules names `ApiError`."""
+def test_no_live_or_database_module_but_the_routes_names_an_error_form() -> None:
+    """The routes' calls through an object (the service, the registry, the database) are not
+    read: none of those modules names an error form."""
     named = {
         str(path.relative_to(SOURCE))
         for folder in ("live", "db")
         for path in (SOURCE / folder).rglob("*.py")
-        if "ApiError" in path.read_text(encoding="utf-8")
+        if FORM_WORDS.search(path.read_text(encoding="utf-8"))
     }
     assert named == {"live/routes.py", "live/control_routes.py"}
+
+
+def test_every_definition_naming_an_error_form_in_a_read_module_is_read_or_listed() -> None:
+    """In each module the reading went into (the routes', site/deps.py, player_api/deps.py and
+    the rest), a top-level definition that names an error form is one the reading read, or one
+    listed in `NOT_ON_A_LIVE_ROUTE`; and no class the read code names (whose methods it does not
+    read) names one."""
+    readers = [_read(route) for route in _live_routes(_app()).values()]
+    read = {fn for r in readers for fn in r.read}
+    read_names = {(f.__module__, f.__qualname__.split(".")[0]) for f in read}
+    modules = {f.__module__ for f in read}
+    for name in sorted(modules):
+        module = sys.modules[name]
+        listed = NOT_ON_A_LIVE_ROUTE.get(name, set())
+        found = {(name, d) for d in naming_forms(module)}
+        assert found == {(name, d) for d in listed} | (found & read_names), name
+        assert not {(name, d) for d in listed} & read_names, name
+    for cls in {c for r in readers for c in r.classes}:
+        assert not FORM_WORDS.search(inspect.getsource(cls)), cls.__qualname__
+
+
+# -- what the reading refuses to read ---------------------------------------------------------
+
+
+class _SetsItsCode(ApiError):
+    def __init__(self) -> None:
+        super().__init__(410, "gone")
+        self.code = "other"
+
+
+class _CodeAnotherWay(ApiError):
+    def __init__(self) -> None:
+        ApiError.__init__(self, 410, "gone")
+
+
+class _Deeper(NotSignedIn):
+    pass
+
+
+def _through_a_module() -> None:
+    raise http_errors.ApiError(410, "gone")
+
+
+def _returned() -> JSONResponse:
+    return error_response(410, "gone")
+
+
+def _with_a_status() -> JSONResponse:
+    return JSONResponse({"error": "gone"}, status_code=410)
+
+
+def _http_exception() -> None:
+    raise HTTPException(410)
+
+
+def _a_code_by_name() -> None:
+    code = "gone"
+    raise ApiError(410, code)
+
+
+def _a_status_by_name() -> None:
+    status = 410
+    raise ApiError(status, "gone")
+
+
+def _sets_its_code() -> None:
+    raise _SetsItsCode
+
+
+def _code_another_way() -> None:
+    raise _CodeAnotherWay()
+
+
+def _deeper() -> None:
+    raise _Deeper
+
+
+def _passed_on(make: Callable[..., Exception] = ApiError) -> None:
+    raise make(410, "gone")
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        _through_a_module,
+        _returned,
+        _with_a_status,
+        _http_exception,
+        _a_code_by_name,
+        _a_status_by_name,
+        _sets_its_code,
+        _code_another_way,
+        _deeper,
+        _passed_on,
+    ],
+)
+def test_an_error_form_the_reading_cannot_read_fails_it(fn: Callable[[], object]) -> None:
+    with pytest.raises(Unreadable):
+        Reader().function(fn)
+
+
+def _readable() -> JSONResponse:
+    if False:
+        raise NotSignedIn
+    try:
+        raise ApiError(409, "gone")
+    except ApiError:
+        pass
+    return JSONResponse({"ok": True})
+
+
+def test_the_forms_it_reads_are_read() -> None:
+    reader = Reader()
+    reader.function(_readable)
+    assert reader.raised == {(401, "not_signed_in"), (409, "gone")}
 
 
 # -- the same codes, as answered (fakes) -----------------------------------------------------
