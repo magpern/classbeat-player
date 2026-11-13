@@ -29,7 +29,9 @@ const SECURE = "secureWebPreferences";
 const STATIC_CALLS = new Set(["getFocusedWindow", "getAllWindows", "fromWebContents", "fromId"]);
 export { EXTRA_KEYS };
 /** Built-in constructors the sources may call `new` on (by their global name only). */
-const GLOBAL_NEW = new Set(["Date", "Error", "Map", "Set", "RegExp", "TextEncoder", "TextDecoder", "URL", "Intl.Collator", "AbortController", "Promise", "WeakMap", "WeakSet", "Uint8Array", "TypeError", "RangeError"]);
+const GLOBAL_NEW = new Set(["Date", "Error", "Map", "Set", "RegExp", "TextEncoder", "TextDecoder", "URL", "Intl.Collator", "AbortController", "Promise", "WeakMap", "WeakSet", "Uint8Array", "TypeError", "RangeError", "WebSocket"]);
+/** Globals allowed after `new` in one file only (owner, 2026-11-13, #173): the live connection. */
+const ONE_FILE_NEW: ReadonlyMap<string, RegExp> = new Map([["WebSocket", /[\\/]src[\\/]main[\\/]live[\\/]live-socket\.ts$/]]);
 const FORBIDDEN_TEXT = /constructor/;
 
 export interface Found {
@@ -174,6 +176,8 @@ export function checkSource(text: string, file: string): Found {
         const global = GLOBAL_NEW.has(name) && !known.declared.has(head) && !known.imported.has(head) && !known.classes.has(head);
         const own = ts.isIdentifier(e) && (known.imported.has(name) || known.classes.has(name)) && !known.declared.has(name);
         if (!global && !own) say(n, `a new of ${name}, not an import, a class of this file or an allowed global`);
+        const only = ONE_FILE_NEW.get(name);
+        if (global && only && !only.test(file)) say(n, `a new of ${name} outside the one file allowed it`);
       }
     }
     if (ts.isIdentifier(n)) {

@@ -18,13 +18,13 @@ export interface SocketEvents {
 export type Connect = (url: string, on: SocketEvents) => LiveSocket;
 
 /** The part of the WHATWG WebSocket this uses. */
-interface WebSocketLike {
+interface RuntimeSocketLike {
   send(data: string): void;
   close(code?: number): void;
   addEventListener(type: string, fn: (e: { data?: unknown; code?: number }) => void): void;
 }
 /** Opens one connection; the runtime's WebSocket by default, a stand-in in the tests. */
-type OpenSocket = (url: string) => WebSocketLike;
+type OpenSocket = (url: string) => RuntimeSocketLike;
 
 const runtimeSocket: OpenSocket = (url) => new WebSocket(url);
 
@@ -38,7 +38,7 @@ export function webSocketConnect(openSocket: OpenSocket = runtimeSocket): Connec
       done = true;
       on.closed(code);
     };
-    let ws: WebSocketLike;
+    let ws: RuntimeSocketLike;
     try {
       ws = openSocket(url);
     } catch {
