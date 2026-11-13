@@ -2,7 +2,7 @@
 // clicker's keys: Page Up and Page Down step, F5 and Shift+F5 are Start only, B and "." do nothing.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { keyAction } from "../../src/core/room/keys.ts";
+import { keyAction, waitsForQuestion } from "../../src/core/room/keys.ts";
 import type { KeyPress } from "../../src/core/room/keys.ts";
 
 const k = (key: string, over: Partial<KeyPress> = {}): KeyPress => ({ key, shift: false, mod: false, alt: false, repeat: false, ...over });
@@ -43,4 +43,11 @@ test("other keys and chords are left alone", () => {
   for (const press of [k("Enter"), k("a"), k("z"), k("F4"), k("z", { mod: true, shift: true }), k("f", { mod: true }), k("ArrowRight", { alt: true }), k("Tab", { mod: true })]) {
     assert.equal(keyAction(press), null, JSON.stringify(press));
   }
+});
+
+test("Space, the arrows and the Page keys wait while the End question is open; the rest do not", () => {
+  const waits = [k(" "), k("ArrowRight"), k("ArrowLeft"), k("PageDown"), k("PageUp"), k("ArrowRight", { shift: true }), k("ArrowLeft", { shift: true })];
+  const acts = [k("z", { mod: true }), k("f"), k("End"), k("Escape"), k("Tab"), k("F5"), k("b")];
+  for (const p of waits) assert.equal(waitsForQuestion(keyAction(p)!), true, p.key);
+  for (const p of acts) assert.equal(waitsForQuestion(keyAction(p)!), false, p.key);
 });

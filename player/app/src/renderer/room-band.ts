@@ -8,7 +8,7 @@ import { bandView, mainCommand } from "../core/room/band-view.ts";
 import type { BandView, ButtonId, ButtonView, ClockStatus } from "../core/room/band-view.ts";
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
-import { keyAction } from "../core/room/keys.ts";
+import { keyAction, waitsForQuestion } from "../core/room/keys.ts";
 import { REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import { qrSvg } from "./room-qr.ts";
@@ -225,6 +225,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
     const t = now();
     if (a === null) return set(M.keyPress(state, t));
     e.preventDefault();
+    if (state.asking && waitsForQuestion(a)) return set(M.keyPress(state, t));
     const st = status();
     switch (a.kind) {
       case "tab":

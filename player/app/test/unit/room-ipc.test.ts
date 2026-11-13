@@ -131,3 +131,13 @@ test("the room page uses only the room's fixed calls (issue #198: the band's com
   assert.deepEqual(used, ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
   for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
 });
+
+test("the preload is reached once, by name, in room.ts only: no other way round the list of calls", () => {
+  const room = code(read("src", "renderer", "room.ts"));
+  // The one place the preload is taken, and the only bare `api` (no alias, no passing it on).
+  assert.deepEqual([...room.matchAll(/\.room\b|\["room"\]|\['room'\]/g)].map((m) => m[0]), [".room"]);
+  assert.deepEqual([...room.matchAll(/\bapi\b(?!\.\w)/g)].length, 1);
+  assert.match(room, /const api = \(window as unknown as \{ room: RoomApi \}\)\.room;/);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, f);
+  for (const f of ["room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, f);
+});

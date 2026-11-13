@@ -43,6 +43,12 @@ export function keyAction(k: KeyPress): KeyAction | null {
   return k.repeat && action.kind !== "ignore" ? { kind: "ignore" } : action;
 }
 
+/**
+ * Space and the arrows (and the clicker's Page keys) do nothing while the End question is open:
+ * the question is answered first, with Enter, Esc or a press.
+ */
+export const waitsForQuestion = (a: KeyAction): boolean => a.kind === "main" || a.kind === "next" || a.kind === "previous" || a.kind === "jump";
+
 function plain(k: KeyPress): KeyAction | null {
   switch (k.key) {
     case " ":

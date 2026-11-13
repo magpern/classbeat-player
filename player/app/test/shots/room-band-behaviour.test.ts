@@ -176,6 +176,53 @@ test("End asks; the question holds the band until answered; Esc and Keep going c
   });
 });
 
+test("a click on End only asks: it calls nothing, and End class needs its own press", async () => {
+  await room({}, async (r) => {
+    await wiggle(r.page);
+    const p = await at(r, "end");
+    await r.page.mouse.click(p.x, p.y);
+    assert.equal(await r.page.locator(".band .ask").count(), 1);
+    assert.deepEqual(await r.calls(), []);
+    assert.equal(await r.phase(), "shown");
+  });
+});
+
+test("a tap on End only asks too", async () => {
+  await room({ touch: true }, async (r) => {
+    const p = await restOnHidden(r, "end");
+    await r.page.touchscreen.tap(p.x, p.y);
+    assert.equal(await r.page.locator(".band .ask").count(), 0, "the first tap only shows the band");
+    await r.page.touchscreen.tap(p.x, p.y);
+    assert.equal(await r.page.locator(".band .ask").count(), 1);
+    assert.deepEqual(await r.calls(), []);
+  });
+});
+
+test("a double-click on End lands on Keep going: nothing is called and the question closes", async () => {
+  await room({}, async (r) => {
+    await wiggle(r.page);
+    const p = await at(r, "end");
+    await r.page.mouse.dblclick(p.x, p.y);
+    assert.equal(await r.page.locator(".band .ask").count(), 0);
+    assert.deepEqual(await r.calls(), []);
+    // A nervous triple click: the third opens the question again, and still nothing ends.
+    await r.page.mouse.click(p.x, p.y, { clickCount: 3 });
+    assert.deepEqual(await r.calls(), []);
+  });
+});
+
+test("while the End question is open, Space and the arrows do nothing; Esc answers it first", async () => {
+  await room({}, async (r) => {
+    await r.page.keyboard.press("End");
+    for (const k of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "Shift+ArrowRight", "Shift+ArrowLeft"]) await r.page.keyboard.press(k);
+    assert.deepEqual(await r.calls(), []);
+    assert.equal(await r.page.locator(".band .ask").count(), 1);
+    await r.page.keyboard.press("Escape");
+    await r.page.keyboard.press(" ");
+    assert.deepEqual(await r.calls(), ["pause"]);
+  });
+});
+
 test("with one display it stays up before the start and on Class Complete; with two it hides", async () => {
   for (const fixture of ["before-start", "finished"]) {
     await room({ frame: frameOf(fixture) }, async (r) => {
