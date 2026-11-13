@@ -5,7 +5,12 @@ from typing import Final
 
 from player_backend.db.executor import Query
 
-# The first statement of a device-token request's transaction. Always one row.
+# The first statement of a device-token request's transaction: the budget it is counted
+# against, `requests` or `documents`, for auth_enter_device to read (migration 0009). The
+# function holds both limits; this only chooses between them.
+DEVICE_BUDGET: Final[Query] = Query("SELECT set_config('app.device_budget', %s, true)")
+
+# The second: the token's lookup, count and account. Always one row.
 ENTER_DEVICE: Final[Query] = Query("SELECT device_id, state FROM player.auth_enter_device(%s)")
 
 # The account the function set for this transaction, and the transaction's time.

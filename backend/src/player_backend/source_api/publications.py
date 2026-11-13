@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
 from player_backend import publication_policy
+from player_backend.body_policy import declared_over
 from player_backend.class_schemas import schemas
 from player_backend.db import classes, sources
 from player_backend.http_errors import ApiError
@@ -39,20 +40,24 @@ REFUSED_EVENTS = {
 }
 
 
-async def publication_body(request: Request) -> bytes:
-    """The request's body, read no further than the largest a publication may be."""
-    declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > BODY_MAX:
-        raise ApiError(413, "document_too_large")
+async def publication_body(request: Request) -> bytes | None:
+    """The request's body, read no further than the largest a publication may be; None when
+    it is larger. Read before the source token (tests/guards/test_guard_body_order.py), so a
+    slow upload holds no pool connection. The route answers an oversized body itself, inside
+    the token's transaction, so that it counts as the token's use (section 10). The rest of an
+    oversized body is never read.
+    """
+    if declared_over(request.headers.get("content-length"), BODY_MAX):
+        return None
     read = bytearray()
     async for chunk in request.stream():
         read.extend(chunk)
         if len(read) > BODY_MAX:
-            raise ApiError(413, "document_too_large")
+            return None
     return bytes(read)
 
 
-PublicationBody = Annotated[bytes, Depends(publication_body)]
+PublicationBody = Annotated[bytes | None, Depends(publication_body)]
 
 
 def _detail(pub: Publication, highest: int) -> dict[str, object]:
@@ -67,6 +72,9 @@ def _detail(pub: Publication, highest: int) -> dict[str, object]:
 
 @router.post("/publications")
 def publish(raw: PublicationBody, entry: SourceToken, who: TheCaller) -> JSONResponse:
+    if raw is None:
+        # Refused by the route, so the request and "last used" stay counted.
+        raise ApiError(413, "document_too_large")
     class_schema, publication_schema = schemas()
     checked = publication_policy.check(raw, class_schema, publication_schema)
     if isinstance(checked, publication_policy.Refusal):

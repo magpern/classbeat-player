@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager
 
 import pytest
 
+from player_backend.bearer_policy import Budget
 from player_backend.db import devices
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Pool
@@ -30,10 +31,10 @@ def _lookups(monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
     entered = devices.entered
 
     def counted(
-        pool: Pool, token_hash: bytes, keys: devices.BearerKeys
+        pool: Pool, token_hash: bytes, keys: devices.BearerKeys, budget: Budget
     ) -> AbstractContextManager[AccountContext | devices.Refused]:
         seen.append(token_hash)
-        return entered(pool, token_hash, keys)
+        return entered(pool, token_hash, keys, budget)
 
     monkeypatch.setattr(devices, "entered", counted)
     return seen

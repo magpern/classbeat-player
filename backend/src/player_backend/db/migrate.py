@@ -98,6 +98,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0008_source_api.sql") as pending:
         if pending:
             db.rows(q.M0008_SOURCE_API)
+    with _step(db, done, "0009_device_budgets.sql") as pending:
+        if pending:
+            db.rows(q.M0009_DEVICE_BUDGETS)
     return done
 
 

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 
 from player_backend.bearer_blocks import BearerBlocks
+from player_backend.body_cap import install_body_cap
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
@@ -56,6 +57,8 @@ def create_app(settings: Settings, mailer: Mailer | None = None) -> FastAPI:
     app.include_router(site_router)
     app.include_router(player_router)
     app.include_router(source_router)
+    # Before the access log: a middleware added later runs outside it.
+    install_body_cap(app)
 
     @app.middleware("http")
     async def access_log(  # pyright: ignore[reportUnusedFunction]

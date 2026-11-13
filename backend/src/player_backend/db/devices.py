@@ -1,8 +1,10 @@
 """Data access of devices and the device token (ADR 0002, sections 6, 9, 10 and 11).
 
-`entered` is the request's transaction for a device token: `auth_enter_device` is its first
-statement. Everything else takes the `AccountContext` of a request (a site session's, or the
-device's own) and filters by its account in the code.
+`entered` is the request's transaction for a device token: its first statement names the
+request's budget, its second is `auth_enter_device`, which counts the request against that
+budget with the limits as its own constants (migration 0009). Everything else takes the
+`AccountContext` of a request (a site session's, or the device's own) and filters by its
+account in the code.
 """
 
 from __future__ import annotations
@@ -17,12 +19,11 @@ from uuid import UUID
 
 from player_backend.bearer_policy import (
     COUNTED_PER_TOKEN,
-    REQUEST_MAX,
-    REQUEST_WINDOW,
     SAME_TOKEN_MAX,
     SAME_TOKEN_WINDOW,
     UNKNOWN_MAX,
     UNKNOWN_WINDOW,
+    Budget,
     DeviceRefusal,
 )
 from player_backend.client_policy import ClientInfo
@@ -47,11 +48,10 @@ class Refused:
 
 @dataclass(frozen=True)
 class BearerKeys:
-    """The counters' keys of one request (bearer_policy.py)."""
+    """The keys of one request's counters of tokens that do not work (bearer_policy.py)."""
 
     same_token: bytes
     unknown_tokens: bytes
-    requests: bytes
 
 
 @dataclass(frozen=True)
@@ -69,18 +69,27 @@ def _over(db: Handle, key: bytes, window: object, limit: int) -> bool:
 
 
 @contextmanager
-def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[AccountContext | Refused]:
+def entered(
+    pool: Pool, token_hash: bytes, keys: BearerKeys, budget: Budget
+) -> Generator[AccountContext | Refused]:
     """The transaction of a device-token request, or why the token sets no account.
 
-    Committed when the block ends, rolled back when it raises. For a `Refused` the caller
-    leaves the block first and raises after it, so that what was counted stays counted; for a
-    route that refuses the request it does the same (`undone_on_error`, db/context.py).
+    The request is counted against `budget` inside `auth_enter_device`; over it the function
+    answers `limited` and sets no account. Committed when the block ends, rolled back when it
+    raises. For a `Refused` the caller leaves the block first and raises after it, so that what
+    was counted stays counted; for a route that refuses the request it does the same
+    (`undone_on_error`, db/context.py).
     """
     with pool.handle() as db, db.transaction():
+        db.rows(q.DEVICE_BUDGET, (budget,))
         found = db.rows(q.ENTER_DEVICE, (token_hash,))
         current = db.rows(q.CURRENT_ACCOUNT)
         device_id, state = found[0] if len(found) == 1 else (None, None)
         account_id, now = current[0]
+        if state == "limited":
+            # Counted, "last used" written, no account set: nothing else to look at.
+            yield Refused("limited")
+            return
         if state == "ok":
             if not (
                 isinstance(device_id, UUID)
@@ -88,8 +97,6 @@ def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[Accoun
                 and isinstance(now, datetime)
             ):
                 yield Refused("unknown")
-            elif _over(db, keys.requests, REQUEST_WINDOW, REQUEST_MAX):
-                yield Refused("limited")
             else:
                 yield AccountContext(
                     account_id=account_id,

@@ -297,20 +297,28 @@ def test_the_sync_routes_answer_a_token_that_does_not_work_as_built(site: Site, 
 def test_the_sync_routes_count_towards_the_device_tokens_limit(site: Site) -> None:
     account = _account(site)
     pairhelp.settle(site, 60)
-    paths = (CHANGES, CURSOR, f"{CLASSES}/{new_uuid()}")
+    # Pages and the cursor share the 60; a document read has a budget of its own
+    # (tests/test_document_budget.py).
+    paths = (CHANGES, CURSOR)
     statuses = [
-        account.app.get(paths[n % 3], headers=bearer(account.token)).status_code for n in range(60)
+        account.app.get(paths[n % 2], headers=bearer(account.token)).status_code for n in range(60)
     ]
-    assert set(statuses) <= {200, 404}
-    over = account.app.get(CHANGES, headers=bearer(account.token))
-    assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
+    assert set(statuses) == {200}
+    for path in paths:
+        over = account.app.get(path, headers=bearer(account.token))
+        assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
+    read = account.app.get(f"{CLASSES}/{new_uuid()}", headers=bearer(account.token))
+    assert read.status_code == 404
 
 
 def test_malformed_requests_count_towards_the_device_tokens_limit(site: Site) -> None:
     account = _account(site)
     pairhelp.settle(site, 60)
+    # The malformed pages here; malformed class ids count towards the document reads' budget
+    # (tests/test_document_budget.py).
+    pages = [path for path in MALFORMED if path.startswith(CHANGES)]
     statuses = [
-        account.app.get(MALFORMED[n % len(MALFORMED)], headers=bearer(account.token)).status_code
+        account.app.get(pages[n % len(pages)], headers=bearer(account.token)).status_code
         for n in range(60)
     ]
     assert set(statuses) == {422}
