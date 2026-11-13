@@ -44,10 +44,12 @@ const startFromList = async (): Promise<void> => {
 
 /** What the reopened window is: the room page, its policy, its preload and its preferences. */
 async function hardening(room: Page) {
+  // macOS has one menu bar for the application, not one per window: there the room window's own
+  // menu (removed with removeMenu) cannot be read from isMenuBarVisible.
   const prefs = await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))!;
     const p = (w.webContents as unknown as { getLastWebPreferences(): Record<string, unknown> | null }).getLastWebPreferences() ?? {};
-    return { ci: p.contextIsolation, ni: p.nodeIntegration, sb: p.sandbox, wv: p.webviewTag, ws: p.webSecurity, menu: w.isMenuBarVisible() };
+    return { ci: p.contextIsolation, ni: p.nodeIntegration, sb: p.sandbox, wv: p.webviewTag, ws: p.webSecurity, ownMenu: process.platform !== "darwin" && w.isMenuBarVisible() };
   });
   const page = await room.evaluate(() => ({
     csp: document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
@@ -58,7 +60,7 @@ async function hardening(room: Page) {
   return { prefs, page };
 }
 const HARDENED = {
-  prefs: { ci: true, ni: false, sb: true, wv: false, ws: true, menu: false },
+  prefs: { ci: true, ni: false, sb: true, wv: false, ws: true, ownMenu: false },
   page: { csp: ROOM_CSP, require: "undefined", player: "undefined", api: ["onUpdate", "state"] },
 };
 
