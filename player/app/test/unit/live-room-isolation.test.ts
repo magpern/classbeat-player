@@ -10,11 +10,11 @@ import { CH_ROOM_REMOTE_STATE, CH_ROOM_STATE } from "../../src/core/channels.ts"
 import * as channels from "../../src/core/channels.ts";
 import { ROOM_CHANNELS } from "../../src/core/ipc-policy.ts";
 import { roomFrameOf } from "../../src/core/room/frame.ts";
-import { NO_REMOTE } from "../../src/core/room/remote.ts";
 import { registerLiveHandlers, LIVE_CHANNELS } from "../../src/main/live/live-handlers.ts";
+import { liveRoomRemote } from "../../src/main/live/room-remote.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
-import { CONTROL_CODE, HOST_TOKEN, started } from "./live-relay.ts";
+import { CONTROL_CODE, HOST_TOKEN, JOIN_CODE, started } from "./live-relay.ts";
 import { REPO } from "./fixtures.ts";
 
 const APP_DIR = join(REPO, "player", "app");
@@ -35,7 +35,7 @@ async function withCode() {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
   registerLiveHandlers(bus, () => TRUSTED, r.live);
-  registerRoomHandlers(bus, () => ROOM, r.controller, { endClass: () => undefined, remote: NO_REMOTE });
+  registerRoomHandlers(bus, () => ROOM, r.controller, { endClass: () => undefined, remote: liveRoomRemote(r.live) });
   return { r, handlers };
 }
 
@@ -59,7 +59,10 @@ test("what the room window is sent and what it can ask for never holds the contr
     r.live.tick();
   }
   seen.push(JSON.stringify(handlers.get(CH_ROOM_STATE)!(event(9, ROOM_URL), undefined)));
-  seen.push(JSON.stringify(handlers.get(CH_ROOM_REMOTE_STATE)!(event(9, ROOM_URL), undefined)));
+  // The room's slot is the live client's (#202): it shows the join code, and nothing more.
+  const slot = handlers.get(CH_ROOM_REMOTE_STATE)!(event(9, ROOM_URL), undefined);
+  assert.equal((slot as { joinCode?: string }).joinCode, JOIN_CODE);
+  seen.push(JSON.stringify(slot));
   assert.ok(seen.length > 0 && seen.every((s) => s.length > 2));
   for (const s of seen) {
     assert.ok(!s.includes(CONTROL_CODE), "the control code in a room frame");
