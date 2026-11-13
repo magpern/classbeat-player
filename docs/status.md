@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-12.
+Updated 2026-11-13.
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -25,14 +25,15 @@ following (#62, #66), Next and Previous say what they do while following (#63, #
 Merged: service skeleton, roles and migrations (#32), email link sign-in and site sessions (#54),
 sign-in hardening (#60), ADR 0002 as built (#57, #68 and this update), device pairing (#58, #61),
 pairing hardening (#71, #79), pairing in the app (#74, #84; hardening #87, #89), the source API
-(#73, #86), the SMTP mailer and operator commands (#83, #90). In progress: the player API (#92).
-Next: the class library, passkeys; deploy files with the hourly purge, `PLAYER_SITE_ORIGIN` and
-trusted proxies; purge counts (needs a migration).
+(#73, #86), the SMTP mailer and operator commands (#83, #90), the player API with class sync
+(#92, #96), refused requests counted on every credentialed route and review notes (#98, #101),
+backend deploy files with the hourly purge (#95, #97, #99, #100). Next: the class library,
+passkeys; purge counts (needs a migration); the player API answers in `schema/`.
 
 ## PL4: screens
 
-Merged: the design system and the plain 2D room screen spec (#22, #31). In progress: the room
-screen (#77) and the spec follow-ups (#78).
+Merged: the design system and the plain 2D room screen spec (#22, #31), and its follow-ups (#78,
+#91). In progress: the room screen (#77, PR #85).
 
 ## Infra
 
@@ -58,9 +59,14 @@ Merged: #30 and its findings (#53).
 - Player: reader findings N3, N4, N6, N7 from #59; presenter layout notes from #38; a test that
   stopping the native scene clears its state (#53); one capitalisation convention for status
   texts (#65 design review).
-- Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); remove the unused
-  `devices.count_active` and `MAX_DEVICES` (#79 review); SMTP review notes N2–N7 (#90); source
-  API notes: a U+0000 key test, a row-lock test, packaging of `schema/` (#86).
+- Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); packaging of `schema/`
+  (#86); a size cap on site request bodies and a guard that the raw body is read before the
+  session, a test that the SMTP conversation releases its deadline, the DNS lookup inside the
+  deadline (#101 review); a separate budget for document reads so a first sync of 2,000 classes
+  does not take 34 minutes, cursors bound to an account, a resync on a format-version change (#96).
+- Docs: the presenter spec's minimum window size; the short next row's dropped fields called a
+  choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
+  section 6 bullet on one device token per account against one pairing at a time).
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
 

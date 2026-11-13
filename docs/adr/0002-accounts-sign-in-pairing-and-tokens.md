@@ -801,6 +801,19 @@ gets 429 with `Retry-After`, except where the table says otherwise. Live limits 
 the live process's memory. A request a route refuses keeps what its credential check wrote (the
 counters, "last used"); any other error undoes the whole request.
 
+So that the framework's own refusals count too, every route that holds a credential's
+transaction (site sessions, device tokens, source tokens) takes its path and query values, and
+the site its bodies, as raw text. It parses them with pure functions (`param_policy.py`,
+`sync_policy.py`) and answers `422 invalid_request` itself. Site bodies are read before the
+session's transaction opens. A publication's body is read by its own capped reader before the
+source token is checked; its content is checked by `publication_policy.py`, which answers `422`
+with its own codes (`invalid_publication`, `content_hash_mismatch`,
+`unsupported_format_version`). An oversized publication gets `413 document_too_large` before
+the token is checked, so today it is not counted; counting it is open work (#103). A guard test (`tests/guards/test_guard_raw_parameters.py`) fails on a typed parameter,
+a length limit, an alias or a body model on any such route. Routes without a credential
+(pairing start and poll, sign-in, the code exchange) look nothing up before their body is
+valid, so the framework's `422` there counts nothing and reaches nothing (#96, #98).
+
 | What | Limit | Over the limit |
 |---|---|---|
 | Sign-in link requests, per email and requesting address together | 3 per 15 minutes, 10 per day | The usual answer; no mail |
