@@ -55,5 +55,8 @@ check "design token mock-up change runs web" "web" "$(flags push "$before_tok" H
 before_live="$(git rev-parse HEAD)"
 commit schema/live/v1/examples/x.json
 check "live schema example change runs backend, schema, web and desktop" "backend schema web desktop" "$(flags push "$before_live" HEAD)"
+before_pol="$(git rev-parse HEAD)"
+commit backend/src/player_backend/request_policy.py
+check "request policy change runs backend and web" "backend web" "$(flags push "$before_pol" HEAD)"
 
 exit "$fail"
