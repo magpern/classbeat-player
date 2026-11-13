@@ -178,6 +178,23 @@ describe("the markup trap", () => {
     ["HTMLButtonElement.formAction javascript:", "document.createElement('button').formAction = 'javascript:go()'"],
     ["HTMLObjectElement.data javascript:", "document.createElement('object').data = 'javascript:go()'"],
     ["SVGAnimatedString.baseVal javascript:", "document.createElementNS('http://www.w3.org/2000/svg', 'a').href.baseVal = 'javascript:go()'"],
+    // The same address made one URL part at a time (#312).
+    ["HTMLAnchorElement.protocol javascript:", "const a = document.createElement('a'); a.href = 'x:go()'; a.protocol = 'javascript'"],
+    ["HTMLAreaElement.protocol javascript:", "const a = document.createElement('area'); a.href = 'x:go()'; a.protocol = 'JavaScript'"],
+    // A name or URL value that is not a string, as an object whose toString changes (#312).
+    ["setAttribute name not a string", "document.createElement('iframe').setAttribute({ toString: () => 'srcdoc' }, '<p>x</p>')"],
+    ["setAttribute href not a string", "document.createElement('a').setAttribute('href', new URL('https://x.test/'))"],
+    ["setAttributeNS name not a string", "document.createElement('a').setAttributeNS(null, { toString: () => 'title' }, 'x')"],
+    ["setAttributeNS src not a string", "document.createElement('img').setAttributeNS(null, 'src', { toString: () => '/x' })"],
+    ["toggleAttribute name not a string", "document.createElement('img').toggleAttribute({ toString: () => 'onload' })"],
+    ["Attr.value href not a string", "document.createAttribute('href').value = { toString: () => '/x' }"],
+    ["Attr.textContent src not a string", "document.createAttribute('src').textContent = 1"],
+    ["HTMLIFrameElement.src not a string", "document.createElement('iframe').src = { toString: () => '/x' }"],
+    ["HTMLAnchorElement.href not a string", "document.createElement('a').href = new URL('https://x.test/')"],
+    // An Attr is read through the native getters: a shadowed name or a replaced instanceof hides nothing (#312).
+    ["setAttributeNode onerror", "const a = document.createAttribute('onerror'); Object.defineProperty(a, 'name', { value: 'title' }); document.createElement('img').setAttributeNode(a)"],
+    ["setNamedItem onerror", "Object.defineProperty(Attr, Symbol.hasInstance, { value: () => false }); document.createElement('img').attributes.setNamedItem(document.createAttribute('onerror'))"],
+    ["Attr.nodeValue onerror", "Object.defineProperty(Attr, Symbol.hasInstance, { value: () => false }); document.createAttribute('onerror').nodeValue = 'go()'"],
   ];
   for (const [kind, table] of [["markup", calls], ["script", handlers]] as const) {
     for (const [detail, code] of table) {
@@ -196,18 +213,59 @@ describe("the markup trap", () => {
     await site.page.evaluate(`(() => {
       const a = document.createElement('a');
       for (const v of ['/sign-in', './javascript:x', 'java%73cript:x', '#javascript:x', 'https://x.test/javascript:x']) { a.setAttribute('href', v); a.href = v; }
+      // Every URL part written on an ordinary address, on both kinds of link (#312).
+      for (const l of [a, document.createElement('area')]) {
+        l.href = 'https://x.test/a?b#c';
+        for (const [part, v] of [['protocol', 'http'], ['protocol', 'javascript'], ['username', 'u'], ['password', 'p'], ['host', 'y.test:81'], ['hostname', 'z.test'], ['port', '82'], ['pathname', 'javascript:x'], ['search', 'javascript:x'], ['hash', 'javascript:x']]) l[part] = v;
+      }
     })()`);
     assert.deepEqual((await traps(site.page)).filter((t) => t.kind === "script"), []);
     await site.context.close();
   });
 
+  // Each checked value is converted to a string once, and that string is what is written: an object
+  // that answers `/x` when checked and a dangerous value later is written as `/x` (#312). Each
+  // case returns what was written; the object's toString must have run exactly once.
+  const twoFaced: [string, string, string][] = [
+    ["setAttribute href", "const a = document.createElement('a'); a.setAttribute('href', two('/x', 'javascript:go()')); return a.getAttribute('href')", "/x"],
+    ["setAttribute name srcdoc", "const f = document.createElement('iframe'); f.setAttribute(two('title', 'srcdoc'), '<p>x</p>'); return f.getAttributeNames().join()", "title"],
+    ["setAttribute name onclick", "const d = document.createElement('div'); d.setAttribute(two('title', 'onclick'), 'go()'); return d.getAttributeNames().join()", "title"],
+    ["setAttributeNS href", "const a = document.createElement('a'); a.setAttributeNS(null, 'href', two('/x', 'javascript:go()')); return a.getAttribute('href')", "/x"],
+    ["setAttributeNS name", "const f = document.createElement('iframe'); f.setAttributeNS(null, two('title', 'srcdoc'), 'x'); return f.getAttributeNames().join()", "title"],
+    ["toggleAttribute name", "const i = document.createElement('img'); i.toggleAttribute(two('title', 'onload')); return i.getAttributeNames().join()", "title"],
+    ["Attr.value", "const a = document.createAttribute('href'); a.value = two('/x', 'javascript:go()'); return a.value", "/x"],
+    ["Attr.nodeValue", "const a = document.createAttribute('src'); a.nodeValue = two('/x', 'javascript:go()'); return a.value", "/x"],
+    ["Attr.textContent", "const a = document.createAttribute('action'); a.textContent = two('/x', 'javascript:go()'); return a.value", "/x"],
+    ["HTMLIFrameElement.src", "const f = document.createElement('iframe'); f.src = two('/x', 'javascript:go()'); return f.getAttribute('src')", "/x"],
+    ["HTMLAnchorElement.href", "const a = document.createElement('a'); a.href = two('/x', 'javascript:go()'); return a.getAttribute('href')", "/x"],
+    ["SVGAnimatedString.baseVal", "const a = document.createElementNS('http://www.w3.org/2000/svg', 'a'); a.href.baseVal = two('/x', 'javascript:go()'); return a.getAttribute('href')", "/x"],
+    ["HTMLAnchorElement.protocol", "const a = document.createElement('a'); a.href = 'x:go()'; a.protocol = two('y', 'javascript'); return a.href", "y:go()"],
+    ["XMLHttpRequest.responseType", "const x = new XMLHttpRequest(); x.responseType = two('text', 'document'); return x.responseType", "text"],
+    ["execCommand", "document.execCommand(two('bold', 'insertHTML'), false, '<b>x</b>'); return 'called'", "called"],
+  ];
+  for (const [route, code, written] of twoFaced) {
+    it(`converts a value once: ${route}`, async () => {
+      const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+      const got = await site.page.evaluate(`(() => {
+        let calls = 0;
+        const two = (first, later) => ({ toString: () => (calls += 1) === 1 ? first : later });
+        const written = (() => { ${code}; })();
+        return { written, calls };
+      })()`);
+      assert.deepEqual(got, { written, calls: 1 });
+      // Nothing dangerous was written, so the only note is the one for a value that is not a string.
+      assert.deepEqual((await traps(site.page)).filter((t) => ["markup", "script"].includes(t.kind) && !t.detail.endsWith("not a string")), []);
+      await site.context.close();
+    });
+  }
+
   it("has every hook in place, and a hook whose API is missing is noted, not skipped", async () => {
     const whole = await openSite(browser, "/sign-in", { width: 390, height: 844 });
     assert.deepEqual((await traps(whole.page)).filter((t) => t.kind === "missing"), []);
     await whole.context.close();
-    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "delete Element.prototype.setAttributeNode; delete Document.parseHTML; delete XMLHttpRequest.prototype.responseXML; delete globalThis.XSLTProcessor; delete HTMLAnchorElement.prototype.href;" });
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "delete Element.prototype.setAttributeNode; delete Document.parseHTML; delete XMLHttpRequest.prototype.responseXML; delete globalThis.XSLTProcessor; delete HTMLAnchorElement.prototype.href; delete HTMLAreaElement.prototype.protocol;" });
     const missing = (await traps(site.page)).filter((t) => t.kind === "missing").map((t) => t.detail);
-    for (const m of ["setAttributeNode", "Document.parseHTML", "XMLHttpRequest.responseXML", "XSLTProcessor.transformToFragment", "HTMLAnchorElement.href"]) assert.ok(missing.includes(m), `${m}: ${missing.join(", ")}`);
+    for (const m of ["setAttributeNode", "Document.parseHTML", "XMLHttpRequest.responseXML", "XSLTProcessor.transformToFragment", "HTMLAnchorElement.href", "HTMLAnchorElement.protocol", "HTMLAreaElement.protocol"]) assert.ok(missing.includes(m), `${m}: ${missing.join(", ")}`);
     await site.context.close();
   });
 });
