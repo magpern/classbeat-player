@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Browser, Page } from "playwright-core";
-import { controlAddress, remoteViewOf } from "../../src/core/room/remote.ts";
+import { controlAddress, lastsUntilHidden, remoteViewOf } from "../../src/core/room/remote.ts";
 import type { RemoteView } from "../../src/core/room/remote.ts";
 import { CONTROL_CODE, DEVICE_TOKEN, HOST_TOKEN, JOIN_CODE, ORIGIN, rig, SESSION_ID } from "../unit/live-relay.ts";
 import type { Rig } from "../unit/live-relay.ts";
@@ -68,6 +68,14 @@ const STATES: readonly { name: string; steps: (r: Rig) => Promise<void> | void }
       await r.advance(0);
     },
   },
+  {
+    name: "no-answer",
+    steps: async (r) => {
+      r.answer = { kind: "unreachable" };
+      r.live.start();
+      await r.advance(0);
+    },
+  },
 ];
 
 /** The band's QR code as drawn: for each module's centre, whether the dark path is there. */
@@ -98,8 +106,8 @@ for (const s of STATES) {
     const view = await slotAfter(s.steps);
     for (const size of SIZES) {
       const name = `${s.name}-${size[0]}x${size[1]}`;
-      // "Phone remote ended" shows only when it arrives while the room window is open.
-      const late = view.slot === "available" && view.note === "ended";
+      // "Phone remote ended" and "Can't reach site" show only when they arrive while the room window is open.
+      const late = lastsUntilHidden(view);
       const o = await openRoom(browser, { size, frame: frameOf("running", ROUTES.following), remote: late ? on(1) : view });
       try {
         if (late) await o.pushRemote(view);

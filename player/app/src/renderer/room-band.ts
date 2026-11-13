@@ -9,7 +9,7 @@ import type { BandView, ButtonId, ButtonView, ClockStatus } from "../core/room/b
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { keyAction, waitsForQuestion } from "../core/room/keys.ts";
-import { REMOTE_ABSENT } from "../core/room/remote.ts";
+import { lastsUntilHidden, REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import { qrSvg } from "./room-qr.ts";
 
@@ -87,8 +87,8 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   let state: BandState = M.HIDDEN;
   let frame: RoomFrame | null = null;
   let slot: RemoteView = REMOTE_ABSENT;
-  // "Phone remote ended" shows until the band next hides.
-  let endedNoted = false;
+  // "Phone remote ended" and "Can't reach site" show until the band next hides.
+  let noted = false;
   let tabbing = false;
   let swallow = false;
   let drawn = "";
@@ -107,7 +107,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       drawn = "";
       return;
     }
-    const shownSlot: RemoteView = slot.slot === "available" && slot.note === "ended" && !endedNoted ? { slot: "available", note: "none" } : slot;
+    const shownSlot: RemoteView = lastsUntilHidden(slot) && !noted ? { slot: "available", note: "none" } : slot;
     const v = bandView(st, frame?.band ?? null, shownSlot, state.asking);
     const key = JSON.stringify(v);
     if (key === drawn) return;
@@ -127,7 +127,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
     const wasHidden = state.phase === "hidden";
     state = M.tick(next, now(), ctx());
     if (state.phase === "hidden" && !wasHidden) {
-      endedNoted = false;
+      noted = false;
       if (band.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
     render();
@@ -270,7 +270,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       update();
     },
     remote(v) {
-      if (v.slot === "available" && v.note === "ended" && !(slot.slot === "available" && slot.note === "ended")) endedNoted = true;
+      if (lastsUntilHidden(v) && !(lastsUntilHidden(slot) && slot.note === v.note)) noted = true;
       slot = v;
       update();
     },
