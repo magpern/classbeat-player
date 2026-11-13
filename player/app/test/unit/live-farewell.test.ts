@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { END_TRY_MS } from "../../src/main/live/ender.ts";
 import { failedLine } from "../../src/main/live/live-service.ts";
 import { HOST_TOKEN, rig, started } from "./live-relay.ts";
+import type { Rig } from "./live-relay.ts";
 
 const HELLO = { v: 1, type: "hello", token: HOST_TOKEN };
 const END = { v: 1, type: "end" };
@@ -105,4 +106,52 @@ test("a step after the start answer that throws is logged once, without its text
   assert.equal(failedLine(odd), "live session: a step after a backend answer failed (error)");
   assert.equal(failedLine(HOST_TOKEN), "live session: a step after a backend answer failed (error)");
   assert.equal(failedLine(new TypeError(HOST_TOKEN)), "live session: a step after a backend answer failed (TypeError)");
+});
+
+// #216: hardening from the #212 review.
+
+const fill = (r: Rig): void => {
+  // The state on welcome and six make_codes fill the second's 7 messages: `end` has to wait.
+  for (let i = 0; i < 6; i++) r.live.makeCode();
+};
+
+test("a hand-over to the ender before end went out stops the old publisher: it never sends end later", async () => {
+  const r = await started();
+  const host = r.socket();
+  fill(r);
+  r.live.end();
+  host.drop(1006);
+  assert.equal(r.sockets.length, 2);
+  await r.advance(1000);
+  assert.ok(!types(host.sent).includes("end"));
+});
+
+test("an ended answer before end went out stops the old publisher: it never sends end later", async () => {
+  const r = await started();
+  const host = r.socket();
+  fill(r);
+  r.live.end();
+  host.server({ v: 1, type: "ended", reason: "expired" });
+  assert.equal(host.closedByApp, true);
+  await r.advance(1000);
+  assert.ok(!types(host.sent).includes("end"));
+  assert.equal(r.live.busy(), false);
+  assert.equal(r.sockets.length, 1);
+});
+
+test("an ended that the transport answers within the send of end reaches the farewell", async () => {
+  const r = await started();
+  const host = r.socket();
+  host.onSent = (m) => {
+    if ((m as { type?: string }).type === "end") host.server({ v: 1, type: "ended", reason: "host_ended" });
+  };
+  r.live.end();
+  assert.deepEqual(host.sent[host.sent.length - 1], END);
+  // Settled at once: closed, and no ender after the try's time limit.
+  assert.equal(host.closedByApp, true);
+  await r.advance(0);
+  assert.equal(r.live.busy(), false);
+  await r.advance(END_TRY_MS * 3);
+  assert.equal(r.sockets.length, 1);
+  assert.equal(types(host.sent).filter((t) => t === "end").length, 1);
 });

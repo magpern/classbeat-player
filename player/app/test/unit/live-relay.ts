@@ -25,6 +25,8 @@ export interface FakeSocket {
   readonly url: string;
   readonly sent: unknown[];
   closedByApp: boolean;
+  /** Called within the app's `send`, after the message is recorded: a transport that answers at once. */
+  onSent: ((message: unknown) => void) | null;
   open(): void;
   server(message: unknown): void;
   drop(code: number): void;
@@ -50,6 +52,10 @@ export interface Rig {
   readonly logs: string[];
   /** When set, opening a socket throws it (a step after the start answer failing). */
   connectThrows: Error | null;
+  /** When set, start answers wait until `release` gives them, each with the answer set when it was asked. */
+  holdAnswers: boolean;
+  /** Gives the held answer of start request `i` (0 the first). */
+  release(i: number): Promise<void>;
   /** The fake clock's timers, for what the tests build beside the live client. */
   readonly setTimer: (fn: () => void, ms: number) => unknown;
   readonly clearTimer: (handle: unknown) => void;
@@ -61,6 +67,7 @@ export function rig(): Rig {
   let ids = 0;
   const requests: BackendRequest[] = [];
   const sockets: FakeSocket[] = [];
+  const held: (() => void)[] = [];
   const setTimer = (fn: () => void, ms: number): number => {
     ids += 1;
     timers.push({ at: now + ms, fn, id: ids });
@@ -76,6 +83,11 @@ export function rig(): Rig {
     origin: ORIGIN,
     logs: [],
     connectThrows: null,
+    holdAnswers: false,
+    async release(i) {
+      held[i]();
+      await r.advance(0);
+    },
     setTimer,
     clearTimer,
     answer: { kind: "http", status: 200, body: { sessionId: SESSION_ID, joinCode: JOIN_CODE, hostToken: HOST_TOKEN }, retryAfterS: null },
@@ -106,7 +118,9 @@ export function rig(): Rig {
     credential: () => (r.paired ? { origin: r.origin, token: DEVICE_TOKEN, expired: false } : null),
     call: async (req) => {
       requests.push(req);
-      return r.answer;
+      const answer = r.answer;
+      if (r.holdAnswers) await new Promise<void>((res) => void held.push(res));
+      return answer;
     },
     connect: (url, on: SocketEvents) => {
       if (r.connectThrows !== null) throw r.connectThrows;
@@ -114,13 +128,18 @@ export function rig(): Rig {
         url,
         sent: [],
         closedByApp: false,
+        onSent: null,
         open: () => on.open(),
         server: (m) => on.message(JSON.stringify(m)),
         drop: (code) => on.closed(code),
       };
       sockets.push(s);
       return {
-        send: (text) => void s.sent.push(JSON.parse(text)),
+        send: (text) => {
+          const m: unknown = JSON.parse(text);
+          s.sent.push(m);
+          s.onSent?.(m);
+        },
         close: () => void (s.closedByApp = true),
       };
     },

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { test } from "node:test";
+import { END_TRY_MS } from "../../src/main/live/ender.ts";
 import { QUIT_WAIT_MS, quitAfterLive } from "../../src/main/live/quit.ts";
 import { HOST_TOKEN, rig, started } from "./live-relay.ts";
 import type { Rig } from "./live-relay.ts";
@@ -180,6 +181,24 @@ test("live: no answer to the host's end, the app still exits after QUIT_WAIT_MS"
   assert.equal(q.exits, 0);
   await r.advance(1);
   assert.equal(q.exits, 1);
+});
+
+// #216 (#204 review): the bounds in milliseconds, not through the constants they are named by.
+test("live with no answer: the app exits at 5 s, and the host's connection would wait 10 s", async () => {
+  assert.equal(QUIT_WAIT_MS, 5_000);
+  assert.equal(END_TRY_MS, 10_000);
+  const r = await started();
+  const host = r.socket();
+  const q = quit(r);
+  assert.equal(q.willQuit(), true);
+  await r.advance(4_999);
+  assert.equal(q.exits, 0);
+  await r.advance(1);
+  assert.equal(q.exits, 1);
+  await r.advance(4_999);
+  assert.equal(host.closedByApp, false);
+  await r.advance(1);
+  assert.equal(host.closedByApp, true);
 });
 
 test("a launch during the wait starts the app again after the exit; one without a wait is the window's", async () => {
