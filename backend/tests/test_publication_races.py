@@ -31,11 +31,18 @@ def _pub(class_id: str, number: int, title: str) -> Publication:
     return found
 
 
-def _race(site: Site, first: Publication, second: Publication) -> tuple[str, str]:
+def _race(
+    site: Site, first: Publication, second: Publication, before: Publication | None = None
+) -> tuple[str, str]:
+    """`first` held open while `second` is sent; `before`, when given, committed ahead of both."""
     site.allow(EMAIL)
     digest = token_hash(sh.link(site, site.sign_in(EMAIL)))
     pool = cast(SiteState, site.app.state.site).pool
     outcomes: list[str] = []
+    if before is not None:
+        with sources.entered_again(pool, digest) as entry:
+            assert entry is not None
+            assert classes.publish(entry.context, entry.source_id, before).outcome == "applied"
 
     def other(pool: Pool) -> None:
         with sources.entered_again(pool, digest) as entry:
@@ -63,3 +70,13 @@ def test_two_first_sends_of_one_class_never_cross(site: Site) -> None:
 def test_an_older_send_waiting_behind_a_newer_one_is_stale(site: Site) -> None:
     assert _race(site, _pub("c1", 5, "New"), _pub("c1", 4, "Old")) == ("applied", "stale")
     assert sh.class_rows(site, EMAIL) == [("c1", 5, "class", "New", 1)]
+
+
+def test_a_send_waits_for_the_row_lock_of_a_send_that_wrote_nothing(site: Site) -> None:
+    # The class exists and the first send is a repeat: it writes no row, so only the lock of
+    # `SELECT ... FOR UPDATE` holds the second send back (an insert or an update would make it
+    # wait on its own). The second then decides against the row as it stands.
+    first = _pub("c1", 1, "A")
+    found = _race(site, first, _pub("c1", 4, "B"), before=first)
+    assert found == ("repeat", "applied")
+    assert sh.class_rows(site, EMAIL) == [("c1", 4, "class", "B", 2)]

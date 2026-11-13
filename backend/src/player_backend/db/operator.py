@@ -4,6 +4,10 @@ The commands connect with `PLAYER_DATABASE_OWNER_URL`, like the migration runner
 to go on when the connection is not `player_owner`: no running role's credential is used.
 Everything goes through the schema's own rules: the allowlist's `player_owner` policy and the
 `auth_purge_expired` function. Emails are checked and normalised by the caller.
+
+The check reads `current_user`, which a superuser's URL that sets `-c role=player_owner` also
+passes. What the commands do is the same then (they act as `player_owner`); the README asks for
+`player_owner`'s own login all the same.
 """
 
 from __future__ import annotations

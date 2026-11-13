@@ -15,6 +15,7 @@ from player_backend.code_policy import INPUT_MAX, code_hash, normalise_code
 from player_backend.db import pairing
 from player_backend.http_errors import ApiError, error_response
 from player_backend.pairing_policy import LABEL_MAX, clean_label
+from player_backend.site.bodies import RawBody, parsed
 from player_backend.site.deps import SiteSession, TheCaller
 
 router = APIRouter()
@@ -44,8 +45,9 @@ def _not_found() -> JSONResponse:
 
 
 @router.post("/pairing/find")
-def find(body: CodeLookup, context: SiteSession) -> JSONResponse:
+def find(raw: RawBody, context: SiteSession) -> JSONResponse:
     """What asks to be paired, shown before anything is decided."""
+    body = parsed(CodeLookup, raw)
     found = pairing.find(context, _hash_of(body.code))
     if found is None:
         return _not_found()
@@ -54,7 +56,8 @@ def find(body: CodeLookup, context: SiteSession) -> JSONResponse:
 
 
 @router.post("/pairing/decide")
-def decide(body: CodeDecision, context: SiteSession, who: TheCaller) -> JSONResponse:
+def decide(raw: RawBody, context: SiteSession, who: TheCaller) -> JSONResponse:
+    body = parsed(CodeDecision, raw)
     user_code_hash = _hash_of(body.code)
     name = clean_label(body.name) if body.approve else None
     if body.approve and name is None:

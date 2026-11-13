@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from typing import Any
-from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
@@ -15,6 +14,7 @@ from fastapi.routing import APIRoute
 
 from player_backend.db import site_sessions
 from player_backend.http_errors import ApiError
+from player_backend.param_policy import uuid_of
 from player_backend.site.cookies import clear_session_cookie
 from player_backend.site.deps import NotSignedIn, RecentSignIn, SiteSession, TheCaller
 
@@ -46,10 +46,14 @@ def list_sessions(context: SiteSession) -> JSONResponse:
 
 
 @router.delete("/sessions/{session_id}")
-def end_session(session_id: UUID, context: SiteSession, who: TheCaller) -> Response:
-    if not site_sessions.end_session(context, session_id, who.info):
+def end_session(session_id: str, context: SiteSession, who: TheCaller) -> Response:
+    # Raw text, parsed here: a value the framework refused would roll back "last used".
+    parsed = uuid_of(session_id)
+    if parsed is None:
+        raise ApiError(422, "invalid_request")
+    if not site_sessions.end_session(context, parsed, who.info):
         raise ApiError(404, "not_found")
-    return _signed_out() if session_id == context.credential_id else Response(status_code=204)
+    return _signed_out() if parsed == context.credential_id else Response(status_code=204)
 
 
 class _SignedOutAlready(APIRoute):

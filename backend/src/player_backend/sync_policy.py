@@ -15,7 +15,6 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
-from uuid import UUID
 
 PAGE_DEFAULT: Final = 100
 PAGE_MAX: Final = 500
@@ -37,13 +36,6 @@ def page_request(after: str | None, limit: str | None) -> tuple[int, int] | None
     return cursor, size
 
 
-def class_id_of(raw: str) -> UUID | None:
-    """A class row's id from the path: only the canonical 8-4-4-4-12 hexadecimal form."""
-    if _CANONICAL_UUID.fullmatch(raw) is None:
-        return None
-    return UUID(raw)
-
-
 def _decimal(raw: str) -> int | None:
     # ASCII digits only (`int` would also take signs, spaces, `_` and other scripts' digits),
     # and no more than a bigint can have, so nothing large is ever converted.
@@ -53,9 +45,6 @@ def _decimal(raw: str) -> int | None:
 
 
 _DECIMAL: Final = re.compile(r"[0-9]{1,19}")
-_CANONICAL_UUID: Final = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
 
 
 def is_page_request(after: int, limit: int) -> bool:

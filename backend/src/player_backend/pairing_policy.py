@@ -22,7 +22,6 @@ START_WINDOW: Final = timedelta(hours=1)
 START_MAX: Final = 10
 # A device's name, a platform and a version: 1 to 40 characters.
 LABEL_MAX: Final = 40
-MAX_DEVICES: Final = 10
 # How often a start asks again with new codes when a code is still in use by another pairing.
 START_TRIES: Final = 3
 

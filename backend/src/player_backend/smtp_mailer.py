@@ -34,7 +34,37 @@ def tls_context() -> ssl.SSLContext:
 def _checked(context: ssl.SSLContext) -> ssl.SSLContext:
     if context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname:
         raise ValueError("the SMTP TLS context must verify the certificate and the host name")
+    # `MINIMUM_SUPPORTED` is below every version, so it is refused too.
+    if context.minimum_version < ssl.TLSVersion.TLSv1_2:
+        raise ValueError("the SMTP TLS context must require TLS 1.2 at least")
     return context
+
+
+def _connect(deadline: Deadline, host: str, port: int) -> socket.socket:
+    """A connection to the first address of `host` that answers, all within the time left.
+
+    Address by address, each held by the deadline and given only the time that is left, so
+    several addresses that do not answer cannot take more than the whole limit together.
+    """
+    last: OSError = OSError("the mail service's host has no address")
+    for family, kind, proto, _, address in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM):
+        sock = socket.socket(family, kind, proto)
+        try:
+            deadline.hold(sock)
+            sock.connect(address)
+        except OSError as error:
+            deadline.release()
+            sock.close()
+            if isinstance(error, TimeoutError) or deadline.expired:
+                raise
+            last = error
+            continue
+        except BaseException:
+            deadline.release()
+            sock.close()
+            raise
+        return sock
+    raise last
 
 
 def message_bytes(settings: SmtpSettings, mail: Mail) -> bytes:
@@ -75,10 +105,9 @@ class SmtpMailer:
         self, deadline: Deadline, context: ssl.SSLContext, to: str, content: bytes
     ) -> None:
         s = self._settings
-        sock = socket.create_connection((s.host, s.port), timeout=deadline.left())
+        sock = _connect(deadline, s.host, s.port)
         client: smtplib.SMTP | None = None
         try:
-            deadline.hold(sock)
             if s.tls == "implicit":
                 sock = self._wrap(deadline, context, sock)
             # No host given, so smtplib connects nothing itself: it talks over `sock`.
@@ -101,9 +130,14 @@ class SmtpMailer:
                 client.login(s.user, s.password)
             deadline.step()
             client.sendmail(s.sender, [to], content)
-            deadline.step()
-            client.quit()
+            try:
+                deadline.step()
+                client.quit()
+            except (smtplib.SMTPException, OSError):
+                # The mail was handed over: a failed goodbye does not make it unsent.
+                pass
         finally:
+            deadline.release()
             if client is not None:
                 client.close()
             sock.close()
@@ -118,6 +152,7 @@ class SmtpMailer:
             deadline.hold(wrapped)
             wrapped.do_handshake()
         except BaseException:
+            deadline.release()
             wrapped.close()
             raise
         return wrapped

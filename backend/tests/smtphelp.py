@@ -20,7 +20,10 @@ from typing import Literal
 # implicit: TLS from the first byte. starttls: STARTTLS offered. plain: AUTH offered, no TLS.
 # silent: accepts and says nothing. drip: a greeting one byte at a time, never finished.
 # rcpt_refused: implicit TLS, then refuses the recipient, quoting it, as a real server might.
-type Mode = Literal["implicit", "starttls", "plain", "silent", "drip", "rcpt_refused"]
+# quit_dropped: implicit TLS, takes the mail, then hangs up on QUIT without an answer.
+type Mode = Literal[
+    "implicit", "starttls", "plain", "silent", "drip", "rcpt_refused", "quit_dropped"
+]
 
 PASSWORD = "fake-smtp-password-0f3c"  # Made up; the fake checks nothing.
 
@@ -122,7 +125,7 @@ class FakeSmtp:
                 conn.sendall(b"x")
             return
         over_tls = False
-        if self.mode in ("implicit", "rcpt_refused"):
+        if self.mode in ("implicit", "rcpt_refused", "quit_dropped"):
             assert self.tls is not None
             conn = self.tls.wrap_socket(conn, server_side=True)
             over_tls = True
@@ -155,6 +158,10 @@ class FakeSmtp:
                 self.messages.append(body)
                 conn.sendall(b"250 queued\r\n")
             elif verb == b"QUIT":
+                if self.mode == "quit_dropped":
+                    reader.close()
+                    conn.close()
+                    return
                 conn.sendall(b"221 bye\r\n")
                 return
             else:

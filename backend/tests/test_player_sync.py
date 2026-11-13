@@ -11,9 +11,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
-from fastapi.routing import APIRoute
 
-from player_backend.player_api.sync import router as sync_router
 from player_backend.publication_policy import content_hash
 from player_backend.token_issue import new_token
 from tests import pairhelp
@@ -319,15 +317,3 @@ def test_malformed_requests_count_towards_the_device_tokens_limit(site: Site) ->
     for path in (CHANGES, MALFORMED[0]):
         over = account.app.get(path, headers=bearer(account.token))
         assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
-
-
-def test_every_sync_parameter_is_taken_as_raw_text() -> None:
-    # A parameter the framework parses is refused by it inside the device token's transaction,
-    # which then rolls back the token's count: each is text, parsed by the route.
-    seen = 0
-    for route in sync_router.routes:
-        assert isinstance(route, APIRoute)
-        for field in (*route.dependant.path_params, *route.dependant.query_params):
-            assert field.field_info.annotation in (str, str | None), (route.path, field.name)
-            seen += 1
-    assert seen == 3

@@ -77,7 +77,9 @@ the owner's choice (`docs/owner.md`).
 
 Run on the server as `player_owner`, with `PLAYER_DATABASE_OWNER_URL` as for migrations. The
 commands check the role they connect as and refuse anything but `player_owner`; they never read
-`PLAYER_DATABASE_URL`.
+`PLAYER_DATABASE_URL`. The check reads `current_user`, so a superuser's URL that sets the role
+(`options=-c role=player_owner`) passes it too. The commands then still act as `player_owner`
+and do nothing more, but give them `player_owner`'s own login, never a superuser's.
 
 ```bash
 python -m player_backend.admin allowlist add <email>     # trimmed and lower-cased first

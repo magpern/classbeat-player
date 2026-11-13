@@ -11,8 +11,6 @@ account's links: list them, revoke one.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -21,6 +19,8 @@ from starlette.background import BackgroundTask
 from player_backend.db import sources
 from player_backend.http_errors import ApiError
 from player_backend.mail_delivery import deliver
+from player_backend.param_policy import uuid_of
+from player_backend.site.bodies import RawBody, parsed
 from player_backend.site.deps import SiteSession, TheCaller
 from player_backend.site.state import site_state
 from player_backend.source_policy import (
@@ -67,15 +67,14 @@ def _display_name(request: Request, source_id: str) -> str:
 
 
 @router.post("/source-links/check")
-def check(body: LinkRequest, request: Request, context: SiteSession) -> JSONResponse:
-    source = _known(request, body)
+def check(raw: RawBody, request: Request, context: SiteSession) -> JSONResponse:
+    source = _known(request, parsed(LinkRequest, raw))
     return JSONResponse({"source": source.id, "name": source.name, "scope": list(SCOPE)})
 
 
 @router.post("/source-links/approve")
-def approve(
-    body: LinkApproval, request: Request, context: SiteSession, who: TheCaller
-) -> JSONResponse:
+def approve(raw: RawBody, request: Request, context: SiteSession, who: TheCaller) -> JSONResponse:
+    body = parsed(LinkApproval, raw)
     source = _known(request, body)
     if not valid_challenge(body.code_challenge, body.code_challenge_method):
         raise ApiError(422, "invalid_code_challenge")
@@ -122,7 +121,11 @@ def list_links(request: Request, context: SiteSession) -> JSONResponse:
 
 
 @router.delete("/source-links/{link_id}")
-def revoke_link(link_id: UUID, context: SiteSession, who: TheCaller) -> Response:
-    if not sources.revoke(context, link_id, who.info):
+def revoke_link(link_id: str, context: SiteSession, who: TheCaller) -> Response:
+    # Raw text, parsed here: a value the framework refused would roll back "last used".
+    found = uuid_of(link_id)
+    if found is None:
+        raise ApiError(422, "invalid_request")
+    if not sources.revoke(context, found, who.info):
         raise ApiError(404, "not_found")
     return Response(status_code=204)
