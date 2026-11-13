@@ -49,7 +49,9 @@ export function renderLive(v: LivePanelView | null): void {
   line("live-line", v.line);
   $("live-start").hidden = !v.canStart;
   $("live-make-code").hidden = !v.canMakeCode;
-  $("live-end").hidden = !v.canEnd;
+  const end = $("live-end");
+  end.hidden = !v.canEnd;
+  if (end.textContent !== v.endText) end.textContent = v.endText;
 }
 
 export function mountLive(api: LiveApi): void {

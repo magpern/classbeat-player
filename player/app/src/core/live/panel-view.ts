@@ -21,6 +21,8 @@ export interface LivePanelView {
   readonly detail: string | null;
   readonly canStart: boolean;
   readonly canEnd: boolean;
+  /** The End button's words: "Cancel" while the start request is pending, as nothing runs yet. */
+  readonly endText: string;
   readonly canMakeCode: boolean;
   /** The class code (the join code) while the session runs. */
   readonly classCode: string | null;
@@ -50,7 +52,7 @@ const REFUSALS: Readonly<Record<Refusal, string>> = {
   no_class: "Open a class first",
   not_paired: "Pair this computer to use a phone remote",
   pair_again: "The pairing no longer works: pair this computer again",
-  sessions_full: "Three phone remotes already run on this account: end one first",
+  sessions_full: "Three phone remotes already run on this account: end one on that computer",
   too_many: "Too many tries. Wait a minute and try again",
   unreachable: "The server cannot be reached. The class goes on",
   server: "The server did not start the phone remote. Try again",
@@ -129,6 +131,7 @@ export function livePanelView(m: LiveModel, f: PanelFacts): LivePanelView {
     canStart: f.classOpen && (m.phase === "idle" || m.phase === "ended" || m.phase === "refused"),
     // While starting, End cancels: the answer, when it comes, is ended on the backend (#203).
     canEnd: running || m.phase === "starting",
+    endText: m.phase === "starting" ? "Cancel" : "End phone remote",
     canMakeCode: live && f.secondDisplay && code === null,
     classCode: running ? (m.session?.joinCode ?? null) : null,
     controlCode: code?.code ?? null,

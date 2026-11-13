@@ -170,6 +170,8 @@ test("the phone-remote panel in each state: rendered, the control code only wher
         const body = (await page.textContent("body")) ?? "";
         assert.equal(body.includes(CONTROL_CODE), s.view.controlCode !== null, `${name}: the control code shown only when offered`);
         if (s.view.line !== null) assert.ok(body.includes(s.view.line), `${name}: the phone's line`);
+        if (s.view.canEnd) assert.equal((await page.textContent("#live-end"))?.trim(), s.view.endText, `${name}: the End button's words`);
+        if (s.view.detail !== null) assert.ok(body.includes(s.view.detail), `${name}: the detail`);
         await checkQr(page, s.view, name);
         assert.deepEqual(external, [], `${name}: requests left the file system`);
         assert.deepEqual(errors, [], `${name}: page errors`);
@@ -187,6 +189,9 @@ test("the phone-remote panel in each state: rendered, the control code only wher
   assert.equal(by.get("code-used")!.codeNote, "Control code used");
   assert.equal(by.get("code-expired")!.canMakeCode, true);
   assert.equal(by.get("starting")!.canEnd, true);
+  assert.equal(by.get("starting")!.endText, "Cancel");
+  assert.equal(by.get("on")!.endText, "End phone remote");
+  assert.equal(by.get("refused")!.detail, "Three phone remotes already run on this account: end one on that computer");
   assert.equal(by.get("two-phones-line")!.line, "Phone 1: pause");
   assert.deepEqual(
     by.get("two-phones-line")!.slots.map((x) => x.text),

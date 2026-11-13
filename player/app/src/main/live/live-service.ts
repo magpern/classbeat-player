@@ -50,6 +50,10 @@ export interface LiveService {
   tick(): void;
   /** The app quits or the presenter closed: ends the session. */
   stop(): void;
+  /** Whether a start answer is awaited or an ender still runs: a session may be left to end (#205). */
+  busy(): boolean;
+  /** Resolves once no start answer is awaited and no ender runs. Never rejects. */
+  settled(): Promise<void>;
 }
 
 export function createLiveService(d: LiveDeps): LiveService {
@@ -58,6 +62,13 @@ export function createLiveService(d: LiveDeps): LiveService {
   let socket: LiveSocket | null = null;
   let publisher: Publisher | null = null;
   let retry: unknown = null;
+  // The start requests awaiting their answer and the enders still running, for the quit (#205).
+  const inFlight = new Set<Promise<unknown>>();
+  const track = (p: Promise<unknown>): void => {
+    const done = (): void => void inFlight.delete(p);
+    inFlight.add(p);
+    p.then(done, done);
+  };
 
   /** Every connection, the host's and the ender's, goes to the live socket of the session's backend. */
   const dial = (at: string, on: SocketEvents): LiveSocket => d.connect(liveSocketUrl(at), on);
@@ -91,16 +102,18 @@ export function createLiveService(d: LiveDeps): LiveService {
         const c = d.credential();
         if (c === null) return dispatch({ type: "answer", request, answer: { ok: false, refusal: "pair_again" } });
         origin = c.origin;
-        void d
-          .call({ origin: c.origin, method: "POST", path: "/api/live/sessions", token: c.token })
-          .catch(() => ({ kind: "unreachable" }) as const)
-          .then((a) => dispatch({ type: "answer", request, answer: parseStartAnswer(a) }, c.origin));
+        track(
+          d
+            .call({ origin: c.origin, method: "POST", path: "/api/live/sessions", token: c.token })
+            .catch(() => ({ kind: "unreachable" }) as const)
+            .then((a) => dispatch({ type: "answer", request, answer: parseStartAnswer(a) }, c.origin)),
+        );
         return;
       }
       case "end_session": {
         // Only to the backend the session was started on, never to another address.
         if (at === null) return;
-        endSession({ open: (on) => dial(at, on), setTimer: d.setTimer, clearTimer: d.clearTimer }, x.token);
+        track(endSession({ open: (on) => dial(at, on), setTimer: d.setTimer, clearTimer: d.clearTimer }, x.token));
         return;
       }
       case "connect": {
@@ -192,6 +205,11 @@ export function createLiveService(d: LiveDeps): LiveService {
       dispatch({ type: "end" });
       dropPublisher();
       cancelRetry();
+    },
+    busy: () => inFlight.size > 0,
+    async settled() {
+      // An answer that comes while waiting may start an ender: it is tracked before the answer's own promise settles.
+      while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
     },
   };
 }

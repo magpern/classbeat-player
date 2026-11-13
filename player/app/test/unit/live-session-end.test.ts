@@ -5,8 +5,9 @@
 // Fakes only: no network.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { END_TRIES_MS, END_TRY_MS } from "../../src/main/live/ender.ts";
-import { HOST_TOKEN, rig, started } from "./live-relay.ts";
+import { liveSocketUrl } from "../../src/core/live/host-wire.ts";
+import { END_TRIES_MS, END_TRY_MS, tryAgainAfter } from "../../src/main/live/ender.ts";
+import { HOST_TOKEN, ORIGIN, OTHER_ORIGIN, rig, started } from "./live-relay.ts";
 import type { FakeSocket, Rig } from "./live-relay.ts";
 
 const HELLO = { v: 1, type: "hello", token: HOST_TOKEN };
@@ -120,4 +121,128 @@ test("the ender stops when the session is already gone, and sends the token only
   await quiet(r, 1);
   assert.deepEqual(r.socket().sent, [HELLO]);
   assert.ok(!JSON.stringify(r.live.view()).includes(HOST_TOKEN));
+});
+
+// #205: hardening of the ender.
+
+test("a late answer after a re-pair is ended on the backend it came from, never on the new pairing's", async () => {
+  const r = rig();
+  r.live.start();
+  r.live.classChanged();
+  // The computer is paired again with another backend before the first answer comes.
+  r.origin = OTHER_ORIGIN;
+  r.live.start();
+  await r.advance(0);
+  assert.deepEqual(
+    r.requests.map((q) => q.origin),
+    [ORIGIN, OTHER_ORIGIN],
+  );
+  const [ender, host] = r.sockets;
+  // The first session's host token goes only to the first backend.
+  assert.equal(ender.url, liveSocketUrl(ORIGIN));
+  assert.equal(host.url, liveSocketUrl(OTHER_ORIGIN));
+  serveEnd(ender);
+  host.open();
+  host.server({ v: 1, type: "welcome", role: "host" });
+  assert.equal(r.live.view().status, "On");
+  await r.advance(0);
+  assert.equal(r.sockets.length, 2);
+});
+
+test("the try's time limit is 10 s and the tries start at once, after 1 s and after 2 s", async () => {
+  assert.equal(END_TRY_MS, 10_000);
+  assert.deepEqual(END_TRIES_MS, [0, 1000, 2000]);
+  const r = rig();
+  r.live.start();
+  r.live.end();
+  await r.advance(0);
+  r.socket().open();
+  await r.advance(END_TRY_MS - 1);
+  assert.equal(r.socket().closedByApp, false);
+  await r.advance(1);
+  assert.equal(r.socket().closedByApp, true);
+});
+
+test("end sent, then the connection drops with 1006: tried again, and the next hello finds the session gone", async () => {
+  const r = rig();
+  r.live.start();
+  r.live.end();
+  await r.advance(0);
+  const first = r.socket();
+  first.open();
+  first.server({ v: 1, type: "welcome", role: "host" });
+  assert.deepEqual(first.sent, [HELLO, END]);
+  first.drop(1006);
+  await r.advance(END_TRIES_MS[1] - 1);
+  assert.equal(r.sockets.length, 1);
+  await r.advance(1);
+  assert.equal(r.sockets.length, 2);
+  r.socket().open();
+  assert.deepEqual(r.socket().sent, [HELLO]);
+  r.socket().drop(4401);
+  await quiet(r, 2);
+});
+
+test("end sent and no answer in time: tried again, and a session still there is ended then", async () => {
+  const r = rig();
+  r.live.start();
+  r.live.end();
+  await r.advance(0);
+  const first = r.socket();
+  first.open();
+  first.server({ v: 1, type: "welcome", role: "host" });
+  assert.deepEqual(first.sent, [HELLO, END]);
+  await r.advance(END_TRY_MS);
+  assert.equal(first.closedByApp, true);
+  await r.advance(END_TRIES_MS[1]);
+  assert.equal(r.sockets.length, 2);
+  serveEnd(r.socket());
+  await quiet(r, 2);
+});
+
+test("end sent and every connection drops with 1006: three tries at most", async () => {
+  const r = rig();
+  r.live.start();
+  r.live.end();
+  await r.advance(0);
+  for (let n = 0; n < END_TRIES_MS.length; n += 1) {
+    if (n > 0) await r.advance(END_TRIES_MS[n]);
+    assert.equal(r.sockets.length, n + 1);
+    const s = r.socket();
+    s.open();
+    s.server({ v: 1, type: "welcome", role: "host" });
+    assert.deepEqual(s.sent, [HELLO, END]);
+    s.drop(1006);
+  }
+  await quiet(r, END_TRIES_MS.length);
+});
+
+test("end sent and the connection closed cleanly: end arrived, so no other try", async () => {
+  for (const code of [1000, 1001, 4403]) {
+    const r = rig();
+    r.live.start();
+    r.live.end();
+    await r.advance(0);
+    r.socket().open();
+    r.socket().server({ v: 1, type: "welcome", role: "host" });
+    r.socket().drop(code);
+    await quiet(r, 1);
+  }
+});
+
+test("which closes are tried again", () => {
+  const cases: readonly [number, boolean, boolean][] = [
+    [1006, false, true],
+    [1006, true, true],
+    [1000, false, true],
+    [1000, true, false],
+    [1011, true, false],
+    [4401, false, false],
+    [4401, true, false],
+    [4403, false, false],
+    [4403, true, false],
+    [4409, false, false],
+    [4409, true, false],
+  ];
+  for (const [code, endSent, again] of cases) assert.equal(tryAgainAfter(code, endSent), again, `${code} ${endSent}`);
 });
