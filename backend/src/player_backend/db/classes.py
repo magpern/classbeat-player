@@ -8,6 +8,7 @@ A refusal is returned, and the caller rolls back what was written for it.
 
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
 from typing import Final, Literal
 from uuid import UUID
@@ -15,6 +16,7 @@ from uuid import UUID
 from player_backend.db.context import AccountContext
 from player_backend.db.queries import classes as q
 from player_backend.publication_policy import Publication, outcome
+from player_backend.sync_policy import BASE_END, BASE_MIN, base_of
 
 # Section 7: an account holds at most 2,000 classes (rows that hold a document).
 MAX_CLASSES: Final = 2000
@@ -56,8 +58,7 @@ def publish(ctx: AccountContext, source_id: str, pub: Publication) -> Decision:
         return Decision("repeat", highest)
     if found == "stale" or found == "conflict":
         return Decision(found, highest)
-    ctx.db.rows(q.SYNC_ROW, (ctx.account_id,))
-    position = _int(ctx.db.rows(q.SYNC_NEXT, (ctx.account_id,))[0][0])
+    position = next_position(ctx)
     # Counted under the sync cursor's lock, so two new classes of one account cannot both pass.
     if not pub.removed and holds_document is not True:
         held = _int(ctx.db.rows(q.COUNT_HELD, (ctx.account_id,))[0][0])
@@ -76,6 +77,14 @@ def publish(ctx: AccountContext, source_id: str, pub: Publication) -> Decision:
         ),
     )
     return Decision("applied", pub.number)
+
+
+def next_position(ctx: AccountContext) -> int:
+    """The account's next place in its sync order, under the sync row's lock until the
+    transaction ends. The row is made at the first change, starting at a random base."""
+    base = base_of(secrets.randbelow(BASE_END - BASE_MIN))
+    ctx.db.rows(q.SYNC_ROW, (ctx.account_id, base, base))
+    return _int(ctx.db.rows(q.SYNC_NEXT, (ctx.account_id,))[0][0])
 
 
 def _hash(value: object) -> str | None:

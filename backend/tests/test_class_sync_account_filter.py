@@ -91,8 +91,12 @@ def test_the_class_sync_queries_keep_to_their_account_without_the_policy(
     b, b_ids = _account(su, "b@example.test", 5)
     # The handle is not held by the policy: it sees both accounts' rows.
     assert su.execute("SELECT count(*) FROM player.classes").fetchone() == (7,)
+    # B's order starts at a base of its own; A's row is from before bases (0).
+    su.execute("UPDATE player.account_sync SET base = 1 WHERE account_id = %s", (b,))
     as_a = _context(db, a)
     assert class_sync.cursor(as_a) == 2
+    assert class_sync.sync_range(as_a) == (0, 2)
+    assert class_sync.sync_range(_context(db, b)) == (1, 5)
     page = class_sync.changes(as_a, 0, 500)
     assert [change.id for change in page.changes] == a_ids
     assert (page.cursor, page.more) == (2, False)
@@ -112,10 +116,11 @@ def test_the_class_sync_queries_keep_to_their_account_without_the_policy(
     # place in the order, sync still does not show it: the player API takes numbers above 0.
     su.execute(
         "INSERT INTO player.classes (account_id, source_id, source_class_id, "
-        "publication_number, sync_position) VALUES (%s, 'classbeat', 'placeholder', 0, 1)",
+        "publication_number, sync_position) VALUES (%s, 'classbeat', 'placeholder', 0, 3)",
         (a,),
     )
     assert [change.id for change in class_sync.changes(as_a, 0, 500).changes] == a_ids
     # An account with no sync row yet has cursor 0 and no changes.
     assert class_sync.cursor(_context(db, uuid.uuid4())) == 0
+    assert class_sync.sync_range(_context(db, uuid.uuid4())) == (0, 0)
     assert list(class_sync.changes(_context(db, uuid.uuid4()), 0, 1).changes) == []

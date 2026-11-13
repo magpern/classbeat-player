@@ -14,6 +14,11 @@ SELECT coalesce(
 """
 )
 
+# The account's base and current place (sync_policy.py). No row: no change yet, both 0.
+SYNC_RANGE: Final[Query] = Query(
+    "SELECT y.base, y.position FROM player.account_sync y WHERE y.account_id = %s"
+)
+
 # Section 7: the player API takes only rows with a number above 0. One more row than the page
 # holds is asked for, as the sign that more follow. A class's content is not read here.
 CHANGES: Final[Query] = Query(

@@ -2,6 +2,8 @@
 
 `BodyCap` is an ASGI middleware, inside the access log and outside every route:
 
+- the cap is the one of the route the request matches (its path template, so a deployment
+  under a path prefix, `root_path`, keeps each route's cap), found the way the router finds it;
 - a `Content-Length` over the cap is answered at once, before the app sees the request;
 - otherwise the body's bytes are counted as the route reads them, and the read that goes over
   the cap raises `BodyTooLarge`. The rest is never read.
@@ -16,7 +18,9 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.routing import iter_route_contexts
 from starlette.datastructures import Headers
+from starlette.routing import Match, Router
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from player_backend.body_policy import body_cap, declared_over
@@ -30,12 +34,23 @@ class BodyTooLarge(HTTPException):
         super().__init__(413, CODE)
 
 
+def route_of(router: Router, scope: Scope) -> str | None:
+    """The path template of the route that fully matches the request (path and method), as the
+    router would pick it; None when none does. Matching takes the scope's `root_path` off."""
+    for context in iter_route_contexts(router.routes):
+        match, _ = context.matches(scope)
+        if match is Match.FULL:
+            return context.path
+    return None
+
+
 class BodyCap:
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, router: Router) -> None:
         self.app = app
+        self.router = router
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        cap = body_cap(str(scope["path"])) if scope["type"] == "http" else None
+        cap = body_cap(route_of(self.router, scope)) if scope["type"] == "http" else None
         if cap is None:
             await self.app(scope, receive, send)
             return
@@ -64,4 +79,4 @@ def install_body_cap(app: FastAPI) -> None:
         return error_response(413, CODE)
 
     app.add_exception_handler(BodyTooLarge, too_large)
-    app.add_middleware(BodyCap)
+    app.add_middleware(BodyCap, router=app.router)

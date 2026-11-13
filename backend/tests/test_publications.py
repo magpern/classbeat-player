@@ -131,7 +131,7 @@ def test_the_sync_cursor_moves_once_per_applied_publication(
     app, token = linked
     for class_id, number in (("a", 1), ("b", 1), ("a", 2), ("a", 2), ("a", 1)):
         sh.publish(app, token, sh.envelope(class_id, number, sh.document(class_id)))
-    assert site.su.execute("SELECT position FROM player.account_sync").fetchone() == (3,)
+    assert site.su.execute("SELECT position - base FROM player.account_sync").fetchone() == (3,)
     assert [(r[0], r[4]) for r in sh.class_rows(site, EMAIL)] == [("a", 3), ("b", 2)]
 
 
@@ -252,7 +252,7 @@ def test_at_most_2000_classes_per_account(site: Site, linked: tuple[Browser, str
         "INSERT INTO player.classes (account_id, source_id, source_class_id, publication_number, "
         "kind, content_hash, published_at, sync_position, document) "
         "SELECT c.account_id, 'classbeat', 'bulk-' || n, 1, 'class', c.content_hash, now(), "
-        "1, c.document FROM player.classes c, generate_series(1, 1999) n"
+        "n, c.document FROM player.classes c, generate_series(1, 1999) n"
     )
     cursor = "SELECT position FROM player.account_sync"
     before = site.su.execute(cursor).fetchone()

@@ -14,13 +14,14 @@ from typing import Final
 
 BODY_MAX: Final = 16 * 1024
 
-# The routes that read and limit their own body.
+# The routes that read and limit their own body, by the path template of the route.
 OWN_LIMIT: Final = frozenset({"/api/source/publications"})
 
 
-def body_cap(path: str) -> int | None:
-    """The largest body a request to `path` may send, or None when its route sets its own."""
-    return None if path in OWN_LIMIT else BODY_MAX
+def body_cap(route: str | None) -> int | None:
+    """The largest body a request to the route with path template `route` may send, or None
+    when that route sets its own. A request no route matches (`None`) gets the cap."""
+    return None if route is not None and route in OWN_LIMIT else BODY_MAX
 
 
 def declared_over(content_length: str | None, cap: int) -> bool:

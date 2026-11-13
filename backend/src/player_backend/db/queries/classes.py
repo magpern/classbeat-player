@@ -25,11 +25,12 @@ FOR UPDATE
 """
 )
 
-# The sync cursor: one row per account, made at its first publication. The update locks it,
-# so one account's changes get their numbers in the order they commit.
+# The sync cursor: one row per account, made at its first publication, starting at its base
+# (sync_policy.py; the base is passed twice: as the base and as the first position). The update
+# locks it, so one account's changes get their numbers in the order they commit.
 SYNC_ROW: Final[Query] = Query(
     """
-INSERT INTO player.account_sync (account_id) VALUES (%s)
+INSERT INTO player.account_sync (account_id, base, position) VALUES (%s, %s, %s)
 ON CONFLICT (account_id) DO NOTHING
 """
 )
