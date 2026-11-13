@@ -6,7 +6,8 @@ sections 3 and 4).
   the site session's transaction; every refusal is 403 `cannot_control`: no sign-in, an ended
   one, another origin, another account, an unknown session, both places held; unknown sessions
   count for the address (429 past 60 a minute); the end of the site session drops the
-  controller at the re-check;
+  controller at the re-check; a grant whose site session transaction fails at its commit holds
+  no place;
 - `POST /api/live/control`: "controller added" (`code`) and "control code cancelled" after
   wrong tries are written after `auth_enter_device` with the session's stored hash, and nothing
   once the device is revoked.
@@ -155,6 +156,42 @@ def test_the_end_of_the_sign_in_drops_the_controller_at_the_recheck(site: Site) 
     assert browser.post("/api/site/sign-out").status_code == 204
     assert service.recheck()
     assert service.registry.signed_in_controllers() == []
+
+
+# Fails the transaction at its commit, as a deferred check does, once "controller added" is in it.
+_FAIL_AT_COMMIT = (
+    "CREATE FUNCTION public.test_fail_at_commit() RETURNS trigger LANGUAGE plpgsql AS "
+    "$$ BEGIN RAISE EXCEPTION 'failed at commit'; END $$",
+    "CREATE CONSTRAINT TRIGGER test_fail_at_commit AFTER INSERT ON player.audit_events "
+    "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.event = 'live.controller_added') "
+    "EXECUTE FUNCTION public.test_fail_at_commit()",
+)
+_NO_FAIL_AT_COMMIT = (
+    "DROP TRIGGER IF EXISTS test_fail_at_commit ON player.audit_events",
+    "DROP FUNCTION IF EXISTS public.test_fail_at_commit()",
+)
+
+
+def test_a_sign_in_whose_commit_fails_holds_no_place(site: Site) -> None:
+    browser, live = _hosting(site)
+    failing = site.browser(raise_errors=False)
+    failing.take_cookies(browser)
+    try:
+        for statement in _FAIL_AT_COMMIT:
+            site.su.execute(statement)
+        for _ in range(3):  # more than the 2 places: none is left held
+            assert _ask(failing, live["joinCode"]).status_code == 500
+    finally:
+        for statement in _NO_FAIL_AT_COMMIT:
+            site.su.execute(statement)
+    service = _service(site)
+    assert service.registry.signed_in_controllers() == []
+    assert _live_events(site) == []
+    # Both places are free for the next sign-ins.
+    for slot in (1, 2):
+        body = _valid("controller-answer", _ask(browser, live["joinCode"]), 200)
+        seat = service.registry.controller_seat(body["controllerToken"], service.clock())
+        assert seat is not None and seat.slot == slot
 
 
 def _code(site: Site, live: dict[str, str]) -> str:

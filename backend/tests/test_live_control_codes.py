@@ -134,6 +134,8 @@ def test_a_code_that_ran_out_before_the_sweep_is_refused_and_told(live: Any) -> 
     with live.joined(started.host_token, None) as host:
         code = _code(host)
         live.clock.now += 120.0
+        # The re-check has confirmed the session meanwhile: only the code has run out.
+        live.registry.confirm([started.session_id], live.clock())
         _refused(_try(live, started.join_code, code), 403, "invalid_code")
         assert recv(host) == {"v": 1, "type": "code_cancelled", "reason": "expired"}
 
