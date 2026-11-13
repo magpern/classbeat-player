@@ -182,73 +182,136 @@ def test_every_live_schema_is_closed(name: str) -> None:
 _TYPED_OBJECT = {"type": "object", "additionalProperties": False, "properties": {}}
 
 
-@pytest.mark.parametrize(
-    ("label", "mutate"),
-    [
-        # The reviewer's mutations A to C of PR #176.
-        ("A: a property that accepts anything", lambda d: d["properties"].update(meta={})),
-        ("B: patternProperties", lambda d: d.update(patternProperties={"^x": {}})),
-        (
-            "C: an object subschema without a type",
-            lambda d: d["properties"].update(extra={"properties": {"x": {}}}),
+OPENINGS: list[tuple[str, Any]] = [
+    # The reviewer's mutations A to C of PR #176.
+    ("A: a property that accepts anything", lambda d: d["properties"].update(meta={})),
+    ("B: patternProperties", lambda d: d.update(patternProperties={"^x": {}})),
+    (
+        "C: an object subschema without a type",
+        lambda d: d["properties"].update(extra={"properties": {"x": {}}}),
+    ),
+    ("a boolean property schema", lambda d: d["properties"].update(extra=True)),
+    ("a described-only property", lambda d: d["properties"].update(extra={"title": "x"})),
+    ("unevaluatedProperties", lambda d: d.update(unevaluatedProperties=False)),
+    ("dependentSchemas", lambda d: d.update(dependentSchemas={"v": {}})),
+    (
+        "prefixItems",
+        lambda d: d["properties"].update(
+            extra={
+                "type": "array",
+                "maxItems": 1,
+                "prefixItems": [{}],
+                "items": {"type": "null"},
+            }
         ),
-        ("a boolean property schema", lambda d: d["properties"].update(extra=True)),
-        ("a described-only property", lambda d: d["properties"].update(extra={"title": "x"})),
-        ("unevaluatedProperties", lambda d: d.update(unevaluatedProperties=False)),
-        ("dependentSchemas", lambda d: d.update(dependentSchemas={"v": {}})),
-        (
-            "prefixItems",
-            lambda d: d["properties"].update(
-                extra={
-                    "type": "array",
-                    "maxItems": 1,
-                    "prefixItems": [{}],
-                    "items": {"type": "null"},
-                }
-            ),
+    ),
+    ("additionalProperties true", lambda d: d.update(additionalProperties=True)),
+    ("additionalProperties a schema", lambda d: d.update(additionalProperties={})),
+    ("an object without additionalProperties", lambda d: d.pop("additionalProperties")),
+    (
+        "a nested open object",
+        lambda d: d["properties"].update(
+            extra={"type": "object", "properties": {"x": {"type": "string"}}}
         ),
-        ("additionalProperties true", lambda d: d.update(additionalProperties=True)),
-        ("additionalProperties a schema", lambda d: d.update(additionalProperties={})),
-        ("an object without additionalProperties", lambda d: d.pop("additionalProperties")),
-        (
-            "a nested open object",
-            lambda d: d["properties"].update(
-                extra={"type": "object", "properties": {"x": {"type": "string"}}}
-            ),
-        ),
-        (
-            "an untyped anyOf branch",
-            lambda d: d["properties"].update(extra={"anyOf": [{"type": "null"}, {}]}),
-        ),
-        ("allOf", lambda d: d.update(allOf=[_TYPED_OBJECT])),
-        ("oneOf", lambda d: d["properties"].update(extra={"oneOf": [{"type": "null"}]})),
-        ("a type outside the set", lambda d: d["properties"].update(extra={"type": "number"})),
-        (
-            "an array without items",
-            lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1}),
-        ),
-        (
-            "an array of anything",
-            lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1, "items": {}}),
-        ),
-        ("a remote $ref", lambda d: d["properties"].update(extra={"$ref": "other.schema.json"})),
-        (
-            "patternProperties inside a condition",
-            lambda d: d.update({"if": {"patternProperties": {"^x": {}}}}),
-        ),
-        ("a boolean condition", lambda d: d.update({"not": False})),
-        ("a string without maxLength", lambda d: d["properties"].update(extra={"type": "string"})),
-        (
-            "a pattern-only string without maxLength",
-            lambda d: d["properties"].update(extra={"type": "string", "pattern": "^a+$"}),
-        ),
-    ],
-)
+    ),
+    (
+        "an untyped anyOf branch",
+        lambda d: d["properties"].update(extra={"anyOf": [{"type": "null"}, {}]}),
+    ),
+    ("allOf", lambda d: d.update(allOf=[_TYPED_OBJECT])),
+    ("oneOf", lambda d: d["properties"].update(extra={"oneOf": [{"type": "null"}]})),
+    ("a type outside the set", lambda d: d["properties"].update(extra={"type": "number"})),
+    (
+        "an array without items",
+        lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1}),
+    ),
+    (
+        "an array of anything",
+        lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1, "items": {}}),
+    ),
+    ("a remote $ref", lambda d: d["properties"].update(extra={"$ref": "other.schema.json"})),
+    (
+        "patternProperties inside a condition",
+        lambda d: d.update({"if": {"patternProperties": {"^x": {}}}}),
+    ),
+    ("a boolean condition", lambda d: d.update({"not": False})),
+    ("a string without maxLength", lambda d: d["properties"].update(extra={"type": "string"})),
+    (
+        "a pattern-only string without maxLength",
+        lambda d: d["properties"].update(extra={"type": "string", "pattern": "^a+$"}),
+    ),
+]
+
+
+@pytest.mark.parametrize(("label", "mutate"), OPENINGS)
 def test_the_closed_shape_check_refuses_every_opening(label: str, mutate: Any) -> None:
     doc = schema("ack")
     assert problems(doc) == []
     mutate(doc)
     assert problems(doc) != [], label
+
+
+# The same labels, in the same order, are pinned in ts/test/live.test.ts: a check dropped from
+# one suite fails there.
+OPENING_LABELS = [
+    "A: a property that accepts anything",
+    "B: patternProperties",
+    "C: an object subschema without a type",
+    "a boolean property schema",
+    "a described-only property",
+    "unevaluatedProperties",
+    "dependentSchemas",
+    "prefixItems",
+    "additionalProperties true",
+    "additionalProperties a schema",
+    "an object without additionalProperties",
+    "a nested open object",
+    "an untyped anyOf branch",
+    "allOf",
+    "oneOf",
+    "a type outside the set",
+    "an array without items",
+    "an array of anything",
+    "a remote $ref",
+    "patternProperties inside a condition",
+    "a boolean condition",
+    "a string without maxLength",
+    "a pattern-only string without maxLength",
+]
+
+
+def test_the_closed_shape_check_covers_the_same_23_openings_as_the_ts_suite() -> None:
+    assert len(OPENINGS) == 23
+    assert [label for label, _ in OPENINGS] == OPENING_LABELS
+
+
+def _fixed_width(pattern: str) -> int | None:
+    """The one length every match of `pattern` has, or None when it varies (stdlib parser)."""
+    lo, hi = re._parser.parse(pattern).getwidth()  # type: ignore[attr-defined]  # pyright: ignore
+    return lo if lo == hi else None
+
+
+def _strings_with_a_pattern(node: Any, where: str = "") -> Iterator[tuple[str, dict[str, Any]]]:
+    if isinstance(node, dict):
+        if isinstance(node.get("pattern"), str):
+            yield where, node
+        for key, value in node.items():
+            yield from _strings_with_a_pattern(value, f"{where}/{key}")
+    elif isinstance(node, list):
+        for i, value in enumerate(node):
+            yield from _strings_with_a_pattern(value, f"{where}/{i}")
+
+
+def test_max_length_equals_the_length_a_fixed_length_pattern_gives() -> None:
+    checked = 0
+    for name in names():
+        for where, node in _strings_with_a_pattern(schema(name)):
+            width = _fixed_width(node["pattern"])
+            if width is not None:
+                assert node.get("maxLength") == width, (name, where)
+                checked += 1
+    # Every pattern in schema/live/v1 is fixed-length today (ts/test/live.test.ts pins the same 16).
+    assert checked == 16
 
 
 # ---- rule 13, ADR 0005 sections 3 and 4: what reaches a controller ---------------------------
@@ -341,3 +404,27 @@ def test_http_errors_are_the_closed_enum() -> None:
         "cannot_control",
         "internal_error",
     }
+    assert by_route == ROUTE_ERRORS
+
+
+# The error set of each route, pinned in full (ts/test/live.test.ts pins the same table).
+ROUTE_ERRORS: dict[str, set[str]] = {
+    "POST /api/live/sessions": {
+        "invalid_request",
+        "invalid_token",
+        "token_unknown",
+        "token_expired",
+        "token_revoked",
+        "sessions_full",
+        "too_many_requests",
+        "internal_error",
+    },
+    "POST /api/live/controller": {"invalid_request", "cannot_control", "internal_error"},
+    "POST /api/live/control": {
+        "invalid_request",
+        "invalid_code",
+        "controllers_full",
+        "too_many_requests",
+        "internal_error",
+    },
+}

@@ -92,8 +92,142 @@ for (const [label, mutate] of OPENINGS) {
   });
 }
 
+// The labels, in order, pinned in schema/python/tests/test_live_guards.py too: a check dropped
+// from one suite fails there.
+const OPENING_LABELS = [
+  "A: a property that accepts anything",
+  "B: patternProperties",
+  "C: an object subschema without a type",
+  "a boolean property schema",
+  "a described-only property",
+  "unevaluatedProperties",
+  "dependentSchemas",
+  "prefixItems",
+  "additionalProperties true",
+  "additionalProperties a schema",
+  "an object without additionalProperties",
+  "a nested open object",
+  "an untyped anyOf branch",
+  "allOf",
+  "oneOf",
+  "a type outside the set",
+  "an array without items",
+  "an array of anything",
+  "a remote $ref",
+  "patternProperties inside a condition",
+  "a boolean condition",
+  "a string without maxLength",
+  "a pattern-only string without maxLength",
+];
+
 test("the closed-shape check covers the same 23 openings as the Python suite", () => {
   assert.equal(OPENINGS.length, 23);
+  assert.deepEqual(
+    OPENINGS.map(([label]) => label),
+    OPENING_LABELS,
+  );
+});
+
+// The length every match of a live pattern has. The patterns use only anchors, literals, classes
+// like [A-Za-z0-9_-], {n} counts and (a|b) groups whose branches are as long as each other;
+// anything else throws, so a new construct has to be taught here on purpose.
+function fixedWidth(pattern: string): number {
+  let i = 0;
+  const atom = (): number => {
+    const c = pattern[i];
+    if (c === "[") {
+      i = pattern.indexOf("]", i) + 1;
+      return 1;
+    }
+    if (c === "(") {
+      i += 1;
+      const widths = [sequence()];
+      while (pattern[i] === "|") {
+        i += 1;
+        widths.push(sequence());
+      }
+      assert.equal(pattern[i], ")", pattern);
+      i += 1;
+      assert.equal(new Set(widths).size, 1, `a group of unequal branches in ${pattern}`);
+      return widths[0];
+    }
+    assert.match(c, /[A-Za-z0-9_\-]/, `unsupported pattern construct ${c} in ${pattern}`);
+    i += 1;
+    return 1;
+  };
+  const sequence = (): number => {
+    let width = 0;
+    while (i < pattern.length && pattern[i] !== "|" && pattern[i] !== ")") {
+      if (pattern[i] === "^" || pattern[i] === "$") {
+        i += 1;
+        continue;
+      }
+      const one = atom();
+      const count = /^\{(\d+)\}/.exec(pattern.slice(i));
+      if (count) i += count[0].length;
+      width += one * (count ? Number(count[1]) : 1);
+    }
+    return width;
+  };
+  const width = sequence();
+  assert.equal(i, pattern.length, pattern);
+  return width;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function* patterned(node: any, where = ""): Generator<[string, any]> {
+  if (Array.isArray(node)) {
+    for (const [k, v] of node.entries()) yield* patterned(v, `${where}/${k}`);
+  } else if (node !== null && typeof node === "object") {
+    if (typeof node.pattern === "string") yield [where, node];
+    for (const [k, v] of Object.entries(node)) yield* patterned(v, `${where}/${k}`);
+  }
+}
+
+test("maxLength equals the length a fixed-length pattern gives", () => {
+  let checked = 0;
+  for (const name of NAMES) {
+    for (const [where, node] of patterned(load(join(V1, `${name}.schema.json`)))) {
+      assert.equal(node.maxLength, fixedWidth(node.pattern), `${name} ${where}`);
+      checked += 1;
+    }
+  }
+  // The Python suite pins the same count.
+  assert.equal(checked, 16);
+});
+
+test("fixedWidth reads the live pattern forms", () => {
+  assert.equal(fixedWidth("^[A-Za-z0-9_-]{22}$"), 22);
+  assert.equal(fixedWidth("^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$"), 51);
+  assert.equal(fixedWidth("^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"), 9);
+});
+
+// The error set of each route, pinned in full (schema/python/tests/test_live_guards.py too).
+const ROUTE_ERRORS: Record<string, string[]> = {
+  "POST /api/live/sessions": [
+    "invalid_request",
+    "invalid_token",
+    "token_unknown",
+    "token_expired",
+    "token_revoked",
+    "sessions_full",
+    "too_many_requests",
+    "internal_error",
+  ],
+  "POST /api/live/controller": ["invalid_request", "cannot_control", "internal_error"],
+  "POST /api/live/control": ["invalid_request", "invalid_code", "controllers_full", "too_many_requests", "internal_error"],
+};
+
+test("each route's error set in routing.json is pinned, and is inside the error enum", () => {
+  const routing = load(join(V1, "routing.json"));
+  const codes: string[] = load(join(V1, "error.schema.json")).properties.error.enum;
+  const byRoute: Record<string, string[]> = {};
+  for (const r of routing.http) byRoute[r.route] = [...r.errors].sort();
+  assert.deepEqual(
+    byRoute,
+    Object.fromEntries(Object.entries(ROUTE_ERRORS).map(([k, v]) => [k, [...v].sort()])),
+  );
+  for (const errors of Object.values(byRoute)) for (const e of errors) assert.ok(codes.includes(e), e);
 });
 
 test("the command actions are exactly the ADR 0005 table, nudge exactly ±5000 ms", () => {
