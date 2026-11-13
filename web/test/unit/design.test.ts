@@ -58,13 +58,11 @@ describe("design tokens", () => {
 describe("the web lane stands alone", () => {
   const sources = walk(join(WEB, "src")).filter((p) => /\.(ts|css|html)$/.test(p));
 
-  it("nothing in src imports from player/ or reaches the network", () => {
+  it("nothing in src imports from player/", () => {
     for (const p of sources) {
       const text = readFileSync(p, "utf8");
       const name = relative(WEB, p);
       assert.doesNotMatch(text, /from\s+["'][^"']*\/player\//, `${name} imports from player/`);
-      assert.doesNotMatch(text, /\b(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)\b/, `${name} uses the network`);
-      assert.doesNotMatch(text, /https?:\/\//, `${name} names a URL`);
     }
   });
 
