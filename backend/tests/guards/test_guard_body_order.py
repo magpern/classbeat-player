@@ -37,6 +37,8 @@ READS_BODY = frozenset(
         ("POST", "/api/site/source-links/check"),
         ("POST", "/api/site/source-links/approve"),
         ("POST", "/api/site/account/delete"),
+        ("POST", "/api/site/passkeys"),
+        ("PATCH", "/api/site/passkeys/{passkey_id}"),
         ("POST", "/api/source/publications"),
     }
 )

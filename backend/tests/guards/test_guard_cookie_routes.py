@@ -47,6 +47,13 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("GET", "/api/site/classes"),
         ("GET", "/api/site/classes/{class_id}"),
         ("DELETE", "/api/site/classes/{class_id}"),
+        # ADR 0002, section 4: the account's passkeys (adding and removing behind a recent
+        # sign-in).
+        ("GET", "/api/site/passkeys"),
+        ("POST", "/api/site/passkeys/options"),
+        ("POST", "/api/site/passkeys"),
+        ("PATCH", "/api/site/passkeys/{passkey_id}"),
+        ("DELETE", "/api/site/passkeys/{passkey_id}"),
     }
 )
 # The app's routes: pairing takes the device code in the body, the player API a device token
@@ -84,6 +91,9 @@ LOGIN_COOKIE_ROUTES = frozenset(
     {
         ("POST", "/api/site/sign-in/link"),
         ("POST", "/api/site/sign-in/complete"),
+        # ADR 0002, section 4: a passkey sign-in's challenge is bound to the browser token.
+        ("POST", "/api/site/sign-in/passkey/options"),
+        ("POST", "/api/site/sign-in/passkey"),
     }
 )
 SITE_API = "/api/site/"
@@ -174,7 +184,7 @@ def test_every_cookie_route_applies_the_origin_check() -> None:
 
 def test_no_route_takes_a_token_in_its_path() -> None:
     # Principle 3. The path parameters are a session's, a device's and a link's id, a
-    # source's own class id and a class row's id: not credentials.
+    # source's own class id, a class row's id and a passkey row's id: not credentials.
     parameters = {r.path for r in _routes() if "{" in r.path}
     assert parameters == {
         "/api/site/sessions/{session_id}",
@@ -183,6 +193,7 @@ def test_no_route_takes_a_token_in_its_path() -> None:
         "/api/source/classes/{source_class_id}",
         "/api/player/classes/{class_id}",
         "/api/site/classes/{class_id}",
+        "/api/site/passkeys/{passkey_id}",
     }
 
 

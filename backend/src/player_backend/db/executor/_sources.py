@@ -21,6 +21,8 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.library",
     "player_backend.db.queries.operator",
     "player_backend.db.queries.account",
+    "player_backend.db.queries.passkey_login",
+    "player_backend.db.queries.passkeys",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"
@@ -35,4 +37,5 @@ SQL_FILES: Final = (
     "0008_source_api.sql",
     "0009_device_budgets.sql",
     "0010_sync_order.sql",
+    "0011_passkeys.sql",
 )

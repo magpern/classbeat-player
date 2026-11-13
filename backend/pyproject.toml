@@ -10,6 +10,8 @@ dependencies = [
   "psycopg-pool>=3.2,<4",
   # The class format's validators (ADR 0003, section 4): the contract lane's package, as it is.
   "classformat",
+  # Passkeys (ADR 0002, section 4): the WebAuthn verification library, pinned.
+  "webauthn==3.0.1",
 ]
 
 [tool.uv.sources]

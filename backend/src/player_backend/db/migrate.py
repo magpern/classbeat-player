@@ -104,6 +104,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0010_sync_order.sql") as pending:
         if pending:
             db.rows(q.M0010_SYNC_ORDER)
+    with _step(db, done, "0011_passkeys.sql") as pending:
+        if pending:
+            db.rows(q.M0011_PASSKEYS)
     return done
 
 

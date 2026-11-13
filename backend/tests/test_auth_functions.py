@@ -12,7 +12,8 @@ from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
 
 # Given their bodies by migration 0004 (tests/test_login_functions.py and the site tests), by
 # migration 0006 (tests/test_pairing_functions.py, tests/test_device_functions.py) and by
-# migration 0008 (tests/test_source_functions.py).
+# migration 0008 (tests/test_source_functions.py) and by migration 0011
+# (tests/test_passkey_functions.py and the passkey tests).
 IMPLEMENTED = {
     "auth_enter_session",
     "auth_request_login",
@@ -26,6 +27,9 @@ IMPLEMENTED = {
     "auth_new_link_code",
     "auth_exchange_link_code",
     "auth_enter_source",
+    "auth_new_login_challenge",
+    "auth_passkey_for_login",
+    "auth_complete_passkey",
 }
 STUBS = sorted(SECURITY_DEFINER_FUNCTIONS - IMPLEMENTED - {"auth_purge_expired"})
 
