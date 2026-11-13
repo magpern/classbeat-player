@@ -33,6 +33,7 @@ EXPORT = "/api/site/account/export"
 DELETE_ACCOUNT = "/api/site/account/delete"
 SITE_CLASSES = "/api/site/classes"
 LIVE_SESSIONS = "/api/live/sessions"
+LIVE_CONTROLLER = "/api/live/controller"
 
 
 @dataclass(frozen=True)
@@ -361,6 +362,24 @@ def _start_live_session(site: Site, a: Actor) -> None:
     registry.end(b_last.session_id, "host_ended")
 
 
+def _live_controller(site: Site, a: Actor) -> None:
+    # B's live session and its join code are known to A here; A's sign-in gives no control of
+    # it. A's own session's join code does give A a controller.
+    service = cast(LiveService, site.app.state.live)
+    b_account = uuid.UUID(_one(site, "SELECT id FROM player.accounts WHERE email = %s", B))
+    b_live = service.registry.start(b_account, uuid.UUID(a.other.device_id), bytes(32), 0.0)
+    assert b_live is not None
+    refused = a.browser.post(LIVE_CONTROLLER, json={"session": b_live.join_code})
+    assert refused.status_code == 403 and refused.json() == {"error": "cannot_control"}
+    assert service.registry.signed_in_controllers(b_account) == []
+    own = a.app.post(LIVE_SESSIONS, headers=bearer(a.token))
+    assert own.status_code == 200, own.text
+    granted = a.browser.post(LIVE_CONTROLLER, json={"session": own.json()["joinCode"]})
+    assert granted.status_code == 200, granted.text
+    service.registry.end(b_live.session_id, "host_ended")
+    service.registry.end(uuid.UUID(own.json()["sessionId"]), "host_ended")
+
+
 # In this order: the third and second last end A's device and A's sessions, and the last one
 # deletes A.
 CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
@@ -383,6 +402,7 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/player/classes/{class_id}"): _held_class,
     ("GET", "/api/player/cursor"): _cursor,
     ("POST", LIVE_SESSIONS): _start_live_session,
+    ("POST", LIVE_CONTROLLER): _live_controller,
     # After the player API's cases: the last of these deletes A's class "shared".
     ("GET", "/api/site/classes"): _list_library,
     ("GET", "/api/site/classes/{class_id}"): _read_library_class,

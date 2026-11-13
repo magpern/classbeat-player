@@ -1,7 +1,7 @@
 """Guard: the routes that read a cookie equal the written list (ADR 0002, section 5).
 
 The session cookie is accepted by the site's API (`/api/site/`) and by exactly one live route,
-`POST /api/live/controller` (PL8, not built yet). Nowhere else. A new route that reads a cookie
+`POST /api/live/controller` (PL8). Nowhere else. A new route that reads a cookie
 fails here until it is listed, and it can be listed only if the ADR allows it.
 """
 
@@ -54,6 +54,8 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("POST", "/api/site/passkeys"),
         ("PATCH", "/api/site/passkeys/{passkey_id}"),
         ("DELETE", "/api/site/passkeys/{passkey_id}"),
+        # Section 8, "Becoming a controller": the one live route that takes the session cookie.
+        ("POST", "/api/live/controller"),
     }
 )
 # The app's routes: pairing takes the device code in the body, the player API a device token
@@ -81,6 +83,9 @@ SOURCE_TOKEN_ROUTES = frozenset(
 # The code exchange (section 7, step 5): the source link code in the body, from the source's
 # server. No cookie and no other credential.
 LINK_CODE_ROUTES = frozenset({("POST", "/api/source/token")})
+# Section 8, "Becoming a controller": the join code and the control code in the body, from the
+# phone's page. No cookie and no other credential.
+CONTROL_CODE_ROUTES = frozenset({("POST", "/api/live/control")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -155,6 +160,13 @@ def test_the_code_exchange_takes_no_cookie_and_no_bearer_token() -> None:
     assert not LINK_CODE_ROUTES & (bearer | cookie)
 
 
+def test_the_control_code_route_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token) | _using(app_only)
+    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    assert not CONTROL_CODE_ROUTES & (bearer | cookie)
+    assert all(path.startswith("/api/live/") for _, path in CONTROL_CODE_ROUTES)
+
+
 def test_every_route_is_on_one_of_the_lists() -> None:
     # A new route fails here until someone has said which credential it takes.
     listed = (
@@ -163,6 +175,7 @@ def test_every_route_is_on_one_of_the_lists() -> None:
         | DEVICE_TOKEN_ROUTES
         | SOURCE_TOKEN_ROUTES
         | LINK_CODE_ROUTES
+        | CONTROL_CODE_ROUTES
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES

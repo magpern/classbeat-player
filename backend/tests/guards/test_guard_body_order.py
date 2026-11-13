@@ -40,6 +40,9 @@ READS_BODY = frozenset(
         ("POST", "/api/site/passkeys"),
         ("PATCH", "/api/site/passkeys/{passkey_id}"),
         ("POST", "/api/source/publications"),
+        # ADR 0002, section 8: becoming a controller, by sign-in and by control code.
+        ("POST", "/api/live/controller"),
+        ("POST", "/api/live/control"),
     }
 )
 

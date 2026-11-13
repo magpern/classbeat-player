@@ -21,11 +21,14 @@ from starlette.websockets import WebSocketDisconnect
 
 from player_backend.db import live as db_live
 from player_backend.db.executor import Pool
+from player_backend.http_errors import install_error_handlers
 from player_backend.live import router
 from player_backend.live.hub import Hub
 from player_backend.live.registry import Registry, Started
 from player_backend.live.service import LiveService
+from player_backend.mail import Mailer
 from player_backend.settings import Settings
+from player_backend.site.state import SiteState
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_hash
 
@@ -49,6 +52,10 @@ class Live:
     hub: Hub
     clock: Clock
     ends: list[tuple[uuid.UUID, str]] = field(default_factory=list[tuple[uuid.UUID, str]])
+    # The audit events written after `auth_enter_device` (faked): event name and detail.
+    events: list[tuple[str, dict[str, str]]] = field(
+        default_factory=list[tuple[str, dict[str, str]]]
+    )
 
     @property
     def registry(self) -> Registry:
@@ -60,7 +67,7 @@ class Live:
         return started
 
     def controller(self, started: Started, signed_in: bool = False) -> str:
-        """A controller token for the session, as #171's routes will give one out."""
+        """A controller token for the session, held as the controller routes hold one."""
         token = new_token("ctl")
         slot = self.registry.add_controller(
             started.session_id, token_hash(token), SITE_SESSION if signed_in else None
@@ -169,15 +176,27 @@ def live_app(
         ends.append((session_id, reason))
         return db_live.RECORDED
 
+    events: list[tuple[str, dict[str, str]]] = []
+
+    def record_event(
+        _pool: Pool, _hash: bytes, event: str, detail: dict[str, str], _client: object = None
+    ) -> str:
+        events.append((event, dict(detail)))
+        return db_live.RECORDED
+
     monkeypatch.setattr(db_live, "record_end", record_end)
+    monkeypatch.setattr(db_live, "record_event", record_event)
     # No pool is used: the one database call the WebSocket can reach is faked above.
     service = LiveService(Registry(), cast(Pool, object()), clock)
     app = FastAPI()
-    app.state.settings = Settings(
+    app.state.settings = settings = Settings(
         database_url="postgresql://unused", site_origin=SITE, trusted_proxies=proxies
     )
+    # The control routes take the caller's address as the site does (site/deps.py).
+    app.state.site = SiteState(settings, cast(Pool, object()), cast(Mailer, object()))
     app.state.live = service
     app.state.live_hub = hub = Hub(service, hello_within)
     app.include_router(router)
+    install_error_handlers(app)
     with TestClient(app, client=("203.0.113.7", 50000)) as client:
-        yield Live(client=client, hub=hub, clock=clock, ends=ends)
+        yield Live(client=client, hub=hub, clock=clock, ends=ends, events=events)

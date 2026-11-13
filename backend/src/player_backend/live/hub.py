@@ -19,6 +19,11 @@ ADR 0005, sections 1 and 3 to 6).
   returning host reach no one.
 - A session that ends, or a controller that is dropped (the registry's watchers, called on any
   thread: the re-check's, a route's, the event loop's), gets `ended` and is closed with 4403.
+- The host's `make_code` gets `control_code`, to the host's connection only, after
+  `code_cancelled` `replaced` (or `expired`) for the code it replaces; over 30 an hour it is
+  dropped and counted (`code_limit`), and the current code stays. A code used, run out or
+  cancelled by wrong tries is told to the host as `code_cancelled` (a watcher's event). The
+  host's `drop` ends the current code, telling no one, and drops the slot's controller.
 
 Threads: the hub's state is touched on the event loop only. The watcher hands each event over
 with `call_soon_threadsafe` and logs a failure by its type. The loop is bound by `bind`, which
@@ -36,10 +41,11 @@ from collections.abc import Coroutine
 from typing import Any
 from uuid import UUID
 
-from player_backend.live.events import Dropped, Ended, Seat
+from player_backend.live.events import CodeCancelled, Dropped, Ended, Seat
 from player_backend.live.link import Link, Socket
 from player_backend.live.schemas import routes, valid
 from player_backend.live.service import LiveService
+from player_backend.live.watchers import Event
 from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate, Window, commands_window
 from player_backend.live_relay_policy import Answer, Outstanding, ack_of, on_command
 from player_backend.live_route_policy import inbound, outbound
@@ -48,6 +54,8 @@ from player_backend.live_wire_policy import (
     ENDED,
     REPLACED,
     Message,
+    code_cancelled,
+    control_code,
     controller_joined,
     controller_left,
     decode,
@@ -90,7 +98,7 @@ class Hub:
         elif self._loop is not loop:
             raise RuntimeError("the live hub runs on one event loop")
 
-    def _watch(self, event: Ended | Dropped) -> None:
+    def _watch(self, event: Event) -> None:
         loop = self._loop
         if loop is None:
             return
@@ -99,12 +107,14 @@ class Hub:
         except RuntimeError as error:  # the loop is closed: the process is stopping
             _logged("live.event_lost", type(error).__name__, logging.WARNING)
 
-    def _guarded(self, event: Ended | Dropped) -> None:
+    def _guarded(self, event: Event) -> None:
         try:
             if isinstance(event, Ended):
                 self._ended(event)
-            else:
+            elif isinstance(event, Dropped):
                 self._dropped(event)
+            else:
+                self._cancelled(event)
         except Exception as error:  # one event must not cost the loop or the next event
             _logged("live.event_failed", type(error).__name__, logging.ERROR)
 
@@ -126,6 +136,11 @@ class Hub:
         self._send(link, ended("dropped"))
         link.close(ENDED)
         self._left(link)
+
+    def _cancelled(self, event: CodeCancelled) -> None:
+        host = self._hosts.get(event.session_id)
+        if host is not None:
+            self._send(host, code_cancelled(event.reason))
 
     # -- connections ----------------------------------------------------------------------
 
@@ -221,8 +236,22 @@ class Hub:
             self._result(link, message)
         elif route.type == "end":
             self._spawn(asyncio.to_thread(self.service.end, link.session_id, "host_ended"))
-        else:  # `make_code` and `drop`: the host operations of issue #171, not built yet
-            self._drop(link, "not_built")
+        elif route.type == "make_code":
+            self._make_code(link)
+        else:
+            # The host's `drop`: the one message left that the allowlist routes to the server
+            # (the host's set is held by tests/guards/test_guard_live_routing.py).
+            slot = message.get("slot")  # 1 or 2: the schema holds it to those integers
+            if isinstance(slot, int):
+                self.service.registry.host_drop(link.session_id, slot)
+
+    def _make_code(self, link: Link) -> None:
+        made = self.service.registry.make_code(link.session_id, self.service.clock())
+        if made is None:
+            return self._drop(link, "code_limit")
+        if made.earlier is not None:
+            self._send(link, code_cancelled(made.earlier))
+        self._send(link, control_code(made.code, made.expires_in_ms))
 
     def _command(self, link: Link, message: Message) -> None:
         if link.slot is None:  # not reached: only a controller's command has a route

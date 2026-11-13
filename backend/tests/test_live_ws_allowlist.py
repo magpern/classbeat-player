@@ -91,7 +91,10 @@ def test_from_the_host_only_companion_state_goes_on(live: Any) -> None:
         recv(host)
         expected: list[dict[str, Any]] = []
         for schema, message in EXAMPLES:
-            if schema == "end.schema.json":
+            # These act (end the session, answer the host, drop a phone): their own tests are
+            # test_live_ws_ends.py and test_live_control_codes.py, which also show that a
+            # controller is sent nothing of a control code.
+            if schema in {"end.schema.json", "make-code.schema.json", "drop.schema.json"}:
                 continue
             live.clock.now += 1.0
             host.send_json(message)

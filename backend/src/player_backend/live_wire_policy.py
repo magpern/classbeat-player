@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from typing import Final, Literal, cast
 
+from player_backend.live_code_policy import CancelReason
 from player_backend.live_session_policy import WireReason
 from player_backend.live_token_policy import Via
 
@@ -101,3 +102,12 @@ def controller_left(slot: int, via: Via) -> Message:
 
 def ended(reason: WireReason) -> Message:
     return {"v": 1, "type": "ended", "reason": reason}
+
+
+def control_code(code: str, expires_in_ms: int) -> Message:
+    """The new control code, for the host only (the routing allowlist holds it to the host)."""
+    return {"v": 1, "type": "control_code", "code": code, "expiresInMs": expires_in_ms}
+
+
+def code_cancelled(reason: CancelReason) -> Message:
+    return {"v": 1, "type": "code_cancelled", "reason": reason}
