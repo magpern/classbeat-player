@@ -116,7 +116,13 @@ def _taken_back_on_failure(request: Request) -> Generator[_Grant]:
     this exits after it, so a failed commit of the site session's transaction (which runs as
     `site_session` exits, after the route has returned) reaches here as well as a failed
     audit write. Declared after the body, as it counts as a dependency that holds a
-    transaction (guards/test_guard_body_order.py)."""
+    transaction (guards/test_guard_body_order.py).
+
+    `scope="function"` where it is declared is a choice, not a requirement: request-scoped, it
+    would see the same failed commit, as the function-scoped exits run inside the request's.
+    It is kept function-scoped so the release runs before the answer is sent. A place still
+    held when sending the answer fails, after the commit, is not freed here; the host's `drop`
+    frees it (tests/test_live_controller_routes.py)."""
     grant = _Grant()
     try:
         yield grant

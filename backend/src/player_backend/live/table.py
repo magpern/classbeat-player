@@ -3,11 +3,17 @@ id, by host token hash, by join code and by controller token hash; and who is to
 
 `Table` holds it; `Controllers` (live/controllers.py) and `Registry` (live/registry.py) act on it.
 Every method that reads or changes it holds `_lock`; the watchers are told after it is released.
+
+A session found past its lifetime outside the sweep (`host_session`, `controller_seat`, the
+control-code exchange, `sign_in_controller`) ends there, and its end is handed to the recorder
+the service set (`record_expiries`), as the sweep's are: the service writes `live.session_ended`.
+A session ends once (`_remove` answers None after that), so its end is handed over once.
 """
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 from uuid import UUID
@@ -60,11 +66,26 @@ class Table:
         self._by_controller: dict[bytes, tuple[UUID, int]] = {}
         self._watchers = Watchers()
         self._tell = self._watchers.tell
+        self._recorder: Callable[[Ended], None] | None = None
 
     def watch(self, watcher: Watcher) -> None:
         """Call `watcher` for every session that ends, every controller that is dropped and
         every control code that is cancelled."""
         self._watchers.add(watcher)
+
+    def record_expiries(self, recorder: Callable[[Ended], None]) -> None:
+        """Call `recorder` for every session ended on expiry outside the sweep (the sweep's
+        caller records those of `end_due` itself)."""
+        self._recorder = recorder
+
+    def _expiry_told(self, ended: Ended | None) -> None:
+        """Tell the watchers of a session ended on expiry outside the sweep, then hand it to the
+        recorder. Call with `_lock` released: the recorder writes to the database."""
+        if ended is None:
+            return
+        self._tell([ended])
+        if self._recorder is not None:
+            self._recorder(ended)
 
     def _remove(self, session_id: UUID, reason: EndReason) -> Ended | None:
         session = self._sessions.pop(session_id, None)

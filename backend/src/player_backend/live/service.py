@@ -10,7 +10,15 @@
   `auth_session_active` for every controller got by sign-in. Not active: the session ends
   (`revoked`), or that controller is dropped. A re-check the database does not answer changes
   nothing; the sweep ends a session left unconfirmed too long (live_session_policy.py).
-- `sweep`: the lifetimes, of the sessions and of their control codes.
+- `sweep`: the lifetimes, of the sessions and of their control codes. A session found past its
+  lifetime outside the sweep (a host's or controller's `hello`, the control-code exchange, a
+  sign-in) ends there and is recorded the same way: the registry hands its end to `_expired`
+  (`record_expiries`, live/table.py), so every path writes one `live.session_ended`. On the event
+  loop (a `hello`), the lookup and the hub's attach stay in one loop step, so a drop or an end
+  from another thread reaches the hub after the attach; only the write goes to a worker thread.
+  Any failure of that write is logged by its type and never fails the caller.
+  On the sign-in path the write takes a second pool connection while the request holds the site
+  session's; a full pool waits at most the pool's 5 seconds and is then a `DatabaseError`, logged.
 - `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
   `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
   transaction; if writing it or committing that transaction fails, the place is freed again
@@ -28,6 +36,7 @@ keeps only its allowed fields, so those values are in the message.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -62,6 +71,9 @@ class LiveService:
         self._unknown = UnknownSessions()
         self._unknown_lock = threading.Lock()
         self._sign_in = SignInLimits()
+        # Writes of expired sessions' ends handed off the event loop, held until done.
+        self._writes: set[asyncio.Future[None]] = set()
+        registry.record_expiries(self._expired)
 
     def start(self, ctx: AccountContext, device_hash: bytes, client: ClientInfo) -> Started | None:
         """Start a session for the request's device; None when the account has 3 elsewhere."""
@@ -83,6 +95,23 @@ class LiveService:
         if ended is not None:
             self._record(ended)
         return ended is not None
+
+    def _expired(self, ended: Ended) -> None:
+        """Record a session ended on expiry outside the sweep; off the loop when called on it."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # a route's or the re-check's thread: written here
+            self._record_guarded(ended)
+            return
+        write = loop.run_in_executor(None, self._record_guarded, ended)
+        self._writes.add(write)
+        write.add_done_callback(self._writes.discard)
+
+    def _record_guarded(self, ended: Ended) -> None:
+        try:
+            self._record(ended)
+        except Exception as error:  # never fails the hello, the route or the loop
+            _logged("live.end_not_recorded", type(error).__name__, logging.ERROR)
 
     def _record(self, ended: Ended) -> None:
         _logged("live.session_ended", ended.reason)

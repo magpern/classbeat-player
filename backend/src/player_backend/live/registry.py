@@ -119,12 +119,11 @@ class Registry(Controllers):
             session = None if found is None else self._sessions.get(found)
             if session is None:
                 return None
-            reason = expiry(session.clocks(), now)
-            if reason is None:
+            ended = self._expired(session, now)
+            if ended is None:
                 return session.id
-            ended = self._remove(session.id, reason)
-        # Its lifetime was over: it ends now, as the sweep would have ended it.
-        self._tell([ended] if ended else [])
+        # Its lifetime was over: it ends now, and is recorded, as the sweep would have ended it.
+        self._expiry_told(ended)
         return None
 
     def session_of_code(self, raw_code: object) -> UUID | None:
