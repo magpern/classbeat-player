@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/site-api/v1/me.schema.json",
+  "title": "MeAnswer",
+  "description": "The answer of GET /api/site/me for a site session (ADR 0002, section 4): the signed-in account's own email, as stored (trimmed and lower-cased, at most 254 characters), and nothing else. No other field is allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "email"
+  ],
+  "properties": {
+    "email": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 254,
+      "pattern": "^[^\\sA-Z]+@[^@\\sA-Z]+$"
+    }
+  }
+}

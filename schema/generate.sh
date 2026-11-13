@@ -47,6 +47,22 @@ for name in changes cursor error class; do
     --cwd "$api" --no-additionalProperties --declareExternallyReferenced
 done
 
+# The site's answers for a site session (ADR 0002, section 4). One module per schema:
+# schema/site-api/v1/<name>.schema.json -> site_api_<name>.py and site-api-<name>.d.ts.
+site="$here/site-api/v1"
+for path in "$site"/*.schema.json; do
+  name="$(basename "$path" .schema.json)"
+  uv run --project "$here/python" --frozen datamodel-codegen \
+    --input "$path" --input-file-type jsonschema \
+    --output "$out/python/site_api_${name//-/_}.py" \
+    --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 \
+    --use-standard-collections --use-union-operator --use-annotated --field-constraints \
+    --disable-timestamp --use-title-as-name --extra-fields forbid --formatters black isort
+  npm --prefix "$here/ts" exec --no -- json2ts \
+    --input "$path" --output "$out/ts/site-api-$name.d.ts" \
+    --cwd "$site" --no-additionalProperties
+done
+
 # The live sessions' HTTP bodies and WebSocket messages (ADR 0005, section 4). One module per
 # schema: schema/live/v1/<name>.schema.json -> live_<name>.py and live-<name>.d.ts.
 live="$here/live/v1"
