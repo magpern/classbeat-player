@@ -231,36 +231,26 @@ elif ! grep -Eq '^FROM node:[0-9]+[^ ]*@sha256:[0-9a-f]{64} AS web$' "$root/dock
 else
   ok "the Dockerfile builds the companion page in a pinned Node stage and copies only web/dist/control"
 fi
-# The allow lines are compared as a whole with the exact list the Dockerfile's COPY lines need
-# (issue #289): a missing, extra or wider entry (for example !schema/** or !web/) fails.
+# The whole dockerignore is compared, in order, with one exact list (issues #289, #294, #298). In a
+# dockerignore the later rule wins, so order matters: the catch-all `*` must come first (without it
+# the whole context, including a local .env or secrets/, goes to the build), the `!` allow lines are
+# exactly the paths the Dockerfile copies (a missing, extra or wider entry such as !schema/** or
+# !web/ fails), and the **/ lines come after them, so **/tests still removes backend/src/tests.
+# Comments and blank lines are skipped; CRLF and indentation are not trimmed, so they fail.
 # web/tsconfig.json is in the list because the web stage copies it (the TypeScript build reads it).
-want_allow="$(printf '%s\n' \
+di="$root/docker/backend.Dockerfile.dockerignore"
+want_di="$(printf '%s\n' \
+  '*' \
   '!backend/pyproject.toml' '!backend/uv.lock' '!backend/src' '!backend/db' \
   '!schema/python' '!schema/class-format' '!schema/live/v1' '!schema/generated/python' \
   '!docker/backend-entrypoint.sh' '!docker/purge-loop.sh' \
-  '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' | LC_ALL=C sort)"
-got_allow="$(grep -E '^[[:space:]]*!' "$root/docker/backend.Dockerfile.dockerignore" | LC_ALL=C sort)"
-if [ "$got_allow" = "$want_allow" ]; then
-  ok "backend.Dockerfile.dockerignore allows exactly the paths the Dockerfile copies"
+  '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' \
+  '**/.venv' '**/__pycache__' '**/tests' '**/node_modules')"
+got_di="$(grep -Ev '^[[:space:]]*(#|$)' "$di")"
+if [ "$got_di" = "$want_di" ]; then
+  ok "backend.Dockerfile.dockerignore holds exactly the expected rules, in order"
 else
-  bad "backend.Dockerfile.dockerignore allow lines differ from the expected list: $(diff <(printf '%s\n' "$want_allow") <(printf '%s\n' "$got_allow") | grep '^[<>]' | tr '\n' ' ')"
-fi
-# The deny lines too (issue #294): the first rule must be the catch-all `*` (without it the whole
-# context, including a local .env or secrets/, goes to the build), and the other non-allow lines
-# are compared as a whole, so a removed **/ line fails.
-di="$root/docker/backend.Dockerfile.dockerignore"
-first_rule="$(grep -Ev '^[[:space:]]*(#|$)' "$di" | head -n 1)"
-if [ "$first_rule" = "*" ]; then
-  ok "backend.Dockerfile.dockerignore starts by denying everything (*)"
-else
-  bad "backend.Dockerfile.dockerignore's first rule is '$first_rule', not *"
-fi
-want_deny="$(printf '%s\n' '*' '**/.venv' '**/__pycache__' '**/tests' '**/node_modules' | LC_ALL=C sort)"
-got_deny="$(grep -Ev '^[[:space:]]*(#|!|$)' "$di" | LC_ALL=C sort)"
-if [ "$got_deny" = "$want_deny" ]; then
-  ok "backend.Dockerfile.dockerignore has exactly the expected deny lines"
-else
-  bad "backend.Dockerfile.dockerignore deny lines differ from the expected list: $(diff <(printf '%s\n' "$want_deny") <(printf '%s\n' "$got_deny") | grep '^[<>]' | tr '\n' ' ')"
+  bad "backend.Dockerfile.dockerignore differs from the expected rules (< expected, > actual): $(diff <(printf '%s\n' "$want_di") <(printf '%s\n' "$got_di") | grep '^[<>]' | tr '\n' ' ')"
 fi
 if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
   ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
