@@ -231,13 +231,19 @@ elif ! grep -Eq '^FROM node:[0-9]+[^ ]*@sha256:[0-9a-f]{64} AS web$' "$root/dock
 else
   ok "the Dockerfile builds the companion page in a pinned Node stage and copies only web/dist/control"
 fi
-for allowed in web/package.json web/package-lock.json web/build.mjs web/src; do
-  if ! grep -Fxq "!$allowed" "$root/docker/backend.Dockerfile.dockerignore"; then
-    bad "backend.Dockerfile.dockerignore does not allow $allowed"
-  fi
-done
-if grep -Eq '^!web/?(\*)?$|^!web/(dist|test)' "$root/docker/backend.Dockerfile.dockerignore"; then
-  bad "backend.Dockerfile.dockerignore admits more of web/ than the build reads"
+# The allow lines are compared as a whole with the exact list the Dockerfile's COPY lines need
+# (issue #289): a missing, extra or wider entry (for example !schema/** or !web/) fails.
+# web/tsconfig.json is in the list because the web stage copies it (the TypeScript build reads it).
+want_allow="$(printf '%s\n' \
+  '!backend/pyproject.toml' '!backend/uv.lock' '!backend/src' '!backend/db' \
+  '!schema/python' '!schema/class-format' '!schema/live/v1' '!schema/generated/python' \
+  '!docker/backend-entrypoint.sh' '!docker/purge-loop.sh' \
+  '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' | LC_ALL=C sort)"
+got_allow="$(grep -E '^[[:space:]]*!' "$root/docker/backend.Dockerfile.dockerignore" | LC_ALL=C sort)"
+if [ "$got_allow" = "$want_allow" ]; then
+  ok "backend.Dockerfile.dockerignore allows exactly the paths the Dockerfile copies"
+else
+  bad "backend.Dockerfile.dockerignore allow lines differ from the expected list: $(diff <(printf '%s\n' "$want_allow") <(printf '%s\n' "$got_allow") | grep '^[<>]' | tr '\n' ' ')"
 fi
 if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
   ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
