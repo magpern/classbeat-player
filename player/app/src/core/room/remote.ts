@@ -3,12 +3,13 @@
 // Pure. Nothing else of the live session reaches the room window: never a control code, a token,
 // an account, a device or anything about a rider (ADR 0005 sections 2 and 3, rules 13 and 14).
 
-/** The second line under the Off button: none, "In use elsewhere" or "Phone remote ended". */
+/** The second line under the Phone remote button: none, "In use elsewhere" or "Phone remote ended". */
 export type RemoteNote = "none" | "in_use" | "ended";
 
+/** The slot's states: the spec's Absent, Off (`available`, with its second line), Starting, and On with Phone connected and Reconnecting. */
 export type RemoteView =
   | { readonly slot: "absent" }
-  | { readonly slot: "off"; readonly note: RemoteNote }
+  | { readonly slot: "available"; readonly note: RemoteNote }
   | { readonly slot: "starting" }
   | { readonly slot: "on"; readonly joinCode: string; readonly phones: 0 | 1 | 2; readonly reconnecting: boolean };
 
@@ -27,8 +28,8 @@ export function remoteViewOf(v: RemoteView): RemoteView {
   const r = v as unknown as Record<string, unknown> | null;
   if (r === null || typeof r !== "object") return REMOTE_ABSENT;
   switch (r.slot) {
-    case "off":
-      return typeof r.note === "string" && NOTES.includes(r.note) ? { slot: "off", note: r.note as RemoteNote } : REMOTE_ABSENT;
+    case "available":
+      return typeof r.note === "string" && NOTES.includes(r.note) ? { slot: "available", note: r.note as RemoteNote } : REMOTE_ABSENT;
     case "starting":
       return { slot: "starting" };
     case "on": {

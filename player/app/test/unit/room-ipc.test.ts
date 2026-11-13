@@ -1,6 +1,7 @@
 // The room screen's window keeps the shell's hardening: its own sender check and channel set
 // (core/ipc-policy.ts), a handler that answers only it and only with a RoomFrame, a preload that
-// can only read frames, and a page with its own policy. The presenter's pages never pass as the
+// reads frames and sends only the room's fixed controls (room-controls.test.ts), and a page with its
+// own policy. The presenter's pages never pass as the
 // room, and the room never passes as one of them.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,8 +9,9 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_ROOM_STATE, CH_ROOM_UPDATE } from "../../src/core/channels.ts";
-import { isRoomSender, pageOf, ROOM_CHANNELS } from "../../src/core/ipc-policy.ts";
+import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "../../src/core/channels.ts";
+import { isRoomSender, pageOf, ROOM_CHANNELS, ROOM_PUSH_CHANNELS } from "../../src/core/ipc-policy.ts";
+import { NO_REMOTE } from "../../src/core/room/remote.ts";
 import { roomFrameOf } from "../../src/core/room/frame.ts";
 import type { Snapshot } from "../../src/core/snapshot.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
@@ -66,7 +68,8 @@ function rig() {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
   let reads = 0;
-  registerRoomHandlers(bus, () => ROOM, { snapshot: () => (reads++, SNAP) });
+  const fail = (): never => assert.fail("a refused message reached the shell");
+  registerRoomHandlers(bus, () => ROOM, { snapshot: () => (reads++, SNAP), command: fail }, { endClass: fail, remote: NO_REMOTE, log: () => undefined });
   const ev = (id: number, url: string, parent: unknown = null, noFrame = false): IpcMainInvokeEvent =>
     ({ sender: { id }, senderFrame: noFrame ? null : { parent, url } }) as unknown as IpcMainInvokeEvent;
   return { handlers, ev, reads: () => reads };
@@ -78,25 +81,32 @@ test("the handler registers the room's channels only, and answers the room with 
   assert.deepEqual(r.handlers.get(CH_ROOM_STATE)!(r.ev(9, ROOM.roomUrl), { anything: 1 }), roomFrameOf(SNAP));
 });
 
-test("the handler refuses every other sender without reading the clock", () => {
+test("every room handler refuses every other sender without reading the clock or acting", () => {
   const r = rig();
-  const h = r.handlers.get(CH_ROOM_STATE)!;
-  for (const e of [r.ev(7, ROOM.roomUrl), r.ev(7, MAIN.presenterUrl), r.ev(9, MAIN.presenterUrl), r.ev(9, ROOM.roomUrl, {}), r.ev(9, ROOM.roomUrl, null, true)]) {
-    assert.equal(h(e, undefined), null);
+  for (const ch of ROOM_CHANNELS) {
+    const h = r.handlers.get(ch)!;
+    for (const e of [r.ev(7, ROOM.roomUrl), r.ev(7, MAIN.presenterUrl), r.ev(9, MAIN.presenterUrl), r.ev(9, ROOM.roomUrl, {}), r.ev(9, ROOM.roomUrl, null, true)]) {
+      assert.equal(h(e, ch === CH_ROOM_COMMAND ? { type: "start" } : undefined), null, ch);
+    }
   }
   assert.equal(r.reads(), 0);
 });
 
-test("the room preload exposes only `state` and `onUpdate`, and uses only the room's channels", () => {
+test("the room preload exposes exactly the room's functions, and uses only the room's channels", () => {
   const src = code(read("src", "preload", "room-preload.ts"));
-  assert.deepEqual([...src.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]).sort(), ["onUpdate", "state"]);
-  assert.deepEqual([...src.matchAll(/ipcRenderer\.invoke\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_STATE"]);
-  assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE"]);
-  assert.doesNotMatch(src, /ipcRenderer\.(send|sendSync|postMessage)\b/);
-  assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE]);
+  assert.deepEqual(
+    [...src.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]).sort(),
+    ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"],
+  );
+  const invoked = [...src.matchAll(/ipcRenderer\.invoke\((\w+)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(invoked)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"]);
+  assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE"]);
+  assert.doesNotMatch(src, /ipcRenderer\.(send|sendSync|postMessage|addListener|once)\b/);
+  assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP]);
+  assert.deepEqual(ROOM_PUSH_CHANNELS, [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE]);
   // The presenter's preload knows nothing of the room.
   assert.doesNotMatch(code(read("src", "preload", "preload.ts")), /CH_ROOM_|room:/);
-  assert.notEqual(CH_ROOM_UPDATE, CH_ROOM_STATE);
+  assert.equal(new Set([...ROOM_CHANNELS, ...ROOM_PUSH_CHANNELS]).size, ROOM_CHANNELS.length + ROOM_PUSH_CHANNELS.length);
 });
 
 test("room.html carries exactly the room's policy, before any script, and no inline script, style or handler", () => {
