@@ -1,6 +1,7 @@
 // The room screen's window (docs/design/class-list.md, "Where it sits"): opened when a class opens,
 // on the display `placeRoom` picks, shown without taking the keyboard from the presenter, sent a
-// RoomFrame with every snapshot, and closed with the class (`roomCloses`) or with the presenter.
+// RoomFrame with every snapshot, and closed with the class (`roomCloses`, core/room/lifecycle.ts) or with
+// the presenter. "Show the room screen" (menu.ts) opens it again through the same `open`.
 // It has the presenter's hardening (web-preferences.ts, hardening.ts), its own page and policy
 // (room.html, ROOM_CSP) and its own preload, which can only read frames.
 import { BrowserWindow, screen } from "electron";
@@ -27,6 +28,12 @@ export interface RoomWindowDeps {
   readonly preload: string;
   /** The presenter's window, beside which the room goes. */
   readonly presenter: () => BrowserWindow | null;
+}
+
+function raise(p: BrowserWindow | null): void {
+  if (!p || p.isDestroyed() || p.isMinimized()) return;
+  p.moveTop();
+  p.focus();
 }
 
 export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
@@ -65,6 +72,11 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
         if (win === w) win = null;
       });
       w.once("ready-to-show", () => {
+        // On the presenter's own display the presenter is raised above the room window once it
+        // shows, so no control is ever covered, also where there is no free room beside it
+        // (`behindPresenter`). Focus raises it where the system has no stacking request of its
+        // own; the presenter is where the instructor works, so it keeps the keyboard either way.
+        if (!place?.fullScreen) w.once("show", () => raise(d.presenter()));
         // The presenter keeps the keyboard and its controls (plan, section 9).
         w.showInactive();
         if (place?.fullScreen) w.setFullScreen(true);

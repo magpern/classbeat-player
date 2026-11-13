@@ -13,7 +13,7 @@ import { registerListHandlers } from "./list/list-handlers.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
-import { roomCloses } from "../core/room/placement.ts";
+import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
 import { setupPairing } from "./pairing/setup.ts";
@@ -57,6 +57,10 @@ function showPresenter(): void {
   showPage(PRESENTER_FILE);
   // "Back to the class" after the room window was closed by hand opens it again.
   if (controller.snapshot().doc !== null) room.open();
+}
+// File > Show the room screen: opens a room window closed by hand again, while the class is open.
+function showRoom(): void {
+  if (roomMayOpen(controller.snapshot().doc !== null, onListPage(), pinned())) room.open();
 }
 function showList(): void {
   showPage(LIST_FILE);
@@ -132,7 +136,7 @@ if (!app.requestSingleInstanceLock()) {
     registerRoomHandlers(ipcMain, () => room.trusted(), controller);
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
-    installMenu(() => void openClass(), showList);
+    installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();
     controller.attach(() => live()?.webContents ?? null);
   });
