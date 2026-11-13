@@ -50,6 +50,29 @@ const inState = (state: State, then?: Stage): Stage => async (f) => {
   await at(f, ".run");
   if (then) await then(f);
 };
+/**
+ * The words the fixtures table of docs/design/companion.md lists for a state, read from the page:
+ * every phrase in `shown` is on it, every phrase in `hidden` is not, and the interval countdown is
+ * marked estimated (`.count.est`) or not. A missing word fails the stage, so the shot fails.
+ */
+interface Words {
+  readonly shown: readonly string[];
+  readonly hidden?: readonly string[];
+  readonly estimated: boolean;
+  readonly keys?: readonly string[];
+}
+const showing = (state: State, w: Words): Stage =>
+  inState(state, async (f) => {
+    const text = async (): Promise<string> => (await f.page.locator("body").innerText()).replace(/\s+/g, " ");
+    await f.page.waitForSelector(`text=${w.shown[0]}`);
+    const body = await text();
+    for (const word of w.shown) assert.ok(body.toLowerCase().includes(word.toLowerCase()), `"${word}" is not on the page: ${body.slice(0, 300)}`);
+    for (const word of w.hidden ?? []) assert.ok(!body.toLowerCase().includes(word.toLowerCase()), `"${word}" is on the page`);
+    assert.equal(await f.page.locator(".count.est").count(), w.estimated ? 1 : 0, w.estimated ? "the countdown is not marked estimated" : "the countdown is marked estimated");
+    for (const key of w.keys ?? []) assert.ok((await f.page.locator(`[data-action=${key}]`).count()) > 0, `no ${key} key`);
+  });
+const FOLLOW = (state: string, change: State = {}): State => variant(FOLLOWING, { link: { mode: "following", state, canUndo: false, announcement: null }, ...change });
+
 const lastCommandId = (f: Fake): string => (JSON.parse(f.live.sent.filter((t) => t.includes('"command"')).at(-1) ?? "{}") as { id: string }).id;
 async function holdSkip(f: Fake, ms: number): Promise<void> {
   const box = await f.page.locator("[data-action=skip]").boundingBox();
@@ -99,15 +122,24 @@ const STATES: Readonly<Record<string, StateDef>> = {
   ended: { open: live, stage: inState(FOLLOWING, async (f) => (f.live.send({ v: 1, type: "ended", reason: "host_ended" }), void (await at(f, "[data-action=get_control]")))) },
   running: { open: live, stage: inState(FOLLOWING) },
   manual: { open: live, stage: inState(MANUAL) },
-  "off-list": { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "off_the_list", canUndo: false, announcement: null } })) },
+  "off-list": {
+    open: live,
+    stage: showing(FOLLOW("off_the_list"), { shown: ["Not a class song", "Interval left, estimated", "in about"], hidden: ["Following the music"], estimated: true }),
+  },
   "paused-following": {
     open: live,
-    stage: inState(variant(FOLLOWING, { status: "paused", link: { mode: "following", state: "paused", canUndo: false, announcement: null }, allowed: ["resume", "skip"] })),
+    stage: showing(FOLLOW("paused", { status: "paused", allowed: ["resume", "skip"] }), { shown: ["Music paused", "Paused"], hidden: ["Following the music", "estimated"], estimated: false, keys: ["resume"] }),
   },
-  coasting: { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "coasting", canUndo: false, announcement: null } })) },
-  ambiguous: { open: live, stage: inState(variant(FOLLOWING, { link: { mode: "following", state: "ambiguous", canUndo: false, announcement: null } })) },
+  coasting: {
+    open: live,
+    stage: showing(FOLLOW("coasting"), { shown: ["Music not heard", "Interval left, estimated", "in about"], hidden: ["Following the music"], estimated: true }),
+  },
+  ambiguous: {
+    open: live,
+    stage: showing(FOLLOW("ambiguous"), { shown: ["Song is in twice"], hidden: ["Following the music", "estimated", "about"], estimated: false }),
+  },
   "last-interval": { open: live, stage: inState(variant(FOLLOWING, { next: [], nextSong: null })) },
-  paused: { open: live, stage: inState(recorded("manual-paused-last-interval")) },
+  paused: { open: live, stage: showing(recorded("manual-paused-last-interval"), { shown: ["Manual clock", "Paused"], estimated: false, keys: ["resume", "nudge"] }) },
   "before-start": { open: live, stage: inState(recorded("not-started")) },
   resynced: { open: live, stage: inState(recorded("resync-announced")) },
   finished: { open: live, stage: inState(variant(MANUAL, { status: "ended", allowed: [] })) },

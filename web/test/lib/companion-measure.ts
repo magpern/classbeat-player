@@ -6,9 +6,12 @@
 //
 // The page's clock is paused (Playwright's clock), so no animation frame runs: a style change is
 // flushed by reading the layout, and the screenshot paints it.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
 import pageChecks, { CONTRAST, FLOORS } from "../spec/page/companion-checks.js";
+import { WEB_DIR } from "./browser.ts";
 import { HIDE, inkOf, shadowHues } from "./measure.ts";
 import type { Row } from "./measure.ts";
 
@@ -19,6 +22,37 @@ export interface CompanionResult {
   readonly png: Buffer;
   /** Per tier, the smallest cap height over its K1 floor (share and pixels both): 1.03 is 3 % above. */
   readonly margins: Readonly<Record<string, number>>;
+}
+
+/** Every colour of design/tokens.css written as a hex value, as the computed style prints it. */
+function tokenColours(): string[] {
+  const css = readFileSync(join(WEB_DIR, "src", "design", "tokens.css"), "utf8");
+  return [...css.matchAll(/--[\w-]+:\s*#([0-9a-f]{6})\b/gi)].map((m) => {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+    return `rgb(${r}, ${g}, ${b})`;
+  });
+}
+
+/** K10: every border that is drawn, on an element or on its ::before or ::after, is a token colour. */
+async function borderTokens(page: Page): Promise<Row[]> {
+  const off = await page.evaluate((tokens) => {
+    const found: string[] = [];
+    for (const el of document.querySelectorAll("body *")) {
+      for (const pseudo of [null, "::before", "::after"]) {
+        const c = getComputedStyle(el, pseudo);
+        if (pseudo && c.content === "none") continue;
+        for (const side of ["Top", "Right", "Bottom", "Left"]) {
+          const style = c.getPropertyValue(`border-${side.toLowerCase()}-style`);
+          const width = c.getPropertyValue(`border-${side.toLowerCase()}-width`);
+          const colour = c.getPropertyValue(`border-${side.toLowerCase()}-color`);
+          if (style === "none" || style === "hidden" || parseFloat(width) === 0) continue;
+          if (!tokens.includes(colour)) found.push(`${el.className || el.tagName}${pseudo ?? ""} border-${side.toLowerCase()} ${colour}`);
+        }
+      }
+    }
+    return found;
+  }, tokenColours());
+  return off.map((t) => ({ tier: "token", text: t.slice(0, 40), result: "FAIL border colour is not a design token (K10)" }));
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */
@@ -104,6 +138,7 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (K10)" });
   for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" });
   for (const [text, result] of pageRows) rows.push({ tier: "companion", text, result });
+  rows.push(...(await borderTokens(page)));
   rows.push(...(await motion(page)));
   return { rows, png, margins };
 }
