@@ -18,6 +18,9 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 
+/** The class list page's policy: the presenter's, and the page's own style sheet and fonts. */
+export const LIST_CSP = CSP.replace("style-src 'none'", "style-src 'self'").replace("font-src 'none'", "font-src 'self'");
+
 export interface SecureWebPreferences {
   readonly preload: string;
   readonly contextIsolation: true;

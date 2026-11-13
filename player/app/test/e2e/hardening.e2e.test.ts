@@ -37,7 +37,7 @@ test("the page has no Node and only the narrow preload API", async () => {
     process: typeof (globalThis as Record<string, unknown>).process,
     api: Object.keys((window as unknown as { player: object }).player).sort(),
   }));
-  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["command", "getState", "onUpdate", "openDropped", "pairingState", "startPairing", "unpair"] });
+  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["backToClass", "command", "dismissFileError", "getState", "listView", "onUpdate", "openClassFile", "openDropped", "pairingState", "reopenPairingPage", "startClass", "startPairing", "unpair"] });
 });
 
 test("CSP is present and blocks inline scripts and network requests", async () => {
@@ -112,15 +112,29 @@ test("IPC from the wrong window is refused and changes nothing", async () => {
         pairingState: await wc.executeJavaScript("window.player.pairingState()"),
         startPairing: await wc.executeJavaScript("window.player.startPairing()"),
         unpair: await wc.executeJavaScript("window.player.unpair()"),
+        reopen: await wc.executeJavaScript("window.player.reopenPairingPage()"),
+        listView: await wc.executeJavaScript("window.player.listView()"),
+        start: await wc.executeJavaScript("window.player.startClass('11111111-1111-4111-8111-111111111111', 'sha256:x')"),
+        openFile: await wc.executeJavaScript("window.player.openClassFile()"),
+        dismiss: await wc.executeJavaScript("window.player.dismissFileError()"),
+        back: await wc.executeJavaScript("window.player.backToClass()"),
       };
       w.destroy();
       return out;
     },
     { preload, presenterFile },
   );
-  assert.deepEqual(r, { state: null, command: null, open: null, pairingState: null, startPairing: null, unpair: null });
+  assert.deepEqual(r, { state: null, command: null, open: null, pairingState: null, startPairing: null, unpair: null, reopen: null, listView: null, start: null, openFile: null, dismiss: null, back: null });
   const afterState = await page.evaluate(() => (window as unknown as { player: { getState(): Promise<unknown> } }).player.getState());
   assert.deepEqual(afterState, before);
+});
+
+test("the presenter page cannot use the class list's channels", async () => {
+  const r = await page.evaluate(async () => {
+    const p = (window as unknown as { player: Record<string, (...a: unknown[]) => Promise<unknown>> }).player;
+    return [await p.listView(), await p.startClass("11111111-1111-4111-8111-111111111111", "sha256:x"), await p.openClassFile(), await p.dismissFileError(), await p.backToClass()];
+  });
+  assert.deepEqual(r, [null, null, null, null, null]);
 });
 
 test("malformed IPC from the presenter itself is refused", async () => {

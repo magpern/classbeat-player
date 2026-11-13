@@ -178,7 +178,9 @@ test("the browser is opened in one place, only with the pairing page, which the 
   assert.equal(setup.match(/\bopenExternal\b/g)?.length, 1, "one call site");
   assert.match(setup, /openPage: \(url\) => void shell\.openExternal\(url\)/);
   const service = src("main/pairing/service.ts");
-  assert.deepEqual([...service.matchAll(/\bd\.openPage\(([^)]*)\)/g)].map((m) => m[1]), ["e.page"]);
+  // The pairing page: the one in the start answer, and "Open the page again" opens that same page (the waiting state's), nothing else.
+  assert.deepEqual([...service.matchAll(/\bd\.openPage\(([^)]*)\)/g)].map((m) => m[1]), ["e.page", "state.page"]);
+  assert.match(src("core/pairing/machine.ts"), /kind: "waiting",[\s\S]*?page: answer\.page,/);
   // The open_page effect's page is the start answer's, and that is checked by pairingPageOn.
   const machine = src("core/pairing/machine.ts");
   assert.deepEqual([...machine.matchAll(/do: "open_page", page: ([\w.]+)/g)].map((m) => m[1]), ["answer.page"]);
@@ -202,16 +204,18 @@ test("the reader is built in the main process only, by platform", () => {
   assert.match(src("main/main.ts"), /selectMusic\(process\.platform\)/);
 });
 
-test("the preload bridge: the same four functions, and the three of pairing (#74), which take no argument", () => {
+test("the preload bridge: the same four functions, those of pairing (#74) and of the class list; only startClass takes arguments", () => {
   const preload = src("preload/preload.ts");
   const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
-  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "unpair"]);
-  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["unpair", "CH_UNPAIR"]]) {
+  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass"]);
+  // The class list's only argument is a class's id and hash (startClass); the shell parses it (core/list/commands.ts).
+  assert.match(preload, /^ {2}startClass: \(id: unknown, hash: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIST_START, \{ id, hash \}\),$/m);
+  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"]]) {
     assert.match(preload, new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${channel}\\),$`, "m"), name);
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back"],
   );
 });
 

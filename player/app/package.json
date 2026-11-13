@@ -15,7 +15,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test:unit": "node --import tsx --test \"test/unit/*.test.ts\"",
     "test:e2e": "npm run build && node --import tsx --test --test-concurrency=1 \"test/e2e/*.test.ts\"",
-    "test": "bash ci.sh"
+    "test": "bash ci.sh",
+    "test:shots": "npm run build && node --import tsx --test --test-concurrency=1 \"test/shots/*.test.ts\""
   },
   "dependencies": {
     "classformat": "file:../../schema/ts"

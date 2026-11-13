@@ -48,8 +48,10 @@ export interface SyncService {
    * Takes the snapshot of a cached class for play, or null when it is not held or does not read
    * back with its hash. Sync never changes it; a newer version applies after `unpin`.
    */
-  pin(id: string): Readonly<Record<string, unknown>> | null;
+  pin(id: string, hash?: string): Readonly<Record<string, unknown>> | null;
   unpin(): void;
+  /** Calls the listener after a change to what the class list shows (a class, the pin, the status or the wipe). */
+  watch(listener: () => void): void;
   stop(): void;
 }
 
@@ -59,12 +61,17 @@ export const MAX_PAGE_ANSWER_BYTES = 1024 * 1024;
 /** An answer with a class document: a document is at most 1 MiB (ADR 0002, section 7). */
 export const MAX_CLASS_ANSWER_BYTES = 2 * 1024 * 1024;
 
+/** What the class list shows depends on these; a new Map or object means a change (the model never edits one in place). */
+const listKey = (s: SyncState): readonly unknown[] => [s.account, s.held, s.published, s.notUpdated, s.pinned, s.status, s.wipePending, s.wipeAfterPin, s.lasting];
+const sameKey = (a: readonly unknown[], b: readonly unknown[]): boolean => a.every((x, i) => x === b[i]);
+
 export function createSyncService(d: SyncDeps): SyncService {
   let state: SyncState = INITIAL;
   let timer: unknown = null;
   let stopped = false;
   const queue: SyncEvent[] = [];
   let running = false;
+  const listeners: (() => void)[] = [];
 
   /** The credential for a request of the running sync: only while it is still that account's. */
   const credentialFor = (run: number): SyncCredential | null => {
@@ -158,6 +165,7 @@ export function createSyncService(d: SyncDeps): SyncService {
     queue.push(e);
     if (running) return;
     running = true;
+    const before = listKey(state);
     try {
       for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
         const out = step(state, next, d.now());
@@ -167,6 +175,7 @@ export function createSyncService(d: SyncDeps): SyncService {
     } finally {
       running = false;
     }
+    if (!sameKey(before, listKey(state))) for (const l of listeners) l();
   }
 
   const due = (): void => {
@@ -196,8 +205,10 @@ export function createSyncService(d: SyncDeps): SyncService {
       }
       return classListView(state, documents);
     },
-    pin(id) {
+    pin(id, seen) {
       const hash = state.held.get(id);
+      // The version the instructor saw: a class that changed since is refused.
+      if (seen !== undefined && seen !== hash) return null;
       const account = state.account;
       if (hash === undefined || account === null || state.wipeAfterPin || state.wipePending) return null;
       // Only the paired account's class, from a file that says it is that account's.
@@ -210,6 +221,9 @@ export function createSyncService(d: SyncDeps): SyncService {
     },
     unpin() {
       dispatch({ type: "unpin" });
+    },
+    watch(listener) {
+      listeners.push(listener);
     },
     stop() {
       stopped = true;

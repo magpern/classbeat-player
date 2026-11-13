@@ -17,6 +17,12 @@ export interface LaunchOptions {
   readonly env?: Readonly<Record<string, string>>;
   /** The user-data folder; a new temporary one when not given. */
   readonly userData?: string;
+  /**
+   * The page the window shows when the test starts. The app starts on the class list; the older
+   * tests are about the presenter, so by default the window is taken to the presenter page the way
+   * the shell does it (loadFile in the main process). "list" leaves it where the app put it.
+   */
+  readonly page?: "presenter" | "list";
 }
 
 export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronApplication; page: Page }> {
@@ -30,6 +36,13 @@ export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronA
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
+  if ((opts.page ?? "presenter") === "presenter") {
+    await app.evaluate(async ({ app: electron, BrowserWindow }) => {
+      await BrowserWindow.getAllWindows()[0]!.loadFile(`${electron.getAppPath()}/dist/presenter.html`);
+    });
+    await page.waitForFunction(() => location.pathname.endsWith("/presenter.html"));
+    await page.waitForLoadState("domcontentloaded");
+  }
   return { app, page };
 }
 

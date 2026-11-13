@@ -31,6 +31,8 @@ export interface PairingDeps {
 export interface PairingService {
   view(): PairingView;
   start(): PairingView;
+  /** While a code is waiting: opens the pairing page in the browser again. Nothing else changes. */
+  reopenPage(): PairingView;
   unpair(): PairingView;
   /** Reads a saved pairing, once, at startup, and asks the server whether it still works. */
   load(): void;
@@ -160,6 +162,16 @@ export function createPairingService(d: PairingDeps): PairingService {
     view,
     start() {
       dispatch({ type: "start", origin: d.origin(), keychain: d.store.available() });
+      return view();
+    },
+    reopenPage() {
+      if (state.kind === "waiting") {
+        try {
+          d.openPage(state.page);
+        } catch {
+          // The page can be opened by hand: its address is on the screen.
+        }
+      }
       return view();
     },
     unpair() {

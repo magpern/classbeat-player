@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Class player</title>
+<link rel="stylesheet" href="classlist.css">
+<script src="classlist.js" defer></script>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="head">
+    <div class="title"><h1>Classes</h1><span class="count" id="count" hidden></span></div>
+    <button type="button" id="open-file"><span>Open a class file…</span> <span class="kbd" id="open-key">Ctrl+O</span></button>
+  </header>
+  <div id="status-slot" class="slot"></div>
+  <div id="file-slot" class="slot"></div>
+  <div class="filter" id="filter" hidden>
+    <label for="filter-input" class="lbl">Find a class</label>
+    <div class="box"><input id="filter-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type to filter"><span class="kbd slash" id="filter-key" aria-hidden="true">/</span></div>
+    <span class="of" id="filter-of"></span>
+  </div>
+  <div id="body" class="slot"></div>
+  <p id="live" role="status" class="visually-hidden"></p>
+</div>
+</body>
+</html>
