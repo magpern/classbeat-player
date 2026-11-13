@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #177).
+Updated 2026-11-13 (after #218).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -30,10 +30,11 @@ classbeat's data shape with example classes (#27), the player API answers in `sc
 ADR 0005 (#166) decides transport, control and the contract; issues #167 to #174 follow its
 section 9. Merged: the contract `schema/live/v1` with its rule guards (#167, #176), the live
 re-check functions and revocation notices (#168, #175), the companion state and command intake in
-the player (#172, #177). In review: live sessions in the backend (#169, #178). In progress: the
-companion page spec (Designer). Next: the WebSocket (#170), then control codes (#171); the
-player's live client and panel (#173) after the spec. The companion page (#174) waits with #144
-on the owner's web-lane answer.
+the player (#172, #177), live sessions in the backend (#169, #178), the player's live client and
+panel (#173, #200; the `WebSocket` exception decided by the owner), the session ender (#203,
+#204) and its hardening (#205, #210), the control code as a QR (#201, #206), the quit that waits
+for the live `end` (#211, #212) and its hardening (#216, #217). The companion page (#174) waits
+with #144 on the owner's web-lane answer.
 
 ## PL2: backend and sign-in
 
@@ -155,10 +156,12 @@ Merged: #30 and its findings (#53).
 ## One screen (owner, 2026-11-13)
 
 The owner tried the Mac build on one screen: the room window hid the presenter window and its
-Start button. The owner decided the class runs on one screen (plan section 3). Next: a Designer
-spec for the room screen's own controls (Start, Pause, Previous, Next, End, shown on mouse move
-and fading out) and the phone join code on it, then the issues to build it. The presenter window
-stays for a second display.
+Start button. The owner decided the class runs on one screen (plan section 3). Merged: the room
+screen's controls spec (#195, #209, #214), the room window bridge (#197, #199), the controls band with clicker keys and the room
+window filling a single display (#198, #207), the phone-remote slot joined to the live client
+(#202, #213) and its "Can't reach site" retry (#215, #218). Held: the rail texts for following
+stopped (#208): the work is done in its worktree, but its commit and push were refused to the
+agent, so it waits for the owner (owner.md). The presenter window stays for a second display.
 
 ## Waiting for the owner
 
