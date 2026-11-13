@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13.
+Updated 2026-11-13 (after #148).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -31,8 +31,10 @@ backend deploy files with the hourly purge (#95, #97, #99, #100), the body size 
 600 document reads a minute, counted oversized publications and the SMTP deadline over DNS and
 connect (#103, #104), the player API answers in `schema/` (#106, #109), the class library on the
 site (#107, #110), account export and deletion (#108, #112), cursors bound to an account, the
-body cap keyed on the route and the class paging index (#115, #127). In progress: passkeys (#130,
-PR #134), the website pages spec (#131). Next: the website pages, purge counts (needs a
+body cap keyed on the route and the class paging index (#115, #127), passkeys (#130, #134) and
+their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry), the
+website pages spec (#131, #137). In progress: the website shell and sign-in (#144), held on a
+question for the owner (owner.md). Next: the other website pages, purge counts (needs a
 migration).
 
 ## PL4: screens
@@ -41,12 +43,14 @@ Merged: the design system and the plain 2D room screen spec (#22, #31), and its 
 #91); class sync and the offline cache (#111, #113); the room screen (#77, #85), its spec as
 built (#124) and its hardening (#119, #128, which also settles #122); sync hardening (#114, #121);
 the presenter window's minimum size (#123, #126); the class list spec (#116, #125) and its data
-(#129, #132). In progress: the class list screen (#133).
+(#129, #132); the class list screen (#133, #138) and its hardening (#142, #143); the room screen
+in its own window (#141, #148). In progress: the room window follow-ups (#149).
 
 ## Infra
 
 Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
-(#75, #76); the backend job also runs for changes under `schema/` (#88, #93).
+(#75, #76); the backend job also runs for changes under `schema/` (#88, #93); the class list
+screenshots are uploaded whenever the shot tests exist (#139, #140).
 
 ## Scene spike
 
@@ -82,6 +86,11 @@ Merged: #30 and its findings (#53).
   hashes every cached file, so the screen calls it only when the sync view changes (#132 review).
 - Screens: the zone-word check skips words over 16 letters; the next-row gap check has a 0.5 px
   tolerance (#128 review).
+- Player: the class list's lasting-fault panel says "restart the player" and its plate "Restart
+  the app"; one word when the panel is next touched (#143 design review). The #143 source test
+  of the wiring catches a deleted line, not a semantic change; moving that glue into a unit-tested
+  module, and making the drop callback of `registerHandlers` required (#143 review).
+- Backend: the account locks 7270003 and 7270011 still wait without a limit (#147).
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
 
