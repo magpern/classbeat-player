@@ -107,6 +107,34 @@ test("after last, queue, command, joined and tick do nothing, and only end goes 
   assert.equal(told, 1);
 });
 
+test("last on a publisher with no connection queues nothing, tells nobody and sends nothing, now or after a reconnect (#212 N1)", () => {
+  const b = bench();
+  b.p.disconnected();
+  const before = b.sent.length;
+  let told = 0;
+  assert.equal(b.p.last(END, () => void (told += 1)), false);
+  b.p.connected((text) => void b.sent.push(JSON.parse(text) as { type: string }));
+  b.advance(10 * WINDOW_MS);
+  assert.equal(b.sent.filter((m) => m.type === "end").length, 0);
+  assert.ok(b.sent.length >= before);
+  assert.equal(told, 0);
+  b.p.stop();
+  assert.equal(b.p.last(END, () => void (told += 1)), false);
+  assert.equal(told, 0);
+});
+
+test("a second last is refused: its callback is never told and only one end goes out (#212 N1)", () => {
+  const b = bench();
+  let first = 0;
+  let second = 0;
+  assert.equal(b.p.last(END, () => void (first += 1)), true);
+  assert.equal(b.p.last(END, () => void (second += 1)), false);
+  b.advance(10 * WINDOW_MS);
+  assert.equal(b.sent.filter((m) => m.type === "end").length, 1);
+  assert.equal(first, 1);
+  assert.equal(second, 0);
+});
+
 test("a stop from within a send ends the pump: nothing more goes out and no timer is set", () => {
   let timers = 0;
   const p = createPublisher({
