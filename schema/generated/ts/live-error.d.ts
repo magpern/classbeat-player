@@ -10,10 +10,11 @@
  */
 export interface LiveErrorBody {
   /**
-   * POST /api/live/sessions: 401 invalid_token, token_unknown, token_expired or token_revoked (the device token), 409 sessions_full (3 per account). POST /api/live/controller: 403 cannot_control, for every failure. POST /api/live/control: 403 invalid_code (unknown session or wrong code), 409 controllers_full. Any route: 422 invalid_request, 429 too_many_requests, 500 internal_error.
+   * POST /api/live/sessions: 401 invalid_token, token_unknown, token_expired or token_revoked (the device token), 409 sessions_full (3 per account). POST /api/live/controller: 403 cannot_control, for every failure. POST /api/live/control: 403 invalid_code (unknown session or wrong code), 409 controllers_full. Any route: 413 body_too_large (the body cap runs before routing), 422 invalid_request (not on POST /api/live/sessions, which takes no body), 429 too_many_requests, 500 internal_error.
    */
   error:
     | "invalid_request"
+    | "body_too_large"
     | "invalid_token"
     | "token_unknown"
     | "token_expired"

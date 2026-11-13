@@ -20,9 +20,9 @@
     { "type": "ended", "schema": "ended.schema.json", "from": ["server"], "to": ["host", "controller"] }
   ],
   "http": [
-    { "route": "POST /api/live/sessions", "credential": "device_token", "body": null, "answer": "session-answer.schema.json", "errors": ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "too_many_requests", "internal_error"] },
-    { "route": "POST /api/live/controller", "credential": "site_cookie", "body": "controller-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "cannot_control", "internal_error"] },
-    { "route": "POST /api/live/control", "credential": "none", "body": "control-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "invalid_code", "controllers_full", "too_many_requests", "internal_error"] }
+    { "route": "POST /api/live/sessions", "credential": "device_token", "body": null, "answer": "session-answer.schema.json", "errors": ["body_too_large", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "too_many_requests", "internal_error"] },
+    { "route": "POST /api/live/controller", "credential": "site_cookie", "body": "controller-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "body_too_large", "cannot_control", "internal_error"] },
+    { "route": "POST /api/live/control", "credential": "none", "body": "control-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "body_too_large", "invalid_code", "controllers_full", "too_many_requests", "internal_error"] }
   ],
   "errorSchema": "error.schema.json"
 }

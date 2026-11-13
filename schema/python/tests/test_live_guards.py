@@ -401,6 +401,7 @@ def test_http_errors_are_the_closed_enum() -> None:
     # The routing table lists only the answers a route gives: the cookie route never answers 429.
     assert by_route["POST /api/live/controller"] == {
         "invalid_request",
+        "body_too_large",
         "cannot_control",
         "internal_error",
     }
@@ -410,7 +411,7 @@ def test_http_errors_are_the_closed_enum() -> None:
 # The error set of each route, pinned in full (ts/test/live.test.ts pins the same table).
 ROUTE_ERRORS: dict[str, set[str]] = {
     "POST /api/live/sessions": {
-        "invalid_request",
+        "body_too_large",
         "invalid_token",
         "token_unknown",
         "token_expired",
@@ -419,9 +420,15 @@ ROUTE_ERRORS: dict[str, set[str]] = {
         "too_many_requests",
         "internal_error",
     },
-    "POST /api/live/controller": {"invalid_request", "cannot_control", "internal_error"},
+    "POST /api/live/controller": {
+        "invalid_request",
+        "body_too_large",
+        "cannot_control",
+        "internal_error",
+    },
     "POST /api/live/control": {
         "invalid_request",
+        "body_too_large",
         "invalid_code",
         "controllers_full",
         "too_many_requests",
