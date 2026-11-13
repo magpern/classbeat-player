@@ -9,6 +9,11 @@
 !schema/live/v1
 !docker/backend-entrypoint.sh
 !docker/purge-loop.sh
+!web/package.json
+!web/package-lock.json
+!web/tsconfig.json
+!web/build.mjs
+!web/src
 **/.venv
 **/__pycache__
 **/tests

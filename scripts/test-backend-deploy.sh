@@ -223,13 +223,29 @@ if grep -Eq '^COPY schema/live/v1 schema/live/v1$' "$root/docker/backend.Dockerf
 else
   bad "the Dockerfile does not copy schema/live/v1"
 fi
+# The companion page's build stage (issue #277): pinned Node, and only the files it reads.
+if ! grep -Eq '^COPY --from=web /web/dist/control web/dist/control$' "$root/docker/backend.Dockerfile"; then
+  bad "the Dockerfile does not copy web/dist/control from the web stage"
+elif ! grep -Eq '^FROM node:[0-9]+[^ ]*@sha256:[0-9a-f]{64} AS web$' "$root/docker/backend.Dockerfile"; then
+  bad "the Dockerfile's web stage is not a pinned Node image"
+else
+  ok "the Dockerfile builds the companion page in a pinned Node stage and copies only web/dist/control"
+fi
+for allowed in web/package.json web/package-lock.json web/build.mjs web/src; do
+  if ! grep -Fxq "!$allowed" "$root/docker/backend.Dockerfile.dockerignore"; then
+    bad "backend.Dockerfile.dockerignore does not allow $allowed"
+  fi
+done
+if grep -Eq '^!web/?(\*)?$|^!web/(dist|test)' "$root/docker/backend.Dockerfile.dockerignore"; then
+  bad "backend.Dockerfile.dockerignore admits more of web/ than the build reads"
+fi
 if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
   ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
 else
   bad "backend.Dockerfile.dockerignore does not allow schema/live/v1"
 fi
 # The built image holds the schemas where the backend reads them, and the backend loads them.
-# Needs a Docker daemon and the network an image build already uses (base image, PyPI).
+# Needs a Docker daemon and the network an image build already uses (base images, PyPI, npm).
 if docker info >/dev/null 2>&1; then
   image="player-backend-test:$$"
   if docker build -q -f "$root/docker/backend.Dockerfile" -t "$image" "$root" >"$tmp/build.log" 2>&1; then
@@ -242,6 +258,57 @@ assert schemas.valid("hello.schema.json", {}) in (True, False)
       ok "the image has schema/live/v1/routing.json where the backend reads it"
     else
       bad "the image cannot load the live schemas: $(head -c 400 "$tmp/run.log")"
+    fi
+    # The companion page (issue #277): the image holds the built page where the backend reads it,
+    # and GET /control answers 200 with the /control headers. The app is called as an ASGI
+    # application (no lifespan, so no database and no socket). GET, not HEAD: HEAD is a 405.
+    if docker run --rm --entrypoint python \
+      -e PLAYER_DATABASE_URL=postgresql://player_app:x@db/player \
+      -e PLAYER_SITE_ORIGIN=https://player.example.com \
+      "$image" -I -c '
+import asyncio
+
+from player_backend.app import create_app
+from player_backend.control_page import CONTROL_DIR
+from player_backend.settings import Settings
+
+assert str(CONTROL_DIR) == "/srv/classbeat-player/web/dist/control", CONTROL_DIR
+assert (CONTROL_DIR / "index.html").is_file(), "no built page"
+app = create_app(Settings.from_env(), live_recheck=None)
+sent = []
+
+
+async def receive():
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+async def send(message):
+    sent.append(message)
+
+
+scope = {
+    "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+    "scheme": "http", "path": "/control", "raw_path": b"/control", "query_string": b"",
+    "headers": [(b"host", b"player.example.com")], "client": ("127.0.0.1", 1),
+    "server": ("player.example.com", 80), "root_path": "",
+}
+asyncio.run(app(scope, receive, send))
+start = next(m for m in sent if m["type"] == "http.response.start")
+headers = {k.decode().lower(): v.decode() for k, v in start["headers"]}
+body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+assert start["status"] == 200, start["status"]
+assert headers["content-type"].startswith("text/html"), headers["content-type"]
+assert b"<html" in body.lower(), "not the page"
+csp = headers["content-security-policy"]
+assert "default-src '"'"'none'"'"'" in csp and "frame-ancestors '"'"'none'"'"'" in csp, csp
+assert headers["referrer-policy"] == "no-referrer"
+assert headers["x-content-type-options"] == "nosniff"
+assert headers["x-frame-options"] == "DENY"
+assert headers["cache-control"] == "no-store"
+' >"$tmp/control.log" 2>&1; then
+      ok "the image serves GET /control: 200 with the CSP, no-referrer, nosniff, DENY and no-store"
+    else
+      bad "the image does not serve /control as expected: $(tail -c 400 "$tmp/control.log")"
     fi
   else
     bad "the backend image did not build: $(tail -c 400 "$tmp/build.log")"

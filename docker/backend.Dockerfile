@@ -6,7 +6,20 @@
 # The sources stay in their repository layout because the backend reads the class format's
 # schemas from `schema/class-format/` and `schema/live/` next to `backend/` (class_schemas.py,
 # live/schemas.py: the package is installed editable from backend/src, so both find the root).
-# Pinned by digest (the multi-arch index of python:3.12-slim-bookworm); update it on purpose.
+#
+# The handlebar companion page (`/control`, issue #277) is built in a first stage, with the same
+# Node major as CI, and only `web/dist/control` is copied into the final image, where the backend
+# reads it (control_page.py: CONTROL_DIR). Node and npm stay out of the final image.
+#
+# Both bases are pinned by digest (the multi-arch indexes of node:24-bookworm-slim and
+# python:3.12-slim-bookworm); update them on purpose.
+FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json web/tsconfig.json web/build.mjs ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY web/src src
+RUN npm run build
+
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
 
 ENV PYTHONUNBUFFERED=1 \
@@ -24,6 +37,7 @@ COPY schema/live/v1 schema/live/v1
 COPY backend/pyproject.toml backend/uv.lock backend/
 COPY backend/src backend/src
 COPY backend/db backend/db
+COPY --from=web /web/dist/control web/dist/control
 RUN cd backend && uv sync --locked --no-dev
 
 COPY docker/backend-entrypoint.sh docker/purge-loop.sh /usr/local/bin/
