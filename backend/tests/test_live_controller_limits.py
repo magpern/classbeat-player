@@ -192,3 +192,18 @@ def test_both_places_held_counts_against_neither_limit(site: Site, clock: Clock)
         assert (answer.status_code, answer.json()) == (409, {"error": "controllers_full"})
     assert service.refused_for(address_hash(ip_address(ADDRESS))) is None
     assert not service.signed_out_refused(address_hash(ip_address(ADDRESS)))
+
+
+def test_an_address_over_the_control_limit_still_signs_in(site: Site, clock: Clock) -> None:
+    """A rider on the studio's shared address cannot lock the instructor out: the address
+    refused by `/control`'s per-address limit is not refused on the sign-in route."""
+    browser, live = _hosting(site)
+    join = live["joinCode"]
+    phone = site.browser()  # the same address as the instructor's browser
+    for _ in range(60):
+        answer = phone.post(CONTROL, json={"session": _unknown(join), "code": "BCDF-GHJK"})
+        assert (answer.status_code, answer.json()) == (403, {"error": "invalid_code"})
+    limited = phone.post(CONTROL, json={"session": join, "code": _code(site, live)})
+    assert (limited.status_code, limited.json()) == (429, {"error": "too_many_requests"})
+    assert _service(site).refused_for(address_hash(ip_address(ADDRESS))) is not None
+    assert _ask(browser, join).status_code == 200
