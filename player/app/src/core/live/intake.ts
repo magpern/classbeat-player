@@ -6,8 +6,12 @@
 //   4. a basis published more than `staleMs` ago (3 s): `stale`;
 //   5. an action not in the last published `allowed`: `not_allowed`;
 //   6. the route now would hand the clock over to manual: `would_stop_following`;
-//   7. otherwise `applied`, with the ClockCommand the caller sends down the presenter's path.
-// The one exception to 6 is `undo_resync`: ADR 0001's undo returns to the manual clock.
+//   7. the action does nothing now, or is not offered now, though the phone's picture offered it
+//      (a nudge once the clock follows the music again, in any link state; an undo whose window
+//      has closed; a start after the presenter started): `not_allowed`, nothing applied;
+//   8. otherwise `applied`, with the ClockCommand the caller sends down the presenter's path.
+// The one exception to 6 is `undo_resync`: ADR 0001's undo returns to the manual clock. Check 7
+// asks the same `allowedActions` the next state will carry, so `applied` always means done.
 import type { CommandResult } from "../../../../../schema/generated/ts/live-command-result.d.ts";
 import type { CompanionState } from "../../../../../schema/generated/ts/live-companion-state.d.ts";
 import type { ForwardedCommand } from "../../../../../schema/generated/ts/live-command-forwarded.d.ts";
@@ -15,6 +19,7 @@ import type { ClockCommand } from "../commands.ts";
 import type { PlayerState } from "../player-state.ts";
 import { command, routeFor } from "../player-state.ts";
 import { toClockCommand, UNDO_ACTION } from "./actions.ts";
+import { allowedActions } from "./allowed.ts";
 import type { CompanionAction } from "./actions.ts";
 import { parseForwardedCommand } from "./forwarded.ts";
 
@@ -68,7 +73,7 @@ export function recordPublished(m: IntakeMemory, state: CompanionState, at: numb
 
 const answer = (c: ForwardedCommand, result: CommandResult["result"], reason: Reason | null): CommandResult => ({ v: 1, type: "command_result", slot: c.slot, id: c.id, result, reason });
 
-/** Why the command is refused, or null when it is to be applied (checks 2 to 6). */
+/** Why the command is refused, or null when it is to be applied (checks 2 to 7). */
 function refusal(m: IntakeMemory, s: PlayerState, c: ForwardedCommand, cmd: ClockCommand | null, now: number, canSend: boolean, cfg: IntakeConfig): Reason | null {
   if (c.run !== m.run) return "stale_run";
   const current = m.published.at(-1);
@@ -78,6 +83,7 @@ function refusal(m: IntakeMemory, s: PlayerState, c: ForwardedCommand, cmd: Cloc
   if (!current.allowed.includes(c.action)) return "not_allowed";
   if (cmd === null) return "invalid";
   if (c.action !== UNDO_ACTION && stopsFollowing(s, cmd, now, canSend)) return "would_stop_following";
+  if (!allowedActions(s, now, canSend).includes(c.action)) return "not_allowed";
   return null;
 }
 

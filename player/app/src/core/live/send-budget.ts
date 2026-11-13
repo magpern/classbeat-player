@@ -5,6 +5,9 @@
 //   second, and at once when a controller joins;
 // - command_results go first, then the host's other messages, then the state;
 // - fewer than 8 messages in any second, all kinds together.
+// Results always go before the state, so the 1 s heartbeat holds only while the other messages
+// stay at 6 or fewer a second. They do: the server lets at most 4 commands a second reach the host
+// (2 per controller), and make_code, drop and end are rare. Results are never dropped to make room.
 import type { CommandResult } from "../../../../../schema/generated/ts/live-command-result.d.ts";
 import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
 import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";

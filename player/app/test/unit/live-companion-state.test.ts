@@ -93,3 +93,11 @@ test("long texts are clipped to the contract's lengths", () => {
   assert.equal(st?.now.zone.name.length, 80);
   assert.equal(st?.nextSong?.title.length, 200);
 });
+
+test("holding and paused: a hold at a window's end says holding; a paused music or clock says paused; the class end says ended", () => {
+  const at = (link: Parameters<typeof loaded>[0], status: Parameters<typeof loaded>[1]) => companionStateOf(loaded(link, status), NOW, true, RUN, 0)?.status;
+  assert.equal(at(following("Locked", { held: true, holdUntil: NOW + 4000 }), "paused"), "holding", "the clock stands still at the window's end");
+  assert.equal(at(following("Paused", { held: false }), "paused"), "paused", "the music is paused");
+  assert.equal(at({ mode: "manual", state: "Manual", held: false }, "paused"), "paused");
+  assert.equal(at(following("Locked", { held: true, holdUntil: NOW + 4000 }), "ended"), "ended", "the end wins over a hold");
+});

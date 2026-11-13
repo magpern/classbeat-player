@@ -3,7 +3,6 @@
 // free text but the class's own cue, zone names and song titles; announcements cross as a kind.
 import type { Class } from "../../../../../schema/generated/ts/class.d.ts";
 import type { Announcement, CompanionState, ComingInterval, LinkState, NextSong, Zone } from "../../../../../schema/generated/ts/live-companion-state.d.ts";
-import { planFrom } from "../clock/plan.ts";
 import type { LinkStateName, Announcement as LinkAnnouncement } from "../link/types.ts";
 import { HANDOVER_TEXT } from "../link/while-following.ts";
 import type { PlayerState } from "../player-state.ts";
@@ -35,8 +34,8 @@ function zoneOf(doc: Class, zone: number): Zone {
   return { number: zone, name: name.length > 0 ? name : `Zone ${zone}` };
 }
 
-function nextSongOf(doc: Class, classMs: number): NextSong | null {
-  if (planFrom(doc).manualOnly) return null;
+function nextSongOf(doc: Class, manualOnly: boolean, classMs: number): NextSong | null {
+  if (manualOnly) return null;
   const song = doc.songs.find((s) => s.start_ms > classMs);
   if (song === undefined) return null;
   const title = clip(song.title, MAX_SONG_TEXT);
@@ -86,7 +85,7 @@ export function companionStateOf(s: PlayerState, now: number, canSend: boolean, 
       remainingMs: ms(holding && link.holdRemainingMs !== null ? link.holdRemainingMs : view.intervalRemainingMs),
     },
     next: next as CompanionState["next"],
-    nextSong: nextSongOf(doc, view.classMs),
+    nextSong: nextSongOf(doc, l.plan.manualOnly, view.classMs),
     link: {
       mode: link.mode,
       state: STATE_NAMES[link.state],

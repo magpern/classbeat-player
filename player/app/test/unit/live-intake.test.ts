@@ -9,8 +9,9 @@ import type { CompanionAction } from "../../src/core/live/actions.ts";
 import { parseForwardedCommand } from "../../src/core/live/forwarded.ts";
 import { DEFAULT_INTAKE_CONFIG, intake, newIntake, recordPublished, REMEMBERED_COMMANDS } from "../../src/core/live/intake.ts";
 import type { IntakeOutcome } from "../../src/core/live/intake.ts";
+import type { PlayerState } from "../../src/core/player-state.ts";
 import { companionStateOf } from "../../src/core/live/companion-state.ts";
-import { following, forwarded, id, loaded, NOW, OTHER_RUN, published, RUN, validCommandResult } from "./live-rig.ts";
+import { following, forwarded, id, loaded, NOW, OTHER_RUN, published, RUN, undoable, validCommandResult } from "./live-rig.ts";
 
 // Type test: the intake hands on a ClockCommand or nothing, never anything else.
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -162,4 +163,54 @@ test("the order: stale_run before invalid before stale before not_allowed before
   assert.equal(r({}), "not_allowed");
   const all = published(locked, true, 0, NOW, ["pause"]);
   assert.equal(intake(all, locked, forwarded("pause"), NOW, false).result?.reason, "would_stop_following");
+});
+
+// Published on one state, tapped on a changed one (review of #177, B1 and N1).
+const manualRunning = loaded({ mode: "manual", state: "Manual" }, "running");
+
+test("a nudge published on the manual clock is refused once the clock follows the music again, in any link state", () => {
+  const m = published(manualRunning, true);
+  assert.ok(m.published[0].allowed.includes("nudge"));
+  const changed: readonly [string, PlayerState][] = [
+    ["Follow picked, not locked yet", loaded({ mode: "following", state: "Manual", everLocked: false }, "running")],
+    ["Coasting", loaded(following("Coasting"), "running")],
+    ["Off the list", loaded(following("Off the list"), "running")],
+    ["Locked", loaded(following("Locked"), "running")],
+  ];
+  for (const [name, now] of changed) {
+    for (const deltaMs of [5000, -5000]) {
+      for (const canSend of [true, false]) {
+        const out = intake(m, now, forwarded("nudge", { deltaMs }), NOW + 500, canSend);
+        assert.equal(out.result?.result, "refused", name);
+        assert.ok(out.result?.reason === "not_allowed" || out.result?.reason === "would_stop_following", `${name}: ${out.result?.reason}`);
+        assert.equal(out.command, null, name);
+      }
+    }
+  }
+  assert.equal(intake(m, changed[1][1], forwarded("nudge"), NOW + 500, true).result?.reason, "not_allowed", "coasting: no handover, just not offered");
+  assert.equal(intake(m, changed[3][1], forwarded("nudge"), NOW + 500, true).result?.reason, "would_stop_following", "locked: the route is a handover");
+});
+
+test("an undo published while it could be undone is refused once its window has closed, and applied just before", () => {
+  const s = loaded(undoable({ undo: { clockMs: 90_000, at: NOW - 29_000, until: NOW + 1000 } }), "running");
+  const m = published(s, true);
+  assert.ok(m.published[0].allowed.includes("undo_resync"));
+  assert.equal(intake(m, s, forwarded("undo_resync"), NOW + 1000, true).result?.result, "applied");
+  assert.deepEqual(refusedFor(intake(m, s, forwarded("undo_resync", { id: id(2) }), NOW + 1001, true)), ["refused", "not_allowed", null]);
+  const gone = loaded(following("Locked"), "running");
+  assert.deepEqual(refusedFor(intake(m, gone, forwarded("undo_resync", { id: id(3) }), NOW, true)), ["refused", "not_allowed", null], "or once it was superseded");
+});
+
+test("an action that does nothing by the time it arrives is refused, not applied (start after the presenter started)", () => {
+  const ready = loaded({ mode: "manual", state: "Manual" }, "ready");
+  const m = published(ready, true);
+  assert.ok(m.published[0].allowed.includes("start"));
+  assert.deepEqual(refusedFor(intake(m, manualRunning, forwarded("start"), NOW + 200, true)), ["refused", "not_allowed", null]);
+  assert.deepEqual(refusedFor(intake(published(manualRunning, true), loaded({ mode: "manual", state: "Manual" }, "paused"), forwarded("pause"), NOW, true)), ["refused", "not_allowed", null]);
+});
+
+test("a route that became a handover is still would_stop_following, ahead of not_allowed", () => {
+  const m = published(loaded(following("Paused"), "paused"), true);
+  assert.ok(m.published[0].allowed.includes("resume"));
+  assert.equal(intake(m, loaded(following("Paused"), "paused"), forwarded("resume"), NOW, false).result?.reason, "would_stop_following");
 });
