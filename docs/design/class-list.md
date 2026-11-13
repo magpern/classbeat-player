@@ -38,20 +38,26 @@ choice, no zone profile, no rider data, no ranking (rule 13).
   (state "Class file not opened").
 - **Where the room window goes.** On the display the instructor last moved it to in this session,
   while that display is still connected and is not the presenter's; otherwise on the largest
-  display other than the presenter's, in full screen. With one display, the room screen is a
-  16:9 window inside the work area, at most 1280 px wide, beside the presenter where a side has
-  room for it; on a small work area it may be narrower than 640 px and may cover part of the
-  presenter (#149 tracks keeping the presenter's controls clear). It is a rehearsal view: room-2d.md's room-distance heights (C1) and its 720-line minimum do not
-  apply to it, while contrast, overlap and zone checks still do. The window is shown without
-  taking the keyboard from the presenter. There is no display picker in this version; the
-  instructor moves the window.
-- **When the room window closes.** It closes when the instructor is on the class list with no
-  class pinned. While a class is pinned the list offers "Back to the class" and the room stays.
-  When the class ends it stays on "Class Complete" for as long as the instructor stays in the
-  class; if the class ends while the instructor is on the list, it closes then. A class opened
-  from a file is never pinned, so it closes when the instructor returns to the list. Closing the
-  presenter closes the room window and quits the application. "Back to the class" reopens a room
-  window that was closed by hand.
+  display other than the presenter's, in full screen. With one display, the room screen is a 16:9
+  window inside the work area, at most 1280 px wide and at least 480x270 (smaller only when the
+  work area is), in the largest free part to the right, left, below or above the presenter, so it
+  never covers the presenter. When no free part holds 480x270, the window goes behind the
+  presenter, which is raised above it so none of its controls is covered. The presenter is raised
+  only in that case, and it takes the keyboard only when the application already has it: a class
+  opened while another application has the focus leaves that focus where it is. Beside the
+  presenter nothing is raised or focused. It is a rehearsal view: room-2d.md's room-distance
+  heights (C1) and its 720-line minimum do not apply to it, while contrast, overlap and zone
+  checks still do. The window is shown without taking the keyboard from the presenter. There is no
+  display picker in this version; the instructor moves the window.
+- **When the room window closes, and how it comes back.** It closes when the instructor is on the
+  class list with no class pinned. While a class is pinned the list offers "Back to the class" and
+  the room stays. When the class ends it stays on "Class Complete" for as long as the instructor
+  stays in the class; if the class ends while the instructor is on the list, it closes then. A
+  class opened from a file is never pinned, so it closes when the instructor returns to the list.
+  Closing the presenter closes the room window and quits the application. A room window closed by
+  hand comes back with "Back to the class" or with File > "Show the room screen"
+  (CmdOrCtrl+Shift+R). That menu item is greyed out whenever the room window may not open (no
+  class open, or the instructor is on the list with no class pinned) and enabled otherwise.
 
 ## Content, in priority order
 
@@ -96,7 +102,8 @@ wide, centred; side padding 32 px; vertical order is fixed.
 | 1280×800 | As drawn | 7 / 6 |
 | 1000×720 (the player's default window less its title bar, and the smallest) | As drawn | 6 / 5; 5 rows is the minimum when a plate is shown (expired, file error) |
 
-The class list keeps the presenter's minimum window size, 1000×720, because both use the same window; nothing smaller is a design size. The shell sets that minimum (#123, merged in #126).
+The class list keeps the presenter's minimum window size, 1000×720, because both use the same
+window; nothing smaller is a design size. The shell sets that minimum (#123, merged in #126).
 
 | Region | Content | Behaviour |
 |---|---|---|
@@ -107,7 +114,8 @@ The class list keeps the presenter's minimum window size, 1000×720, because bot
 | List | Rows, sorted by title A to Z | The only region that scrolls (always-visible scroll bar, `scrollbar-width: auto`) |
 | Footer | The selected class's title (at most two lines, then an ellipsis; the full title is in its row) and the Start button | Fixed; absent where there is no list |
 
-Rows grow with their content: a title may take up to four lines before it would be cut (the worst case, 80 wide capitals, takes
+Rows grow with their content: a title may take up to four lines before it would be cut (the worst
+case, 80 wide capitals, takes
 three at 1000 px wide: mock-up "Long titles"). Nothing else changes size.
 
 ### A row
@@ -134,7 +142,8 @@ with the keyboard focus in the list it also has a 3 px white outline. Selection 
 alone.
 
 **Order:** title A to Z, compared without regard to case or accents; equal titles by id. No
-row is ever moved because of when it was updated, started or played. The order does not change when a sync adds or updates a class, except that
+row is ever moved because of when it was updated, started or played. The order does not change when
+a sync adds or updates a class, except that
 the class appears where its title puts it; the selection stays on the same class (by id), and
 the row is scrolled into view only when the instructor moved the selection.
 
@@ -144,7 +153,8 @@ the list and the footer.
 
 ## States
 
-The body is chosen in this order: (0) cache unreadable (`unavailable`), (1) cache being wiped, (2) pairing in progress, (3) not
+The body is chosen in this order: (0) cache unreadable (`unavailable`), (1) cache being wiped, (2)
+pairing in progress, (3) not
 paired, (4) paired. In (4) the status line follows `SyncView.status`. The marker shapes are
 white and carry no hue: a filled circle for "fine", a hollow circle for "working", a hollow
 square for "away" (a normal state with no action). A **white plate with black text** is for the
@@ -212,7 +222,8 @@ is still there); with no classes, the primary button of the panel.
 ## Measurable criteria
 
 Checked by the mock-up checks in [mockups/measure.js](mockups/measure.js) on every state at
-every window size below (57 renderings: 19 states at three sizes); the product's CI screenshots are held to the same
+every window size below (57 renderings: 19 states at three sizes); the product's CI screenshots are
+held to the same
 numbers.
 
 | # | Check | Number |
