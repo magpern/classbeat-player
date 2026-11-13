@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #218).
+Updated 2026-11-13 (after #225).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -33,7 +33,9 @@ re-check functions and revocation notices (#168, #175), the companion state and 
 the player (#172, #177), live sessions in the backend (#169, #178), the player's live client and
 panel (#173, #200; the `WebSocket` exception decided by the owner), the session ender (#203,
 #204) and its hardening (#205, #210), the control code as a QR (#201, #206), the quit that waits
-for the live `end` (#211, #212) and its hardening (#216, #217). The companion page (#174) waits
+for the live `end` (#211, #212) and its hardening (#216, #217), the audit of sessions that end on
+expiry outside the sweep (#220, #225), the tighter routing table and string bounds (#221, #223)
+and the live publisher and listener hardening (#222, #224). The companion page (#174) waits
 with #144 on the owner's web-lane answer.
 
 ## PL2: backend and sign-in
@@ -157,11 +159,12 @@ Merged: #30 and its findings (#53).
 
 The owner tried the Mac build on one screen: the room window hid the presenter window and its
 Start button. The owner decided the class runs on one screen (plan section 3). Merged: the room
-screen's controls spec (#195, #209, #214), the room window bridge (#197, #199), the controls band with clicker keys and the room
-window filling a single display (#198, #207), the phone-remote slot joined to the live client
-(#202, #213) and its "Can't reach site" retry (#215, #218). Held: the rail texts for following
-stopped (#208): the work is done in its worktree, but its commit and push were refused to the
-agent, so it waits for the owner (owner.md). The presenter window stays for a second display.
+screen's controls spec (#195, #209, #214), the room window bridge (#197, #199), the controls band
+with clicker keys and the room window filling a single display (#198, #207), the phone-remote
+slot joined to the live client (#202, #213) and its "Can't reach site" retry (#215, #218).
+Held: the rail texts for following stopped (#208): the work is done in its worktree, but its
+commit and push were refused to the agent, so it waits for the owner (owner.md). The presenter
+window stays for a second display.
 
 ## Waiting for the owner
 
