@@ -85,10 +85,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
       - name: npm ci and npm test in every package
         run: bash scripts/run-node-packages.sh .
-      # Runs only when the run produced the screenshots (hashFiles is empty when the folder is
-      # missing or empty), so main stays green before the class list screenshots exist.
+      # Conditioned on the committed screenshot sources (hashFiles is empty when they do not exist
+      # yet), so main stays green before #138 lands and the upload then fails CI if no screenshots
+      # were produced. always() uploads on red runs too, like room-screenshots.
       - name: Keep the class list screenshots
-        if: hashFiles('player/app/screenshots/**') != ''
+        if: always() && hashFiles('player/app/test/shots/**') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: class-list-screenshots
