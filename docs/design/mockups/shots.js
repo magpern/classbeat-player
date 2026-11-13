@@ -26,6 +26,11 @@ const SIZES = [
 // The worst case of every text slot: the longest content the format allows (ADR 0003), and by
 // width (wide capitals, single 80-character words). Static HTML; each fixture lists its worst
 // cases in a header comment.
+// The room screen's own controls (room-2d.md, "Controls on the room screen"), shown. The worst
+// case of the band is checked at every size.
+const CONTROLS = ['controls-before-start', 'controls-running', 'controls-paused', 'controls-manual', 'controls-no-code', 'controls-end', 'controls-finished'];
+const KEEP_CONTROLS = new Set(['controls-worst-1650x1080', 'controls-worst-1280x1024', 'controls-worst-1024x768', 'controls-worst-2560x1080', 'controls-worst-1280x720']);
+
 const WORST = ['worst-off-list', 'worst-running', 'worst-paused', 'worst-before-start', 'worst-finished', 'worst-ambiguous', 'worst-wide', 'worst-wide-before-start'];
 
 // save: false = checked by measure.js, not kept as a PNG in the repository. motion: 'reduce'
@@ -74,6 +79,10 @@ const SHOTS = [
   ...MORE.flatMap((s) => [room(s, 1920, 1080), room(s, 1650, 1080, false), room(s, 1280, 1024, false)]),
   room('running', 1920, 1080, true, 'reduce'), // the beat dot is off with reduced motion
   ...WORST.flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_WORST.has(`${s}-${w}x${h}`)))),
+  ...CONTROLS.map((s) => room(s, 1920, 1080)),
+  room('controls-running', 1440, 1080), // 4:3
+  room('controls-running', 1920, 1080, true, 'reduce'), // the band appears and fades at once
+  ...SIZES.map(([w, h]) => room('controls-worst', w, h, KEEP_CONTROLS.has(`controls-worst-${w}x${h}`))),
   room('running', 480, 270), // the room preview inside the presenter window
   room('worst-running', 480, 270, false),
   { file: 'presenter.html', png: 'presenter-1280x800.png', w: 1280, h: 800, room: false, presenter: true, save: true },
@@ -84,4 +93,4 @@ const SHOTS = [
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
-module.exports = { SHOTS, STATES, MORE, SIZES, WORST };
+module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS };

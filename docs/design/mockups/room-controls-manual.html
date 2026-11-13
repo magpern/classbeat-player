@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room screen: controls, manual clock, before the start</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="room.css">
+<link rel="stylesheet" href="controls.css">
+</head>
+<body class="shown">
+<!-- Controls shown, manual clock: every control works on the clock ("Interval"). Phone remote off: offered, not shown.
+     Base:  State: before the start with the manual clock: waiting for Start. Lights down on the first zone. Seven zones, two long names. -->
+<aside class="gel z1 down">
+  <div class="gel-head"><span class="gel-num n" data-tier="gel">1</span><span class="lbl" data-tier="label" data-lines="2">First zone</span></div>
+  <span class="gel-name n" data-tier="value" data-lines="2">Recovery</span>
+  <div class="gel-targets" data-tier="minor" data-lines="3"><span>50–60% FTP</span><span>RPE 2–3</span></div>
+</aside>
+
+<header class="rail">
+
+  <span class="lbl seg"></span>
+  <span class="link manual" data-tier="label">Press Start</span>
+</header>
+
+<section class="intro">
+  <h1 data-tier="value">Thursday threshold</h1>
+  <div class="facts">
+    <div><span class="lbl" data-tier="label">Length</span><span class="v n" data-tier="value">42:00</span></div>
+    <div><span class="lbl" data-tier="label">Songs</span><span class="v n" data-tier="value">11</span></div>
+    <div><span class="lbl" data-tier="label">Intervals</span><span class="v n" data-tier="value">24</span></div>
+    <div><span class="lbl" data-tier="label">Class load</span><span class="v n" data-tier="value">58</span></div>
+  </div>
+  <span class="lbl ztitle" data-tier="label">Time in each zone, as planned</span>
+  <div class="zones">
+    <div class="z1"><span class="n" data-tier="minor">1</span><span class="tm" data-tier="minor">6:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Recovery</span></div>
+    <div class="z2"><span class="n" data-tier="minor">2</span><span class="tm" data-tier="minor">11:30</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Endurance, the aerobic base for long steady rides</span></div>
+    <div class="z3"><span class="n" data-tier="minor">3</span><span class="tm" data-tier="minor">8:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Tempo</span></div>
+    <div class="z4"><span class="n" data-tier="minor">4</span><span class="tm" data-tier="minor">7:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Threshold</span></div>
+    <div class="z5"><span class="n" data-tier="minor">5</span><span class="tm" data-tier="minor">5:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">VO2 max</span></div>
+    <div class="z6"><span class="n" data-tier="minor">6</span><span class="tm" data-tier="minor">3:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Anaerobic capacity</span></div>
+    <div class="z7"><span class="n" data-tier="minor">7</span><span class="tm" data-tier="minor">1:30</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Neuromuscular power</span></div>
+  </div>
+</section>
+
+<section class="score">
+  <div class="track iv">
+    <div class="block z1" style="left:25.00vw;width:50.00vw"><span class="n" data-tier="minor">1</span><span class="t" data-tier="label" data-fit="hide">Recovery</span></div>
+    <div class="block z2" style="left:75.00vw;width:33.33vw;padding-right:13.33vw"><span class="n" data-tier="minor">2</span><span class="t" data-tier="label" data-fit="hide">Endurance, the aerobic base for long steady rides</span></div>
+  </div>
+  <div class="track songs">
+    <div class="clip" style="left:25.00vw;width:64.44vw;--phrase:2.564vw"><span class="head"><b data-tier="label" data-clamp="1">Slow Sunrise</b></span><span class="a" data-tier="label" data-fit="hide">Harbour Lights</span><span class="bpm" data-tier="label" data-fit="hide">104 bpm</span></div>
+    <div class="clip" style="left:89.44vw;width:66.11vw;--phrase:2.083vw"></div>
+  </div>
+  <div class="past"></div>
+  <div class="now"></div>
+</section>
+<nav class="controls" aria-label="Class controls"><div class="transport"><button class="btn"><span class="w" data-tier="label">Previous</span><span class="sub" data-tier="label">Interval</span></button><button class="btn main"><span class="w" data-tier="label">Start</span></button><button class="btn"><span class="w" data-tier="label">Next</span><span class="sub" data-tier="label">Interval</span></button></div><div class="code"><button class="btn phone"><span class="w" data-tier="label">Phone remote</span><span class="sub" data-tier="label">Show the class code</span></button></div><button class="btn quit"><span class="w" data-tier="label">End</span></button></nav>
+</body>
+</html>
