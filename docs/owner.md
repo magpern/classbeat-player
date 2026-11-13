@@ -13,6 +13,10 @@ with other work; nothing in the development loop waits for an answer.
 - **A mail service** (before the first deploy): sign-in links and security notices are sent by
   mail (ADR 0002). Which service, and the sending domain.
 - **Signing accounts** (before PL7): an Apple Developer membership and a Windows signing identity.
+  On a company-managed Mac that blocks apps from unknown sources, a signed and notarised build is
+  enough only if the policy allows apps from identified developers; if it allows only the App
+  Store, the company's IT has to make an exception for the app in its device management. Until then the unsigned CI build
+  (`classbeat-player-macos-unsigned`) runs only on a Mac that is not managed.
 
 ## Decisions waiting
 
@@ -28,6 +32,10 @@ with other work; nothing in the development loop waits for an answer.
   `credentials: "same-origin"` and every other file keeps the full check; move the website out of
   `web/src/` into its own folder with its own, stricter network guard; or revise #144. Until then
   agents do other work.
+- **The companion's buttons.** Plan section 3 names start, pause, skip and nudge for the
+  handlebar companion. ADR 0005 (section 10) adds resume, so a pause from the phone can be ended
+  from the phone, and the one-touch undo of a resync that plan section 4 already puts on the
+  companion. Agents built it so; plan section 3 is yours to update or to overrule.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); no phone app of our own, with Bluefy on iPhone for sensors; no external
   hardware such as lighting.
