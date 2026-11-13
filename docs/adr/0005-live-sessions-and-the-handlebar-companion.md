@@ -68,6 +68,8 @@ What this ADR takes as given:
   with new codes. The app gives each run a random `run` id (16 bytes, base64url) sent in every
   state message. The rest of the lifetime is ADR 0002's: one per device (a new one ends the
   earlier), 3 per account, 15 minutes after the host connection is lost, 12 hours at most.
+  A fourth session on one account is refused with 409 `sessions_full` (amended 2026-11-13,
+  #176: neither ADR named the answer).
   *Default behind the app's live-session interface:* carrying one session into the next class is
   a later, reviewed change; nothing in the messages assumes either way.
 - **Ending.** The host sends `end` over its connection, or the live process ends the session by
@@ -100,7 +102,10 @@ ADR 0002 section 8, restated so the issues can check it, with the one change of 
 - **At most 2 controllers** (a phone and a spare), counted as controller tokens held. A third
   request by sign-in gets `cannot_control`, like every failure there. A right control code while
   both places are held gets `controllers_full`, is not used up and is not counted as a wrong try;
-  a wrong code is counted as before, whatever the places. The host frees a place with `drop`.
+  a wrong code is counted as before, whatever the places. The host frees a place with `drop`;
+  a `drop` also cancels the current control code, so the freed place needs a new one (amended
+  2026-11-13, #166 review). A malformed code, on the sign-in route or the code route, gets 422
+  `invalid_request` like any malformed body; it tells nothing about the session (#176 review).
 - The server gives each controller its `slot` (1 or 2) and stamps it on what it forwards to the
   host. The phone's `command` schema has no `slot`, so a phone-sent one fails validation and the
   message is dropped. The presenter lists "phone 1" and "phone 2" with "Drop" beside each, and
@@ -345,6 +350,10 @@ points to section 4 here for the companion's messages.
 What a guessed or stolen controller token can do grows by these two: resume a paused class and
 undo a resync while one is announced. Neither changes an interval, reaches a rider or a device,
 or outlasts the session; the host can drop the controller.
+
+This ADR also refines three points ADR 0002 left open, without changing its rules: the
+controller token ends with the site session it came from; a right code while both places are held
+is `controllers_full` and not a wrong try; and the server, not the phone, gives the `slot`.
 
 ## Alternatives
 
