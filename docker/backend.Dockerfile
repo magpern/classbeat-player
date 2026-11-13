@@ -7,6 +7,9 @@
 # schemas from `schema/class-format/` and `schema/live/` next to `backend/` (class_schemas.py,
 # live/schemas.py: the package is installed editable from backend/src, so both find the root).
 #
+# The site API's answer models, generated in the contract lane, are loaded from
+# `schema/generated/python/` next to `backend/` (site/answers.py: GENERATED_DIR), as they are.
+#
 # The handlebar companion page (`/control`, issue #277) is built in a first stage, with the same
 # Node major as CI, and only `web/dist/control` is copied into the final image, where the backend
 # reads it (control_page.py: CONTROL_DIR). Node and npm stay out of the final image.
@@ -34,6 +37,7 @@ WORKDIR /srv/classbeat-player
 COPY schema/python schema/python
 COPY schema/class-format schema/class-format
 COPY schema/live/v1 schema/live/v1
+COPY schema/generated/python schema/generated/python
 COPY backend/pyproject.toml backend/uv.lock backend/
 COPY backend/src backend/src
 COPY backend/db backend/db

@@ -244,6 +244,20 @@ if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; 
 else
   bad "backend.Dockerfile.dockerignore does not allow schema/live/v1"
 fi
+# The generated site API models (issue #287): copied to where the backend loads them from.
+if grep -Eq '^COPY schema/generated/python schema/generated/python$' "$root/docker/backend.Dockerfile"; then
+  ok "the Dockerfile copies schema/generated/python"
+else
+  bad "the Dockerfile does not copy schema/generated/python"
+fi
+if grep -Eq '^!schema/generated/python$' "$root/docker/backend.Dockerfile.dockerignore"; then
+  ok "the Dockerfile's dockerignore lets schema/generated/python into the build"
+else
+  bad "backend.Dockerfile.dockerignore does not allow schema/generated/python"
+fi
+if grep -Eq '^!schema/generated/?(\*)?$' "$root/docker/backend.Dockerfile.dockerignore"; then
+  bad "backend.Dockerfile.dockerignore admits more of schema/generated than python/"
+fi
 # The built image holds the schemas where the backend reads them, and the backend loads them.
 # Needs a Docker daemon and the network an image build already uses (base images, PyPI, npm).
 if docker info >/dev/null 2>&1; then
@@ -258,6 +272,17 @@ assert schemas.valid("hello.schema.json", {}) in (True, False)
       ok "the image has schema/live/v1/routing.json where the backend reads it"
     else
       bad "the image cannot load the live schemas: $(head -c 400 "$tmp/run.log")"
+    fi
+    # The generated models (issue #287): present where the backend's GENERATED_DIR resolves.
+    if docker run --rm --entrypoint python "$image" -I -c '
+from pathlib import Path
+
+generated = Path("/srv/classbeat-player/schema/generated/python")
+assert (generated / "site_api_me.py").is_file(), sorted(p.name for p in generated.glob("*"))
+' >"$tmp/run.log" 2>&1; then
+      ok "the image has schema/generated/python/site_api_me.py where the backend loads it"
+    else
+      bad "the image lacks the generated models: $(head -c 400 "$tmp/run.log")"
     fi
     # The companion page (issue #277): the image holds the built page where the backend reads it,
     # and GET /control answers 200 with the /control headers. The app is called as an ASGI

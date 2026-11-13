@@ -7,6 +7,7 @@
 !schema/python
 !schema/class-format
 !schema/live/v1
+!schema/generated/python
 !docker/backend-entrypoint.sh
 !docker/purge-loop.sh
 !web/package.json
