@@ -519,18 +519,18 @@ section 2; companion.md): the join code in the fragment and nothing else. Openin
 fills in the class code on the companion page and offers sign-in; control still needs the
 instructor's sign-in.
 
-**The slot's states.** The live client is not built yet (ADR 0005, issue 8), so today the slot
-is always absent.
+**The slot's states.** A build without the live client always shows the slot absent.
 
 | State | When (ADR 0005) | The slot shows | Mock-up |
 |---|---|---|---|
-| Absent | No live client in this build; the app is not paired (class files only); no network or no answer from the site | Nothing, and no gap or explanation on the room screen (riders need none): Next is followed by End. The presenter, when there is one, says why (ADR 0005, section 2) | [no code](mockups/room-controls-no-code.html) |
+| Absent | No live client in this build; the app is not paired (class files only); a pairing that no longer works | Nothing, and no gap or explanation on the room screen (riders need none): Next is followed by End. The presenter, when there is one, says why (ADR 0005, section 2) | [no code](mockups/room-controls-no-code.html) |
 | Off | Paired and online, no phone remote for this class (the default at each start of the app) | A button "Phone remote", second line "Show the class code". Pressing it starts the live session (ADR 0005: on the instructor's request, never automatically). With one display this button is ADR 0005 section 2's instructor request, which the presenter makes with a second display | [manual, before the start](mockups/room-controls-manual.html) |
 | Starting | `POST /api/live/sessions` sent | The same button, disabled, second line "Getting a code" | [html](mockups/room-controls-slot-starting.html) |
 | On | Session running | The QR code, "Class code", the code, state line "Phone remote on" | [before the start](mockups/room-controls-before-start.html), [running](mockups/room-controls-running.html) |
 | Phone connected | `controller_joined` | State line "Phone connected", or "2 phones connected". Nothing else about the phones (no names, no list) | [paused](mockups/room-controls-paused.html), [worst case](mockups/room-controls-worst.html) |
 | Reconnecting | The host connection dropped (ADR 0005 section 6) | The code stays; state line "Reconnecting" | [html](mockups/room-controls-slot-reconnecting.html) |
 | Refused | 409 `sessions_full` | The Off button, second line "In use elsewhere" | [html](mockups/room-controls-slot-refused.html) |
+| No answer | A start that got no answer, or an unreachable site | The Off button, second line "Can't reach site". Pressing it tries again. The note lasts until the band next hides, like "Phone remote ended" | [html](mockups/room-controls-slot-unreachable.html) |
 | Ended | `ended`, or the reconnect is refused | Back to Off, second line "Phone remote ended" until the band next hides | [html](mockups/room-controls-slot-ended.html) |
 
 State lines are at most 18 characters ("2 phones connected"), so the slot fits at 5:4 beside three
@@ -559,6 +559,13 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | Enter | The focused button | |
 | Esc | Closes the End question ("Keep going"); otherwise hides the band at once | |
 
+**While the End question is open**, Space, the arrows (with or without Shift), Page Up and Page
+Down do nothing, so a stray clicker press or a nudged key cannot move the class or answer the
+question. Esc, Enter, Tab, Undo (Ctrl+Z), F and End still work.
+
+Clicker keys, as built (#207): F5 and Shift+F5 are Start only before the class starts; B and
+period do nothing, so the room never goes blank; Page Up and Page Down are Previous and Next.
+
 A held key repeats nothing: one press, one command (Ctrl+Z too). None of the clicker keys (Page Up,
 Page Down, F5, Shift+F5, B, period) shows the band.
 
@@ -583,6 +590,7 @@ is a placeholder of the right size, not a real code ([qr-placeholder.svg](mockup
 | Running, following: Next is "Song", Previous "Stops following"; code with QR | [html](mockups/room-controls-running.html) | [16:9](mockups/room-controls-running-1920x1080.png), [4:3](mockups/room-controls-running-1440x1080.png), [reduced motion](mockups/room-controls-running-reduced-1920x1080.png) |
 | Paused: Resume; code with QR, a phone connected | [html](mockups/room-controls-paused.html) | [16:9](mockups/room-controls-paused-1920x1080.png) |
 | Running, manual clock, no phone remote (slot absent) | [html](mockups/room-controls-no-code.html) | [16:9](mockups/room-controls-no-code-1920x1080.png) |
+| Slot: Starting, Reconnecting, In use elsewhere, No answer, Phone remote ended | [starting](mockups/room-controls-slot-starting.html), [reconnecting](mockups/room-controls-slot-reconnecting.html), [refused](mockups/room-controls-slot-refused.html), [unreachable](mockups/room-controls-slot-unreachable.html), [ended](mockups/room-controls-slot-ended.html) | CI screenshots (not kept) |
 | The End question | [html](mockups/room-controls-end.html) | [16:9](mockups/room-controls-end-1920x1080.png) |
 | Class Complete: Close class | [html](mockups/room-controls-finished.html) | [16:9](mockups/room-controls-finished-1920x1080.png) |
 | Worst case: three "Stops following", code with QR, "2 phones connected", over the worst running fixture | [html](mockups/room-controls-worst.html) | checked at all ten sizes; kept: [2560×1080](mockups/room-controls-worst-2560x1080.png), [1280×720](mockups/room-controls-worst-1280x720.png), [1650×1080](mockups/room-controls-worst-1650x1080.png), [1024×768](mockups/room-controls-worst-1024x768.png), [5:4](mockups/room-controls-worst-1280x1024.png) |
@@ -633,7 +641,7 @@ fixture by size. Every check passes on every shot.
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
 | C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing (at least 1/3 s between the starts of two lights, including with tempo drift near 180 BPM), the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |
 | C8. Coverage | Every piece of text on the screen is inside an element the checks see (in the mock-ups: a `data-tier` element), so no text escapes C1 to C4 |
-| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. **Behaviour, PL4 CI only** (the mock-ups are static and cannot check it): the band hides 3 s after the last input of each kind (pointer move, click, tap, key press); a pointer resting over the band does not hold it; after a button is pressed by click or tap the band still hides 3 s later; keyboard focus reached by Tab holds it, and so does the End question, until Esc or an answer; with one display it does not hide before the start or on "Class Complete"; a click or tap while hidden, or during the fade-out, presses nothing and only shows the band; on touch a tap is the only way in; with reduced motion it appears and hides in 0 ms; F follows the music without showing the band. No control code reaches the room window on any room channel (ADR 0005's guard, extended to the new channels) |
+| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. **Behaviour, PL4 CI only** (the mock-ups are static and cannot check it): the band hides 3 s after the last input of each kind (pointer move, click, tap, key press); a pointer resting over the band does not hold it; after a button is pressed by click or tap the band still hides 3 s later; keyboard focus reached by Tab holds it, and so does the End question, until Esc or an answer; with one display it does not hide before the start or on "Class Complete"; a click or tap while hidden, or during the fade-out, presses nothing and only shows the band; on touch a tap is the only way in; with reduced motion it appears and hides in 0 ms; F follows the music without showing the band; while the End question is open the transport keys do nothing. No control code reaches the room window on any room channel (ADR 0005's guard, extended to the new channels) |
 | C9. Palette | From `tokens.css`, by [mockups/palette.js](mockups/palette.js): every zone at least 7 : 1 with black on it, on the stage and on the lights-down gel; neighbouring zones at least ΔE 30 apart for normal vision, 25 for protanopia and deuteranopia, 12 for tritanopia (system.md) |
 
 How the mock-up script finds ink ([mockups/ink.js](mockups/ink.js)): a pixel is ink when it differs
