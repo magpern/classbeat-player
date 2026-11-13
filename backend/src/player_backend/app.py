@@ -7,11 +7,14 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
+from player_backend.control_page import CONTROL_DIR, control_router, load_files
+from player_backend.control_page_policy import control_headers, is_control_path
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
@@ -42,8 +45,12 @@ def create_app(
     settings: Settings,
     mailer: Mailer | None = None,
     live_recheck: RecheckTiming | None = RecheckTiming(),  # noqa: B008 (frozen)
+    control_dir: Path = CONTROL_DIR,
 ) -> FastAPI:
-    """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand."""
+    """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand.
+
+    `control_dir` is the built companion page (control_page.py), read once, here.
+    """
     configure_logging(settings.log_level)
 
     @asynccontextmanager
@@ -86,6 +93,7 @@ def create_app(
     app.include_router(player_router)
     app.include_router(source_router)
     app.include_router(live_router)
+    app.include_router(control_router(load_files(control_dir)))
     # Before the access log: a middleware added later runs outside it.
     install_body_cap(app)
 
@@ -102,7 +110,14 @@ def create_app(
             _log.exception("unhandled error")
             response = error_response(500, "internal_error")
         # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
-        response.headers.update(response_headers(request.url.path))
+        # ADR 0005, section 8: the companion page's own, under /control.
+        path = request.url.path
+        root: str = request.scope.get("root_path", "")
+        routed = path.removeprefix(root) if root else path
+        if is_control_path(routed):
+            response.headers.update(control_headers(routed, settings.site_origin))
+        else:
+            response.headers.update(response_headers(path))
         # Method, path and status only: never the query string, a header or a body.
         _access_log.info(
             "request",
