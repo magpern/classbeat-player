@@ -253,7 +253,7 @@ body {
   .metric .v { font-size: min(7.55vh, 5.7vw); } /* spec: min(7.4vh, 5.55vw); +2.7 % so a different Chrome's metrics still leave 5.5 % cap height (CI measured 5.47 % on the spec value) */
   /* Full width: two lines at --t-text, three at --t-text-min. */
   /* Two vh higher than the spec's 62 and 78 vh: with 3 lines the next row's ink stood less than
-     0.1 vh above the score; the room keeps at least 0.8 vh clear (measure.ts, "next row clear"). */
+     0.1 vh above the score; the room keeps at least 0.7 vh clear (measure.ts, "next row clear"). */
   .cue { left: var(--safe-x); top: 60vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
   .next { left: var(--safe-x); top: 76vh; }

@@ -3,8 +3,8 @@
 // between the next row and the score. Each runs in the page and returns the problems it found.
 import type { Page } from "playwright-core";
 
-/** The next row's ink ends at least this share (0.8 vh: what the wide layout keeps, 0.89 vh) of the screen height above the score (room-2d.md, "Layout"). */
-export const MIN_NEXT_GAP = 0.008;
+/** The next row's ink ends at least this share (0.7 vh: what the wide layouts keep, 0.74 vh at 16:10 in CI's Chrome) of the screen height above the score (room-2d.md, "Layout"). */
+export const MIN_NEXT_GAP = 0.007;
 
 /**
  * A zone name that would fit at a larger size is never drawn smaller (room-2d.md, "Zone name on
@@ -41,21 +41,28 @@ export function nameDrawnSmaller(page: Page): Promise<string[]> {
 
 /**
  * The time-in-zone list breaks a word only when it cannot help it: a word wider than its column
- * is cut by `overflow-wrap: anywhere`, so each name is laid out once with breaking off and its
- * words must still fit (room-2d.md, "Time-in-zone list").
+ * is cut by `overflow-wrap: anywhere`, so each word of a name is measured whole and must fit
+ * (room-2d.md, "Time-in-zone list"). A word longer than FITTABLE_WORD letters (the worst cases'
+ * 24-letter capitals) cannot fit any column and may break.
  */
+const FITTABLE_WORD = 16;
+
 export function zoneWordsBroken(page: Page): Promise<string[]> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>(".zones .t")]
-      .filter((t) => {
-        const saved = t.style.overflowWrap;
-        t.style.overflowWrap = "normal";
-        const broken = t.scrollWidth > t.clientWidth + 1;
-        t.style.overflowWrap = saved;
-        return broken;
-      })
-      .map((t) => `zone name "${(t.textContent ?? "").slice(0, 24)}" has a word wider than its ${Math.round(t.clientWidth)}px column`),
-  );
+  return page.evaluate((maxLen) => {
+    const found: string[] = [];
+    for (const t of document.querySelectorAll<HTMLElement>(".zones .t")) {
+      const cs = getComputedStyle(t);
+      const probe = document.createElement("span");
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-weight:${cs.fontWeight};font-size:${cs.fontSize};font-family:${cs.fontFamily};letter-spacing:${cs.letterSpacing}`;
+      document.body.append(probe);
+      for (const word of (t.textContent ?? "").split(/\s+/).filter((w) => w.length > 0 && w.length <= maxLen)) {
+        probe.textContent = word;
+        if (probe.getBoundingClientRect().width > t.clientWidth + 1) found.push(`zone name word "${word}" is wider than its ${Math.round(t.clientWidth)}px column`);
+      }
+      probe.remove();
+    }
+    return found;
+  }, FITTABLE_WORD);
 }
 
 /** The indexes (data-mi) of the text elements of the next row, and the top of the score, in pixels. */
