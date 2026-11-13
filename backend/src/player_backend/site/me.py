@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.get("/me")
 def me(context: SiteSession) -> JSONResponse:
-    email = account.email(context)
+    email = account.own_email(context)
     if email is None:
         # The account went while the session was still being checked: nobody is signed in.
         raise NotSignedIn

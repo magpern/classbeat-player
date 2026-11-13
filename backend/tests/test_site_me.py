@@ -1,22 +1,25 @@
 """`GET /api/site/me` (ADR 0002, sections 4, 5 and 10; schema/site-api/v1/me.schema.json): the
 signed-in account's own email and nothing else, for a live site session only, never stored.
 
-Isolation between two accounts is also in tests/guards/test_guard_endpoint_isolation.py, the
-cookie rule in tests/guards/test_guard_cookie_routes.py, the 16 KiB body cap in
-tests/test_body_cap.py and the headers on every route in tests/test_site_requests.py.
+Isolation between two accounts is also in tests/guards/test_guard_endpoint_isolation.py, and
+without row-level security in tests/test_account_email_filter.py; the cookie rule in
+tests/guards/test_guard_cookie_routes.py, the 16 KiB body cap in tests/test_body_cap.py and the
+headers on every route in tests/test_site_requests.py.
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
 
 import pydantic
 import pytest
 
 from player_backend.db import account
 from player_backend.db.context import AccountContext
-from player_backend.site.answers import GENERATED_DIR, me_answer
+from player_backend.site.answers import GENERATED_DIR, NAMESPACE, me_answer
 from player_backend.token_issue import new_token
 from tests.sitehelp import ORIGIN, SESSION_COOKIE, Browser, Site, link_token
 
@@ -25,6 +28,7 @@ OTHER = "other@example.test"
 ME = "/api/site/me"
 SESSIONS = "/api/site/sessions"
 NOT_SIGNED_IN = {"error": "not_signed_in"}
+KEY = f"{NAMESPACE}.site_api_me"
 USED = "SELECT last_used_at FROM player.sessions"
 FRESH = "SELECT last_used_at > now() - interval '1 minute' FROM player.sessions"
 
@@ -168,7 +172,7 @@ def test_a_request_the_route_refuses_keeps_last_used(
     def gone(ctx: AccountContext) -> str | None:
         return None
 
-    monkeypatch.setattr(account, "email", gone)
+    monkeypatch.setattr(account, "own_email", gone)
     _refused(browser)
     assert site.su.execute(FRESH).fetchone() == (True,)
     assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
@@ -206,8 +210,8 @@ def test_an_email_the_contract_refuses_is_never_answered(site: Site) -> None:
 def test_the_model_is_the_contracts_generated_one() -> None:
     model = me_answer()
     assert Path(GENERATED_DIR, "site_api_me.py").is_file()
-    assert model.__name__ == "MeAnswer" and model.__module__ == "site_api_me"
-    assert sys.modules["site_api_me"].__file__ == str(GENERATED_DIR / "site_api_me.py")
+    assert model.__name__ == "MeAnswer" and model.__module__ == KEY
+    assert sys.modules[KEY].__file__ == str(GENERATED_DIR / "site_api_me.py")
     assert model(email=EMAIL).model_dump(mode="json") == {"email": EMAIL}
     with pytest.raises(pydantic.ValidationError):
         model.model_validate({"email": EMAIL, "id": "x"})
@@ -216,3 +220,38 @@ def test_the_model_is_the_contracts_generated_one() -> None:
             model(email=refused)
     # Loaded once per process.
     assert me_answer() is model
+
+
+@pytest.fixture
+def fresh_load(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """`me_answer` loads again, with the namespaced entry gone; both are restored afterwards."""
+    me_answer.cache_clear()
+    monkeypatch.delitem(sys.modules, KEY, raising=False)
+    yield
+    me_answer.cache_clear()
+
+
+@pytest.mark.usefixtures("fresh_load")
+def test_a_module_under_the_bare_name_is_never_taken_for_the_generated_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unrelated = ModuleType("site_api_me")
+    unrelated.MeAnswer = object  # pyright: ignore[reportAttributeAccessIssue]
+    monkeypatch.setitem(sys.modules, "site_api_me", unrelated)
+    model = me_answer()
+    assert model is not object and model.__module__ == KEY
+    assert sys.modules[KEY].__file__ == str(GENERATED_DIR / "site_api_me.py")
+    assert sys.modules["site_api_me"] is unrelated
+    assert model(email=EMAIL).model_dump(mode="json") == {"email": EMAIL}
+
+
+@pytest.mark.usefixtures("fresh_load")
+def test_a_module_under_the_namespaced_key_from_another_file_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    planted = ModuleType(KEY)
+    planted.__file__ = str(tmp_path / "site_api_me.py")
+    planted.MeAnswer = object  # pyright: ignore[reportAttributeAccessIssue]
+    monkeypatch.setitem(sys.modules, KEY, planted)
+    with pytest.raises(ImportError):
+        me_answer()
