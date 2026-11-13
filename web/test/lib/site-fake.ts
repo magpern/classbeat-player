@@ -116,18 +116,32 @@ function instrument(mode: Passkey): void {
     };
   }
   // Turning a string into markup, however the name was written (#260; ui/dom.ts sets text only).
-  for (const [proto, prop] of [[Element.prototype, "innerHTML"], [Element.prototype, "outerHTML"], [ShadowRoot.prototype, "innerHTML"]] as const) {
+  for (const [proto, prop] of [[Element.prototype, "innerHTML"], [Element.prototype, "outerHTML"], [ShadowRoot.prototype, "innerHTML"], [HTMLIFrameElement.prototype, "srcdoc"]] as const) {
     const d = Object.getOwnPropertyDescriptor(proto, prop);
     Object.defineProperty(proto, prop, { get() { return d?.get?.call(this); }, set(v: string) { note("markup", prop); d?.set?.call(this, v); } });
   }
-  for (const [proto, name] of [[Element.prototype, "insertAdjacentHTML"], [Element.prototype, "setHTMLUnsafe"], [Document.prototype, "write"], [Document.prototype, "writeln"], [Range.prototype, "createContextualFragment"], [DOMParser.prototype, "parseFromString"]] as const) {
+  for (const [proto, name] of [[Element.prototype, "insertAdjacentHTML"], [Element.prototype, "setHTMLUnsafe"], [Element.prototype, "setHTML"], [ShadowRoot.prototype, "setHTMLUnsafe"], [ShadowRoot.prototype, "setHTML"], [Document.prototype, "write"], [Document.prototype, "writeln"], [Range.prototype, "createContextualFragment"], [DOMParser.prototype, "parseFromString"]] as const) {
     const orig = (proto as unknown as Record<string, unknown>)[name];
     if (typeof orig !== "function") continue;
     (proto as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
-      note("markup", name);
+      note("markup", proto === ShadowRoot.prototype ? `ShadowRoot.${name}` : name);
       return (orig as (...x: unknown[]) => unknown).apply(this, a);
     };
   }
+  // Static Document.parseHTMLUnsafe / Document.parseHTML, and an iframe's srcdoc set as an attribute.
+  for (const name of ["parseHTMLUnsafe", "parseHTML"] as const) {
+    const orig = (Document as unknown as Record<string, unknown>)[name];
+    if (typeof orig !== "function") continue;
+    (Document as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
+      note("markup", `Document.${name}`);
+      return (orig as (...x: unknown[]) => unknown).apply(this, a);
+    };
+  }
+  const setAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function (this: Element, name: string, value: string) {
+    if (String(name).toLowerCase() === "srcdoc") note("markup", "setAttribute srcdoc");
+    return setAttribute.call(this, name, value);
+  };
   document.addEventListener("securitypolicyviolation", (e) => note("csp", `${e.violatedDirective} ${e.blockedURI}`));
   // The passkey prompt.
   if (mode === "absent") {

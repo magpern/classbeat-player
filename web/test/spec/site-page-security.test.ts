@@ -113,6 +113,31 @@ describe("nothing secret leaves the page, in any state", () => {
   }
 });
 
+describe("the markup trap", () => {
+  // Each way a string becomes markup is noted when it runs, so a computed name that the source
+  // scan cannot see is still caught.
+  const calls: [string, string][] = [
+    ["innerHTML", "document.createElement('div').innerHTML = 'x'"],
+    ["setHTMLUnsafe", "document.createElement('div').setHTMLUnsafe('x')"],
+    ["setHTML", "document.createElement('div').setHTML('x')"],
+    ["Document.parseHTMLUnsafe", "Document.parseHTMLUnsafe('x')"],
+    ["ShadowRoot.setHTMLUnsafe", "document.createElement('div').attachShadow({ mode: 'open' }).setHTMLUnsafe('x')"],
+    ["ShadowRoot.setHTML", "document.createElement('div').attachShadow({ mode: 'open' }).setHTML('x')"],
+    ["Document.parseHTML", "Document.parseHTML('x')"],
+    ["srcdoc", "document.createElement('iframe').srcdoc = '<p>x</p>'"],
+    ["setAttribute srcdoc", "document.createElement('iframe').setAttribute('SrcDoc', '<p>x</p>')"],
+  ];
+  for (const [detail, code] of calls) {
+    it(`notes ${detail}`, async () => {
+      const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+      // These APIs exist in the Chromium the tests run on, so a missing one is a failure, not a skip.
+      await site.page.evaluate(`(() => { ${code}; })()`);
+      assert.ok((await traps(site.page)).some((t) => t.kind === "markup" && t.detail === detail), `${detail} not noted`);
+      await site.context.close();
+    });
+  }
+});
+
 describe("the keyboard (site.md, S8)", () => {
   it("reaches the skip link first, which moves focus to the page without changing the address", async () => {
     const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
