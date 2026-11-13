@@ -26,6 +26,7 @@ from player_backend.login_policy import retry_after
 from player_backend.mail_delivery import deliver
 from player_backend.param_policy import uuid_of
 from player_backend.passkey_policy import (
+    BUSY_RETRY_SECONDS,
     CHALLENGE_BYTES,
     NAME_MAX,
     STARTS_WINDOW,
@@ -131,6 +132,10 @@ def register(raw: RawBody, request: Request, context: RecentSignIn, who: TheCall
         verify=verify,
         client=who.info,
     )
+    if outcome == "busy":
+        # Raised, not returned: the challenge's use is rolled back, so the same answer can be
+        # sent again after `Retry-After`. The session's "last used" is kept.
+        raise ApiError(429, "too_many_requests", {"Retry-After": str(BUSY_RETRY_SECONDS)})
     if outcome == "refused":
         # One answer for a used, expired or other session's challenge and a credential that
         # fails a check: start again.

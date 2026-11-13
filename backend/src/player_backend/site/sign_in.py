@@ -25,6 +25,7 @@ from player_backend.login_policy import (
     sign_in_mail,
 )
 from player_backend.mail_delivery import deliver
+from player_backend.passkey_policy import BUSY_RETRY_SECONDS
 from player_backend.site.cookies import login_cookie_token, put_login_cookie, put_session_cookie
 from player_backend.site.deps import TheCaller
 from player_backend.site.state import site_state
@@ -89,14 +90,18 @@ def complete(
     session_token = new_token("ses")
     # Without the browser's own token nothing can match: a token made here is in no link.
     browser_token = browser or new_token("lgn")
-    signed_in = login.complete(
+    outcome = login.complete(
         site_state(request).pool,
         link_hash=token_hash(body.token),
         browser_hash=token_hash(browser_token),
         session_hash=token_hash(session_token),
         client=who.info,
     )
-    if not signed_in:
+    if outcome == "busy":
+        # The wait for the account's sign-in lock ran out (#158). Nothing was used up: the same
+        # link can be sent again after `Retry-After`.
+        raise ApiError(429, "too_many_requests", {"Retry-After": str(BUSY_RETRY_SECONDS)})
+    if outcome != "signed_in":
         # One answer for every refusal: ask for a new link from this browser.
         raise ApiError(401, "sign_in_refused")
     response = JSONResponse({"status": "signed_in"})

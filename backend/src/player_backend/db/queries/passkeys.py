@@ -59,6 +59,10 @@ RETURNING id
 
 # The account's additions are taken one at a time, so the cap of 10 holds when two happen at
 # once. The backend's role may not lock the account's row (it has no UPDATE on accounts).
+# The wait is bounded (#158): the transaction's lock_timeout is read, set to the bound for the
+# lock alone, and put back once the lock is held.
+LOCK_WAIT_NOW: Final[Query] = Query("SELECT current_setting('lock_timeout')")
+SET_LOCK_WAIT: Final[Query] = Query("SELECT set_config('lock_timeout', %s, true)")
 LOCK_ADDITIONS: Final[Query] = Query(
     "SELECT pg_advisory_xact_lock(7270011, ('x' || left(replace(%s::text, '-', ''), 8))"
     "::bit(32)::integer)"

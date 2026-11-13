@@ -21,9 +21,10 @@ from typing import Final
 MIGRATIONS: Final = 7270001
 # Two keys: link requests for one email from one browser.
 SIGN_IN_LINK: Final = 7270002
-# Two keys: new sessions of one account, under the cap of 20.
+# Two keys: new sessions of one account, under the cap of 20. Waited for at most 2 seconds.
 ACCOUNT_SESSIONS: Final = 7270003
-# Two keys: passkey additions of one account, under the cap of 10.
+# Two keys: passkey additions of one account, under the cap of 10. Waited for at most 2
+# seconds (`passkey_policy.ADDITIONS_LOCK_WAIT`).
 PASSKEY_ADDITIONS: Final = 7270011
 
 NUMBERS: Final[dict[str, int]] = {
@@ -55,6 +56,9 @@ SITES: Final[dict[int | str, tuple[str, ...]]] = {
     ACCOUNT_SESSIONS: (
         _MIGRATION_DIR + "0005_sign_in_hardening.sql",
         _MIGRATION_DIR + "0011_passkeys.sql",
+        # Both again, their bodies replaced with the wait bounded (#158).
+        _MIGRATION_DIR + "0012_bounded_lock_waits.sql",
+        _MIGRATION_DIR + "0012_bounded_lock_waits.sql",
     ),
     PASSKEY_ADDITIONS: ("db/queries/passkeys.py",),
     PAIRING_CODES: (

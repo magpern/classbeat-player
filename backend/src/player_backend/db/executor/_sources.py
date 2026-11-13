@@ -38,4 +38,5 @@ SQL_FILES: Final = (
     "0009_device_budgets.sql",
     "0010_sync_order.sql",
     "0011_passkeys.sql",
+    "0012_bounded_lock_waits.sql",
 )

@@ -10,10 +10,12 @@ from datetime import timedelta
 from typing import Literal
 
 from player_backend.client_policy import ClientInfo
-from player_backend.db.executor import Pool
+from player_backend.db.executor import DatabaseError, Pool
+from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import login as q
 
 type LinkOutcome = Literal["limited", "invalid", "mail", "no_mail"]
+type CompleteOutcome = Literal["signed_in", "refused", "busy"]
 
 
 def request_link(
@@ -48,11 +50,20 @@ def request_link(
 
 def complete(
     pool: Pool, *, link_hash: bytes, browser_hash: bytes, session_hash: bytes, client: ClientInfo
-) -> bool:
-    """Use a link up and create the session. True only when the function said so."""
-    with pool.handle() as db, db.transaction():
-        done = db.rows(
-            q.COMPLETE_LOGIN,
-            (link_hash, browser_hash, session_hash, client.network, client.family),
-        )
-        return done[0][0] is True
+) -> CompleteOutcome:
+    """Use a link up and create the session: `signed_in` only when the function said so.
+
+    `busy` when the function's wait for the account's sign-in lock ran out (#158): the whole
+    call is rolled back, so the link is not used up and nothing is written.
+    """
+    try:
+        with pool.handle() as db, db.transaction():
+            done = db.rows(
+                q.COMPLETE_LOGIN,
+                (link_hash, browser_hash, session_hash, client.network, client.family),
+            )
+    except DatabaseError as error:
+        if not ran_out(error):
+            raise
+        return "busy"
+    return "signed_in" if done[0][0] is True else "refused"
