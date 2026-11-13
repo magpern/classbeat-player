@@ -5,7 +5,9 @@
 # and uses no signing material or secrets.
 # Usage: build-mac.sh [--out DIR] [--help]      (default DIR: dist-local, under the repo root)
 # Test hooks (environment): BUILD_MAC_UNAME, BUILD_MAC_NODE, BUILD_MAC_NPM,
-# BUILD_MAC_XCODE_SELECT, BUILD_MAC_PACKAGE name the commands used instead of the real ones.
+# BUILD_MAC_XCODE_SELECT, BUILD_MAC_PACKAGE name the commands used instead of the real ones;
+# BUILD_MAC_ELECTRON_FETCH is the command (run in the app folder) that fetches the Electron
+# runtime when npm skipped its install script; BUILD_MAC_APP_DIR replaces player/app.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,6 +17,8 @@ node_cmd="${BUILD_MAC_NODE:-node}"
 npm_cmd="${BUILD_MAC_NPM:-npm}"
 xcode_cmd="${BUILD_MAC_XCODE_SELECT:-xcode-select}"
 package_cmd="${BUILD_MAC_PACKAGE:-$here/package-desktop.sh}"
+app="${BUILD_MAC_APP_DIR:-$root/player/app}"
+electron_fetch="${BUILD_MAC_ELECTRON_FETCH:-}"
 out="$root/dist-local"
 
 usage() {
@@ -55,12 +59,28 @@ case "$("$uname_cmd" -m)" in
   *) die "unsupported CPU: $("$uname_cmd" -m)" ;;
 esac
 
-(cd "$root/schema/ts" && "$npm_cmd" ci)
-(cd "$root/player/app" && "$npm_cmd" ci && "$npm_cmd" run build)
-
-mkdir -p "$out"
+# Fail early on a bad output directory, before the slow npm steps.
+mkdir -p "$out" 2>/dev/null && [ -d "$out" ] && [ -w "$out" ] || die "cannot use --out directory: $out"
 out="$(cd "$out" && pwd)"
-"$package_cmd" "$root/player/app" "$out" "$label"
+
+(cd "$root/schema/ts" && "$npm_cmd" ci)
+(cd "$app" && "$npm_cmd" ci && "$npm_cmd" run build)
+
+# Newer npm skips install scripts that allowScripts does not cover, so Electron's own install
+# script may not have downloaded the runtime. Run that same script (the version pinned in the
+# lockfile) ourselves; nothing is changed in npm's configuration.
+if [ ! -d "$app/node_modules/electron/dist" ]; then
+  echo "build-mac: Electron runtime missing (npm skipped its install script); fetching it"
+  if [ -n "$electron_fetch" ]; then
+    (cd "$app" && "$electron_fetch") || die "fetching the Electron runtime failed"
+  else
+    (cd "$app" && "$node_cmd" node_modules/electron/install.js) || die "fetching the Electron runtime failed"
+  fi
+  [ -d "$app/node_modules/electron/dist" ] ||
+    die "no Electron runtime after fetching it: check the network and run again (or: cd player/app && node node_modules/electron/install.js)"
+fi
+
+"$package_cmd" "$app" "$out" "$label"
 
 archive="$out/classbeat-player-$label-unsigned.tar.gz"
 cat <<MSG

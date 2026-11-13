@@ -25,7 +25,11 @@ echo "${FAKE_NODE_MAJOR:-24}"
 F
 cat >"$bin/npm" <<'F'
 #!/usr/bin/env bash
-echo "npm $* in ${PWD#"$ROOT_FOR_LOG"/}" >>"$LOG"
+echo "npm $* in ${PWD##*/}" >>"$LOG"
+# Fake npm ci installing the Electron runtime, unless this run simulates a skipped script.
+if [ "$1" = ci ] && [ "${PWD##*/}" = app ] && [ -z "${FAKE_SKIP_SCRIPTS:-}" ]; then
+  mkdir -p node_modules/electron/dist
+fi
 F
 cat >"$bin/xcode-select" <<'F'
 #!/usr/bin/env bash
@@ -33,7 +37,12 @@ cat >"$bin/xcode-select" <<'F'
 F
 cat >"$bin/package" <<'F'
 #!/usr/bin/env bash
-echo "package ${1#"$ROOT_FOR_LOG"/} $3" >>"$LOG"
+echo "package ${1##*/} $3" >>"$LOG"
+F
+cat >"$bin/fetch" <<'F'
+#!/usr/bin/env bash
+echo "fetch in ${PWD##*/}" >>"$LOG"
+[ -n "${FAKE_FETCH_EMPTY:-}" ] || mkdir -p node_modules/electron/dist
 F
 chmod +x "$bin"/*
 
@@ -41,8 +50,10 @@ export LOG="$tmp/log" ROOT_FOR_LOG
 ROOT_FOR_LOG="$(cd "$here/.." && pwd)"
 export BUILD_MAC_UNAME="$bin/uname" BUILD_MAC_NODE="$bin/node" BUILD_MAC_NPM="$bin/npm"
 export BUILD_MAC_XCODE_SELECT="$bin/xcode-select" BUILD_MAC_PACKAGE="$bin/package"
+export BUILD_MAC_ELECTRON_FETCH="$bin/fetch"
 
-run() { : >"$LOG"; set +e; out="$(bash "$here/build-mac.sh" "$@" 2>&1)"; rc=$?; set -e; }
+# The app folder is a scratch copy so tests never write into the repository.
+run() { : >"$LOG"; rm -rf "$tmp/app"; mkdir -p "$tmp/app"; export BUILD_MAC_APP_DIR="$tmp/app"; set +e; out="$(bash "$here/build-mac.sh" "$@" 2>&1)"; rc=$?; set -e; }
 
 run --help
 check "help exits 0" 0 "$rc"
@@ -75,16 +86,37 @@ check "refuses unknown CPU" 1 "$rc"
 
 run --out "$tmp/out"
 check "success exits 0" 0 "$rc"
-expected="npm ci in schema/ts
-npm ci in player/app
-npm run build in player/app
-package player/app macos-arm64"
-check "steps in order, packaging reused" "$expected" "$(cat "$LOG")"
+expected="npm ci in ts
+npm ci in app
+npm run build in app
+package app macos-arm64"
+check "runtime present: steps in order, no fetch, packaging reused" "$expected" "$(cat "$LOG")"
 has "prints archive path" "$tmp/out/classbeat-player-macos-arm64-unsigned.tar.gz" "$out"
 has "prints unpack hint" "Electron.app" "$out"
 
 FAKE_ARCH=x86_64 run --out "$tmp/out"
-has "intel label" "package player/app macos-x64" "$(cat "$LOG")"
+has "intel label" "package app macos-x64" "$(cat "$LOG")"
+
+FAKE_SKIP_SCRIPTS=1 run --out "$tmp/out"
+check "runtime missing: fetch runs, then packages" 0 "$rc"
+expected="npm ci in ts
+npm ci in app
+npm run build in app
+fetch in app
+package app macos-arm64"
+check "runtime missing: fetch between build and package" "$expected" "$(cat "$LOG")"
+has "runtime missing: says so" "Electron runtime missing" "$out"
+
+FAKE_SKIP_SCRIPTS=1 FAKE_FETCH_EMPTY=1 run --out "$tmp/out"
+check "fetch producing nothing fails" 1 "$rc"
+has "fetch failure message" "no Electron runtime after fetching it" "$out"
+case "$(cat "$LOG")" in *package*) echo "FAIL packaged after a failed fetch" >&2; fail=1 ;; *) echo "ok   no packaging after a failed fetch" ;; esac
+
+touch "$tmp/afile"
+run --out "$tmp/afile"
+check "bad --out fails" 1 "$rc"
+has "bad --out message" "cannot use --out directory" "$out"
+check "bad --out runs no npm" "" "$(cat "$LOG")"
 
 # The script must not touch quarantine or Gatekeeper.
 if grep -Ev '^[[:space:]]*#' "$here/build-mac.sh" | grep -Eq 'xattr|spctl|codesign'; then
