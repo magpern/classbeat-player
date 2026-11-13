@@ -11,10 +11,13 @@ from player_backend.db.executor import Query
 
 LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)")
 
-ACCOUNT: Final[Query] = Query("SELECT email, created_at FROM player.accounts WHERE id = %s")
+# The export's head and the deletion's confirmation.
+EMAIL_AND_CREATED_AT: Final[Query] = Query(
+    "SELECT email, created_at FROM player.accounts WHERE id = %s"
+)
 
 # The account's own email, for `GET /api/site/me`: that column alone.
-EMAIL: Final[Query] = Query("SELECT email FROM player.accounts WHERE id = %s")
+OWN_EMAIL: Final[Query] = Query("SELECT email FROM player.accounts WHERE id = %s")
 
 # One page of the export's classes: committed classes and the markers of removed ones, after a
 # sync position, in sync order (the placeholder, number 0, is no class and has no position).

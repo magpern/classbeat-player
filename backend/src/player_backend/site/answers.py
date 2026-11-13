@@ -22,23 +22,33 @@ if TYPE_CHECKING:
 GENERATED_DIR: Final = Path(__file__).resolve().parents[4] / "schema" / "generated" / "python"
 
 
+# The generated modules are registered under this prefix, never under their bare names, so that
+# an unrelated module of the same name is never taken for one of them.
+NAMESPACE: Final = "player_backend._generated"
+
+
 def _load(name: str) -> ModuleType:
-    """The generated module `name`, from its file, under its own name."""
+    """The generated module `name`, from its file, under `NAMESPACE`."""
     if not name.isidentifier():
         raise ValueError("not a generated module name: " + name)
-    loaded = sys.modules.get(name)
+    path = GENERATED_DIR / f"{name}.py"
+    key = f"{NAMESPACE}.{name}"
+    loaded = sys.modules.get(key)
     if loaded is not None:
+        # Only ever the module this function loaded from the generated file.
+        if getattr(loaded, "__file__", None) != str(path):
+            raise ImportError("not the generated module: " + key)
         return loaded
-    spec = importlib.util.spec_from_file_location(name, GENERATED_DIR / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(key, path)
     if spec is None or spec.loader is None:
         raise ImportError("no generated module: " + name)
     module = importlib.util.module_from_spec(spec)
     # Registered before it runs, so that its model resolves its annotations in its own module.
-    sys.modules[name] = module
+    sys.modules[key] = module
     try:
         spec.loader.exec_module(module)
     except BaseException:
-        del sys.modules[name]
+        del sys.modules[key]
         raise
     return module
 

@@ -3,7 +3,9 @@ and 12).
 
 Every read filters by the account in the code; the policy is the backstop.
 
-- `email` reads the account's own email for `GET /api/site/me`, in the request's transaction.
+- `own_email` reads the account's own email for `GET /api/site/me`, in the request's
+  transaction. `_email_and_created_at` reads the email with the account's creation time, for the
+  export's head and for the deletion's confirmation.
 - `export_head` runs in the signed-in request's transaction: it writes the "export made" event
   and reads the account's small parts, column by column.
 - `class_pages` reads the classes after that transaction has committed, while the answer is
@@ -51,16 +53,17 @@ def over_export_limit(ctx: AccountContext) -> bool:
     return hit[0][0] is not False
 
 
-def _email(ctx: AccountContext) -> tuple[str, object] | None:
-    found = ctx.db.rows(q.ACCOUNT, (ctx.account_id,))
+def _email_and_created_at(ctx: AccountContext) -> tuple[str, object] | None:
+    """(email, created_at) of the account, or None when the account is gone."""
+    found = ctx.db.rows(q.EMAIL_AND_CREATED_AT, (ctx.account_id,))
     if len(found) != 1 or not isinstance(found[0][0], str):
         return None
     return found[0][0], found[0][1]
 
 
-def email(ctx: AccountContext) -> str | None:
+def own_email(ctx: AccountContext) -> str | None:
     """The account's own email, as stored, or None when the account is gone."""
-    found = ctx.db.rows(q.EMAIL, (ctx.account_id,))
+    found = ctx.db.rows(q.OWN_EMAIL, (ctx.account_id,))
     if len(found) != 1 or not isinstance(found[0][0], str):
         return None
     return found[0][0]
@@ -68,7 +71,7 @@ def email(ctx: AccountContext) -> str | None:
 
 def export_head(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
     """The export without its classes, or None when the account is gone."""
-    found = _email(ctx)
+    found = _email_and_created_at(ctx)
     if found is None:
         return None
     email, created_at = found
@@ -167,7 +170,7 @@ type Deletion = Literal["deleted", "not_confirmed", "gone"]
 
 def delete(ctx: AccountContext, typed: str) -> Deletion:
     """Delete the account when `typed` is its email. Writes no event: its events go with it."""
-    found = _email(ctx)
+    found = _email_and_created_at(ctx)
     if found is None:
         return "gone"
     if not confirmed(typed, found[0]):
