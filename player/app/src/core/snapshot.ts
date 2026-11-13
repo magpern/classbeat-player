@@ -3,6 +3,7 @@ import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import type { ClockView } from "./clock/view.ts";
 import type { ControlLabels } from "./link/while-following.ts";
 import type { LinkView } from "./link/view.ts";
+import type { BandRoutes } from "./room/band-routes.ts";
 
 export interface FileError {
   readonly message: string;
@@ -18,7 +19,9 @@ export interface Snapshot {
   readonly link: LinkView | null;
   /** The Next and Previous labels, from the same routing as the commands. */
   readonly controls: ControlLabels | null;
+  /** Where each of the room screen's band buttons sends its press, from the same routing. */
+  readonly band: BandRoutes | null;
   readonly error: FileError | null;
 }
 
-export const EMPTY_SNAPSHOT: Snapshot = { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, error: null };
+export const EMPTY_SNAPSHOT: Snapshot = { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, band: null, error: null };

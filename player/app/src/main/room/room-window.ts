@@ -1,5 +1,5 @@
 // The room screen's window (docs/design/class-list.md, "Where it sits"): opened when a class opens,
-// on the display `placeRoom` picks, shown without taking the keyboard from the presenter, sent a
+// on the display `placeRoom` picks (with one display full screen above the presenter), sent a
 // RoomFrame with every snapshot, and closed with the class (`roomCloses`, core/room/lifecycle.ts) or with
 // the presenter. "Show the room screen" (menu.ts) opens it again through the same `open`.
 // It has the presenter's hardening (web-preferences.ts, hardening.ts), its own page and policy
@@ -35,15 +35,13 @@ export interface RoomWindowDeps {
   readonly presenter: () => BrowserWindow | null;
 }
 
-// Raises the presenter above a room window it shares the display with. It takes the keyboard only
-// when the application already has it: a class opened while another application has the focus
-// (a file dropped from it) leaves that focus where it is.
-function raise(p: BrowserWindow | null): void {
-  if (!p || p.isDestroyed() || p.isMinimized()) return;
-  const appFocused = BrowserWindow.getFocusedWindow() !== null;
-  p.moveTop();
-  // Where the system has no stacking request of its own, focus is what raises the window.
-  if (appFocused) p.focus();
+// With one display the room window covers the presenter: it takes the keyboard only when the
+// application already has it, so a class opened while another application has the focus (a file
+// dropped from it) leaves that focus where it is.
+function showAlone(w: BrowserWindow): void {
+  if (BrowserWindow.getFocusedWindow() !== null) w.show();
+  else w.showInactive();
+  w.moveTop();
 }
 
 export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
@@ -58,10 +56,9 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
 
   const placement = () => {
     const p = d.presenter();
-    const bounds = p && !p.isDestroyed() ? p.getBounds() : null;
-    const presenterDisplay = bounds ? screen.getDisplayMatching(bounds).id : null;
+    const presenterDisplay = p && !p.isDestroyed() ? screen.getDisplayMatching(p.getBounds()).id : null;
     const displays = screen.getAllDisplays().map((x) => ({ id: x.id, bounds: x.bounds, workArea: x.workArea }));
-    return placeRoom(displays, presenterDisplay, bounds, lastDisplay);
+    return placeRoom(displays, presenterDisplay, lastDisplay);
   };
 
   return {
@@ -86,12 +83,10 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
         if (win === w) win = null;
       });
       w.once("ready-to-show", () => {
-        // With no free room beside the presenter the room window is under it (`behindPresenter`):
-        // the presenter is raised above it once it shows, so no control is ever covered. Beside
-        // it, nothing overlaps and nothing is raised or focused.
-        if (place?.behindPresenter) w.once("show", () => raise(d.presenter()));
-        // The presenter keeps the keyboard and its controls (plan, section 9).
-        w.showInactive();
+        // With a second display the presenter keeps the keyboard and its controls (plan, section 9);
+        // with one, the room window and its own controls are the class (room-2d.md).
+        if (place?.alone) showAlone(w);
+        else w.showInactive();
         if (place?.fullScreen) w.setFullScreen(true);
       });
       void w.loadFile(d.file);

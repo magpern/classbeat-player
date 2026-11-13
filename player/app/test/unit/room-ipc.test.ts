@@ -59,9 +59,13 @@ const SNAP = {
   error: { message: "m", details: [] },
 } as unknown as Snapshot;
 
-test("a frame carries the class, the clock view and the link view, and nothing else of the snapshot", () => {
-  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["doc", "link", "view"]);
-  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link });
+test("a frame carries the class, the clock view, the link view and the band's routes, and nothing else of the snapshot", () => {
+  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "view"]);
+  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null });
+  // The routes are rebuilt from closed values: nothing else the snapshot holds there goes along.
+  const band = { start: "music", pause: "handover", resume: "clock", next: "music", previous: "nope", extra: "QQQQ-QQQQ" };
+  const framed = roomFrameOf({ ...SNAP, band } as unknown as Snapshot);
+  assert.deepEqual(framed.band, { start: "music", pause: "handover", resume: "clock", next: "music", previous: "clock" });
 });
 
 function rig() {
@@ -121,8 +125,9 @@ test("room.html carries exactly the room's policy, before any script, and no inl
   for (const k of ["connect-src", "media-src", "object-src", "frame-src", "worker-src", "img-src"]) assert.match(ROOM_CSP, new RegExp(`${k} 'none'`), k);
 });
 
-test("the room page sends nothing: it only reads its state and its pushes", () => {
+test("the room page uses only the room's fixed calls (issue #198: the band's commands, End class, the phone remote)", () => {
   const src = code(read("src", "renderer", "room.ts"));
-  assert.deepEqual([...src.matchAll(/api\.(\w+)\(/g)].map((m) => m[1]).sort(), ["onUpdate", "state"]);
-  assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\./);
+  const used = [...new Set([...src.matchAll(/api\.(\w+)/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(used, ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
 });

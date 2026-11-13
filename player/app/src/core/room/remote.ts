@@ -11,7 +11,7 @@ export type RemoteView =
   | { readonly slot: "absent" }
   | { readonly slot: "available"; readonly note: RemoteNote }
   | { readonly slot: "starting" }
-  | { readonly slot: "on"; readonly joinCode: string; readonly phones: 0 | 1 | 2; readonly reconnecting: boolean };
+  | { readonly slot: "on"; readonly joinCode: string; readonly phones: 0 | 1 | 2; readonly reconnecting: boolean; readonly site?: string };
 
 export const REMOTE_ABSENT: RemoteView = { slot: "absent" };
 
@@ -19,6 +19,21 @@ export const REMOTE_ABSENT: RemoteView = { slot: "absent" };
 export const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 
 const NOTES: readonly string[] = ["none", "in_use", "ended"];
+
+/** The site the QR code points at: an HTTPS origin and nothing more (no path, user, query or fragment). */
+export function siteOf(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 100) return null;
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    return null;
+  }
+  return url.protocol === "https:" && url.username === "" && url.password === "" && url.origin === v ? v : null;
+}
+
+/** The QR code's address (ADR 0005 section 2): the join code in the fragment and nothing else. */
+export const controlAddress = (site: string, joinCode: string): string => `${site}/control#${joinCode}`;
 
 /**
  * What the room window is sent: the view rebuilt field by field, so whatever else the object holds
@@ -36,7 +51,9 @@ export function remoteViewOf(v: RemoteView): RemoteView {
       const { joinCode, phones, reconnecting } = r;
       if (typeof joinCode !== "string" || !JOIN_CODE.test(joinCode)) return REMOTE_ABSENT;
       if ((phones !== 0 && phones !== 1 && phones !== 2) || typeof reconnecting !== "boolean") return REMOTE_ABSENT;
-      return { slot: "on", joinCode, phones, reconnecting };
+      // The site is kept only when it is a plain HTTPS origin; without it the band shows no QR code.
+      const site = siteOf(r.site);
+      return site === null ? { slot: "on", joinCode, phones, reconnecting } : { slot: "on", joinCode, phones, reconnecting, site };
     }
     default:
       return REMOTE_ABSENT;
