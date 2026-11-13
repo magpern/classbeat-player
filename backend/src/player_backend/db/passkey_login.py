@@ -12,7 +12,8 @@ from datetime import timedelta
 from typing import Literal
 
 from player_backend.client_policy import ClientInfo
-from player_backend.db.executor import Handle, Pool
+from player_backend.db.executor import DatabaseError, Handle, Pool
+from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import passkey_login as q
 
 type SignInOutcome = Literal["signed_in", "refused", "limited", "busy"]
@@ -89,32 +90,41 @@ def sign_in(
     finds the lock taken is `busy` at once, with nothing read or written: it never waits for
     the lock on a pool connection. The lock is the transaction's first statement, so no
     attempt reads the counter before it holds the lock.
+
+    An attempt whose wait for the account's sign-in lock (inside `auth_complete_passkey`) ran
+    out is `busy` too (#158): the whole attempt is rolled back, so the challenge is not used up
+    and no counter, session or event is written.
     """
-    with pool.handle() as db, db.transaction():
-        if db.rows(q.TRY_LOCK_FAILED, (failed_lock,))[0][0] is not True:
-            return "busy"
-        if _over_already(db, failed_key, failed_window, failed_max):
-            return "limited"
-        done = False
-        if credential_id is not None and challenge_hash is not None:
-            found = db.rows(q.PASSKEY_FOR_LOGIN, (credential_id,))
-            public_key = found[0][0] if len(found) == 1 else None
-            counter = verify(public_key) if isinstance(public_key, bytes) else None
-            if counter is not None:
-                completed = db.rows(
-                    q.COMPLETE_PASSKEY,
-                    (
-                        credential_id,
-                        challenge_hash,
-                        browser_hash,
-                        counter,
-                        session_hash,
-                        client.network,
-                        client.family,
-                    ),
-                )
-                done = completed[0][0] is True
-        if done:
-            return "signed_in"
-        _hit(db, failed_key, failed_window, failed_max)
-        return "refused"
+    try:
+        with pool.handle() as db, db.transaction():
+            if db.rows(q.TRY_LOCK_FAILED, (failed_lock,))[0][0] is not True:
+                return "busy"
+            if _over_already(db, failed_key, failed_window, failed_max):
+                return "limited"
+            done = False
+            if credential_id is not None and challenge_hash is not None:
+                found = db.rows(q.PASSKEY_FOR_LOGIN, (credential_id,))
+                public_key = found[0][0] if len(found) == 1 else None
+                counter = verify(public_key) if isinstance(public_key, bytes) else None
+                if counter is not None:
+                    completed = db.rows(
+                        q.COMPLETE_PASSKEY,
+                        (
+                            credential_id,
+                            challenge_hash,
+                            browser_hash,
+                            counter,
+                            session_hash,
+                            client.network,
+                            client.family,
+                        ),
+                    )
+                    done = completed[0][0] is True
+            if done:
+                return "signed_in"
+            _hit(db, failed_key, failed_window, failed_max)
+            return "refused"
+    except DatabaseError as error:
+        if not ran_out(error):
+            raise
+        return "busy"

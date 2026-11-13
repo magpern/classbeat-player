@@ -116,7 +116,11 @@ deploy files run it as the `purge` service of `docker/compose.backend.yml`; see
   an address that has an account, and no count toward the total per email for a request over
   its per-pair limits. A newer link cancels the browser's older ones only when the request is
   within its limits. An advisory lock each makes two link requests from one browser leave one
-  usable link and two sign-ins at once leave at most 20 sessions.
+  usable link and two sign-ins at once leave at most 20 sessions. Migration `0012` bounds the
+  wait for the sign-in lock (in `auth_complete_login` and `auth_complete_passkey`) to 2 seconds,
+  as `passkey_policy.ADDITIONS_LOCK_WAIT` bounds the passkey-additions lock (#158): a wait that
+  runs out rolls the call back and is answered 429 with `Retry-After: 1`, the link, challenge
+  or registration not used up (`tests/test_lock_waits.py`).
 - A signed-in request is one transaction: `site_session` (`site/deps.py`) calls
   `auth_enter_session` as its first statement and yields an `AccountContext` with the handle.
   It is committed after the route's function returns and before the response is sent. When

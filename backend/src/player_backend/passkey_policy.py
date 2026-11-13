@@ -33,8 +33,14 @@ FAILED_WINDOW: Final = timedelta(minutes=10)
 FAILED_MAX: Final = 10
 # The failed sign-ins of one address are counted one attempt at a time, under the advisory
 # lock `lock_registry.PASSKEY_FAILED` (one key, from the counter's key). An attempt that finds
-# the lock taken does not wait for it: it is answered 429 with this `Retry-After`.
+# the lock taken does not wait for it: it is answered 429 with this `Retry-After`. So is a
+# sign-in (link or passkey) or a passkey addition whose wait for its account's lock ran out
+# (#158).
 BUSY_RETRY_SECONDS: Final = 1
+# The longest wait for the account's passkey-additions lock (`lock_registry.PASSKEY_ADDITIONS`),
+# as PostgreSQL's `lock_timeout` takes it. The sign-in lock's wait is bounded the same inside the
+# sign-in functions (0012_bounded_lock_waits.sql).
+ADDITIONS_LOCK_WAIT: Final = "2s"
 # Section 10: challenge starts, 30 per 10 minutes per address (sign-in) and per account
 # (registration), then 429.
 STARTS_WINDOW: Final = timedelta(minutes=10)

@@ -17,9 +17,11 @@ from uuid import UUID
 
 from player_backend.client_policy import ClientInfo
 from player_backend.db.context import AccountContext
-from player_backend.db.executor import Row
+from player_backend.db.executor import DatabaseError, Row
+from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import passkeys as q
 from player_backend.passkey_policy import (
+    ADDITIONS_LOCK_WAIT,
     PASSKEYS_MAX,
     STARTS_MAX,
     STARTS_WINDOW,
@@ -31,7 +33,7 @@ from player_backend.passkey_policy import (
 ADDED = "passkey.added"
 REMOVED = "passkey.removed"
 
-type AddOutcome = Literal["refused", "too_many", "exists"]
+type AddOutcome = Literal["refused", "too_many", "exists", "busy"]
 type StartRefusal = Literal["limited", "too_many"]
 
 
@@ -69,6 +71,22 @@ def _event(ctx: AccountContext, event: str, client: ClientInfo, passkey_id: UUID
         q.ADD_PASSKEY_EVENT,
         (ctx.account_id, event, ctx.credential_id, client.network, client.family, detail),
     )
+
+
+def lock_additions(ctx: AccountContext) -> bool:
+    """Take the account's additions lock, waiting at most `ADDITIONS_LOCK_WAIT`. False when the
+    wait ran out: its savepoint is rolled back and the transaction can go on."""
+    try:
+        with ctx.db.transaction():
+            prior = ctx.db.rows(q.LOCK_WAIT_NOW)[0][0]
+            ctx.db.rows(q.SET_LOCK_WAIT, (ADDITIONS_LOCK_WAIT,))
+            ctx.db.rows(q.LOCK_ADDITIONS, (ctx.account_id,))
+            ctx.db.rows(q.SET_LOCK_WAIT, (prior,))
+    except DatabaseError as error:
+        if not ran_out(error):
+            raise
+        return False
+    return True
 
 
 def list_passkeys(ctx: AccountContext) -> list[PasskeyInfo]:
@@ -123,7 +141,9 @@ def finish_registration(
 
     The challenge is used up whatever follows, so the caller returns a refusal rather than
     raising it: raising would roll the use back. `exists` when any account holds the
-    credential id already.
+    credential id already. `busy` when the wait for the account's additions lock ran out
+    (#158): nothing is added, and the caller raises it, so that the use is rolled back too and
+    the same answer can be sent again.
     """
     if challenge_hash is None:
         return "refused"
@@ -133,7 +153,8 @@ def finish_registration(
     new = verify()
     if new is None:
         return "refused"
-    ctx.db.rows(q.LOCK_ADDITIONS, (ctx.account_id,))
+    if not lock_additions(ctx):
+        return "busy"
     count = ctx.db.rows(q.COUNT_PASSKEYS, (ctx.account_id,))[0][0]
     if not isinstance(count, int) or count >= PASSKEYS_MAX:
         return "too_many"
