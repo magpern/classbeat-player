@@ -2,12 +2,15 @@
 // with the device token, the one WebSocket, the reconnect timer and the class run's publisher.
 // The host token stays in this process's memory, in the model, and leaves it only in `hello` (on
 // the host's connection, or on the ender's when a session the host is not in is ended: ender.ts);
-// it is never stored, logged or sent to a window. The presenter gets `view()` and nothing else.
+// it is never stored, logged or sent to a window. The presenter gets `view()`; the room window gets
+// `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else.
 // Ending while live keeps the host's connection until the session is ended (farewell.ts, #211).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
 import type { LivePanelView } from "../../core/live/panel-view.ts";
+import { roomSlotOf } from "../../core/live/room-slot.ts";
+import type { RemoteView } from "../../core/room/remote.ts";
 import { step } from "../../core/live/session-model.ts";
 import { OFF } from "../../core/live/session-types.ts";
 import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-types.ts";
@@ -51,6 +54,10 @@ export const failedLine = (e: unknown): string => {
 
 export interface LiveService {
   view(): LivePanelView;
+  /** The room window's slot: the join code and the phones connected, never anything else of the session. */
+  roomView(): RemoteView;
+  /** Calls the listener after every event that changed the session. */
+  onChange(listener: () => void): void;
   start(): LivePanelView;
   end(): LivePanelView;
   makeCode(): LivePanelView;
@@ -74,6 +81,7 @@ export function createLiveService(d: LiveDeps): LiveService {
   let socket: LiveSocket | null = null;
   let publisher: Publisher | null = null;
   let retry: unknown = null;
+  const listeners: (() => void)[] = [];
   const log = d.log ?? ((line: string) => console.warn(line));
   // The start requests awaiting their answer, the farewells and the enders still running, for the
   // quit (#205). A step that throws is logged without its text, which could hold a token.
@@ -113,6 +121,7 @@ export function createLiveService(d: LiveDeps): LiveService {
       if (model.run !== null) publisher = createPublisher({ run: model.run, host: d.host, setTimer: d.setTimer, clearTimer: d.clearTimer, applied: (slot, action, deltaMs) => dispatch({ type: "applied", slot, action, deltaMs }) });
     }
     if (model.phase === "idle" || model.phase === "ended" || model.phase === "refused") origin = null;
+    if (model !== before) for (const l of listeners) l();
   };
 
   const run = (x: LiveEffect, at: string | null): void => {
@@ -229,6 +238,10 @@ export function createLiveService(d: LiveDeps): LiveService {
 
   return {
     view,
+    roomView: () => roomSlotOf(model, { paired: d.credential() !== null, classOpen: d.classOpen(), site: origin }),
+    onChange(listener) {
+      listeners.push(listener);
+    },
     start() {
       dispatch({ type: "start", run: d.runId(), credential: credential(), classOpen: d.classOpen() });
       return view();

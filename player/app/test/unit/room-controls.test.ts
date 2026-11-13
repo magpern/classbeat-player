@@ -199,7 +199,7 @@ test("no control code, token or controller detail reaches the room window on any
   assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock });
 });
 
-const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts"];
+const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts", "core/live/room-slot.ts", "main/live/room-remote.ts"];
 
 test("the room's sources name no control code, token or controller, and each push goes through its filter", () => {
   for (const p of ROOM_SOURCES) assert.doesNotMatch(code(read("src", ...p.split("/"))), /control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, p);

@@ -17,11 +17,13 @@ import { electronBlocker } from "./electron-blocker.ts";
 import { createKeepAwake } from "./keep-awake.ts";
 import { roomCloses, roomMayOpen } from "../core/room/lifecycle.ts";
 import { NO_REMOTE } from "../core/room/remote.ts";
+import type { RoomRemote } from "../core/room/remote.ts";
 import { registerRoomHandlers } from "./room/room-handlers.ts";
 import { createRoomWindow } from "./room/room-window.ts";
 import { registerLiveHandlers } from "./live/live-handlers.ts";
 import type { LiveService } from "./live/live-service.ts";
 import { quitAfterLive } from "./live/quit.ts";
+import { liveRoomRemote } from "./live/room-remote.ts";
 import { setupLive } from "./live/setup.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
@@ -47,7 +49,7 @@ let presenter: BrowserWindow | null = null;
 let list: ListController | null = null;
 let pairing: PairingService | null = null;
 let sync: SyncService | null = null;
-// The phone remote: off until the instructor starts it in the presenter, and only for the open class run.
+// The phone remote: off until the instructor starts it, in the presenter or on the room screen, and only for the open class run.
 let phoneRemote: LiveService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
@@ -57,9 +59,9 @@ const controller = createController(undefined, music.reader, music.transport);
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 // The room screen's own window: it opens with every class that opens, and closes with the class.
 const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: ROOM_PRELOAD, presenter: live });
-// The room window's phone-remote slot: the live client runs from the presenter only so far (#173);
-// joining it to the room screen's slot is later work, so the slot is absent.
-const remote = NO_REMOTE;
+// The room window's phone-remote slot: absent until the live client is set up, then joined to it
+// (#202). Its Phone remote button is the instructor's request; nothing starts it by itself.
+let remote: RoomRemote = NO_REMOTE;
 const pinned = (): boolean => (sync?.view().pinned ?? null) !== null;
 // Whether the main window is on the class list, as the shell asked for it: set when the shell starts
 // a page load, so a command right after "Class list" already sees the list (the URL changes only
@@ -191,11 +193,16 @@ if (!app.requestSingleInstanceLock()) {
     controller.watch(() => refreshRoomItem());
     controller.watch((s) => keepAwake.update(s.view));
     controller.watch(() => phoneRemote?.tick());
+    phoneRemote = setupLive(controller, paired);
+    const roomRemote = liveRoomRemote(phoneRemote);
+    remote = roomRemote;
+    // A class opened or closed, or the computer paired or unpaired, can change the slot too.
+    controller.watch(() => roomRemote.refresh());
+    paired.watch(() => roomRemote.refresh());
     remote.watch((v) => room.sendRemote(v));
     registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
-    phoneRemote = setupLive(controller, paired);
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();

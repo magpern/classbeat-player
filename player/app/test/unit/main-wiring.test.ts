@@ -51,7 +51,17 @@ test("the display-sleep blocker follows every snapshot and is released with the 
 
 test("End class from the room window ends the phone remote and the pin, and the class list comes back", () => {
   assert.match(main, /function endClass\(\): void \{\s*remote\.stop\(\);\s*list\?\.release\(\);\s*showList\(\);\s*\}/);
-  // This build has no live client: the phone remote's slot is absent, and each change reaches the room window.
-  assert.match(main, /const remote = NO_REMOTE;/);
   assert.match(main, /remote\.watch\(\(v\)\s*=>\s*room\.sendRemote\(v\)\)/);
+});
+
+// #202: the room window's slot is joined to the live client, and only the room's button starts it.
+test("the room's phone-remote slot is the live client's, refreshed with every snapshot and pairing change", () => {
+  assert.match(main, /let remote: RoomRemote = NO_REMOTE;/);
+  assert.match(main, /phoneRemote = setupLive\(controller, paired\);\s*const roomRemote = liveRoomRemote\(phoneRemote\);\s*remote = roomRemote;/);
+  assert.match(main, /controller\.watch\(\(\) => roomRemote\.refresh\(\)\);/);
+  assert.match(main, /paired\.watch\(\(\) => roomRemote\.refresh\(\)\);/);
+  // The room's slot is wired before its handlers, so room:remote-start reaches the live client.
+  assert.ok(main.indexOf("remote = roomRemote;") < main.indexOf("registerRoomHandlers("));
+  // Nothing in the shell starts the phone remote: only the room's handler and the presenter's do.
+  assert.doesNotMatch(main, /\b(remote|roomRemote|phoneRemote)\??\.start\(/);
 });
