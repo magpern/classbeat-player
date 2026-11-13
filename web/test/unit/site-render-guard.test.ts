@@ -41,6 +41,13 @@ describe("the markup-API scan", () => {
     "frame.srcdoc = x;",
     'frame.setAttribute("srcdoc", x);',
     '<iframe srcdoc="<p>x</p>"></iframe>',
+    'document.execCommand("insertHTML", false, x);',
+    "const d = xhr.responseXML;",
+    'xhr.responseType = "document";',
+    "xhr.responseType='document';",
+    "new XSLTProcessor();",
+    "p.transformToFragment(xml, document);",
+    "p.transformToDocument(xml);",
   ];
   for (const code of fixtures) {
     it(`catches ${code}`, () => {

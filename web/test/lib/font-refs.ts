@@ -1,15 +1,19 @@
 // Remote font references in a CSS or HTML text, for the web lane's guard (test/unit/design.test.ts):
-// a remote url() in an @font-face block, a remote @import, a remote <link href>.
+// a remote url() or src() in an @font-face block, a remote @import, a remote <link href>.
 //
 // The structure is found in the raw text, the way the CSS and HTML tokenizers find it: a keyword may
 // be written with CSS escapes, a brace inside a string, an escape or a comment does not close an
 // @font-face block, and a `>` inside a quoted attribute does not end a <link> tag. Only a captured
 // value is decoded (CSS escapes in a CSS value, character references in an href), never the whole
 // text, so a decoded character never moves the structure (#276, B1). Every value is then read as
-// the URL parser reads it.
+// the URL parser reads it, and anything but a same-origin relative reference or `data:` is remote (#307).
 
-/** Leaves the page: `http:` or `https:` with or without slashes, or protocol-relative (the URL parser reads `\` as `/`). */
-const REMOTE = /^(?:https?:|[/\\]{2})/i;
+/**
+ * Stays on the page (an allowlist, #307): `data:`, nothing (the sheet itself), a query or a
+ * fragment, a path from the root that is not protocol-relative, or a relative path whose first
+ * segment has no `:` (no scheme). The URL parser reads `\` as `/`. Everything else is remote.
+ */
+const LOCAL = /^(?:data:|$|[?#]|[/\\](?![/\\])|[^/\\?#:]+(?:[/\\?#]|$))/i;
 
 /** The URL parser's clean-up: C0 controls and spaces (and, to be safe, any other white space) trimmed at both ends, tab and newline removed anywhere. */
 export function urlInput(value: string): string {
@@ -19,6 +23,19 @@ export function urlInput(value: string): string {
   while (a < b && blank(value[a])) a += 1;
   while (b > a && blank(value[b - 1])) b -= 1;
   return value.slice(a, b).replace(/[\t\n\r]/g, "");
+}
+
+/** The text a `data:` address carries, percent-decoded byte by byte as the browser does (and base64-decoded if it says so); null if it is not one or cannot be read (then it loads nothing). */
+export function dataText(url: string): string | null {
+  const m = /^data:([^,]*),([\s\S]*)$/i.exec(url);
+  if (!m) return null;
+  const body = m[2].replace(/%([0-9a-f]{2})/gi, (_x, h: string) => String.fromCharCode(parseInt(h, 16)));
+  if (!/;\s*base64\s*$/i.test(m[1])) return body;
+  try {
+    return atob(body.replace(/\s/g, ""));
+  } catch {
+    return null;
+  }
 }
 
 /** Decodes the CSS escapes of one captured value: `\68 ttps` is `https`, `\/` is `/`; CRLF, CR and FF count as LF and a backslash-newline is a continuation. */
@@ -64,8 +81,10 @@ const value = (stop: string): string => `(?:${cssString('"')}|${cssString("'")}|
 const COMMENTS = "(?:\\s|/\\*[\\s\\S]*?\\*/)*";
 // The body runs to the first `}` outside a string, an escape or a comment (or to the end of the text).
 const FONT_FACE = new RegExp(`@${keyword("font-face")}${COMMENTS}\\{(?:${cssString('"')}"?|${cssString("'")}'?|/\\*[\\s\\S]*?(?:\\*/|$)|\\\\[\\s\\S]|[^}"'\\\\])*`, "gi");
-const FONT_URL = new RegExp(`${keyword("url")}\\(\\s*${value(`)"'\\s`)}`, "gi");
-const IMPORT = new RegExp(`@${keyword("import")}${COMMENTS}(?:${keyword("url")}\\(\\s*)?${value(`)"';\\s`)}`, "gi");
+// `src()` is the CSS Values 4 twin of `url()` (#307).
+const URL_FN = `(?:${keyword("url")}|${keyword("src")})\\(`;
+const FONT_URL = new RegExp(`${URL_FN}\\s*${value(`)"'\\s`)}`, "gi");
+const IMPORT = new RegExp(`@${keyword("import")}${COMMENTS}(?:${URL_FN}\\s*)?${value(`)"';\\s`)}`, "gi");
 
 const HTML_SPACE = new Set([" ", "\t", "\n", "\f", "\r"]);
 
@@ -109,12 +128,23 @@ function linkHrefs(text: string): string[] {
   return hrefs;
 }
 
-/** The remote font references in a CSS or HTML text, each as the URL parser would read it. */
-export function remoteFontRefs(text: string): string[] {
+/**
+ * The remote font references in a CSS or HTML text, each as the URL parser would read it. A
+ * `data:` address is local, but the sheet or page it carries is read too (to `depth` levels; one
+ * nested deeper than that counts as remote).
+ */
+export function remoteFontRefs(text: string, depth = 4): string[] {
   const found: string[] = [];
+  const push = (url: string): void => {
+    if (!found.includes(url)) found.push(url);
+  };
   const add = (raw: string): void => {
     const url = urlInput(raw);
-    if (REMOTE.test(url) && !found.includes(url)) found.push(url);
+    if (!LOCAL.test(url)) return push(url);
+    const inner = dataText(url);
+    if (inner === null) return;
+    if (depth <= 0) return push(url);
+    for (const u of remoteFontRefs(inner, depth - 1)) push(u);
   };
   const css = (m: RegExpMatchArray): string => decodeCssEscapes(m[1] ?? m[2] ?? m[3] ?? "");
   for (const block of text.matchAll(FONT_FACE)) for (const u of block[0].matchAll(FONT_URL)) add(css(u));
