@@ -50,6 +50,8 @@ worst-case content of every text slot ([mockups/shots.js](mockups/shots.js)): 25
 1920×1080, 1280×720 (the smallest), 1680×1050 and 1280×800 (16:10), 1650×1080 (1.53 : 1, the
 narrowest ratio of the wide layout), 1620×1080 (3:2, the widest of the narrow layout),
 1440×1080 and 1024×768 (4:3), 1280×1024 (5:4, the narrowest).
+The room window of a one-display set-up (class-list.md, "Where the room window goes") may be
+smaller than the room sizes and is a rehearsal view, not held to C1.
 
 ### 16:9 and 16:10 (1920×1080, 1280×720, 1280×800; anything wider than 3:2)
 
@@ -111,10 +113,12 @@ needs two lines is set at 7.1 vh (at most 5.75 vw); the metrics sit in a row und
 spread to the safe edge with at least 1.6 vw between them, values at min(7.55 vh, 5.7 vw) so
 "On the beat", "Standing" and "Song, planned" fit on one line down to 5:4 (7.12 vh there, 7.55 vh
 at 4:3). These two sizes are the **product's**: the first is 3 % above the mock-ups' nominal 6.9 vh,
-and the second is 2 % (its vh term) and 2.7 % (its vw term) above their min(7.4 vh, 5.55 vw), a margin because the product is measured in its own
+and the second is 2 % (its vh term) and 2.7 % (its vw term) above their min(7.4 vh, 5.55 vw), a
+margin because the product is measured in its own
 browser (see C1), whose font metrics give cap heights about 2.3 % lower; the mock-ups keep the
 nominal sizes, and both stay above the 5.5 % floor; the cue (from 60 vh, two lines at
-`--t-text`, three at `--t-text-min`) and the next interval (76 vh) use the full width (a four-line cue moves the next row up beside the gel: see
+`--t-text`, three at `--t-text-min`) and the next interval (76 vh) use the full width (a four-line
+cue moves the next row up beside the gel: see
 "Cue" under "Fitting text"); the score is 83 to 95 vh; the segment name is dropped from
 the rail. Switch point: any aspect ratio of 3:2 or narrower. 5:4 screenshot:
 [last interval at 1280×1024](mockups/room-last-interval-1280x1024.png) ("On the beat") and the
@@ -157,7 +161,8 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   white, never a hue.
 - **Zone name on the gel**: from the class, up to 80 characters. At most two lines at
   `--t-value`, never larger than 5 vw (5.75 vw at 3:2 and narrower) so a word of up to 4 em fits
-  the gel (at 3:2 and narrower, a two-line name is set at 7.1 vh). A name that needs more than two lines, or
+  the gel (at 3:2 and narrower, a two-line name is set at 7.1 vh). A name that needs more than two
+  lines, or
   has a word too wide for the gel, steps down to `--t-minor` with at most three lines (two at
   3:2 and narrower), and a longer one ends in an ellipsis (the presenter shows it whole). At 3:2
   and narrower, a two-line name beside three targets is also set at `--t-minor`: the 60 vh gel
@@ -177,7 +182,8 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   `--t-label`. At 3:2 and narrower the list starts 2.5 vw further left (still 1.5 vw clear of the
   gel), the chip column is 4.4 vh, the time column 10.3 vh, and the gaps are 0.7 vw inside a row
   and 1.2 vw between the columns, so that a zone-name word of up to 16 letters stays whole in its
-  column (CI checks it). A name wraps to two lines; a longer one ends in an ellipsis after the second line, and the full name is on
+  column (CI checks it). A name wraps to two lines; a longer one ends in an ellipsis after the
+  second line, and the full name is on
   the gel when that zone plays. The list ends above 76 vh, clear of the score, at every layout;
   the first cue is not shown before the start (it appears with the first interval). Fixture:
   seven zones with "Endurance, the aerobic base for long steady rides" (49 characters, ends in an
@@ -215,7 +221,8 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   score blocks). A moment's label (for example "Drop") sits on the clip's second line, so it never
   covers the title. In the ambiguous state the occurrence marker ("1st of 2") is its own label
   right after the title and is never cut: the title gives up width to its ellipsis first
-  ([worst case](mockups/room-worst-ambiguous.html), [1650×1080](mockups/room-worst-ambiguous-1650x1080.png)).
+  ([worst case](mockups/room-worst-ambiguous.html),
+  [1650×1080](mockups/room-worst-ambiguous-1650x1080.png)).
 - **Class title** (before the start and finished): up to 80 characters. One line at 11 vh (9 vh
   at 3:2 and narrower); a title that does not fit steps down to `--t-value` on one line (two
   lines at 7.4 vh at 3:2 and narrower), then ends in an ellipsis (the presenter shows it whole).
@@ -235,11 +242,14 @@ slot and are checked at all ten sizes. Three were added for the #31 review: the
 occurrence marker, and two **width-based** fixtures, [running](mockups/room-worst-wide.html) and
 [before the start](mockups/room-worst-wide-before-start.html), with names, segment and titles made
 of the widest capitals (M, W) and single 80-character words, and a 120-character cue in wide
-capitals ([1650×1080](mockups/room-worst-wide-1650x1080.png), [4:3](mockups/room-worst-wide-1440x1080.png)
+capitals ([1650×1080](mockups/room-worst-wide-1650x1080.png),
+[4:3](mockups/room-worst-wide-1440x1080.png)
 with three cue lines and the full next row, [5:4](mockups/room-worst-wide-1280x1024.png) with
-four cue lines and the short next row, [before the start](mockups/room-worst-wide-before-start-1650x1080.png)). The mock-ups choose
+four cue lines and the short next row, [before the
+start](mockups/room-worst-wide-before-start-1650x1080.png)). The mock-ups choose
 step-downs by character count; the width-based fixtures are the ones the product's own measuring
-must pass, and PL4 CI keeps them. The other five: [off the list](mockups/room-worst-off-list.html) (tag and "Interval
+must pass, and PL4 CI keeps them. The other five: [off the list](mockups/room-worst-off-list.html)
+(tag and "Interval
 left, estimated", plate "Not a class song", `58:58`, class time `1:58:58`, "On the beat",
 "Standing", "Song, planned", BPM 200, a 120-character cue with long words, 80-character zone,
 segment and song names, three targets, "Breakdown"), [running](mockups/room-worst-running.html)
@@ -249,9 +259,11 @@ range, a 60-character cue at `--t-text`), [paused](mockups/room-worst-paused.htm
 [before the start](mockups/room-worst-before-start.html) and
 [finished](mockups/room-worst-finished.html) (an 80-character title, seven zones with 80-character
 names, `2:12:00`). Screenshots: off the list at
-[5:4](mockups/room-worst-off-list-1280x1024.png) and [1650×1080](mockups/room-worst-off-list-1650x1080.png),
+[5:4](mockups/room-worst-off-list-1280x1024.png) and
+[1650×1080](mockups/room-worst-off-list-1650x1080.png),
 running at [1280×720](mockups/room-worst-running-1280x720.png), before the start at
-[5:4](mockups/room-worst-before-start-1280x1024.png) and [1650×1080](mockups/room-worst-before-start-1650x1080.png).
+[5:4](mockups/room-worst-before-start-1280x1024.png) and
+[1650×1080](mockups/room-worst-before-start-1650x1080.png).
 
 ## States
 
@@ -269,7 +281,7 @@ Link states are white, grey and black only, never a hue (rule 7).
 | Ambiguous | The same recording is in the class twice | Link plate "Song is in twice"; the clip carries the marker "1st of 2", never cut; the presenter offers the other | [html](mockups/room-ambiguous.html) | [16:9](mockups/room-ambiguous-1920x1080.png) |
 | Manual clock | No link, or chosen | Link "Manual clock" in grey with a square marker (a choice, not a fault, so no plate); no bar count | [html](mockups/room-manual.html) | [16:9](mockups/room-manual-1920x1080.png) |
 | Last interval | The class's final interval | Label "Last interval"; "bars to the end"; next row "End of class"; an "End" mark in the score | [html](mockups/room-last-interval.html) | [16:9](mockups/room-last-interval-1920x1080.png), [4:3](mockups/room-last-interval-1440x1080.png) |
-| Finished | Class time reached the end | House lights up: a white gel, "Class Complete" and the length; title, time ridden, songs, class load (planned) and time in each zone; score at "End", the past in grey | [html](mockups/room-finished.html) | [16:9](mockups/room-finished-1920x1080.png), [4:3](mockups/room-finished-1440x1080.png) |
+| Finished | Class time reached the end | House lights up: a white gel, "Class Complete" and the length; title, time ridden, songs, class load (planned) and time in each zone; score at "End", the past in grey. The room window stays on this state until the instructor leaves the class (class-list.md, "When the room window closes") | [html](mockups/room-finished.html) | [16:9](mockups/room-finished-1920x1080.png), [4:3](mockups/room-finished-1440x1080.png) |
 | Interval of 100 minutes or more | More than 99:59 left | The countdown reads `99+` (sized as `MM:SS`) until 99:59 remain | [html](mockups/room-long-interval.html) | [16:9](mockups/room-long-interval-1920x1080.png) |
 | Last 5 seconds | 5 s or less to the change | Label "Change in"; nothing flashes until the change itself | [html](mockups/room-change-in.html) | [16:9](mockups/room-change-in-1920x1080.png) |
 | Hold at a song change | See below | Label "Until the next song"; the countdown is the expected time to the next song; no bar count | [html](mockups/room-hold.html) | [16:9](mockups/room-hold-1920x1080.png) |
@@ -300,7 +312,8 @@ measure). It follows the beats it marks: the tempo between the song's beat ancho
 song is playing, not the song's listed BPM. Two lights always start at least 1/3 s apart; a beat
 that comes sooner after the last light is skipped. In steady time that is every beat up to
 180 BPM and every second beat above (200 BPM: 1.67 lights a second), and tempo drift near 180
-can never give four lights in one second. With `prefers-reduced-motion` (and in the player's own reduced-motion setting, which
+can never give four lights in one second. With `prefers-reduced-motion` (and in the player's own
+reduced-motion setting, which
 the plain screen honours the same way): colour changes are instant, there is no flash and no
 beat dot, and the score steps once a second. No state relies on motion to be understood.
 
@@ -330,7 +343,8 @@ These are what a Developer builds against and what CI checks on the real screen'
 in PL4, at every supported size with the worst-case content. On the mock-ups,
 [mockups/shoot.js](mockups/shoot.js) takes the screenshots and then runs
 [mockups/measure.js](mockups/measure.js) on every shot in [mockups/shots.js](mockups/shots.js)
-(the states, four more states at three sizes, and the eight worst cases at all ten sizes, and the presenter at two: 118
+(the states, four more states at three sizes, and the eight worst cases at all ten sizes, and the
+presenter at two: 118
 shots, about twelve minutes with Playwright and Chromium, animations stopped at their first
 frame so every PNG reproduces); it exits non-zero on any failure and ends with a summary table of
 fixture by size. Every check passes on every shot.
@@ -340,7 +354,7 @@ fixture by size. Every check passes on every shot.
 | C1. Text height | **Measured in the product's own browser** on the real screen (the CI Chromium), not on the mock-ups: its font metrics give cap heights about 2.3 % lower than the mock-up browser, which is why the product's value sizes carry the margin given under "Layout". The floors below are not lowered. Cap height as a share of the screen height, at every room size: countdown at least 20 %; gel numeral at least 25 %; values (zone name, cadence, position, BPM) at least 5.5 % (a zone name stepped down by the fitting rules: 3 %); the cue, class time and the next interval at least 3 %; labels and score text at least 2 %. Not applied to the presenter window or the preview |
 | C2. Contrast | WCAG 2 ratio between the text colour and the worst rendered background pixel inside the text's ink: at least 7 : 1 for everything except labels, at least 4.5 : 1 for labels |
 | C3. Safe area | All text ink within 5 % of every edge |
-| C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole; the ink of the next row ends at least 0.7 vh above the top of the score at every size (5.04 px at 1280×720; a minimum: no design may go below it; CI checks it on every room screenshot) |
+| C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole; the ink of the next row ends at least 0.7 vh above the top of the score at every size (5.04 px at 1280×720; a minimum: no design may go below it; CI checks it on every room screenshot, with a tolerance of 0.5 px for the ink trim described below) |
 | C5. Zone | Every zone colour carries its number; the gel, the next row and the time-in-zone list also carry the name; a score block shows its name if and only if the whole name fits beside the number, and never draws it cut. Past score blocks carry no zone colour |
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
 | C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing (at least 1/3 s between the starts of two lights, including with tempo drift near 180 BPM), the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |

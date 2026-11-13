@@ -20,6 +20,14 @@ with other work; nothing in the development loop waits for an answer.
   sign-up by allowlist only; sign-in links work only in the browser that asked for them; no
   local lock on a studio computer shared by several instructors; account deletion removes
   everything, including removal markers and audit events; 8-letter join codes.
+- **The web lane's network guard and the website (#144).** `web/test/unit/design.test.ts`
+  forbids any network call under `web/src/`, so the room screen never depends on the network.
+  The website lives in the same lane and must call its backend, so it fails that guard. Agents
+  never weaken a rule guard, so #144 is held, done but not pushed. Choose one: narrow the guard
+  so that only the site's one network module may call `fetch('/api/site/…')` with
+  `credentials: "same-origin"` and every other file keeps the full check; move the website out of
+  `web/src/` into its own folder with its own, stricter network guard; or revise #144. Until then
+  agents do other work.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); no phone app of our own, with Bluefy on iPhone for sensors; no external
   hardware such as lighting.
