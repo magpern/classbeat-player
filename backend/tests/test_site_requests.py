@@ -25,6 +25,7 @@ def _calls(site: Site) -> list[tuple[str, str]]:
         path = path.replace("{link_id}", str(uuid.uuid4()))
         path = path.replace("{source_class_id}", "c1")
         path = path.replace("{class_id}", str(uuid.uuid4()))
+        path = path.replace("{passkey_id}", str(uuid.uuid4()))
         assert "{" not in path, "a new path parameter needs a value here"
         found.append((route.method, path))
     return found

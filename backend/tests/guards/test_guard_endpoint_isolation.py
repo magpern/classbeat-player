@@ -17,6 +17,7 @@ from player_backend.source_api.deps import source_token
 from tests import pairhelp
 from tests import sourcehelp as sh
 from tests.pairhelp import DECIDE, DEVICE, DEVICES, FIND, bearer
+from tests.passkeyhelp import OPTIONS, PASSKEYS, Authenticator, b64, options_of, register
 from tests.routehelp import routes_of
 from tests.sitehelp import Browser, Site
 
@@ -44,6 +45,8 @@ class Other:
     class_ids: tuple[str, ...]  # the ids of B's class rows, as the player API names a class
     cursor: int  # B's sync cursor
     base: int  # where B's sync order starts: B's places are above it, up to its cursor
+    passkey_id: str  # the id of B's passkey row
+    credential_id: bytes  # B's passkey's credential id, as A could learn it from a browser
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,10 @@ def _snapshot(site: Site, email: str) -> list[tuple[object, ...]]:
         "JOIN player.accounts a ON a.id = c.account_id WHERE a.email = %s ORDER BY 2",
         "SELECT 'sync', y::text, '' FROM player.account_sync y "
         "JOIN player.accounts a ON a.id = y.account_id WHERE a.email = %s ORDER BY 2",
+        "SELECT 'passkey', p::text, '' FROM player.passkeys p "
+        "JOIN player.accounts a ON a.id = p.account_id WHERE a.email = %s ORDER BY 2",
+        "SELECT 'registration', r::text, '' FROM player.passkey_registrations r "
+        "JOIN player.accounts a ON a.id = r.account_id WHERE a.email = %s ORDER BY 2",
     ):
         found.extend(site.su.execute(statement, (email,)).fetchall())
     return found
@@ -262,6 +269,47 @@ def _own_class_id(a: Actor, source_class_id: str) -> str:
     return next(c["class_id"] for c in listed if c["source_class_id"] == source_class_id)
 
 
+def _list_passkeys(site: Site, a: Actor) -> None:
+    answer = a.browser.get(PASSKEYS)
+    assert answer.status_code == 200 and answer.json() == {"passkeys": []}
+    assert a.other.passkey_id not in answer.text
+
+
+def _passkey_options(site: Site, a: Actor) -> None:
+    # Only A's own passkeys are excluded: B's credential is not named to A.
+    options = options_of(a.browser.post(OPTIONS))
+    assert options.get("excludeCredentials", []) == []
+    assert b64(a.other.credential_id) not in str(options)
+
+
+def _add_passkey(site: Site, a: Actor) -> None:
+    # B's credential id is known to A here; a passkey of that id is not A's to add.
+    copy = Authenticator()
+    copy.credential_id = a.other.credential_id
+    refused = register(a.browser, copy)
+    assert refused.status_code == 409 and refused.json() == {"error": "passkey_exists"}
+    assert register(a.browser, Authenticator(), "A key").status_code == 201
+
+
+def _own_passkey_id(a: Actor) -> str:
+    (listed,) = a.browser.get(PASSKEYS).json()["passkeys"]
+    return str(listed["id"])
+
+
+def _rename_passkey(site: Site, a: Actor) -> None:
+    # B's passkey id is known to A here; it is still not A's to rename.
+    path = f"{PASSKEYS}/{a.other.passkey_id}"
+    assert a.browser.request("PATCH", path, json={"name": "Taken"}).status_code == 404
+    own = f"{PASSKEYS}/{_own_passkey_id(a)}"
+    assert a.browser.request("PATCH", own, json={"name": "A desk"}).status_code == 200
+
+
+def _remove_passkey(site: Site, a: Actor) -> None:
+    # B's passkey id is known to A here; it is still not A's to remove.
+    assert a.browser.delete(f"{PASSKEYS}/{a.other.passkey_id}").status_code == 404
+    assert a.browser.delete(f"{PASSKEYS}/{_own_passkey_id(a)}").status_code == 204
+
+
 def _revoke_own_device(site: Site, a: Actor) -> None:
     assert a.app.delete(DEVICE, headers=bearer(a.token)).status_code == 204
     assert a.app.get(DEVICE, headers=bearer(a.token)).status_code == 401
@@ -317,6 +365,12 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/site/classes"): _list_library,
     ("GET", "/api/site/classes/{class_id}"): _read_library_class,
     ("DELETE", "/api/site/classes/{class_id}"): _delete_library_class,
+    # In this order: A adds a passkey of its own, then renames and removes it.
+    ("GET", PASSKEYS): _list_passkeys,
+    ("POST", OPTIONS): _passkey_options,
+    ("POST", PASSKEYS): _add_passkey,
+    ("PATCH", "/api/site/passkeys/{passkey_id}"): _rename_passkey,
+    ("DELETE", "/api/site/passkeys/{passkey_id}"): _remove_passkey,
     ("DELETE", "/api/player/device"): _revoke_own_device,
     ("POST", EXPORT): _export,
     ("POST", "/api/site/sessions/end-all"): _end_all,
@@ -348,6 +402,10 @@ def _account_b(site: Site) -> tuple[Browser, Other]:
     for class_id, number in (("shared", 3), ("b-only", 4), ("b-kept", 2)):
         published = sh.publish(server, b_source, sh.envelope(class_id, number, sh.document("B")))
         assert published.status_code == 200
+    # A passkey, and a registration that waits for its answer.
+    b_key = Authenticator()
+    assert register(b, b_key, "B key").status_code == 201
+    assert b.post(OPTIONS).status_code == 200
     other = Other(
         session_id=_one(
             site,
@@ -395,6 +453,13 @@ def _account_b(site: Site) -> tuple[Browser, Other]:
                 B,
             )
         ),
+        passkey_id=_one(
+            site,
+            "SELECT x.id::text FROM player.passkeys x "
+            "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s",
+            B,
+        ),
+        credential_id=b_key.credential_id,
     )
     return b, other
 
@@ -425,8 +490,9 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
         )
         before = _snapshot(site, B)
         # A session, a device, a pairing that waits, a source link with three classes and its
-        # sync cursor, and the events of making them.
-        kinds = ["session", *["event"] * 8, "device", "pairing", "link", *["class"] * 3, "sync"]
+        # sync cursor, a passkey, a registration that waits, and the events of making them.
+        kinds = ["session", *["event"] * 9, "device", "pairing", "link", *["class"] * 3, "sync"]
+        kinds += ["passkey", "registration"]
         assert [row[0] for row in before] == kinds
         case(site, a)
         assert _snapshot(site, B) == before

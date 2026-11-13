@@ -38,6 +38,8 @@ RAW_PARAMETERS = {
     ("GET", "/api/site/classes"): {"before", "limit"},
     ("GET", "/api/site/classes/{class_id}"): {"class_id"},
     ("DELETE", "/api/site/classes/{class_id}"): {"class_id"},
+    ("PATCH", "/api/site/passkeys/{passkey_id}"): {"passkey_id"},
+    ("DELETE", "/api/site/passkeys/{passkey_id}"): {"passkey_id"},
     ("GET", "/api/player/changes"): {"after", "limit"},
     ("GET", "/api/player/classes/{class_id}"): {"class_id"},
     ("GET", "/api/source/classes/{source_class_id}"): {"source_class_id"},
