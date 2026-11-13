@@ -26,7 +26,9 @@ What this ADR takes as given:
   control by sign-in or by control code, controller tokens `cbp_ctl_`, at most 2 controllers,
   the WebSocket `hello`, the message limits and the routing allowlist. Section 10 holds the live
   limits, section 13 the threats. This ADR keeps all of it except the controller's command
-  set, which section 10 amends (two actions added). It decides what 0002 left to PL8: the
+  set, which section 10 amends (two actions added), and how the sign-in controller route
+  counts unknown join codes, which section 10 moves from per address to per account
+  (amended 2026-11-13). It decides what 0002 left to PL8: the
   transport in practice, the run of a session, the contract, the command semantics, failure
   behaviour and the issue split.
 - [ADR 0003](0003-class-format.md): an interval has `start_ms`, `length_ms`, `zone` and a `cue`
@@ -89,7 +91,8 @@ What this ADR takes as given:
 
 ### 3. Control authority
 
-ADR 0002 section 8, restated so the issues can check it, with the one change of section 10:
+ADR 0002 section 8, restated so the issues can check it, with the changes of section 10 (the
+command set, and the per-account count on the sign-in route):
 
 - *By sign-in.* The phone is signed in on the site with the host's account and sends the join
   code to `POST /api/live/controller`. The controller token ends with that site session.
@@ -339,7 +342,7 @@ Then the Verifier runs the companion's "done when" on fakes: app, backend and a 
 page, with a fake music link. Issues 1, 2 and 6 start together; then 3, 7 and 9; then 4 and 8;
 then 5. That keeps within two open pull requests per lane.
 
-### 10. Amends ADR 0002 sections 8 and 13
+### 10. Amends ADR 0002 sections 8, 10 and 13
 
 ADR 0002 lets a controller send start, pause, skip and nudge, and the plan's companion text names
 the same buttons. This ADR adds two actions and drops none; the plan's button list is extended by
@@ -367,12 +370,16 @@ way a control code ends, the host's `drop` (section 3), marked in ADR 0002's tok
 **Amended 2026-11-13: the sign-in route is not locked out per address.** ADR 0002 counts a
 `POST /api/live/controller` with an unknown join code against the caller's address, and its
 section 10 table refuses every join from that address for the rest of the minute after 60. A
-rider on the studio's shared address could so block the instructor's sign-in, which ADR 0002
-section 8 says no limit may do. So the sign-in route counts unknown join codes **per account**
+rider on the studio's shared address could so block the instructor's sign-in, which is what ADR
+0002 section 8 avoids for control codes: "such a limit would let a rider lock the instructor
+out". So the sign-in route counts unknown join codes **per account**
 (60 a minute, then `cannot_control` for that account until the minute ends) and neither counts
 against nor is refused by the per-address limit. Only a signed-in account reaches the count, so
-nothing about join codes is shown to anyone without a sign-in. `POST /api/live/control` and rider
-joins keep the per-address limit. ADR 0002's two lines on this are marked amended.
+nothing about join codes is shown to anyone without a sign-in. A call without a valid site
+session is answered `cannot_control` before any join-code lookup; such calls are counted against
+the caller's address, and that limit refuses only calls without a valid site session, so a
+signed-in instructor is never refused by it. `POST /api/live/control` and rider
+joins keep the per-address limit. ADR 0002's lines on this, in sections 8, 10 and 13, are marked amended.
 
 ## Alternatives
 
