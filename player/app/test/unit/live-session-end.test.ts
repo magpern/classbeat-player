@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { liveSocketUrl } from "../../src/core/live/host-wire.ts";
 import { END_TRIES_MS, END_TRY_MS, tryAgainAfter } from "../../src/main/live/ender.ts";
-import { HOST_TOKEN, ORIGIN, OTHER_ORIGIN, rig, started } from "./live-relay.ts";
+import { HOST_TOKEN, JOIN_CODE, ORIGIN, OTHER_ORIGIN, rig, SESSION_ID, started } from "./live-relay.ts";
 import type { FakeSocket, Rig } from "./live-relay.ts";
 
 const HELLO = { v: 1, type: "hello", token: HOST_TOKEN };
@@ -147,6 +147,35 @@ test("a late answer after a re-pair is ended on the backend it came from, never 
   assert.equal(r.live.view().status, "On");
   await r.advance(0);
   assert.equal(r.sockets.length, 2);
+});
+
+// #216 (#204 review): End, a re-pair and a new session that is already live when the old answer comes.
+test("a late answer after End and a re-pair, with the new session live: ended on its own backend with its own token", async () => {
+  const r = rig();
+  r.holdAnswers = true;
+  const OLD_TOKEN = `cbp_hst_${"o".repeat(43)}`;
+  r.answer = { kind: "http", status: 200, body: { sessionId: SESSION_ID, joinCode: JOIN_CODE, hostToken: OLD_TOKEN }, retryAfterS: null };
+  r.live.start();
+  r.live.end();
+  r.origin = OTHER_ORIGIN;
+  r.answer = { kind: "http", status: 200, body: { sessionId: SESSION_ID, joinCode: JOIN_CODE, hostToken: HOST_TOKEN }, retryAfterS: null };
+  r.live.start();
+  // The new session's answer first: it connects to the new backend and goes live there.
+  await r.release(1);
+  const host = r.socket();
+  assert.equal(host.url, liveSocketUrl(OTHER_ORIGIN));
+  host.open();
+  host.server({ v: 1, type: "welcome", role: "host" });
+  assert.equal(r.live.view().status, "On");
+  // Then the old one: its session is ended on the backend it came from, never on the new one.
+  await r.release(0);
+  assert.equal(r.sockets.length, 2);
+  const ender = r.socket();
+  assert.equal(ender.url, liveSocketUrl(ORIGIN));
+  ender.open();
+  assert.deepEqual(ender.sent, [{ v: 1, type: "hello", token: OLD_TOKEN }]);
+  assert.ok(!JSON.stringify(host.sent).includes(OLD_TOKEN));
+  assert.equal(r.live.view().status, "On");
 });
 
 test("the try's time limit is 10 s and the tries start at once, after 1 s and after 2 s", async () => {

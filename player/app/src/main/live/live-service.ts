@@ -4,7 +4,7 @@
 // the host's connection, or on the ender's when a session the host is not in is ended: ender.ts);
 // it is never stored, logged or sent to a window. The presenter gets `view()`; the room window gets
 // `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else.
-// Ending while live keeps the host's connection until the session is ended (farewell.ts, #211).
+// Ending while live keeps the host's connection until the session is ended (end-live.ts, farewell.ts, #211).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
@@ -16,7 +16,7 @@ import { OFF } from "../../core/live/session-types.ts";
 import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-types.ts";
 import type { BackendCall } from "../pairing/http.ts";
 import { endSession } from "./ender.ts";
-import { farewell } from "./farewell.ts";
+import { endLive } from "./end-live.ts";
 import type { Farewell } from "./farewell.ts";
 import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
@@ -146,27 +146,11 @@ export function createLiveService(d: LiveDeps): LiveService {
         return;
       }
       case "end_live": {
-        if (at === null) return;
-        // The run's connection and publisher are the farewell's now: nothing else uses them.
-        const s = socket;
-        const p = publisher;
-        const n = x.socket;
+        // The run's connection and publisher are the ending's now (end-live.ts): nothing else uses them.
+        const ending = { at, socket, publisher, n: x.socket, token: x.token };
         socket = null;
         publisher = null;
-        if (s === null || p === null) {
-          s?.close();
-          p?.stop();
-          track(ender(at, x.token));
-          return;
-        }
-        const token = x.token;
-        const f = farewell({ socket: s, sendEnd: (sent) => p.last({ v: 1, type: "end" }, sent), endElsewhere: () => ender(at, token), setTimer: d.setTimer, clearTimer: d.clearTimer });
-        farewells.set(n, f);
-        const forget = (): void => {
-          farewells.delete(n);
-          p.stop();
-        };
-        track(f.done.then(forget, forget));
+        endLive({ ender, track, farewells, setTimer: d.setTimer, clearTimer: d.clearTimer }, ending);
         return;
       }
       case "connect": {
