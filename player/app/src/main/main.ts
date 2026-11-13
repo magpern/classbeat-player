@@ -46,6 +46,11 @@ function createPresenter(): void {
     show: true,
     webPreferences: secureWebPreferences(join(DIST, "preload.cjs")),
   });
+  // On Windows the constructor's minimum is applied to the outer window, so the content area could
+  // shrink by the frame; setMinimumSize takes the outer size, so add the frame to the content minimum.
+  const [outerW, outerH] = presenter.getSize();
+  const [contentW, contentH] = presenter.getContentSize();
+  presenter.setMinimumSize(PRESENTER_SIZE.minWidth + (outerW! - contentW!), PRESENTER_SIZE.minHeight + (outerH! - contentH!));
   presenter.on("closed", () => {
     presenter = null;
   });
