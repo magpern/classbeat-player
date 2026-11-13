@@ -13,6 +13,7 @@ import type { Command } from "../../generated/ts/live-command.d.ts";
 import type { ForwardedCommand } from "../../generated/ts/live-command-forwarded.d.ts";
 import type { CompanionState } from "../../generated/ts/live-companion-state.d.ts";
 import type { Hello } from "../../generated/ts/live-hello.d.ts";
+import { problems } from "./live-shape.ts";
 
 const V1 = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "live", "v1");
 const SECRET = "Ab3-_xY9".repeat(6).slice(0, 43);
@@ -47,6 +48,41 @@ for (const name of NAMES) {
       });
     }
   }
+}
+
+for (const name of NAMES) {
+  test(`${name} is closed (the allowlist of live-shape.ts)`, () => {
+    assert.deepEqual(problems(load(join(V1, `${name}.schema.json`))), []);
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const OPENINGS: [string, (d: any) => void][] = [
+  // The reviewer's mutations A to C of PR #176.
+  ["A: a property that accepts anything", (d) => (d.properties.meta = {})],
+  ["B: patternProperties", (d) => (d.patternProperties = { "^x": {} })],
+  ["C: an object subschema without a type", (d) => (d.properties.extra = { properties: { x: {} } })],
+  ["a boolean property schema", (d) => (d.properties.extra = true)],
+  ["a described-only property", (d) => (d.properties.extra = { title: "x" })],
+  ["unevaluatedProperties", (d) => (d.unevaluatedProperties = false)],
+  ["dependentSchemas", (d) => (d.dependentSchemas = { v: {} })],
+  ["prefixItems", (d) => (d.properties.extra = { type: "array", maxItems: 1, prefixItems: [{}], items: { type: "null" } })],
+  ["additionalProperties true", (d) => (d.additionalProperties = true)],
+  ["an object without additionalProperties", (d) => delete d.additionalProperties],
+  ["a nested open object", (d) => (d.properties.extra = { type: "object", properties: { x: { type: "string" } } })],
+  ["an untyped anyOf branch", (d) => (d.properties.extra = { anyOf: [{ type: "null" }, {}] })],
+  ["allOf", (d) => (d.allOf = [{ type: "object", additionalProperties: false, properties: {} }])],
+  ["an array of anything", (d) => (d.properties.extra = { type: "array", maxItems: 1, items: {} })],
+  ["a remote $ref", (d) => (d.properties.extra = { $ref: "other.schema.json" })],
+  ["patternProperties inside a condition", (d) => (d.if = { patternProperties: { "^x": {} } })],
+];
+for (const [label, mutate] of OPENINGS) {
+  test(`the closed-shape check refuses ${label}`, () => {
+    const doc = load(join(V1, "ack.schema.json"));
+    assert.deepEqual(problems(doc), []);
+    mutate(doc);
+    assert.notDeepEqual(problems(doc), []);
+  });
 }
 
 test("the command actions are exactly the ADR 0005 table, nudge exactly ±5000 ms", () => {

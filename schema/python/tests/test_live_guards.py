@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from live_shape import problems
 from live_vectors import LIVE, load, names, routing, schema, validator, words
 
 ACTIONS = ["start", "pause", "resume", "skip", "nudge", "undo_resync"]
@@ -55,22 +56,16 @@ def hits(node: Any, forbidden: set[str]) -> list[str]:
     return sorted({t for t in terms(node) if set(split_words(t)) & forbidden})
 
 
-def objects(node: Any, path: str = "#") -> Iterator[tuple[str, dict[str, Any]]]:
-    """Every subschema that defines an object (not the conditions of if/then/else/not)."""
-    if not isinstance(node, dict):
-        return
-    if node.get("type") == "object" or (
-        isinstance(node.get("type"), list) and "object" in node["type"]
-    ):
-        yield path, node
-    for key in ("properties", "$defs"):
-        for name, sub in node.get(key, {}).items():
-            yield from objects(sub, f"{path}/{key}/{name}")
-    if isinstance(node.get("items"), dict):
-        yield from objects(node["items"], f"{path}/items")
-    for key in ("anyOf", "oneOf", "allOf"):
-        for i, sub in enumerate(node.get(key, [])):
-            yield from objects(sub, f"{path}/{key}/{i}")
+def property_names(node: Any) -> Iterator[str]:
+    """Every property name at any depth, conditions included."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "properties" and isinstance(value, dict):
+                yield from value
+            yield from property_names(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from property_names(item)
 
 
 def ws_entries() -> list[dict[str, Any]]:
@@ -165,7 +160,11 @@ def test_no_live_schema_holds_an_equipment_word() -> None:
     forbidden = words("equipment-words.txt")
     found = {name: hits(schema(name), forbidden) for name in names()}
     assert {name: h for name, h in found.items() if h} == {}
-    assert hits(routing(), forbidden) == []
+    for entry in routing()["messages"]:
+        assert not set(split_words(entry["type"])) & forbidden, entry["type"]
+    for route in routing()["http"]:
+        for code in route["errors"]:
+            assert not set(split_words(code)) & forbidden, code
     # Every JSON file under schema/live/ (examples aside, which hold refused shapes on purpose).
     for path in sorted(LIVE.rglob("*.json")):
         if "examples" not in path.parts:
@@ -176,11 +175,75 @@ def test_no_live_schema_holds_an_equipment_word() -> None:
 
 
 @pytest.mark.parametrize("name", names())
-def test_every_object_is_closed(name: str) -> None:
-    found = list(objects(schema(name)))
-    assert found, name
-    for path, node in found:
-        assert node.get("additionalProperties") is False, f"{name} {path}"
+def test_every_live_schema_is_closed(name: str) -> None:
+    assert problems(schema(name)) == []
+
+
+_TYPED_OBJECT = {"type": "object", "additionalProperties": False, "properties": {}}
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        # The reviewer's mutations A to C of PR #176.
+        ("A: a property that accepts anything", lambda d: d["properties"].update(meta={})),
+        ("B: patternProperties", lambda d: d.update(patternProperties={"^x": {}})),
+        (
+            "C: an object subschema without a type",
+            lambda d: d["properties"].update(extra={"properties": {"x": {}}}),
+        ),
+        ("a boolean property schema", lambda d: d["properties"].update(extra=True)),
+        ("a described-only property", lambda d: d["properties"].update(extra={"title": "x"})),
+        ("unevaluatedProperties", lambda d: d.update(unevaluatedProperties=False)),
+        ("dependentSchemas", lambda d: d.update(dependentSchemas={"v": {}})),
+        (
+            "prefixItems",
+            lambda d: d["properties"].update(
+                extra={
+                    "type": "array",
+                    "maxItems": 1,
+                    "prefixItems": [{}],
+                    "items": {"type": "null"},
+                }
+            ),
+        ),
+        ("additionalProperties true", lambda d: d.update(additionalProperties=True)),
+        ("additionalProperties a schema", lambda d: d.update(additionalProperties={})),
+        ("an object without additionalProperties", lambda d: d.pop("additionalProperties")),
+        (
+            "a nested open object",
+            lambda d: d["properties"].update(
+                extra={"type": "object", "properties": {"x": {"type": "string"}}}
+            ),
+        ),
+        (
+            "an untyped anyOf branch",
+            lambda d: d["properties"].update(extra={"anyOf": [{"type": "null"}, {}]}),
+        ),
+        ("allOf", lambda d: d.update(allOf=[_TYPED_OBJECT])),
+        ("oneOf", lambda d: d["properties"].update(extra={"oneOf": [{"type": "null"}]})),
+        ("a type outside the set", lambda d: d["properties"].update(extra={"type": "number"})),
+        (
+            "an array without items",
+            lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1}),
+        ),
+        (
+            "an array of anything",
+            lambda d: d["properties"].update(extra={"type": "array", "maxItems": 1, "items": {}}),
+        ),
+        ("a remote $ref", lambda d: d["properties"].update(extra={"$ref": "other.schema.json"})),
+        (
+            "patternProperties inside a condition",
+            lambda d: d.update({"if": {"patternProperties": {"^x": {}}}}),
+        ),
+        ("a boolean condition", lambda d: d.update({"not": False})),
+    ],
+)
+def test_the_closed_shape_check_refuses_every_opening(label: str, mutate: Any) -> None:
+    doc = schema("ack")
+    assert problems(doc) == []
+    mutate(doc)
+    assert problems(doc) != [], label
 
 
 # ---- rule 13, ADR 0005 sections 3 and 4: what reaches a controller ---------------------------
@@ -230,13 +293,13 @@ def test_the_control_code_goes_to_the_host_only() -> None:
     for other in ws_entries():
         if other["type"] in ("control_code", "hello"):
             continue
-        props = schema_of(other)["properties"]
+        props = set(property_names(schema_of(other)))
         assert not [p for p in props if set(split_words(p)) & credential], other["type"]
 
 
 def test_phone_command_has_no_slot_and_the_forwarded_one_has_it() -> None:
     phone = schema("command")
-    assert "slot" not in phone["properties"]
+    assert "slot" not in set(property_names(phone))
     assert phone["additionalProperties"] is False
     forwarded = schema("command-forwarded")
     assert "slot" in forwarded["required"]
@@ -244,7 +307,7 @@ def test_phone_command_has_no_slot_and_the_forwarded_one_has_it() -> None:
 
 
 def test_ack_carries_no_slot() -> None:
-    assert "slot" not in schema("ack")["properties"]
+    assert "slot" not in set(property_names(schema("ack")))
 
 
 @pytest.mark.parametrize("message", sorted(TO_CONTROLLER))
