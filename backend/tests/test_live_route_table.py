@@ -1,18 +1,17 @@
-"""The judgement of the live routing table, on today's table and on the planned one (#234, #237).
-The tables below are fixed copies in this file: none is read from `routing.json`, so the
-contract can change without this file moving.
+"""The rules `routetable.py` judges the live routing table by (#234, #237, #240).
 
-Today `routing.json` lists no 413 and lists `invalid_request` for `POST /api/live/sessions`
-(which takes no body); the contract will list `body_too_large` for every live route and drop
-that `invalid_request`. Both shapes pass; each case below names the mutation that fails it.
-No database.
+The tables are fixed copies in this file: none is read from `routing.json`, so the contract can
+change without this file moving (the real table is checked against the real routes in
+test_live_route_errors.py). Every route lists `body_too_large` and the error enum holds it; every
+other listed code is a code the route sends and every code it sends is listed, with no
+allowance. Each case names the mutation that fails it. No database.
 """
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
+import pytest
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
@@ -24,17 +23,16 @@ CONTROLLER = "POST /api/live/controller"
 CONTROL = "POST /api/live/control"
 # Fixed copies of the two shapes, not read from routing.json (that table is checked against the
 # real routes in test_live_route_errors.py); `routetable.py` is tested against these alone.
-_SESSIONS_SENDS = {
-    "invalid_token",
-    "token_unknown",
-    "token_expired",
-    "token_revoked",
-    "sessions_full",
-    "too_many_requests",
-    "internal_error",
-}
 ANSWERED: dict[str, set[str]] = {
-    SESSIONS: _SESSIONS_SENDS,
+    SESSIONS: {
+        "invalid_token",
+        "token_unknown",
+        "token_expired",
+        "token_revoked",
+        "sessions_full",
+        "too_many_requests",
+        "internal_error",
+    },
     CONTROLLER: {"invalid_request", "cannot_control", "internal_error"},
     CONTROL: {
         "invalid_request",
@@ -44,9 +42,6 @@ ANSWERED: dict[str, set[str]] = {
         "internal_error",
     },
 }
-TODAY: dict[str, set[str]] = {n: set(c) for n, c in ANSWERED.items()}
-TODAY[SESSIONS].add("invalid_request")  # listed, never sent: the route takes no body
-# The error enum of today's schema (no `body_too_large`).
 ERROR_ENUM = {
     "invalid_request",
     "invalid_token",
@@ -59,74 +54,58 @@ ERROR_ENUM = {
     "controllers_full",
     "too_many_requests",
     "internal_error",
+    BODY_CAP,
 }
 
 
-def _planned() -> dict[str, set[str]]:
-    table = copy.deepcopy(ANSWERED)
-    for entry in table.values():
-        entry.add(BODY_CAP)
-    return table
+def _table() -> dict[str, set[str]]:
+    return {name: codes | {BODY_CAP} for name, codes in ANSWERED.items()}
 
 
-def _check(table: dict[str, set[str]], enum: set[str] | None = None) -> list[str]:
-    return problems(table, ANSWERED, ERROR_ENUM | {BODY_CAP} if enum is None else enum)
+def test_the_table_that_lists_what_is_sent_and_the_body_cap_passes() -> None:
+    assert problems(_table(), ANSWERED, ERROR_ENUM) == []
 
 
-def _check_with(table: dict[str, set[str]], answered: dict[str, set[str]]) -> list[str]:
-    return problems(table, answered, ERROR_ENUM | {BODY_CAP})
-
-
-def test_today_passes_with_its_one_named_unsent_code() -> None:
-    assert _check(TODAY, ERROR_ENUM) == []
-
-
-def test_the_planned_table_passes() -> None:
-    assert _check(_planned()) == []
-
-
-def test_the_planned_table_without_the_enum_value_fails() -> None:
+def test_the_body_cap_missing_from_the_enum_fails() -> None:
     """Mutation: `body_too_large` left out of error.schema.json's enum."""
-    assert _check(_planned(), ERROR_ENUM) == [f"{BODY_CAP} listed but not in the error enum"]
+    found = problems(_table(), ANSWERED, ERROR_ENUM - {BODY_CAP})
+    assert found == [f"{BODY_CAP} not in the error enum"]
 
 
-def test_the_body_cap_for_some_routes_only_fails() -> None:
-    """Mutation: `body_too_large` dropped from one live route's entry."""
-    table = _planned()
-    table["POST /api/live/control"].discard(BODY_CAP)
-    assert len(_check(table)) == 1 and "only" in _check(table)[0]
+@pytest.mark.parametrize("name", sorted(ANSWERED))
+def test_the_body_cap_missing_from_any_one_route_fails(name: str) -> None:
+    """Mutation: `body_too_large` dropped from that route's entry."""
+    table = _table()
+    table[name].discard(BODY_CAP)
+    found = problems(table, ANSWERED, ERROR_ENUM)
+    assert len(found) == 1 and name in found[0]
 
 
-def test_the_unsent_code_is_let_through_for_that_route_only() -> None:
-    """Mutation: the same listed-but-unsent code on another route (`controller` sends it, so
-    take it away from what that route sends)."""
-    answered = {n: set(c) for n, c in ANSWERED.items()}
-    answered["POST /api/live/controller"].discard("invalid_request")
-    found = problems(TODAY, answered, ERROR_ENUM)
-    assert len(found) == 1 and "controller" in found[0]
+def test_a_table_without_the_body_cap_anywhere_fails() -> None:
+    """Mutation: the old shape, no route lists `body_too_large` (no "none" branch)."""
+    assert len(problems(ANSWERED, ANSWERED, ERROR_ENUM)) == len(ANSWERED)
+
+
+def test_invalid_request_listed_for_a_route_that_takes_no_input_fails() -> None:
+    """Mutation: `invalid_request` re-added to `POST /api/live/sessions` (sends none)."""
+    table = _table()
+    table[SESSIONS].add("invalid_request")
+    found = problems(table, ANSWERED, ERROR_ENUM)
+    assert len(found) == 1 and SESSIONS in found[0]
 
 
 def test_another_code_listed_but_unsent_fails() -> None:
-    """Mutation: `sessions_full` added to the controller's entry; nothing allows it."""
-    table = _planned()
-    table["POST /api/live/controller"].add("sessions_full")
-    assert len(_check(table)) == 1
+    """Mutation: `sessions_full` added to the controller's entry."""
+    table = _table()
+    table[CONTROLLER].add("sessions_full")
+    assert len(problems(table, ANSWERED, ERROR_ENUM)) == 1
 
 
 def test_a_code_sent_but_not_listed_fails() -> None:
-    """Mutation: `internal_error` dropped from an entry (also with the planned shape)."""
-    for table in (copy.deepcopy(TODAY), _planned()):
-        table["POST /api/live/control"].discard("internal_error")
-        assert len(_check(table)) == 1
-
-
-def test_the_allowance_covers_only_a_code_that_is_not_sent() -> None:
-    """Mutation: the route takes a body after all; the entry must then list the code, and the
-    planned table (which drops it) fails."""
-    answered = {n: set(c) for n, c in ANSWERED.items()}
-    answered[SESSIONS].add("invalid_request")
-    assert problems(TODAY, answered, ERROR_ENUM) == []
-    assert len(_check_with(_planned(), answered)) == 1
+    """Mutation: `internal_error` dropped from an entry."""
+    table = _table()
+    table[CONTROL].discard("internal_error")
+    assert len(problems(table, ANSWERED, ERROR_ENUM)) == 1
 
 
 def _tiny(**params: Any) -> bool:
