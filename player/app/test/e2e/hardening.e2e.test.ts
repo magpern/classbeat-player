@@ -37,7 +37,7 @@ test("the page has no Node and only the narrow preload API", async () => {
     process: typeof (globalThis as Record<string, unknown>).process,
     api: Object.keys((window as unknown as { player: object }).player).sort(),
   }));
-  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["backToClass", "command", "dismissFileError", "getState", "listView", "onUpdate", "openClassFile", "openDropped", "pairingState", "reopenPairingPage", "startClass", "startPairing", "unpair"] });
+  assert.deepEqual(r, { require: "undefined", process: "undefined", api: ["backToClass", "command", "dismissFileError", "dropPhone", "endLive", "getState", "listView", "liveView", "makeControlCode", "onUpdate", "openClassFile", "openDropped", "pairingState", "reopenPairingPage", "startClass", "startLive", "startPairing", "unpair"] });
 });
 
 test("CSP is present and blocks inline scripts and network requests", async () => {
