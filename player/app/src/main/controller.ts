@@ -21,6 +21,8 @@ export interface Controller {
   command(cmd: ClockCommand): Snapshot;
   /** A named command for the music app; ignored unless the instructor follows the music. */
   music(action: TransportAction): Snapshot;
+  /** Calls the listener once when the open class's clock reaches its end. */
+  onEnded(listener: () => void): void;
   attach(target: () => WebContents | null): void;
   stop(): void;
 }
@@ -38,12 +40,19 @@ export function createController(now: () => number = () => performance.now(), re
 
   // Every snapshot follows the music first, so a snapshot taken between ticks never shows a clock
   // that ran past a window's end.
+  let endedLoad = 0;
+  const enders: (() => void)[] = [];
   const snapshot = (): Snapshot => {
     const t = now();
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
     if (reader.unavailable?.() === true) state = withoutReader(state);
     state = advance(state, t, reader.latest(t));
-    return snapshotOf(state, t, transport !== null);
+    const snap = snapshotOf(state, t, transport !== null);
+    if (snap.view?.status === "ended" && endedLoad !== snap.loadId) {
+      endedLoad = snap.loadId;
+      for (const l of enders) l();
+    }
+    return snap;
   };
   const onDemand = reader.setActive !== undefined;
   const sync = (): void => reader.setActive?.(isFollowing(state));
@@ -77,6 +86,9 @@ export function createController(now: () => number = () => performance.now(), re
     music(action) {
       if (transport !== null && isFollowing(state)) transport.send(action);
       return snapshot();
+    },
+    onEnded(listener) {
+      enders.push(listener);
     },
     attach(t) {
       target = t;

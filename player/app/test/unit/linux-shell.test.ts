@@ -129,7 +129,7 @@ test("music commands cross the bridge as names only, and reach busctl only while
   const s = shell();
   const handlers = new Map<string, (event: never, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (channel, listener) => void handlers.set(channel, listener as (event: never, raw: unknown) => unknown) };
-  const trusted = { presenterId: 1, presenterUrl: "file:///app/presenter.html" };
+  const trusted = { presenterId: 1, presenterUrl: "file:///app/presenter.html", listUrl: "file:///app/classlist.html" };
   registerHandlers(bus, s.c, () => trusted, {} as PairingService);
   const event = { sender: { id: 1 }, senderFrame: { parent: null, url: trusted.presenterUrl } } as never;
   const send = (raw: unknown): unknown => handlers.get("player:command")?.(event, raw);

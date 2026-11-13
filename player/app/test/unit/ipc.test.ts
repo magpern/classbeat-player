@@ -48,7 +48,7 @@ for (const bad of [
   test(`dropped file refused: ${JSON.stringify(bad)?.slice(0, 60)}`, () => assert.equal(parseDroppedFile(bad), null));
 }
 
-const TRUSTED = { presenterId: 7, presenterUrl: "file:///app/dist/presenter.html" };
+const TRUSTED = { presenterId: 7, presenterUrl: "file:///app/dist/presenter.html", listUrl: "file:///app/dist/classlist.html" };
 const GOOD = { senderId: 7, topFrame: true, frameUrl: "file:///app/dist/presenter.html" };
 
 test("sender: the presenter's top frame on the presenter page is trusted", () => {
