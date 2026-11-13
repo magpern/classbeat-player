@@ -202,6 +202,57 @@ for name in PLAYER_SITE_ORIGIN PLAYER_BACKEND_ORIGIN PLAYER_TRUSTED_PROXIES PLAY
   fi
 done
 
+# --- the live WebSocket in the image (issue #185) ----------------------------------------------
+# The size cap equals the app's own limit, read from the code, not typed twice.
+want_cap="$(python3 -I -c '
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r"^MESSAGE_MAX_BYTES: Final = (\d+(?: \* \d+)*)$", text, re.M)
+print(eval(match.group(1), {"__builtins__": {}}) if match else "")
+' "$root/backend/src/player_backend/live_limit_policy.py")"
+if [ -z "$want_cap" ]; then
+  bad "MESSAGE_MAX_BYTES not found in live_limit_policy.py"
+elif grep -Eq -- "--ws-max-size $want_cap( |\\|\$)" "$root/docker/backend-entrypoint.sh" \
+  && grep -Eq -- '--ws websockets( |\\|$)' "$root/docker/backend-entrypoint.sh"; then
+  ok "the entrypoint caps WebSocket messages at the app limit ($want_cap) with --ws websockets"
+else
+  bad "the entrypoint lacks --ws websockets or --ws-max-size $want_cap"
+fi
+if grep -Eq '^COPY schema/live/v1 schema/live/v1$' "$root/docker/backend.Dockerfile"; then
+  ok "the Dockerfile copies schema/live/v1"
+else
+  bad "the Dockerfile does not copy schema/live/v1"
+fi
+if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
+  ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
+else
+  bad "backend.Dockerfile.dockerignore does not allow schema/live/v1"
+fi
+# The built image holds the schemas where the backend reads them, and the backend loads them.
+# Needs a Docker daemon and the network an image build already uses (base image, PyPI).
+if docker info >/dev/null 2>&1; then
+  image="player-backend-test:$$"
+  if docker build -q -f "$root/docker/backend.Dockerfile" -t "$image" "$root" >"$tmp/build.log" 2>&1; then
+    if docker run --rm --entrypoint python "$image" -I -c '
+from player_backend.live import schemas
+assert (schemas.SCHEMA_DIR / "routing.json").is_file(), schemas.SCHEMA_DIR
+assert schemas.routes(), "no routes"
+assert schemas.valid("hello.schema.json", {}) in (True, False)
+' >"$tmp/run.log" 2>&1; then
+      ok "the image has schema/live/v1/routing.json where the backend reads it"
+    else
+      bad "the image cannot load the live schemas: $(head -c 400 "$tmp/run.log")"
+    fi
+  else
+    bad "the backend image did not build: $(tail -c 400 "$tmp/build.log")"
+  fi
+  docker rmi -f "$image" >/dev/null 2>&1 || true
+elif [ "${CI:-}" = "true" ]; then
+  bad "a Docker daemon is required in CI to build the backend image"
+else
+  echo "skip: no Docker daemon, the image content check was not run"
+fi
+
 # --- the entrypoint's roles: a stand-in `python` shows the environment it would get -------------
 mkdir "$tmp/bin" "$tmp/mount"
 cat >"$tmp/bin/python" <<'EOF'
@@ -236,7 +287,7 @@ check_out "app connects as player_app, password escaped" \
   "APP=postgresql://player_app:p%40ss%2Fw%3Ard%231@db/player" "$out"
 check_out "app has no owner address" "OWNER=unset" "$out"
 check_out "app is one uvicorn process" \
-  "ARGS=uvicorn --factory player_backend.app:app_from_env --host 0.0.0.0 --port 8000 --no-access-log --no-proxy-headers" "$out"
+  "ARGS=uvicorn --factory player_backend.app:app_from_env --host 0.0.0.0 --port 8000 --no-access-log --no-proxy-headers --ws websockets --ws-max-size 16384" "$out"
 out="$(run_entry purge)"
 check_out "purge connects as player_owner" "OWNER=postgresql://player_owner:own%20er%25pw@db/player" "$out"
 check_out "purge has no app address" "APP=unset" "$out"
