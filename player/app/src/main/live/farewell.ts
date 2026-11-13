@@ -16,6 +16,10 @@ export interface FarewellDeps {
   readonly sendEnd: (sent: () => void) => boolean;
   /** Ends the session on a connection of its own (the ender), for when `end` may not have arrived. */
   readonly endElsewhere: () => Promise<void>;
+  /** Stops the run's publisher, and so its timer, once the farewell has an outcome (#216). */
+  readonly stop: () => void;
+  /** Takes the farewell before `end` is queued, so an answer that comes at once reaches it (#216). */
+  readonly register: (f: Farewell) => void;
   readonly setTimer: (fn: () => void, ms: number) => unknown;
   readonly clearTimer: (handle: unknown) => void;
 }
@@ -39,14 +43,14 @@ export function farewell(d: FarewellDeps): Farewell {
     if (settled) return;
     settled = true;
     d.clearTimer(timer);
+    d.stop();
     d.socket.close();
     if (again) d.endElsewhere().then(finish, finish);
     else finish();
   };
   // No answer in time: whether or not `end` went out, it is not known to have arrived.
   const timer = d.setTimer(() => settle(true), END_TRY_MS);
-  if (!d.sendEnd(() => void (endSent = true))) settle(true);
-  return {
+  const f: Farewell = {
     message(text) {
       if (!settled && parseHostFrame(text)?.type === "ended") settle(false);
     },
@@ -55,4 +59,7 @@ export function farewell(d: FarewellDeps): Farewell {
     },
     done,
   };
+  d.register(f);
+  if (!d.sendEnd(() => void (endSent = true))) settle(true);
+  return f;
 }

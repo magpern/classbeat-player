@@ -70,24 +70,30 @@ export function createPublisher(d: PublisherDeps): Publisher {
     return s === null ? "" : JSON.stringify(s);
   };
 
+  // Whether a connection is in: a send can end the run at once (a transport that answers within
+  // `send`, #216), and then nothing more is sent.
+  const sending = (): boolean => send !== null;
   const pump = (): void => {
     cancel();
-    if (budget === null || send === null) return;
+    const out = send;
+    if (budget === null || out === null) return;
     const r = d.host.read();
-    const out = take(budget, r.now);
-    budget = out.budget;
-    for (const s of out.sends) {
+    const due = take(budget, r.now);
+    budget = due.budget;
+    for (const s of due.sends) {
       if (s.kind === "message") {
-        send(JSON.stringify(s.message));
-        if (s.message.type === "end" && lastSent !== null) return finished(lastSent);
-        continue;
+        const isLast = s.message.type === "end" ? lastSent : null;
+        out(JSON.stringify(s.message));
+        if (isLast !== null) return finished(isLast);
+      } else {
+        const state = companionStateOf(r.state, r.now, r.canSend, d.run, seq);
+        if (state === null) continue;
+        out(JSON.stringify(state));
+        memory = recordPublished(memory, state, r.now);
+        lastShown = JSON.stringify({ ...state, seq: 0 });
+        seq += 1;
       }
-      const state = companionStateOf(r.state, r.now, r.canSend, d.run, seq);
-      if (state === null) continue;
-      send(JSON.stringify(state));
-      memory = recordPublished(memory, state, r.now);
-      lastShown = JSON.stringify({ ...state, seq: 0 });
-      seq += 1;
+      if (!sending()) return;
     }
     const wait = Math.max(0, wakeAt(budget, r.now) - r.now);
     timer = d.setTimer(pump, wait);
