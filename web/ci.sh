@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# The web lane's checks, for CI (and `npm test`): lint, types, build, unit tests, then the spec's
-# measurable checks (docs/design/room-2d.md, C1 to C9) on the real screen in headless Chrome at
-# every state and size, with screenshots written to screenshots/. Expects `npm ci` to have run.
-# SPEC_ONLY=<regex> limits the screenshot checks to matching "<fixture>-<w>x<h>" names.
+# The web lane's checks, for CI (and `npm test`): lint, types, build, unit tests, then the specs'
+# measurable checks in headless Chrome: the room screen (docs/design/room-2d.md, C1 to C9) at every
+# state and size, with screenshots in screenshots/, and the website (docs/design/site.md, S1 to
+# S12) at every state, size and at 200 % text, on a fake backend, with screenshots in
+# screenshots/site/. Expects `npm ci` to have run.
+# SPEC_ONLY=<regex> limits the screenshot checks to matching "<fixture>-<w>x<h>" or
+# "site-<state>-<w>" names.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
