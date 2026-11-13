@@ -402,7 +402,7 @@ events.
 | Role | Who | Proves it with | May |
 |---|---|---|---|
 | Host | The app that started the session | The session's host token | Lock and end the session; publish the clock and class state; make codes; drop controllers and riders; receive riders' data |
-| Controller | The instructor's phone (handlebar companion) | A controller token | Receive the clock, the cue and what is next; send start, pause, skip and nudge to the host |
+| Controller | The instructor's phone (handlebar companion) | A controller token | Receive the clock, the cue and what is next; send start, pause, resume, skip, nudge and the undo of a resync to the host (amended 2026-11-13, ADR 0005) |
 | Rider | A rider's phone | A rider token | Receive the clock and class state; send their own nickname and readings to the host |
 
 **Starting, and who the host is.**
@@ -526,9 +526,10 @@ Either way the phone gets a controller token. At most 2 controllers per session.
 |---|---|---|
 | Clock and class state (time, interval, what is next) | Host | Riders, controllers |
 | Coaching cue | Host | Controllers |
-| Control command (start, pause, skip, nudge) | Controller | Host |
+| Control command (start, pause, resume, skip, nudge, undo of a resync; amended 2026-11-13, ADR 0005) | Controller | Host |
 | Rider nickname, presence and readings | Rider | Host |
 | Session ended, removed, locked | Server | The connection concerned |
+| The companion's messages (amended 2026-11-13, ADR 0005 section 4) | As that table says | As that table says |
 
 - Anything not in the table is dropped and counted.
 - There is no path from a rider to a rider, and none from a rider to a controller. If the
@@ -959,7 +960,7 @@ the database's log is covered too:
 | **A guessed pairing code** | 2.6 × 10^10 values, 10 minutes, 5 wrong tries per account per 15 minutes, and a signed-in session is needed to try at all. A hit only attaches someone else's waiting device to the guesser's own account; the token goes to the holder of the device code. The app shows which account it joined |
 | A pairing code pushed on a user by an attacker | The code is typed, never in a link. The page says to confirm only a code on the user's own screen and shows the asking platform and version before anything is decided (`auth_find_pairing`). A mail tells the user a device was paired. The token is read-only and revocable |
 | **A guessed join code** | Same code space; 60 joins with an unknown code per address per minute. A hit makes the guesser a rider in a stranger's class: they receive the clock and class state, never anyone's data. The host sees them, can remove them, lock the session or make a new code. At most 60 riders |
-| A guessed control code | The exchange names a session, so a guess is tried against one session's code only. 2 minutes, single use, cancelled after 5 wrong tries, at most 30 codes an hour per session: 150 tries an hour against 2.6 × 10^10 values. A controller can only start, pause, skip and nudge; the host can drop it |
+| A guessed control code | The exchange names a session, so a guess is tried against one session's code only. 2 minutes, single use, cancelled after 5 wrong tries, at most 30 codes an hour per session: 150 tries an hour against 2.6 × 10^10 values. A controller can only start, pause, resume, skip, nudge and undo a resync (amended 2026-11-13, ADR 0005), and stops following the music only by that undo; the host can drop it |
 | A rider on the studio's Wi-Fi cancelling control codes on purpose | They know the join code, so they can burn each control code with 5 wrong tries. The count is per session, never per address, so the instructor's phone on the same Wi-Fi is not locked out: the host makes a new code, and a right code is accepted whatever was tried before. Someone who keeps burning codes can stop control by code for that class. Control by sign-in does not use the code and always works |
 | A rider on the studio's Wi-Fi blocking joins on purpose | 60 joins with unknown codes a minute from the studio's address stop further joins from that address for the rest of that minute. Riders already in are not affected, nor are phones on mobile data. It lasts only while the person keeps it up |
 | **A replayed publication** | Needs the source token. The same number and hash is a repeat and changes nothing. The same number with other content is refused |

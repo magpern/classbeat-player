@@ -10,6 +10,7 @@ ADR that changes a decision says which one it replaces.
 | [0002](0002-accounts-sign-in-pairing-and-tokens.md) | Accounts, sign-in, pairing and tokens | Accepted |
 | [0003](0003-class-format.md) | Class format | Accepted |
 | [0004](0004-provider-terms.md) | Provider terms | Accepted |
+| [0005](0005-live-sessions-and-the-handlebar-companion.md) | Live sessions and the handlebar companion | Proposed |
 
 ## Template
 
