@@ -31,6 +31,9 @@ from player_backend.site.state import SiteState
 from player_backend.smtp_mailer import mailer_from_env
 from player_backend.source_api import router as source_router
 
+# How long shutdown waits for the live sessions' audit writes still running off the event loop.
+LIVE_DRAIN_WITHIN = 5.0
+
 _access_log = logging.getLogger("player_backend.access")
 _log = logging.getLogger("player_backend.app")
 
@@ -58,9 +61,14 @@ def create_app(
         try:
             yield
         finally:
-            if loop is not None:
-                loop.stop()
-            pool.close()
+            try:
+                if loop is not None:
+                    loop.stop()
+                # Before the pool closes: an end handed off the loop (a `hello`) is still written.
+                if not await service.drain(LIVE_DRAIN_WITHIN):
+                    _log.warning("live writes left at shutdown")
+            finally:
+                pool.close()
 
     app = FastAPI(
         title="Class player backend",
