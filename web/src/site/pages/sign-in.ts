@@ -1,9 +1,8 @@
 // The sign-in page (docs/design/site.md, "Sign in"): the email link, a passkey, and the pages
 // around them. The link token lives only in this closure: it is sent in the body of one POST
 // and dropped once used. Nothing is written to storage and nothing is logged.
-import type { Answer } from "../core/answer.ts";
 import { afterLinkAsked, afterLinkUsed, afterPasskey, NOTICE_WORDS, plateWords } from "../core/sign-in-model.ts";
-import type { Next, Plate, SignInView } from "../core/sign-in-model.ts";
+import type { Next, PasskeyOutcome, Plate, SignInView } from "../core/sign-in-model.ts";
 import { call } from "../net/api.ts";
 import { passkeySignIn } from "../net/passkey.ts";
 import { el } from "../ui/dom.ts";
@@ -66,8 +65,8 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
     const email = currentEmail();
     again = () => void usePasskey();
     show({ screen: "form", email, busy: "passkey" });
-    const answer: Answer | "cancelled" = await passkeySignIn();
-    show(afterPasskey(email, answer));
+    const outcome: PasskeyOutcome = await passkeySignIn();
+    show(afterPasskey(email, outcome));
   }
 
   function currentEmail(): string {

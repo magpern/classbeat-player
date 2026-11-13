@@ -13,6 +13,12 @@ export interface SignedInEnv {
 }
 
 export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedInEnv): void {
+  // At most one wait for the connection: pressing "Try again" while offline adds no other.
+  let waitingOnline = false;
+  const onOnline = (): void => {
+    waitingOnline = false;
+    if (env.current()) void load();
+  };
   const load = async (): Promise<void> => {
     const answer = await call("GET", page.load);
     if (!env.current()) return;
@@ -28,7 +34,8 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
         break;
       case "offline":
         main.replaceChildren(h1(page.title), offlinePlate(() => void load()));
-        window.addEventListener("online", () => env.current() && void load(), { once: true });
+        if (!waitingOnline) window.addEventListener("online", onOnline, { once: true });
+        waitingOnline = true;
         break;
       default:
         main.replaceChildren(h1(page.title));

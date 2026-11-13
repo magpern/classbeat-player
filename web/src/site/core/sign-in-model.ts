@@ -10,6 +10,7 @@ export const NOTICES: readonly Notice[] = ["ended", "signed-out", "deleted"];
 export type Plate =
   | { readonly kind: "link-limited"; readonly retryAfter: number | null }
   | { readonly kind: "passkey-limited"; readonly retryAfter: number | null }
+  | { readonly kind: "passkey-wait"; readonly retryAfter: number | null }
   | { readonly kind: "too-many"; readonly retryAfter: number | null }
   | { readonly kind: "passkey-failed" }
   | { readonly kind: "link-refused" }
@@ -44,11 +45,31 @@ export function afterLinkUsed(a: Answer): Next {
   return { screen: "link", busy: false, plate: failed(a) ?? { kind: "server" } };
 }
 
+/** What a passkey sign-in came to: the prompt cancelled, or the answer of the step that ended it. */
+export type PasskeyOutcome = "cancelled" | { readonly step: "options" | "assertion"; readonly answer: Answer };
+
+/**
+ * The backend's `Retry-After` for an attempt that found another one from the same address still
+ * being checked (`passkey_policy.BUSY_RETRY_SECONDS`). A longer wait on `POST sign-in/passkey`
+ * is the failed sign-ins' limit.
+ */
+export const BUSY_RETRY_SECONDS = 1;
+
+/**
+ * A passkey 429. Only the failed sign-ins' limit names failed sign-ins; the options' limit (how
+ * many sign-ins are started) and a busy answer get neutral words, as does a 429 with no wait.
+ */
+function passkeyLimit(step: "options" | "assertion", retryAfter: number | null): Plate {
+  const failedLimit = step === "assertion" && retryAfter !== null && retryAfter > BUSY_RETRY_SECONDS;
+  return { kind: failedLimit ? "passkey-limited" : "passkey-wait", retryAfter };
+}
+
 /** After the passkey prompt and `POST sign-in/passkey` (or its options). */
-export function afterPasskey(email: string, a: Answer | "cancelled"): Next {
-  if (a === "cancelled") return { screen: "form", email, plate: { kind: "passkey-failed" } };
-  if (a.kind === "ok") return { screen: "signed-in" };
-  if (a.kind === "too_many") return { screen: "form", email, plate: { kind: "passkey-limited", retryAfter: a.retryAfter } };
+export function afterPasskey(email: string, o: PasskeyOutcome): Next {
+  if (o === "cancelled") return { screen: "form", email, plate: { kind: "passkey-failed" } };
+  const a = o.answer;
+  if (a.kind === "ok" && o.step === "assertion") return { screen: "signed-in" };
+  if (a.kind === "too_many") return { screen: "form", email, plate: passkeyLimit(o.step, a.retryAfter) };
   if (a.kind === "refused") return { screen: "form", email, plate: { kind: "passkey-failed" } };
   return { screen: "form", email, plate: failed(a) ?? { kind: "server" } };
 }
@@ -65,6 +86,8 @@ export function plateWords(p: Plate): Words {
       return { head: "Too many sign-in requests", detail: `Please try again ${waitWords(p.retryAfter)}. One network connection can ask for 10 sign-in links an hour, whatever the email address.` };
     case "passkey-limited":
       return { head: "Too many sign-in requests", detail: `Please try again ${waitWords(p.retryAfter)}. After 10 passkey sign-ins that fail within 10 minutes, this network connection has to wait.` };
+    case "passkey-wait":
+      return { head: "Too many sign-in requests", detail: `Please try again ${p.retryAfter !== null && p.retryAfter <= BUSY_RETRY_SECONDS ? "in a moment" : waitWords(p.retryAfter)}.` };
     case "too-many":
       return { head: "Please wait a little", detail: `You have asked for too much in a short time. Try again ${waitWords(p.retryAfter)}. Nothing was changed.` };
     case "passkey-failed":

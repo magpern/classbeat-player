@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { afterLinkAsked, afterLinkUsed, afterPasskey, plateWords } from "../../src/site/core/sign-in-model.ts";
 import { fragmentOf } from "../../src/site/core/link-token.ts";
+import type { Answer } from "../../src/site/core/answer.ts";
 
 const TOKEN = `cbp_ml_${"a".repeat(43)}`;
 
@@ -42,11 +43,28 @@ describe("using a link", () => {
 });
 
 describe("a passkey", () => {
+  const assertion = (answer: Answer) => ({ step: "assertion", answer }) as const;
+  const options = (answer: Answer) => ({ step: "options", answer }) as const;
+
   it("signs in, fails as one, or waits on the limit", () => {
-    assert.deepEqual(afterPasskey("", { kind: "ok", status: 200, body: {} }), { screen: "signed-in" });
+    assert.deepEqual(afterPasskey("", assertion({ kind: "ok", status: 200, body: {} })), { screen: "signed-in" });
     assert.deepEqual(afterPasskey("x", "cancelled"), { screen: "form", email: "x", plate: { kind: "passkey-failed" } });
-    assert.deepEqual(afterPasskey("", { kind: "refused", status: 401, code: "sign_in_refused" }), { screen: "form", email: "", plate: { kind: "passkey-failed" } });
-    assert.deepEqual(afterPasskey("", { kind: "too_many", retryAfter: 420 }), { screen: "form", email: "", plate: { kind: "passkey-limited", retryAfter: 420 } });
+    assert.deepEqual(afterPasskey("", assertion({ kind: "refused", status: 401, code: "sign_in_refused" })), { screen: "form", email: "", plate: { kind: "passkey-failed" } });
+    assert.deepEqual(afterPasskey("", assertion({ kind: "too_many", retryAfter: 420 })), { screen: "form", email: "", plate: { kind: "passkey-limited", retryAfter: 420 } });
+  });
+
+  it("names failed sign-ins only for their own limit (#257)", () => {
+    // The options' limit counts sign-ins started, not failed ones.
+    assert.deepEqual(afterPasskey("", options({ kind: "too_many", retryAfter: 420 })), { screen: "form", email: "", plate: { kind: "passkey-wait", retryAfter: 420 } });
+    // Busy: another attempt from the same address is still being checked.
+    assert.deepEqual(afterPasskey("", assertion({ kind: "too_many", retryAfter: 1 })), { screen: "form", email: "", plate: { kind: "passkey-wait", retryAfter: 1 } });
+    assert.deepEqual(afterPasskey("", assertion({ kind: "too_many", retryAfter: null })), { screen: "form", email: "", plate: { kind: "passkey-wait", retryAfter: null } });
+    assert.deepEqual(afterPasskey("", assertion({ kind: "too_many", retryAfter: 2 })), { screen: "form", email: "", plate: { kind: "passkey-limited", retryAfter: 2 } });
+  });
+
+  it("does not sign in on the options alone", () => {
+    assert.deepEqual(afterPasskey("", options({ kind: "ok", status: 200, body: {} })), { screen: "form", email: "", plate: { kind: "server" } });
+    assert.deepEqual(afterPasskey("", options({ kind: "offline" })), { screen: "form", email: "", plate: { kind: "offline" } });
   });
 });
 
@@ -54,6 +72,9 @@ describe("the words", () => {
   it("state the limits as ADR 0002 section 10 does, and never say whether an address may sign in", () => {
     assert.match(plateWords({ kind: "link-limited", retryAfter: 3000 }).detail, /in about 50 minutes\. One network connection can ask for 10 sign-in links an hour/);
     assert.match(plateWords({ kind: "passkey-limited", retryAfter: 420 }).detail, /in about 7 minutes\. After 10 passkey sign-ins that fail within 10 minutes/);
+    assert.deepEqual(plateWords({ kind: "passkey-wait", retryAfter: 420 }), { head: "Too many sign-in requests", detail: "Please try again in about 7 minutes." });
+    assert.deepEqual(plateWords({ kind: "passkey-wait", retryAfter: 1 }), { head: "Too many sign-in requests", detail: "Please try again in a moment." });
+    assert.deepEqual(plateWords({ kind: "passkey-wait", retryAfter: null }), { head: "Too many sign-in requests", detail: "Please try again in a few minutes." });
     for (const kind of ["passkey-failed", "link-refused", "offline", "server"] as const) {
       const w = plateWords({ kind });
       assert.doesNotMatch(`${w.head} ${w.detail}`, /not allowed|no account|not on the|cannot sign in|unknown address|\d{3}|_/i);

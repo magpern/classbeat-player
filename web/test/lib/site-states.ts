@@ -51,6 +51,22 @@ export const STATES: readonly State[] = [
     steps: pressText("Sign in with a passkey"),
     ready: ".plate",
   },
+  {
+    // The options' limit (sign-ins started): neutral words, no failed sign-ins named (#257).
+    name: "sign-in-passkey-wait",
+    path: "/sign-in",
+    script: { "POST sign-in/passkey/options": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "300" } } },
+    steps: pressText("Sign in with a passkey"),
+    ready: ".plate",
+  },
+  {
+    // Busy: another attempt from the same address is still being checked (#257).
+    name: "sign-in-passkey-busy",
+    path: "/sign-in",
+    script: { "POST sign-in/passkey/options": { status: 200, body: PASSKEY_OPTIONS }, "POST sign-in/passkey": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "1" } } },
+    steps: pressText("Sign in with a passkey"),
+    ready: ".plate",
+  },
   { name: "sign-in-session-ended", path: "/classes", script: { "GET classes": { status: 401, body: { error: "not_signed_in" } } }, ready: ".note" },
   { name: "signed-out", path: "/classes", script: { ...signedInClasses, "POST sign-out": { status: 204 } }, steps: pressText("Sign out"), ready: ".note" },
   {

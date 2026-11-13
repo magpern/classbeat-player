@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
-import { CSP, ORIGIN, launchOffline, openSite, traps } from "../lib/site-fake.ts";
+import { CSP, ORIGIN, crossSite, launchOffline, openSite, traps } from "../lib/site-fake.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
 
@@ -47,6 +47,33 @@ describe("the page's CSP", () => {
     const css = readFileSync(join(DIST, "site", "site.css"), "utf8");
     assert.doesNotMatch(css, /url\(\s*["']?(https?:|\/\/)|@import/);
   });
+});
+
+describe("the fake's cross-site refusal (backend `cross_site_refusal`)", () => {
+  // Page requests reach the fake without `Sec-Fetch-*` (Playwright does not show them), so this
+  // table is where that half of the rule is exercised (#257).
+  const same = { origin: ORIGIN };
+  const cases: [string, Record<string, string>, boolean][] = [
+    ["GET", {}, false],
+    ["HEAD", { origin: "https://evil.example", "sec-fetch-site": "cross-site" }, false],
+    ["POST", same, false],
+    ["POST", { ...same, "sec-fetch-site": "same-origin" }, false],
+    ["POST", { ...same, "sec-fetch-site": "same-site" }, true],
+    ["POST", { ...same, "sec-fetch-site": "cross-site" }, true],
+    ["POST", { ...same, "sec-fetch-site": "none" }, true],
+    ["post", { ...same, "sec-fetch-site": "cross-site" }, true],
+    ["DELETE", { ...same, "sec-fetch-site": "same-site" }, true],
+    ["PATCH", { ...same, "sec-fetch-site": "cross-site" }, true],
+    ["PUT", { ...same, "sec-fetch-site": "cross-site" }, true],
+    ["POST", {}, true],
+    ["POST", { origin: "null" }, true],
+    ["POST", { origin: "https://evil.example", "sec-fetch-site": "same-origin" }, true],
+  ];
+  for (const [method, headers, refused] of cases) {
+    it(`${method} ${JSON.stringify(headers)} is ${refused ? "refused" : "let through"}`, () => {
+      assert.equal(crossSite(method, headers), refused);
+    });
+  }
 });
 
 describe("nothing secret leaves the page, in any state", () => {

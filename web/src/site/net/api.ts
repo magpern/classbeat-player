@@ -11,6 +11,10 @@ export async function call(method: Method, route: string, body?: unknown): Promi
   try {
     res = await fetch(`/api/site/${route}`, {
       method,
+      // Kept explicit: in `cors` mode the browser sends the real Origin even under
+      // `Referrer-Policy: no-referrer`; another mode may send `Origin: null`, which the backend
+      // refuses as cross-site (Fetch, "append a request Origin header").
+      mode: "cors",
       credentials: "same-origin",
       cache: "no-store",
       // A redirect is never followed: it is an answer the page does not understand.
