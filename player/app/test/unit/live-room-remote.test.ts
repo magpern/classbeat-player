@@ -228,3 +228,32 @@ test("isolation: no room channel and no push ever carries the control code, the 
   // What the slot holds is the spec's fields and nothing else.
   for (const v of x.pushed) for (const k of Object.keys(v)) assert.ok(["slot", "note", "joinCode", "phones", "reconnecting", "site"].includes(k), k);
 });
+
+test("a slot listener that throws never stops the others, the live service or the refresh, and is logged without its text (#222)", async () => {
+  const r = rig();
+  const lines: string[] = [];
+  const remote = liveRoomRemote(r.live, (line) => void lines.push(line));
+  let thrown = 0;
+  remote.watch(() => {
+    thrown += 1;
+    throw new TypeError(`room listener broke ${HOST_TOKEN}`);
+  });
+  const pushed: RemoteView[] = [];
+  remote.watch((v) => void pushed.push(v));
+  remote.start();
+  await r.advance(0);
+  r.socket().open();
+  r.socket().server({ v: 1, type: "welcome", role: "host" });
+  // The session carried on past the throws: it runs, with its join code.
+  assert.equal(r.live.view().classCode, JOIN_CODE);
+  // A refresh from outside the live service (main.ts calls it on every snapshot) does not throw either.
+  r.live.classChanged();
+  assert.doesNotThrow(() => remote.refresh());
+  assert.deepEqual(pushed.slice(0, 2), [{ slot: "starting" }, ON(0)]);
+  assert.equal(thrown, pushed.length);
+  assert.ok(thrown >= 2, `the throwing listener was called ${thrown} times`);
+  // The live service never saw the throw: its own listener line is not in its log.
+  assert.equal(r.logs.filter((l) => l.includes("change listener")).length, 0);
+  assert.equal(lines.length, thrown);
+  for (const line of lines) assert.equal(line, "live session: a change listener failed (TypeError)");
+});

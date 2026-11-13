@@ -125,3 +125,29 @@ test("a stop from within a send ends the pump: nothing more goes out and no time
   assert.deepEqual(out, ["companion_state"]);
   assert.equal(timers, 0);
 });
+
+test("a sender replaced from within its own send sends nothing more: its late sends are dropped (#217 N1)", () => {
+  const b = bench();
+  const old: string[] = [];
+  const fresh: string[] = [];
+  const type = (text: string): string => (JSON.parse(text) as { type: string }).type;
+  // The old connection: on the first message of a backlog it is replaced by a new one, within send.
+  b.p.connected((text) => {
+    old.push(type(text));
+    if (old.length === MAX_PER_WINDOW + 1) {
+      b.p.disconnected();
+      b.p.connected((t) => void fresh.push(type(t)));
+    }
+  });
+  // Fill this second's budget, then a backlog that falls due all at once in the next one.
+  while (old.length < MAX_PER_WINDOW) b.p.queue(result(100 + old.length));
+  for (let i = 0; i < 3; i++) b.p.queue(result(200 + i));
+  assert.equal(old.length, MAX_PER_WINDOW);
+  b.advance(WINDOW_MS);
+  // The old sender got the one message it was sending when it was replaced, and nothing after it.
+  assert.equal(old.length, MAX_PER_WINDOW + 1);
+  // The new connection starts fresh: the state, and none of the old queue.
+  assert.deepEqual(fresh, ["companion_state"]);
+  b.advance(10 * WINDOW_MS);
+  assert.equal(old.length, MAX_PER_WINDOW + 1);
+});
