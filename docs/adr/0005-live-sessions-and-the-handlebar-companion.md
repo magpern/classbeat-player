@@ -81,8 +81,11 @@ What this ADR takes as given:
   caught by the 30 s re-check. This is an acceptance criterion with a test in the backend issues
   (status.md, "Carried into PL8").
 - In the companion part of PL8 **no rider route exists** (`POST /api/live/join` is built with the
-  riders). The join code only names the session for the two controller routes of ADR 0002. The
-  room screen shows nothing of the session.
+  riders). The join code only names the session for the two controller routes of ADR 0002.
+  *Amended 2026-11-13 (one screen, plan section 3):* the room screen shows the join code, as text
+  and as a QR code of `https://<site>/control#<join code>`, so the instructor's phone can find the
+  session and steer it by sign-in when there is only one screen. The join code alone gives
+  nothing (section 3). The room screen never shows a control code or anything that carries one.
 
 ### 3. Control authority
 
@@ -357,9 +360,19 @@ or outlasts the session; the host can drop the controller.
 This ADR also refines four points ADR 0002 left open, without changing its rules: a right code
 while both places are held is `controllers_full` and not a wrong try (section 3); the server, not
 the phone, gives the `slot` (section 3); each controller may send at most 2 commands a second,
-answered `rate` beyond that (section 4); and the host asks for, and is told about, control codes
+answered `rate` beyond that (section 5); and the host asks for, and is told about, control codes
 by WebSocket messages (`make_code`, `control_code`, `code_cancelled`, section 4). It adds one
 way a control code ends, the host's `drop` (section 3), marked in ADR 0002's token table.
+
+**Amended 2026-11-13: the sign-in route is not locked out per address.** ADR 0002 counts a
+`POST /api/live/controller` with an unknown join code against the caller's address, and its
+section 10 table refuses every join from that address for the rest of the minute after 60. A
+rider on the studio's shared address could so block the instructor's sign-in, which ADR 0002
+section 8 says no limit may do. So the sign-in route counts unknown join codes **per account**
+(60 a minute, then `cannot_control` for that account until the minute ends) and neither counts
+against nor is refused by the per-address limit. Only a signed-in account reaches the count, so
+nothing about join codes is shown to anyone without a sign-in. `POST /api/live/control` and rider
+joins keep the per-address limit. ADR 0002's two lines on this are marked amended.
 
 ## Alternatives
 

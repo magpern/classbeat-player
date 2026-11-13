@@ -483,8 +483,9 @@ stay on the phone (plan section 7).
   the live session's account.
   - The join code names the session and gives nothing: without the host account's sign-in the
     call fails.
-  - Every failure gets one answer, `cannot_control`. An unknown code counts as a join with an
-    unknown code for the caller's address (section 10).
+  - Every failure gets one answer, `cannot_control`. An unknown code counts against the signed-in
+    account, 60 a minute, not against the caller's address (amended 2026-11-13, ADR 0005
+    section 10).
   - So no route lists an account's live sessions, and the list of cookie routes stays at one.
 - *By control code.* The host asks the live process for a control code for its session. The app
   shows it in the presenter window only, never on the room screen, as text and as a QR code of
@@ -848,7 +849,8 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
 | Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |
-| Live joins, control exchanges and controller requests with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
+| Live joins and control exchanges with an unknown code | 60 per address per minute | Every join from that address is refused until the minute ends |
+| Controller requests by sign-in with an unknown code (amended 2026-11-13, ADR 0005) | 60 per account per minute | `cannot_control` for that account until the minute ends |
 | Wrong control codes | 5 per session and code | The code is cancelled; the host is told and may make a new one |
 | Control codes made | 30 per session per hour | 429 to the host |
 | WebSocket connections | 300 per address per minute; 100 waiting for `hello` per address; one per token; 63 per session (60 riders, 2 controllers, the host) | Refused |
