@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import time
 from ipaddress import ip_address
 from typing import cast
 
@@ -39,7 +38,8 @@ ELSEWHERE = "198.51.100.9"
 
 class Clock:
     def __init__(self) -> None:
-        self.now = time.monotonic()
+        # A whole number of seconds, so that a minute later is exactly 60.0 later.
+        self.now = 1000.0
 
     def __call__(self) -> float:
         return self.now
