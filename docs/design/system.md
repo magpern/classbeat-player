@@ -154,11 +154,12 @@ the 2 % tier is kept for labels, link states and the score's song titles.
 | `--m-flash` | 160 ms | A white line, 1 vh wide, down the gel's right edge at an interval change | 0: no flash |
 | `--m-state` | 300 ms, ease out | A link-state plate appearing or leaving; lights down and up | 0 |
 | (score) | continuous, 0.28 vw per second | The score moving under "now" | Moves in whole-second steps |
-| (beat) | 120 ms | A dot beside the BPM, on the beat, only when the link is locked and the song has beat anchors | Off |
+| (beat) | 120 ms | A dot after the BPM on the beats from the song's beat anchors (not its listed BPM), two lights at least 1/3 s apart (in steady time, every beat up to 180 BPM and every second beat above), only when the link is locked and the song has beat anchors | Off (not shown) |
 
 The single orchestrated moment is the interval change, and its white edge line is the one large
 flash the screen makes, once per change. Apart from that line and the beat dot, nothing flashes,
-and nothing flashes more than three times a second. The 3D scene may add its own light show, but
+and nothing, the beat dot included, flashes more than three times a second: two lights of the dot
+start at least 1/3 s apart, and a beat that comes sooner is skipped. The 3D scene may add its own light show, but
 the text and the zone rules above stay as they are over it.
 
 ## Shipping the tokens

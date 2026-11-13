@@ -4,6 +4,10 @@
 
 const STATES = ['before-start', 'running', 'paused', 'coasting', 'off-list', 'ambiguous', 'manual', 'last-interval', 'finished', 'ftp-test'];
 
+// States added for strings that had no mock-up (issue #78): "99+", "Change in", "Until the next
+// song", "Press Start". Each is also checked at the narrowest ratio of each layout.
+const MORE = ['long-interval', 'change-in', 'hold', 'before-start-manual'];
+
 // Every room size and ratio the spec supports (room-2d.md, "Sizes"): from 21:9 down to 5:4,
 // the smallest of each layout, and both sides of the 3:2 switch point.
 const SIZES = [
@@ -19,12 +23,18 @@ const SIZES = [
   [1280, 1024], // 5:4, the narrowest
 ];
 
-// The worst case of every text slot (gen: the longest content the format allows).
-const WORST = ['worst-off-list', 'worst-running', 'worst-paused', 'worst-before-start', 'worst-finished'];
+// The worst case of every text slot: the longest content the format allows (ADR 0003), and by
+// width (wide capitals, single 80-character words). Static HTML; each fixture lists its worst
+// cases in a header comment.
+const WORST = ['worst-off-list', 'worst-running', 'worst-paused', 'worst-before-start', 'worst-finished', 'worst-ambiguous', 'worst-wide', 'worst-wide-before-start'];
 
-// save: false = checked by measure.js, not kept as a PNG in the repository.
-const room = (state, w, h, save = true) => ({ file: `room-${state}.html`, png: `room-${state}-${w}x${h}.png`, w, h, room: true, save });
-const KEEP_WORST = new Set(['worst-off-list-1280x1024', 'worst-off-list-1650x1080', 'worst-running-1280x720', 'worst-before-start-1280x1024', 'worst-before-start-1650x1080']);
+// save: false = checked by measure.js, not kept as a PNG in the repository. motion: 'reduce'
+// renders with prefers-reduced-motion.
+const room = (state, w, h, save = true, motion = null) => ({
+  file: `room-${state}.html`, png: `room-${state}${motion ? '-reduced' : ''}-${w}x${h}.png`, w, h, room: true, save, motion,
+});
+const KEEP_WORST = new Set(['worst-off-list-1280x1024', 'worst-off-list-1650x1080', 'worst-running-1280x720', 'worst-before-start-1280x1024', 'worst-before-start-1650x1080',
+  'worst-ambiguous-1650x1080', 'worst-wide-1650x1080', 'worst-wide-1440x1080', 'worst-wide-1280x1024', 'worst-wide-before-start-1650x1080']);
 
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
@@ -41,10 +51,14 @@ const SHOTS = [
   room('last-interval', 1440, 1080),
   room('last-interval', 1280, 1024), // 5:4 with "On the beat"
   room('before-start', 1440, 1080),
+  ...MORE.flatMap((s) => [room(s, 1920, 1080), room(s, 1650, 1080, false), room(s, 1280, 1024, false)]),
+  room('running', 1920, 1080, true, 'reduce'), // the beat dot is off with reduced motion
   ...WORST.flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_WORST.has(`${s}-${w}x${h}`)))),
   room('running', 480, 270), // the room preview inside the presenter window
   room('worst-running', 480, 270, false),
   { file: 'presenter.html', png: 'presenter-1280x800.png', w: 1280, h: 800, room: false, presenter: true, save: true },
+  // The player's default presenter window (1000x760 with its title bar).
+  { file: 'presenter.html', png: 'presenter-1000x720.png', w: 1000, h: 720, room: false, presenter: true, save: true },
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
-module.exports = { SHOTS, STATES, SIZES, WORST };
+module.exports = { SHOTS, STATES, MORE, SIZES, WORST };
