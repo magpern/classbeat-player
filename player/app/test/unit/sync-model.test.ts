@@ -1,6 +1,6 @@
 // Class sync's pure model (core/sync/sync-model.ts): paging and the cursor, removals, a full
-// resync, backoff on 429 and on faults, offline, the three token codes, the pinned class, and a
-// cache that belongs to another account.
+// resync, backoff on 429 and on faults, offline, the three token codes, the pinned class, a cache
+// that belongs to another account, and a wipe that fails or is left unfinished.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Change, FetchResult, ListResult } from "../../src/core/sync/answers.ts";
@@ -23,7 +23,7 @@ const pageOf = (changes: Change[], cursor: number, more = false): ListResult => 
 const kept = (hash = H1): FetchResult => ({ kind: "class", hash, document: DOC });
 
 /** Drives the model; `effects` is what the last event asked for. */
-function rig(held: [string, string][] = [], cursor = 0, account: string | null = held.length > 0 || cursor > 0 ? ACCOUNT : null) {
+function rig(held: [string, string][] = [], cursor = 0, account: string | null = held.length > 0 || cursor > 0 ? ACCOUNT : null, wipePending = false) {
   let state: SyncState = INITIAL;
   let effects: readonly Effect[] = [];
   const r = {
@@ -46,9 +46,10 @@ function rig(held: [string, string][] = [], cursor = 0, account: string | null =
     listed: (answer: ListResult) => r.send({ type: "listed", run: r.run, answer }),
     fetched: (id: string, answer: FetchResult) => r.send({ type: "fetched", run: r.run, id, answer }),
     written: (ok = true) => r.send({ type: "written", run: r.run, ok }),
+    wiped: (ok = true) => r.send({ type: "wiped", ok }),
     held: () => Object.fromEntries(state.held),
   };
-  r.send({ type: "loaded", account, cursor, held: new Map(held) });
+  r.send({ type: "loaded", account, cursor, held: new Map(held), wipePending });
   return r;
 }
 
@@ -56,7 +57,7 @@ test("a first sync pages through the changes, applies each in order and commits 
   const r = rig();
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
   assert.deepEqual(r.listed(pageOf([cls(ID_A, 1), gone(ID_B, 2)], 2, true)), [{ do: "fetch", run: 1, id: ID_A }]);
-  assert.deepEqual(r.fetched(ID_A, kept()), [{ do: "keep", run: 1, id: ID_A, hash: H1, document: DOC }]);
+  assert.deepEqual(r.fetched(ID_A, kept()), [{ do: "keep", run: 1, account: ACCOUNT, id: ID_A, hash: H1, document: DOC }]);
   // A removal deletes the cached document at once, before the cursor passes it.
   assert.deepEqual(r.written(), [{ do: "remove", run: 1, ids: [ID_B] }]);
   assert.deepEqual(r.written(), [{ do: "commit", run: 1, account: ACCOUNT, cursor: 2 }]);
@@ -199,6 +200,7 @@ test("the pairing ending wipes the cache; with no pairing nothing is asked", () 
   // The answer to the request that was out is not applied.
   assert.deepEqual(r.send({ type: "listed", run: 1, answer: pageOf([cls(ID_B, 4)], 4) }), []);
   assert.deepEqual(r.held(), {});
+  assert.deepEqual(r.wiped(), [{ do: "wake", at: r.now }]);
   assert.deepEqual(r.send({ type: "due", credential: null }), [{ do: "wake", at: r.now + SYNC_EVERY_MS }]);
   // A later pairing starts from nothing.
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 2, after: 0 }]);
@@ -206,9 +208,48 @@ test("the pairing ending wipes the cache; with no pairing nothing is asked", () 
 
 test("a cache of another account, or of none recorded, is wiped before syncing from 0", () => {
   const r = rig([[ID_A, H1]], 9, OTHER);
-  assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "wipe" }, { do: "list", run: 1, after: 0 }]);
+  assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "wipe" }]);
+  assert.deepEqual(r.held(), {});
+  assert.deepEqual(r.wiped(), [{ do: "wake", at: r.now }]);
+  assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
   const u = rig([[ID_A, H1]], 0, null);
-  assert.deepEqual(u.send({ type: "due", credential: PAIRED }), [{ do: "wipe" }, { do: "list", run: 1, after: 0 }]);
+  assert.deepEqual(u.send({ type: "due", credential: PAIRED }), [{ do: "wipe" }]);
+  u.wiped();
+  assert.deepEqual(u.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
+});
+
+test("a wipe that fails holds everything: nothing syncs for any account and nothing plays until it is done", () => {
+  const r = rig([[ID_A, H1]], 3);
+  r.send({ type: "due", credential: PAIRED });
+  assert.deepEqual(r.send({ type: "forgotten" }), [{ do: "wipe" }]);
+  assert.deepEqual(r.wiped(false), [{ do: "wake", at: r.now + FIRST_BACKOFF_MS }]);
+  assert.equal(r.state.wipePending, true);
+  // Another account pairs: the wipe is tried again, and nothing is asked of the server.
+  const b: Credential = { account: OTHER, expired: false };
+  assert.deepEqual(r.send({ type: "due", credential: b }), [{ do: "wipe" }]);
+  assert.deepEqual(r.wiped(false), [{ do: "wake", at: r.now + 2 * FIRST_BACKOFF_MS }]);
+  assert.deepEqual(r.send({ type: "due", credential: null }), [{ do: "wipe" }]);
+  r.send({ type: "pin", id: ID_A, hash: H1 });
+  assert.equal(r.state.pinned, null);
+  assert.deepEqual(r.held(), {});
+  assert.deepEqual(syncView(r.state).classes, 0);
+  // Done at last: then, and only then, the new account syncs, from 0.
+  assert.deepEqual(r.wiped(), [{ do: "wake", at: r.now }]);
+  assert.deepEqual(r.send({ type: "due", credential: b }), [{ do: "list", run: 2, after: 0 }]);
+});
+
+test("a wipe left unfinished on disk, or asked before the cache was read, is done at start, paired or not", () => {
+  const r = rig([[ID_A, H1]], 3, ACCOUNT, true);
+  assert.deepEqual(r.held(), {});
+  assert.deepEqual(r.send({ type: "due", credential: null }), [{ do: "wipe" }]);
+  r.wiped();
+  assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 0 }]);
+  // The pairing ended before the cache was read: what is on disk is not loaded as held.
+  let state = step(INITIAL, { type: "forgotten" }, 0).state;
+  state = step(state, { type: "loaded", account: ACCOUNT, cursor: 3, held: new Map([[ID_A, H1]]), wipePending: false }, 0).state;
+  assert.equal(state.held.size, 0);
+  assert.equal(state.wipePending, true);
+  assert.deepEqual(step(state, { type: "due", credential: PAIRED }, 0).effects, [{ do: "wipe" }]);
 });
 
 test("the class being played is never changed: a newer version is cached and shown as available", () => {
@@ -244,8 +285,9 @@ test("revoked while a class plays: the wipe waits for the class to end, and noth
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), []);
   // Nothing new is pinned while the wipe waits.
   r.send({ type: "pin", id: ID_A, hash: H1 });
-  assert.deepEqual(r.send({ type: "unpin" }), [{ do: "wipe" }, { do: "wake", at: r.now }]);
+  assert.deepEqual(r.send({ type: "unpin" }), [{ do: "wipe" }]);
   assert.deepEqual(r.held(), {});
+  assert.deepEqual(r.wiped(), [{ do: "wake", at: r.now }]);
   assert.equal(r.state.pinned, null);
   assert.deepEqual(r.send({ type: "pin", id: ID_A, hash: H1 }), []);
   assert.equal(r.state.pinned, null);
@@ -255,7 +297,10 @@ test("another account's pairing while a class plays: wiped once it ends, then sy
   const r = rig([[ID_A, H1]], 1);
   r.send({ type: "pin", id: ID_A, hash: H1 });
   assert.deepEqual(r.send({ type: "due", credential: { account: OTHER, expired: false } }), []);
-  assert.deepEqual(r.send({ type: "unpin" }), [{ do: "wipe" }, { do: "wake", at: r.now }]);
+  assert.deepEqual(r.send({ type: "unpin" }), [{ do: "wipe" }]);
+  // Not synced until the wipe is done.
+  assert.deepEqual(r.send({ type: "due", credential: { account: OTHER, expired: false } }), [{ do: "wipe" }]);
+  r.wiped();
   assert.deepEqual(r.send({ type: "due", credential: { account: OTHER, expired: false } }), [{ do: "list", run: 1, after: 0 }]);
 });
 
@@ -291,6 +336,6 @@ test("answers for another run, another class or nothing asked are ignored; one s
   r.listed(pageOf([cls(ID_A, 1)], 1));
   assert.deepEqual(r.fetched(ID_B, kept()), []);
   assert.deepEqual(r.written(), []);
-  assert.deepEqual(r.send({ type: "loaded", account: OTHER, cursor: 9, held: new Map() }), []);
+  assert.deepEqual(r.send({ type: "loaded", account: OTHER, cursor: 9, held: new Map(), wipePending: false }), []);
   assert.equal(r.state.cursor, 0);
 });

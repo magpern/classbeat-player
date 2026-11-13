@@ -96,18 +96,21 @@ export function createSyncService(d: SyncDeps): SyncService {
         return ask(c, { path: `/api/player/classes/${e.id}`, maxBodyBytes: MAX_CLASS_ANSWER_BYTES }, (a) => ({ type: "fetched", run: e.run, id: e.id, answer: parseClass(a, e.id, classSchema) }));
       }
       case "keep":
-        return write(e.run, () => d.cache.keep(e.id, e.hash, e.document));
+        return write(e.run, () => d.cache.keep(e.account, e.id, e.hash, e.document));
       case "remove":
         return write(e.run, () => d.cache.remove(e.ids));
       case "commit":
         return write(e.run, () => d.cache.commit(e.account, e.cursor));
-      case "wipe":
+      case "wipe": {
+        // Done only when the cache says so; otherwise tried again later and at every start.
+        let ok = true;
         try {
           d.cache.wipe();
         } catch {
-          // Tried again at the next start: a cache without a pairing is wiped then (setup.ts).
+          ok = false;
         }
-        return;
+        return dispatch({ type: "wiped", ok });
+      }
       case "report":
         try {
           d.report(e.kind);
@@ -155,7 +158,8 @@ export function createSyncService(d: SyncDeps): SyncService {
       try {
         stored = d.cache.load();
       } catch {
-        stored = { account: null, cursor: 0, held: new Map<string, string>() };
+        // A cache that cannot be read is not trusted: it is wiped and synced again.
+        stored = { account: null, cursor: 0, held: new Map<string, string>(), wipePending: true };
       }
       dispatch({ type: "loaded", ...stored });
       due();
@@ -167,9 +171,13 @@ export function createSyncService(d: SyncDeps): SyncService {
     view: () => syncView(state),
     pin(id) {
       const hash = state.held.get(id);
-      if (hash === undefined || state.wipeAfterPin) return null;
+      const account = state.account;
+      if (hash === undefined || account === null || state.wipeAfterPin || state.wipePending) return null;
+      // Only the paired account's class, from a file that says it is that account's.
+      const c = d.credential();
+      if (c !== null && c.account !== account) return null;
       const found = d.cache.read(id);
-      if (found === null || found.hash !== hash) return null;
+      if (found === null || found.hash !== hash || found.account !== account) return null;
       dispatch({ type: "pin", id, hash });
       return state.pinned?.id === id && state.pinned.hash === hash ? found.document : null;
     },

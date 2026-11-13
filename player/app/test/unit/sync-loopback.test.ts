@@ -1,9 +1,11 @@
 // Class sync end to end against a fake player API on loopback: the real HTTP client, the real cache
 // in a temporary folder, and the real pairing service holding the token. The first sync, an
 // incremental sync, a removal, the class being played kept during play, and the wipe after the
-// device is revoked. No network beyond 127.0.0.1, and nothing is logged.
+// device is revoked, a wipe that fails before another account pairs, and a restart with a wipe left
+// unfinished. No network beyond 127.0.0.1, and nothing is logged.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import type { RmOptions } from "node:fs";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -11,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, afterEach, before, beforeEach, test } from "node:test";
 import { recordText } from "../../src/core/pairing/record.ts";
-import { classCache, CLASSES_DIR, SYNC_FILE } from "../../src/main/sync/cache.ts";
+import { classCache, CLASSES_DIR, SYNC_FILE, WIPE_FILE } from "../../src/main/sync/cache.ts";
 import { createBackendCall } from "../../src/main/pairing/http.ts";
 import { memoryStore } from "../../src/main/pairing/keychain.ts";
 import { createPairingService } from "../../src/main/pairing/service.ts";
@@ -79,15 +81,15 @@ const reports: string[] = [];
 /** Every token issued in this file: the server may still see an earlier one's last request. */
 const tokens: string[] = [];
 
-/** A new token, pairing and sync on the same folder (the sync not started). */
-function freshApp(): void {
-  sync?.stop();
+const call = createBackendCall();
+
+/** A new pairing with a new token, to `email`'s account, or none for null; sync reads it from now on. */
+function pairAs(email: string | null): void {
   pairing?.stop();
   token = newToken("dev");
   tokens.push(token);
   const store = memoryStore();
-  store.save(recordText({ origin, token, email: "ann@example.test" }));
-  const call = createBackendCall();
+  if (email !== null) store.save(recordText({ origin, token, email }));
   pairing = createPairingService({
     now: () => Date.now(),
     call,
@@ -101,10 +103,16 @@ function freshApp(): void {
     clearTimer: () => undefined,
   });
   pairing.load();
+}
+
+/** A new app on the same folder, as after a restart: a new pairing (see `pairAs`) and sync, not started. */
+function freshApp(email: string | null = "ann@example.test", remove?: (path: string, options?: RmOptions) => void): void {
+  sync?.stop();
+  pairAs(email);
   sync = createSyncService({
     now: () => Date.now(),
     call,
-    cache: classCache(dir),
+    cache: classCache(dir, remove),
     credential: () => credentialOf(pairing),
     report: (kind) => (reports.push(kind), pairing.tokenRefused(kind)),
     // The tests sync on demand; the regular wake never fires.
@@ -122,6 +130,7 @@ beforeEach(() => {
   refusal = null;
   requests.length = 0;
   reports.length = 0;
+  lock.locked = false;
   dir = join(mkdtempSync(join(tmpdir(), "cbp-sync-")), "class-cache");
   freshApp();
 });
@@ -274,5 +283,87 @@ test("offline: the server gone away deletes nothing and the cache still plays", 
   assert.deepEqual(files(), [`${ID_A}.json`]);
   assert.ok(unreachable.pin(ID_A) !== null);
   unreachable.stop();
+  nothingLeaked();
+});
+
+/** Deleting the cached classes fails while `locked` is set, as a file held open does on Windows. */
+const lock = { locked: false };
+const lockable = (path: string, options?: RmOptions): void => {
+  if (lock.locked && path.endsWith(CLASSES_DIR)) throw new Error("EBUSY");
+  rmSync(path, options);
+};
+/** What sync asked of the server (the pairing's own device check aside). */
+const synced = (): string[] => [...listedAfter(), ...fetchedIds()];
+
+/** Account A synced ID_A and ID_B, then was revoked, and the wipe that followed failed. */
+async function revokedWithWipeFailed(): Promise<void> {
+  freshApp("ann@example.test", lockable);
+  publish(ID_A, document("A"));
+  publish(ID_B, document("B"));
+  linkAndStart(pairing, sync);
+  await settled();
+  lock.locked = true;
+  refusal = { status: 401, body: { error: "token_revoked" } };
+  sync.syncNow();
+  await settled();
+  assert.equal(pairing.credential(), null);
+  // Still on disk, marked to be wiped, and nothing of it is shown or plays.
+  assert.deepEqual(files(), [`${ID_A}.json`, `${ID_B}.json`]);
+  assert.equal(existsSync(join(dir, WIPE_FILE)), true);
+  assert.equal(sync.view().classes, 0);
+  assert.equal(sync.pin(ID_A), null);
+  // Account B's classes on the server from here on.
+  refusal = null;
+  entries.clear();
+  publish(ID_C, document("C, of account B"));
+  requests.length = 0;
+}
+
+test("a wipe that failed: the next account to pair syncs nothing until it is done, and sees none of the last one's classes", async () => {
+  await revokedWithWipeFailed();
+  // Account B pairs while the files are still locked: the wipe is tried again, nothing is asked.
+  pairAs("bob@example.test");
+  sync.syncNow();
+  sync.syncNow();
+  await settled();
+  assert.deepEqual(synced(), []);
+  assert.deepEqual(files(), [`${ID_A}.json`, `${ID_B}.json`]);
+  assert.equal(sync.view().classes, 0);
+  assert.equal(sync.pin(ID_A), null);
+  // Unlocked: the next try wipes, and only then is B synced, from 0.
+  lock.locked = false;
+  sync.syncNow();
+  assert.equal(existsSync(dir), false);
+  assert.deepEqual(synced(), []);
+  sync.syncNow();
+  await settled();
+  assert.deepEqual(listedAfter(), ["0"]);
+  assert.deepEqual(files(), [`${ID_C}.json`]);
+  assert.deepEqual(sync.view(), { status: "synced", classes: 1, pinned: null });
+  assert.equal(sync.pin(ID_A), null);
+  assert.equal(sync.pin(ID_B), null);
+  assert.ok(sync.pin(ID_C) !== null);
+  nothingLeaked();
+});
+
+test("a restart with a wipe left unfinished wipes first, with or without a pairing", async () => {
+  await revokedWithWipeFailed();
+  // Restarted with no pairing, the files still locked: nothing loads, the marker stays.
+  freshApp(null, lockable);
+  linkAndStart(pairing, sync);
+  assert.deepEqual(sync.view(), { status: "unpaired", classes: 0, pinned: null });
+  assert.equal(sync.pin(ID_A), null);
+  assert.equal(existsSync(join(dir, WIPE_FILE)), true);
+  // Restarted again, paired to account B, the files free: the wipe is done at start, before B syncs.
+  lock.locked = false;
+  freshApp("bob@example.test", lockable);
+  linkAndStart(pairing, sync);
+  assert.equal(existsSync(dir), false);
+  assert.deepEqual(synced(), []);
+  sync.syncNow();
+  await settled();
+  assert.deepEqual(files(), [`${ID_C}.json`]);
+  assert.equal(sync.pin(ID_A), null);
+  assert.ok(sync.pin(ID_C) !== null);
   nothingLeaked();
 });
