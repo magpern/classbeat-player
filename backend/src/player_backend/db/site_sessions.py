@@ -15,6 +15,7 @@ from typing import cast
 from uuid import UUID
 
 from player_backend.client_policy import ClientInfo
+from player_backend.db import revocation
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Pool
 from player_backend.db.queries import site_sessions as q
@@ -97,15 +98,22 @@ def list_sessions(ctx: AccountContext) -> list[SessionInfo]:
 
 
 def end_session(ctx: AccountContext, session_id: UUID, client: ClientInfo) -> bool:
-    """End one session of the account. False when the account has no such session."""
+    """End one session of the account. False when the account has no such session.
+
+    The transaction sends the account's `live_revocations` notice, as for every way of ending
+    sessions (ADR 0002, section 8): a controller signed in with it is dropped at once."""
     if not ctx.db.rows(q.END_SESSION, (ctx.account_id, session_id)):
         return False
+    revocation.notify(ctx)
     _event(ctx, SIGNED_OUT, client, {"current": session_id == ctx.credential_id})
     return True
 
 
 def end_all_sessions(ctx: AccountContext, client: ClientInfo) -> int:
-    """End every session of the account, this one included. Returns how many."""
+    """End every session of the account, this one included. Returns how many.
+
+    The transaction sends the account's `live_revocations` notice."""
     ended = len(ctx.db.rows(q.END_ALL_SESSIONS, (ctx.account_id,)))
+    revocation.notify(ctx)
     _event(ctx, ALL_ENDED, client, {"sessions": ended})
     return ended

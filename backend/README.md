@@ -148,7 +148,7 @@ deploy files run it as the `purge` service of `docker/compose.backend.yml`; see
 - Migration `0006` gives `auth_start_pairing`, `auth_find_pairing`, `auth_decide_pairing`,
   `auth_collect_pairing` and `auth_enter_device` their bodies, with ADR 0002's numbers as
   constants in the SQL (principle 7). No grant, table or function is added.
-  `auth_device_active` still fails closed (PL8). Migration `0007` replaces the body of
+  `auth_device_active` has its body from migration `0013` (below). Migration `0007` replaces the body of
   `auth_decide_pairing`: an approval refused at the cap returns `NULL` (not `false`, which is a
   wrong code or a closed form), so the site can answer `409` whatever fills the cap. The cap
   is checked by the function alone.
@@ -268,6 +268,22 @@ default: no source can be linked.
   time, each page in its own short transaction that enters the session again. If the session
   has ended or the account is gone before a page, the stream stops there and the download is
   not valid JSON. No connection is held between pages.
+
+## Live re-check and revocation notices (ADR 0002, section 8; ADR 0005, section 2)
+
+- Migration `0013` gives `auth_device_active` and `auth_session_active` their bodies, the live
+  process's re-check every 30 seconds. Each answers true exactly when `auth_enter_device` would
+  answer `ok` (before its budget) or `auth_enter_session` would find the session, with the same
+  lifetimes as constants in the SQL (principle 7): not revoked, used within 180 days, used once
+  or paired within 24 hours; used within 14 days, created within 60 days. Neither sets the
+  account, writes "last used", counts a budget or writes an event
+  (`tests/test_live_check_functions.py`).
+- The transactions that revoke a device (on the site or by the app itself), end one session,
+  sign out everywhere or delete the account call `revocation.notify` after their write:
+  `pg_notify('live_revocations', <account id>)`. PostgreSQL sends it only at commit, once per
+  transaction; a refused or rolled-back one sends none. The notice is a hint with no authority;
+  the live process answers it with the re-check (`tests/test_revocation_notices.py`). No advisory
+  lock is taken.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

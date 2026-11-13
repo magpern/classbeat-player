@@ -110,6 +110,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0012_bounded_lock_waits.sql") as pending:
         if pending:
             db.rows(q.M0012_BOUNDED_LOCK_WAITS)
+    with _step(db, done, "0013_live_checks.sql") as pending:
+        if pending:
+            db.rows(q.M0013_LIVE_CHECKS)
     return done
 
 
