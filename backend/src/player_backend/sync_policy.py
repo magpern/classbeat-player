@@ -1,10 +1,14 @@
 """Pure rules of class sync for the player API (ADR 0002, sections 6 and 7; plan, section 5).
 
 - A cursor is a place in one account's own sync order: the `account_sync` position of that
-  account. It starts at 0, before the account's first publication, and only grows. The changes
+  account. It is 0 before the account's first publication, and only grows. The changes
   "since a cursor" are the account's class rows whose place is above it, in that order.
-- A cursor above the account's current one was never this account's: it came from another
-  account, or from a server whose data was restored. The device is told to resync in full.
+- Each account's order starts at its own `base`, drawn at random from `BASE_MIN` up to
+  `BASE_END` when its sync row is made, so the places of two accounts do not overlap and a
+  cursor stays a plain integer. A row made before bases existed has base 0.
+- A cursor that is neither 0 nor between the account's base and its current place was never
+  this account's: it came from another account, or from a server whose data was restored. The
+  device is told to resync in full.
 - A page holds at most `PAGE_MAX` changes, `PAGE_DEFAULT` when the device names no limit. The
   cursor of a page is the place of its last change, so the next page starts after it.
 """
@@ -20,6 +24,10 @@ PAGE_DEFAULT: Final = 100
 PAGE_MAX: Final = 500
 # The largest place a cursor can name: the column is a PostgreSQL bigint.
 CURSOR_MAX: Final = 2**63 - 1
+# The range a base is drawn from. Bases end at 2^52, so every place stays an integer that a
+# JavaScript number holds exactly (below 2^53) for 2^52 publications.
+BASE_MIN: Final = 2**32
+BASE_END: Final = 2**52
 
 
 def page_request(after: str | None, limit: str | None) -> tuple[int, int] | None:
@@ -52,9 +60,17 @@ def is_page_request(after: int, limit: int) -> bool:
     return 0 <= after <= CURSOR_MAX and 1 <= limit <= PAGE_MAX
 
 
-def needs_resync(after: int, current: int) -> bool:
-    """Whether a cursor names a place this account's sync order has never reached."""
-    return after > current
+def base_of(draw: int) -> int:
+    """The base for a draw from 0 up to `BASE_END - BASE_MIN` (the caller's random number)."""
+    if not 0 <= draw < BASE_END - BASE_MIN:
+        raise ValueError("draw out of range")
+    return BASE_MIN + draw
+
+
+def needs_resync(after: int, base: int, current: int) -> bool:
+    """Whether a cursor is not this account's: neither 0 nor a place from its base up to its
+    current place."""
+    return after != 0 and not base <= after <= current
 
 
 @dataclass(frozen=True)

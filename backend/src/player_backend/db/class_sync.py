@@ -52,6 +52,16 @@ def cursor(ctx: AccountContext) -> int:
     return _int(ctx.db.rows(q.CURSOR, (ctx.account_id,))[0][0])
 
 
+def sync_range(ctx: AccountContext) -> tuple[int, int]:
+    """The account's base and current cursor: (0, 0) before its first change."""
+    found = ctx.db.rows(q.SYNC_RANGE, (ctx.account_id,))
+    if not found:
+        return 0, 0
+    # One row per account: anything else fails here rather than read another account's.
+    ((base, current),) = found
+    return _int(base), _int(current)
+
+
 def changes(ctx: AccountContext, after: int, limit: int) -> Page[Change]:
     """The account's changes after the cursor `after`, at most `limit`, in sync order."""
     rows = ctx.db.rows(q.CHANGES, (ctx.account_id, after, limit + 1))

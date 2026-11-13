@@ -81,8 +81,12 @@ class Upload:
             yield part
 
 
-def _streamed(site: Site, path: str, upload: Upload, headers: dict[str, str]) -> httpx.Response:
-    transport = httpx.ASGITransport(app=site.app, client=("198.51.100.9", 40000))
+def _streamed(
+    site: Site, path: str, upload: Upload, headers: dict[str, str], root_path: str = ""
+) -> httpx.Response:
+    transport = httpx.ASGITransport(
+        app=site.app, client=("198.51.100.9", 40000), root_path=root_path
+    )
 
     async def send() -> httpx.Response:
         async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as client:
@@ -98,6 +102,7 @@ def test_the_cap_and_the_route_that_sets_its_own() -> None:
     assert body_cap("/api/source/token") == BODY_MAX
     assert body_cap("/api/source/publications/") == BODY_MAX
     assert body_cap("/no/such/route") == BODY_MAX
+    assert body_cap(None) == BODY_MAX
     assert body_cap("/api/source/publications") is None
 
 
@@ -226,3 +231,31 @@ def test_an_oversized_publication_without_a_token_is_refused_as_unsigned(
     answer = server.post(sh.PUBLICATIONS, content=b" " * (PUBLICATION_MAX + 1))
     assert answer.status_code == 401 and answer.json() == {"error": "invalid_token"}
     assert handles == []
+
+
+PREFIX = "/player"
+
+
+def test_under_a_path_prefix_each_route_keeps_its_cap(
+    site: Site, linked: tuple[Browser, str], handles: list[str]
+) -> None:
+    """Served under a `root_path`, a publication keeps its own limit of 2 MiB (#115), and
+    every other route its 16 KiB: the cap is keyed on the route that matched."""
+    _, token = linked
+    upload = Upload(2 * PUBLICATION_MAX)
+    path = PREFIX + sh.PUBLICATIONS
+    answer = _streamed(site, path, upload, sh.bearer(token), root_path=PREFIX)
+    assert answer.status_code == 413 and answer.json() == {"error": "document_too_large"}
+    assert PUBLICATION_MAX < upload.taken <= PUBLICATION_MAX + CHUNK
+    handles.clear()
+    small = Upload(10 * BODY_MAX)
+    headers = {**SAME_ORIGIN, "Content-Type": "application/json"}
+    other = _streamed(site, PREFIX + "/api/site/pairing/find", small, headers, PREFIX)
+    assert (other.status_code, other.json()) == (413, TOO_LARGE)
+    assert BODY_MAX < small.taken <= BODY_MAX + 2 * CHUNK and handles == []
+
+
+def test_only_the_publication_route_with_its_method_sets_its_own_limit(site: Site) -> None:
+    """The same path with another method is no match of the route: it gets the cap."""
+    answer = sh.server(site).request("PUT", sh.PUBLICATIONS, content=b" " * (BODY_MAX + 1))
+    assert (answer.status_code, answer.json()) == (413, TOO_LARGE)

@@ -5,7 +5,7 @@ the stream stops when the session ends or the account goes before a page."""
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import AbstractContextManager
 from types import SimpleNamespace
 from typing import Any, cast
@@ -18,6 +18,7 @@ from player_backend.db import account as account_db
 from player_backend.db import site_sessions
 from player_backend.db.executor import Handle
 from player_backend.db.queries import account as q
+from player_backend.site import account as site_account
 from tests import sourcehelp as sh
 from tests.accounthelp import EXPORT
 from tests.pairhelp import settle
@@ -101,6 +102,59 @@ def test_classes_are_read_a_page_of_16_at_a_time(
     assert EXPORT_PAGE == 16 and sizes == [16, 16, 8]
     # No transaction is held open between pages: not the request's, not the last page's.
     assert len(held) == 3 and held == [0, 0, 0]
+
+
+def test_no_transaction_is_held_while_the_stream_is_paused_on_a_page(
+    site: Site, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Measured at every chunk, while the class pages wait at their `yield` for the client: a
+    page written while its transaction is still open fails here (#115)."""
+    browser, _ = _with_classes(site, MANY)
+    real = site_account.export_chunks
+    held: list[int] = []
+
+    def measured(
+        head: Mapping[str, object], classes: Iterable[Mapping[str, object]]
+    ) -> Iterator[bytes]:
+        for chunk in real(head, classes):
+            held.append(_open_transactions(site))
+            yield chunk
+
+    monkeypatch.setattr(site_account, "export_chunks", measured)
+    answer = browser.post(EXPORT)
+    assert len(answer.json()["classes"]) == MANY
+    # The opening, one chunk per class, the close: each written with no transaction open.
+    assert len(held) == MANY + 2 and set(held) == {0}
+
+
+def test_a_class_published_again_during_the_export_is_listed_once(
+    site: Site, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    browser, account_id = _with_classes(site, MANY)
+
+    def republish_before_second(page: int) -> None:
+        if page != 2:
+            return
+        # As an applied publication does: the next place in the account's order, a new number.
+        place = site.su.execute(
+            "UPDATE player.account_sync SET position = position + 1 WHERE account_id = %s "
+            "RETURNING position",
+            (account_id,),
+        ).fetchone()
+        assert place is not None
+        moved = site.su.execute(
+            "UPDATE player.classes SET publication_number = 2, sync_position = %s "
+            "WHERE account_id = %s AND source_class_id = 'c00'",
+            (place[0], account_id),
+        )
+        assert moved.rowcount == 1
+
+    _before_each_page(monkeypatch, republish_before_second)
+    classes: list[dict[str, Any]] = browser.post(EXPORT).json()["classes"]
+    listed = [c["source_class_id"] for c in classes]
+    # Read on the first page, then moved to the end of the order: still listed once, as read.
+    assert listed == [f"c{n:02}" for n in range(MANY)]
+    assert classes[0]["publication_number"] == 1
 
 
 def test_a_full_last_page_is_followed_by_an_empty_one(

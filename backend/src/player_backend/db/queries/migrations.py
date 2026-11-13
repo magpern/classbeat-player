@@ -13,6 +13,7 @@ M0006_PAIRING_AND_DEVICES: Final[Query] = Query.from_file("0006_pairing_and_devi
 M0007_PAIRING_HARDENING: Final[Query] = Query.from_file("0007_pairing_hardening.sql")
 M0008_SOURCE_API: Final[Query] = Query.from_file("0008_source_api.sql")
 M0009_DEVICE_BUDGETS: Final[Query] = Query.from_file("0009_device_budgets.sql")
+M0010_SYNC_ORDER: Final[Query] = Query.from_file("0010_sync_order.sql")
 
 # The ledger lives in its own schema, with row-level security forced like every table, and one
 # policy for player_owner alone. No other role has any right on it.

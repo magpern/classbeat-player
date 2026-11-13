@@ -20,8 +20,8 @@ from typing import Any, Final, cast
 from uuid import UUID
 
 from player_backend.client_policy import ClientInfo
+from player_backend.db import classes
 from player_backend.db.context import AccountContext
-from player_backend.db.queries import classes as cq
 from player_backend.db.queries import library as q
 from player_backend.library_policy import PageRequest, length_of, title_of
 
@@ -121,8 +121,7 @@ def delete_class(ctx: AccountContext, class_id: UUID, client: ClientInfo) -> boo
         # Already a marker: nothing to delete, and no new place in the sync order.
         return True
     # The sync cursor's lock is taken after the class row's, as a publication takes them.
-    ctx.db.rows(cq.SYNC_ROW, (ctx.account_id,))
-    position = _int(ctx.db.rows(cq.SYNC_NEXT, (ctx.account_id,))[0][0])
+    position = classes.next_position(ctx)
     marked = ctx.db.rows(q.MARK_DELETED, (position, ctx.account_id, class_id))
     assert len(marked) == 1
     # No title and no content (section 11): the class's id, key and number.

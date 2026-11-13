@@ -55,6 +55,17 @@ def _account(site: Site, email: str = EMAIL, address: str = "198.51.100.1") -> A
     return Account(browser, app, token, sh.server(site, "192.0.2.30"), source_token)
 
 
+def _base(site: Site, email: str = EMAIL) -> int:
+    """Where the account's sync order starts (sync_policy.py): its first change is at base + 1."""
+    row = site.su.execute(
+        "SELECT y.base FROM player.account_sync y JOIN player.accounts a ON a.id = y.account_id "
+        "WHERE a.email = %s",
+        (email,),
+    ).fetchone()
+    assert row is not None and isinstance(row[0], int)
+    return row[0]
+
+
 def _changes(account: Account, query: str = "") -> list[tuple[object, ...]]:
     body = account.get(CHANGES + query)
     found: list[dict[str, Any]] = body["changes"]
@@ -88,8 +99,9 @@ def test_changes_come_in_sync_order_with_their_numbers_and_hashes(site: Site) ->
     account = _account(site)
     account.publish("one", 1, "First")
     account.publish("two", 5, "Second")
+    base = _base(site)
     body = account.get(CHANGES)
-    assert body["cursor"] == 2 and body["more"] is False
+    assert body["cursor"] == base + 2 and body["more"] is False
     changes: list[dict[str, Any]] = body["changes"]
     first, second = changes
     assert set(first) == {
@@ -102,41 +114,46 @@ def test_changes_come_in_sync_order_with_their_numbers_and_hashes(site: Site) ->
         "published_at",
         "position",
     }
-    assert (first["source"], first["source_class_id"], first["position"]) == ("classbeat", "one", 1)
+    assert (first["source"], first["source_class_id"], first["position"]) == (
+        "classbeat",
+        "one",
+        base + 1,
+    )
     assert first["content_hash"] == content_hash(sh.document("First"))
     assert (second["source_class_id"], second["publication_number"], second["position"]) == (
         "two",
         5,
-        2,
+        base + 2,
     )
     # No content in a change: not the title, not the document.
     assert "First" not in str(changes) and "document" not in str(changes)
-    assert account.get(CURSOR) == {"cursor": 2}
+    assert account.get(CURSOR) == {"cursor": base + 2}
 
 
 def test_a_removal_after_a_class_is_one_change_with_no_hash(site: Site) -> None:
     account = _account(site)
     account.publish("gone", 1, "Soon gone")
     account.publish("kept", 1, "Kept")
+    base = _base(site)
     first: list[dict[str, Any]] = account.get(CHANGES)["changes"]
     gone_id = next(c["class_id"] for c in first if c["source_class_id"] == "gone")
     assert account.get(f"{CLASSES}/{gone_id}")["document"] is not None
     account.publish("gone", 2, None)
     # The class's row moved to the end of the order as a removal: one change, not two.
     assert _changes(account) == [("kept", 1, False), ("gone", 2, True)]
-    after_kept = account.get(CHANGES + "?after=2")
-    assert after_kept["cursor"] == 3
+    after_kept = account.get(f"{CHANGES}?after={base + 2}")
+    assert after_kept["cursor"] == base + 3
     changes: list[dict[str, Any]] = after_kept["changes"]
     assert len(changes) == 1
     removal = changes[0]
     assert removal["class_id"] == gone_id and removal["removed"] is True
-    assert removal["content_hash"] is None and removal["position"] == 3
+    assert removal["content_hash"] is None and removal["position"] == base + 3
     # The marker holds no document: the class is not found any more.
     refused = account.app.get(f"{CLASSES}/{gone_id}", headers=bearer(account.token))
     assert refused.status_code == 404 and refused.json() == {"error": "not_found"}
     # Sent again with a higher number, it is a class again, at a new place.
     account.publish("gone", 3, "Back")
-    assert _changes(account, "?after=3") == [("gone", 3, False)]
+    assert _changes(account, f"?after={base + 3}") == [("gone", 3, False)]
     assert account.get(f"{CLASSES}/{gone_id}")["publication_number"] == 3
 
 
@@ -144,6 +161,7 @@ def test_changes_come_in_pages_with_a_limit(site: Site) -> None:
     account = _account(site)
     for n in range(1, 6):
         account.publish(f"c{n}", n, f"Class {n}")
+    base = _base(site)
     seen: list[object] = []
     cursor = 0
     pages = 0
@@ -158,12 +176,13 @@ def test_changes_come_in_pages_with_a_limit(site: Site) -> None:
         if body["more"] is False:
             break
     assert seen == ["c1", "c2", "c3", "c4", "c5"]
-    assert (pages, cursor) == (3, 5)
+    assert (pages, cursor) == (3, base + 5)
     # A page that ends exactly at the last change says so.
-    assert account.get(f"{CHANGES}?after=3&limit=2")["more"] is False
-    assert account.get(f"{CHANGES}?after=2&limit=2")["more"] is True
+    assert account.get(f"{CHANGES}?after={base + 3}&limit=2")["more"] is False
+    assert account.get(f"{CHANGES}?after={base + 2}&limit=2")["more"] is True
     # The current cursor is an empty page.
-    assert account.get(f"{CHANGES}?after=5") == {"changes": [], "cursor": 5, "more": False}
+    current: dict[str, object] = {"changes": [], "cursor": base + 5, "more": False}
+    assert account.get(f"{CHANGES}?after={base + 5}") == current
     assert len(account.get(f"{CHANGES}?limit=500")["changes"]) == 5
 
 
@@ -199,22 +218,35 @@ def test_a_malformed_cursor_limit_or_class_id_is_refused(site: Site, path: str) 
     assert pairhelp.device_rows(site, EMAIL) == [("Studio PC", True, False)]
 
 
-def test_a_cursor_from_another_account_reads_only_this_accounts_changes(site: Site) -> None:
+def test_a_cursor_from_another_account_is_refused_with_a_resync(site: Site) -> None:
     mine = _account(site)
     other = _account(site, OTHER, "198.51.100.2")
+    their_cursors: list[int] = []
     for n in range(1, 5):
         other.publish(f"theirs-{n}", n, "Theirs")
-    mine.publish("mine", 1, "Mine")
-    their_cursor = other.get(CURSOR)["cursor"]
-    assert their_cursor == 4 and mine.get(CURSOR) == {"cursor": 1}
-    # Above this account's own cursor: never this account's, so the device resyncs in full.
-    refused = mine.app.get(f"{CHANGES}?after={their_cursor}", headers=bearer(mine.token))
-    assert refused.status_code == 409
-    assert refused.json() == {"error": "resync_required", "cursor": 1}
-    assert "theirs" not in refused.text
-    # A cursor this account has reached reads this account's rows, and never the other's.
-    assert _changes(mine, "?after=0") == [("mine", 1, False)]
-    assert _changes(mine, "?after=1") == []
+        their_cursors.append(other.get(CURSOR)["cursor"])
+    for n in range(1, 6):
+        mine.publish(f"mine-{n}", n, "Mine")
+    base, their_base = _base(site), _base(site, OTHER)
+    # Each account's order starts at its own random base, so their places do not meet.
+    assert base != their_base and their_cursors == [their_base + n for n in range(1, 5)]
+    assert mine.get(CURSOR) == {"cursor": base + 5}
+    # Every cursor the other account was given is refused for this account's device token,
+    # however its number compares with this account's own (#115): the device resyncs in full.
+    for their_cursor in their_cursors:
+        refused = mine.app.get(f"{CHANGES}?after={their_cursor}", headers=bearer(mine.token))
+        assert refused.status_code == 409
+        assert refused.json() == {"error": "resync_required", "cursor": base + 5}
+        assert "theirs" not in refused.text
+    # So is a place below this account's base, and one above its current cursor.
+    for never in (1, base - 1, base + 6):
+        refused = mine.app.get(f"{CHANGES}?after={never}", headers=bearer(mine.token))
+        assert refused.status_code == 409 and refused.json()["error"] == "resync_required"
+    # Its own cursors read this account's rows, and never the other's.
+    assert len(_changes(mine, "?after=0")) == 5
+    assert _changes(mine, f"?after={base}") == _changes(mine, "?after=0")
+    assert _changes(mine, f"?after={base + 4}") == [("mine-5", 5, False)]
+    assert _changes(mine, f"?after={base + 5}") == []
     their_ids = [c["class_id"] for c in other.get(CHANGES)["changes"]]
     for class_id in their_ids:
         answer = mine.app.get(f"{CLASSES}/{class_id}", headers=bearer(mine.token))
@@ -238,7 +270,11 @@ def test_one_class_by_its_id(site: Site) -> None:
     }
     assert body["document"] == sh.document("The class")
     assert body["content_hash"] == change["content_hash"] == content_hash(sh.document("The class"))
-    assert (body["source_class_id"], body["publication_number"], body["position"]) == ("one", 7, 1)
+    assert (body["source_class_id"], body["publication_number"], body["position"]) == (
+        "one",
+        7,
+        _base(site) + 1,
+    )
     unknown = account.app.get(
         f"{CLASSES}/00000000-0000-4000-8000-000000000000", headers=bearer(account.token)
     )
@@ -254,7 +290,8 @@ def test_sync_writes_nothing_but_the_device_tokens_own_use(site: Site) -> None:
     account.publish("two", 1, None)
     class_id = account.get(CHANGES)["changes"][0]["class_id"]
     before = _stored(site)
-    for path in (CHANGES, f"{CHANGES}?after=1&limit=1", CURSOR, f"{CLASSES}/{class_id}"):
+    own = f"{CHANGES}?after={_base(site) + 1}&limit=1"
+    for path in (CHANGES, own, CURSOR, f"{CLASSES}/{class_id}"):
         account.get(path)
     for refused in (f"{CHANGES}?after=99", f"{CLASSES}/{new_uuid()}", *MALFORMED):
         assert account.app.get(refused, headers=bearer(account.token)).status_code in (

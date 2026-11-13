@@ -5,9 +5,12 @@ from __future__ import annotations
 import pytest
 
 from player_backend.sync_policy import (
+    BASE_END,
+    BASE_MIN,
     CURSOR_MAX,
     PAGE_DEFAULT,
     PAGE_MAX,
+    base_of,
     is_page_request,
     needs_resync,
     page_of,
@@ -49,10 +52,28 @@ def test_a_page_request_from_the_querys_raw_text() -> None:
         assert page_request(after, limit) is None, (after, limit)
 
 
-def test_only_a_cursor_above_the_current_one_needs_a_resync() -> None:
-    assert not needs_resync(0, 0)
-    assert not needs_resync(4, 5) and not needs_resync(5, 5)
-    assert needs_resync(6, 5) and needs_resync(1, 0)
+def test_only_0_or_a_place_from_the_base_to_the_current_one_needs_no_resync() -> None:
+    # An order from before bases: base 0.
+    assert not needs_resync(0, 0, 0)
+    assert not needs_resync(4, 0, 5) and not needs_resync(5, 0, 5)
+    assert needs_resync(6, 0, 5) and needs_resync(1, 0, 0)
+    # An order with its own base: 0 and the places from the base up to the current one.
+    base = BASE_MIN + 7
+    assert not needs_resync(0, base, base + 3)
+    for own in (base, base + 1, base + 3):
+        assert not needs_resync(own, base, base + 3)
+    for foreign in (1, 3, base - 1, base + 4, CURSOR_MAX):
+        assert needs_resync(foreign, base, base + 3)
+
+
+def test_a_base_keeps_every_place_a_safe_integer_for_javascript() -> None:
+    assert base_of(0) == BASE_MIN == 2**32
+    assert base_of(BASE_END - BASE_MIN - 1) == BASE_END - 1
+    # 2^52 publications after the highest base, a place is still below 2^53.
+    assert BASE_END + 2**52 <= 2**53
+    for draw in (-1, BASE_END - BASE_MIN):
+        with pytest.raises(ValueError):
+            base_of(draw)
 
 
 def test_a_page_keeps_the_limit_and_says_whether_more_follow() -> None:

@@ -108,11 +108,13 @@ def publish(app: Browser, token: str, body: object) -> httpx.Response:
 
 
 def class_rows(site: Site, email: str) -> list[tuple[object, ...]]:
-    """(source_class_id, number, kind, title or None, sync_position) of the account's classes."""
+    """(source_class_id, number, kind, title or None, place) of the account's classes. The
+    place is the sync position counted from the account's base: 1 for its first change."""
     return site.su.execute(
         "SELECT c.source_class_id, c.publication_number, c.kind, "
-        "c.document -> 'class' ->> 'title', c.sync_position "
+        "c.document -> 'class' ->> 'title', c.sync_position - coalesce(y.base, 0) "
         "FROM player.classes c JOIN player.accounts a ON a.id = c.account_id "
+        "LEFT JOIN player.account_sync y ON y.account_id = c.account_id "
         "WHERE a.email = %s ORDER BY c.source_class_id",
         (email,),
     ).fetchall()

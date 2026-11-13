@@ -66,6 +66,13 @@ def _publish(
     assert answer.status_code == 200, answer.text
 
 
+def _base(site: Site) -> int:
+    """Where the one account's sync order starts (sync_policy.py)."""
+    row = site.su.execute("SELECT base FROM player.account_sync").fetchone()
+    assert row is not None and isinstance(row[0], int)
+    return row[0]
+
+
 def test_the_answers_of_the_three_routes_match_their_schemas(site: Site) -> None:
     app, token, server, source_token = _paired(site)
     headers = bearer(token)
@@ -83,7 +90,8 @@ def test_the_answers_of_the_three_routes_match_their_schemas(site: Site) -> None
     # A page that is not the last.
     first = _assert_valid("changes", app.get(CHANGES + "?limit=1", headers=headers), 200)
     assert first["more"] is True
-    assert _assert_valid("cursor", app.get(CURSOR, headers=headers), 200) == {"cursor": 3}
+    cursor = _assert_valid("cursor", app.get(CURSOR, headers=headers), 200)
+    assert cursor == {"cursor": _base(site) + 3}
     kept = next(c for c in page["changes"] if not c["removed"])
     held = _assert_valid("class", app.get(f"{CLASSES}/{kept['class_id']}", headers=headers), 200)
     assert held["document"] == sh.document("Second")
@@ -103,7 +111,7 @@ def test_the_error_bodies_of_the_three_routes_match_their_schema(site: Site) -> 
         assert body["error"] == code
     assert _assert_valid("error", app.get(CHANGES + "?after=99", headers=headers), 409) == {
         "error": "resync_required",
-        "cursor": 1,
+        "cursor": _base(site) + 1,
     }
     # A token that does not work: by shape, then as the table has it.
     for route in (CHANGES, CURSOR, f"{CLASSES}/{NO_CLASS}"):

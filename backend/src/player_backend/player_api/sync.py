@@ -2,8 +2,8 @@
 
 - `GET /api/player/changes?after=<cursor>&limit=<n>`: the account's class and removal changes
   after the cursor, in sync order, each with its number and hash and no content; the page's
-  cursor, and whether more follow. A cursor above the account's own answers
-  `409 resync_required` with the current cursor.
+  cursor, and whether more follow. A cursor that is not this account's (above its current one,
+  or below its base: another account's) answers `409 resync_required` with the current cursor.
 - `GET /api/player/classes/{class_id}`: one class the account holds now, with its document.
   A removal, an unknown id and another account's id are all `404 not_found`.
 - `GET /api/player/cursor`: the account's current cursor.
@@ -51,8 +51,8 @@ def changes(
     if requested is None:
         raise ApiError(422, "invalid_request")
     after_place, size = requested
-    current = class_sync.cursor(context)
-    if needs_resync(after_place, current):
+    base, current = class_sync.sync_range(context)
+    if needs_resync(after_place, base, current):
         raise ApiError(409, "resync_required", extra={"cursor": current})
     page = class_sync.changes(context, after_place, size)
     return JSONResponse(

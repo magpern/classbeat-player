@@ -43,6 +43,7 @@ class Other:
     source_token: str  # B's source token: used here only to see that it still works
     class_ids: tuple[str, ...]  # the ids of B's class rows, as the player API names a class
     cursor: int  # B's sync cursor
+    base: int  # where B's sync order starts: B's places are above it, up to its cursor
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,18 @@ def _one(site: Site, statement: LiteralString, email: str) -> str:
     row = site.su.execute(statement, (email,)).fetchone()
     assert row is not None
     return str(row[0])
+
+
+def _base_of_a(site: Site) -> int:
+    """Where A's sync order starts (sync_policy.py)."""
+    return int(
+        _one(
+            site,
+            "SELECT x.base FROM player.account_sync x "
+            "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s",
+            A,
+        )
+    )
 
 
 def _list(site: Site, a: Actor) -> None:
@@ -183,12 +196,17 @@ def _changes(site: Site, a: Actor) -> None:
         (c["source_class_id"], c["publication_number"], c["removed"]) for c in body["changes"]
     ]
     assert listed == [("shared", 1, False), ("b-only", 9, True)]
-    assert (body["cursor"], body["more"]) == (2, False)
-    # B's cursor is above A's: it was never A's, and it shows A nothing of B.
+    base = _base_of_a(site)
+    assert (body["cursor"], body["more"]) == (base + 2, False)
+    # No cursor B was given was ever A's, and none shows A anything of B (#115).
+    refused = {"error": "resync_required", "cursor": base + 2}
     ahead = a.app.get(f"{CHANGES}?after={a.other.cursor}", headers=bearer(a.token))
-    assert ahead.status_code == 409 and ahead.json() == {"error": "resync_required", "cursor": 2}
+    assert ahead.status_code == 409 and ahead.json() == refused
+    for place in range(a.other.base + 1, a.other.cursor):
+        behind = a.app.get(f"{CHANGES}?after={place}", headers=bearer(a.token))
+        assert behind.status_code == 409 and behind.json() == refused
     # A cursor that A's own order has reached reads A's rows after it, and nothing of B's.
-    later = a.app.get(f"{CHANGES}?after=1", headers=bearer(a.token))
+    later = a.app.get(f"{CHANGES}?after={base + 1}", headers=bearer(a.token))
     assert [c["source_class_id"] for c in later.json()["changes"]] == ["b-only"]
     for class_id in a.other.class_ids:
         assert class_id not in answer.text + ahead.text + later.text
@@ -207,7 +225,7 @@ def _held_class(site: Site, a: Actor) -> None:
 
 def _cursor(site: Site, a: Actor) -> None:
     answer = a.app.get(CURSOR, headers=bearer(a.token))
-    assert answer.status_code == 200 and answer.json() == {"cursor": 2}
+    assert answer.status_code == 200 and answer.json() == {"cursor": _base_of_a(site) + 2}
 
 
 def _list_library(site: Site, a: Actor) -> None:
@@ -365,6 +383,14 @@ def _account_b(site: Site) -> tuple[Browser, Other]:
             _one(
                 site,
                 "SELECT x.position FROM player.account_sync x "
+                "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s",
+                B,
+            )
+        ),
+        base=int(
+            _one(
+                site,
+                "SELECT x.base FROM player.account_sync x "
                 "JOIN player.accounts a ON a.id = x.account_id WHERE a.email = %s",
                 B,
             )
