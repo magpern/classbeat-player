@@ -26,6 +26,7 @@ from tests.sitehelp import Browser, Site
 A = "a@example.test"
 B = "b@example.test"
 SESSIONS = "/api/site/sessions"
+ME = "/api/site/me"
 CHANGES = "/api/player/changes"
 PLAYER_CLASSES = "/api/player/classes"
 CURSOR = "/api/player/cursor"
@@ -114,6 +115,13 @@ def _list(site: Site, a: Actor) -> None:
     listed = a.browser.get(SESSIONS).json()["sessions"]
     assert len(listed) == 1 and listed[0]["current"] is True
     assert a.other.session_id not in str(listed)
+
+
+def _me(site: Site, a: Actor) -> None:
+    # A's own email and nothing else: B's email is known here and is not in the answer.
+    answer = a.browser.get(ME)
+    assert answer.status_code == 200 and answer.json() == {"email": A}
+    assert B not in answer.text
 
 
 def _end_one(site: Site, a: Actor) -> None:
@@ -384,6 +392,7 @@ def _live_controller(site: Site, a: Actor) -> None:
 # deletes A.
 CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/site/sessions"): _list,
+    ("GET", ME): _me,
     ("DELETE", "/api/site/sessions/{session_id}"): _end_one,
     ("POST", "/api/site/sign-out"): _sign_out,
     ("POST", "/api/site/pairing/find"): _find_pairing,

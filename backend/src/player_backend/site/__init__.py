@@ -12,6 +12,7 @@ from player_backend.site.account import router as account_router
 from player_backend.site.classes import router as classes_router
 from player_backend.site.deps import same_origin
 from player_backend.site.devices import router as devices_router
+from player_backend.site.me import router as me_router
 from player_backend.site.pairing import router as pairing_router
 from player_backend.site.passkey_sign_in import router as passkey_sign_in_router
 from player_backend.site.passkeys import router as passkeys_router
@@ -24,6 +25,7 @@ router.include_router(sign_in_router)
 router.include_router(passkey_sign_in_router)
 router.include_router(passkeys_router)
 router.include_router(sessions_router)
+router.include_router(me_router)
 router.include_router(pairing_router)
 router.include_router(devices_router)
 router.include_router(source_links_router)

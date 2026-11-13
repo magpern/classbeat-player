@@ -13,6 +13,9 @@ LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)")
 
 ACCOUNT: Final[Query] = Query("SELECT email, created_at FROM player.accounts WHERE id = %s")
 
+# The account's own email, for `GET /api/site/me`: that column alone.
+EMAIL: Final[Query] = Query("SELECT email FROM player.accounts WHERE id = %s")
+
 # One page of the export's classes: committed classes and the markers of removed ones, after a
 # sync position, in sync order (the placeholder, number 0, is no class and has no position).
 # The page size is the export's constant, passed as the limit.
