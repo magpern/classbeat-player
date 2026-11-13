@@ -49,7 +49,7 @@ in its own window (#141, #148) and its follow-ups (#149, #151: the presenter kep
 Show the room screen, a run-time check that refuses any renderer with loose web preferences);
 shell hardening (#152, #154; #155, #156: preloads, spell checker, shell handlers, re-checked on
 every navigation); keep-awake while a class runs (#157, #159). Every PL4 item is merged; the
-Verifier's run on `main` is in progress.
+Verifier's run on `main` follows (AGENTS.md, section 4).
 
 ## Infra
 
