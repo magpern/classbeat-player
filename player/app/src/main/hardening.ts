@@ -2,8 +2,8 @@
 // windows, no webviews, no permissions. Side effects only; the rules are in web-preferences.ts.
 import { app, session } from "electron";
 import type { WebContents } from "electron";
-import { looseRenderer } from "./loose-renderer.ts";
-import type { LiveRenderer } from "./loose-renderer.ts";
+import { refuse, refuseLoose } from "./refuse-loose.ts";
+import type { RefusableRenderer, RefuseDeps } from "./refuse-loose.ts";
 import { isAllowedRequest } from "./web-preferences.ts";
 
 // Every renderer, however it was made (a window, a view, window.open), is compared with
@@ -13,16 +13,15 @@ import { isAllowedRequest } from "./web-preferences.ts";
 // rule (test/unit/shell-guard-check.ts): nothing outside hardening.ts may set it.
 // The static check (test/unit/window-prefs-check.ts) is the early warning; this is the guarantee.
 // The keys Electron does not report are read another way (loose-renderer.ts); a getter that throws,
-// or Electron's `_getPreloadScript` missing after an upgrade, refuses the renderer.
-function refuseLoose(contents: WebContents, preloads: readonly string[]): void {
-  if (contents.isDestroyed()) return;
-  const loose = looseRenderer(contents as unknown as LiveRenderer, () => session.defaultSession, preloads);
-  if (loose.length === 0) return;
-  console.error(`Refused a renderer that is not hardened (${loose.join(", ")}).`);
-  // Closed at once. Inside a window.open that a handler wrongly allowed, this can leave the opener
-  // waiting: that fails closed, and guardContents denies every window.open.
-  contents.close();
-}
+// or Electron's `_getPreloadScript` missing after an upgrade, refuses the renderer. The refusal
+// itself (refuse-loose.ts) never throws out of these listeners (#156 review, N-2).
+const refuseDeps = (preloads: readonly string[]): RefuseDeps => ({
+  defaultSession: () => session.defaultSession,
+  preloads,
+  report: (message) => console.error(message),
+  // A renderer that cannot be closed must not go on loading: the application ends instead.
+  fatal: () => app.exit(1),
+});
 
 function guardContents(contents: WebContents): void {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -50,9 +49,18 @@ export function hardenSession(appDirUrl: string, preloads: readonly string[]): v
   ses.setPermissionCheckHandler(() => false);
   ses.setDevicePermissionHandler(() => false);
   ses.on("will-download", (e) => e.preventDefault());
+  const deps = refuseDeps(preloads);
   app.on("web-contents-created", (_e, contents) => {
-    guardContents(contents);
-    refuseLoose(contents, preloads);
-    contents.on("did-start-navigation", () => refuseLoose(contents, preloads));
+    // getLastWebPreferences and _getPreloadScript are Electron's own, missing from its typings.
+    const live = contents as unknown as RefusableRenderer;
+    try {
+      guardContents(contents);
+      contents.on("did-start-navigation", () => refuseLoose(live, deps));
+    } catch {
+      // A renderer without its navigation guards, or without the re-check on each load, is refused.
+      refuse(live, ["guards"], deps);
+      return;
+    }
+    refuseLoose(live, deps);
   });
 }
