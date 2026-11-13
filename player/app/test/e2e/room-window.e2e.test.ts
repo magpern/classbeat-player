@@ -12,7 +12,7 @@ import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { placeRoom } from "../../src/core/room/placement.ts";
 import type { DisplayFacts, Rect } from "../../src/core/room/placement.ts";
-import { ROOM_CSP } from "../../src/main/web-preferences.ts";
+import { ROOM_CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { converterExamples } from "../unit/fixtures.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
 import { APP_DIR, launch, sleep } from "./launch.ts";
@@ -133,14 +133,15 @@ test("the room page's channel answers only the room window: the same preload and
   const preload = join(APP_DIR, "dist", "room-preload.cjs");
   const file = join(APP_DIR, "dist", "room.html");
   const got = await app.evaluate(
-    async ({ BrowserWindow }, { preload, file }) => {
-      const w = new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    async ({ BrowserWindow }, { secure, file }) => {
+      // The room's own hardening, so only the sender differs (a loose window is refused anyway).
+      const w = new BrowserWindow({ show: false, webPreferences: secure });
       await w.loadFile(file);
       const out = await w.webContents.executeJavaScript("window.room.state()");
       w.destroy();
       return out;
     },
-    { preload, file },
+    { secure: secureWebPreferences(preload), file },
   );
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());

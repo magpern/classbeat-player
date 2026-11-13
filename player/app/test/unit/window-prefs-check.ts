@@ -5,7 +5,12 @@
 //   unaliased import from "electron", in a type, as the callee of a `new` that is checked, or in a
 //   direct call of a static method that finds existing windows (STATIC_CALLS).
 //   No other reference (no `const W = BrowserWindow`, no member access, no `extends`), no string
-//   with its name, no default or namespace import of "electron", no `require`, no `import()`.
+//   with its name, no default or namespace import of "electron", no `require`, no `import()`,
+//   no `import x = require(...)`.
+// - No way to reach a constructor by another road: no `constructor` (as a name, a string or part
+//   of a template), no `Reflect`, no member name built from strings (`o[\`a${b}\`]`, `o["a" + b]`).
+// - A `new` names a host, a name imported unaliased, a class of the same file, or a global
+//   constructor from GLOBAL_NEW that the file does not redeclare; nothing else (#149, N4).
 // - A checked `new` has an object literal whose keys are plain identifiers; spreads only before
 //   `webPreferences`, written once and out in full.
 // - `webPreferences` is `secureWebPreferences(...)`, or `{ ...secureWebPreferences(...), k: v }`
@@ -14,13 +19,16 @@
 //   binding of that name exists anywhere (web-preferences.ts declares it once).
 import { dirname, resolve } from "node:path";
 import ts from "typescript";
+import { EXTRA_KEYS } from "../../src/main/web-preferences.ts";
 
 const HOSTS = new Set(["BrowserWindow", "BrowserView", "WebContentsView"]);
 const SECURE = "secureWebPreferences";
 /** Static methods that only find existing windows; called directly, never passed on. */
 const STATIC_CALLS = new Set(["getFocusedWindow", "getAllWindows", "fromWebContents", "fromId"]);
-/** Keys a window may add after the spread. Nothing here touches isolation, sessions or Node. */
-export const EXTRA_KEYS = new Set(["backgroundThrottling"]);
+export { EXTRA_KEYS };
+/** Built-in constructors the sources may call `new` on (by their global name only). */
+const GLOBAL_NEW = new Set(["Date", "Error", "Map", "Set", "RegExp", "TextEncoder", "TextDecoder", "URL", "Intl.Collator", "AbortController", "Promise", "WeakMap", "WeakSet", "Uint8Array", "TypeError", "RangeError"]);
+const FORBIDDEN_TEXT = /constructor/;
 
 export interface Found {
   readonly problems: string[];
@@ -38,6 +46,42 @@ const isTypePosition = (n: ts.Node): boolean => {
   return false;
 };
 const plainName = (n: ts.PropertyName): string | null => (ts.isIdentifier(n) ? n.text : null);
+/** A string built at run time: a template with substitutions, or `+` with a string in it. */
+const builtString = (e: ts.Expression): boolean => {
+  if (ts.isParenthesizedExpression(e)) return builtString(e.expression);
+  if (ts.isTemplateExpression(e)) return true;
+  if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const strings = (x: ts.Expression): boolean => ts.isStringLiteralLike(x) || builtString(x);
+    return strings(e.left) || strings(e.right);
+  }
+  return false;
+};
+const newName = (e: ts.Expression): string | null => {
+  if (ts.isIdentifier(e)) return e.text;
+  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression) && ts.isIdentifier(e.name)) return `${e.expression.text}.${e.name.text}`;
+  return null;
+};
+
+/** Names a `new` may use: unaliased named imports, and the classes and other bindings of the file. */
+function bindings(sf: ts.SourceFile): { imported: Set<string>; classes: Set<string>; declared: Set<string> } {
+  const imported = new Set<string>();
+  const classes = new Set<string>();
+  const declared = new Set<string>();
+  const names = (b: ts.BindingName): void => {
+    if (ts.isIdentifier(b)) declared.add(b.text);
+    else for (const el of b.elements) if (!ts.isOmittedExpression(el)) names(el.name);
+  };
+  const walk = (n: ts.Node): void => {
+    if (ts.isImportSpecifier(n) && !n.propertyName && !n.isTypeOnly) imported.add(n.name.text);
+    else if (ts.isImportSpecifier(n) || ts.isImportClause(n) || ts.isNamespaceImport(n)) if (n.name) declared.add(n.name.text);
+    if (ts.isClassDeclaration(n) && n.name) classes.add(n.name.text);
+    if (ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isBindingElement(n)) names(n.name);
+    if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassExpression(n) || ts.isEnumDeclaration(n)) && n.name) declared.add(n.name.text);
+    ts.forEachChild(n, walk);
+  };
+  walk(sf);
+  return { imported, classes, declared };
+}
 
 function checkWebPreferences(v: ts.Expression, isSecure: (e: ts.Expression) => boolean): string[] {
   if (isSecure(v)) return [];
@@ -79,13 +123,15 @@ function checkOptions(call: ts.NewExpression, isSecure: (e: ts.Expression) => bo
 
 /** Checks one source file; `file` is its absolute path (to resolve imports). */
 export function checkSource(text: string, file: string): Found {
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const kind = /\.(c|m)?jsx?$/.test(file) ? ts.ScriptKind.JS : /\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
   const problems: string[] = [];
   const say = (n: ts.Node, what: string): void => void problems.push(`${file}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}: ${what}`);
   const isPrefsFile = /[\\/]src[\\/]main[\\/]web-preferences\.ts$/.test(file);
   let secureImported = false;
   const checked = new Set<ts.Node>();
   let windows = 0;
+  const known = bindings(sf);
 
   const visit = (n: ts.Node): void => {
     if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) {
@@ -105,16 +151,26 @@ export function checkSource(text: string, file: string): Found {
       }
     }
     if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword) say(n, "a dynamic import");
+    if (ts.isImportEqualsDeclaration(n)) say(n, "an import = require(...)");
+    if (ts.isElementAccessExpression(n) && builtString(n.argumentExpression)) say(n, "a member name built from strings");
     if (ts.isNewExpression(n)) {
       const e = n.expression;
+      const name = newName(e);
       if (ts.isIdentifier(e) && HOSTS.has(e.text)) {
         windows++;
         for (const p of checkOptions(n, (x) => ts.isCallExpression(x) && ts.isIdentifier(x.expression) && x.expression.text === SECURE && x.arguments.length === 1)) say(n, p);
+      } else if (name === null) say(n, "a new of something other than a name");
+      else {
+        const head = name.split(".")[0]!;
+        const global = GLOBAL_NEW.has(name) && !known.declared.has(head) && !known.imported.has(head) && !known.classes.has(head);
+        const own = ts.isIdentifier(e) && (known.imported.has(name) || known.classes.has(name)) && !known.declared.has(name);
+        if (!global && !own) say(n, `a new of ${name}, not an import, a class of this file or an allowed global`);
       }
     }
     if (ts.isIdentifier(n)) {
       const parent = n.parent;
       if (n.text === "require" && !isTypePosition(n)) say(n, "require");
+      if ((n.text === "constructor" || n.text === "Reflect") && !isTypePosition(n)) say(n, `${n.text}`);
       if (HOSTS.has(n.text) && !checked.has(n) && !isTypePosition(n)) {
         const imported = ts.isImportSpecifier(parent) && !parent.propertyName && parent.name === n;
         const finder = ts.isPropertyAccessExpression(parent) && parent.expression === n && STATIC_CALLS.has(parent.name.text) && ts.isCallExpression(parent.parent) && parent.parent.expression === parent;
@@ -128,6 +184,7 @@ export function checkSource(text: string, file: string): Found {
       }
     }
     if (ts.isStringLiteralLike(n) && HOSTS.has(n.text)) say(n, `a string naming ${n.text}`);
+    if ((ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) && FORBIDDEN_TEXT.test(n.text)) say(n, "a string with constructor");
     ts.forEachChild(n, visit);
   };
   // `new` callees first, so the identifier check knows which references are checked.
