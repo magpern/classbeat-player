@@ -1,5 +1,6 @@
 // The site's addresses (docs/design/site.md, "Pages and their addresses"). Pure: no I/O.
-// Which page an address shows, and which addresses a sign-in may return to.
+// Which page an address shows, and which addresses a sign-in may return to: a signed-in page of
+// the site, or one entry of the fixed table of other pages served beside it (the companion).
 
 export type Nav = "classes" | "devices" | "account";
 
@@ -60,4 +61,38 @@ export function returnPathOf(path: string, search: string): string | null {
   if (page.kind !== "signed-in") return null;
   if (!KEEPS_QUERY.has(path) || search === "" || search === "?") return path;
   return search.startsWith("?") && !/[\\#\s]/.test(search) ? `${path}${search}` : path;
+}
+
+/**
+ * The other pages served beside the site that a sign-in may return to, by name (issue #263).
+ * Only these: a sign-in address names an entry of this table, never an address.
+ */
+export const RETURN_ENTRIES: Readonly<Record<string, string>> = { control: "/control" };
+export type ReturnEntry = "control";
+
+/** A class (join) code exactly as the companion shows it (ADR 0002's alphabet, `XXXX-XXXX`). */
+const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
+const RETURN_FRAGMENT = /^#?return=([a-z]+)(?:\.(.*))?$/;
+
+/**
+ * The sign-in address that returns to `entry` afterwards. The entry goes in the fragment, which
+ * the browser never sends to a server; for the companion it may carry the class code, which only
+ * names the session and gives no control (rule 14). Nothing else goes with it: never a control
+ * code, a token or an address. A class code that is not one exactly is left out.
+ */
+export function signInAddressFor(entry: ReturnEntry, join: string | null): string {
+  return join !== null && JOIN_CODE.test(join) ? `/sign-in#return=${entry}.${join}` : `/sign-in#return=${entry}`;
+}
+
+/**
+ * The address a sign-in fragment asks to return to, or null. Only an entry of the table, with a
+ * class code for the companion and nothing else; anything other than exactly that is null, and
+ * the sign-in then goes to the default page. The result is `/control` or `/control#XXXX-XXXX`.
+ */
+export function returnEntryOf(hash: string): string | null {
+  const m = RETURN_FRAGMENT.exec(hash);
+  if (!m || !Object.hasOwn(RETURN_ENTRIES, m[1])) return null;
+  const path = RETURN_ENTRIES[m[1]];
+  if (m[2] === undefined) return path;
+  return JOIN_CODE.test(m[2]) ? `${path}#${m[2]}` : null;
 }

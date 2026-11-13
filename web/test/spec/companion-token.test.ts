@@ -117,11 +117,49 @@ describe("companion token: by control code (the QR code)", () => {
 });
 
 describe("companion token: by sign-in", () => {
-  it("not signed in: Sign in to steer opens the site's sign-in page and sends nothing", async () => {
+  it("not signed in: Sign in to steer opens the site's sign-in page, asked to come back, and sends nothing", async () => {
     const f = await openCompanion(browser, { ...size, hash: "#BCDF-GHJK" });
     await f.page.click("[data-action=sign_in]");
-    await f.page.waitForURL("https://site.test/sign-in");
+    // The fixed entry and the class code, in the fragment only: no server sees them (#263).
+    await f.page.waitForURL("https://site.test/sign-in#return=control.BCDF-GHJK");
     assert.equal(f.api.filter((s) => s.method === "POST").length, 0);
+    await f.context.close();
+  });
+
+  it("not signed in: the way to sign-in carries the class code at most, never a control code, a query or storage (#263)", async () => {
+    const CONTROL = "LMNP-QRST";
+    const f = await openCompanion(browser, { ...size });
+    await f.page.waitForSelector("[data-action=sign_in]");
+    await f.page.fill("#class-code", "bcdf ghjk");
+    await f.page.fill("#control-code", CONTROL);
+    const seen: string[] = [];
+    f.page.on("request", (r) => seen.push(r.url()));
+    const before = (await f.traps()).filter((t) => t.kind === "storage" && !t.detail.startsWith("session getItem"));
+    await f.page.click("[data-action=sign_in]");
+    await f.page.waitForURL("https://site.test/sign-in#return=control.BCDF-GHJK");
+    assert.deepEqual(before, [], "nothing written to storage before leaving");
+    assert.deepEqual(seen, ["https://site.test/sign-in"], "the sign-in page is asked for with no query and no fragment");
+    assert.ok(!f.page.url().includes(CONTROL), "the control code stays behind");
+    assert.equal(f.api.filter((s) => s.method === "POST").length, 0);
+    for (const s of f.api) assert.ok(!s.url.includes("?") && !s.url.includes(CONTROL));
+    assert.equal(await f.page.evaluate(() => localStorage.length + sessionStorage.length), 0, "nothing in either storage");
+    assert.deepEqual(f.external, []);
+    await f.context.close();
+  });
+
+  it("not signed in with no class code: sign-in comes back to the plain page (#263)", async () => {
+    const f = await openCompanion(browser, { ...size });
+    await f.page.click("[data-action=sign_in]");
+    await f.page.waitForURL("https://site.test/sign-in#return=control");
+    await f.context.close();
+  });
+
+  it("back from sign-in with the class code: it fills the field and offers one tap, sending nothing by itself (#263)", async () => {
+    const f = await openCompanion(browser, { ...size, hash: "#BCDF-GHJK", signedIn: true, answers: { controller: [OK] } });
+    await f.page.waitForSelector("text=Steer this class");
+    assert.equal(f.page.url(), PAGE_URL, "the class code leaves the address bar at once");
+    assert.equal(await f.page.inputValue("#class-code"), "BCDF-GHJK");
+    assert.equal(f.api.filter((s) => s.method === "POST").length, 0, "the class code alone gives no control (rule 14)");
     await f.context.close();
   });
 

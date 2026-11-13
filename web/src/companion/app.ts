@@ -10,7 +10,9 @@ import type { Delta, Event, Live } from "./core/session.ts";
 import type { Action } from "./core/state-check.ts";
 import { liveView } from "./core/view.ts";
 import { idFromBytes } from "./core/wire.ts";
+import { normaliseCode } from "./core/codes.ts";
 import type { Fragment } from "./core/codes.ts";
+import { signInAddressFor } from "../site/core/routes.ts";
 import { post, signedIn } from "./net.ts";
 import { connectingPage, droppedPage, endedPage, entryPage, lostPage } from "./render/pages.ts";
 import { RunScreen } from "./render/run.ts";
@@ -19,8 +21,6 @@ import { forgetToken, loadToken, saveToken } from "./store.ts";
 import { ScreenWake } from "./wake.ts";
 
 const TICK_MS = 250;
-/** The site's sign-in page (the website, issue #144). */
-export const SIGN_IN_PATH = "/sign-in";
 
 const now = (): number => performance.now();
 const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -63,7 +63,9 @@ export class CompanionApp {
     const r = submit(this.entry, way);
     this.entry = r.entry;
     if ("signIn" in r) {
-      location.assign(SIGN_IN_PATH);
+      // The site's sign-in page, asked to come back here with the class code (never the control
+      // code): the entry is in the fragment, so it goes to no server (issue #263).
+      location.assign(signInAddressFor("control", normaliseCode(this.entry.classCode)));
       return;
     }
     this.draw();

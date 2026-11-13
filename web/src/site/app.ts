@@ -1,7 +1,8 @@
 // The site's router: which page an address shows, the frame around it, and the way back after
-// a sign-in. The page that asked is kept in memory only (never in the address or in storage),
-// and only as a path of this site (core/routes.ts).
-import { pageOf, returnPathOf } from "./core/routes.ts";
+// a sign-in. The page that asked is kept in memory only (never in storage), and only as a path of
+// this site or an entry of the fixed table of other pages (core/routes.ts). A page of the site
+// is opened in place; another page (the companion at /control) is loaded.
+import { pageOf, returnEntryOf, returnPathOf } from "./core/routes.ts";
 import { NOTICES } from "./core/sign-in-model.ts";
 import type { Notice, SignInView } from "./core/sign-in-model.ts";
 import { fragmentOf } from "./core/link-token.ts";
@@ -12,7 +13,8 @@ import { signedInPage } from "./pages/signed-in.ts";
 import { signInPage } from "./pages/sign-in.ts";
 import { frame, PRODUCT } from "./ui/shell.ts";
 
-let returnTo: string | null = null;
+/** Where a sign-in goes back to: a page of this site, or another page that has to be loaded. */
+let returnTo: { readonly to: string; readonly load: boolean } | null = null;
 let shown = 0;
 
 const noticeOf = (state: unknown): Notice | undefined => {
@@ -50,16 +52,20 @@ function render(focus: "heading" | "none"): void {
   }
   if (page.kind === "sign-in") {
     // The token leaves the address bar before anything else happens (ADR 0002, section 4, step 5).
+    // A fragment that is not a token may name an entry to return to (/control): kept in memory.
     const fragment = fragmentOf(location.hash);
+    const entry = fragment.kind === "none" ? returnEntryOf(location.hash) : null;
+    if (entry !== null) returnTo = { to: entry, load: true };
     if (location.hash || location.search) history.replaceState(history.state, "", "/sign-in");
     document.title = `Sign in · ${PRODUCT}`;
     const main = frame({ narrow: true });
     const start: SignInView =
       fragment.kind === "token" ? { screen: "link", busy: false } : fragment.kind === "broken" ? { screen: "form", email: "", plate: { kind: "link-refused" } } : { screen: "form", email: "", notice: noticeOf(history.state) };
     const signedIn = (): void => {
-      const to = returnTo ?? "/classes";
+      const back = returnTo ?? { to: "/classes", load: false };
       returnTo = null;
-      go(to);
+      if (back.load) location.assign(back.to);
+      else go(back.to);
     };
     signInPage(main, start, { passkey: passkeySupported(), signedIn }, fragment.kind === "token" ? fragment.token : null, fragment.kind === "token" ? "auto" : focus);
     return;
@@ -75,7 +81,7 @@ function render(focus: "heading" | "none"): void {
     signedInPage(main, page, {
       current: () => ticket === shown,
       sessionEnded: () => {
-        returnTo = asked;
+        returnTo = asked === null ? null : { to: asked, load: false };
         go("/sign-in", "ended");
       },
     });
