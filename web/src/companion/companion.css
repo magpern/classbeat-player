@@ -1,0 +1,240 @@
+/* The handlebar companion page (docs/design/companion.md), ported from the reference mock-up
+   (docs/design/mockups/companion.css). One phone screen, never scrolled while connected. Every size
+   is a share of the visible page (dvh: the height without the browser's bars, and vw) in one of
+   two layouts, portrait and landscape; the padding adds the safe-area insets for notches.
+   Colours: tokens.css only. Hue only on things that stand for a zone. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* Portrait (the default): sizes in vh, capped by vw so a narrow phone keeps its line lengths. */
+:root {
+  --c-gel: min(10.6dvh, 23vw); /* zone numeral */
+  --c-hero: min(10dvh, 21.5vw); /* time left in the interval */
+  --c-value: min(4.6dvh, 9.4vw); /* zone name, cadence, position */
+  --c-text: min(4.2dvh, 8.6vw); /* the cue, up to 60 characters */
+  --c-text-min: min(3.4dvh, 7vw); /* a longer cue */
+  --c-minor: min(3.2dvh, 6.6vw); /* next intervals, next song, class time, key labels */
+  --c-label: min(2.4dvh, 5vw); /* labels, hints */
+  --c-pad: 4vw;
+  --c-gap: 1.3dvh;
+  --c-key-h: max(64px, 8.6dvh); /* touch target height; never under 64 CSS px */
+  --c-key-gap: 12px; /* space between two touch targets; never under 12 CSS px */
+}
+@media (orientation: landscape) {
+  :root {
+    --c-gel: min(21dvh, 11vw);
+    --c-hero: min(18dvh, 9.6vw);
+    --c-value: min(8.2dvh, 4.3vw);
+    --c-text: min(7.4dvh, 3.9vw);
+    --c-text-min: min(6dvh, 3.2vw);
+    --c-minor: min(5.6dvh, 3vw);
+    --c-label: min(4.4dvh, 2.35vw);
+    --c-pad: 2.4vw;
+    --c-gap: 2dvh;
+    --c-key-h: max(64px, 17dvh);
+  }
+}
+
+body {
+  background: var(--stage); color: var(--light-1); font-family: var(--face-text);
+  font-size: var(--c-label); line-height: 1.1; overflow: hidden; overflow-wrap: break-word;
+  font-variant-numeric: lining-nums;
+}
+.n { font-family: var(--face-number); font-weight: 800; letter-spacing: 0; }
+.lbl { font-family: var(--face-text); font-size: var(--c-label); color: var(--light-3); font-weight: 400; line-height: 1.1; }
+/* Running numbers: each digit in a cell as wide as the widest digit (system.md, Type). */
+.d { display: inline-block; width: var(--cell, 0.48em); text-align: center; }
+
+/* ---------- The class view: one grid, two layouts ---------- */
+.run {
+  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 2dvh var(--c-pad); display: grid; gap: var(--c-gap);
+  grid-template-columns: 100%;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "top" "gel" "clock" "cue" "coming" "keys";
+}
+@media (orientation: landscape) {
+  .run {
+    padding: 2.6dvh var(--c-pad); column-gap: 3vw;
+    grid-template-columns: 44fr 56fr;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "top top" "gel cue" "clock cue" "clock coming" "keys keys";
+  }
+}
+.top { grid-area: top; display: flex; align-items: center; gap: 2vw; min-height: calc(var(--c-label) * 1.9); }
+.gel { grid-area: gel; }
+.clock { grid-area: clock; }
+.cue { grid-area: cue; }
+.coming { grid-area: coming; }
+.keys { grid-area: keys; }
+
+/* Top line: the music link (or a plate), then the class time on the right. */
+.link { display: inline-flex; align-items: center; gap: 0.6em; white-space: nowrap; color: var(--light-3); }
+.link::before { content: ""; width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--light-3); flex: none; }
+.link.manual { color: var(--light-2); }
+.link.manual::before { border-radius: 0; background: var(--light-2); }
+.link.alert { color: var(--ink); background: var(--light-1); font-weight: 700; padding: 0.35em 0.6em; border-radius: 4px; white-space: normal; min-width: 0; line-height: 1.15; }
+.link.alert::before { background: var(--ink); border-radius: 0; }
+.ct { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.4em; white-space: nowrap; }
+.ct .val { font-size: var(--c-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; --cell: 0.42em; }
+
+/* The gel: a band of the zone's colour with the numeral and the name cut out in black. */
+.gel {
+  background: var(--zone); color: var(--ink); border-radius: 6px;
+  display: flex; align-items: center; gap: 3vw; padding: 1dvh 3vw; min-width: 0;
+  transition: background-color var(--m-change), color var(--m-change);
+}
+.gel-num { font-size: var(--c-gel); line-height: 0.8; flex: none; padding-top: 0.04em; }
+.gel-txt { display: flex; flex-direction: column; gap: 0.6dvh; min-width: 0; flex: 1; }
+.gel-name { font-size: var(--c-value); line-height: 0.95; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* A name that needs more than two lines steps down to --c-minor, two lines, then an ellipsis. */
+.gel-name.long { --tier: minor; font-size: var(--c-minor); line-height: 1.02; }
+.gel-tg { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); line-height: 1; display: flex; flex-wrap: wrap; column-gap: 0.6em; }
+.gel-tg span { white-space: nowrap; }
+.gel .lbl { color: var(--ink); font-weight: 700; }
+/* Lights down: paused or not started; the colour moves into the glyphs. */
+.gel.down { background: color-mix(in srgb, var(--zone) 6%, var(--stage)); color: var(--zone); box-shadow: inset 0 0 0 3px var(--zone); }
+.gel.down .lbl { color: var(--zone); }
+.gel.blank { background: var(--light-1); }
+@media (orientation: landscape) { .gel { padding: 1.6dvh 1.6vw; gap: 1.6vw; } }
+
+/* The clock row: time left on the left, the next song change on the right (under it in
+   landscape). */
+.clock { display: flex; justify-content: space-between; gap: 4vw; min-width: 0; }
+@media (orientation: landscape) { .clock { flex-direction: column; justify-content: flex-start; gap: 2dvh; } }
+.cl { display: flex; flex-direction: column; gap: 0.8dvh; flex: none; }
+.cl .lbl { display: flex; gap: 0.6em; align-items: center; white-space: nowrap; }
+.count { font-size: var(--c-hero); line-height: 0.82; white-space: nowrap; position: relative; width: fit-content; margin-left: -0.03em; }
+.count.est { color: var(--light-2); margin-bottom: 0.2em; }
+.count.est::after { content: ""; position: absolute; left: 0.05em; right: 0; bottom: -0.12em; border-top: 0.05em dashed var(--light-2); }
+.pill { font-weight: 700; color: var(--ink); background: var(--light-1); padding: 0.15em 0.5em; border-radius: 4px; }
+.song { display: flex; flex-direction: column; gap: 0.5dvh; min-width: 0; flex: 1; }
+/* In landscape the song change is one line under the countdown: "Next song in 1:22 Title". */
+@media (orientation: landscape) {
+  .song { flex: none; flex-direction: row; align-items: baseline; gap: 0.6em; }
+  .song .st { flex: 0 1 auto; min-width: 0; }
+  .song .sa { display: none; }
+}
+.song .lbl { white-space: nowrap; }
+.song .when { font-size: var(--c-value); line-height: 0.95; }
+@media (orientation: landscape) { .song .when { white-space: nowrap; } }
+.song .when.dim { color: var(--light-2); }
+.song .st { font-size: var(--c-minor); font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song .sa { font-size: var(--c-label); color: var(--light-2); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The cue: as written, never cut, never scrolled. */
+.cue { font-size: var(--c-text); font-weight: 700; line-height: 1.1; overflow: hidden; text-wrap: pretty; min-height: 0; }
+.cue.long { --tier: textmin; font-size: var(--c-text-min); line-height: 1.08; }
+.cue.title { font-weight: 700; }
+.cue-lbl { display: block; font-weight: 400; margin-bottom: 0.4dvh; }
+
+/* Coming up: the next intervals. */
+.coming { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 2.4vw; row-gap: 0.9dvh; align-items: center; min-width: 0; }
+@media (orientation: landscape) { .coming { column-gap: 1.2vw; row-gap: 1.4dvh; } }
+.coming > .lbl { grid-column: 1; }
+.next { grid-column: 2; display: flex; align-items: center; gap: 2vw; white-space: nowrap; min-width: 0; }
+@media (orientation: landscape) { .next { gap: 1vw; } }
+.next > * { flex: none; }
+.next .chip { font-family: var(--face-number); font-weight: 800; font-size: var(--c-minor); background: var(--zone); color: var(--ink); line-height: 1; padding: 0.12em 0.32em 0.04em; border-radius: 3px; }
+.next .v { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); line-height: 1; }
+.next .dim { color: var(--light-2); }
+.next .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* A notice that needs the instructor: white plate, black text, its key (Undo) inside. It takes
+   skip's place (portrait: the second row; landscape: the last key). */
+.keys .notice { grid-column: 1 / -1; }
+@media (orientation: landscape) { .keys .notice { grid-column: 4; } .notice .dt { display: none; } }
+.notice { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 1dvh 3vw; display: flex; align-items: center; gap: 3vw; min-width: 0; }
+@media (orientation: landscape) { .notice { padding: 1.2dvh 1.6vw; gap: 1.6vw; } }
+.notice .nt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.4dvh; }
+.notice .h { font-size: var(--c-minor); font-weight: 700; line-height: 1.1; }
+.notice .dt { font-size: var(--c-label); line-height: 1.15; }
+.note { border: 2px solid var(--light-1); border-radius: 4px; padding: 0.2em 0.6em; display: inline-flex; align-items: center; gap: 0.5em; white-space: nowrap; min-width: 0; }
+.note .h { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.note::before { content: ""; width: 0.6em; height: 0.6em; flex: none; border-radius: 50%; background: var(--light-1); }
+
+/* ---------- Keys: touch targets for a wet or gloved thumb ---------- */
+.keys { display: grid; gap: var(--c-key-gap); grid-template-columns: repeat(6, 1fr); }
+.keys .key { grid-column: span 2; }
+.keys .key.half { grid-column: span 3; }
+.keys .key.full { grid-column: 1 / -1; }
+@media (orientation: landscape) {
+  .keys { grid-template-columns: 1fr 1.15fr 1fr 2fr; }
+  .keys .key, .keys .key.half { grid-column: auto; }
+  .keys .key.full { grid-column: 1 / -1; }
+  .keys .key.full[data-action=skip] { grid-column: auto; }
+}
+.key {
+  position: relative; overflow: hidden; min-height: var(--c-key-h); min-width: 64px;
+  font: inherit; color: var(--light-1); background: var(--stage-raised); border: 2px solid var(--light-3); border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3dvh; padding: 0.6dvh 1vw 12px; text-align: center;
+}
+.key .kl { font-size: var(--c-minor); font-weight: 700; line-height: 1.05; display: inline-flex; align-items: center; gap: 0.4em; }
+.key .kh { font-size: var(--c-label); color: var(--light-2); line-height: 1.1; }
+.key.main { background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
+.key.main .kh { color: var(--ink); }
+.key.dis { color: var(--light-2); border-color: var(--stage-line); border-style: dashed; }
+/* Hold to confirm: a white bar fills along the key's foot while the thumb is down. */
+.key .prog { position: absolute; left: 0; bottom: 0; height: 8px; width: var(--p, 0%); background: var(--light-1); }
+.key.main .prog { background: var(--ink); }
+.key.holding { border-color: var(--light-1); border-width: 3px; }
+.notice .key { flex: none; background: var(--ink); color: var(--light-1); border-color: var(--ink); min-width: 96px; }
+.keys .msg { grid-column: 1 / -1; min-height: var(--c-key-h); display: flex; align-items: center; justify-content: center; border: 2px dashed var(--stage-line); border-radius: 8px; color: var(--light-2); padding: 0 3vw; text-align: center; }
+.keys .msg span { font-size: var(--c-minor); }
+
+/* ---------- Pages without the class: code, connecting, ended ---------- */
+.page {
+  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 3dvh calc(var(--c-pad) + 1vw); display: flex; flex-direction: column; gap: 2.2dvh;
+}
+@media (orientation: landscape) {
+  .page { display: grid; grid-template-columns: 1fr 1fr; column-gap: 5vw; align-content: start; padding: 4dvh 4vw; row-gap: 2.4dvh; }
+  .page > .lead { grid-column: 1; }
+  .page > .act { grid-column: 2; grid-row: 1 / span 6; }
+}
+.page .lead, .page .act { display: flex; flex-direction: column; gap: max(12px, 2dvh); min-width: 0; }
+.page h1 { font-family: var(--face-number); font-weight: 800; font-size: var(--c-value); line-height: 1; }
+.page p { font-size: var(--c-minor); line-height: 1.25; }
+.page p.small { font-size: var(--c-label); color: var(--light-2); }
+.field { display: flex; flex-direction: column; gap: calc(0.8dvh + 6px); }
+.field .lab { font-size: var(--c-label); font-weight: 700; }
+.input {
+  min-height: 64px; border: 2px solid var(--light-3); border-radius: 8px; background: var(--stage-raised);
+  display: flex; align-items: center; padding: 0 14px; font-family: var(--face-number); font-weight: 800; font-size: var(--c-value); letter-spacing: 0.06em;
+}
+.input .ph { color: var(--light-2); font-weight: 600; letter-spacing: 0; font-family: var(--face-text); font-size: var(--c-label); }
+.input.focus { outline: 3px solid var(--light-1); outline-offset: 3px; }
+.field.err .input { border-width: 4px; border-color: var(--light-1); }
+.err-line { display: flex; gap: 0.5em; align-items: baseline; font-size: var(--c-label); font-weight: 700; }
+.err-line::before, .plate .h::before { content: ""; width: 0.7em; height: 0.7em; flex: none; border: 2px solid currentColor; }
+.page .key { width: 100%; }
+.plate { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 1.4dvh 3vw; display: flex; flex-direction: column; gap: 0.6dvh; }
+@media (orientation: landscape) { .plate { padding: 1.6dvh 1.6vw; } }
+.plate .h { font-size: var(--c-minor); font-weight: 700; display: flex; gap: 0.5em; align-items: baseline; line-height: 1.15; }
+.plate .dt { font-size: var(--c-label); line-height: 1.2; }
+.work { display: flex; align-items: center; gap: 0.6em; font-size: var(--c-minor); }
+.work::before { content: ""; width: 0.8em; height: 0.8em; border-radius: 50%; border: 3px solid var(--light-1); flex: none; }
+.who { font-size: var(--c-label); color: var(--light-2); }
+
+/* ---------- Fitting steps (render/fit.ts measures and sets them) ---------- */
+/* Step 1: next rows three, two, one. */
+.coming .cut { display: none; }
+/* tight: the cue needs the room, so one next row is left (the mock-ups leave out the others),
+   and the notice's detail line goes (the presenter has it). */
+.run.tight .notice .dt { display: none; }
+/* tighter: only a cue all in capitals needs it. The next rows go. */
+.run.tighter .coming { display: none; }
+
+/* ---------- The product's own: real fields and keys ---------- */
+.field .lab { display: block; }
+.input { width: 100%; color: var(--light-1); appearance: none; outline: none; text-transform: uppercase; }
+.input::placeholder { color: var(--light-2); font-weight: 600; letter-spacing: 0; font-family: var(--face-text); font-size: var(--c-label); text-transform: none; }
+.input:focus-visible { outline: 3px solid var(--light-1); outline-offset: 3px; }
+.key { cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.key:focus-visible { outline: 3px solid var(--light-1); outline-offset: 3px; }
+.key.dis, .key[aria-busy="true"] { cursor: default; }
+.key .kl, .key .kh, .key .prog { pointer-events: none; }
+
+/* Reduced motion: no transition or animation (K9). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

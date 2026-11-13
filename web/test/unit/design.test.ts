@@ -111,4 +111,16 @@ describe("the web lane stands alone", () => {
       assert.doesNotMatch(text, /\b(document|window|localStorage|requestAnimationFrame)\b/, f);
     }
   });
+
+  it("the companion's core imports no DOM or I/O", () => {
+    const dir = join(WEB, "src", "companion", "core");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
+    assert.ok(files.length >= 10);
+    for (const f of files) {
+      const text = readFileSync(join(dir, f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+      // Only other core modules, the room's pure formatting, and the contract's generated types.
+      for (const m of text.matchAll(/from\s+["']([^"']+)["']/g)) assert.match(m[1], /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/, `${f}: ${m[1]}`);
+      assert.doesNotMatch(text, /\b(document|window|localStorage|sessionStorage|location|history|navigator|fetch|WebSocket|XMLHttpRequest|setTimeout|setInterval|requestAnimationFrame|console|crypto|performance|Date)\b/, f);
+    }
+  });
 });

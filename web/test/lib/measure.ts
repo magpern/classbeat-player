@@ -30,7 +30,7 @@ const SAFE = 0.05;
 // All text transparent. A text element's own outline (the FTP test tag) is hidden in both
 // pictures too: Chromium anti-aliases a border at a fractional position differently after the
 // text inside it is repainted, which would count the outline as ink.
-const HIDE = "[data-tier], [data-tier] * { color: transparent !important; text-shadow: none !important; } [data-tier] { border-color: transparent !important; }";
+export const HIDE = "[data-tier], [data-tier] * { color: transparent !important; text-shadow: none !important; } [data-tier] { border-color: transparent !important; }";
 
 export interface Shot {
   readonly fixture: string;
@@ -76,7 +76,8 @@ function paint(page: Page, it: Item, on: "repaint" | boolean): Promise<void> {
   );
 }
 
-async function inkOf(page: Page, probe: Page, s: Shot, it: Item) {
+/** The ink of one text item: its box on the page and its worst contrast. `wait` lets a page whose clock is paused (no animation frames) flush its style changes another way. */
+export async function inkOf(page: Page, probe: Page, s: { readonly width: number; readonly height: number }, it: Item, wait: (p: Page) => Promise<void> = settle) {
   // The element's box, clipped to the screen, with a margin for ink outside its line box.
   const bx0 = Math.max(0, Math.floor(it.box.x0) - 8);
   const by0 = Math.max(0, Math.floor(it.box.y0) - 8);
@@ -85,13 +86,13 @@ async function inkOf(page: Page, probe: Page, s: Shot, it: Item) {
   if (bx1 <= bx0 || by1 <= by0) return null;
   const clip = { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 };
   await paint(page, it, "repaint");
-  await settle(page);
+  await wait(page);
   const bg = await page.screenshot({ clip });
   await paint(page, it, true);
-  await settle(page);
+  await wait(page);
   const one = await page.screenshot({ clip });
   await paint(page, it, false);
-  await settle(page);
+  await wait(page);
   const args: [string, string, number[][], number] = [bg.toString("base64"), one.toString("base64"), it.colors, INK];
   const r = await probe.evaluate(ink, args);
   if (!r) return null;
@@ -99,7 +100,7 @@ async function inkOf(page: Page, probe: Page, s: Shot, it: Item) {
 }
 
 /** Hue (not grey) in a box-shadow, text-shadow or gradient outside an element that stands for a zone. */
-function shadowHues(page: Page): Promise<string[]> {
+export function shadowHues(page: Page): Promise<string[]> {
   return page.evaluate((limit) => {
     const chroma = (v: string): number[] => {
       const out: number[] = [];
