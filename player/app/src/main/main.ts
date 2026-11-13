@@ -14,6 +14,7 @@ import { selectMusic } from "./select-music.ts";
 import { setupSync } from "./sync/setup.ts";
 import type { SyncService } from "./sync/service.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
+import { PRESENTER_SIZE } from "./window-size.ts";
 
 const DIST = __dirname;
 const APP_DIR_URL = `${pathToFileURL(DIST).href}/`;
@@ -40,12 +41,16 @@ async function openClass(): Promise<void> {
 
 function createPresenter(): void {
   presenter = new BrowserWindow({
-    width: 1000,
-    height: 760,
+    ...PRESENTER_SIZE,
     title: "Class player",
     show: true,
     webPreferences: secureWebPreferences(join(DIST, "preload.cjs")),
   });
+  // On Windows the constructor's minimum is applied to the outer window, so the content area could
+  // shrink by the frame; setMinimumSize takes the outer size, so add the frame to the content minimum.
+  const [outerW, outerH] = presenter.getSize();
+  const [contentW, contentH] = presenter.getContentSize();
+  presenter.setMinimumSize(PRESENTER_SIZE.minWidth + (outerW! - contentW!), PRESENTER_SIZE.minHeight + (outerH! - contentH!));
   presenter.on("closed", () => {
     presenter = null;
   });
