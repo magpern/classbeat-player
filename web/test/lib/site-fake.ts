@@ -45,6 +45,8 @@ export interface Seen {
   readonly url: string;
   readonly body: string | null;
   readonly headers: Readonly<Record<string, string>>;
+  /** When the fake saw it (`Date.now()`). */
+  readonly at: number;
 }
 
 export interface FakeSite {
@@ -113,6 +115,19 @@ function instrument(mode: Passkey): void {
       return orig.call(this, state, unused, url);
     };
   }
+  // Turning a string into markup, however the name was written (#260; ui/dom.ts sets text only).
+  for (const [proto, prop] of [[Element.prototype, "innerHTML"], [Element.prototype, "outerHTML"], [ShadowRoot.prototype, "innerHTML"]] as const) {
+    const d = Object.getOwnPropertyDescriptor(proto, prop);
+    Object.defineProperty(proto, prop, { get() { return d?.get?.call(this); }, set(v: string) { note("markup", prop); d?.set?.call(this, v); } });
+  }
+  for (const [proto, name] of [[Element.prototype, "insertAdjacentHTML"], [Element.prototype, "setHTMLUnsafe"], [Document.prototype, "write"], [Document.prototype, "writeln"], [Range.prototype, "createContextualFragment"], [DOMParser.prototype, "parseFromString"]] as const) {
+    const orig = (proto as unknown as Record<string, unknown>)[name];
+    if (typeof orig !== "function") continue;
+    (proto as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
+      note("markup", name);
+      return (orig as (...x: unknown[]) => unknown).apply(this, a);
+    };
+  }
   document.addEventListener("securitypolicyviolation", (e) => note("csp", `${e.violatedDirective} ${e.blockedURI}`));
   // The passkey prompt.
   if (mode === "absent") {
@@ -173,7 +188,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
 async function answer(site: FakeSite, script: Script, turns: Map<string, number>, held: Route[], route: Route, request: Request, url: URL): Promise<void> {
   const key = `${request.method()} ${url.pathname.slice("/api/site/".length)}`;
   const headers = await request.allHeaders();
-  site.api.push({ method: request.method(), route: key, url: request.url(), body: request.postData(), headers });
+  site.api.push({ method: request.method(), route: key, url: request.url(), body: request.postData(), headers, at: Date.now() });
   if (crossSite(request.method(), headers)) {
     site.crossSite.push(key);
     return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"cross_site_request"}', headers: { "Cache-Control": "no-store" } });

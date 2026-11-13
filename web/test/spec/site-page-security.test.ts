@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
 import { CSP, ORIGIN, crossSite, launchOffline, openSite, traps } from "../lib/site-fake.ts";
+import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
 
@@ -49,6 +50,16 @@ describe("the page's CSP", () => {
   });
 });
 
+describe("rendering in the built bundle (#260)", () => {
+  // The bundler folds a computed name such as `el["inner" + "HTML"]` into the plain one, which
+  // the source scan (test/unit/site-render-guard.test.ts) cannot see. A name the bundler leaves
+  // computed is caught when it runs: the "markup" trap below.
+  it("never turns a string into markup", () => {
+    const js = readFileSync(join(DIST, "site", "site.js"), "utf8");
+    for (const bad of MARKUP) assert.doesNotMatch(js, bad, `site.js uses ${bad.source}`);
+  });
+});
+
 describe("the fake's cross-site refusal (backend `cross_site_refusal`)", () => {
   // Page requests reach the fake without `Sec-Fetch-*` (Playwright does not show them), so this
   // table is where that half of the rule is exercised (#257).
@@ -82,8 +93,8 @@ describe("nothing secret leaves the page, in any state", () => {
       const site = await reach(browser, { state, width: 390, zoom: 1, ink: false });
       const seen = await traps(site.page);
       // The session is the server's HttpOnly cookie: the page never reads or writes a cookie, and
-      // keeps nothing in storage, IndexedDB or the cache.
-      assert.deepEqual(seen.filter((t) => ["storage", "cookie", "indexeddb", "cache", "console", "csp"].includes(t.kind)), []);
+      // keeps nothing in storage, IndexedDB or the cache. Nothing is turned into markup.
+      assert.deepEqual(seen.filter((t) => ["storage", "cookie", "indexeddb", "cache", "console", "csp", "markup"].includes(t.kind)), []);
       assert.deepEqual(site.console.filter((c) => !c.includes("Failed to load resource")), []);
       assert.deepEqual(site.external, [], "a request to another origin");
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");

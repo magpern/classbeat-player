@@ -1,7 +1,7 @@
 // The sign-in page's states (docs/design/site.md, "Sign in"; ADR 0002, sections 4 and 10).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { afterLinkAsked, afterLinkUsed, afterPasskey, plateWords } from "../../src/site/core/sign-in-model.ts";
+import { afterLinkAsked, afterLinkUsed, afterPasskey, busyResendAfter, plateWords } from "../../src/site/core/sign-in-model.ts";
 import { fragmentOf } from "../../src/site/core/link-token.ts";
 import type { Answer } from "../../src/site/core/answer.ts";
 
@@ -78,6 +78,24 @@ describe("the words", () => {
     for (const kind of ["passkey-failed", "link-refused", "offline", "server"] as const) {
       const w = plateWords({ kind });
       assert.doesNotMatch(`${w.head} ${w.detail}`, /not allowed|no account|not on the|cannot sign in|unknown address|\d{3}|_/i);
+    }
+  });
+});
+
+describe("the one resend of a busy passkey answer (ADR 0002, section 10)", () => {
+  it("waits for a busy answer's Retry-After and resends nothing else", () => {
+    assert.equal(busyResendAfter({ kind: "too_many", retryAfter: 1 }), 1);
+    assert.equal(busyResendAfter({ kind: "too_many", retryAfter: 0 }), 0);
+    for (const a of [
+      { kind: "too_many", retryAfter: 2 },
+      { kind: "too_many", retryAfter: 420 },
+      { kind: "too_many", retryAfter: null },
+      { kind: "ok", status: 200, body: {} },
+      { kind: "refused", status: 401, code: "sign_in_refused" },
+      { kind: "offline" },
+      { kind: "server" },
+    ] satisfies Answer[]) {
+      assert.equal(busyResendAfter(a), null, JSON.stringify(a));
     }
   });
 });
