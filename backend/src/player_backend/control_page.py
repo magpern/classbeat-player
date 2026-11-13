@@ -41,6 +41,13 @@ def _regular(path: Path) -> bool:
     return path.is_file() and not path.is_symlink()
 
 
+def under_real_folders(folder: Path, relative: Path) -> bool:
+    """Whether each folder between `folder` and the file at `relative` is a real folder, not a
+    link out of the tree. Kept although `rglob` does not enter linked folders on Python 3.12:
+    the check does not rest on how a walk treats links."""
+    return all(not (folder / p).is_symlink() for p in relative.parents)
+
+
 def load_files(folder: Path) -> ControlFiles:
     """The built page and its assets. A folder that is missing gives an empty table."""
     if not folder.is_dir() or folder.is_symlink():
@@ -52,9 +59,7 @@ def load_files(folder: Path) -> ControlFiles:
     for path in sorted(folder.rglob("*")):
         relative = path.relative_to(folder)
         media_type = asset_type(relative.as_posix())
-        # Each folder on the way must be a real folder too, not a link out of the tree.
-        inside = all(not (folder / p).is_symlink() for p in relative.parents)
-        if media_type is not None and inside and _regular(path):
+        if media_type is not None and under_real_folders(folder, relative) and _regular(path):
             assets[relative.as_posix()] = Served(path.read_bytes(), media_type)
     return ControlFiles(page=page, assets=assets)
 
