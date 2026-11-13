@@ -24,14 +24,11 @@ with other work; nothing in the development loop waits for an answer.
   sign-up by allowlist only; sign-in links work only in the browser that asked for them; no
   local lock on a studio computer shared by several instructors; account deletion removes
   everything, including removal markers and audit events; 8-letter join codes.
-- **The web lane's network guard and the website (#144).** `web/test/unit/design.test.ts`
-  forbids any network call under `web/src/`, so the room screen never depends on the network.
-  The website lives in the same lane and must call its backend, so it fails that guard. Agents
-  never weaken a rule guard, so #144 is held, done but not pushed. Choose one: narrow the guard
-  so that only the site's one network module may call `fetch('/api/site/…')` with
-  `credentials: "same-origin"` and every other file keeps the full check; move the website out of
-  `web/src/` into its own folder with its own, stricter network guard; or revise #144. Until then
-  agents do other work.
+- **Decided (owner, 2026-11-13): network calls in web code are allowed.** The owner reversed the
+  web lane's network guard ("allow code to communicate"). #253 removed the network and URL checks
+  from `web/test/unit/design.test.ts`; it keeps the import check and the font check, and #255 added
+  a check that no web CSS or HTML loads a remote font. The website (#144) was then built in #256,
+  and the companion page (#174) is being built.
 - **The companion's buttons.** Plan section 3 names start, pause, skip and nudge for the
   handlebar companion. ADR 0005 (section 10) adds resume, so a pause from the phone can be ended
   from the phone, and the one-touch undo of a resync that plan section 4 already puts on the
@@ -40,10 +37,8 @@ with other work; nothing in the development loop waits for an answer.
   Option 1: `WebSocket` is allowed in `player/app/src/main/live/live-socket.ts` only, pinned by a
   test in `rules.test.ts` that the owner committed (b4a6657); every other file keeps the full
   check. Built in #200.
-- **The rail texts (#208): a refused commit.** The work for #208 is done and checked in
-  `../cbp-wt/208` (branch `208-rail-follow-texts`), but the agent's `git commit` and `git push`
-  were refused by the session's permission check. Agents do not work around a refusal. Either
-  push the branch yourself, or allow the agent to commit and push it.
+- **Resolved (owner, 2026-11-13): the rail texts (#208).** Pushed at the owner's request and
+  merged in #251.
 - **One screen (owner, 2026-11-13): questions the room-screen spec leaves open.** Agents picked the
   safe default for each; say if you want another.
   - Taking control by code: a control code on the only screen would be seen by every rider, so
