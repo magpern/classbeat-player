@@ -1,6 +1,5 @@
 // The two screens that are not running: before the start (lights down on the first zone, the class
 // laid out) and after the end (house lights up). Pure.
-import { nameTier } from "./fit.ts";
 import { lengthText, targetTexts, zoneDef, clockText } from "./format.ts";
 import type { Class } from "./input.ts";
 import type { GelModel, IntroModel, ZoneRow } from "./model.ts";
@@ -41,10 +40,10 @@ export function firstZoneGel(doc: Class): GelModel {
   const zone = doc.intervals[0].zone;
   const def = zoneDef(doc, zone);
   const name = def?.name ?? "";
-  return { look: "down", zone, label: "First zone", numeral: String(zone), name, nameTier: nameTier(name), targets: targetTexts(def) };
+  return { look: "down", zone, label: "First zone", numeral: String(zone), name, targets: targetTexts(def) };
 }
 
 /** The house lights up: a white gel, no zone, "Class Complete" and the length. */
 export function completeGel(doc: Class): GelModel {
-  return { look: "blank", zone: null, label: "Class", numeral: null, name: "Complete", nameTier: "one", targets: [lengthText(doc.class.length_ms)] };
+  return { look: "blank", zone: null, label: "Class", numeral: null, name: "Complete", targets: [lengthText(doc.class.length_ms)] };
 }

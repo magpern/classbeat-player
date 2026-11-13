@@ -13,6 +13,11 @@ const NAMES = [
   "Anaerobic capacity, short and very hard efforts well above your threshold power",
   "Neuromuscular power: all-out sprints of a few seconds, from a rolling start, go!",
 ];
+// The widest capitals: seven names of 80 characters, alternately one word and many words of M and W.
+const WIDE_WORD = "MW".repeat(40);
+const WIDE_WORDS = "WOMB WHOM MOW MEW WAW MAW WHAM WOW MOM NOW WOMEN MOWN HMM WHOM WOW MOWN MEMO OW";
+const WIDE_NAMES = [WIDE_WORD, WIDE_WORDS, WIDE_WORD, WIDE_WORDS, WIDE_WORD, WIDE_WORDS, WIDE_WORD];
+const CUE_WIDE = "WHOA: MOVE WITH THE MUSIC. WOW, MOMENTUM NOW. MAXIMUM WORK, WIDE KNEES, MOW THE HILL. WE WIN WHEN WE MOVE AS ONE. WOW!";
 const TITLE = "Thursday threshold builder: long climbing intervals with a final all-out finish";
 const SEGMENT = "Main set, part two: the long climbing intervals before the final sprint finish!";
 const CUE_LONG = "Uncompromisingly smooth: counterclockwise shoulders, breathe, recover, then accelerate progressively through the chorus.";
@@ -29,9 +34,22 @@ function filler(fromS: number, toS: number, n: number, firstZone: number): [numb
   return Array.from({ length: n }, (_, i) => [i === n - 1 ? toS - fromS - each * (n - 1) : each, ((firstZone + i - 1) % 7) + 1] as [number, number]);
 }
 
-function worstClass(o: { zone: number; nextCadence: Class["intervals"][number]["cadence"]; nextPosition: "standing"; shortZone4?: boolean; cue: string }): Class {
-  const names = [...NAMES];
+interface Worst {
+  zone: number;
+  nextCadence: Class["intervals"][number]["cadence"];
+  nextPosition: "standing";
+  shortZone4?: boolean;
+  cue: string;
+  /** Widest-glyph content (room-2d.md, the width-based fixtures): names, segment and title by width, not length. */
+  wide?: boolean;
+  /** The playing zone's name, whatever its length (the browser measures how it fits). */
+  zoneName?: string;
+}
+
+function worstClass(o: Worst): Class {
+  const names = o.wide ? WIDE_NAMES : [...NAMES];
   if (o.shortZone4) names[3] = "Functional threshold";
+  if (o.zoneName) names[o.zone - 1] = o.zoneName;
   const scale = scaleOf(names, () => ({ ftp_pct: [105, 120], rpe: [9, 10], hrmax_pct: [92, 100] }));
   // 60 + the test + the next interval + 126 = 188 intervals.
   const parts: [number, number][] = [...filler(0, TEST_START_S, 60, 1), [3600, o.zone], [750, 7], ...filler(TEST_START_S + 3600 + 750, LENGTH_S, 126, 2)];
@@ -69,8 +87,8 @@ function worstClass(o: { zone: number; nextCadence: Class["intervals"][number]["
     moments: { quality: "measured", items: [{ at_ms: 375_000, kind: "breakdown" }] },
   });
   Object.assign(songs[11], { title: "Another Remarkably Long Title, Part Two: the Return of the Long Title Again", artist: "The Very Long Artist Name Collective", bpm: 174 });
-  const segments = [{ name: SEGMENT, kind: "main" as const, start_ms: 3_000_000, end_ms: 9_000_000 }];
-  const doc = classOf(TITLE, scale, intervals, songs as Class["songs"], segments, 388);
+  const segments = [{ name: o.wide ? WIDE_WORD : SEGMENT, kind: "main" as const, start_ms: 3_000_000, end_ms: 9_000_000 }];
+  const doc = classOf(o.wide ? WIDE_WORD : TITLE, scale, intervals, songs as Class["songs"], segments, 388);
   return { ...doc, class: { ...doc.class, length_ms: LENGTH_S * 1000 } };
 }
 
@@ -82,6 +100,11 @@ export const WORST_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
   // 1:58:58 left in the class (the screen shows the link's figure while following).
   const left = { classRemainingMs: 7_138_000 };
   const view = (doc: Class) => ({ ...clockAt(doc, NOW_MS), ...left });
+  const wide = worstClass({ zone: 7, ...beat, cue: CUE_WIDE, wide: true });
+  const withAmbiguity = (doc: Class): RoomInput => {
+    const v = view(doc);
+    return { doc, view: v, link: linkAt(v, "Ambiguous", { ...left, candidates: [11, 10] }) };
+  };
   const withLink = (doc: Class, state: Parameters<typeof linkAt>[1]): RoomInput => {
     const v = view(doc);
     return { doc, view: v, link: linkAt(v, state, left) };
@@ -90,6 +113,15 @@ export const WORST_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     "worst-off-list": withLink(offList, "Off the list"),
     "worst-running": withLink(running, "Locked"),
     "worst-paused": withLink(paused, "Paused"),
+    // The occurrence marker beside 80-character song titles: the title gives way, the marker never.
+    "worst-ambiguous": withAmbiguity(worstClass({ zone: 5, ...beat, cue: CUE_60 })),
+    // Short names of the widest glyphs: one word that is too wide for the gel at 11 characters, and
+    // three words that wrap to more lines than fit beside the targets.
+    "worst-wide-word": withLink(worstClass({ zone: 4, ...beat, cue: CUE_60, zoneName: "MWMWMWMWMWM" }), "Locked"),
+    "worst-wide-words": withLink(worstClass({ zone: 4, ...beat, cue: CUE_60, zoneName: "MWMWMW MWMWMW MWMWMW" }), "Locked"),
+    // Widest glyphs: names, segment, title and cue by width, not by length.
+    "worst-wide": withLink(wide, "Locked"),
+    "worst-wide-before-start": snapshot(wide, 0, "Locked", "ready"),
     // Wide capitals: the cue that needs a fourth line at 3:2 and narrower.
     "worst-cue-caps": withLink(worstClass({ zone: 3, nextCadence: { from: 105, to: 120 }, nextPosition: "standing", cue: CUE_CAPS }), "Locked"),
     "worst-before-start": snapshot(running, 0, "Locked", "ready"),

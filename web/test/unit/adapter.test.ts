@@ -105,13 +105,27 @@ describe("adapter: the states of room-2d.md", () => {
     const m = model("ftp-test");
     assert.deepEqual([m.clock?.ftpTag, m.clock?.count, m.clock?.wide], [true, "18:42", true]);
     assert.deepEqual(m.clock?.line, { kind: "song", time: "1:22" });
-    assert.equal(m.gel?.nameTier, "two");
     assert.equal(m.cue?.long, true);
   });
 
-  it("every state of the spec has a fixture", () => {
-    assert.deepEqual([...STATE_NAMES].sort(), ["ambiguous", "before-start", "coasting", "finished", "ftp-test", "last-interval", "manual", "off-list", "paused", "running"]);
-    assert.equal(WORST_NAMES.length, 6);
+  it("every one of the 14 states of the spec has a fixture", () => {
+    const spec = ["before-start", "before-start-manual", "running", "ftp-test", "long-interval", "change-in", "hold", "paused", "coasting", "off-list", "ambiguous", "manual", "last-interval", "finished"];
+    for (const n of spec) assert.ok(STATE_NAMES.includes(n), n);
+    for (const n of ["worst-off-list", "worst-running", "worst-paused", "worst-before-start", "worst-finished", "worst-ambiguous", "worst-wide", "worst-wide-before-start"]) assert.ok(WORST_NAMES.includes(n), n);
+  });
+
+  it("99+ for an interval of 100 minutes or more, sized as MM:SS; the time to the next song under it", () => {
+    const m = model("long-interval");
+    assert.deepEqual([m.clock?.count, m.clock?.wide, m.clock?.line], ["99+", true, { kind: "song", time: "3:05" }]);
+  });
+
+  it("the last 5 seconds say 'Change in'; the hold says 'Until the next song' with the expected time", () => {
+    assert.deepEqual([model("change-in").clock?.label, model("change-in").clock?.count], ["Change in", "0:04"]);
+    assert.deepEqual([model("hold").clock?.label, model("hold").clock?.count, model("hold").clock?.line], ["Until the next song", "0:12", null]);
+  });
+
+  it("before the start with the manual clock: 'Press Start' as a choice, not a plate", () => {
+    assert.deepEqual(model("before-start-manual").rail.link, { text: "Press Start", look: "manual" });
   });
 });
 
@@ -170,8 +184,7 @@ describe("adapter: the product rules hold in every fixture", () => {
   });
 
   it("the worst cases carry the longest content: an 80-character name steps the gel down", () => {
-    assert.equal(model("worst-off-list").gel?.nameTier, "long");
-    assert.equal(model("worst-paused").gel?.nameTier, "two");
+    assert.ok((model("worst-off-list").gel?.name.length ?? 0) > 75);
     assert.equal(model("worst-running").clock?.count, "58:58");
     assert.deepEqual(model("worst-running").clock?.line, { kind: "bars", count: 2948, tail: "bars to the change" });
     assert.equal(model("worst-running").rail.left, "1:58:58");

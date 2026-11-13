@@ -1,6 +1,5 @@
 // What the room screen draws, decided: every string, class and position the DOM needs, so the DOM
 // code only places it. Pure types.
-import type { NameTier } from "./fit.ts";
 import type { ScoreModel } from "./score.ts";
 
 export type RoomKind = "empty" | "before-start" | "running" | "finished";
@@ -12,7 +11,6 @@ export interface GelModel {
   readonly label: string;
   readonly numeral: string | null;
   readonly name: string;
-  readonly nameTier: NameTier;
   readonly targets: readonly string[];
 }
 

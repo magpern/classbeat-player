@@ -2,6 +2,8 @@
 // time (the score's motion and the beat dot); every other decision is in the pure modules.
 import { el } from "./dom.ts";
 import { toRoomModel } from "./adapter.ts";
+import { lastLightStart, nextSchedule } from "./beat-schedule.ts";
+import type { BeatSchedule } from "./beat-schedule.ts";
 import type { RoomInput } from "./input.ts";
 import type { BeatModel } from "./model.ts";
 import { createGel } from "./render-gel.ts";
@@ -24,15 +26,33 @@ export interface RoomScreen {
 }
 
 /**
- * The beat dot after the BPM: the CSS animation (room.css) runs at the beat's period; the delay
- * puts the next light `phaseMs` from now. Not made at all with reduced motion.
+ * The beat dot after the BPM. The element is redrawn with every snapshot, but when it lights is
+ * kept in a schedule (beat-schedule.ts), so jitter between snapshots never adds a light and a new
+ * tempo never lights within 1/3 s of the last one. Not made at all with reduced motion.
  */
-function beatDot(beat: BeatModel | null, reduced: boolean): HTMLElement | null {
-  if (!beat || reduced) return null;
-  const dot = el("span", { class: "beat" });
-  dot.style.setProperty("--beat", `${beat.periodMs}ms`);
-  dot.style.animationDelay = `${-(beat.periodMs - (beat.phaseMs % beat.periodMs))}ms`;
-  return dot;
+function createBeatDots(reduced: boolean, animate: boolean): (beat: BeatModel | null) => HTMLElement | null {
+  let schedule: BeatSchedule | null = null;
+  let lastStart: number | null = null;
+  return (beat) => {
+    const now = performance.now();
+    if (schedule) lastStart = lastLightStart(schedule, now) ?? lastStart;
+    if (!beat || reduced) {
+      schedule = null;
+      return null;
+    }
+    schedule = nextSchedule(schedule, lastStart, beat, now);
+    const dot = el("span", { class: "beat" });
+    if (animate && typeof dot.animate === "function") {
+      // Lit for the first 30 % of each period. The start time is absolute on the document's
+      // timeline, so redrawing the dot (a new element every snapshot) cannot move a light.
+      const a = dot.animate(
+        [{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0.2, offset: 0.3 }, { opacity: 0.2, offset: 1 }],
+        { duration: schedule.periodMs, iterations: Infinity },
+      );
+      a.startTime = schedule.anchorMs;
+    }
+    return dot;
+  };
 }
 
 /**
@@ -54,6 +74,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
   const root = el("div", { class: "room" });
   const gel = createGel();
   const dyn = el("div", { class: "dyn" });
+  const beatDot = createBeatDots(reduced, animate);
   root.append(gel.element, dyn);
   host.append(root);
 
@@ -73,6 +94,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
     const h1 = dyn.querySelector<HTMLElement>(".intro h1");
     if (h1) fitTitle(h1);
     fitCue(dyn.querySelector<HTMLElement>(".cue"));
+    gel.fit();
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
   resize?.observe(root);
@@ -88,7 +110,8 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       if (m.gel) gel.update(m.gel, changed);
       const parts: HTMLElement[] = [renderRail(m.rail)];
       if (m.clock) parts.push(renderClock(m.clock));
-      if (m.metrics.length) parts.push(renderMetrics(m.metrics, beatDot(m.beat, reduced)));
+      const dot = beatDot(m.beat);
+      if (m.metrics.length) parts.push(renderMetrics(m.metrics, dot));
       if (m.cue) parts.push(renderCue(m.cue));
       if (m.next) parts.push(renderNext(m.next));
       if (m.intro) parts.push(renderIntro(m.intro));

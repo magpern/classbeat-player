@@ -15,8 +15,12 @@ export const SPAN_S = 360;
 export const VW_PER_S = 100 / SPAN_S;
 const SAFE_RIGHT = 95;
 const PAD = 0.8;
-/** An interval block narrower than this cannot hold its number whole: it is drawn as history. */
-export const MIN_BLOCK_W = 4;
+/**
+ * The part of an interval block that is still ahead of "now" (or the whole block, when it has not
+ * begun) must be at least this wide to hold its number whole, at every supported size (the
+ * narrowest case is 5:4). A narrower one is a neutral sliver: no zone colour, no number.
+ */
+export const MIN_BLOCK_W = 3;
 /** A block that begins right of this has no room for its number inside the safe area. */
 export const NUMBER_FITS_UNTIL = 91;
 /** A song title is offered only when at least this much of the clip is visible for it. */
@@ -62,8 +66,11 @@ export interface ScoreModel {
   readonly unsure: boolean;
   /** Everything wholly in the past, one grey block: history, not information. */
   readonly gone: ScoreGone | null;
-  /** Past blocks too narrow for their number are history too. */
-  readonly thin: readonly ScoreGone[];
+  /**
+   * Blocks with too little room ahead of "now" for their number (a short interval to come, or the
+   * last seconds of the current one): drawn neutral, never in a zone colour without its number.
+   */
+  readonly slivers: readonly ScoreGone[];
   readonly blocks: readonly ScoreBlock[];
   readonly clips: readonly ScoreClip[];
   readonly moments: readonly ScoreMoment[];
@@ -77,8 +84,8 @@ export interface ScoreInput {
   readonly intervals: readonly Interval[];
   readonly songs: readonly Song[];
   readonly zoneName: (zone: number) => string;
-  /** The recording that plays is in the class more than once: which occurrence this is. */
-  readonly ambiguity: { readonly songIndex: number; readonly ordinal: number; readonly total: number } | null;
+  /** The recording is in the class more than once: the song indexes it could be, in order. */
+  readonly ambiguity: readonly number[] | null;
   readonly unsure: boolean;
 }
 
@@ -118,9 +125,9 @@ function padsFor(left: number, right: number): { padLeft: number | null; padRigh
   return { padLeft, padRight };
 }
 
-function layoutIntervals(inp: ScoreInput): Pick<ScoreModel, "gone" | "thin" | "blocks"> {
+function layoutIntervals(inp: ScoreInput): Pick<ScoreModel, "gone" | "slivers" | "blocks"> {
   const blocks: ScoreBlock[] = [];
-  const thin: ScoreGone[] = [];
+  const slivers: ScoreGone[] = [];
   let goneLeft: number | null = null;
   let goneRight = 0;
   for (const iv of inp.intervals) {
@@ -133,17 +140,17 @@ function layoutIntervals(inp: ScoreInput): Pick<ScoreModel, "gone" | "thin" | "b
       continue;
     }
     const width = right - left;
-    // A zone colour always carries its number whole (system.md, rule 2): a block with no room
-    // for it, in width or before the safe edge, is not drawn in colour.
-    if (width < MIN_BLOCK_W) {
-      thin.push({ left: r2(left), width: r2(width) });
+    // A zone colour always carries its whole number (system.md, rule 2): a block with no room
+    // for it ahead of "now", or before the safe edge, is not drawn in colour.
+    if (right - Math.max(left, NOW_X) < MIN_BLOCK_W) {
+      slivers.push({ left: r2(left), width: r2(width) });
       continue;
     }
     if (left > NUMBER_FITS_UNTIL) continue;
     blocks.push({ zone: iv.zone, left: r2(left), width: r2(width), ...padsFor(left, right), name: inp.zoneName(iv.zone) });
   }
   const gone = goneLeft === null ? null : { left: r2(Math.max(goneLeft, -NOW_X)), width: r2(goneRight - Math.max(goneLeft, -NOW_X)) };
-  return { gone, thin, blocks };
+  return { gone, slivers, blocks };
 }
 
 function clipFor(song: Song, index: number, inp: ScoreInput): ScoreClip | null {
@@ -156,13 +163,13 @@ function clipFor(song: Song, index: number, inp: ScoreInput): ScoreClip | null {
   // Wholly past: history, no label. Beginning past the visible room for a title: no label.
   const room = Math.min(right, SAFE_RIGHT) - Math.max(left, NOW_X) - 2 * PAD;
   if (right <= NOW_X || room < TITLE_MIN_W) return { ...base, padLeft: null, padRight: null, title: null, occurrence: null, artist: null, bpm: null };
-  const amb = inp.ambiguity?.songIndex === index ? inp.ambiguity : null;
+  const nth = inp.ambiguity ? inp.ambiguity.indexOf(index) : -1;
   return {
     ...base,
     ...padsFor(left, right),
     title: song.title,
-    occurrence: amb ? `${ordinalText(amb.ordinal)} of ${amb.total}` : null,
-    artist: amb ? null : song.artist,
+    occurrence: nth >= 0 && inp.ambiguity ? `${ordinalText(nth + 1)} of ${inp.ambiguity.length}` : null,
+    artist: nth >= 0 ? null : song.artist,
     bpm: song.bpm ?? null,
   };
 }

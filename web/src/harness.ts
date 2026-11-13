@@ -24,12 +24,14 @@ document.documentElement.dataset.fixture = input ? name : "unknown";
 // For the motion tests: draw another snapshot on the same screen, as the shell does each second.
 declare global {
   interface Window {
-    harness: { show(fixture: string): void };
+    harness: { show(fixture: string, classOffsetMs?: number): void };
   }
 }
 window.harness = {
-  show(fixture) {
+  // `classOffsetMs` moves the clock on (or back) as a later or jittery snapshot would.
+  show(fixture, classOffsetMs = 0) {
     const next = FIXTURES[fixture];
-    if (next) screen.update(next);
+    if (!next) return;
+    screen.update(next.view && classOffsetMs ? { ...next, view: { ...next.view, classMs: next.view.classMs + classOffsetMs } } : next);
   },
 };

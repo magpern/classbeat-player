@@ -40,7 +40,7 @@ function renderClip(c: ScoreClip): HTMLElement {
 }
 
 export function renderScore(score: ScoreModel): ScoreView {
-  const history = [...(score.gone ? [score.gone] : []), ...score.thin].map((g) => el("div", { class: "block gone", style: { left: vw(g.left), width: vw(g.width) } }));
+  const history = [...(score.gone ? [score.gone] : []), ...score.slivers.map((g) => ({ ...g, sliver: true }))].map((g) => el("div", { class: `block gone${"sliver" in g ? " sliver" : ""}`, style: { left: vw(g.left), width: vw(g.width) } }));
   const intervals = el("div", { class: "track iv" }, [...history, ...score.blocks.map(renderBlock)]);
   const songs = el("div", { class: "track songs" }, [
     ...score.clips.map(renderClip),

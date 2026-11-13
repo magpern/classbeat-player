@@ -1,21 +1,6 @@
 // Fitting rules that depend only on the text (docs/design/room-2d.md, "Fitting text"). Pure.
-// The mock-ups choose by length and the product does the same where a length is enough; what
-// only a measurement can answer (a title that fits its line) is measured at the DOM edge.
-
-/** The zone name on the gel: one line, two lines at --t-value, or stepped down to --t-minor. */
-export type NameTier = "one" | "two" | "long";
-
-const NAME_ONE_LINE_MAX = 12;
-const NAME_TWO_LINE_MAX = 20;
-/** A word wider than the gel at --t-value (about 11 characters) forces the step-down. */
-const NAME_WORD_MAX = 11;
-
-export function nameTier(name: string): NameTier {
-  const longestWord = Math.max(0, ...name.split(/\s+/).map((w) => w.length));
-  if (name.length > NAME_TWO_LINE_MAX || longestWord > NAME_WORD_MAX) return "long";
-  if (name.length > NAME_ONE_LINE_MAX) return "two";
-  return "one";
-}
+// What only a measurement can answer (a zone name, a title or a cue that fits its box: widths
+// depend on the glyphs) is measured at the DOM edge, never counted in characters.
 
 /** A cue over 60 characters is set at --t-text-min. */
 export const CUE_LONG_OVER = 60;
@@ -37,10 +22,11 @@ export const MAX_FLASHES_PER_SECOND = 3;
  * tempo would make it flash more than three times a second.
  */
 export function beatPeriodMs(bpm: number): number {
-  const minPeriod = 1000 / MAX_FLASHES_PER_SECOND + 1;
+  const minPeriod = 1000 / MAX_FLASHES_PER_SECOND;
   let period = 60_000 / bpm;
-  while (period < minPeriod) period *= 2;
-  return Math.round(period);
+  while (period < minPeriod - 1e-9) period *= 2;
+  // Rounded up: two lights are never closer than 1/3 s. Every beat up to 180 BPM.
+  return Math.ceil(period);
 }
 
 /** The beat dot needs a tempo and anchors; it never claims to hit a beat it cannot measure. */

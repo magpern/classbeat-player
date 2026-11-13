@@ -8,7 +8,7 @@ type View = NonNullable<RoomInput["view"]>;
 /** Link plates are at most about 20 characters so they fit beside the class time at 4:3. */
 export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean): LinkPlate {
   if (!started) {
-    return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "quiet" };
+    return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "manual" };
   }
   if (!link || link.mode === "manual" || link.state === "Manual") return { text: "Manual clock", look: "manual" };
   switch (link.state) {

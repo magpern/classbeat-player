@@ -80,7 +80,7 @@ describe("the web lane stands alone", () => {
   });
 
   it("the pure modules import no DOM or I/O", () => {
-    for (const f of ["adapter", "fit", "format", "score", "link-text", "intro-model", "model", "input"]) {
+    for (const f of ["adapter", "fit", "format", "score", "link-text", "intro-model", "beat-schedule", "model", "input"]) {
       // Comments may say "window" or "document"; code may not use them.
       const text = readFileSync(join(WEB, "src", "room", `${f}.ts`), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
       assert.doesNotMatch(text, /from\s+["'](node:|\.\/dom|\.\/render|\.\/mount)/, f);

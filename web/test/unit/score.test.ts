@@ -61,7 +61,7 @@ describe("score rules", () => {
   });
 
   it("an ambiguous recording says which occurrence the clip is, and drops the artist", () => {
-    const s = scoreOf("running", { ambiguity: { songIndex: 5, ordinal: 1, total: 2 } });
+    const s = scoreOf("running", { ambiguity: [5, 9] });
     const clip = s.clips.find((c) => c.title === "Neon Avenue");
     assert.equal(clip?.title, "Neon Avenue");
     assert.equal(clip?.occurrence, "1st of 2");
@@ -75,12 +75,28 @@ describe("score rules", () => {
     const mk = (offsetS: number, lengthS: number): Class["intervals"][number] => ({ start_ms: at + offsetS * 1000, length_ms: lengthS * 1000, zone: 5, cue: "x" });
     const input: ScoreInput = { classMs: at, lengthMs: at + 600_000, intervals: [mk(-10, 10), mk(0, 6), mk(6, 90), mk(250, 90)], songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false };
     const s = layoutScore(input);
-    // 6 s is 1.67 vw: too narrow for a number, so it is history, not a colour.
-    assert.equal(s.thin.length, 1);
-    assert.ok(s.thin[0].width < MIN_BLOCK_W);
+    // 6 s is 1.67 vw: too narrow for a number, so it is a neutral sliver, not a colour.
+    assert.equal(s.slivers.length, 1);
+    assert.ok(s.slivers[0].width < MIN_BLOCK_W);
     // The 250 s interval begins at 94 vw: no room for its number inside the safe area.
     assert.ok(xAt(at + 250_000, at) > NUMBER_FITS_UNTIL);
     assert.deepEqual(s.blocks.map((b) => b.left), [xAt(at + 6000, at)].map((v) => Math.round(v * 100) / 100));
+  });
+
+  it("the current block's last seconds are a neutral sliver: its number never sits half hidden at 'now'", () => {
+    const doc = STATE_FIXTURES.running.doc as Class;
+    const left = (secs: number) => {
+      const at = 1_169_000 - secs * 1000; // the Threshold interval ends at 19:29
+      return layoutScore({ classMs: at, lengthMs: 2_520_000, intervals: doc.intervals, songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false });
+    };
+    for (const secs of [3, 4.5, 8]) {
+      const s = left(secs);
+      assert.ok(!s.blocks.some((b) => b.zone === 4 && b.left < NOW_X), `${secs} s left: zone 4 still drawn in colour`);
+      assert.ok(s.slivers.some((g) => g.left < NOW_X), `${secs} s left: no sliver`);
+    }
+    assert.ok(left(30).blocks.some((b) => b.zone === 4 && b.left < NOW_X), "30 s left: the number fits");
+    // Every drawn block has MIN_BLOCK_W vw ahead of 'now'.
+    for (const b of left(11).blocks) assert.ok(b.left + b.width - Math.max(b.left, NOW_X) >= MIN_BLOCK_W);
   });
 
   it("the End mark appears when the end of the class is on the score, inside the safe area", () => {

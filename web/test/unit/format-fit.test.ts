@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { beatPeriodMs, canShowBeat, cueIsLong, hasThreeTargets, nameTier } from "../../src/room/fit.ts";
+import { beatPeriodMs, canShowBeat, cueIsLong, hasThreeTargets } from "../../src/room/fit.ts";
 import { cadenceText, classTimeText, clockText, countdownIsWide, countdownText, positionText, rangeText, targetTexts } from "../../src/room/format.ts";
 import type { Class } from "../../src/room/input.ts";
 
@@ -55,14 +55,6 @@ describe("format", () => {
 });
 
 describe("fit", () => {
-  it("nameTier follows the spec's lengths: one line, two lines, then the step-down", () => {
-    assert.equal(nameTier("Threshold"), "one");
-    assert.equal(nameTier("Neuromuscular"), "long"); // a word wider than the gel
-    assert.equal(nameTier("Functional threshold"), "two");
-    assert.equal(nameTier("Endurance, the aerobic base for long steady rides"), "long");
-    assert.equal(nameTier("Anaerobic capacity"), "two");
-  });
-
   it("a cue over 60 characters is set smaller", () => {
     assert.equal(cueIsLong("x".repeat(60)), false);
     assert.equal(cueIsLong("x".repeat(61)), true);
@@ -79,6 +71,8 @@ describe("fit", () => {
       assert.ok(1000 / period <= 3, `${bpm} bpm flashes ${(1000 / period).toFixed(2)} times a second`);
     }
     assert.equal(beatPeriodMs(120), 500); // every beat when that is slow enough
+    assert.equal(beatPeriodMs(180), 334); // every beat up to 180 bpm, 1/3 s rounded up
+    assert.equal(beatPeriodMs(181), 663); // every second beat above it
     assert.equal(beatPeriodMs(200), 600); // every second beat when it would be too fast
   });
 

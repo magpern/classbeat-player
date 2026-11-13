@@ -47,6 +47,16 @@ function ftpClass(): Class {
   return withCue(doc, 3, "Easy now. Let the legs spin out.", { cadence: { from: 80, to: 90 } });
 }
 
+/** A 3-hour class with a 2-hour interval playing: 1:48:12 left of it, the next song in 3:05. */
+function longClass(): Class {
+  const intervals = intervalsFrom(0, [[300, 1], [7200, 3], [3300, 1]]);
+  const songs = songsFrom(0, [
+    ["Open Road", "Kite Season", 600, 120], ["Long Haul", "Northbound", 593, 124], ["Far Country", "Low Tide", 9607, 118],
+  ]);
+  const segments = [{ name: "Main set", kind: "main" as const, start_ms: 300_000, end_ms: 7_500_000 }];
+  return classOf("Thursday threshold", scale, intervals, songs, segments, 140);
+}
+
 export const STATE_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
   const doc = baseClass();
   const at = 1_099_000; // 18:19: the Threshold interval has 1:10 left
@@ -64,5 +74,16 @@ export const STATE_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     "last-interval": snapshot(lastDoc, lastAt, "Locked"),
     finished: snapshot(doc, 2_520_000, "Locked", "ended"),
     "ftp-test": snapshot(ftpClass(), 678_000, "Locked"),
+    // The last seconds of the Threshold interval (it ends at 19:29): "Change in", and the block
+    // of the current interval has little room left ahead of "now" for its number.
+    "change-in": snapshot(doc, 1_165_000, "Locked"),
+    "end-3s": snapshot(doc, 1_166_000, "Locked"),
+    "end-4s5": snapshot(doc, 1_164_500, "Locked"),
+    "end-8s": snapshot(doc, 1_161_000, "Locked"),
+    "end-11s": snapshot(doc, 1_158_000, "Locked"),
+    // Held at the end of the song window: the last interval stays, its countdown is the expected time to the next song.
+    hold: { doc, view: { ...view, classMs: 1_169_000, intervalRemainingMs: 0 }, link: linkAt(view, "Locked", { held: true, holdRemainingMs: 12_000 }) },
+    "long-interval": snapshot(longClass(), 1_008_000, "Locked"),
+    "before-start-manual": { doc, view: clockAt(doc, 0, "ready"), link: linkAt(clockAt(doc, 0, "ready"), "Manual") },
   };
 })();

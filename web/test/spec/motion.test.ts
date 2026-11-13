@@ -122,3 +122,36 @@ describe("the beat dot", () => {
     await locked.context().close();
   });
 });
+
+describe("the beat dot's real timing (C7)", () => {
+  it("never starts two lights less than 1/3 s apart, through snapshot jitter and a tempo change near 180 bpm", async () => {
+    const page = await open("beat-drift", { setting: false });
+    const starts = await page.evaluate(async () => {
+      const out: number[] = [];
+      let prev = 0;
+      let running = true;
+      const sample = (t: number): void => {
+        const dot = document.querySelector(".beat");
+        const o = dot ? Number(getComputedStyle(dot).opacity) : 0;
+        if (prev < 0.5 && o > 0.9) out.push(t);
+        prev = o;
+        if (running) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+      // A snapshot every 250 ms for 14 s, each with its own jitter of up to 150 ms; the tempo in
+      // force changes (a new anchor) 10 s in.
+      const t0 = performance.now();
+      let seed = 3;
+      const jitter = (): number => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31) * 300 - 150;
+      while (performance.now() - t0 < 14_000) {
+        window.harness.show("beat-drift", Math.round(performance.now() - t0 + jitter()));
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      running = false;
+      return out;
+    });
+    assert.ok(starts.length > 20, `only ${starts.length} lights seen`);
+    for (let i = 1; i < starts.length; i += 1) assert.ok(starts[i] - starts[i - 1] >= 1000 / 3 - 20, `lights ${starts[i - 1].toFixed(0)} and ${starts[i].toFixed(0)} ms are ${(starts[i] - starts[i - 1]).toFixed(0)} ms apart`);
+    await page.context().close();
+  });
+});

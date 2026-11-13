@@ -1,7 +1,7 @@
 // The typed adapter: a snapshot (the open class, the clock view, the music link view) becomes the
 // room screen's model. Pure; nothing here reads the DOM, a clock or the network, so every state
 // is a function of its input and is tested as one.
-import { beatPeriodMs, canShowBeat, cueIsLong, nameTier } from "./fit.ts";
+import { beatPeriodMs, canShowBeat, cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
 import type { Class, LinkInput, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
@@ -39,10 +39,7 @@ export function toRoomModel(input: RoomInput): RoomModel {
 }
 
 function scoreFor(doc: Class, view: View, link: LinkInput | null) {
-  const cand = link?.candidates ?? [];
-  const songIndex = link?.songIndex ?? null;
-  const ordinal = songIndex === null ? 0 : cand.indexOf(songIndex) + 1;
-  const ambiguity = link?.state === "Ambiguous" && cand.length > 1 && songIndex !== null && ordinal > 0 ? { songIndex, ordinal, total: cand.length } : null;
+  const ambiguity = link?.state === "Ambiguous" && link.candidates.length > 1 ? link.candidates : null;
   return layoutScore({
     classMs: view.classMs,
     lengthMs: view.lengthMs,
@@ -74,7 +71,7 @@ function running(doc: Class, view: View, link: LinkInput | null): RoomModel {
   const song = songOf(doc, view, link);
   const def = zoneDef(doc, iv.zone);
   const name = def?.name ?? "";
-  const gel: GelModel = { look: paused ? "down" : "zone", zone: iv.zone, label: "Zone", numeral: String(iv.zone), name, nameTier: nameTier(name), targets: targetTexts(def) };
+  const gel: GelModel = { look: paused ? "down" : "zone", zone: iv.zone, label: "Zone", numeral: String(iv.zone), name, targets: targetTexts(def) };
   const segment = doc.segments?.find((s) => view.classMs >= s.start_ms && view.classMs < s.end_ms)?.name ?? null;
   const following = link?.mode === "following";
   const left = following ? link.classRemainingMs : view.classRemainingMs;
@@ -114,7 +111,7 @@ function clockFor(doc: Class, view: View, link: LinkInput | null, paused: boolea
     count: countdownText(remaining),
     wide: countdownIsWide(iv.length_ms),
     estimated: guessing,
-    line: paused ? { kind: "text", text: pauseLine(link) } : lineFor(view, link, song, last),
+    line: paused ? { kind: "text", text: pauseLine(link) } : held ? null : lineFor(view, link, song, last),
   };
 }
 
