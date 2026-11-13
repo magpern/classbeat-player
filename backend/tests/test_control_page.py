@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -13,8 +14,9 @@ import pytest
 from fastapi import FastAPI
 from starlette.types import Message, Scope
 
+from player_backend import control_page
 from player_backend.app import create_app
-from player_backend.control_page import CONTROL_DIR
+from player_backend.control_page import CONTROL_DIR, load_files, under_real_folders
 from player_backend.control_page_policy import (
     asset_type,
     content_security_policy,
@@ -29,8 +31,9 @@ SETTINGS = Settings(
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
-    "img-src 'self'; connect-src https://player.test/api/live/ "
-    "https://player.test/api/site/sessions wss://player.test/api/live/ws; base-uri 'none'; "
+    "img-src 'self'; connect-src https://player.test/api/live/controller "
+    "https://player.test/api/live/control https://player.test/api/site/sessions "
+    "wss://player.test/api/live/ws; base-uri 'none'; "
     "form-action 'self'; frame-ancestors 'none'; object-src 'none'"
 )
 PAGE = b"<!doctype html><title>Steer the class</title>"
@@ -66,6 +69,8 @@ def _send(app: FastAPI, method: str, raw_path: str, root_path: str = "") -> http
     """The request as a server hands it over: the path decoded, never normalised, so `..`,
     `.` and escapes reach the app as they were sent (an HTTP client would tidy them)."""
     messages: list[Message] = []
+    # The path holds the prefix, as servers hand it over; a `/` prefix adds no second slash.
+    prefix = root_path.rstrip("/")
 
     async def receive() -> Message:
         return {"type": "http.request", "body": b"", "more_body": False}
@@ -79,8 +84,8 @@ def _send(app: FastAPI, method: str, raw_path: str, root_path: str = "") -> http
         "http_version": "1.1",
         "method": method,
         "scheme": "https",
-        "path": root_path + unquote(raw_path),
-        "raw_path": (root_path + raw_path).encode(),
+        "path": prefix + unquote(raw_path),
+        "raw_path": (prefix + raw_path).encode(),
         "root_path": root_path,
         "query_string": b"",
         "headers": [(b"host", b"player.test")],
@@ -186,6 +191,32 @@ def test_under_a_path_prefix_the_page_keeps_its_headers(app: FastAPI) -> None:
     _assert_headers(missing, "no-cache")
 
 
+def test_under_the_root_prefix_the_page_keeps_its_headers(app: FastAPI) -> None:
+    """`root_path="/"` is taken off at a `/` boundary only, as the router does (#279)."""
+    answer = _send(app, "GET", "/control", root_path="/")
+    assert answer.status_code == 200 and answer.content == PAGE
+    _assert_headers(answer, "no-store")
+    asset = _send(app, "GET", "/control/companion.js", root_path="/")
+    assert asset.status_code == 200
+    _assert_headers(asset, "no-cache")
+    other = _send(app, "GET", "/healthz", root_path="/")
+    assert other.headers["content-security-policy"] != CSP
+
+
+def test_a_500_under_control_carries_every_header(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(_served: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(control_page, "_answer", broken)
+    for path, cache in (("/control", "no-store"), ("/control/companion.js", "no-cache")):
+        answer = _send(app, "GET", path)
+        assert answer.status_code == 500, path
+        assert answer.json() == {"error": "internal_error"}
+        _assert_headers(answer, cache)
+
+
 def test_the_real_build_is_served_whole() -> None:
     """When the web lane's page is built here, every file its build writes is served."""
     if not (CONTROL_DIR / "index.html").is_file():
@@ -214,6 +245,35 @@ def test_a_linked_folder_is_not_served(tmp_path: Path) -> None:
     app = create_app(SETTINGS, live_recheck=None, control_dir=tmp_path / "link")
     assert _send(app, "GET", "/control").status_code == 404
     assert _send(app, "GET", "/control/companion.js").status_code == 404
+
+
+def _walk_into_links(self: Path, pattern: str) -> Iterator[Path]:
+    """`rglob("*")` as a walk that does enter linked folders (Python 3.13 can be asked to)."""
+    assert pattern == "*"
+    for top, folders, files in os.walk(self, followlinks=True):
+        for name in [*folders, *files]:
+            yield Path(top) / name
+
+
+def test_a_file_in_a_linked_folder_inside_is_not_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The per-folder link check, alone: even a walk that enters `out/` (a link to `dist/`, whose
+    `main.js` has a served name and type) serves nothing from it (#279)."""
+    control = _build(tmp_path)
+    monkeypatch.setattr(Path, "rglob", _walk_into_links)
+    assert (control / "out" / "main.js") in set(control.rglob("*"))
+    files = load_files(control)
+    assert sorted(files.assets) == sorted(ASSETS)
+    assert all(SECRET != served.body for served in files.assets.values())
+
+
+def test_which_folders_on_the_way_are_real(tmp_path: Path) -> None:
+    control = _build(tmp_path)
+    assert under_real_folders(control, Path("companion.js"))
+    assert under_real_folders(control, Path("fonts/a.woff2"))
+    assert not under_real_folders(control, Path("out/main.js"))
+    assert not under_real_folders(control, Path("out/deep/main.js"))
 
 
 def test_other_paths_keep_the_sites_headers(app: FastAPI) -> None:
@@ -268,7 +328,8 @@ def test_the_policy_connects_only_to_the_live_endpoint_and_the_api() -> None:
     policy = content_security_policy("https://site.test:8443")
     directives = dict(d.strip().split(" ", 1) for d in policy.split(";"))
     assert directives["connect-src"].split() == [
-        "https://site.test:8443/api/live/",
+        "https://site.test:8443/api/live/controller",
+        "https://site.test:8443/api/live/control",
         "https://site.test:8443/api/site/sessions",
         "wss://site.test:8443/api/live/ws",
     ]

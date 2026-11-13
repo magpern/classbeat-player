@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
+from starlette._utils import get_route_path
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
@@ -111,9 +112,9 @@ def create_app(
             response = error_response(500, "internal_error")
         # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
         # ADR 0005, section 8: the companion page's own, under /control.
+        # The path as the router matches it: `root_path` taken off at a `/` boundary only.
         path = request.url.path
-        root: str = request.scope.get("root_path", "")
-        routed = path.removeprefix(root) if root else path
+        routed = get_route_path(request.scope)
         if is_control_path(routed):
             response.headers.update(control_headers(routed, settings.site_origin))
         else:

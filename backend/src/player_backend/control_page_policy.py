@@ -28,9 +28,9 @@ _SEGMENT: Final = re.compile(r"[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*")
 MAX_DEPTH: Final = 2
 
 # Each fetch of the page: POST /api/live/controller, POST /api/live/control, GET
-# /api/site/sessions (web/src/companion/net.ts), and its one WebSocket (socket.ts).
-_LIVE_API: Final = "/api/live/"
-_SESSIONS: Final = "/api/site/sessions"
+# /api/site/sessions (web/src/companion/net.ts), and its one WebSocket (socket.ts). Exact paths:
+# a source path without a trailing `/` matches that path only.
+_FETCHED: Final = ("/api/live/controller", "/api/live/control", "/api/site/sessions")
 _LIVE_WS: Final = "/api/live/ws"
 
 
@@ -55,7 +55,7 @@ def asset_type(relative: str) -> str | None:
 def content_security_policy(site_origin: str) -> str:
     """The page's policy. `site_origin` is the site's `https://` origin (settings.py)."""
     socket_origin = "wss://" + site_origin.removeprefix("https://")
-    connect = f"{site_origin}{_LIVE_API} {site_origin}{_SESSIONS} {socket_origin}{_LIVE_WS}"
+    connect = " ".join([*(site_origin + p for p in _FETCHED), socket_origin + _LIVE_WS])
     return (
         "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
         f"img-src 'self'; connect-src {connect}; base-uri 'none'; form-action 'self'; "
