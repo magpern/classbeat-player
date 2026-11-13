@@ -36,6 +36,24 @@ with other work; nothing in the development loop waits for an answer.
   handlebar companion. ADR 0005 (section 10) adds resume, so a pause from the phone can be ended
   from the phone, and the one-touch undo of a resync that plan section 4 already puts on the
   companion. Agents built it so; plan section 3 is yours to update or to overrule.
+- **The player's network guard and the live connection (#173).** `player/app/test/unit/rules.test.ts`
+  forbids the word `WebSocket` anywhere under `player/app/src/`, with no exception. ADR 0005 has
+  the player open one WebSocket to the backend for a live class. Agents never weaken a rule guard,
+  so #173 is held, committed but not pushed. Choose one: allow `WebSocket` in
+  `player/app/src/main/live/live-socket.ts` only, with a test that pins that single exception and
+  every other file keeps the full check; move the connection out of `player/app/src/` into its own
+  helper with its own guard; or revise #173. Until then agents do other work.
+- **One screen (owner, 2026-11-13): questions the room-screen spec leaves open.** Agents picked the
+  safe default for each; say if you want another.
+  - Taking control by code: a control code on the only screen would be seen by every rider, so
+    with one display a phone takes control by sign-in only (ADR 0005).
+  - End class sends nothing to the music app (the music keeps playing).
+  - The undo of a resync is only Ctrl/Cmd+Z when there is no presenter; there is no on-screen notice.
+  - Dropping a phone or switching the phone remote off: only End class does it with one display.
+  - The phone remote never starts by itself; the room screen has a "Phone remote" button.
+  - The controls stay shown before the start and on Class Complete with one display.
+  - "Pairing code for app" is read as the riders' join code, shown with a QR that opens the phone
+    remote's sign-in page.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); no phone app of our own, with Bluefy on iPhone for sensors; no external
   hardware such as lighting.
