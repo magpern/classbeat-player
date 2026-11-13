@@ -87,12 +87,17 @@ function routeOf(l: Loaded, cmd: ClockCommand, canSend: boolean): Routed | null 
   return routeWhileFollowing(l.link, canFollow(l), cmd, canSend);
 }
 
+/** The route a clock control takes now, as the presenter's path takes it (the live intake asks too). */
+export function routeFor(s: PlayerState, cmd: ClockCommand, canSend: boolean): Routed | null {
+  return s.loaded === null ? null : routeOf(s.loaded, cmd, canSend);
+}
+
 /**
  * The music app command a clock control turns into while the clock follows the music, or null
  * when the control is applied here. The shell sends it; the clock then follows the music's answer.
  */
 export function transportFor(s: PlayerState, cmd: ClockCommand, canSend: boolean): TransportAction | null {
-  const r = s.loaded === null ? null : routeOf(s.loaded, cmd, canSend);
+  const r = routeFor(s, cmd, canSend);
   return r?.kind === "transport" ? r.action : null;
 }
 
