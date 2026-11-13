@@ -28,7 +28,7 @@ function fresh() {
     },
   };
 }
-const loaded = (wipePending = false): SyncEvent => ({ type: "loaded", account: ACCOUNT, cursor: 4, held: new Map([[ID_A, H1]]), wipePending });
+const loaded = (wipePending = false): SyncEvent => ({ type: "loaded", account: ACCOUNT, cursor: 4, held: new Map([[ID_A, H1]]), published: new Map(), wipePending });
 
 test("before the cache is read nothing is asked of the server and nothing plays: the cache is read first", () => {
   const r = fresh();
@@ -45,23 +45,23 @@ test("before the cache is read nothing is asked of the server and nothing plays:
 test("a cache that cannot be read is kept: sync is unavailable and the read is tried again with the fault backoff", () => {
   const r = fresh();
   // No wipe, no write, no request: only a later wake.
-  assert.deepEqual(r.send({ type: "unreadable" }), [{ do: "wake", at: NOW + FIRST_BACKOFF_MS }]);
-  assert.deepEqual(syncView(r.state), { status: "unavailable", classes: 0, pinned: null });
+  assert.deepEqual(r.send({ type: "unreadable", lasting: false }), [{ do: "wake", at: NOW + FIRST_BACKOFF_MS }]);
+  assert.deepEqual(syncView(r.state), { status: "unavailable", unavailable: "passing", wiping: false, classes: 0, notUpdated: [], pinned: null });
   assert.equal(r.state.wipePending, false);
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "load" }]);
-  assert.deepEqual(r.send({ type: "unreadable" }), [{ do: "wake", at: NOW + 2 * FIRST_BACKOFF_MS }]);
+  assert.deepEqual(r.send({ type: "unreadable", lasting: false }), [{ do: "wake", at: NOW + 2 * FIRST_BACKOFF_MS }]);
   // Read at last: held as it is on disk, and synced on from its cursor.
   assert.deepEqual(r.send(loaded()), []);
-  assert.deepEqual(syncView(r.state), { status: "unpaired", classes: 1, pinned: null });
+  assert.deepEqual(syncView(r.state), { status: "unpaired", unavailable: null, wiping: false, classes: 1, notUpdated: [], pinned: null });
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "list", run: 1, after: 4 }]);
   // Once read, a stray fault report changes nothing.
-  assert.deepEqual(r.send({ type: "unreadable" }), []);
+  assert.deepEqual(r.send({ type: "unreadable", lasting: false }), []);
   assert.equal(r.state.status, "syncing");
 });
 
 test("a cache shown to need a wipe is wiped, also after a fault reading it", () => {
   const r = fresh();
-  r.send({ type: "unreadable" });
+  r.send({ type: "unreadable", lasting: false });
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "load" }]);
   r.send(loaded(true));
   assert.equal(r.state.held.size, 0);
@@ -70,7 +70,7 @@ test("a cache shown to need a wipe is wiped, also after a fault reading it", () 
 
 test("the pairing ending while the cache cannot be read wipes it; once wiped there is nothing left to read", () => {
   const r = fresh();
-  r.send({ type: "unreadable" });
+  r.send({ type: "unreadable", lasting: false });
   assert.deepEqual(r.send({ type: "forgotten" }), [{ do: "wipe" }]);
   // The wipe comes before any read.
   assert.deepEqual(r.send({ type: "due", credential: PAIRED }), [{ do: "wipe" }]);

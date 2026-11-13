@@ -4,7 +4,7 @@
 // again with the fault backoff, a cache shown to be no account's is wiped, and a wipe that leaves
 // files behind stays pending. No network at all, and nothing is logged.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { RmOptions } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ import type { BackendRequest } from "../../src/main/pairing/http.ts";
 import { classCache, CLASSES_DIR, SYNC_FILE, WIPE_FILE } from "../../src/main/sync/cache.ts";
 import { createSyncService } from "../../src/main/sync/service.ts";
 import type { SyncCredential, SyncService } from "../../src/main/sync/service.ts";
-import { document, ID_A, ok, page } from "./sync-fixtures.ts";
+import { document, ID_A, ID_B, ok, page, STAMP } from "./sync-fixtures.ts";
 
 const ANN = "a".repeat(64);
 const BOB = "b".repeat(64);
@@ -79,7 +79,7 @@ const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 10));
 function annsCache(): string {
   const doc = document("Ann's class");
   const cache = classCache(dir);
-  cache.keep(ANN, ID_A, contentHash(doc), doc);
+  cache.keep(ANN, ID_A, contentHash(doc), doc, STAMP);
   cache.commit(ANN, 3);
   return readFileSync(join(dir, CLASSES_DIR, `${ID_A}.json`), "utf8");
 }
@@ -95,9 +95,11 @@ test("a class is not pinned while the pairing is another account's, before sync 
   // Bob is paired now, and no sync has run since: the cache and the file both still say Ann.
   credential = credentialOf(BOB);
   assert.equal(s.pin(ID_A), null);
+  assert.deepEqual(s.list(), []);
   assert.equal(s.view().pinned, null);
-  // Ann paired again: hers plays.
+  // Ann paired again: hers plays, and is listed.
   credential = credentialOf(ANN);
+  assert.equal(s.list().length, 1);
   assert.ok(s.pin(ID_A) !== null);
   assert.deepEqual(logged, []);
 });
@@ -112,7 +114,7 @@ test("a cache that cannot be read at start is kept: sync is unavailable, and the
   credential = credentialOf(ANN);
   const s = service(classCache(dir, rmSync, read));
   s.start();
-  assert.deepEqual(s.view(), { status: "unavailable", classes: 0, pinned: null });
+  assert.deepEqual(s.view(), { status: "unavailable", unavailable: "passing", wiping: false, classes: 0, notUpdated: [], pinned: null });
   assert.equal(s.pin(ID_A), null);
   assert.deepEqual(timers.map((t) => t.ms), [FIRST_BACKOFF_MS]);
   // Still failing at the next try: the wait doubles, nothing is asked, nothing is deleted.
@@ -129,7 +131,7 @@ test("a cache that cannot be read at start is kept: sync is unavailable, and the
   fireTimer();
   await settle();
   assert.deepEqual(asked.map((r) => r.path), ["/api/player/changes?after=3&limit=100"]);
-  assert.deepEqual(s.view(), { status: "synced", classes: 1, pinned: null });
+  assert.deepEqual(s.view(), { status: "synced", unavailable: null, wiping: false, classes: 1, notUpdated: [], pinned: null });
   assert.ok(s.pin(ID_A) !== null);
   assert.deepEqual(logged, []);
 });
@@ -140,7 +142,7 @@ test("a cache shown to hold classes with no cursor is wiped at start, paired or 
   const s = service();
   s.start();
   assert.equal(existsSync(dir), false);
-  assert.deepEqual(s.view(), { status: "unpaired", classes: 0, pinned: null });
+  assert.deepEqual(s.view(), { status: "unpaired", unavailable: null, wiping: false, classes: 0, notUpdated: [], pinned: null });
   assert.equal(asked.length, 0);
 });
 
@@ -161,7 +163,7 @@ test("a wipe that reports success but leaves the classes behind stays pending: n
   s.forgotten();
   assert.equal(existsSync(join(dir, CLASSES_DIR, `${ID_A}.json`)), true);
   assert.equal(existsSync(join(dir, WIPE_FILE)), true);
-  assert.deepEqual(s.view(), { status: "unpaired", classes: 0, pinned: null });
+  assert.deepEqual(s.view(), { status: "unpaired", unavailable: null, wiping: true, classes: 0, notUpdated: [], pinned: null });
   // Bob pairs: the wipe is tried again first, nothing is asked, nothing plays.
   credential = credentialOf(BOB);
   s.syncNow();
@@ -178,4 +180,103 @@ test("a wipe that reports success but leaves the classes behind stays pending: n
   assert.deepEqual(asked.map((r) => r.path), ["/api/player/changes?after=0&limit=100"]);
   assert.equal(s.pin(ID_A), null);
   assert.deepEqual(logged, []);
+});
+
+test("the class list is the cached classes in title order, with their times, built from what reads back", async () => {
+  const cache = classCache(dir);
+  const b = document("beta");
+  const a = document("Alpha");
+  cache.keep(ANN, ID_A, contentHash(b), b, STAMP);
+  cache.keep(ANN, ID_B, contentHash(a), a, "2026-11-05T08:30:00+00:00");
+  cache.commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  const rows = s.list();
+  assert.deepEqual(rows.map((r) => [r.title, r.updated]), [["Alpha", "2026-11-05T08:30:00+00:00"], ["beta", STAMP]]);
+  assert.equal(JSON.stringify(rows).includes(TOKEN), false);
+  // A class file that no longer has its hash is not listed.
+  writeFileSync(join(dir, CLASSES_DIR, `${ID_A}.json`), readFileSync(join(dir, CLASSES_DIR, `${ID_A}.json`), "utf8").replace("beta", "BETA"));
+  assert.deepEqual(s.list().map((r) => r.title), ["Alpha"]);
+  assert.deepEqual(logged, []);
+});
+
+test("a folder in a class file's place, or a file in the class folder's, is a lasting fault; a disk error is a passing one", () => {
+  const faults: [string, "lasting" | "passing"][] = [["ENOTDIR", "lasting"], ["EISDIR", "lasting"], ["EIO", "passing"], ["EACCES", "passing"]];
+  for (const [code, kind] of faults) {
+    annsCache();
+    credential = credentialOf(ANN);
+    const read = (): Buffer | null => {
+      throw Object.assign(new Error(code), { code });
+    };
+    const s = service(classCache(dir, rmSync, read));
+    s.start();
+    assert.equal(s.view().status, "unavailable", code);
+    assert.equal(s.view().unavailable, kind, code);
+    s.stop();
+  }
+});
+
+test("the class list gives nothing of one account under another's pairing: Ann's class, her pairing forgotten, Bob paired", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.deepEqual(s.list().map((r) => r.title), ["Ann's class"]);
+  assert.ok(s.pin(ID_A) !== null);
+  // The pairing ends while the class plays: the cache waits to be wiped.
+  credential = null;
+  s.forgotten();
+  assert.deepEqual(s.list(), []);
+  credential = credentialOf(BOB);
+  s.syncNow();
+  await settle();
+  assert.equal(s.view().classes, 1, "Ann's class is still held for the snapshot that plays");
+  assert.deepEqual(s.list(), []);
+  s.unpin();
+  assert.deepEqual(s.list(), []);
+  assert.deepEqual(logged, []);
+});
+
+test("the class list shows none of the classes the plate says were removed, once unpaired", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.list().length, 1);
+  // Not playing: the cache is wiped at once.
+  credential = null;
+  s.forgotten();
+  assert.deepEqual(s.list(), []);
+  // Playing: it waits, and nothing is listed meanwhile.
+  annsCache();
+  const t = service();
+  credential = credentialOf(ANN);
+  t.start();
+  await settle();
+  assert.ok(t.pin(ID_A) !== null);
+  credential = null;
+  t.forgotten();
+  assert.deepEqual(t.list(), []);
+});
+
+test("the class list gives a class only as the version held, and only from a file of the held account", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.list().length, 1);
+  // A good file of another version than the one held (a keep not yet reported on disk).
+  const other = document("Another version");
+  classCache(dir).keep(ANN, ID_A, contentHash(other), other, STAMP);
+  assert.equal(s.pin(ID_A), null);
+  assert.deepEqual(s.list(), []);
+  // A good file with the held version's content but another account's.
+  const same = document("Ann's class");
+  classCache(dir).keep(BOB, ID_A, contentHash(same), same, STAMP);
+  assert.deepEqual(s.list(), []);
 });

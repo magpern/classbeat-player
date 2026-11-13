@@ -6,6 +6,9 @@ import classSchema from "../../../../../schema/class-format/v1/class.schema.json
 import { isClassId, parseChanges, parseClass } from "../../core/sync/answers.ts";
 import { INITIAL, step } from "../../core/sync/sync-model.ts";
 import type { Effect, SyncEvent, SyncState } from "../../core/sync/sync-model.ts";
+import { classListView } from "../../core/sync/class-list.ts";
+import type { ClassRow } from "../../core/sync/class-list.ts";
+import { lastingFault } from "../../core/sync/fault-policy.ts";
 import { syncView } from "../../core/sync/view.ts";
 import type { SyncView } from "../../core/sync/view.ts";
 import type { HttpAnswer } from "../../core/pairing/protocol.ts";
@@ -39,6 +42,8 @@ export interface SyncService {
   /** The pairing ended (its token is already deleted): the cache is wiped, after any class being played. */
   forgotten(): void;
   view(): SyncView;
+  /** The class list's rows: one per cached class that reads back with its hash, in title order. */
+  list(): readonly ClassRow[];
   /**
    * Takes the snapshot of a cached class for play, or null when it is not held or does not read
    * back with its hash. Sync never changes it; a newer version applies after `unpin`.
@@ -88,8 +93,8 @@ export function createSyncService(d: SyncDeps): SyncService {
     let stored;
     try {
       stored = d.cache.load();
-    } catch {
-      dispatch({ type: "unreadable" });
+    } catch (e) {
+      dispatch({ type: "unreadable", lasting: lastingFault(e) });
       return false;
     }
     dispatch({ type: "loaded", ...stored });
@@ -113,7 +118,7 @@ export function createSyncService(d: SyncDeps): SyncService {
         return ask(c, { path: `/api/player/classes/${e.id}`, maxBodyBytes: MAX_CLASS_ANSWER_BYTES }, (a) => ({ type: "fetched", run: e.run, id: e.id, answer: parseClass(a, e.id, classSchema) }));
       }
       case "keep":
-        return write(e.run, () => d.cache.keep(e.account, e.id, e.hash, e.document));
+        return write(e.run, () => d.cache.keep(e.account, e.id, e.hash, e.document, e.publishedAt));
       case "remove":
         return write(e.run, () => d.cache.remove(e.ids));
       case "commit":
@@ -179,6 +184,18 @@ export function createSyncService(d: SyncDeps): SyncService {
       dispatch({ type: "forgotten" });
     },
     view: () => syncView(state),
+    list() {
+      const documents = new Map<string, Readonly<Record<string, unknown>>>();
+      // The same guards as pin(): nothing while a wipe waits, or under another account's pairing.
+      const c = d.credential();
+      if (state.account === null || state.wipeAfterPin || state.wipePending || (c !== null && c.account !== state.account)) return [];
+      for (const [id, hash] of state.held) {
+        // Only the paired account's document that still has the hash it was kept with is listed.
+        const found = d.cache.read(id);
+        if (found !== null && found.hash === hash && found.account === state.account) documents.set(id, found.document);
+      }
+      return classListView(state, documents);
+    },
     pin(id) {
       const hash = state.held.get(id);
       const account = state.account;

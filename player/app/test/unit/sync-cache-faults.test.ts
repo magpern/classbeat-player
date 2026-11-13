@@ -10,7 +10,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { contentHash } from "classformat/src/index.ts";
 import { readCapped } from "../../src/main/capped-read.ts";
 import { classCache, CLASSES_DIR, SYNC_FILE, WIPE_FILE } from "../../src/main/sync/cache.ts";
-import { document, ID_A, ID_B } from "./sync-fixtures.ts";
+import { document, ID_A, ID_B, STAMP } from "./sync-fixtures.ts";
 
 const ACCOUNT = "c".repeat(64);
 let dir: string;
@@ -27,8 +27,8 @@ function filled(): Map<string, string> {
   const cache = classCache(dir);
   const a = document("A");
   const b = document("B");
-  cache.keep(ACCOUNT, ID_A, contentHash(a), a);
-  cache.keep(ACCOUNT, ID_B, contentHash(b), b);
+  cache.keep(ACCOUNT, ID_A, contentHash(a), a, STAMP);
+  cache.keep(ACCOUNT, ID_B, contentHash(b), b, STAMP);
   cache.commit(ACCOUNT, 5);
   return snapshot();
 }
@@ -57,16 +57,16 @@ test("a delete that leaves a class behind without saying so: the wipe throws and
     rmSync(path, options);
   };
   const cache = classCache(dir, remove);
-  cache.keep(ACCOUNT, ID_A, contentHash(doc), doc);
+  cache.keep(ACCOUNT, ID_A, contentHash(doc), doc, STAMP);
   cache.commit(ACCOUNT, 1);
   assert.throws(() => cache.wipe(), /not wiped/);
   assert.equal(existsSync(join(dir, WIPE_FILE)), true);
   assert.equal(existsSync(classFile(ID_A)), true);
   // Still pending, after a restart too: nothing loads, plays, keeps or commits.
   const again = classCache(dir, remove);
-  assert.deepEqual(again.load(), { account: null, cursor: 0, held: new Map(), wipePending: true });
+  assert.deepEqual(again.load(), { account: null, cursor: 0, held: new Map(), published: new Map(), wipePending: true });
   assert.equal(again.read(ID_A), null);
-  assert.throws(() => again.keep(ACCOUNT, ID_B, contentHash(doc), doc));
+  assert.throws(() => again.keep(ACCOUNT, ID_B, contentHash(doc), doc, STAMP));
   assert.throws(() => again.commit(ACCOUNT, 2));
   leaky.on = false;
   again.wipe();
@@ -81,7 +81,7 @@ test("the cursor file cannot be read: the load throws, and every file stays unti
   assert.deepEqual(snapshot(), before);
   assert.equal(existsSync(join(dir, WIPE_FILE)), false);
   fault.on = false;
-  assert.deepEqual(cache.load(), { account: ACCOUNT, cursor: 5, held: new Map([[ID_A, contentHash(document("A"))], [ID_B, contentHash(document("B"))]]), wipePending: false });
+  assert.deepEqual(cache.load(), { account: ACCOUNT, cursor: 5, held: new Map([[ID_A, contentHash(document("A"))], [ID_B, contentHash(document("B"))]]), published: new Map([[ID_A, STAMP], [ID_B, STAMP]]), wipePending: false });
 });
 
 test("a class file cannot be read: the load throws, and the file is not dropped", () => {
@@ -110,12 +110,12 @@ test("the class folder cannot be listed: the load throws, and nothing is deleted
 test("a missing cursor file is no cursor, and a link in its place is not one: classes without one are wiped", () => {
   filled();
   rmSync(join(dir, SYNC_FILE));
-  assert.deepEqual(classCache(dir).load(), { account: null, cursor: 0, held: new Map(), wipePending: true });
+  assert.deepEqual(classCache(dir).load(), { account: null, cursor: 0, held: new Map(), published: new Map(), wipePending: true });
   if (!posix) return;
   const elsewhere = join(dir, "..", "sync-elsewhere.json");
   writeFileSync(elsewhere, JSON.stringify({ v: 1, account: ACCOUNT, cursor: 5 }));
   symlinkSync(elsewhere, join(dir, SYNC_FILE));
-  assert.deepEqual(classCache(dir).load(), { account: null, cursor: 0, held: new Map(), wipePending: true });
+  assert.deepEqual(classCache(dir).load(), { account: null, cursor: 0, held: new Map(), published: new Map(), wipePending: true });
 });
 
 test("a cursor past 2^53 is neither kept nor loaded as one", () => {
@@ -123,6 +123,6 @@ test("a cursor past 2^53 is neither kept nor loaded as one", () => {
   const cache = classCache(dir);
   assert.throws(() => cache.commit(ACCOUNT, 2 ** 53));
   writeFileSync(join(dir, SYNC_FILE), `{"v":1,"account":"${ACCOUNT}","cursor":9007199254740993}`);
-  assert.deepEqual(cache.load(), { account: null, cursor: 0, held: new Map(), wipePending: true });
+  assert.deepEqual(cache.load(), { account: null, cursor: 0, held: new Map(), published: new Map(), wipePending: true });
   assert.deepEqual(readdirSync(join(dir, CLASSES_DIR)).sort(), [`${ID_A}.json`, `${ID_B}.json`]);
 });
