@@ -193,3 +193,65 @@ test("the phone-remote panel in each state: rendered, the control code only wher
     ["Phone 1: steering", "Phone 2: steering"],
   );
 });
+
+/** A rig whose control code is shown. */
+async function withCode(): Promise<Rig> {
+  const on = await started();
+  on.live.makeCode();
+  on.socket().server({ v: 1, type: "control_code", code: CONTROL_CODE, expiresInMs: 120_000 });
+  return on;
+}
+
+// An already drawn QR code is removed, not left behind, when the next view has no link (#201
+// review): each way the code goes away, on one page that keeps polling, as the presenter does.
+test("a drawn QR code goes from the page when the code is used, runs out, is dropped or the second display goes", { timeout: 60_000 }, async () => {
+  const gone: [string, (r: Rig) => Promise<void>][] = [
+    ["used", async (r) => void r.socket().server({ v: 1, type: "code_cancelled", reason: "used" })],
+    ["expired", (r) => r.advance(120_000)],
+    ["drop", async (r) => {
+      r.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "sign_in" });
+      r.live.drop(1);
+    }],
+    ["one display", async (r) => void (r.secondDisplay = false)],
+  ];
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, reducedMotion: "reduce" });
+  try {
+    const first = await withCode();
+    await context.addInitScript("globalThis.__name = (f) => f;");
+    await context.addInitScript(STUB);
+    await context.addInitScript(`window.__state = ${JSON.stringify(first.controller.snapshot())}; window.__pairing = ${JSON.stringify(PAIRED)}; window.__live = null;`);
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(`file://${join(APP_DIR, "dist", "presenter.html")}`);
+    const serve = (v: LivePanelView): Promise<void> => page.evaluate((x) => void ((window as unknown as { __live: unknown }).__live = x), v);
+    for (const [how, end] of gone) {
+      const r = await withCode();
+      const shown = r.live.view();
+      assert.ok(shown.controlLink !== null, how);
+      await serve(shown);
+      await page.waitForSelector("#live-qr-code", { state: "attached" });
+      // Drawing the same link again keeps the same node.
+      await page.evaluate(() => void ((document.getElementById("live-qr-code") as unknown as { __mark: boolean }).__mark = true));
+      await r.advance(1000);
+      const again = r.live.view();
+      assert.equal(again.controlLink, shown.controlLink, how);
+      await serve(again);
+      await page.waitForFunction((left) => document.getElementById("live-control-left")?.textContent === left, again.controlCodeLeft);
+      assert.equal(await page.evaluate(() => (document.getElementById("live-qr-code") as unknown as { __mark?: boolean } | null)?.__mark), true, `${how}: the same node`);
+      // The code goes away: the next view has no link.
+      await end(r);
+      const after = r.live.view();
+      assert.equal(after.controlLink, null, how);
+      assert.equal(after.controlCode, null, how);
+      await serve(after);
+      await page.waitForSelector("#live-control", { state: "hidden" });
+      assert.equal(await page.locator("#live-qr-code").count(), 0, `${how}: the QR code is gone from the page`);
+      assert.equal(await page.evaluate(() => document.getElementById("live-qr")!.hidden), true, `${how}: its box is hidden`);
+      assert.ok(!((await page.textContent("body")) ?? "").includes(CONTROL_CODE), `${how}: the code's text is gone`);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
