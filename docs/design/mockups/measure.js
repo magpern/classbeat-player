@@ -24,6 +24,8 @@
 // 8. Coverage: every piece of text on the page sits inside a data-tier element, so 1 to 4 see it.
 // 9. Palette (once, from tokens.css): see palette.js.
 // 10. Window screens (class-list.md): data-min-cap, a minimum cap height in pixels.
+// 11. The handlebar companion (companion.md): its own cap floors (share of the viewport height
+//     per orientation, and pixels), 7 : 1 for all text, and companion-checks.js in the page.
 // Not covered here (say so when this becomes the PL4 CI check): hue in box-shadow and gradients.
 'use strict';
 const path = require('path');
@@ -33,6 +35,7 @@ const { checkPalette } = require('./palette');
 const collect = require('./collect');
 const ink = require('./ink');
 const { fit } = require('./fit');
+const companion = require('./companion-checks');
 
 // Minimums per tier (room-2d.md, "Measurable checks").
 const TIERS = {
@@ -99,15 +102,17 @@ async function check(browser, probe, s) {
   }
   // The presenter window and the room preview are read at arm's length: no room-distance
   // cap heights, and the presenter window has no projector safe area.
-  const preview = s.h < 600 || !s.room;
+  const preview = !s.companion && (s.h < 600 || !s.room);
+  const tiers = s.companion ? companion.tiersFor(s) : TIERS;
   const rows = [];
   for (const it of items) {
-    const t = TIERS[it.tier];
+    const t = tiers[it.tier];
     const problems = [...it.problems];
     if (!it.ink) problems.push('no visible ink');
     else {
       if (!preview && it.cap < t.cap) problems.push(`cap ${(it.cap * 100).toFixed(2)}% < ${t.cap * 100}%`);
       // A window screen (class-list.md) states its minimum in pixels: data-min-cap.
+      if (t.px && it.cap * s.h < t.px - 0.05) problems.push(`cap ${(it.cap * s.h).toFixed(1)} px < ${t.px} px`);
       if (it.minpx && it.cap * s.h < it.minpx - 0.05) problems.push(`cap ${(it.cap * s.h).toFixed(1)} px < ${it.minpx} px`);
       if (it.worst < t.contrast) problems.push(`contrast ${it.worst.toFixed(1)} < ${t.contrast}`);
       const k = it.ink;
@@ -142,6 +147,7 @@ async function check(browser, probe, s) {
     });
     for (const [text, result] of found) rows.push({ tier: 'site', text, lines: '', cap: '', contrast: '', result });
   }
+  if (s.companion) for (const [text, result] of await page.evaluate(companion.pageChecks)) rows.push({ tier: 'companion', text, lines: '', cap: '', contrast: '', result });
   // Reduced motion.
   const rm = await browser.newPage({ viewport: { width: s.w, height: s.h }, reducedMotion: 'reduce' });
   await rm.goto('file://' + path.join(__dirname, s.file));
@@ -174,7 +180,7 @@ async function measure(shots) {
   console.table(pal.rows);
   let failed = pal.failed;
   const results = [];
-  for (const s of shots.filter((x) => x.room || x.presenter)) {
+  for (const s of shots.filter((x) => x.room || x.presenter || x.companion)) {
     await fit(browser, s);
     const r = await check(browser, probe, s);
     console.log(`\n${s.png}${r.preview ? " (arm's length: room cap heights not checked)" : ''}`);
