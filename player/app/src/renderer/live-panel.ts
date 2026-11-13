@@ -1,9 +1,10 @@
 // The presenter's phone-remote panel (ADR 0005 sections 2, 3 and 5): start and end the phone
-// remote, the class code, with a second display a control code, the two phones' places with Drop,
-// and the "Phone 1: pause" line. It only ever holds a LivePanelView (core/live/panel-view.ts): no
-// host token. This panel is the presenter window's alone; the room window has no part of it.
-// Text only through textContent.
+// remote, the class code, with a second display a control code and its QR code (live-qr.ts), the
+// two phones' places with Drop, and the "Phone 1: pause" line. It only ever holds a LivePanelView
+// (core/live/panel-view.ts): no host token. This panel is the presenter window's alone; the room
+// window has no part of it. Text only through textContent.
 import type { LivePanelView } from "../core/live/panel-view.ts";
+import { renderQr } from "./live-qr.ts";
 
 export interface LiveApi {
   liveView(): Promise<LivePanelView | null>;
@@ -37,6 +38,7 @@ export function renderLive(v: LivePanelView | null): void {
   line("live-class", v.classCode, "live-class-code");
   line("live-control", v.controlCode, "live-control-code");
   $("live-control-left").textContent = v.controlCodeLeft ?? "";
+  renderQr($("live-qr"), $("live-qr-box"), v.controlLink);
   line("live-code-note", v.codeNote);
   $("live-slots").hidden = v.slots.length === 0;
   for (const slot of [1, 2] as const) {
