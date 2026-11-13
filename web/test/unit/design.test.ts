@@ -21,14 +21,24 @@ function walk(dir: string): string[] {
 
 const REMOTE = /^\s*(?:https?:)?\/\//i;
 
+/** Decodes CSS escapes (`\68 ttps` is `https`, `\/` is `/`), so an escaped scheme cannot hide a remote reference. */
+function decodeCssEscapes(text: string): string {
+  return text.replace(/\\(?:([0-9a-f]{1,6})[ \t\n\r\f]?|([^\n\r\f0-9a-f]))/gi, (_m, hex?: string, ch?: string) => {
+    if (ch !== undefined) return ch;
+    const cp = parseInt(hex ?? "0", 16);
+    return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : "\ufffd";
+  });
+}
+
 /** Remote font references in a CSS or HTML text: a remote url() in an @font-face, a remote @import, a remote <link href>. */
-function remoteFontRefs(text: string): string[] {
+function remoteFontRefs(raw: string): string[] {
+  const text = decodeCssEscapes(raw);
   const found: string[] = [];
   for (const m of text.matchAll(/@font-face\s*\{[^}]*\}/gi))
-    for (const u of m[0].matchAll(/url\(\s*["']?([^)"'\s]+)/gi)) if (REMOTE.test(u[1] ?? "")) found.push(u[1] ?? "");
-  for (const m of text.matchAll(/@import\s+(?:url\(\s*)?["']?([^)"';\s]+)/gi)) if (REMOTE.test(m[1] ?? "")) found.push(m[1] ?? "");
+    for (const u of m[0].matchAll(/url\(\s*["']?\s*([^)"'\s]+)/gi)) if (REMOTE.test(u[1] ?? "")) found.push(u[1] ?? "");
+  for (const m of text.matchAll(/@import\s+(?:url\(\s*)?["']?\s*([^)"';\s]+)/gi)) if (REMOTE.test(m[1] ?? "")) found.push(m[1] ?? "");
   for (const m of text.matchAll(/<link\b[^>]*>/gi)) {
-    const href = /\bhref\s*=\s*["']?([^"'\s>]+)/i.exec(m[0])?.[1] ?? "";
+    const href = /\bhref\s*=\s*["']?\s*([^"'\s>]+)/i.exec(m[0])?.[1] ?? "";
     if (REMOTE.test(href)) found.push(href);
   }
   return found;
@@ -91,6 +101,17 @@ describe("the web lane stands alone", () => {
     assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href="https://fonts.test/css">'), ["https://fonts.test/css"]);
     assert.deepEqual(remoteFontRefs('<link rel="preload" as="font" href="//f.test/a.woff2">'), ["//f.test/a.woff2"]);
     assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href="./room/room.css">'), []);
+    // Whitespace after the opening quote, and CSS escapes, do not hide a remote reference.
+    assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href=" https://fonts.test/css">'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs("<link rel=stylesheet href=' //f.test/a.woff2'>"), ["//f.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url( ' https://x.test/a.woff2')}"), ["https://x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs('@import " https://fonts.test/css";'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url(\\68 ttps://x.test/a.woff2)}"), ["https://x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url('\\000068ttps://x.test/a.woff2')}"), ["https://x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs('@import url("\\68\\74tps://fonts.test/css");'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs('@import "\\68 ttps:\\/\\/fonts.test/css";'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url(\\2f \\2f x.test/a.woff2)}"), ["//x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url(./fonts/\\61.woff2)}"), []);
   });
 
   it("nothing from a class file becomes markup", () => {

@@ -29,3 +29,27 @@ describe("rendering in src/site", () => {
     assert.match(dom, /\.textContent = text;/);
   });
 });
+
+describe("the markup-API scan", () => {
+  const fixtures = [
+    "el.innerHTML = x;",
+    "el.setHTML(x);",
+    "el.setHTMLUnsafe(x);",
+    "shadow.setHTML(x, { sanitizer });",
+    "Document.parseHTMLUnsafe(x);",
+    "Document.parseHTML(x);",
+    "frame.srcdoc = x;",
+    'frame.setAttribute("srcdoc", x);',
+    '<iframe srcdoc="<p>x</p>"></iframe>',
+  ];
+  for (const code of fixtures) {
+    it(`catches ${code}`, () => {
+      assert.ok(MARKUP.some((re) => re.test(code)));
+    });
+  }
+
+  it("leaves text-only code alone", () => {
+    assert.ok(!MARKUP.some((re) => re.test("el.textContent = text; el.setAttribute('class', 'a');")));
+  });
+});
+
