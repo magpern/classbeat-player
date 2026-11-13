@@ -6,50 +6,22 @@
 // With the room window's screenshots written to screenshots/ for the design review.
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync } from "node:fs";
-import { createServer } from "node:http";
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { placeRoom } from "../../src/core/room/placement.ts";
 import type { DisplayFacts, Rect } from "../../src/core/room/placement.ts";
-import { ROOM_CSP } from "../../src/main/web-preferences.ts";
+import { ROOM_CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { converterExamples } from "../unit/fixtures.ts";
-import { newToken } from "../unit/pairing-tokens.ts";
-import { changeOf, classBody, document as classDocument, ID_A, page as changesPage } from "../unit/sync-fixtures.ts";
+import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
 import { APP_DIR, launch, sleep } from "./launch.ts";
+import { startBackend } from "./room-backend.ts";
 
-const TOKEN = newToken("dev");
-const DEVICE_CODE = newToken("dc");
 const TITLE = "Room window spin";
 const DOC = classDocument(TITLE);
 const SHOTS = join(APP_DIR, "screenshots");
 const FOOTER_LINE = "Starting opens the room screen and the presenter window";
-
-function fakeBackend(origin: () => string): Server {
-  return createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      const send = (status: number, json?: unknown): void => {
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(json === undefined ? undefined : JSON.stringify(json));
-      };
-      const url = new URL(req.url ?? "/", "http://127.0.0.1");
-      const route = `${req.method} ${url.pathname}`;
-      if (route === "POST /api/pairing/start") return send(200, { device_code: DEVICE_CODE, user_code: "BCDF-GHJK", verification_uri: `${origin()}/pair`, expires_in: 600, interval: 5 });
-      if (route === "POST /api/pairing/token") return send(200, { device_token: TOKEN, email: "ann@example.test" });
-      if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, { error: "token_unknown" });
-      if (route === "GET /api/player/device") return send(200, { device: { name: "Studio" } });
-      if (route === "GET /api/player/changes") {
-        const after = Number(url.searchParams.get("after"));
-        return send(200, after >= 1 ? changesPage([], after) : changesPage([changeOf(ID_A, 1, DOC)], 1));
-      }
-      if (route === `GET /api/player/classes/${ID_A}`) return send(200, classBody(ID_A, DOC, 1));
-      send(404, { error: "not_found" });
-    });
-  });
-}
 
 let server: Server;
 let origin = "";
@@ -59,9 +31,7 @@ let closed = false;
 
 before(async () => {
   mkdirSync(SHOTS, { recursive: true });
-  server = fakeBackend(() => origin);
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  ({ server, origin } = await startBackend(DOC));
   ({ app, page } = await launch({ page: "list", args: ["--test-memory-keychain"], env: { PLAYER_BACKEND_ORIGIN: origin } }));
   app.on("close", () => void (closed = true));
   await app.evaluate(({ shell }) => {
@@ -163,14 +133,15 @@ test("the room page's channel answers only the room window: the same preload and
   const preload = join(APP_DIR, "dist", "room-preload.cjs");
   const file = join(APP_DIR, "dist", "room.html");
   const got = await app.evaluate(
-    async ({ BrowserWindow }, { preload, file }) => {
-      const w = new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    async ({ BrowserWindow }, { secure, file }) => {
+      // The room's own hardening, so only the sender differs (a loose window is refused anyway).
+      const w = new BrowserWindow({ show: false, webPreferences: secure });
       await w.loadFile(file);
       const out = await w.webContents.executeJavaScript("window.room.state()");
       w.destroy();
       return out;
     },
-    { preload, file },
+    { secure: secureWebPreferences(preload), file },
   );
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());

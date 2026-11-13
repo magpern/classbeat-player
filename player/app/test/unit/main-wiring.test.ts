@@ -35,3 +35,8 @@ test("the room window closes with the class: on the class list unpinned, at the 
   assert.match(main, /controller\.onEnded\(\(\) => \{\s*if \(roomCloses\(onListPage\(\), pinned\(\)\)\) room\.close\(\);/);
   assert.match(main, /presenter\.on\("closed", \(\) => \{\s*presenter = null;\s*room\.close\(\);/);
 });
+
+test("File > Show the room screen opens the room window again while the class is open", () => {
+  assert.match(main, /function showRoom\(\): void \{\s*if \(roomMayOpen\(controller\.snapshot\(\)\.doc !== null, onListPage\(\), pinned\(\)\)\) room\.open\(\);\s*\}/);
+  assert.match(main, /installMenu\(\{[^}]*\bshowRoom\b[^}]*\}\)/);
+});

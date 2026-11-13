@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
-import { CSP } from "../../src/main/web-preferences.ts";
+import { CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { APP_DIR, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
@@ -99,9 +99,10 @@ test("IPC from the wrong window is refused and changes nothing", async () => {
   const preload = join(APP_DIR, "dist", "preload.cjs");
   const presenterFile = join(APP_DIR, "dist", "presenter.html");
   const r = await app.evaluate(
-    async ({ BrowserWindow }, { preload, presenterFile }) => {
-      // Same preload, same page: only the sender differs from the presenter.
-      const w = new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    async ({ BrowserWindow }, { secure, presenterFile }) => {
+      // Same preload, same page, the same hardening (a loose window is refused before it loads,
+      // loose-renderer.e2e.test.ts): only the sender differs from the presenter.
+      const w = new BrowserWindow({ show: false, webPreferences: secure });
       await w.loadFile(presenterFile);
       // No named helper here: the test runner's transform would rename it out of scope.
       const wc = w.webContents;
@@ -122,7 +123,7 @@ test("IPC from the wrong window is refused and changes nothing", async () => {
       w.destroy();
       return out;
     },
-    { preload, presenterFile },
+    { secure: secureWebPreferences(preload), presenterFile },
   );
   assert.deepEqual(r, { state: null, command: null, open: null, pairingState: null, startPairing: null, unpair: null, reopen: null, listView: null, start: null, openFile: null, dismiss: null, back: null });
   const afterState = await page.evaluate(() => (window as unknown as { player: { getState(): Promise<unknown> } }).player.getState());

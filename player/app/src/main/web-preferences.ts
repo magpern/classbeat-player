@@ -64,6 +64,40 @@ export function secureWebPreferences(preload: string): SecureWebPreferences {
   };
 }
 
+/** Keys a window may add after `...secureWebPreferences(...)` (test/unit/window-prefs-check.ts). */
+export const EXTRA_KEYS: ReadonlySet<string> = new Set(["backgroundThrottling"]);
+
+/**
+ * The hardening keys Electron reports back for a live renderer (`getLastWebPreferences`): every key
+ * of `secureWebPreferences` except `preload`, `navigateOnDragDrop` and `spellcheck`, which it does
+ * not report and the static check covers.
+ */
+export const REPORTED_KEYS = [
+  "contextIsolation",
+  "sandbox",
+  "nodeIntegration",
+  "nodeIntegrationInWorker",
+  "nodeIntegrationInSubFrames",
+  "webSecurity",
+  "allowRunningInsecureContent",
+  "webviewTag",
+  "experimentalFeatures",
+  "enableBlinkFeatures",
+  "safeDialogs",
+] as const satisfies readonly (keyof SecureWebPreferences)[];
+
+/**
+ * What is loose about a new renderer (hardening.ts refuses it when this is not empty): each
+ * reported hardening key whose value differs from `secureWebPreferences`, and "session" when it is
+ * not on the hardened default session. Names only, never values.
+ */
+export function looseKeys(reported: Readonly<Record<string, unknown>> | null, onDefaultSession: boolean): string[] {
+  const want = secureWebPreferences("") as unknown as Record<string, unknown>;
+  const out: string[] = reported === null ? ["webPreferences"] : REPORTED_KEYS.filter((k) => reported[k] !== want[k]);
+  if (!onDefaultSession) out.push("session");
+  return out;
+}
+
 /** Only the application's own files may load. Everything else (http, https, ws, data, ...) is cancelled. */
 export function isAllowedRequest(url: string, appDirUrl: string): boolean {
   return url.startsWith(appDirUrl);
