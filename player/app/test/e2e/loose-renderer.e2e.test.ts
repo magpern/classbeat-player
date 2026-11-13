@@ -9,6 +9,8 @@ import { APP_DIR, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
+/** The presenter's window, found by id: a test never relies on the order of getAllWindows(). */
+let presenterId: number;
 const preload = join(APP_DIR, "dist", "preload.cjs");
 const presenterFile = join(APP_DIR, "dist", "presenter.html");
 
@@ -21,6 +23,11 @@ interface Seen {
 
 before(async () => {
   ({ app, page } = await launch());
+  presenterId = await app.evaluate(({ BrowserWindow }) => {
+    const all = BrowserWindow.getAllWindows();
+    if (all.length !== 1) throw new Error(`expected the presenter alone, found ${all.length} windows`);
+    return all[0]!.id;
+  });
   // Registered after the app's own guard: records what each new renderer got to do.
   await app.evaluate(({ app: electron }) => {
     const log: Record<number, string[]> = {};
@@ -51,7 +58,11 @@ async function makeWindow(webPreferences: Record<string, unknown>): Promise<Seen
       for (let i = 0; i < 50 && !w.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 20));
       await new Promise((r) => setTimeout(r, 200));
       const log = (globalThis as unknown as { __seen: Record<number, string[]> }).__seen;
-      return { events: log[id] ?? [], destroyed: w.isDestroyed(), windows: BrowserWindow.getAllWindows().length - before, loadFailed };
+      const seen = { events: [...(log[id] ?? [])], destroyed: w.isDestroyed(), windows: BrowserWindow.getAllWindows().length - before, loadFailed };
+      // A window that was not refused (a mutation, a bug) is destroyed here, so it cannot leak
+      // into a later test (#154 review, N-5).
+      if (!w.isDestroyed()) w.destroy();
+      return seen;
     },
     { webPreferences, presenterFile },
   );
@@ -149,7 +160,9 @@ test("a view with loose preferences is destroyed and never loads", async () => {
       for (let i = 0; i < 50 && !wc.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 20));
       await new Promise((r) => setTimeout(r, 200));
       const log = (globalThis as unknown as { __seen: Record<number, string[]> }).__seen;
-      return { events: log[id] ?? [], destroyed: wc.isDestroyed(), windows: 0, loadFailed };
+      const seen = { events: [...(log[id] ?? [])], destroyed: wc.isDestroyed(), windows: 0, loadFailed };
+      if (!wc.isDestroyed()) wc.close();
+      return seen;
     },
     { webPreferences: { ...secureWebPreferences(preload), sandbox: false, nodeIntegration: true } as Record<string, unknown>, presenterFile },
   );
@@ -160,12 +173,12 @@ test("window.open allowed with loose options is destroyed and never loads", asyn
   const before = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
   const known = await app.evaluate(() => Object.keys((globalThis as unknown as { __seen: Record<number, string[]> }).__seen).map(Number));
   // The app denies every window.open; this lets one through with loose options, as a mistake would.
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]!.webContents.setWindowOpenHandler(() => ({
+  await app.evaluate(({ BrowserWindow }, id) => {
+    BrowserWindow.fromId(id)!.webContents.setWindowOpenHandler(() => ({
       action: "allow",
       overrideBrowserWindowOptions: { show: false, webPreferences: { sandbox: false, contextIsolation: false, nodeIntegration: true } },
     }));
-  });
+  }, presenterId);
   try {
     // Opened on a timer: the guard closes the new window inside window.open, which can leave the
     // opener waiting (hardening.ts), so the test does not wait on the page.
@@ -185,8 +198,64 @@ test("window.open allowed with loose options is destroyed and never loads", asyn
     assert.equal(opened.alive, false);
     for (const ev of ["dom-ready", "did-finish-load"]) assert.ok(!opened.events.includes(ev), `${ev} in ${opened.events.join(",")}`);
   } finally {
-    await app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]!.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    });
+    await app.evaluate(({ BrowserWindow }, id) => {
+      BrowserWindow.fromId(id)!.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    }, presenterId);
   }
+});
+
+// A renderer that is already hardened and loaded is checked again each time it starts loading
+// (#154 review, N-3): a session preload registered, or the spell checker turned on, after it was
+// created refuses it on its next load.
+async function reloadAfter(change: "spellChecker" | "sessionPreload"): Promise<{ before: boolean; after: boolean; domReady: boolean }> {
+  return app.evaluate(
+    async ({ BrowserWindow, session }, { webPreferences, presenterFile, change, preload }) => {
+      const ses = session.defaultSession;
+      const w = new BrowserWindow({ show: false, webPreferences });
+      await w.loadFile(presenterFile);
+      const before = !w.isDestroyed();
+      let domReady = false;
+      w.webContents.on("dom-ready", () => void (domReady = true));
+      const id = change === "sessionPreload" ? ses.registerPreloadScript({ type: "frame", filePath: preload }) : null;
+      if (change === "spellChecker") ses.setSpellCheckerEnabled(true);
+      try {
+        await w.loadFile(presenterFile).catch(() => undefined);
+        for (let i = 0; i < 50 && !w.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 20));
+        return { before, after: !w.isDestroyed(), domReady };
+      } finally {
+        if (id !== null) ses.unregisterPreloadScript(id);
+        ses.setSpellCheckerEnabled(false);
+        if (!w.isDestroyed()) w.destroy();
+      }
+    },
+    { webPreferences: secureWebPreferences(preload) as unknown as Record<string, unknown>, presenterFile, change, preload },
+  );
+}
+
+test("a session preload registered later refuses a loaded window on its next load", async () => {
+  assert.deepEqual(await reloadAfter("sessionPreload"), { before: true, after: false, domReady: false });
+});
+
+test("the spell checker turned on later refuses a loaded window on its next load", async () => {
+  assert.deepEqual(await reloadAfter("spellChecker"), { before: true, after: false, domReady: false });
+});
+
+// A getter that throws (an internal changed on an upgrade) refuses the renderer (#154 review, N-2).
+test("a renderer whose state cannot be read is destroyed and never loads", async () => {
+  await app.evaluate(({ session }) => {
+    // Kept anonymous: the bundled test code has no `__name` helper inside the app.
+    const throwing = [
+      (): never => {
+        throw new Error("changed on an upgrade");
+      },
+    ][0];
+    Object.defineProperty(session.defaultSession, "isSpellCheckerEnabled", { configurable: true, value: throwing });
+  });
+  try {
+    assertRefused(await makeWindow(secureWebPreferences(preload) as unknown as Record<string, unknown>));
+  } finally {
+    await app.evaluate(({ session }) => void delete (session.defaultSession as unknown as Record<string, unknown>).isSpellCheckerEnabled);
+  }
+  const r = await app.evaluate(({ session }) => session.defaultSession.isSpellCheckerEnabled());
+  assert.equal(r, false, "restored");
 });

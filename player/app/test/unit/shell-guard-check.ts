@@ -4,18 +4,18 @@
 //
 // - A RESERVED name (the window-open handler, the session's permission, request, protocol, preload
 //   and spell-checker setters) is written only in hardening.ts. Elsewhere it may appear only in a
-//   type, as the name of a local declaration or of a key an object, class or interface defines, or as a
-//   reference to a local of that name; never as a member, an import or export, an object
-//   destructuring or a string. `protocol` may also be read as a member that is only compared
-//   (`url.protocol === "https:"`).
+//   type, as the name of a local declaration or of a key an interface defines, or as a reference to
+//   a local of that name; never as a member, an import or export, an object destructuring, a key
+//   of an object literal or a class (#154 review, N-4) or a string. `protocol` may also be read as a
+//   member that is only compared (`url.protocol === "https:"`, never `||` or `??`).
 // - A REMOVAL name (`off`, `removeListener`, `removeAllListeners`) follows the same rule in every
 //   file, hardening.ts included: nothing removes the `web-contents-created` listener or a
 //   contents' own guards.
 //
 // A member name built from strings (`o["off" + x]`) is refused by window-prefs-check.ts, which
-// reads the same files.
+// reads the same files; a key built from strings (`{ ["off" + x]: f }`) is refused here.
 import ts from "typescript";
-import { isTypePosition } from "./window-prefs-check.ts";
+import { builtString, isTypePosition } from "./window-prefs-check.ts";
 
 /** Names only hardening.ts may write. */
 export const RESERVED: ReadonlySet<string> = new Set([
@@ -63,13 +63,25 @@ function locals(sf: ts.SourceFile): Set<string> {
   return out;
 }
 
-/** The identifier names a declaration of its own, or a key an object literal, class or interface defines. */
+/** The identifier names a declaration of its own, or a key an interface defines (never a value's key). */
 function declares(n: ts.Identifier): boolean {
   const p = n.parent;
   if ((ts.isVariableDeclaration(p) || ts.isParameter(p) || ts.isFunctionDeclaration(p) || ts.isFunctionExpression(p) || ts.isClassDeclaration(p)) && p.name === n) return true;
   if (ts.isBindingElement(p) && p.name === n && ts.isArrayBindingPattern(p.parent)) return true;
-  const key = ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertyDeclaration(p) || ts.isGetAccessorDeclaration(p) || ts.isSetAccessorDeclaration(p) || ts.isMethodSignature(p) || ts.isPropertySignature(p);
-  return key && p.name === n;
+  return (ts.isMethodSignature(p) || ts.isPropertySignature(p)) && p.name === n;
+}
+
+/**
+ * The identifier is a key of a value: of an object literal (`{ off: f }`, `{ off }`, `{ off() {} }`,
+ * `{ [off]: f }`) or a class member. Such a value can be copied onto a contents or the app
+ * (`Object.assign(proto, { setWindowOpenHandler: noop })`, #154 review, N-4), so it is refused.
+ */
+function valueKey(n: ts.Identifier): boolean {
+  const p = n.parent as ts.Node & { name?: ts.Node };
+  if (ts.isComputedPropertyName(p)) return true;
+  // Kinds, not parents: a class's methods and accessors are these kinds too. A class field is no
+  // declaration (`declares`), so it is refused as well.
+  return ts.isObjectLiteralElementLike(p) && !ts.isSpreadAssignment(p) && p.name === n;
 }
 
 /** The identifier is an expression on its own (a reference), not a name inside another node. */
@@ -100,11 +112,12 @@ export function checkShellGuards(text: string, file: string, isHardening: boolea
 
   const visit = (n: ts.Node): void => {
     if (ts.isIdentifier(n) && (RESERVED.has(n.text) || REMOVAL.has(n.text)) && !isTypePosition(n)) {
-      const allowed = declares(n) || (reference(n) && local.has(n.text)) || (n.text === "protocol" && compared(n));
+      const allowed = !valueKey(n) && (declares(n) || (reference(n) && local.has(n.text)) || (n.text === "protocol" && compared(n)));
       if (guarded(n.text) && !allowed) say(n, `${n.text} ${REMOVAL.has(n.text) ? "removes a listener" : "is set only in hardening.ts"}`);
       if (RESERVED.has(n.text) && !allowed) reserved.push(n.text);
     }
     if (ts.isStringLiteralLike(n) && guarded(n.text) && !isTypePosition(n)) say(n, `a string naming ${n.text}`);
+    if (ts.isComputedPropertyName(n) && builtString(n.expression)) say(n, "a key built from strings");
     ts.forEachChild(n, visit);
   };
   visit(sf);
