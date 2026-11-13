@@ -245,6 +245,23 @@ if [ "$got_allow" = "$want_allow" ]; then
 else
   bad "backend.Dockerfile.dockerignore allow lines differ from the expected list: $(diff <(printf '%s\n' "$want_allow") <(printf '%s\n' "$got_allow") | grep '^[<>]' | tr '\n' ' ')"
 fi
+# The deny lines too (issue #294): the first rule must be the catch-all `*` (without it the whole
+# context, including a local .env or secrets/, goes to the build), and the other non-allow lines
+# are compared as a whole, so a removed **/ line fails.
+di="$root/docker/backend.Dockerfile.dockerignore"
+first_rule="$(grep -Ev '^[[:space:]]*(#|$)' "$di" | head -n 1)"
+if [ "$first_rule" = "*" ]; then
+  ok "backend.Dockerfile.dockerignore starts by denying everything (*)"
+else
+  bad "backend.Dockerfile.dockerignore's first rule is '$first_rule', not *"
+fi
+want_deny="$(printf '%s\n' '*' '**/.venv' '**/__pycache__' '**/tests' '**/node_modules' | LC_ALL=C sort)"
+got_deny="$(grep -Ev '^[[:space:]]*(#|!|$)' "$di" | LC_ALL=C sort)"
+if [ "$got_deny" = "$want_deny" ]; then
+  ok "backend.Dockerfile.dockerignore has exactly the expected deny lines"
+else
+  bad "backend.Dockerfile.dockerignore deny lines differ from the expected list: $(diff <(printf '%s\n' "$want_deny") <(printf '%s\n' "$got_deny") | grep '^[<>]' | tr '\n' ' ')"
+fi
 if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
   ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
 else
