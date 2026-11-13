@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #245).
+Updated 2026-11-13 (after #256).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -34,11 +34,12 @@ the player (#172, #177), live sessions in the backend (#169, #178), the player's
 panel (#173, #200; the `WebSocket` exception decided by the owner), the session ender (#203,
 #204) and its hardening (#205, #210), the control code as a QR (#201, #206), the quit that waits
 for the live `end` (#211, #212) and its hardening (#216, #217), the audit of sessions that end on
-expiry outside the sweep (#220, #225), the tighter routing table and string bounds (#221, #223)
+expiry outside the sweep (#220, #225), the tighter routing table and string bounds (#221, #223),
 the live publisher and listener hardening (#222, #224), the contract tests (#228, #229), the
 backend hardening (#227, #230), the body cap in the live contract (#234, #235; #237, #238; #236,
 #239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
-#245). The companion page (#174) waits with #144 on the owner's web-lane answer.
+#245). The companion page (#174) is in progress; the owner allowed network calls in web code
+(#252, #253).
 
 ## PL2: backend and sign-in
 
@@ -54,8 +55,8 @@ site (#107, #110), account export and deletion (#108, #112), cursors bound to an
 body cap keyed on the route and the class paging index (#115, #127), passkeys (#130, #134) and
 their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry; #158,
 #160: the account-sessions and passkey-additions locks wait at most 2 s), the
-website pages spec (#131, #137). In progress: the website shell and sign-in (#144), held on a
-question for the owner (owner.md). Next: the other website pages, purge counts (needs a
+website pages spec (#131, #137), the website shell, sign-in and error pages (#144, #256). In
+progress: sign-in hardening from its review (#257). Next: the other website pages, purge counts (needs a
 migration).
 
 ## PL4: screens
@@ -163,9 +164,8 @@ The owner tried the Mac build on one screen: the room window hid the presenter w
 Start button. The owner decided the class runs on one screen (plan section 3). Merged: the room
 screen's controls spec (#195, #209, #214), the room window bridge (#197, #199), the controls band
 with clicker keys and the room window filling a single display (#198, #207), the phone-remote
-slot joined to the live client (#202, #213) and its "Can't reach site" retry (#215, #218).
-Held: the rail texts for following stopped (#208): the work is done in its worktree, but its
-commit and push were refused to the agent, so it waits for the owner (owner.md). The presenter
+slot joined to the live client (#202, #213), its "Can't reach site" retry (#215, #218) and the
+rail texts for following stopped (#208, #251; pushed at the owner's request). The presenter
 window stays for a second display.
 
 ## Waiting for the owner
