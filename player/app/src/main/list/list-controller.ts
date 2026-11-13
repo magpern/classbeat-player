@@ -25,6 +25,8 @@ export interface ListController {
   /** A class file did not open: the list shows it, and stays as it was. */
   fileFailed(error: FileErrorView): void;
   dismissFileError(): void;
+  /** The class being played has ended, or a class file replaced it: unpins it and drops its snapshot. */
+  release(): void;
 }
 
 export function createListController(d: ListDeps): ListController {
@@ -47,9 +49,11 @@ export function createListController(d: ListDeps): ListController {
       if (account !== who) {
         who = account;
         stale();
+        // The snapshot is the account's it was taken under: never shown under another pairing.
+        snapshot = null;
       }
-      // The snapshot lives only while the class is being played.
-      if (sync.pinned === null) snapshot = null;
+      // It lives only while the class is being played, and not while the cache is being wiped.
+      if (sync.pinned === null || sync.wiping) snapshot = null;
       if (!fresh) {
         cached = d.sync.list();
         fresh = true;
@@ -57,6 +61,8 @@ export function createListController(d: ListDeps): ListController {
       return { sync, pairing, rows: listRows(cached, sync.pinned, snapshot), fileError };
     },
     start(id, hash) {
+      // One class at a time: the shell refuses, whatever the page shows.
+      if (d.sync.view().pinned !== null) return false;
       // Only a row the instructor was shown; the pin then checks that it is still that version.
       const row = cached.find((r) => r.id === id && r.hash === hash);
       const document = row === undefined ? null : d.sync.pin(id, hash);
@@ -79,6 +85,11 @@ export function createListController(d: ListDeps): ListController {
     },
     dismissFileError() {
       fileError = null;
+    },
+    release() {
+      snapshot = null;
+      d.sync.unpin();
+      stale();
     },
   };
 }

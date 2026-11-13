@@ -17,6 +17,7 @@ function run(picked: Picked, opened: Snapshot, onList = true) {
     refuse: (m) => (calls.push(`refuse ${m}`), EMPTY_SNAPSHOT),
     fileFailed: (e) => void calls.push(`failed ${e.fileName} | ${e.message} | ${e.details.join(",")}`),
     dismiss: () => void calls.push("dismiss"),
+    release: () => void calls.push("release"),
     showPresenter: () => void calls.push("showPresenter"),
     onList: () => onList,
   };
@@ -27,7 +28,7 @@ const GOOD = { ...EMPTY_SNAPSHOT, loadId: 1 } as Snapshot;
 const BAD = { ...EMPTY_SNAPSHOT, error: { message: "This class file is not valid.", details: ["a", "b", "c", "d", "e", "f"] } } as Snapshot;
 
 test("a file that reads opens in the presenter", async () => {
-  assert.deepEqual(await run({ name: "a.json", text: "{}" }, GOOD), ["open a.json", "dismiss", "showPresenter"]);
+  assert.deepEqual(await run({ name: "a.json", text: "{}" }, GOOD), ["open a.json", "dismiss", "release", "showPresenter"]);
 });
 
 test("a file that does not read, on the list, shows the plate with its name and five details, and stays", async () => {
@@ -38,6 +39,14 @@ test("a file that does not read, on the list, shows the plate with its name and 
 test("on the presenter page a failure is the presenter's error, as before", async () => {
   assert.deepEqual(await run({ name: "big.json", error: "This is not a file." }, GOOD, false), ["refuse This is not a file."]);
   assert.deepEqual(await run({ name: "x.json", text: "{}" }, BAD, false), ["open x.json", "dismiss"]);
+});
+
+test("only a file that opened ends the pin of the class being played; a failed open never releases it", async () => {
+  assert.ok((await run({ name: "a.json", text: "{}" }, GOOD)).includes("release"));
+  for (const onList of [true, false]) {
+    assert.ok(!(await run({ name: "x.json", text: "{}" }, BAD, onList)).includes("release"));
+    assert.ok(!(await run({ name: "big.json", error: "e" }, GOOD, onList)).includes("release"));
+  }
 });
 
 test("a cancelled dialog does nothing", async () => {

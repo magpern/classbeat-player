@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_COMMAND, CH_LIST_BACK, CH_LIST_DISMISS, CH_LIST_OPEN_FILE, CH_LIST_START, CH_LIST_VIEW, CH_STATE } from "../../src/core/channels.ts";
+import { CH_COMMAND, CH_OPEN_DROPPED, CH_LIST_BACK, CH_LIST_DISMISS, CH_LIST_OPEN_FILE, CH_LIST_START, CH_LIST_VIEW, CH_STATE } from "../../src/core/channels.ts";
 import { parseStartRequest } from "../../src/core/list/commands.ts";
 import type { PairingService } from "../../src/main/pairing/service.ts";
 import { registerHandlers } from "../../src/main/ipc-handlers.ts";
@@ -28,12 +28,13 @@ function rig(startResult = true, pinned = false) {
     start: (id, hash) => (calls.push(`start ${id} ${hash}`), startResult),
     fileFailed: () => void calls.push("failed"),
     dismissFileError: () => void calls.push("dismiss"),
+    release: () => void calls.push("release"),
   };
   const host = { showPresenter: () => void calls.push("showPresenter"), openFile: async () => void calls.push("openFile") };
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
   registerListHandlers(bus, () => TRUSTED, list, host);
-  const controller = { snapshot: () => (calls.push("snapshot"), {}), command: () => (calls.push("command"), {}) } as unknown as Controller;
+  const controller = { snapshot: () => (calls.push("snapshot"), {}), command: () => (calls.push("command"), {}), open: () => (calls.push("open"), {}) } as unknown as Controller;
   registerHandlers(bus, controller, () => TRUSTED, {} as PairingService);
   return { calls, v, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw) };
 }
@@ -68,6 +69,8 @@ test("every list channel refuses the presenter page, a subframe, another window 
 test("the clock's channels refuse the list page", () => {
   const r = rig();
   for (const ch of [CH_STATE, CH_COMMAND]) assert.equal(r.call(ch, fromList, { type: "start" }), null, ch);
+  // A class file dropped is the presenter's: from the list page it is refused and never opened.
+  assert.equal(r.call(CH_OPEN_DROPPED, fromList, { name: "a.json", text: "{}" }), null);
   assert.deepEqual(r.calls, []);
   assert.notEqual(r.call(CH_STATE, event(TRUSTED.presenterUrl)), null);
 });

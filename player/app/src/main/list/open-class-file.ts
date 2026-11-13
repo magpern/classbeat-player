@@ -13,6 +13,8 @@ export interface OpenDeps {
   /** The list page's way to show a failure; the presenter page uses `refuse`. */
   readonly fileFailed: (error: FileErrorView) => void;
   readonly dismiss: () => void;
+  /** A file replaced the class being played: its pin and snapshot end. */
+  readonly release: () => void;
   readonly showPresenter: () => void;
   readonly onList: () => boolean;
 }
@@ -31,5 +33,8 @@ export async function openClassFile(d: OpenDeps): Promise<void> {
     return;
   }
   d.dismiss();
-  if (snapshot.error === null) d.showPresenter();
+  if (snapshot.error === null) {
+    d.release();
+    d.showPresenter();
+  }
 }

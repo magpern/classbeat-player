@@ -124,6 +124,59 @@ test("while the pinned class has no cached copy, its snapshot stands in its plac
   assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"], "no snapshot is kept after the end");
 });
 
+test("the shell refuses a start while a class is pinned, and a failed open then never releases the pin of the class playing", () => {
+  const { r, controller } = rig();
+  controller.view();
+  r.sync = { ...r.sync, pinned: { id: r.rows[0].id, after: "none" } };
+  r.pinResult = {};
+  r.openResult = BAD;
+  assert.equal(controller.start(r.rows[1].id, r.rows[1].hash), false);
+  assert.deepEqual(r.pins, [], "sync is not asked to pin another class");
+  assert.equal(r.opened.length, 0);
+  assert.equal(r.unpins, 0, "the pin of the class still playing is kept");
+});
+
+test("release (the class ended, or a file replaced it) unpins and drops the snapshot", () => {
+  const { r, controller } = rig();
+  controller.view();
+  r.pinResult = {};
+  controller.start(r.rows[1].id, r.rows[1].hash);
+  const played = r.rows[1];
+  r.rows = [r.rows[0], r.rows[2]];
+  r.sync = { ...r.sync, pinned: { id: played.id, after: "removed" } };
+  r.listener();
+  assert.equal(controller.view().rows.length, 3);
+  controller.release();
+  assert.equal(r.unpins, 1);
+  // Even if sync still said "pinned and removed", no snapshot is left to show.
+  assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"]);
+});
+
+test("the snapshot is never shown under another pairing, nor while the cache is being wiped", () => {
+  const { r, controller } = rig();
+  controller.view();
+  r.pinResult = {};
+  const played = r.rows[1];
+  controller.start(played.id, played.hash);
+  r.rows = [r.rows[0], r.rows[2]];
+  r.sync = { ...r.sync, pinned: { id: played.id, after: "removed" } };
+  r.listener();
+  assert.equal(controller.view().rows.length, 3);
+  r.pairing = { ...PAIRED, email: "bob@example.com" };
+  r.rows = [];
+  assert.deepEqual(controller.view().rows, [], "Bob sees nothing of Ann's");
+  r.pairing = PAIRED;
+  assert.deepEqual(controller.view().rows, [], "and it does not come back");
+  const second = rig();
+  second.controller.view();
+  second.r.pinResult = {};
+  second.controller.start(second.r.rows[1].id, second.r.rows[1].hash);
+  second.r.sync = { ...second.r.sync, wiping: true, pinned: { id: second.r.rows[1].id, after: "removed" } };
+  second.r.rows = [];
+  second.r.listener();
+  assert.deepEqual(second.controller.view().rows, []);
+});
+
 test("the window gets the file error until it is closed, and a start clears it", () => {
   const { r, controller } = rig();
   controller.fileFailed({ message: "This class file is not valid.", fileName: "x.json", details: ["a"] });

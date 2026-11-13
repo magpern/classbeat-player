@@ -57,6 +57,7 @@ async function openClass(): Promise<void> {
     refuse: (message) => controller.refuse(message),
     fileFailed: (e) => l.fileFailed(e),
     dismiss: () => l.dismissFileError(),
+    release: () => l.release(),
     showPresenter,
     onList: () => (live()?.webContents.getURL().split(/[?#]/, 1)[0] ?? "") === LIST_URL,
   });
@@ -100,6 +101,8 @@ if (!app.requestSingleInstanceLock()) {
     sync = setupSync(pairing);
     list = createListController({ sync, pairing, open: (name, text) => controller.open(name, text) });
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
+    // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
+    controller.onEnded(() => list?.release());
     registerIpc(controller, trusted, pairing);
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     installMenu(() => void openClass(), showList);

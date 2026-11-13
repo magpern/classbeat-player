@@ -8,7 +8,7 @@ import { pageEvent } from "../ipc-handlers.ts";
 import type { ListController } from "./list-controller.ts";
 
 export interface ListHost {
-  /** The presenter page takes the window's place; the room screen opens beside it. */
+  /** The presenter page takes the window's place; the room screen does not open yet (no window for it exists). */
   readonly showPresenter: () => void;
   readonly openFile: () => Promise<void>;
 }
