@@ -232,6 +232,8 @@ export function crossSite(method: string, headers: Readonly<Record<string, strin
 
 function serveFile(route: Route, pathname: string): Promise<void> {
   const rel = normalize(pathname).replace(/^[/\\]+/, "");
+  // The companion page (served beside the site at /control) stands in as a plain page.
+  if (rel === "control") return route.fulfill({ status: 200, headers: { "Content-Type": TYPES[".html"], "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" }, body: "<!doctype html><title>Companion</title>" });
   // Every address of the site is the one page; its scripts, styles and fonts are files.
   const file = /^(site\.(js|css)|fonts\/[\w.-]+\.woff2)$/.test(rel) ? rel : "index.html";
   return route.fulfill({

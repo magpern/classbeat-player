@@ -254,6 +254,47 @@ describe("the way back and signing out", () => {
     await site.context.close();
   });
 
+  it("returns to the companion page with its class code, kept out of every request and of storage (#263)", async () => {
+    const JOIN = "BCDF-GHJK";
+    const site = await open(`/sign-in#return=control.${JOIN}`, { script: PASSKEY_OK });
+    await site.page.waitForSelector("input[name=email]");
+    assert.equal(site.page.url(), `${ORIGIN}/sign-in`, "the entry leaves the address bar at once");
+    assert.deepEqual((await traps(site.page)).filter((x) => x.kind === "storage"), [], "the way back is kept in memory only");
+    await press(site.page, "Sign in with a passkey");
+    await site.page.waitForURL(`${ORIGIN}/control#${JOIN}`);
+    assert.equal(await site.page.title(), "Companion", "the companion page is loaded, not drawn by the site");
+    assert.deepEqual(site.api.map((a) => a.route), ["POST sign-in/passkey/options", "POST sign-in/passkey"], "nothing is read on the way");
+    for (const a of site.api) {
+      assert.equal(new URL(a.url).search, "", `a query on ${a.route}`);
+      assert.ok(!`${a.url} ${a.body ?? ""} ${JSON.stringify(a.headers)}`.includes(JOIN), `the class code went to ${a.route}`);
+    }
+    for (const u of site.urls) assert.ok(!u.includes(JOIN) && !u.includes("return=") && !u.includes("?"), `the entry reached a server: ${u}`);
+    assert.deepEqual(site.external, []);
+    // A fresh browser: nothing was kept in either storage on the way.
+    assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    await site.context.close();
+  });
+
+  it("returns to the companion page without a class code when it had none (#263)", async () => {
+    const site = await open("/sign-in#return=control", { script: PASSKEY_OK });
+    await press(site.page, "Sign in with a passkey");
+    await site.page.waitForURL(`${ORIGIN}/control`);
+    assert.equal(await site.page.title(), "Companion");
+    await site.context.close();
+  });
+
+  for (const hash of ["#return=//evil.example", "#return=https://evil.example/x", "#return=classes", "#return=__proto__", "#return=control.LMNP-QRST.BCDF-GHJK", "#return=control.%2F%2Fevil.example"]) {
+    it(`an entry outside the table goes to the default page: ${hash} (#263)`, async () => {
+      const site = await open(`/sign-in${hash}`, { script: { ...PASSKEY_OK, ...CLASSES } });
+      assert.equal(site.page.url(), `${ORIGIN}/sign-in`);
+      await press(site.page, "Sign in with a passkey");
+      await site.page.waitForSelector("nav .a.cur");
+      assert.equal(path(site.page), "/classes");
+      assert.deepEqual(site.external, []);
+      await site.context.close();
+    });
+  }
+
   it("signs out with one request and opens Sign in with the notice", async () => {
     const site = await open("/classes", { script: { ...CLASSES, "POST sign-out": { status: 204 } } });
     await site.page.waitForSelector("nav .a.cur");

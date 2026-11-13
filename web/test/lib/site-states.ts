@@ -34,6 +34,8 @@ const signedInClasses: Script = { "GET classes": { status: 200, body: { classes:
 export const STATES: readonly State[] = [
   { name: "sign-in", path: "/sign-in", ready: "input[name=email]", main: true },
   { name: "sign-in-no-passkey", path: "/sign-in", passkey: "absent", ready: "input[name=email]" },
+  // Reached from the companion page while signed out (#263): the same page, coming back to /control.
+  { name: "sign-in-from-control", path: "/sign-in#return=control.BCDF-GHJK", ready: "input[name=email]" },
   { name: "sign-in-invalid-email", path: "/sign-in", script: { "POST sign-in/link": { status: 422, body: { error: "invalid_email" } } }, steps: askLink("ana@example"), ready: ".field.err" },
   { name: "sign-in-limited", path: "/sign-in", script: { "POST sign-in/link": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "3000" } } }, steps: askLink(EMAIL), ready: ".plate" },
   { name: "sign-in-sent", path: "/sign-in", script: { "POST sign-in/link": { status: 200, body: { status: "accepted" } } }, steps: askLink(EMAIL), ready: ".note", main: true },

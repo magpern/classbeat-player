@@ -2,7 +2,7 @@
 // addresses"): only a path of this site is ever returned to; no open redirect.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { pageOf, returnPathOf } from "../../src/site/core/routes.ts";
+import { RETURN_ENTRIES, pageOf, returnEntryOf, returnPathOf, signInAddressFor } from "../../src/site/core/routes.ts";
 
 const ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -58,5 +58,71 @@ describe("the way back after a sign-in", () => {
   it("drops a query that could end the path early", () => {
     assert.equal(returnPathOf("/pair", "?a=1#frag"), "/pair");
     assert.equal(returnPathOf("/pair", "?a=\\b"), "/pair");
+  });
+});
+
+describe("the way back to another page: the fixed table (issue #263)", () => {
+  it("holds /control and nothing else", () => {
+    assert.deepEqual({ ...RETURN_ENTRIES }, { control: "/control" });
+    // The companion is not a page of the site: only the table's entry returns to it.
+    assert.equal(pageOf("/control").kind, "not-found");
+    assert.equal(returnPathOf("/control", ""), null);
+  });
+
+  it("asks for it in the fragment, with the class code at most", () => {
+    assert.equal(signInAddressFor("control", null), "/sign-in#return=control");
+    assert.equal(signInAddressFor("control", "BCDF-GHJK"), "/sign-in#return=control.BCDF-GHJK");
+    // Anything that is not exactly a class code is left out, never passed on.
+    for (const bad of ["bcdf-ghjk", "BCDF-GHJK.LMNP-QRST", "BCDFGHJK", "", "https://evil.example", "BCDF-GHJK#x", `cbp_ctl_${"A".repeat(43)}`]) {
+      assert.equal(signInAddressFor("control", bad), "/sign-in#return=control", bad);
+    }
+    for (const address of [signInAddressFor("control", null), signInAddressFor("control", "BCDF-GHJK")]) {
+      assert.ok(!address.includes("?"), "no query: the entry is never sent to a server");
+    }
+  });
+
+  it("reads back exactly what the companion asks for", () => {
+    assert.equal(returnEntryOf(signInAddressFor("control", null).slice("/sign-in".length)), "/control");
+    assert.equal(returnEntryOf(signInAddressFor("control", "BCDF-GHJK").slice("/sign-in".length)), "/control#BCDF-GHJK");
+  });
+
+  it("falls back to the default for any other entry or address", () => {
+    for (const hash of [
+      "",
+      "#",
+      "#return=",
+      "#return=classes",
+      "#return=devices",
+      "#return=constructor",
+      "#return=__proto__",
+      "#return=hasOwnProperty",
+      "#return=CONTROL",
+      "#return=control/",
+      "#return=//evil.example",
+      "#return=https://evil.example",
+      "#return=/control",
+      "#return=%2F%2Fevil.example",
+      "#return=control.",
+      "#return=control.bcdf-ghjk",
+      "#return=control.BCDF-GHJK.LMNP-QRST",
+      "#return=control.BCDF-GHJK#x",
+      "#return=control.BCDF-GHJK?x=1",
+      "#return=control.//evil.example",
+      "#return=control.BCDF-GHJK\nx",
+      "#return=control.AEIO-UAEI",
+      "#next=control",
+      "#control",
+      "#xreturn=control",
+      "#return=control&x=1",
+      `#cbp_ml_${"A".repeat(43)}`,
+    ]) {
+      assert.equal(returnEntryOf(hash), null, hash);
+    }
+  });
+
+  it("always gives /control, or /control with a class code in its fragment", () => {
+    for (const hash of ["#return=control", "#return=control.BCDF-GHJK", "#return=control.ZZZZ-XXXX"]) {
+      assert.match(returnEntryOf(hash) ?? "", /^\/control(#[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4})?$/, hash);
+    }
   });
 });
