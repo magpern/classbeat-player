@@ -57,9 +57,13 @@ test("an odd answer is loose too, never a pass", () => {
   assert.notDeepEqual(check(fake({ session: () => ({ ...SESSION, isSpellCheckerEnabled: () => undefined }) })), []);
 });
 
-test("hardening.ts refuses through looseRenderer, at creation and on every load", () => {
+test("hardening.ts refuses through refuse-loose.ts, at creation and on every load", () => {
   const src = readFileSync(join(REPO, "player", "app", "src", "main", "hardening.ts"), "utf8");
-  assert.match(src, /const loose = looseRenderer\(contents as unknown as LiveRenderer, \(\) => session\.defaultSession, preloads\);/);
-  assert.match(src, /if \(loose\.length === 0\) return;[\s\S]*contents\.close\(\);/);
-  assert.match(src, /refuseLoose\(contents, preloads\);\n\s*contents\.on\("did-start-navigation", \(\) => refuseLoose\(contents, preloads\)\);/);
+  assert.match(src, /defaultSession: \(\) => session\.defaultSession,\n\s*preloads,/);
+  assert.match(src, /fatal: \(\) => app\.exit\(1\),/);
+  assert.match(src, /contents\.on\("did-start-navigation", \(\) => refuseLoose\(live, deps\)\);/);
+  assert.match(src, /refuse\(live, \["guards"\], deps\);\n\s*return;\n\s*\}\n\s*refuseLoose\(live, deps\);\n\s*\}\);/);
+  // The refusal reads through looseRenderer (its behaviour: refuse-loose.test.ts).
+  const refuse = readFileSync(join(REPO, "player", "app", "src", "main", "refuse-loose.ts"), "utf8");
+  assert.match(refuse, /return looseRenderer\(contents, deps\.defaultSession, deps\.preloads\);\n\s*\} catch \{/);
 });

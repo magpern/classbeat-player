@@ -40,3 +40,11 @@ test("File > Show the room screen opens the room window again while the class is
   assert.match(main, /function showRoom\(\): void \{\s*if \(roomMayOpen\(controller\.snapshot\(\)\.doc !== null, onListPage\(\), pinned\(\)\)\) room\.open\(\);\s*\}/);
   assert.match(main, /installMenu\(\{[^}]*\bshowRoom\b[^}]*\}\)/);
 });
+
+// #159 review: the keep-awake release on the presenter closing and on quit had no test.
+test("the display-sleep blocker follows every snapshot and is released with the presenter and on quit", () => {
+  assert.match(main, /controller\.watch\(\(s\)\s*=>\s*keepAwake\.update\(s\.view\)\)/);
+  assert.match(main, /presenter\.on\("closed", \(\) => \{[^}]*\bkeepAwake\.release\(\);[^}]*\}\);/);
+  assert.match(main, /app\.on\("will-quit", \(\) => keepAwake\.release\(\)\);/);
+  assert.match(main, /const keepAwake = createKeepAwake\(electronBlocker\);/);
+});
