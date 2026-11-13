@@ -211,10 +211,10 @@ test("a double-click on End lands on Keep going: nothing is called and the quest
   });
 });
 
-test("while the End question is open, Space, the arrows and F5 do nothing; Esc answers it first", async () => {
+test("while the End question is open in a running class, Space, the arrows and the Page keys do nothing; Esc answers it first (F5 is guarded before the start, below)", async () => {
   await room({}, async (r) => {
     await r.page.keyboard.press("End");
-    for (const k of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "Shift+ArrowRight", "Shift+ArrowLeft", "F5", "Shift+F5"]) await r.page.keyboard.press(k);
+    for (const k of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "Shift+ArrowRight", "Shift+ArrowLeft"]) await r.page.keyboard.press(k);
     assert.deepEqual(await r.calls(), []);
     assert.equal(await r.page.locator(".band .ask").count(), 1);
     await r.page.keyboard.press("Escape");

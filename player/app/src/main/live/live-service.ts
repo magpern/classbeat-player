@@ -18,7 +18,6 @@ import type { BackendCall } from "../pairing/http.ts";
 import { endSession } from "./ender.ts";
 import { endLive } from "./end-live.ts";
 import { failedLine, listenerLine } from "./log-lines.ts";
-export { failedLine };
 import type { Farewell } from "./farewell.ts";
 import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
