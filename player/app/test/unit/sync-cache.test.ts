@@ -186,3 +186,16 @@ test("a class file from before the time was kept still loads: held, with the tim
   assert.equal(classCache(dir).read(ID_A)?.publishedAt, null);
   assert.equal(classCache(dir).read(ID_A)?.document.format_version, doc.format_version);
 });
+
+test("a published_at that is not a time stamp leaves the time unknown, whatever it is", () => {
+  const doc = document("A");
+  mkdirSync(join(dir, CLASSES_DIR), { recursive: true });
+  writeFileSync(join(dir, SYNC_FILE), JSON.stringify({ v: 1, account: ACCOUNT, cursor: 3 }));
+  for (const bad of [7, null, "yesterday", "2026-11-05", "2026-11-05 10:00:00", ""]) {
+    writeFileSync(join(dir, CLASSES_DIR, `${ID_A}.json`), JSON.stringify({ v: 1, account: ACCOUNT, hash: contentHash(doc), document: doc, published_at: bad }));
+    const loaded = classCache(dir).load();
+    assert.equal(loaded.held.size, 1, String(bad));
+    assert.equal(loaded.published.size, 0, String(bad));
+    assert.equal(classCache(dir).read(ID_A)?.publishedAt, null, String(bad));
+  }
+});

@@ -164,3 +164,14 @@ test("a read fault that retrying cannot cure is told apart from a passing one, u
   assert.equal(syncView(state).unavailable, null);
   assert.equal(state.lasting, false);
 });
+
+test("not updated: when the server lists the version already held, the mark goes", () => {
+  const r = rig([[ID_A, H1]], [[ID_A, T1]]);
+  r.sync([cls(ID_A, 1, H2, T2)], { [ID_A]: { kind: "unusable" } });
+  assert.deepEqual(syncView(r.state).notUpdated, [ID_A]);
+  // Published again as the very version held: nothing to fetch, and the copy is current.
+  r.send({ type: "due", credential: PAIRED });
+  r.listed([cls(ID_A, 10, H1, T2)], 10);
+  assert.deepEqual(syncView(r.state).notUpdated, []);
+  assert.equal(r.state.held.get(ID_A), H1);
+});

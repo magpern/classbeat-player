@@ -191,6 +191,8 @@ function advance(s: SyncState, run: Run, now: number): Step {
     const rest = { ...run, todo: run.todo.slice(i + 1) };
     if (c.removed) return waiting(s, rest, { for: "write", then: { drop: [c.id] } }, { do: "remove", run: run.id, ids: [c.id] });
     if (s.held.get(c.id) !== c.hash) return waiting(s, rest, { for: "fetch", id: c.id, publishedAt: c.publishedAt }, { do: "fetch", run: run.id, id: c.id });
+    // Already held as it is: the copy is current, so it is no longer "not updated".
+    if (s.notUpdated.has(c.id)) s = { ...s, notUpdated: new Set([...s.notUpdated].filter((x) => x !== c.id)) };
   }
   const page = run.page;
   if (page === null) return stay(s);

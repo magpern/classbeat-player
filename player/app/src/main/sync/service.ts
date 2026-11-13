@@ -186,10 +186,13 @@ export function createSyncService(d: SyncDeps): SyncService {
     view: () => syncView(state),
     list() {
       const documents = new Map<string, Readonly<Record<string, unknown>>>();
+      // The same guards as pin(): nothing while a wipe waits, or under another account's pairing.
+      const c = d.credential();
+      if (state.account === null || state.wipeAfterPin || state.wipePending || (c !== null && c.account !== state.account)) return [];
       for (const [id, hash] of state.held) {
-        // Only a document that still has the hash it was kept with is listed.
+        // Only the paired account's document that still has the hash it was kept with is listed.
         const found = d.cache.read(id);
-        if (found !== null && found.hash === hash) documents.set(id, found.document);
+        if (found !== null && found.hash === hash && found.account === state.account) documents.set(id, found.document);
       }
       return classListView(state, documents);
     },

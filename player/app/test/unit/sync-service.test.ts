@@ -95,9 +95,11 @@ test("a class is not pinned while the pairing is another account's, before sync 
   // Bob is paired now, and no sync has run since: the cache and the file both still say Ann.
   credential = credentialOf(BOB);
   assert.equal(s.pin(ID_A), null);
+  assert.deepEqual(s.list(), []);
   assert.equal(s.view().pinned, null);
-  // Ann paired again: hers plays.
+  // Ann paired again: hers plays, and is listed.
   credential = credentialOf(ANN);
+  assert.equal(s.list().length, 1);
   assert.ok(s.pin(ID_A) !== null);
   assert.deepEqual(logged, []);
 });
@@ -214,4 +216,67 @@ test("a folder in a class file's place, or a file in the class folder's, is a la
     assert.equal(s.view().unavailable, kind, code);
     s.stop();
   }
+});
+
+test("the class list gives nothing of one account under another's pairing: Ann's class, her pairing forgotten, Bob paired", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.deepEqual(s.list().map((r) => r.title), ["Ann's class"]);
+  assert.ok(s.pin(ID_A) !== null);
+  // The pairing ends while the class plays: the cache waits to be wiped.
+  credential = null;
+  s.forgotten();
+  assert.deepEqual(s.list(), []);
+  credential = credentialOf(BOB);
+  s.syncNow();
+  await settle();
+  assert.equal(s.view().classes, 1, "Ann's class is still held for the snapshot that plays");
+  assert.deepEqual(s.list(), []);
+  s.unpin();
+  assert.deepEqual(s.list(), []);
+  assert.deepEqual(logged, []);
+});
+
+test("the class list shows none of the classes the plate says were removed, once unpaired", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.list().length, 1);
+  // Not playing: the cache is wiped at once.
+  credential = null;
+  s.forgotten();
+  assert.deepEqual(s.list(), []);
+  // Playing: it waits, and nothing is listed meanwhile.
+  annsCache();
+  const t = service();
+  credential = credentialOf(ANN);
+  t.start();
+  await settle();
+  assert.ok(t.pin(ID_A) !== null);
+  credential = null;
+  t.forgotten();
+  assert.deepEqual(t.list(), []);
+});
+
+test("the class list gives a class only as the version held, and only from a file of the held account", async () => {
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.list().length, 1);
+  // A good file of another version than the one held (a keep not yet reported on disk).
+  const other = document("Another version");
+  classCache(dir).keep(ANN, ID_A, contentHash(other), other, STAMP);
+  assert.equal(s.pin(ID_A), null);
+  assert.deepEqual(s.list(), []);
+  // A good file with the held version's content but another account's.
+  const same = document("Ann's class");
+  classCache(dir).keep(BOB, ID_A, contentHash(same), same, STAMP);
+  assert.deepEqual(s.list(), []);
 });
