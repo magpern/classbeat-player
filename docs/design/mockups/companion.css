@@ -97,8 +97,9 @@ body {
 .gel.blank { background: var(--light-1); }
 @media (orientation: landscape) { .gel { padding: 1.6vh 1.6vw; gap: 1.6vw; } }
 
-/* The clock row: time left on the left, cadence and position on the right. */
-.clock { display: flex; justify-content: space-between; gap: 3vw; min-width: 0; }
+/* The clock row: time left on the left, the next song change on the right (under it in
+   landscape). */
+.clock { display: flex; justify-content: space-between; gap: 4vw; min-width: 0; }
 @media (orientation: landscape) { .clock { flex-direction: column; justify-content: flex-start; gap: 2vh; } }
 .cl { display: flex; flex-direction: column; gap: 0.8vh; flex: none; }
 .cl .lbl { display: flex; gap: 0.6em; align-items: center; white-space: nowrap; }
@@ -106,19 +107,19 @@ body {
 .count.est { color: var(--light-2); margin-bottom: 0.2em; }
 .count.est::after { content: ""; position: absolute; left: 0.05em; right: 0; bottom: -0.12em; border-top: 0.05em dashed var(--light-2); }
 .pill { font-weight: 700; color: var(--ink); background: var(--light-1); padding: 0.15em 0.5em; border-radius: 4px; }
-.metrics { display: flex; flex-direction: column; gap: 1vh; min-width: 0; }
-@media (orientation: landscape) { .metrics { flex-direction: row; gap: 3vw; } }
-.metric .lbl { display: block; white-space: nowrap; }
-.metric .v { display: block; font-size: var(--c-value); line-height: 0.95; margin-top: 0.3vh; white-space: nowrap; }
-.metric .v small { font-size: var(--c-minor); font-weight: 600; color: var(--light-2); margin-left: 0.25em; }
-.metric .u { display: block; font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); color: var(--light-2); line-height: 1; margin-top: 0.3vh; white-space: nowrap; }
-/* In landscape the line under a value (the song's BPM) moves up beside its label. */
+.song { display: flex; flex-direction: column; gap: 0.5vh; min-width: 0; flex: 1; }
+/* In landscape the song change is one line under the countdown: "Next song in 1:22 Title". */
 @media (orientation: landscape) {
-  .metric { display: grid; grid-template-columns: auto auto; column-gap: 0.5em; align-items: baseline; justify-content: start; }
-  .metric .lbl { grid-area: 1 / 1; }
-  .metric .u { grid-area: 1 / 2; margin-top: 0; }
-  .metric .v { grid-area: 2 / 1 / 3 / 3; }
+  .song { flex: none; flex-direction: row; align-items: baseline; gap: 0.6em; }
+  .song .st { flex: 0 1 auto; min-width: 0; }
+  .song .sa { display: none; }
 }
+.song .lbl { white-space: nowrap; }
+.song .when { font-size: var(--c-value); line-height: 0.95; }
+@media (orientation: landscape) { .song .when { white-space: nowrap; } }
+.song .when.dim { color: var(--light-2); }
+.song .st { font-size: var(--c-minor); font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song .sa { font-size: var(--c-label); color: var(--light-2); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* The cue: as written, never cut, never scrolled. */
 .cue { font-size: var(--c-text); font-weight: 700; line-height: 1.1; overflow: hidden; text-wrap: pretty; min-height: 0; }
@@ -126,7 +127,7 @@ body {
 .cue.title { font-weight: 700; }
 .cue-lbl { display: block; font-weight: 400; margin-bottom: 0.4vh; }
 
-/* Coming up: the next intervals, then the next song change. */
+/* Coming up: the next intervals. */
 .coming { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 2.4vw; row-gap: 0.9vh; align-items: center; min-width: 0; }
 @media (orientation: landscape) { .coming { column-gap: 1.2vw; row-gap: 1.4vh; } }
 .coming > .lbl { grid-column: 1; }
@@ -134,20 +135,14 @@ body {
 @media (orientation: landscape) { .next { gap: 1vw; } }
 .next > * { flex: none; }
 .next .chip { font-family: var(--face-number); font-weight: 800; font-size: var(--c-minor); background: var(--zone); color: var(--ink); line-height: 1; padding: 0.12em 0.32em 0.04em; border-radius: 3px; }
-.next .v, .song .v { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); line-height: 1; }
+.next .v { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); line-height: 1; }
 .next .dim { color: var(--light-2); }
 .next .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.song { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 2vw; white-space: nowrap; min-width: 0; }
-@media (orientation: landscape) { .song { gap: 1vw; } }
-.song > * { flex: none; }
-.song .v b { font-weight: 800; }
-.song .st { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--light-2); }
-.song .v.dim { color: var(--light-2); }
 
-/* A notice that needs the instructor: white plate, black text, its one key inside. It takes the
-   place of the interval keys (portrait: the second row; landscape: the last two keys). */
+/* A notice that needs the instructor: white plate, black text, its key (Undo) inside. It takes
+   skip's place (portrait: the second row; landscape: the last key). */
 .keys .notice { grid-column: 1 / -1; }
-@media (orientation: landscape) { .keys .notice { grid-column: 4 / 6; } .notice .dt { display: none; } }
+@media (orientation: landscape) { .keys .notice { grid-column: 4; } .notice .dt { display: none; } }
 .notice { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 1vh 3vw; display: flex; align-items: center; gap: 3vw; min-width: 0; }
 @media (orientation: landscape) { .notice { padding: 1.2vh 1.6vw; gap: 1.6vw; } }
 .notice .nt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.4vh; }
@@ -163,9 +158,10 @@ body {
 .keys .key.half { grid-column: span 3; }
 .keys .key.full { grid-column: 1 / -1; }
 @media (orientation: landscape) {
-  .keys { grid-template-columns: 1fr 1fr 1.3fr 1fr 1fr; }
+  .keys { grid-template-columns: 1fr 1.15fr 1fr 2fr; }
   .keys .key, .keys .key.half { grid-column: auto; }
   .keys .key.full { grid-column: 1 / -1; }
+  .keys .key.full[data-action=skip] { grid-column: auto; }
 }
 .key {
   position: relative; overflow: hidden; min-height: var(--c-key-h); min-width: 64px;
@@ -219,13 +215,8 @@ body {
 .who { font-size: var(--c-label); color: var(--light-2); }
 
 /* ---------- Fitting steps (the product measures; the mock-ups set them by hand) ---------- */
-/* tight: the cue needs the room, so one next row is left (the mock-ups leave out the others). */
-/* tighter: only a cue all in capitals needs it. The coming rows go; the gel shows its first
-   target only (the mock-ups pass one). */
-.run.tighter .coming { display: none; }
-/* tight also drops the notice's detail line (the presenter has it) and, in landscape, every
-   target after the first; the key hints say "Hold" only (the mock-ups pass short hints). */
+/* tight: the cue needs the room, so one next row is left (the mock-ups leave out the others),
+   and the notice's detail line goes (the presenter has it). */
 .run.tight .notice .dt { display: none; }
-@media (orientation: landscape) {
-  .run.tight .gel-tg span:nth-child(n+2) { display: none; }
-}
+/* tighter: only a cue all in capitals needs it. The next rows go. */
+.run.tighter .coming { display: none; }

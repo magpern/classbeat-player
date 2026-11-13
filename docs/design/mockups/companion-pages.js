@@ -18,77 +18,85 @@ const field = (label, o = {}) => `<div class="field${o.error ? ' err' : ''}">${T
 const plate = (h, dt) => `<div class="plate" role="alert">${T('minor', h, 2, ' class="h"')}${dt ? T('label', dt, 4, ' class="dt"') : ''}</div>`;
 
 // ---------- The class used by every running state ----------
-const GEL4 = gel(4, 'Threshold', ['88–94% FTP', 'RPE 7–8']);
-const CLOCK = clock('1:10', [['Cadence', '90–100', 'rpm'], ['Position', 'Seated']]);
+// Everything below comes from companion_state (schema/live/v1): status, classRemainingMs,
+// now (zone number and name, cue, remainingMs), next (zone, lengthMs), nextSong (atMs, title,
+// artist), link (mode, state, canUndo, announcement) and allowed. Nothing else.
+const GEL4 = gel(4, 'Threshold');
+const SONG = { when: 'in 1:22', title: 'Pulse Theory', artist: 'Neon Avenue' };
+const CLOCK = clock('1:10', SONG);
 const CUE = 'Find the beat and hold it. Breathe out on every second bar.';
-const NEXT3 = [[2, 'Endurance', '0:45', '85–95', 'Seated'], [5, 'VO2 max', '3:00', '100–110', 'Standing'], [3, 'Tempo', '2:00', 'On the beat', 'Seated']];
-const SONG = ['Next song', 'in <b>37</b> bars', 'Pulse Theory'];
-const FOLLOW = top('Following Spotify', '', '23:41');
+const NEXT3 = [[2, 'Endurance', '0:45'], [5, 'VO2 max', '3:00'], [3, 'Tempo', '2:00']];
+const FOLLOW = top('Following the music', '', '23:41');
 
-add('running', 'Companion: running', 'State: connected, class running, link locked, the song has beat anchors. Interval 6 of 14.',
-  run(FOLLOW + GEL4 + CLOCK + cue(CUE) + coming(NEXT3, SONG) + runKeys({ follow: true })));
+add('running', 'Companion: running', 'State: status running, link following and locked. allowed: pause, skip. The nudges are greyed (never while following); skip goes to the next song.',
+  run(FOLLOW + GEL4 + CLOCK + cue(CUE) + coming(NEXT3) + runKeys({ follow: true })));
 
-add('holding', 'Companion: holding Next interval', 'State: the thumb is on "Next interval", 0.48 s of the 0.8 s hold (60 %). Nothing is sent until the bar is full.',
-  run(FOLLOW + GEL4 + CLOCK + cue(CUE) + coming(NEXT3, SONG) + runKeys({ follow: true, p: '60%' })));
+add('holding', 'Companion: holding Next song', 'State: the thumb is on "Next song" (skip), 0.48 s of the 0.8 s hold (60 %). Nothing is sent until the bar is full.',
+  run(FOLLOW + GEL4 + CLOCK + cue(CUE) + coming(NEXT3) + runKeys({ follow: true, p: '60%' })));
 
-add('skipped', 'Companion: skipped', 'State: a hold on "Next interval" was sent; the host answered and the new interval shows. The note stays 3 s.',
-  run(top('Manual clock', 'manual', '22:31', 'left', note('Next interval: 5 VO2 max')) + gel(5, 'VO2 max', ['106–120% FTP', 'RPE 9']) + clock('3:00', [['Cadence', '100–110', 'rpm'], ['Position', 'Standing']])
-    + cue('Out of the saddle. Three minutes, stay smooth, no bouncing.') + coming(NEXT3.slice(2).concat([[1, 'Recovery', '2:00', '80–90', 'Seated']]), ['Next song', 'in 0:48', 'Pulse Theory'])
+add('skipped', 'Companion: skipped', 'State: manual clock; a hold on "Next interval" sent skip and the ack came back applied. The new interval shows; the note stays 3 s.',
+  run(top('Manual clock', 'manual', '22:31', 'left', note('Next interval: 5 VO2 max')) + gel(5, 'VO2 max') + clock('3:00', { when: 'in 0:48', title: 'Pulse Theory', artist: 'Neon Avenue' })
+    + cue('Out of the saddle. Three minutes, stay smooth, no bouncing.') + coming([[3, 'Tempo', '2:00'], [1, 'Recovery', '2:00']])
     + runKeys()));
 
-add('paused', 'Companion: paused', 'State: paused (the music app reports pause, or Pause on this phone). Lights down; Resume is a hold.',
-  run(top('Music paused', 'alert', '23:41') + gel(4, 'Threshold', ['88–94% FTP', 'RPE 7–8'], { down: true })
-    + clock('1:10', [['Cadence', '90–100', 'rpm'], ['Position', 'Seated']], { pill: 'Paused' }) + cue(CUE) + coming(NEXT3, SONG) + runKeys({ paused: true })));
+add('paused', 'Companion: paused', 'State: status paused, link following, state paused (the music app is paused). Lights down; Resume is a hold.',
+  run(top('Music paused', 'alert', '23:41') + gel(4, 'Threshold', [], { down: true })
+    + clock('1:10', SONG, { pill: 'Paused' }) + cue(CUE) + coming(NEXT3) + runKeys({ follow: true, paused: true })));
 
-add('resynced', 'Companion: resynced', 'State: the link locked again after the music was paused while readings were lost; the clock went 30 s back. One-touch undo.',
-  run(FOLLOW + GEL4 + clock('1:40', [['Cadence', '90–100', 'rpm'], ['Position', 'Seated']]) + cue(CUE) + coming(NEXT3, ['Next song', 'in <b>52</b> bars', 'Pulse Theory'])
-    + runKeys({ follow: true, notice: notice('Resynced, 30\u00a0s back', 'The music was paused while the link was lost.') })));
+add('resynced', 'Companion: resynced', 'State: link.announcement resynced_back, seconds 30, canUndo true; allowed holds undo_resync. One-touch Undo in skip\'s row.',
+  run(FOLLOW + GEL4 + clock('1:40', { when: 'in 1:52', title: 'Pulse Theory', artist: 'Neon Avenue' }) + cue(CUE) + coming(NEXT3)
+    + runKeys({ follow: true, notice: notice('Resynced, 30 s back', 'Undo goes back and stops following.') })));
 
-add('off-list', 'Companion: not a class song', 'State: something not in the class plays. The clock runs on by itself (estimated); no bar count.',
-  run(top('Not a class song', 'alert', '23:41') + GEL4 + clock('1:10', [['Cadence', '90–100', 'rpm'], ['Position', 'Seated']], { label: 'Interval left, estimated', est: true })
-    + cue(CUE) + coming(NEXT3, ['Next song', 'in about 1:22', 'Pulse Theory', true]) + runKeys()));
+add('refused', 'Companion: refused', 'State: ack refused, reason would_stop_following (the music app could not be sent the next song). Shown 4 s in skip\'s row.',
+  run(FOLLOW + GEL4 + CLOCK + cue(CUE) + coming(NEXT3)
+    + runKeys({ follow: true, notice: notice('Not while following the music: use the computer', '', false) })));
 
-add('manual', 'Companion: manual clock', 'State: the manual clock (chosen, or no link). The next song change is counted in class time.',
-  run(top('Manual clock', 'manual', '23:41') + GEL4 + clock('1:10', [['Cadence', 'On the beat', '', '128 bpm'], ['Position', 'Seated']])
-    + cue(CUE) + coming(NEXT3, ['Next song', 'in 1:22', 'Pulse Theory']) + runKeys()));
+add('off-list', 'Companion: not a class song', 'State: link state off_the_list. The clock runs on by itself, so the countdown and the song change are marked as estimates.',
+  run(top('Not a class song', 'alert', '23:41') + GEL4 + clock('1:10', { ...SONG, when: 'in about 1:22', dim: true }, { label: 'Interval left, estimated', est: true })
+    + cue(CUE) + coming(NEXT3) + runKeys({ follow: true })));
 
-add('stale', 'Companion: not hearing the computer', 'State: no state message for 3 s. The countdown dims; keys wait. After 10 s, or when the connection closes: "lost".',
-  run(top('Not hearing the computer', 'alert', '23:41') + GEL4 + clock('1:07', [['Cadence', '90–100', 'rpm'], ['Position', 'Seated']], { label: 'Interval left, estimated', est: true })
-    + cue(CUE) + coming(NEXT3, ['Next song', 'in about 1:19', 'Pulse Theory', true]) + keys(msg('Waiting for the computer'))));
+add('manual', 'Companion: manual clock', 'State: link mode manual. allowed: pause, skip, nudge. The nudges work; skip goes to the next interval.',
+  run(top('Manual clock', 'manual', '23:41') + GEL4 + CLOCK + cue(CUE) + coming(NEXT3) + runKeys()));
 
-add('last-interval', 'Companion: last interval', 'State: the class\'s final interval. Next interval cannot be pressed; "End of class" in the next rows.',
-  run(top('Following Spotify', '', '2:30') + gel(1, 'Recovery', ['Under 55% FTP', 'RPE 2']) + clock('2:30', [['Cadence', '80–90', 'rpm'], ['Position', 'Seated']], { label: 'Last interval' })
-    + cue('Easy spin. Shake out the legs and drink. Thank you, everyone.') + `<section class="coming">${T('label', 'Next', 1, ' class="lbl"')}<div class="next">${T('minor', 'End of class', 1, ' class="v"')}</div><div class="song">${T('label', 'Song ends', 1, ' class="lbl"')}<span class="v" data-tier="minor">in <b>48</b> bars</span></div></section>`
-    + runKeys({ follow: true, last: true })));
+add('reconnecting', 'Companion: reconnecting', 'State: the phone\'s connection dropped under 10 s ago. The countdown runs on from the last state, marked not live; the keys are off. After 10 s: "not connected".',
+  run(top('Reconnecting', 'alert', '23:38') + GEL4 + clock('1:07', SONG, { label: 'Not live', est: true })
+    + cue(CUE) + coming(NEXT3) + keys(msg('Keys work again when the phone is back'))));
 
-add('before-start', 'Companion: before the start', 'State: connected, class loaded, clock at 0. Lights down on the first zone. Start is a hold.',
-  run(top('Waiting for the first song', '', '42:00', 'class') + gel(2, 'Endurance', ['56–75% FTP', 'RPE 4'], { down: true, label: 'First zone' })
-    + clock('5:00', [['Cadence', '85–95', 'rpm'], ['Position', 'Seated']], { label: 'First interval' })
-    + cue('Thursday threshold', { label: 'Class', lines: 3 }) + coming([[3, 'Tempo', '4:00', '90–100', 'Seated'], [4, 'Threshold', '6:00', '90–100', 'Seated']], ['First song', '', 'Neon Avenue'])
+add('host-away', 'Companion: computer not connected', 'State: host_status connected false. The class goes on on the computer; the phone shows the last state, marked not live, for 10 s, then no countdown.',
+  run(top('Computer not connected', 'alert', '23:38') + GEL4 + clock('1:07', SONG, { label: 'Not live', est: true })
+    + cue(CUE) + coming(NEXT3) + keys(msg('Keys work again when the computer is back'))));
+
+add('last-interval', 'Companion: last interval', 'State: next is empty and nextSong null, manual clock; skip is not in allowed. "End of class" in the next rows.',
+  run(top('Manual clock', 'manual', '2:30') + gel(1, 'Recovery') + clock('2:30', null, { label: 'Last interval' })
+    + cue('Easy spin. Shake out the legs and drink. Thank you, everyone.') + coming([])
+    + runKeys({ noSkip: 'Last interval' })));
+
+add('before-start', 'Companion: before the start', 'State: status not_started. Lights down on the first interval\'s zone, its cue and countdown. Start is a hold.',
+  run(top('Not started', 'manual', '42:00', 'class') + gel(2, 'Endurance', [], { down: true, label: 'First zone' })
+    + clock('5:00', { label: 'First song', when: 'at the start', title: 'Neon Avenue', artist: 'Glass Coast' }, { label: 'First interval' })
+    + cue('Easy spin to warm up. Find your seat and settle in.') + coming([[3, 'Tempo', '4:00'], [4, 'Threshold', '6:00']])
     + keys(key('start', 'Start', { main: true, full: true, guard: 'hold', hint: 'Hold to start' }))));
 
-add('finished', 'Companion: class complete', 'State: class time reached the end. Nothing left to steer; the computer ends the session.',
-  run(top('Ended', 'manual', '42:00', 'ridden') + gel(0, 'Class complete', [], { blank: true, sub: '42:00 · 14 intervals · 11 songs' })
-    + cue('Thursday threshold', { label: 'Class', lines: 3 }) + keys(msg('Nothing more to steer. The computer ends the session.'))));
+add('finished', 'Companion: class complete', 'State: status ended. Nothing left to steer; the computer ends the session.',
+  run(top('Ended', 'manual', '42:00', 'ridden') + gel(0, 'Class complete', [], { blank: true, sub: '42:00 ridden' })
+    + keys(msg('Nothing more to steer. The computer ends the session.'))));
 
-// ---------- Worst cases: the longest and widest content the format allows ----------
+// ---------- Worst cases: the longest content the contract allows ----------
 // LONG_CUE: 120 characters of ordinary text with long words. WIDE_CUE: 120 characters all in
 // capitals, much wider than ordinary text; the mock-up takes the last fitting step ("tighter").
 const LONG_CUE = 'Overgeared, deliberately unhurried climbing: strengthening hamstrings, uncompromising breathing, unshakeable concentration';
 const WIDE_CUE = 'STAND UP NOW: HEAVY GEARS, PUSH THROUGH THE ENTIRE CHORUS, NO SITTING DOWN UNTIL THE DROP. BREATHE, HOLD IT, KEEP SMOOTH';
 const NAME80 = 'Maximal aerobic power with standing efforts and short seated recoveries between';
-const TITLE80 = 'Wonderwall Remix (Extended Club Mix) feat. Somebody With A Remarkably Long Name';
-const TG3 = ['106–120% FTP', 'RPE 9–10', '90–100% HRmax'];
-const WORST = (tg = TG3) => top('Not a class song', 'alert', '1:58:58') + gel(7, NAME80, tg)
-  + clock('58:58', [['Cadence', 'On the beat', '', '200 bpm'], ['Position', 'Standing']], { label: 'Interval left, estimated', est: true });
-const NEXT80 = [[6, NAME80, '20:00', 'On the beat', 'Standing'], [7, NAME80, '20:00', 'On the beat', 'Standing']];
-const SONG80 = ['Next song', 'in about 58:58', TITLE80, true];
-add('worst', 'Companion: worst case', 'Worst case: 80-character zone name, three targets, 58:58, class time 1:58:58, "On the beat" at 200 bpm, "Standing", a 120-character cue of long words, 80-character names and title, keys whose presses stop following. Fitting step "tight": one next row, the key hints say "Hold".',
-  run(WORST() + cue(LONG_CUE) + coming(NEXT80.slice(0, 1), SONG80) + runKeys({ follow: true, short: true }), 'tight'));
-add('worst-notice', 'Companion: worst case with a notice', 'Worst case with the longest resync notice in place of the interval keys.',
-  run(WORST() + cue(LONG_CUE) + coming(NEXT80.slice(0, 1), SONG80) + runKeys({ follow: true, notice: notice('Resynced, 1:05 forward', 'The music moved on while the link was lost.') }), 'tight'));
-add('worst-wide', 'Companion: worst case, wide cue', 'Worst case by width: a 120-character cue all in capitals. Last fitting step "tighter": the coming rows go, the gel keeps its first target.',
-  run(WORST(TG3.slice(0, 1)) + cue(WIDE_CUE) + runKeys({ follow: true, short: true }), 'tighter'));
+const TITLE200 = 'Wonderwall Remix (Extended Club Mix) feat. Somebody With A Remarkably Long Name and Another Featured Artist, Live at the Very Large Arena, Remastered Anniversary Edition With Bonus Strings 2026 Mix';
+const SONG200 = { when: 'in about 58:58', title: TITLE200, artist: TITLE200, dim: true };
+const WORST = () => top('Not a class song', 'alert', '1:58:58') + gel(7, NAME80) + clock('58:58', SONG200, { label: 'Interval left, estimated', est: true });
+const NEXT80 = [[6, NAME80, '20:00'], [7, NAME80, '20:00']];
+add('worst', 'Companion: worst case', 'Worst case: 80-character zone name, 58:58, class time 1:58:58, a 120-character cue of long words, 80-character next names, 200-character song title and artist, estimated. Fitting step "tight": one next row.',
+  run(WORST() + cue(LONG_CUE) + coming(NEXT80.slice(0, 1)) + runKeys({ follow: true }), 'tight'));
+add('worst-notice', 'Companion: worst case with a notice', 'Worst case with the longest resync announcement in skip\'s row.',
+  run(WORST() + cue(LONG_CUE) + coming(NEXT80.slice(0, 1)) + runKeys({ follow: true, notice: notice('Resynced, 1:05 forward', 'Undo goes back and stops following.') }), 'tight'));
+add('worst-wide', 'Companion: worst case, wide cue', 'Worst case by width: a 120-character cue all in capitals. Last fitting step "tighter": the next rows go.',
+  run(WORST() + cue(WIDE_CUE) + runKeys({ follow: true }), 'tighter'));
 
 // ---------- Getting control, and losing it ----------
 const SIGNIN = p('Signed in on this phone? Sign in, then only the class code is needed.', true);
@@ -100,23 +108,24 @@ add('code-signed-in', 'Companion: signed in', 'State: /control with a site sessi
   page(h1('Steer the class from this phone') + T('label', 'Signed in as ana@example.com', 2, ' class="who"'),
     field('Class code', { ph: '8 letters', focus: true }) + key('control', 'Steer this class', { main: true, full: true })
     + p('The class code is in the presenter window. Control needs the account that runs the class.', true)));
-add('code-wrong', 'Companion: code did not work', 'State: invalid_code from POST /api/live/control (unknown class, wrong, used or expired code: one answer).',
+add('code-wrong', 'Companion: code did not work', 'State: invalid_code from POST /api/live/control (unknown class, wrong, used or expired code: one answer). cannot_control on the sign-in route reads alike.',
   page(h1('Steer the class from this phone') + p('Scan the QR code in the presenter window, or type the two codes it shows.', true),
     field('Class code', { value: 'BCDF-GHJK' }) + field('Control code', { value: 'LMNP-QRST', error: 'That did not work. A control code works once, for 2 minutes. Ask the computer for a new one.' })
     + key('control', 'Get control', { main: true, full: true })));
+add('full', 'Companion: two phones already', 'State: controllers_full from POST /api/live/control: the code was right, both places are held. The code is not used up.',
+  page(h1('Two phones already steer this class') + p('The class goes on. Drop a phone on the computer, then use the code again.', true),
+    field('Class code', { value: 'BCDF-GHJK' }) + field('Control code', { value: 'LMNP-QRST' })
+    + key('control', 'Try again', { main: true, full: true })));
 add('connecting', 'Companion: connecting', 'State: a controller token was given; the WebSocket is opening and waiting for the first state message.',
   page(h1('Connecting to the class') + `<div class="work" role="status">${T('minor', 'Getting the class from the computer', 2)}</div>`,
     key('cancel', 'Cancel', { full: true })));
-add('lost', 'Companion: connection lost', 'State: the connection closed, or no state message for 10 s. The phone tries again by itself. The class goes on on the computer.',
-  page(plate('Connection lost', 'The class goes on on the computer. Trying again…') + gel(4, 'Threshold', [], { down: true, label: 'Last seen 0:12 ago' }),
+add('lost', 'Companion: not connected', 'State: no connection for 10 s. No countdown. The phone tries again by itself with its token; the class goes on on the computer.',
+  page(plate('Not connected', 'The class goes on on the computer. Trying again…') + gel(4, 'Threshold', [], { down: true, label: 'Last seen 0:12 ago' }),
     key('reconnect', 'Try again now', { full: true }) + p('Nothing you press here reaches the class until the phone is back.', true)));
-add('taken', 'Companion: control taken', 'State: the server closed this connection because another phone took this control (close reason "replaced").',
-  page(h1('Another phone has control') + p('The class goes on. This phone no longer steers it.', true),
-    key('get_control', 'Get control again', { full: true }) + p('You need a new control code from the computer, or your sign-in.', true)));
-add('dropped', 'Companion: control ended', 'State: the computer dropped this phone, or the sign-in that gave control ended (close reason "dropped" or "signed_out").',
+add('dropped', 'Companion: control ended', 'State: ended, reason dropped (the computer freed this phone\'s place), or the token was refused on reconnect (the sign-in ended).',
   page(h1('This phone no longer steers the class') + p('The computer ended its control, or your sign-in ended. The class goes on.', true),
-    key('get_control', 'Get control again', { full: true })));
-add('ended', 'Companion: session ended', 'State: the live session ended (the computer ended it, it started a new one, or 12 hours passed).',
+    key('get_control', 'Get control again', { full: true }) + p('You need a new control code from the computer, or your sign-in.', true)));
+add('ended', 'Companion: session ended', 'State: ended, reason host_ended, revoked or expired.',
   page(h1('The class session has ended') + p('There is nothing more to steer.', true),
     key('get_control', 'Steer another class', { full: true })));
 

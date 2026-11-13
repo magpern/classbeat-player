@@ -25,54 +25,60 @@ function gel(z, name, targets = [], o = {}) {
     + `<div class="gel-txt">${lbl}<span class="gel-name n${long ? ' long' : ''}" data-tier="value" data-lines="2" data-clamp="2">${esc(name)}</span>${tg}</div></section>`;
 }
 
-// The clock row. o.label, o.est (estimated), o.pill ("Paused").
-function clock(time, metrics, o = {}) {
+// The clock row: time left in the interval, and the next song change beside it (under it in
+// landscape). o.label, o.est (estimated), o.pill ("Paused"). song: { when, title, artist, dim,
+// label } from nextSong, or null: "None left".
+function clock(time, song, o = {}) {
   const pill = o.pill ? `<span class="pill" data-tier="label">${esc(o.pill)}</span>` : '';
-  const m = metrics.map(([lbl, v, unit, under]) => `<div class="metric">${T('label', lbl, 1, ' class="lbl"')}<span class="v n" data-tier="value">${esc(v)}${unit ? `<small data-tier="minor">${esc(unit)}</small>` : ''}</span>${under ? T('minor', under, 1, ' class="u"') : ''}</div>`).join('');
+  const sg = song
+    ? `<div class="song">${T('label', song.label || 'Next song', 1, ' class="lbl"')}<span class="when n${song.dim ? ' dim' : ''}" data-tier="value" data-lines="2">${esc(song.when)}</span>`
+      + `${T('minor', song.title, 1, ' class="st" data-clamp="1"')}${T('label', song.artist, 1, ' class="sa" data-clamp="1"')}</div>`
+    : `<div class="song">${T('label', 'Next song', 1, ' class="lbl"')}${T('value', 'None left', 1, ' class="when n"')}</div>`;
   return `<section class="clock"><div class="cl"><span class="lbl">${pill}${T('label', o.label || 'Interval left')}</span>`
-    + `<div class="count n${o.est ? ' est' : ''}" data-tier="hero">${digits(time)}</div></div><div class="metrics">${m}</div></section>`;
+    + `<div class="count n${o.est ? ' est' : ''}" data-tier="hero">${digits(time)}</div></div>${sg}</section>`;
 }
 
 // The cue, as written. Over 60 characters it steps down (CSS: .long).
 const cue = (text, o = {}) => `<p class="cue${text.length > 60 ? ' long' : ''}${o.title ? ' title' : ''}" data-tier="text" data-lines="${o.lines || 8}">${o.label ? `<span class="cue-lbl lbl" data-tier="label">${esc(o.label)}</span>` : ''}${esc(text)}</p>`;
 
-// Coming up: rows of [zone, name, length, cadence, position], then the next song change.
-// song: [label, count html-safe text, title, dim]
-function coming(rows, song) {
-  const r = rows.map(([z, name, len, cad, pos], k) => `${k ? '<span></span>' : T('label', 'Next', 1, ' class="lbl"')}<div class="next"><span class="chip z${z}" data-tier="minor">${z}</span>`
-    + `<span class="v nm" data-tier="minor" data-clamp="1">${esc(name)}</span>${len ? `<span class="v" data-tier="minor">${esc(len)}</span>` : ''}`
-    + `${cad ? `<span class="v dim" data-tier="minor">${esc(cad)}</span>` : ''}${pos ? `<span class="v dim" data-tier="minor">${esc(pos)}</span>` : ''}</div>`).join('');
-  const s = song ? `<div class="song">${T('label', song[0], 1, ' class="lbl"')}<span class="v${song[3] ? ' dim' : ''}" data-tier="minor">${song[1]}</span>${song[2] ? `<span class="st" data-tier="label" data-clamp="1">${esc(song[2])}</span>` : ''}</div>` : '';
-  return `<section class="coming">${r}${s}</section>`;
+// Coming up: rows of [zone number, zone name, length] from `next`; none: "End of class".
+function coming(rows) {
+  const r = rows.length ? rows.map(([z, name, len], k) => `${k ? '<span></span>' : T('label', 'Next', 1, ' class="lbl"')}<div class="next"><span class="chip z${z}" data-tier="minor">${z}</span>`
+    + `<span class="v nm" data-tier="minor" data-clamp="1">${esc(name)}</span><span class="v dim" data-tier="minor">${esc(len)}</span></div>`).join('')
+    : `${T('label', 'Next', 1, ' class="lbl"')}<div class="next">${T('minor', 'End of class', 1, ' class="v"')}</div>`;
+  return `<section class="coming">${r}</section>`;
 }
 
-// A key. o: guard ('hold'), hint, main, dis, half, full, p (hold progress).
+// A key. o: guard ('hold'), hint, main, dis, half, full, p (hold progress), delta (nudge ms).
 function key(action, label, o = {}) {
   const c = ['key', o.main && 'main', o.dis && 'dis', o.half && 'half', o.full && 'full', o.p && 'holding'].filter(Boolean).join(' ');
   const hint = o.hint ? T('label', o.hint, 2, ' class="kh"') : '';
-  return `<button class="${c}" data-action="${action}"${o.guard ? ` data-guard="${o.guard}"` : ''}${o.dis ? ' aria-disabled="true"' : ''}>`
+  return `<button class="${c}" data-action="${action}"${o.delta ? ` data-delta="${o.delta}"` : ''}${o.guard ? ` data-guard="${o.guard}"` : ''}${o.dis ? ' aria-disabled="true"' : ''}>`
     + `<span class="kl" data-tier="minor" data-lines="2">${esc(label)}</span>${hint}${o.p ? `<span class="prog" style="--p:${o.p}"></span>` : ''}</button>`;
 }
 const keys = (...list) => `<nav class="keys" aria-label="Steer the class">${list.join('')}</nav>`;
 const msg = (text) => `<div class="msg">${T('minor', text, 2)}</div>`;
 
-// The usual set while the class runs. o.paused, o.follow (skips stop following), o.last, o.p.
-// o.notice: the resync notice takes the place of the interval keys while it shows.
+// The set while the class runs: the contract's actions only (start, pause, resume, skip, nudge,
+// undo_resync). o.follow: link.mode is following, so the nudges are greyed (never while
+// following) and skip goes to the next song. o.paused, o.p (hold progress on skip),
+// o.noSkip (skip not in `allowed`, with o.noSkip as the reason), o.notice (takes skip's row).
 function runKeys(o = {}) {
-  const sf = o.follow && !o.short ? 'Hold, stops following' : 'Hold';
+  const why = 'Not while following';
+  const nudge = (d, label) => key('nudge', label, o.follow ? { delta: d, dis: true, hint: why } : { delta: d });
   const pause = o.paused
     ? key('resume', 'Resume', { main: true, guard: 'hold', hint: 'Hold' })
     : key('pause', 'Pause', { main: true });
-  return keys(
-    key('nudge_back', 'Back 5\u00a0s'), pause, key('nudge_forward', 'Forward 5\u00a0s'),
-    ...(o.notice ? [o.notice] : [key('previous_interval', 'Previous interval', { half: true, guard: 'hold', hint: sf }),
-    o.last ? key('next_interval', 'Next interval', { half: true, guard: 'hold', dis: true, hint: 'Last interval' })
-      : key('next_interval', o.p ? 'Keep holding' : 'Next interval', { half: true, guard: 'hold', hint: sf, p: o.p })]),
-  );
+  const skipLabel = o.follow ? 'Next song' : 'Next interval';
+  const skip = o.noSkip
+    ? key('skip', skipLabel, { full: true, guard: 'hold', dis: true, hint: o.noSkip })
+    : key('skip', o.p ? 'Keep holding' : skipLabel, { full: true, guard: 'hold', hint: 'Hold', p: o.p });
+  return keys(nudge(-5000, 'Back 5\u00a0s'), pause, nudge(5000, 'Forward 5\u00a0s'), o.notice || skip);
 }
 
-// The resync notice with its one-touch undo (ADR 0001, timing model item 5).
-const notice = (head, detail) => `<div class="notice" role="status"><div class="nt">${T('minor', head, 3, ' class="h"')}${T('label', detail, 3, ' class="dt"')}</div>${key('undo_resync', 'Undo')}</div>`;
+// A notice in skip's row: the resync announcement with its one-touch undo while canUndo
+// (ADR 0001, timing model item 5), or a refused command. undo: show the Undo key.
+const notice = (head, detail, undo = true) => `<div class="notice" role="status"><div class="nt">${T('minor', head, 3, ' class="h"')}${detail ? T('label', detail, 3, ' class="dt"') : ''}</div>${undo ? key('undo_resync', 'Undo') : ''}</div>`;
 // A short "done" note in the top line, in place of the link for 3 s.
 const note = (head) => `<span class="note" role="status">${T('label', head, 1, ' class="h" data-clamp="1"')}</span>`;
 
