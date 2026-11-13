@@ -53,7 +53,8 @@ def test_create_app_keeps_no_mailer_without_one(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(app_module, "open_pool", open_pool)
     settings = Settings(database_url="postgresql://unused", site_origin="https://p.example.test")
-    app = create_app(settings, mailer_from_env({}))
+    # No re-check loop: it would open its own connection to the unused database.
+    app = create_app(settings, mailer_from_env({}), live_recheck=None)
     with TestClient(app):
         assert isinstance(app.state.site.mailer, NoMailer)
     assert opened == ["postgresql://unused"]

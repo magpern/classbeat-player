@@ -8,6 +8,7 @@ section 9 (tenant isolation) is what `db/` and `src/player_backend/db/` implemen
 | `src/player_backend/app.py` | App factory (`create_app(settings)`); `app_from_env` for the server |
 | `src/player_backend/settings.py` | Settings from the environment; no secret has a default |
 | `src/player_backend/site/` | The site's API, `/api/site/`: email link sign-in, site sessions, the user's side of pairing, the account's devices and its class library: list, read, delete (ADR 0002, sections 4, 5, 6, 7 and 12). `cookies.py` is the only module that reads a cookie; `deps.py` has the one dependency of the session credential, the origin check and the recent sign-in check |
+| `src/player_backend/live/` | The live process: sessions in memory, `POST /api/live/sessions`, the re-check and its listener (ADR 0002, section 8; ADR 0005) |
 | `src/player_backend/player_api/` | The app's side: pairing (`/api/pairing/`) and the player API (`/api/player/`). No cookie is read here. `deps.py` has the one dependency of the device token |
 | `src/player_backend/source_api/` | The source API, `/api/source/`: the code exchange, publications, a source's own numbers and its own link (ADR 0002, section 7). No cookie is read here. `deps.py` has the one dependency of the source token |
 | `src/player_backend/class_schemas.py` | Reads the class format's schemas from `schema/class-format/v1/` (ADR 0003); the validators are the contract lane's `classformat` package |
@@ -284,6 +285,40 @@ default: no source can be linked.
   transaction; a refused or rolled-back one sends none. The notice is a hint with no authority;
   the live process answers it with the re-check (`tests/test_revocation_notices.py`). No advisory
   lock is taken.
+
+## Live sessions (ADR 0002, section 8; ADR 0005, sections 2 and 6)
+
+| Route | Credential | Does |
+|---|---|---|
+| `POST /api/live/sessions` | `Authorization: Bearer cbp_dev_…` | `200 {sessionId, joinCode, hostToken}` (`schema/live/v1/session-answer`). The device's earlier session ends first. `409 sessions_full` with 3 sessions on other devices of the account. The device token's refusals are the player API's (401 `invalid_token`, `token_unknown`, `token_expired`, `token_revoked`; 429) |
+
+- The sessions live in the one backend process's memory only (`live/registry.py`): the account,
+  the device, the hash of the device token that started it, the hash of the host token, the join
+  code and the times. The host token is given out once, in the answer. Nothing is written to a
+  log but the event's name and the reason.
+- Lifetimes (`live_session_policy.py`): 15 minutes without a host connection (from the start,
+  while the host has never connected), 12 hours at most. A session the re-check could not confirm
+  for 90 seconds (3 rounds the database did not answer) ends too: the live process fails closed.
+- The re-check (`live/service.py`, `live/recheck.py`): one thread, a listening connection of its
+  own on `live_revocations` (`db/live.py`, `db/executor/_listen.py`). A notice re-checks that
+  account's sessions at once; every 30 seconds all of them; when the listening connection is lost
+  it is opened again after 1, 2, 4, 8, then every 15 seconds and every session is re-checked at
+  once. A device not active ends its session (`revoked`); a site session not active drops the
+  controller it signed in, and the session goes on.
+- The listening connection uses `PLAYER_DATABASE_URL`, like the pool, and needs a session-level
+  connection: behind a transaction pooler (which does not keep `LISTEN`) it would need a separate
+  listener URL that reaches PostgreSQL directly. There is no such setting yet.
+- Audit: `live.session_started` in the start's transaction; `live.session_ended` (with the reason:
+  `host_ended`, `replaced`, `host_away`, `lifetime`, `unconfirmed`) after `auth_enter_device`
+  with the session's stored hash, so nothing is written once the device is revoked or the account
+  is gone. Details hold the session id and the reason only. An end that is not recorded (the
+  device over its request budget, `limited`, or no longer working) is logged as
+  `live.end_not_recorded` with that state; a log names an event, a reason, a state or an error
+  type, never a token, code or hash.
+- `live_token_policy.hello_role`: the WebSocket's `hello` (#170) gives `cbp_hst_` the host's role
+  and `cbp_ctl_` the controller's; a rider token gets none (no rider route in this part of PL8).
+- `create_app(..., live_recheck=None)` runs no re-check loop; the tests use it so, except
+  `tests/test_live_recheck.py`.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

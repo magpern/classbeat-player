@@ -24,6 +24,7 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.passkey_login",
     "player_backend.db.queries.passkeys",
     "player_backend.db.queries.revocation",
+    "player_backend.db.queries.live",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"
