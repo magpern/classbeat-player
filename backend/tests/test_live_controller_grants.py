@@ -29,7 +29,6 @@ from player_backend.live_session_policy import HOST_AWAY_LIMIT, LIFETIME_LIMIT, 
 ACCOUNT = uuid.uuid4()
 DEVICE_HASH = b"d" * 32
 SITE = b"s" * 32
-ADDRESS = b"a" * 32
 CLIENT = ClientInfo(network=None, family="")
 
 
@@ -78,12 +77,12 @@ def test_a_sign_in_whose_event_fails_is_taken_back(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(live, "add_event", refuse)
     with pytest.raises(DatabaseError):
-        service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT)
+        service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert service.registry.signed_in_controllers() == [] and seen == []
     # Both places are free: two sign-ins get slots 1 and 2.
     written = _written(monkeypatch)
     for slot in (1, 2):
-        granted = service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT)
+        granted = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
         assert granted is not None and granted.slot == slot
     assert written == [live.CONTROLLER_ADDED] * 2
 
@@ -93,12 +92,12 @@ def test_a_grant_is_taken_back_only_while_its_token_holds_the_place(
 ) -> None:
     service, started, seen = _service(Clock())
     _written(monkeypatch)
-    first = service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT)
+    first = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert first is not None
     registry = service.registry
     assert registry.drop_controller(started.session_id, first.slot)
     # The same sign-in asks again and gets the same place, with another token.
-    second = service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT)
+    second = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert second is not None and second.slot == first.slot
     assert registry.release(first) is False
     assert registry.controller_seat(second.token, 0.0) is not None
@@ -130,12 +129,12 @@ def test_a_session_past_its_lifetime_gives_no_controller_by_sign_in(
     clock.now = after - 0.001
     if confirmed:
         service.registry.confirm([started.session_id], clock())
-    granted = service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT)
+    granted = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert granted is not None and service.registry.release(granted)
     clock.now = after
     if confirmed:
         service.registry.confirm([started.session_id], clock())
-    assert service.by_sign_in(CTX, started.join_code, SITE, ADDRESS, CLIENT) is None
+    assert service.by_sign_in(CTX, started.join_code, SITE, CLIENT) is None
     assert service.registry.running() == [] and service.registry.signed_in_controllers() == []
     assert [(e.session_id, e.reason) for e in seen if isinstance(e, Ended)] == [
         (started.session_id, reason)

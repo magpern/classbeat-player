@@ -16,8 +16,10 @@
   transaction; if writing it or committing that transaction fails, the place is freed again
   (`release`; the route calls it for the commit, control_routes.py). By a code, and "control
   code cancelled" after wrong tries, after `auth_enter_device` with the session's stored
-  hash. A join code that names no session is counted for the caller's address
-  (live_code_policy.py, `UnknownSessions`).
+  hash. On `by_code`, a join code that names no session is counted for the caller's address
+  (live_code_policy.py, `UnknownSessions`). On `by_sign_in`, one that names no session of the
+  account is counted for the account, and calls without a site session for the address
+  (live_signin_policy.py).
 
 A database error is logged by its type alone and never stops the caller. Logs name an event, an
 error type, an end reason or a device state, never a token, code or hash; the log formatter
@@ -40,6 +42,7 @@ from player_backend.live.events import Exchange, Granted
 from player_backend.live.registry import Ended, Registry, Started
 from player_backend.live_code_policy import UnknownSessions
 from player_backend.live_session_policy import EndReason, audited
+from player_backend.live_signin_policy import SignInLimits
 
 _log = logging.getLogger("player_backend.live")
 
@@ -58,6 +61,7 @@ class LiveService:
         self.clock = clock
         self._unknown = UnknownSessions()
         self._unknown_lock = threading.Lock()
+        self._sign_in = SignInLimits()
 
     def start(self, ctx: AccountContext, device_hash: bytes, client: ClientInfo) -> Started | None:
         """Start a session for the request's device; None when the account has 3 elsewhere."""
@@ -110,18 +114,38 @@ class LiveService:
         with self._unknown_lock:
             self._unknown.count(address_hash, self.clock())
 
-    def by_sign_in(
-        self,
-        ctx: AccountContext,
-        raw_session: object,
-        site_hash: bytes,
-        address_hash: bytes,
-        client: ClientInfo,
-    ) -> Granted | None:
-        """A controller for a sign-in of the session's own account, or None (`cannot_control`)."""
+    def signed_out_refused(self, address_hash: bytes) -> bool:
+        """Whether a sign-in call without a site session from this address is refused unseen."""
+        with self._unknown_lock:
+            return self._sign_in.signed_out_refused(address_hash, self.clock())
+
+    def signed_out(self, address_hash: bytes) -> None:
+        """A sign-in call from this address had no valid site session."""
+        with self._unknown_lock:
+            self._sign_in.signed_out(address_hash, self.clock())
+
+    def _session_of_account(self, raw_session: object, account_id: UUID) -> UUID | None:
+        """The account's session the join code names, or None; a refused account looks up
+        nothing, and a code that names no session of the account is counted for it."""
+        key = account_id.bytes
+        with self._unknown_lock:
+            if self._sign_in.account_refused(key, self.clock()):
+                return None
         session_id = self.registry.session_of_code(raw_session)
+        owned = {r.session_id for r in self.registry.running(account_id)}
+        if session_id is None or session_id not in owned:
+            with self._unknown_lock:
+                self._sign_in.unknown_code(key, self.clock())
+            return None
+        return session_id
+
+    def by_sign_in(
+        self, ctx: AccountContext, raw_session: object, site_hash: bytes, client: ClientInfo
+    ) -> Granted | None:
+        """A controller for a sign-in of the session's own account, or None (`cannot_control`).
+        Both places held is None too, and counts nothing."""
+        session_id = self._session_of_account(raw_session, ctx.account_id)
         if session_id is None:
-            self._unknown_session(address_hash)
             return None
         granted = self.registry.sign_in_controller(
             session_id, ctx.account_id, site_hash, self.clock()

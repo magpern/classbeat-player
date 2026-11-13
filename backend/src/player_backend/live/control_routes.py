@@ -1,16 +1,22 @@
 """`POST /api/live/controller` and `POST /api/live/control`: becoming a controller (ADR 0002,
-sections 5, 8 and 10; ADR 0005, sections 3 and 4).
+sections 5, 8 and 10; ADR 0005, sections 3, 4 and 10).
 
 - *By sign-in* (`/controller`): the one live route that takes the session cookie, with the
   site's `Origin` and `Sec-Fetch-Site` checks. The body's `session` (the join code) only names
   the session: the site session's account must be the live session's account. Every refusal but
-  a malformed body (422) and the address limit (429) is one answer, 403 `cannot_control`: no
-  sign-in, another origin, another account, an unknown session or both places held.
+  a malformed body (422) is one answer, 403 `cannot_control`: no sign-in, another origin,
+  another account, an unknown session, both places held, or either limit below.
+- Its limits (live_signin_policy.py): a call without a valid site session is refused before any
+  join code is looked up and counts for the caller's address; past 60 a minute, a call from that
+  address with no session cookie is refused without a lookup until the minute ends (one with a
+  cookie is still looked up, so a valid session is never refused). A join code that names no
+  session of the account counts for the account; past 60 a minute, every call of the account is
+  refused until the minute ends. Neither is the per-address limit below.
 - *By control code* (`/control`): no credential. An unknown session and a wrong code are both
   403 `invalid_code`; a right code while both places are held is 409 `controllers_full`, and is
-  neither used up nor a wrong try.
-- On both, a join code that names no session counts for the caller's address; past 60 a
-  minute every request from that address gets 429 with `Retry-After` until its minute ends.
+  neither used up nor a wrong try. A join code that names no session counts for the caller's
+  address; past 60 a minute every request from that address gets 429 with `Retry-After` until
+  its minute ends.
 - A body is checked with the contract's schema before anything is looked up; it must be sent
   as JSON. The answer, the contract's `controller-answer`, holds the controller token, given out
   once, here (`Cache-Control: no-store`, like every API answer).
@@ -35,14 +41,15 @@ from player_backend.live_wire_policy import Message, decode
 from player_backend.param_policy import is_json
 from player_backend.site.bodies import Body, RawBody
 from player_backend.site.cookies import session_cookie_token
-from player_backend.site.deps import SiteSession, TheCaller, same_origin
+from player_backend.site.deps import SiteSession, TheCaller, caller, same_origin
 from player_backend.token_policy import token_hash
 
 
 class _OneRefusal(APIRoute):
     """The sign-in route's credential refusals (401 and 403: no or an ended sign-in, another
     origin, and the route's own) all become 403 `cannot_control`, so that the answer tells
-    nothing about the session or the sign-in."""
+    nothing about the session or the sign-in. A 401 (no valid site session) counts for the
+    caller's address (`_signed_out_gate` refuses past the limit)."""
 
     def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         handler = super().get_route_handler()
@@ -51,6 +58,8 @@ class _OneRefusal(APIRoute):
             try:
                 return await handler(request)
             except ApiError as error:
+                if error.status == 401:
+                    live_service(request).signed_out(caller(request).address_hash)
                 if error.status in (401, 403):
                     raise ApiError(403, "cannot_control") from None
                 raise
@@ -79,6 +88,18 @@ def _not_limited(request: Request, address_hash: bytes) -> None:
         raise ApiError(429, "too_many_requests", {"Retry-After": str(wait)})
 
 
+def _signed_out_gate(
+    request: Request,
+    cookie: Annotated[str | None, Depends(session_cookie_token)],
+    who: TheCaller,
+) -> None:
+    """Past the address's limit of calls without a site session, a call with no session cookie
+    is refused before its sign-in or its join code is looked up. One with a cookie is still
+    looked up, so a valid session is never refused here."""
+    if cookie is None and live_service(request).signed_out_refused(who.address_hash):
+        raise ApiError(403, "cannot_control")
+
+
 def _token(token: str) -> JSONResponse:
     return JSONResponse({"controllerToken": token})
 
@@ -105,7 +126,7 @@ def _taken_back_on_failure(request: Request) -> Generator[_Grant]:
         raise
 
 
-@sign_in_router.post("/controller", dependencies=[Depends(same_origin)])
+@sign_in_router.post("/controller", dependencies=[Depends(same_origin), Depends(_signed_out_gate)])
 def by_sign_in(
     raw: RawBody,
     grant: Annotated[_Grant, Depends(_taken_back_on_failure, scope="function")],
@@ -115,12 +136,11 @@ def by_sign_in(
     request: Request,
 ) -> JSONResponse:
     body = _body(raw, "controller-request.schema.json")
-    _not_limited(request, who.address_hash)
     if cookie is None:  # not reached: the session dependency refused it already
         raise ApiError(403, "cannot_control")
     # The hash of the site session that asked: the re-check drops the controller with it.
     granted = live_service(request).by_sign_in(
-        context, body["session"], token_hash(cookie), who.address_hash, who.info
+        context, body["session"], token_hash(cookie), who.info
     )
     if granted is None:
         raise ApiError(403, "cannot_control")
