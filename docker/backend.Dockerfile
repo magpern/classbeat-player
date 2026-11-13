@@ -4,7 +4,8 @@
 # secret is a file the compose file mounts at run time (docker/compose.backend.yml).
 #
 # The sources stay in their repository layout because the backend reads the class format's
-# schemas from `schema/class-format/` next to `backend/` (class_schemas.py).
+# schemas from `schema/class-format/` and `schema/live/` next to `backend/` (class_schemas.py,
+# live/schemas.py: the package is installed editable from backend/src, so both find the root).
 # Pinned by digest (the multi-arch index of python:3.12-slim-bookworm); update it on purpose.
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
 
@@ -19,6 +20,7 @@ RUN pip install --no-cache-dir uv==0.11.32
 WORKDIR /srv/classbeat-player
 COPY schema/python schema/python
 COPY schema/class-format schema/class-format
+COPY schema/live/v1 schema/live/v1
 COPY backend/pyproject.toml backend/uv.lock backend/
 COPY backend/src backend/src
 COPY backend/db backend/db
