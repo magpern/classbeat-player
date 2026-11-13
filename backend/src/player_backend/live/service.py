@@ -12,7 +12,9 @@
   nothing; the sweep ends a session left unconfirmed too long (live_session_policy.py).
 - `sweep`: the lifetimes.
 
-A database error is logged by its type alone and never stops the caller.
+A database error is logged by its type alone and never stops the caller. Logs name an event, an
+error type, an end reason or a device state, never a token, code or hash; the log formatter
+keeps only its allowed fields, so those values are in the message.
 """
 
 from __future__ import annotations
@@ -32,8 +34,9 @@ from player_backend.live_session_policy import EndReason, audited
 _log = logging.getLogger("player_backend.live")
 
 
-def _logged(event: str, **fields: str) -> None:
-    _log.info("live", extra={"fields": {"event": event, **fields}})
+def _logged(event: str, detail: str = "-", level: int = logging.INFO) -> None:
+    """`detail` is a fixed word: an end reason, a device state or an error's type."""
+    _log.log(level, "live: %s", detail, extra={"fields": {"event": event}})
 
 
 class LiveService:
@@ -66,13 +69,17 @@ class LiveService:
         return ended is not None
 
     def _record(self, ended: Ended) -> None:
-        _logged("live.session_ended", reason=ended.reason)
+        _logged("live.session_ended", ended.reason)
         if not audited(ended.reason):
             return
         try:
-            live.record_end(self.pool, ended.device_hash, ended.session_id, ended.reason)
+            state = live.record_end(self.pool, ended.device_hash, ended.session_id, ended.reason)
         except (DatabaseError, HandleClosed) as error:
-            _log.warning("live end not recorded", extra={"fields": {"error": type(error).__name__}})
+            _logged("live.end_not_recorded", type(error).__name__, logging.WARNING)
+            return
+        if state != live.RECORDED:
+            # Over its budget (`limited`), or no longer working: the end has no audit event.
+            _logged("live.end_not_recorded", state, logging.WARNING)
 
     def sweep(self) -> None:
         for ended in self.registry.end_due(self.clock()):
@@ -87,7 +94,7 @@ class LiveService:
             devices = live.devices_active(self.pool, [r.device_hash for r in running])
             sessions = live.sessions_active(self.pool, [c.site_session_hash for c in controllers])
         except (DatabaseError, HandleClosed) as error:
-            _log.warning("live re-check failed", extra={"fields": {"error": type(error).__name__}})
+            _logged("live.recheck_failed", type(error).__name__, logging.WARNING)
             return False
         # Only a plain "active" keeps a session; a hash with no answer ends it too.
         active = [r.session_id for r in running if devices.get(r.device_hash) is True]

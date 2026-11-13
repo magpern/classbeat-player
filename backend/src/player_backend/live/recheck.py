@@ -74,7 +74,11 @@ class RecheckLoop:
         self._listener = None
         self._failures += 1
         self._retry_at = now + listen_retry_after(self._failures)
-        _log.warning("live listener lost", extra={"fields": {"failures": self._failures}})
+        _log.warning(
+            "live listener lost: %d",
+            self._failures,
+            extra={"fields": {"event": "live.listener_lost"}},
+        )
 
     def _open(self, now: float) -> None:
         try:
@@ -115,7 +119,9 @@ class RecheckLoop:
                     self.step()
                 except Exception as error:  # the loop must not die: log the type, go on
                     _log.error(
-                        "live re-check error", extra={"fields": {"error": type(error).__name__}}
+                        "live re-check error: %s",
+                        type(error).__name__,
+                        extra={"fields": {"event": "live.recheck_error"}},
                     )
                     self._stop.wait(self._timing.tick)
         finally:

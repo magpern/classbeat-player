@@ -10,14 +10,17 @@ with no token, code or hash in them; an end after the device was revoked writes 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
+import pytest
 from jsonschema import Draft202012Validator
 
 from player_backend.live.service import LiveService
 from player_backend.token_issue import new_token
+from player_backend.token_policy import token_hash
 from tests import pairhelp
 from tests.pairhelp import DEVICES, bearer
 from tests.sitehelp import Browser, Site
@@ -150,6 +153,29 @@ def test_an_end_after_the_device_is_revoked_writes_nothing(site: Site) -> None:
     assert service.end(session_id, "lifetime")
     assert _live_events(site) == [("live.session_started", {"session_id": body["sessionId"]})]
     assert browser.get(DEVICES).status_code == 200
+
+
+def test_an_end_over_the_devices_budget_is_logged_and_not_recorded(
+    site: Site, caplog: pytest.LogCaptureFixture
+) -> None:
+    _, app, (token,) = _paired(site, "Studio PC")
+    body = app.post(LIVE, headers=bearer(token)).json()
+    service = _service(site)
+    session_id = service.registry.host_session(body["hostToken"], service.clock())
+    assert session_id is not None
+    for _ in range(61):  # the device's requests for this minute are used up
+        site.su.execute("SELECT * FROM player.auth_enter_device(%s)", (token_hash(token),))
+    caplog.set_level(logging.INFO, logger="player_backend.live")
+    assert service.end(session_id, "lifetime")
+    assert [e for e, _ in _live_events(site)] == ["live.session_started"]
+    logged = [
+        (r.getMessage(), cast(dict[str, str], getattr(r, "fields", {})).get("event"))
+        for r in caplog.records
+        if r.levelno == logging.WARNING
+    ]
+    assert logged == [("live: limited", "live.end_not_recorded")]
+    for secret in (token, body["hostToken"], token_hash(token).hex()):
+        assert secret not in caplog.text
 
 
 def test_no_event_holds_a_token_code_or_hash(site: Site) -> None:

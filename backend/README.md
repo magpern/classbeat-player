@@ -305,10 +305,16 @@ default: no source can be linked.
   it is opened again after 1, 2, 4, 8, then every 15 seconds and every session is re-checked at
   once. A device not active ends its session (`revoked`); a site session not active drops the
   controller it signed in, and the session goes on.
+- The listening connection uses `PLAYER_DATABASE_URL`, like the pool, and needs a session-level
+  connection: behind a transaction pooler (which does not keep `LISTEN`) it would need a separate
+  listener URL that reaches PostgreSQL directly. There is no such setting yet.
 - Audit: `live.session_started` in the start's transaction; `live.session_ended` (with the reason:
   `host_ended`, `replaced`, `host_away`, `lifetime`, `unconfirmed`) after `auth_enter_device`
   with the session's stored hash, so nothing is written once the device is revoked or the account
-  is gone. Details hold the session id and the reason only.
+  is gone. Details hold the session id and the reason only. An end that is not recorded (the
+  device over its request budget, `limited`, or no longer working) is logged as
+  `live.end_not_recorded` with that state; a log names an event, a reason, a state or an error
+  type, never a token, code or hash.
 - `live_token_policy.hello_role`: the WebSocket's `hello` (#170) gives `cbp_hst_` the host's role
   and `cbp_ctl_` the controller's; a rider token gets none (no rider route in this part of PL8).
 - `create_app(..., live_recheck=None)` runs no re-check loop; the tests use it so, except

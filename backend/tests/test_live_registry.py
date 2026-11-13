@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 from player_backend.live.registry import Dropped, Ended, Registry, Started
 from player_backend.live_session_policy import HOST_AWAY_LIMIT, LIFETIME_LIMIT, UNCONFIRMED_LIMIT
 from player_backend.token_issue import new_token
-from player_backend.token_policy import token_string
+from player_backend.token_policy import token_hash, token_string
 
 SCHEMA = Path(__file__).resolve().parents[2] / "schema" / "live" / "v1"
 ACCOUNT, OTHER = uuid.uuid4(), uuid.uuid4()
@@ -54,6 +54,11 @@ def test_the_host_token_is_held_as_a_hash_and_never_shown() -> None:
     assert started.host_token not in repr(started)
     assert started.host_token not in repr(vars(registry))
     assert started.host_token.encode() not in repr(vars(registry)).encode()
+    # Nor any hash a session holds: the device token's, the host token's, a controller's.
+    registry.add_controller(started.session_id, b"\x07" * 32, b"\x08" * 32)
+    held = repr(list(vars(registry)["_sessions"].values()))
+    for digest in (HASH, token_hash(started.host_token), b"\x07" * 32, b"\x08" * 32):
+        assert repr(digest) not in held and digest.hex() not in held
 
 
 def test_only_the_host_token_finds_its_session() -> None:

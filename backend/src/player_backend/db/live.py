@@ -56,22 +56,27 @@ def add_event(
     )
 
 
-def record_end(pool: Pool, device_hash: bytes, session_id: UUID, reason: str) -> bool:
+# What `record_end` answers when the event was written; otherwise the device's state.
+RECORDED = "recorded"
+
+
+def record_end(pool: Pool, device_hash: bytes, session_id: UUID, reason: str) -> str:
     """Write "live session ended" after `auth_enter_device` with the session's stored hash.
 
-    False, with nothing written, when that sets no account: the device is revoked, expired or
-    gone, or over its budget.
+    `RECORDED` when written. Otherwise nothing is written and the answer is the device's state
+    from `auth_enter_device` (`revoked`, `expired`, `unknown`, or `limited` when over its
+    budget): that sets no account.
     """
     with pool.handle() as db, db.transaction():
         db.rows(dq.DEVICE_BUDGET, ("requests",))
         found = db.rows(dq.ENTER_DEVICE, (device_hash,))
         account_id, _ = db.rows(dq.CURRENT_ACCOUNT)[0]
-        device_id, state = found[0] if len(found) == 1 else (None, None)
+        device_id, state = found[0] if len(found) == 1 else (None, "unknown")
         if state != "ok" or not isinstance(account_id, UUID) or not isinstance(device_id, UUID):
-            return False
+            return str(state)
         detail = json.dumps({"session_id": str(session_id), "reason": reason})
         db.rows(dq.ADD_DEVICE_EVENT, (account_id, ENDED, "device", device_id, None, "", detail))
-        return True
+        return RECORDED
 
 
 def _answers(rows: list[Row]) -> dict[bytes, bool]:

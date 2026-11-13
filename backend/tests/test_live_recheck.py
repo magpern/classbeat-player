@@ -265,6 +265,22 @@ def test_a_lost_listener_comes_back_and_rechecks_every_session(noticed: Site) ->
     assert _until(lambda: _listeners(noticed) == 1)
 
 
+def test_the_app_as_built_by_default_runs_the_loop(app_url: str, db_url: str) -> None:
+    # `create_app` with no `live_recheck`, as production builds it: its own listener is open,
+    # and a revocation ends the session through it.
+    with running_site(app_url, db_url, live_default=True) as site:
+        assert _until(lambda: _listeners(site) == 1)
+        browser, app, token = _account(site)
+        session_id = _start(app, token)
+        seen = _watched(site)
+        device_id = browser.get(DEVICES).json()["devices"][0]["id"]
+        assert browser.delete(f"{DEVICES}/{device_id}").status_code == 204
+        assert _until(lambda: _running(site) == set())
+        assert _ended(seen, session_id) == ["revoked"]
+    with running_site(app_url, db_url) as site:
+        assert _until(lambda: _listeners(site) == 0)
+
+
 def test_the_loop_stops_with_the_app_and_closes_its_listener(app_url: str, db_url: str) -> None:
     with _site(app_url, db_url, NOTICE_ONLY) as site:
         assert _until(lambda: _listeners(site) == 1)
