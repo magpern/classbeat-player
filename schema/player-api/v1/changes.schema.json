@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/player-api/v1/changes.schema.json",
+  "title": "ChangesAnswer",
+  "description": "The answer of GET /api/player/changes (ADR 0002, section 7): one page of the account's class and removal changes after a cursor, in sync order, with no content. The next page starts after `cursor`; `more` says whether one follows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "changes",
+    "cursor",
+    "more"
+  ],
+  "properties": {
+    "changes": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/Change"
+      }
+    },
+    "cursor": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "more": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "Change": {
+      "title": "Change",
+      "description": "One class the account holds now, or a removal marker. A removal has no hash.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "source",
+        "source_class_id",
+        "publication_number",
+        "removed",
+        "content_hash",
+        "published_at",
+        "position"
+      ],
+      "properties": {
+        "class_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_class_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "publication_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "removed": {
+          "type": "boolean"
+        },
+        "content_hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "published_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        }
+      },
+      "if": {
+        "required": [
+          "removed"
+        ],
+        "properties": {
+          "removed": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "content_hash": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

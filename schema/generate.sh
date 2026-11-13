@@ -31,3 +31,18 @@ npm --prefix "$here/ts" exec --no -- json2ts \
 npm --prefix "$here/ts" exec --no -- json2ts \
   --input "$v1/publication.schema.json" --output "$out/ts/publication.d.ts" \
   --cwd "$v1" --no-additionalProperties --declareExternallyReferenced
+
+# The player API's answers (ADR 0002, section 7). The class answer's `document` references the
+# class schema: its Python module imports the class model, its TypeScript file declares it.
+api="$here/player-api/v1"
+for name in changes cursor error class; do
+  uv run --project "$here/python" --frozen datamodel-codegen \
+    --input "$api/$name.schema.json" --input-file-type jsonschema \
+    --output "$out/python/player_api_$name.py" \
+    --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 \
+    --use-standard-collections --use-union-operator --use-annotated --field-constraints \
+    --disable-timestamp --use-title-as-name --extra-fields forbid --formatters black isort
+  npm --prefix "$here/ts" exec --no -- json2ts \
+    --input "$api/$name.schema.json" --output "$out/ts/player-api-$name.d.ts" \
+    --cwd "$api" --no-additionalProperties --declareExternallyReferenced
+done
