@@ -13,14 +13,14 @@ Added to the codes read:
 
 - the sign-in route's class (`_OneRefusal`) answers every 401 and 403 as 403 `cannot_control`
   (checked by requests below too);
-- every route of the app may answer 422 `invalid_request` (the validation handler) and 500
-  `internal_error` (the access log), both installed on the app as a whole (app.py,
-  http_errors.py).
+- every route may answer 500 `internal_error` (the access log), and a route that takes a
+  parameter or a body may answer 422 `invalid_request` (the validation handler); one that takes
+  neither never does (tests/routetable.py).
 
 The body cap's 413 `body_too_large` is answered before any route is matched (body_cap.py), for
-every route of the app; it is not in the live table, and is listed apart below
-(`BEFORE_ROUTING`) and checked to be answered. Requests below check, on fakes, a sample of the
-codes as answered.
+every route of the app. The table lists it for every live route or for none (tests/routetable.py,
+both shapes in tests/test_live_route_table.py) and each route is requested below to answer it.
+Requests below check, on fakes, a sample of the codes as answered.
 """
 
 from __future__ import annotations
@@ -34,29 +34,29 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
-from fastapi.responses import JSONResponse
 from fastapi.routing import RouteContext
 from starlette.testclient import TestClient
 
 from player_backend import app as app_module
-from player_backend import http_errors
 from player_backend.app import create_app
 from player_backend.db import live as db_live
 from player_backend.db.executor import Pool
-from player_backend.http_errors import ApiError, error_response
 from player_backend.live import control_routes
 from player_backend.settings import Settings
-from player_backend.site.deps import NotSignedIn
-from tests.errorread import FORM_WORDS, Reader, Unreadable, naming_forms
+from tests.errorread import FORM_WORDS, Reader, naming_forms
 from tests.livehelp import SCHEMA, SITE
 from tests.routehelp import http_contexts
+from tests.routetable import BODY_CAP, route_problems, table_problems, takes_input
 
 ROUTING = json.loads((SCHEMA / "routing.json").read_text(encoding="utf-8"))
 TABLE: dict[str, set[str]] = {r["route"]: set(r["errors"]) for r in ROUTING["http"]}
-APP_WIDE = {"invalid_request", "internal_error"}
-BEFORE_ROUTING = {"body_too_large"}
+ERROR_ENUM = set(
+    json.loads((SCHEMA / "error.schema.json").read_text(encoding="utf-8"))["properties"]["error"][
+        "enum"
+    ]
+)
 # Definitions that name an error form in a module the reading goes into, and are on no live
 # route (`_OneRefusal` is the sign-in route's class, applied in `_answered`).
 NOT_ON_A_LIVE_ROUTE: dict[str, set[str]] = {
@@ -109,7 +109,11 @@ def _answered(route: RouteContext) -> set[str]:
         "cannot_control" if one_refusal and status in (401, 403) else code
         for status, code in reader.raised
     }
-    return codes | APP_WIDE
+    return (
+        codes
+        | {"internal_error"}
+        | ({"invalid_request"} if takes_input(route.dependant) else set())
+    )
 
 
 def test_the_live_routes_are_the_tables_routes() -> None:
@@ -118,8 +122,11 @@ def test_the_live_routes_are_the_tables_routes() -> None:
 
 @pytest.mark.parametrize("name", sorted(TABLE))
 def test_a_routes_error_codes_are_its_entry_in_routing_json(name: str) -> None:
-    assert _answered(_live_routes(_app())[name]) == TABLE[name]
-    assert not BEFORE_ROUTING & TABLE[name]
+    assert route_problems(name, TABLE[name], _answered(_live_routes(_app())[name])) == []
+
+
+def test_the_body_cap_is_listed_for_every_live_route_or_none() -> None:
+    assert table_problems(TABLE, ERROR_ENUM) == []
 
 
 def test_no_live_or_database_module_but_the_routes_names_an_error_form() -> None:
@@ -151,102 +158,6 @@ def test_every_definition_naming_an_error_form_in_a_read_module_is_read_or_liste
         assert not {(name, d) for d in listed} & read_names, name
     for cls in {c for r in readers for c in r.classes}:
         assert not FORM_WORDS.search(inspect.getsource(cls)), cls.__qualname__
-
-
-# -- what the reading refuses to read ---------------------------------------------------------
-
-
-class _SetsItsCode(ApiError):
-    def __init__(self) -> None:
-        super().__init__(410, "gone")
-        self.code = "other"
-
-
-class _CodeAnotherWay(ApiError):
-    def __init__(self) -> None:
-        ApiError.__init__(self, 410, "gone")
-
-
-class _Deeper(NotSignedIn):
-    pass
-
-
-def _through_a_module() -> None:
-    raise http_errors.ApiError(410, "gone")
-
-
-def _returned() -> JSONResponse:
-    return error_response(410, "gone")
-
-
-def _with_a_status() -> JSONResponse:
-    return JSONResponse({"error": "gone"}, status_code=410)
-
-
-def _http_exception() -> None:
-    raise HTTPException(410)
-
-
-def _a_code_by_name() -> None:
-    code = "gone"
-    raise ApiError(410, code)
-
-
-def _a_status_by_name() -> None:
-    status = 410
-    raise ApiError(status, "gone")
-
-
-def _sets_its_code() -> None:
-    raise _SetsItsCode
-
-
-def _code_another_way() -> None:
-    raise _CodeAnotherWay()
-
-
-def _deeper() -> None:
-    raise _Deeper
-
-
-def _passed_on(make: Callable[..., Exception] = ApiError) -> None:
-    raise make(410, "gone")
-
-
-@pytest.mark.parametrize(
-    "fn",
-    [
-        _through_a_module,
-        _returned,
-        _with_a_status,
-        _http_exception,
-        _a_code_by_name,
-        _a_status_by_name,
-        _sets_its_code,
-        _code_another_way,
-        _deeper,
-        _passed_on,
-    ],
-)
-def test_an_error_form_the_reading_cannot_read_fails_it(fn: Callable[[], object]) -> None:
-    with pytest.raises(Unreadable):
-        Reader().function(fn)
-
-
-def _readable() -> JSONResponse:
-    if False:
-        raise NotSignedIn
-    try:
-        raise ApiError(409, "gone")
-    except ApiError:
-        pass
-    return JSONResponse({"ok": True})
-
-
-def test_the_forms_it_reads_are_read() -> None:
-    reader = Reader()
-    reader.function(_readable)
-    assert reader.raised == {(401, "not_signed_in"), (409, "gone")}
 
 
 # -- the same codes, as answered (fakes) -----------------------------------------------------
@@ -290,6 +201,7 @@ def _control_body() -> dict[str, str]:
     ("path", "headers", "body", "status", "code"),
     [
         ("/api/live/sessions", {}, None, 401, "invalid_token"),
+        ("/api/live/sessions", JSON, [1, 2], 401, "invalid_token"),
         ("/api/live/controller", SAME_SITE, {"session": "x"}, 403, "cannot_control"),
         ("/api/live/controller", JSON | {"origin": "https://x.test"}, None, 403, "cannot_control"),
         ("/api/live/control", JSON, {"session": 1}, 422, "invalid_request"),
@@ -314,5 +226,4 @@ def test_a_sample_of_the_codes_as_answered(
 def test_the_body_cap_answers_before_routing(client: TestClient, name: str) -> None:
     path = name.split(" ", 1)[1]
     answer = _post(client, path, JSON | {"content-length": str(10**6)}, content=b"{}")
-    assert (answer.status_code, answer.json()) == (413, {"error": "body_too_large"})
-    assert BEFORE_ROUTING == {answer.json()["error"]}
+    assert (answer.status_code, answer.json()) == (413, {"error": BODY_CAP})
