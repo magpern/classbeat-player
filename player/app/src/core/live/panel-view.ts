@@ -30,6 +30,9 @@ export interface LivePanelView {
   readonly codeNote: string | null;
   /** Where the phone goes: the site's control page. */
   readonly controlPage: string | null;
+  /** What the QR code carries, presenter only, exactly while the control code is shown:
+   * `<control page>#<class code>.<control code>` (ADR 0005 section 3; companion.md). */
+  readonly controlLink: string | null;
   readonly slots: readonly SlotView[];
   /** The last phone command applied, for a few seconds: "Phone 1: pause". */
   readonly line: string | null;
@@ -132,6 +135,7 @@ export function livePanelView(m: LiveModel, f: PanelFacts): LivePanelView {
     controlCodeLeft: code === null ? null : clockText(code.expiresAt - f.now + 999),
     codeNote: live && f.secondDisplay && code === null && m.codeNote !== null ? NOTES[m.codeNote] : null,
     controlPage: running && f.origin !== null ? `${f.origin}/control` : null,
+    controlLink: code !== null && f.origin !== null && m.session !== null ? `${f.origin}/control#${m.session.joinCode}.${code.code}` : null,
     slots,
     line: live && m.line !== null && f.now < m.line.until ? lineText(m.line) : null,
   };
