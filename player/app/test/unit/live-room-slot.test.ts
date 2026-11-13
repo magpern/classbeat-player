@@ -55,11 +55,11 @@ test("refusals: in use elsewhere and no answer are said; a broken pairing takes 
   for (const [refusal, v] of Object.entries(want)) assert.deepEqual(roomSlotOf({ ...OFF, phase: "refused", refusal: refusal as Refusal }, FACTS), v, refusal);
 });
 
-test("no answer is Can't reach site whether a class is open or not, and Absent when not paired; it holds nothing of the session", () => {
+test("no answer is Can't reach site with a class open, and Absent with none or when not paired; it holds nothing of the session", () => {
   const away = (over: Partial<LiveModel> = {}): LiveModel => full("refused", { refusal: "unreachable", ...over });
   assert.deepEqual(roomSlotOf(away(), FACTS), { slot: "available", note: "unreachable" });
   assert.deepEqual(roomSlotOf(away(), { ...FACTS, site: null }), { slot: "available", note: "unreachable" });
-  assert.deepEqual(roomSlotOf(away(), { ...FACTS, classOpen: false }), { slot: "available", note: "unreachable" });
+  assert.deepEqual(roomSlotOf(away(), { ...FACTS, classOpen: false }), { slot: "absent" });
   assert.deepEqual(roomSlotOf(away(), { ...FACTS, paired: false }), { slot: "absent" });
   // What the room window is sent is the same view, through its filter.
   assert.deepEqual(remoteViewOf(roomSlotOf(away(), FACTS)), { slot: "available", note: "unreachable" });
@@ -93,11 +93,27 @@ test("endings: Phone remote ended, except for a new class, which starts Off", ()
   assert.deepEqual(roomSlotOf({ ...OFF, phase: "ended", ended: "class_changed" }, FACTS), { slot: "available", note: "none" });
 });
 
-test("not paired: absent in every phase; no class open: no button to press", () => {
+test("not paired: absent in every phase", () => {
   const phases: readonly Phase[] = ["idle", "starting", "connecting", "live", "reconnecting", "ended", "refused"];
   for (const p of phases) assert.deepEqual(roomSlotOf(full(p), { ...FACTS, paired: false }), { slot: "absent" }, p);
-  for (const m of [OFF, { ...OFF, phase: "ended" as const, ended: "host_ended" as const }, { ...OFF, phase: "refused" as const, refusal: "server" as const }]) {
-    assert.deepEqual(roomSlotOf(m, { ...FACTS, classOpen: false }), { slot: "absent" }, m.phase);
+});
+
+test("no class open: Absent in every phase, refusal and ending, with no Off button and no note (#232)", () => {
+  const refusals: readonly Refusal[] = ["sessions_full", "unreachable", "not_paired", "pair_again", "too_many", "server", "no_class"];
+  const endings: readonly EndReason[] = ["host_ended", "revoked", "expired", "lost", "gone", "replaced", "class_changed"];
+  const rows: readonly [string, LiveModel][] = [
+    ["idle", OFF],
+    ["starting", { ...OFF, phase: "starting", run: RUN }],
+    ["connecting", full("connecting", { places: ["none", "none"] })],
+    ["live, no phone", full("live", { places: ["none", "none"] })],
+    ["live, a phone", full("live")],
+    ["live, two phones", full("live", { places: ["connected", "connected"] })],
+    ["reconnecting", full("reconnecting", { places: ["away", "away"] })],
+    ...refusals.map((refusal): [string, LiveModel] => [`refused: ${refusal}`, { ...OFF, phase: "refused", refusal }]),
+    ...endings.map((ended): [string, LiveModel] => [`ended: ${ended}`, { ...OFF, phase: "ended", ended }]),
+  ];
+  for (const [label, m] of rows) {
+    for (const site of [ORIGIN, null]) assert.deepEqual(roomSlotOf(m, { paired: true, classOpen: false, site }), { slot: "absent" }, `${label}, site ${site}`);
   }
 });
 

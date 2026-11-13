@@ -45,9 +45,9 @@ test("other keys and chords are left alone", () => {
   }
 });
 
-test("Space, the arrows and the Page keys wait while the End question is open; the rest do not", () => {
-  const waits = [k(" "), k("ArrowRight"), k("ArrowLeft"), k("PageDown"), k("PageUp"), k("ArrowRight", { shift: true }), k("ArrowLeft", { shift: true })];
-  const acts = [k("z", { mod: true }), k("f"), k("End"), k("Escape"), k("Tab"), k("F5"), k("b")];
+test("Space, the arrows, the Page keys, F5 and Shift+F5 wait while the End question is open; the rest do not", () => {
+  const waits = [k(" "), k("ArrowRight"), k("ArrowLeft"), k("PageDown"), k("PageUp"), k("ArrowRight", { shift: true }), k("ArrowLeft", { shift: true }), k("F5"), k("F5", { shift: true })];
+  const acts = [k("z", { mod: true }), k("f"), k("End"), k("Escape"), k("Tab"), k("b")];
   for (const p of waits) assert.equal(waitsForQuestion(keyAction(p)!), true, p.key);
   for (const p of acts) assert.equal(waitsForQuestion(keyAction(p)!), false, p.key);
 });

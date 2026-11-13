@@ -25,10 +25,11 @@ export function phonesOf(places: readonly Place[]): 0 | 1 | 2 {
 
 /** The slot the room window is sent. Never starts anything: it only reads the session. */
 export function roomSlotOf(m: LiveModel, f: SlotFacts): RemoteView {
-  if (!f.paired) return { slot: "absent" };
+  // No pairing, or no class open: nothing to attach a phone remote to, in every phase.
+  if (!f.paired || !f.classOpen) return { slot: "absent" };
   switch (m.phase) {
     case "idle":
-      return f.classOpen ? { slot: "available", note: "none" } : { slot: "absent" };
+      return { slot: "available", note: "none" };
     case "starting":
     case "connecting":
       // The join code is known while connecting, but it is shown only once the session runs.
@@ -48,9 +49,8 @@ export function roomSlotOf(m: LiveModel, f: SlotFacts): RemoteView {
       if (m.refusal === "not_paired" || m.refusal === "pair_again") return { slot: "absent" };
       if (m.refusal === "sessions_full") return { slot: "available", note: "in_use" };
       if (m.refusal === "unreachable") return { slot: "available", note: "unreachable" };
-      return f.classOpen ? { slot: "available", note: "none" } : { slot: "absent" };
+      return { slot: "available", note: "none" };
     case "ended":
-      if (!f.classOpen) return { slot: "absent" };
       // A new class is a new run: its slot starts Off, with no news of the run before.
       return { slot: "available", note: m.ended === "class_changed" ? "none" : "ended" };
   }

@@ -211,10 +211,10 @@ test("a double-click on End lands on Keep going: nothing is called and the quest
   });
 });
 
-test("while the End question is open, Space and the arrows do nothing; Esc answers it first", async () => {
+test("while the End question is open, Space, the arrows and F5 do nothing; Esc answers it first", async () => {
   await room({}, async (r) => {
     await r.page.keyboard.press("End");
-    for (const k of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "Shift+ArrowRight", "Shift+ArrowLeft"]) await r.page.keyboard.press(k);
+    for (const k of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "Shift+ArrowRight", "Shift+ArrowLeft", "F5", "Shift+F5"]) await r.page.keyboard.press(k);
     assert.deepEqual(await r.calls(), []);
     assert.equal(await r.page.locator(".band .ask").count(), 1);
     await r.page.keyboard.press("Escape");
@@ -275,6 +275,19 @@ test("a clicker: F5 and Shift+F5 are Start only before the start; B and '.' do n
     assert.equal(await r.phase(), "hidden");
   });
   await room({ frame: frameOf("before-start"), alone: false }, async (r) => {
+    await r.page.keyboard.press("F5");
+    assert.deepEqual(await r.calls(), ["start"]);
+  });
+});
+
+test("while the End question is open before the start, F5 and Shift+F5 do nothing; after Esc, F5 starts (#232)", async () => {
+  await room({ frame: frameOf("before-start"), alone: false }, async (r) => {
+    await r.page.keyboard.press("End");
+    assert.equal(await r.page.locator(".band .ask").count(), 1);
+    for (const k of ["F5", "Shift+F5"]) await r.page.keyboard.press(k);
+    assert.deepEqual(await r.calls(), []);
+    assert.equal(await r.page.locator(".band .ask").count(), 1);
+    await r.page.keyboard.press("Escape");
     await r.page.keyboard.press("F5");
     assert.deepEqual(await r.calls(), ["start"]);
   });
