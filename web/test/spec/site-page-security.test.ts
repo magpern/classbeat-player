@@ -93,8 +93,10 @@ describe("nothing secret leaves the page, in any state", () => {
       const site = await reach(browser, { state, width: 390, zoom: 1, ink: false });
       const seen = await traps(site.page);
       // The session is the server's HttpOnly cookie: the page never reads or writes a cookie, and
-      // keeps nothing in storage, IndexedDB or the cache. Nothing is turned into markup.
-      assert.deepEqual(seen.filter((t) => ["storage", "cookie", "indexeddb", "cache", "console", "csp", "markup"].includes(t.kind)), []);
+      // keeps nothing in storage, IndexedDB or the cache. Nothing is turned into markup or an event
+      // handler, every hook of the trap is in place, and no other realm (where the trap is not) is opened.
+      assert.deepEqual(seen.filter((t) => ["storage", "cookie", "indexeddb", "cache", "console", "csp", "markup", "script", "realm", "missing"].includes(t.kind)), []);
+      assert.deepEqual(site.realms, [], "another realm: a frame, a page or a worker");
       assert.deepEqual(site.console.filter((c) => !c.includes("Failed to load resource")), []);
       assert.deepEqual(site.external, [], "a request to another origin");
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
@@ -126,13 +128,74 @@ describe("the markup trap", () => {
     ["Document.parseHTML", "Document.parseHTML('x')"],
     ["srcdoc", "document.createElement('iframe').srcdoc = '<p>x</p>'"],
     ["setAttribute srcdoc", "document.createElement('iframe').setAttribute('SrcDoc', '<p>x</p>')"],
+    ["execCommand insertHTML", "document.execCommand('InsertHTML', false, '<b>x</b>')"],
+    // Every other way to write an attribute (#293).
+    ["setAttributeNS srcdoc", "document.createElement('iframe').setAttributeNS(null, 'srcdoc', '<p>x</p>')"],
+    ["toggleAttribute srcdoc", "document.createElement('iframe').toggleAttribute('srcdoc')"],
+    ["setAttributeNode srcdoc", "document.createElement('iframe').setAttributeNode(document.createAttribute('srcdoc'))"],
+    ["setAttributeNodeNS srcdoc", "document.createElement('iframe').setAttributeNodeNS(document.createAttributeNS(null, 'srcdoc'))"],
+    ["setNamedItem srcdoc", "document.createElement('iframe').attributes.setNamedItem(document.createAttribute('srcdoc'))"],
+    ["setNamedItemNS srcdoc", "document.createElement('iframe').attributes.setNamedItemNS(document.createAttributeNS(null, 'srcdoc'))"],
+    ["Attr.value srcdoc", "const f = document.createElement('iframe'); f.toggleAttribute('srcdoc'); f.getAttributeNode('srcdoc').value = '<p>x</p>'"],
+    ["Attr.nodeValue srcdoc", "document.createAttribute('srcdoc').nodeValue = '<p>x</p>'"],
+    ["Attr.textContent srcdoc", "document.createAttribute('srcdoc').textContent = '<p>x</p>'"],
   ];
-  for (const [detail, code] of calls) {
-    it(`notes ${detail}`, async () => {
+  // An event handler written as an attribute, by each route (#293).
+  const handlers: [string, string][] = [
+    ["setAttribute onclick", "document.createElement('div').setAttribute('OnClick', 'go()')"],
+    ["setAttributeNS onerror", "document.createElement('img').setAttributeNS(null, 'onerror', 'go()')"],
+    ["toggleAttribute onload", "document.createElement('img').toggleAttribute('onload')"],
+    ["setAttributeNode onload", "document.createElement('img').setAttributeNode(document.createAttribute('onload'))"],
+    ["setAttributeNodeNS onload", "document.createElement('img').setAttributeNodeNS(document.createAttributeNS(null, 'onload'))"],
+    ["setNamedItem onfocus", "document.createElement('a').attributes.setNamedItem(document.createAttribute('onfocus'))"],
+    ["setNamedItemNS onfocus", "document.createElement('a').attributes.setNamedItemNS(document.createAttributeNS(null, 'onfocus'))"],
+    ["Attr.value onclick", "const h = document.createAttribute('onclick'); h.value = 'go()'"],
+    ["Attr.nodeValue onclick", "document.createAttribute('onclick').nodeValue = 'go()'"],
+    ["Attr.textContent onclick", "document.createAttribute('onclick').textContent = 'go()'"],
+  ];
+  for (const [kind, table] of [["markup", calls], ["script", handlers]] as const) {
+    for (const [detail, code] of table) {
+      it(`notes ${detail}`, async () => {
+        const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+        // These APIs exist in the Chromium the tests run on, so a missing one is a failure, not a skip.
+        await site.page.evaluate(`(() => { ${code}; })()`);
+        assert.ok((await traps(site.page)).some((t) => t.kind === kind && t.detail === detail), `${detail} not noted`);
+        await site.context.close();
+      });
+    }
+  }
+
+  it("has every hook in place, and a hook whose API is missing is noted, not skipped", async () => {
+    const whole = await openSite(browser, "/sign-in", { width: 390, height: 844 });
+    assert.deepEqual((await traps(whole.page)).filter((t) => t.kind === "missing"), []);
+    await whole.context.close();
+    const site = await openSite(browser, "/sign-in", { width: 390, height: 844, before: "delete Element.prototype.setAttributeNode; delete Document.parseHTML;" });
+    const missing = (await traps(site.page)).filter((t) => t.kind === "missing").map((t) => t.detail);
+    assert.ok(missing.includes("setAttributeNode") && missing.includes("Document.parseHTML"), missing.join(", "));
+    await site.context.close();
+  });
+});
+
+describe("the realm check (#293)", () => {
+  // The trap is installed in the page's own realm only. A fresh realm has prototypes it does not
+  // wrap, so the fake records every realm the page opens and the checks above require none.
+  const opens: [string, string, string][] = [
+    ["an iframe used and removed at once", "frame", "const f = document.createElement('iframe'); document.body.append(f); const set = Object.getOwnPropertyDescriptor(f.contentWindow.Element.prototype, 'innerHTML').set; set.call(document.createElement('div'), '<b>x</b>'); f.remove()"],
+    ["an iframe in a closed shadow root", "frame", "const h = document.createElement('div'); document.body.append(h); h.attachShadow({ mode: 'closed' }).append(document.createElement('iframe'))"],
+    ["an object element", "frame", "const o = document.createElement('object'); o.data = '/sign-in'; o.type = 'text/html'; document.body.append(o)"],
+    ["a popup", "page", "window.open('about:blank', '_blank')"],
+    ["a dedicated worker", "worker", "new Worker('/site.js')"],
+    ["a shared worker", "realm", "new SharedWorker('/site.js')"],
+    ["a service worker", "realm", "navigator.serviceWorker.register('/site.js').catch(() => undefined)"],
+  ];
+  for (const [name, seen, code] of opens) {
+    it(`records ${name}`, async () => {
       const site = await openSite(browser, "/sign-in", { width: 390, height: 844 });
-      // These APIs exist in the Chromium the tests run on, so a missing one is a failure, not a skip.
+      assert.deepEqual(site.realms, []);
       await site.page.evaluate(`(() => { ${code}; })()`);
-      assert.ok((await traps(site.page)).some((t) => t.kind === "markup" && t.detail === detail), `${detail} not noted`);
+      const recorded = async (): Promise<boolean> => (seen === "realm" ? (await traps(site.page)).some((t) => t.kind === "realm") : site.realms.some((r) => r.startsWith(`${seen} `)));
+      for (let i = 0; i < 100 && !(await recorded()); i += 1) await site.page.waitForTimeout(20);
+      assert.ok(await recorded(), `${name} not recorded: ${site.realms.join(", ")}`);
       await site.context.close();
     });
   }

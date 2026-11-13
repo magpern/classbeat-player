@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
 import { checkPalette } from "../lib/palette.ts";
 import { impurities } from "../lib/core-purity.ts";
+import { remoteFontRefs } from "../lib/font-refs.ts";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokens = readFileSync(join(WEB, "src", "design", "tokens.css"), "utf8");
@@ -17,57 +18,6 @@ function walk(dir: string): string[] {
     const p = join(dir, f);
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
-}
-
-const REMOTE = /^\s*(?:https?:)?\/\//i;
-
-/** Decodes the CSS escapes of one captured value: `\68 ttps` is `https`, `\/` is `/`; CRLF, CR and FF count as LF and a backslash-newline is a continuation. */
-function decodeCssEscapes(value: string): string {
-  return value
-    .replace(/\r\n|[\r\f]/g, "\n")
-    .replace(/\\\n/g, "")
-    .replace(/\\(?:([0-9a-f]{1,6})[ \t\n]?|([^\n0-9a-f]))/gi, (_m, hex?: string, ch?: string) => {
-      if (ch !== undefined) return ch;
-      const cp = parseInt(hex ?? "0", 16);
-      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : "�";
-    });
-}
-
-/** Decodes the HTML character references an attribute value may use: `&#x68;ttps`, `&#104;`, `&colon;`, `&sol;`. */
-function decodeHtmlRefs(value: string): string {
-  return value
-    .replace(/&#x([0-9a-f]+);?/gi, (_m, h: string) => String.fromCodePoint(Math.min(parseInt(h, 16), 0x10ffff)))
-    .replace(/&#(\d+);?/g, (_m, d: string) => String.fromCodePoint(Math.min(parseInt(d, 10), 0x10ffff)))
-    .replace(/&colon;/gi, ":")
-    .replace(/&sol;/gi, "/")
-    .replace(/&amp;/gi, "&");
-}
-
-// A CSS token that may hold escapes: a hex escape swallows one whitespace after it, so it is matched whole.
-const cssToken = (stop: string): string => `(?:\\\\[0-9a-f]{1,6}(?:\\r\\n|[ \\t\\n\\r\\f])?|\\\\(?:\\r\\n|[\\s\\S])|[^${stop}\\\\])+`;
-const FONT_URL = new RegExp(`url\\(\\s*["']?\\s*(${cssToken(`)"'\\s`)})`, "gi");
-const IMPORT = new RegExp(`@import(?:\\s|/\\*[\\s\\S]*?\\*/)*(?:url\\(\\s*)?["']?\\s*(${cssToken(`)"';\\s`)})`, "gi");
-
-/**
- * Remote font references in a CSS or HTML text: a remote url() in an @font-face, a remote @import, a remote <link href>.
- * The structure is found in the raw text; only a captured CSS value is CSS-decoded and only a <link> href is HTML-decoded.
- */
-function remoteFontRefs(text: string): string[] {
-  const found: string[] = [];
-  for (const m of text.matchAll(/@font-face\s*\{[^}]*\}/gi))
-    for (const u of m[0].matchAll(FONT_URL)) {
-      const url = decodeCssEscapes(u[1] ?? "");
-      if (REMOTE.test(url)) found.push(url);
-    }
-  for (const m of text.matchAll(IMPORT)) {
-    const url = decodeCssEscapes(m[1] ?? "");
-    if (REMOTE.test(url)) found.push(url);
-  }
-  for (const m of text.matchAll(/<link\b[^>]*>/gi)) {
-    const href = decodeHtmlRefs(/\bhref\s*=\s*["']?\s*([^"'\s>]+)/i.exec(m[0])?.[1] ?? "");
-    if (REMOTE.test(href)) found.push(href);
-  }
-  return found;
 }
 
 describe("design tokens", () => {
@@ -151,6 +101,57 @@ describe("the web lane stands alone", () => {
     assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href="&#104;ttps://fonts.test/css">'), ["https://fonts.test/css"]);
     assert.deepEqual(remoteFontRefs('@import/**/"https://fonts.test/css";'), ["https://fonts.test/css"]);
     assert.deepEqual(remoteFontRefs("@import /* x */ url(https://fonts.test/css);"), ["https://fonts.test/css"]);
+  });
+
+  it("an escape in a keyword, a quote in a tag, or a tab or newline in the address hides no remote font (#293)", () => {
+    const remote: readonly (readonly [string, string])[] = [
+      // CSS escapes in the keyword itself, read as CSS reads them; the structure is still found in the raw text (#276, B1).
+      ["@font-face{src:\\75rl(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font-face{src:\\55 RL(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font-face{src:u\\rl(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font-face{src:\\000075\r\nrl(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ['@\\69mport "https://fonts.test/css";', "https://fonts.test/css"],
+      ['@IM\\port "https://fonts.test/css";', "https://fonts.test/css"],
+      ["@import \\75rl(https://fonts.test/css);", "https://fonts.test/css"],
+      ["@\\66ont-face{src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font\\-face{src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font\\2d face{src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      // A comment before the block, and a brace that does not close it: quoted, escaped or in a comment.
+      ["@font-face/* x */{src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ['@font-face{font-family:"}";src:url(https://x.test/a.woff2)}', "https://x.test/a.woff2"],
+      ["@font-face{font-family:'a}';src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font-face{font-family:a\\};src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ["@font-face{font-family:a/* } */;src:url(https://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      // The URL parser drops tab and newline anywhere and C0 controls or spaces at either end, and reads a backslash as a slash.
+      ["@font-face{src:url('ht\ttps://x.test/a.woff2')}", "https://x.test/a.woff2"],
+      ["@font-face{src:url(ht\\9 tps://x.test/a.woff2)}", "https://x.test/a.woff2"],
+      ['@import "\\1 https://fonts.test/css";', "https://fonts.test/css"],
+      ["@font-face{src:url(\\5c\\5c x.test/a.woff2)}", "\\\\x.test/a.woff2"],
+      ["@font-face{src:url(http:x.test/a.woff2)}", "http:x.test/a.woff2"],
+      // A `>` inside an earlier quoted attribute does not end the tag; a look-alike attribute name is not the href.
+      ['<link title="a>b" rel="stylesheet" href="https://fonts.test/css">', "https://fonts.test/css"],
+      ["<link title='>' href=https://fonts.test/css>", "https://fonts.test/css"],
+      ['<link rel="stylesheet" data-href="./a.css" href="https://fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="./a.css" href="https://fonts.test/css">', "https://fonts.test/css"],
+      // Tab and newline in an href, written as a character, a named or a numeric reference.
+      ['<link rel="stylesheet" href="ht&Tab;tps://fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="https:&NewLine;//fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="ht\ttps://fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="ht\ntps://fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="ht&#10;tps://fonts.test/css">', "https://fonts.test/css"],
+      ['<link rel="stylesheet" href="&bsol;&bsol;fonts.test/css">', "\\\\fonts.test/css"],
+      ['<link rel="stylesheet" href="/\\fonts.test/css">', "/\\fonts.test/css"],
+    ];
+    for (const [text, url] of remote) assert.deepEqual(remoteFontRefs(text), [url], JSON.stringify(text));
+    // The same shapes with a relative address stay local.
+    for (const text of [
+      '<link title="a>b" rel="stylesheet" href="./room/room.css">',
+      '@font-face{font-family:"}";src:url(./fonts/a.woff2)}',
+      "@font-face{src:\\75rl(./fonts/a.woff2)}",
+      '@\\69mport "./room.css";',
+      "@font-face{src:url('./fonts/a\\9 b.woff2')}",
+    ])
+      assert.deepEqual(remoteFontRefs(text), [], JSON.stringify(text));
   });
 
   it("nothing from a class file becomes markup", () => {
