@@ -4,9 +4,11 @@ import { clockText, targetText, zoneText } from "../core/format.ts";
 import type { PairingView } from "../core/pairing/view.ts";
 import type { Snapshot } from "../core/snapshot.ts";
 import { statusText } from "../core/status-text.ts";
+import { mountLive } from "./live-panel.ts";
+import type { LiveApi } from "./live-panel.ts";
 import { mountPairing } from "./pairing-panel.ts";
 
-interface PlayerApi {
+interface PlayerApi extends LiveApi {
   getState(): Promise<Snapshot | null>;
   command(cmd: unknown): Promise<Snapshot | null>;
   openDropped(name: string, text: string): Promise<Snapshot | null>;
@@ -154,4 +156,5 @@ window.addEventListener("drop", (e) => {
 
 api.onUpdate(render);
 mountPairing(api);
+mountLive(api);
 void api.getState().then(render);

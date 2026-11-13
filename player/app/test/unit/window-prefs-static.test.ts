@@ -139,3 +139,11 @@ test("the check accepts the windows as the shell writes them", () => {
   assert.deepEqual(ok('import { Menu } from "electron";\nclass Own {}\nnew Menu(); new Own(); const k = `a${1}`; rows[i + 1];'), [], "imports, own classes, templates, arithmetic keys");
   assert.deepEqual(checkSource('import { BrowserWindow } from "electron";\nimport { secureWebPreferences } from "../web-preferences.ts";\nnew BrowserWindow({ webPreferences: secureWebPreferences(p) });', ROOM).problems, []);
 });
+
+test("the runtime's WebSocket may be built in main/live/live-socket.ts only (#173)", () => {
+  const code = "export const open = (u: string) => new WebSocket(u);";
+  assert.deepEqual(checkSource(code, join(SRC, "main", "live", "live-socket.ts")).problems, []);
+  for (const other of [join(SRC, "main", "main.ts"), join(SRC, "main", "live", "setup.ts"), join(SRC, "renderer", "live-socket.ts"), join(SRC, "main", "live", "live-socket.ts.bak.ts")]) {
+    assert.notDeepEqual(checkSource(code, other).problems, [], other);
+  }
+});

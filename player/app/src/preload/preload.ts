@@ -9,6 +9,11 @@ import {
   CH_LIST_OPEN_FILE,
   CH_LIST_START,
   CH_LIST_VIEW,
+  CH_LIVE_CODE,
+  CH_LIVE_DROP,
+  CH_LIVE_END,
+  CH_LIVE_START,
+  CH_LIVE_VIEW,
   CH_OPEN_DROPPED,
   CH_PAIRING_REOPEN,
   CH_PAIRING_START,
@@ -38,4 +43,11 @@ contextBridge.exposeInMainWorld("player", {
   openClassFile: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_OPEN_FILE),
   dismissFileError: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_DISMISS),
   backToClass: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_BACK),
+  // The phone remote (presenter only): what the panel shows, start, end, a control code, Drop a
+  // phone's place (1 or 2). The answer never holds the host token.
+  liveView: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_VIEW),
+  startLive: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_START),
+  endLive: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_END),
+  makeControlCode: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_CODE),
+  dropPhone: (slot: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_DROP, slot),
 });
