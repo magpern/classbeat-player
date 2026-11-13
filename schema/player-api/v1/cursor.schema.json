@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/player-api/v1/cursor.schema.json",
+  "title": "CursorAnswer",
+  "description": "The answer of GET /api/player/cursor (ADR 0002, section 7): the account's current sync cursor. 0 is before the account's first publication.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cursor"
+  ],
+  "properties": {
+    "cursor": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    }
+  }
+}
