@@ -3,7 +3,7 @@
 // code and how many of the instructor's phones are connected, and nothing else of the session: the
 // room window is seen by every rider, so whatever else the session holds never reaches this view.
 import type { RemoteView } from "../room/remote.ts";
-import type { LiveModel } from "./session-types.ts";
+import type { LiveModel, Place } from "./session-types.ts";
 
 export interface SlotFacts {
   /** Whether this computer is paired: without it there is no phone remote (Absent). */
@@ -11,6 +11,16 @@ export interface SlotFacts {
   readonly classOpen: boolean;
   /** The site the session was started on, for the QR code; the room's filter keeps only an HTTPS origin. */
   readonly site: string | null;
+}
+
+/** The most phones the slot counts: the session has two places (ADR 0005 section 3). */
+export const MAX_PHONES = 2;
+
+/** How many phones the slot shows: the connected places, checked against the cap, so never more than two. */
+export function phonesOf(places: readonly Place[]): 0 | 1 | 2 {
+  const n = places.filter((p) => p === "connected").length;
+  if (n >= MAX_PHONES) return MAX_PHONES;
+  return n === 1 ? 1 : 0;
 }
 
 /** The slot the room window is sent. Never starts anything: it only reads the session. */
@@ -27,9 +37,7 @@ export function roomSlotOf(m: LiveModel, f: SlotFacts): RemoteView {
     case "reconnecting": {
       const joinCode = m.session?.joinCode;
       if (joinCode === undefined) return { slot: "absent" };
-      const n = m.places.filter((p) => p === "connected").length;
-      const phones = n >= 2 ? 2 : n === 1 ? 1 : 0;
-      const on = { slot: "on", joinCode, phones, reconnecting: m.phase === "reconnecting" } as const;
+      const on = { slot: "on", joinCode, phones: phonesOf(m.places), reconnecting: m.phase === "reconnecting" } as const;
       return f.site === null ? on : { ...on, site: f.site };
     }
     case "refused":

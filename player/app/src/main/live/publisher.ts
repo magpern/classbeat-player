@@ -70,9 +70,6 @@ export function createPublisher(d: PublisherDeps): Publisher {
     return s === null ? "" : JSON.stringify(s);
   };
 
-  // Whether a connection is in: a send can end the run at once (a transport that answers within
-  // `send`, #216), and then nothing more is sent.
-  const sending = (): boolean => send !== null;
   const pump = (): void => {
     cancel();
     const out = send;
@@ -93,7 +90,9 @@ export function createPublisher(d: PublisherDeps): Publisher {
         lastShown = JSON.stringify({ ...state, seq: 0 });
         seq += 1;
       }
-      if (!sending()) return;
+      // A send can end the run or replace the connection at once (a transport that answers within
+      // `send`, #216, #217): then nothing more goes through this sender, not even to a new one.
+      if (send !== out) return;
     }
     const wait = Math.max(0, wakeAt(budget, r.now) - r.now);
     timer = d.setTimer(pump, wait);

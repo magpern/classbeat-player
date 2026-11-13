@@ -3,10 +3,10 @@
 // token, the session id, the control code, the run) never in it. Pure; no fakes needed.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { roomSlotOf } from "../../src/core/live/room-slot.ts";
+import { MAX_PHONES, phonesOf, roomSlotOf } from "../../src/core/live/room-slot.ts";
 import type { SlotFacts } from "../../src/core/live/room-slot.ts";
 import { OFF } from "../../src/core/live/session-types.ts";
-import type { EndReason, LiveModel, Phase, Refusal } from "../../src/core/live/session-types.ts";
+import type { EndReason, LiveModel, Phase, Place, Refusal } from "../../src/core/live/session-types.ts";
 import { remoteViewOf } from "../../src/core/room/remote.ts";
 import type { RemoteView } from "../../src/core/room/remote.ts";
 import { CONTROL_CODE, HOST_TOKEN, JOIN_CODE, ORIGIN, SESSION_ID } from "./live-relay.ts";
@@ -73,6 +73,18 @@ test("the phone count is 0, 1 or 2, counted from the places, never anything else
     [["connected", "connected"], 2],
   ];
   for (const [places, phones] of rows) assert.deepEqual(roomSlotOf(full("live", { places }), FACTS), ON(phones), JSON.stringify(places));
+});
+
+test("the phone count is checked against the cap: more connected places than two still count as two (#222)", () => {
+  assert.equal(MAX_PHONES, 2);
+  const connected = (k: number): Place[] => Array.from({ length: k }, (): Place => "connected");
+  assert.equal(phonesOf([]), 0);
+  assert.equal(phonesOf(["away", "none", "away"]), 0);
+  assert.equal(phonesOf(["away", "connected", "none"]), 1);
+  for (const k of [2, 3, 4, 10]) assert.equal(phonesOf(connected(k)), 2, `${k} connected`);
+  // Through the slot as well, with a model that holds more places than the session has.
+  const over = full("live", { places: connected(3) as unknown as LiveModel["places"] });
+  assert.deepEqual(roomSlotOf(over, FACTS), ON(2));
 });
 
 test("endings: Phone remote ended, except for a new class, which starts Off", () => {

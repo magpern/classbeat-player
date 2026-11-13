@@ -4,6 +4,7 @@
 // told is the service's room view only, as remoteViewOf leaves it, and only when it changed.
 import { remoteViewOf } from "../../core/room/remote.ts";
 import type { RemoteView, RoomRemote } from "../../core/room/remote.ts";
+import { listenerLine } from "./live-service.ts";
 import type { LiveService } from "./live-service.ts";
 
 export interface LiveRoomRemote extends RoomRemote {
@@ -11,7 +12,11 @@ export interface LiveRoomRemote extends RoomRemote {
   refresh(): void;
 }
 
-export function liveRoomRemote(live: Pick<LiveService, "roomView" | "onChange" | "start" | "end">): LiveRoomRemote {
+/**
+ * `log` takes the fixed line for a slot listener that threw (default console.warn): one that throws
+ * never stops the others, the live service or the class controller that asked for the refresh.
+ */
+export function liveRoomRemote(live: Pick<LiveService, "roomView" | "onChange" | "start" | "end">, log: (line: string) => void = console.warn): LiveRoomRemote {
   const listeners: ((v: RemoteView) => void)[] = [];
   const view = (): RemoteView => remoteViewOf(live.roomView());
   let last = JSON.stringify(view());
@@ -20,7 +25,13 @@ export function liveRoomRemote(live: Pick<LiveService, "roomView" | "onChange" |
     const text = JSON.stringify(v);
     if (text === last) return;
     last = text;
-    for (const l of listeners) l(v);
+    for (const l of listeners) {
+      try {
+        l(v);
+      } catch (err) {
+        log(listenerLine(err));
+      }
+    }
   };
   live.onChange(refresh);
   return {

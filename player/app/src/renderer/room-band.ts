@@ -9,8 +9,8 @@ import type { BandView, ButtonId, ButtonView, ClockStatus } from "../core/room/b
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { keyAction, waitsForQuestion } from "../core/room/keys.ts";
-import { lastsUntilHidden, REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
+import { bandMoved, NO_NOTE, shownSlot, slotArrived } from "../core/room/remote-note.ts";
 import { qrSvg } from "./room-qr.ts";
 
 export interface BandHost {
@@ -86,9 +86,8 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
 
   let state: BandState = M.HIDDEN;
   let frame: RoomFrame | null = null;
-  let slot: RemoteView = REMOTE_ABSENT;
-  // "Phone remote ended" and "Can't reach site" show until the band next hides.
-  let noted = false;
+  // The slot, and whether its "Phone remote ended" or "Can't reach site" is still to show.
+  let note = NO_NOTE;
   let tabbing = false;
   let swallow = false;
   let drawn = "";
@@ -107,8 +106,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       drawn = "";
       return;
     }
-    const shownSlot: RemoteView = lastsUntilHidden(slot) && !noted ? { slot: "available", note: "none" } : slot;
-    const v = bandView(st, frame?.band ?? null, shownSlot, state.asking);
+    const v = bandView(st, frame?.band ?? null, shownSlot(note), state.asking);
     const key = JSON.stringify(v);
     if (key === drawn) return;
     const focused = (document.activeElement as HTMLElement | null)?.dataset?.id;
@@ -126,8 +124,8 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   function set(next: BandState): void {
     const wasHidden = state.phase === "hidden";
     state = M.tick(next, now(), ctx());
+    note = bandMoved(note, wasHidden, state.phase === "hidden");
     if (state.phase === "hidden" && !wasHidden) {
-      noted = false;
       if (band.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
     render();
@@ -270,8 +268,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       update();
     },
     remote(v) {
-      if (lastsUntilHidden(v) && !(lastsUntilHidden(slot) && slot.note === v.note)) noted = true;
-      slot = v;
+      note = slotArrived(note, v);
       update();
     },
   };
