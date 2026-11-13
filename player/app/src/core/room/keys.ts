@@ -44,10 +44,11 @@ export function keyAction(k: KeyPress): KeyAction | null {
 }
 
 /**
- * Space and the arrows (and the clicker's Page keys) do nothing while the End question is open:
+ * Space, the arrows and the clicker's Page keys and F5 do nothing while the End question is open:
  * the question is answered first, with Enter, Esc or a press.
  */
-export const waitsForQuestion = (a: KeyAction): boolean => a.kind === "main" || a.kind === "next" || a.kind === "previous" || a.kind === "jump";
+export const waitsForQuestion = (a: KeyAction): boolean =>
+  a.kind === "main" || a.kind === "next" || a.kind === "previous" || a.kind === "jump" || a.kind === "start-only";
 
 function plain(k: KeyPress): KeyAction | null {
   switch (k.key) {
