@@ -8,10 +8,12 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { SHOTS } = require('./shots');
 const { measure } = require('./measure');
+const { fit } = require('./fit');
 
 (async () => {
   const browser = await chromium.launch();
   for (const s of SHOTS) {
+    await fit(browser, s);
     const page = await browser.newPage({ viewport: { width: s.w, height: s.h }, deviceScaleFactor: 1, reducedMotion: s.motion || 'no-preference' });
     // No request leaves file://: the mock-ups must be self-contained.
     const external = [];
@@ -20,7 +22,7 @@ const { measure } = require('./measure');
     await page.goto('file://' + path.join(__dirname, s.file));
     await page.evaluate(() => document.fonts.ready);
     // Animations stopped at their first frame, so a shot is the same on every run.
-    if (s.save) await page.screenshot({ path: path.join(__dirname, s.png), animations: 'disabled' });
+    if (s.save) await page.screenshot({ path: path.join(__dirname, s.png), animations: 'disabled', fullPage: !!s.site });
     await page.close();
     if (external.length) throw new Error(`${s.file}: external requests: ${external.join(', ')}`);
     if (s.save) console.log(s.png);

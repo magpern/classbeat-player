@@ -44,6 +44,18 @@ const LIST_STATES = ['synced', 'syncing', 'first-sync', 'offline', 'waiting', 'e
 const KEEP_LIST = new Set(['synced-1920x1080', 'synced-1280x800', 'long-list-1000x720', ...LIST_STATES.map((s) => `${s}-1000x720`)]);
 const list = (state, w, h) => ({ file: `class-list-${state}.html`, png: `class-list-${state}-${w}x${h}.png`, w, h, room: false, presenter: true, save: KEEP_LIST.has(`${state}-${w}x${h}`) });
 
+// The website pages (site.md): phone, tablet and desktop widths at the page's full height (h is
+// worked out by fit.js). Every state is checked at all three; PNGs are kept for phone and
+// desktop, and for tablet on the main state of each page. The narrowest supported width, 320,
+// is checked (and not kept) for the main states: nothing scrolls sideways.
+const { NAMES: SITE_NAMES } = require('./site-pages');
+const SITE_WIDTHS = [390, 820, 1280];
+const SITE_MAIN = ['sign-in', 'sign-in-sent', 'classes', 'class-detail', 'devices', 'pair-found', 'account-sessions', 'account-passkeys', 'account-data', 'link-source'];
+const site = (name, w) => ({
+  file: `site-${name}.html`, png: `site-${name}-${w}.png`, w, h: 0, auto: true, room: false, presenter: true, site: true,
+  save: w === 390 || w === 1280 || (w === 820 && SITE_MAIN.includes(name)),
+});
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -68,6 +80,8 @@ const SHOTS = [
   // The player's default presenter window (1000x760 with its title bar).
   { file: 'presenter.html', png: 'presenter-1000x720.png', w: 1000, h: 720, room: false, presenter: true, save: true },
   ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
+  ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
+  ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST };

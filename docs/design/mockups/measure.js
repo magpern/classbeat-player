@@ -32,6 +32,7 @@ const { SHOTS } = require('./shots');
 const { checkPalette } = require('./palette');
 const collect = require('./collect');
 const ink = require('./ink');
+const { fit } = require('./fit');
 
 // Minimums per tier (room-2d.md, "Measurable checks").
 const TIERS = {
@@ -127,6 +128,20 @@ async function check(browser, probe, s) {
   }
   for (const t of loose) rows.push({ tier: 'text', text: t, lines: '', cap: '', contrast: '', result: 'FAIL text outside any data-tier element' });
   for (const h of hues) rows.push({ tier: 'hue', text: h.slice(0, 30), lines: '', cap: '', contrast: '', result: 'FAIL hue outside a zone' });
+  // Website pages (site.md): touch targets, no sideways scroll, one h1 and one main.
+  if (s.site) {
+    const found = await page.evaluate(() => {
+      const low = [...document.querySelectorAll('.btn, .input, .nav .a, .nav .navbtn, .subnav .a, .row .t .a, .back')]
+        .filter((el) => el.getBoundingClientRect().height < 43.5).map((el) => (el.textContent.trim() || el.className).slice(0, 24));
+      const wide = document.documentElement.scrollWidth > innerWidth;
+      return [
+        ['controls at least 44 px high', low.length ? 'FAIL too low: ' + low.join(', ') : 'ok'],
+        ['no sideways scroll', wide ? `FAIL scrollWidth ${document.documentElement.scrollWidth} > ${innerWidth}` : 'ok'],
+        ['one h1 in one main', document.querySelectorAll('h1').length === 1 && document.querySelectorAll('main').length === 1 ? 'ok' : 'FAIL'],
+      ];
+    });
+    for (const [text, result] of found) rows.push({ tier: 'site', text, lines: '', cap: '', contrast: '', result });
+  }
   // Reduced motion.
   const rm = await browser.newPage({ viewport: { width: s.w, height: s.h }, reducedMotion: 'reduce' });
   await rm.goto('file://' + path.join(__dirname, s.file));
@@ -160,6 +175,7 @@ async function measure(shots) {
   let failed = pal.failed;
   const results = [];
   for (const s of shots.filter((x) => x.room || x.presenter)) {
+    await fit(browser, s);
     const r = await check(browser, probe, s);
     console.log(`\n${s.png}${r.preview ? " (arm's length: room cap heights not checked)" : ''}`);
     console.table(r.rows);
