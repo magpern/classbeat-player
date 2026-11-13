@@ -4,9 +4,9 @@ sections 3 and 4).
 - `POST /api/live/controller`: the host account's sign-in and the join code give a controller
   token (the contract's `controller-answer`, `no-store`) and "controller added" (`sign_in`) in
   the site session's transaction; every refusal is 403 `cannot_control`: no sign-in, an ended
-  one, another origin, another account, an unknown session, both places held; unknown sessions
-  count for the address (429 past 60 a minute); the end of the site session drops the
-  controller at the re-check;
+  one, another origin, another account, an unknown session, both places held (its limits are in
+  tests/test_live_controller_limits.py); the end of the site session drops the controller at
+  the re-check;
 - `POST /api/live/control`: "controller added" (`code`) and "control code cancelled" after
   wrong tries are written after `auth_enter_device` with the session's stored hash, and nothing
   once the device is revoked.
@@ -132,19 +132,6 @@ def test_a_malformed_body_is_invalid_request(site: Site) -> None:
 
 def _unknown(join: str) -> str:
     return ALPHABET[(ALPHABET.index(join[0]) + 1) % len(ALPHABET)] + join[1:]
-
-
-def test_unknown_sessions_count_for_the_address(site: Site) -> None:
-    browser, live = _hosting(site)
-    for _ in range(60):
-        _cannot(_ask(browser, _unknown(live["joinCode"])))
-    limited = _ask(browser, live["joinCode"])
-    assert _valid("error", limited, 429) == {"error": "too_many_requests"}
-    assert 1 <= int(limited.headers["retry-after"]) <= 60
-    # Another address is not held back.
-    other = site.browser("198.51.100.9")
-    other.take_cookies(browser)
-    assert _ask(other, live["joinCode"]).status_code == 200
 
 
 def test_the_end_of_the_sign_in_drops_the_controller_at_the_recheck(site: Site) -> None:
