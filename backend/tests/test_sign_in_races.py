@@ -17,6 +17,7 @@ from collections.abc import Iterator
 import psycopg
 import pytest
 
+from player_backend.lock_registry import ACCOUNT_SESSIONS, SIGN_IN_LINK
 from tests.dbhelp import Conn
 from tests.sitehelp import Site
 
@@ -24,8 +25,8 @@ EMAIL = "rider@example.test"
 CLIENT = "ROW('203.0.113.0/24'::cidr, 'Firefox')::player.client_info"
 REQUEST = f"SELECT player.auth_request_login(%s, %s, %s, %s, {CLIENT})"
 COMPLETE = f"SELECT player.auth_complete_login(%s, %s, %s, {CLIENT})"
-LINK_LOCK = 7270002
-SESSION_LOCK = 7270003
+LINK_LOCK = SIGN_IN_LINK
+SESSION_LOCK = ACCOUNT_SESSIONS
 LOCK_TIMEOUT = "5s"
 
 
