@@ -55,6 +55,7 @@ jobs:
           bash scripts/test-detect-changes.sh
           bash scripts/test-worktree.sh
           bash scripts/test-node-packages.sh
+          bash scripts/test-build-mac.sh
       # Backend deploy files (issue #95): `docker compose config` with placeholder secret files,
       # the roles, the secrets and the purge scheduler. Reads files only; starts nothing.
       - name: Backend deploy files
