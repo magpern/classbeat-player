@@ -808,9 +808,15 @@ the site its bodies, as raw text. It parses them with pure functions (`param_pol
 session's transaction opens. A publication's body is read by its own capped reader before the
 source token is checked; its content is checked by `publication_policy.py`, which answers `422`
 with its own codes (`invalid_publication`, `content_hash_mismatch`,
-`unsupported_format_version`). An oversized publication gets `413 document_too_large` before
-the token is checked, so today it is not counted; counting it is open work (#103). A guard test (`tests/guards/test_guard_raw_parameters.py`) fails on a typed parameter,
-a length limit, an alias or a body model on any such route. Routes without a credential
+`unsupported_format_version`). The reader stops at 2 MiB and holds no database connection
+while it reads; an oversized publication, or a document over 1 MiB inside one, is answered
+`413 document_too_large` inside the source token's transaction, so it counts as the token's use
+(#103). A guard test (`tests/guards/test_guard_raw_parameters.py`) fails on a typed parameter,
+a length limit, an alias or a body model on any such route.
+
+Every other request body is at most 16 KiB (`body_policy.py`). A larger one is refused with
+`413` before it has been read in full, before any credential is looked at and before any
+transaction opens, so it counts nothing (#103). Routes without a credential
 (pairing start and poll, sign-in, the code exchange) look nothing up before their body is
 valid, so the framework's `422` there counts nothing and reaches nothing (#96, #98).
 
@@ -825,7 +831,7 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | Wrong pairing codes, at the look-up and at the decision together | 5 per account per 15 minutes | The form is closed for 15 minutes |
 | Source code exchanges | 10 per address per minute | 429 |
 | Source API requests (publications, number reads, ending the link) | 60 per source token per minute | 429 |
-| Player API requests | 60 per device token per minute | 429 |
+| Player API requests | 60 per device token per minute, plus a separate 600 per device token per minute for class document reads (`GET /api/player/classes/{class_id}`) | 429 |
 | The same unknown or revoked bearer token from one address | 20 per 5 minutes | That token from that address is refused for 5 minutes without a lookup |
 | Different unknown bearer tokens from one address | 200 per 5 minutes | Requests with a token that is not valid are refused for 5 minutes; valid tokens from that address keep working. The address is counted first, so an address over its limit writes no per-token counter |
 | Live joins, per session (per join code) | 120 per minute; 60 riders connected at a time | `cannot_join` |

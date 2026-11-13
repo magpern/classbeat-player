@@ -126,14 +126,21 @@ The command prints only that it ran, and a database error as its type and SQLSTA
 
 1. Read the release notes for changes to settings; add new ones to `docker/.env`.
 2. Back up the database first (below).
-3. Check out the new release, then `compose up -d --build --wait`. `migrate` runs before the new
-   server starts; each migration runs once, in its own transaction, and a changed applied
-   migration is refused (backend README). A failed `migrate` leaves the old server running.
-4. `compose ps` and `/healthz` as in "First start". To go back, check out the old release and
-   start it; migrations are not reversed, so restore the backup if a migration must be undone.
+3. Check out the new release and build it while the old server still runs: `compose build`.
+4. Stop the old server: `compose stop backend`. An old server running against a newer database
+   can answer requests wrongly (for example the change of rate-limit counting in migration 0009,
+   which an old server reads as an unknown token, and the player then forgets its pairing).
+5. `compose up -d --wait`. `migrate` runs before the new server starts; each migration runs
+   once, in its own transaction, and a changed applied migration is refused (backend README).
+   `backend` starts only after `migrate` succeeded, so a failed `migrate` leaves **no** server
+   running. The migrations before the failing one stay applied. Read `compose logs migrate`; fix
+   the cause and run step 5 again, or go back as in step 6.
+6. `compose ps` and `/healthz` as in "First start". To go back, stop `backend`, restore the
+   backup from step 2 (migrations are not reversed, and an old server must not run against a
+   newer database), then check out the old release and start it.
 
-The server is down for the few seconds the container restarts; there is no second process to take
-over, by design.
+The server is down from `compose stop backend` until the new one is healthy (the migrations and
+the start); there is no second process to take over, by design.
 
 ## Backup (owner)
 
