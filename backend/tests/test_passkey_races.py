@@ -1,5 +1,6 @@
-"""Two things at once with passkeys (ADR 0002, sections 4 and 5): a passkey sign-in and a link
-sign-in to one account leave at most 20 sessions, and two additions leave at most 10 passkeys.
+"""Two things at once with passkeys (ADR 0002, sections 4, 5 and 10): a passkey sign-in and a
+link sign-in to one account leave at most 20 sessions, two additions leave at most 10 passkeys,
+and parallel failed sign-ins from one address pass no more checks than the limit leaves.
 
 As in tests/test_sign_in_races.py, one call's transaction is held open on a connection of its
 own, the second call is started and seen to wait for the account's lock, and only then does the
@@ -9,6 +10,7 @@ instead of hanging it.
 
 from __future__ import annotations
 
+import ipaddress
 import threading
 import time
 import uuid
@@ -18,8 +20,10 @@ import httpx
 import psycopg
 import pytest
 
+from player_backend.client_policy import address_hash
+from player_backend.passkey_policy import FAILED_LOCK, failed_limit_key, failed_lock_key
 from tests.dbhelp import Conn
-from tests.passkeyhelp import OPTIONS, PASSKEYS, Authenticator, options_of
+from tests.passkeyhelp import OPTIONS, PASSKEYS, Authenticator, options_of, register, sign_in
 from tests.sitehelp import Site
 
 EMAIL = "rider@example.test"
@@ -197,3 +201,41 @@ def test_two_additions_at_once_leave_10_passkeys(site: Site, two: tuple[Conn, Co
         "SELECT count(*) FROM player.passkeys WHERE account_id = %s", (account,)
     ).fetchone()
     assert count == (10,)
+
+
+def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
+    site: Site, two: tuple[Conn, Conn]
+) -> None:
+    """Nine failures are counted. The other attempt has passed its check (the tenth may still
+    be tried) and has not counted its failure yet: a second attempt waits for it, and is then
+    over the limit. Without the lock both would pass the check, and 11 failures get through."""
+    site.allow(EMAIL)
+    authenticator = Authenticator()
+    assert register(site.sign_in(EMAIL), authenticator).status_code == 201
+    address = "198.51.100.40"
+    browser = site.browser(address)
+    for _ in range(9):
+        assert sign_in(browser, authenticator, rp_id="evil.test").status_code == 401
+    failed = failed_limit_key(address_hash(ipaddress.ip_address(address)))
+    lock = failed_lock_key(failed)
+    hit = "SELECT player.rate_limit_hit(%s, interval '10 minutes', 10)"
+
+    holder, _ = two
+    holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", (FAILED_LOCK, lock))
+    holder.execute("SAVEPOINT look")
+    assert holder.execute(hit, (failed,)).fetchone() == (False,)  # the tenth may be tried
+    holder.execute("ROLLBACK TO SAVEPOINT look")
+
+    def second_attempt() -> object:
+        return sign_in(browser, authenticator, rp_id="evil.test").status_code
+
+    thread, result = _in_background(second_attempt)
+    _wait_for_a_waiter(site, (FAILED_LOCK, lock & 0xFFFFFFFF, "ExclusiveLock"))
+    assert result == []
+    assert holder.execute(hit, (failed,)).fetchone() == (False,)  # its failure, the tenth
+    holder.commit()
+    assert _finished(thread, result) == 429
+    hits = site.su.execute(
+        "SELECT hits FROM player.rate_limits WHERE key_hash = %s", (failed,)
+    ).fetchone()
+    assert hits == (11,)  # ten failures and the refused look

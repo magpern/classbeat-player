@@ -18,6 +18,9 @@ ORDER BY created_at, id
 """
 )
 
+# Section 10: registration starts per account. True when over the limit.
+STARTS_LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)")
+
 COUNT_PASSKEYS: Final[Query] = Query(
     "SELECT count(*)::int FROM player.passkeys WHERE account_id = %s"
 )

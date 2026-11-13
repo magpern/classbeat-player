@@ -2,7 +2,9 @@
 
 ADR 0002, section 4: the relying party's id is the site's host name and the origin must match
 the site's origin exactly, both from `PLAYER_SITE_ORIGIN`. Discoverable credentials, user
-verification required, attestation `none`, the algorithms ES256, EdDSA and RS256.
+verification required, attestation `none`, the algorithms ES256, EdDSA and RS256. A
+registration whose attestation has any other format is refused before the library sees it, so
+no attestation statement (certificates, TPM structures) is ever parsed or checked.
 
 No I/O. A credential that fails any check gives `None`: the library's reasons are never kept,
 returned or logged, because they can quote what the client sent.
@@ -18,6 +20,7 @@ from webauthn import (
     verify_authentication_response,
     verify_registration_response,
 )
+from webauthn.helpers import parse_attestation_object
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 from webauthn.helpers.options_to_json_dict import options_to_json_dict
 from webauthn.helpers.structs import (
@@ -34,6 +37,7 @@ from player_backend.passkey_policy import (
     CREDENTIAL_ID_MIN,
     RP_NAME,
     NewPasskey,
+    from_base64url,
     rp_id_of,
 )
 
@@ -91,6 +95,8 @@ def verified_registration(
     site_origin: str, credential: dict[str, object], challenge: bytes
 ) -> NewPasskey | None:
     """The new passkey, or None when the credential fails any check."""
+    if not _attestation_is_none(credential):
+        return None
     try:
         found = verify_registration_response(
             credential=credential,
@@ -136,6 +142,23 @@ def verified_sign_in(
     except Exception:  # Any failure is a refusal; the reason is never kept.
         return None
     return found.new_sign_count if found.user_verified else None
+
+
+def _attestation_is_none(credential: dict[str, object]) -> bool:
+    """Whether the attestation object's format is `none`. Only its CBOR and the authenticator
+    data are read here; the statement of any other format is never handed on."""
+    response = credential.get("response")
+    if not isinstance(response, dict):
+        return False
+    fields: dict[str, object] = response  # pyright: ignore[reportUnknownVariableType]
+    raw = from_base64url(fields.get("attestationObject"))
+    if raw is None:
+        return False
+    try:
+        fmt: object = parse_attestation_object(raw).fmt
+    except Exception:  # Any failure is a refusal; the reason is never kept.
+        return False
+    return fmt == "none"
 
 
 _TRANSPORTS: Final = frozenset({"usb", "nfc", "ble", "smart-card", "hybrid", "internal", "cable"})

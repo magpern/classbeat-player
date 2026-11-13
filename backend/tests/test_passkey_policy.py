@@ -1,11 +1,12 @@
 """The pure passkey rules (passkey_policy.py): the relying party, the challenge a client's data
-names, credential ids, the limit's key and the name."""
+names, credential ids, the limits' keys and the name."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
+import uuid
 
 import pytest
 
@@ -15,8 +16,11 @@ from player_backend.passkey_policy import (
     clean_name,
     credential_id_of,
     failed_limit_key,
+    failed_lock_key,
     from_base64url,
+    registration_starts_key,
     rp_id_of,
+    sign_in_starts_key,
 )
 
 
@@ -58,6 +62,24 @@ def test_the_limit_key_is_per_address_and_its_own() -> None:
     assert failed_limit_key(one) != failed_limit_key(two)
     assert failed_limit_key(one) == hashlib.sha256(b"passkey.failed:" + one).digest()
     assert failed_limit_key(one) != hashlib.sha256(one).digest()
+
+
+def test_the_start_keys_are_their_own() -> None:
+    address = b"a" * 32
+    account = uuid.UUID(int=1)
+    assert sign_in_starts_key(address) not in (failed_limit_key(address), address)
+    assert sign_in_starts_key(address) != sign_in_starts_key(b"b" * 32)
+    assert len(sign_in_starts_key(address)) == 32
+    assert registration_starts_key(account) != registration_starts_key(uuid.UUID(int=2))
+    assert registration_starts_key(account) != hashlib.sha256(account.bytes).digest()
+    assert len(registration_starts_key(account)) == 32
+
+
+@pytest.mark.parametrize("head", [b"\x00\x00\x00\x00", b"\x7f\xff\xff\xff", b"\x80\x00\x00\x00"])
+def test_the_lock_key_is_a_signed_32_bit_integer_of_the_counters_key(head: bytes) -> None:
+    found = failed_lock_key(head + b"z" * 28)
+    assert -(2**31) <= found < 2**31
+    assert found == int.from_bytes(head, "big", signed=True)
 
 
 @pytest.mark.parametrize(

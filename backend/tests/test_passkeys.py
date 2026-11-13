@@ -1,6 +1,7 @@
 """An account's passkeys on the site (ADR 0002, sections 4 and 11), with a software
-authenticator: registration and its challenge, the recent sign-in, the algorithms, the cap,
-another account's credential, listing, renaming, removing and the events."""
+authenticator: registration and its challenge, the recent sign-in, the algorithms, the
+attestation format, the cap, another account's credential, listing, renaming, removing and the
+events."""
 
 from __future__ import annotations
 
@@ -100,6 +101,16 @@ def test_an_algorithm_the_adr_does_not_allow_is_refused(site: Site) -> None:
     browser = _signed_in(site)
     refused = register(browser, Authenticator("ES384"))
     assert refused.status_code == 400 and refused.json() == REFUSED
+    assert _rows(site, A) == [] and _registrations(site) == 0
+
+
+@pytest.mark.parametrize("fmt", ["packed", "tpm", "android-key", "fido-u2f"])
+def test_an_attestation_format_other_than_none_is_refused(site: Site, fmt: str) -> None:
+    browser = _signed_in(site)
+    credential = Authenticator().create(options_of(browser.post(OPTIONS)), fmt=fmt)
+    refused = browser.post(PASSKEYS, json={"name": "Laptop", "credential": credential})
+    assert refused.status_code == 400 and refused.json() == REFUSED
+    # The challenge is used up, and no passkey is added.
     assert _rows(site, A) == [] and _registrations(site) == 0
 
 

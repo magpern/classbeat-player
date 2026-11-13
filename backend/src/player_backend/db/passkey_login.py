@@ -24,13 +24,26 @@ class _Looked(Exception):
     """Leaves the savepoint of a look at a counter, which undoes that look's count."""
 
 
-def new_challenge(pool: Pool, *, challenge_hash: bytes, browser_hash: bytes) -> None:
+def new_challenge(
+    pool: Pool,
+    *,
+    starts_key: bytes,
+    starts_window: timedelta,
+    starts_max: int,
+    challenge_hash: bytes,
+    browser_hash: bytes,
+) -> bool:
+    """Count one challenge start for the address, then store the challenge. False, with only
+    the count written, when the address is over its limit (section 10)."""
     with pool.handle() as db, db.transaction():
+        if _hit(db, starts_key, starts_window, starts_max):
+            return False
         db.rows(q.NEW_CHALLENGE, (challenge_hash, browser_hash))
+        return True
 
 
 def _hit(db: Handle, key: bytes, window: timedelta, limit: int) -> bool:
-    return db.rows(q.FAILED_LIMIT_HIT, (key, window, limit))[0][0] is not False
+    return db.rows(q.LIMIT_HIT, (key, window, limit))[0][0] is not False
 
 
 def _over_already(db: Handle, key: bytes, window: timedelta, limit: int) -> bool:
@@ -52,6 +65,7 @@ def sign_in(
     pool: Pool,
     *,
     failed_key: bytes,
+    failed_lock: tuple[int, int],
     failed_window: timedelta,
     failed_max: int,
     credential_id: bytes | None,
@@ -68,8 +82,13 @@ def sign_in(
     reaches `auth_complete_passkey` and writes no event (section 4); one the function refuses
     has the event the function wrote. `credential_id` or `challenge_hash` is None when the
     credential named none the database could hold.
+
+    The attempts of one address are taken one at a time under the advisory lock
+    `failed_lock`, held from the check to the commit, so the check and the count are one step:
+    of parallel failing attempts, no more pass the check than the limit leaves.
     """
     with pool.handle() as db, db.transaction():
+        db.rows(q.LOCK_FAILED, failed_lock)
         if _over_already(db, failed_key, failed_window, failed_max):
             return "limited"
         done = False
