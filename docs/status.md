@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #148).
+Updated 2026-11-13 (after #151).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -44,7 +44,9 @@ Merged: the design system and the plain 2D room screen spec (#22, #31), and its 
 built (#124) and its hardening (#119, #128, which also settles #122); sync hardening (#114, #121);
 the presenter window's minimum size (#123, #126); the class list spec (#116, #125) and its data
 (#129, #132); the class list screen (#133, #138) and its hardening (#142, #143); the room screen
-in its own window (#141, #148). In progress: the room window follow-ups (#149).
+in its own window (#141, #148) and its follow-ups (#149, #151: the presenter kept clear, File >
+Show the room screen, a run-time check that refuses any renderer with loose web preferences).
+In progress: shell hardening from the #151 review (#152).
 
 ## Infra
 
@@ -91,6 +93,9 @@ Merged: #30 and its findings (#53).
   of the wiring catches a deleted line, not a semantic change; moving that glue into a unit-tested
   module, and making the drop callback of `registerHandlers` required (#143 review).
 - Backend: the account locks 7270003 and 7270011 still wait without a limit (#147).
+- Screens: the one-display rehearsal room window draws a narrow strip at about 490 px wide; an
+  issue if instructors find it unreadable (#151 design review). The presenter spec (PL5) should
+  say one line on the fallback where the room window sits behind the presenter.
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
 
