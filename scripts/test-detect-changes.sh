@@ -49,5 +49,14 @@ check "schema change runs backend, schema and desktop" "backend schema desktop" 
 before_wf="$(git rev-parse HEAD)"
 commit .github/workflows/ci.yml
 check "workflow change runs backend, schema, player and desktop" "backend schema player desktop" "$(flags push "$before_wf" HEAD)"
+before_tok="$(git rev-parse HEAD)"
+commit docs/design/mockups/tokens.css
+check "design token mock-up change runs web" "web" "$(flags push "$before_tok" HEAD)"
+before_live="$(git rev-parse HEAD)"
+commit schema/live/v1/examples/x.json
+check "live schema example change runs backend, schema, web and desktop" "backend schema web desktop" "$(flags push "$before_live" HEAD)"
+before_pol="$(git rev-parse HEAD)"
+commit backend/src/player_backend/request_policy.py
+check "request policy change runs backend and web" "backend web" "$(flags push "$before_pol" HEAD)"
 
 exit "$fail"
