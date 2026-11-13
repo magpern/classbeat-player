@@ -67,6 +67,16 @@ class RecordingDeadline(Deadline):
         super().release()
 
 
+def _released_open(deadline: RecordingDeadline) -> None:
+    """Every socket the deadline held was released while still open, and none is held now.
+
+    `localhost` may resolve to `::1` before `127.0.0.1`, where the fake server listens: the
+    refused first address is released too, so the count of releases is not fixed.
+    """
+    assert deadline.releases and all(deadline.releases), deadline.releases
+    assert deadline.held is None
+
+
 @pytest.fixture
 def recorded(monkeypatch: pytest.MonkeyPatch) -> list[RecordingDeadline]:
     RecordingDeadline.made = []
@@ -83,7 +93,7 @@ def test_the_socket_is_released_before_it_is_closed_after_a_mail(
         assert len(server.messages) == 1
     [deadline] = recorded
     # Released while still open, and nothing held once `send` has returned.
-    assert deadline.releases == [True] and deadline.held is None
+    _released_open(deadline)
 
 
 def test_the_socket_is_released_before_it_is_closed_after_a_failure(
@@ -94,7 +104,7 @@ def test_the_socket_is_released_before_it_is_closed_after_a_failure(
         with pytest.raises(smtplib.SMTPException):
             mailer.send(_mail(), timeout=5)
     [deadline] = recorded
-    assert deadline.releases == [True] and deadline.held is None
+    _released_open(deadline)
 
 
 def test_a_slow_name_lookup_keeps_to_the_one_limit(
