@@ -5,6 +5,10 @@ An autouse fixture (registered in conftest.py) refuses, before anything is sent,
 `localhost` or a loopback address. A refusal raises, and is also recorded and failed at the end
 of the test, so code that catches every error (as `deliver` does) cannot hide it. The database
 driver connects through libpq, not Python's sockets; the test database is on loopback anyway.
+
+What it does not cover: `getnameinfo`, and a datagram sent with `sendto` without a `connect`
+(a resolver of its own that does not use `getaddrinfo`). It is a guard against mistakes, not
+against code that sets out to reach the network.
 """
 
 from __future__ import annotations

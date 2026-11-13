@@ -54,10 +54,16 @@ class Deadline:
         """Watch `sock` (the one the conversation now uses) and give it the time that is left."""
         with self._lock:
             self._sock = sock
-            expired = self._expired
-        if expired:
-            self._shut(sock)
+            if self._expired:
+                self._shut(sock)
         sock.settimeout(self.left())
+
+    def release(self) -> None:
+        """Watch no socket any more. Called before a socket is closed: the watchdog shuts a
+        socket down under the lock, so once this returns it never acts on a closed socket's
+        descriptor, which the system may by then have given to another file."""
+        with self._lock:
+            self._sock = None
 
     def step(self) -> None:
         """Before each command: the socket gets the time that is left."""
@@ -70,9 +76,8 @@ class Deadline:
     def _cut(self) -> None:
         with self._lock:
             self._expired = True
-            sock = self._sock
-        if sock is not None:
-            self._shut(sock)
+            if self._sock is not None:
+                self._shut(self._sock)
 
     @staticmethod
     def _shut(sock: socket.socket) -> None:
