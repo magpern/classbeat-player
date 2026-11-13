@@ -75,6 +75,17 @@ def test_the_apis_are_never_stored_under_a_prefix(app: FastAPI, root_path: str, 
     assert answer.headers["referrer-policy"] == "no-referrer"
 
 
+@pytest.mark.parametrize("api", NEVER_STORED)
+def test_a_prefix_that_starts_an_api_path_keeps_no_store(app: FastAPI, api: str) -> None:
+    """Under `root_path="/api"` the router matches `/live/...`; the full path is still an API's
+    (#290), so the answer is never stored."""
+    answer = _send(app, api, "/api")
+    assert answer.status_code == 404
+    assert answer.headers["cache-control"] == "no-store"
+    assert answer.headers["content-security-policy"] == CONTENT_SECURITY_POLICY
+    assert answer.headers["referrer-policy"] == "no-referrer"
+
+
 def test_a_path_the_router_does_not_strip_keeps_the_page_headers(app: FastAPI) -> None:
     """`/playerx/...` is not under `/player`: the router routes it whole, and so do the headers."""
     answer = _send(app, "/playerx/api/live/nothing", "/player")

@@ -14,7 +14,6 @@ from fastapi import FastAPI, Request, Response
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
 from player_backend.control_page import CONTROL_DIR, control_router, load_files
-from player_backend.control_page_policy import control_headers, is_control_path
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
@@ -27,8 +26,7 @@ from player_backend.logging_setup import configure_logging
 from player_backend.mail import Mailer
 from player_backend.no_mailer import NoMailer
 from player_backend.player_api import router as player_router
-from player_backend.request_policy import response_headers
-from player_backend.route_path_policy import routed_path
+from player_backend.response_header_policy import headers_for
 from player_backend.settings import Settings
 from player_backend.site import router as site_router
 from player_backend.site.state import SiteState
@@ -112,12 +110,9 @@ def create_app(
             response = error_response(500, "internal_error")
         # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
         # ADR 0005, section 8: the companion page's own, under /control.
-        # The path as the router matches it: `root_path` taken off at a `/` boundary only.
-        routed = routed_path(request.scope["path"], request.scope.get("root_path", ""))
-        if is_control_path(routed):
-            response.headers.update(control_headers(routed, settings.site_origin))
-        else:
-            response.headers.update(response_headers(routed))
+        # Chosen by the routed path, and no-store by the full path too (response_header_policy).
+        root_path = request.scope.get("root_path", "")
+        response.headers.update(headers_for(request.scope["path"], root_path, settings.site_origin))
         # Method, path and status only: never the query string, a header or a body.
         _access_log.info(
             "request",
