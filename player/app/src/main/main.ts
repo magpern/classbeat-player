@@ -1,5 +1,5 @@
-// The desktop shell's entry point: one instance, one hardened presenter window, the File menu
-// and the IPC. The shell owns the class clock (ADR 0001); the presenter only shows it.
+// The desktop shell's entry point: one instance, one hardened presenter window, the room screen's
+// window while a class is open, the File menu and the IPC. The shell owns the class clock (ADR 0001); the presenter only shows it.
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
@@ -13,6 +13,9 @@ import { registerListHandlers } from "./list/list-handlers.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
+import { roomCloses } from "../core/room/placement.ts";
+import { registerRoomHandlers } from "./room/room-handlers.ts";
+import { createRoomWindow } from "./room/room-window.ts";
 import { setupPairing } from "./pairing/setup.ts";
 import type { PairingService } from "./pairing/service.ts";
 import { selectMusic } from "./select-music.ts";
@@ -28,6 +31,7 @@ const PRESENTER_FILE = join(DIST, "presenter.html");
 const PRESENTER_URL = pathToFileURL(PRESENTER_FILE).href;
 const LIST_FILE = join(DIST, "classlist.html");
 const LIST_URL = pathToFileURL(LIST_FILE).href;
+const ROOM_FILE = join(DIST, "room.html");
 
 // The one window: it shows the class list first, and the presenter once a class is started.
 let presenter: BrowserWindow | null = null;
@@ -39,14 +43,25 @@ const music = selectMusic(process.platform);
 const controller = createController(undefined, music.reader, music.transport);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
+// The room screen's own window: it opens with every class that opens, and closes with the class.
+const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: join(DIST, "room-preload.cjs"), presenter: live });
+const pinned = (): boolean => (sync?.view().pinned ?? null) !== null;
+const onListPage = (): boolean => (live()?.webContents.getURL().split(/[?#]/, 1)[0] ?? "") === LIST_URL;
 
 function showPage(file: string): void {
   const win = live();
   if (!win) return;
   void win.loadFile(file);
 }
-const showPresenter = (): void => showPage(PRESENTER_FILE);
-const showList = (): void => showPage(LIST_FILE);
+function showPresenter(): void {
+  showPage(PRESENTER_FILE);
+  // "Back to the class" after the room window was closed by hand opens it again.
+  if (controller.snapshot().doc !== null) room.open();
+}
+function showList(): void {
+  showPage(LIST_FILE);
+  if (roomCloses(true, pinned())) room.close();
+}
 
 async function openClass(): Promise<void> {
   const win = live();
@@ -60,7 +75,7 @@ async function openClass(): Promise<void> {
     dismiss: () => l.dismissFileError(),
     release: () => l.release(),
     showPresenter,
-    onList: () => (live()?.webContents.getURL().split(/[?#]/, 1)[0] ?? "") === LIST_URL,
+    onList: onListPage,
   });
 }
 
@@ -78,6 +93,8 @@ function createPresenter(): void {
   presenter.setMinimumSize(PRESENTER_SIZE.minWidth + (outerW! - contentW!), PRESENTER_SIZE.minHeight + (outerH! - contentH!));
   presenter.on("closed", () => {
     presenter = null;
+    // The class goes with the presenter, and the application quits once both windows are gone.
+    room.close();
   });
   void presenter.loadFile(LIST_FILE);
 }
@@ -105,6 +122,14 @@ if (!app.requestSingleInstanceLock()) {
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
     // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
     controller.onEnded(() => list?.release());
+    // Ending while the instructor is on the list closes the class there; on the presenter the room
+    // screen stays on "Class Complete" until the instructor leaves it.
+    controller.onEnded(() => {
+      if (roomCloses(onListPage(), pinned())) room.close();
+    });
+    controller.onOpened(() => room.open());
+    controller.watch((s) => room.send(s));
+    registerRoomHandlers(ipcMain, () => room.trusted(), controller);
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     installMenu(() => void openClass(), showList);

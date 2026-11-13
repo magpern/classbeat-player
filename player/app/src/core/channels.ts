@@ -15,3 +15,7 @@ export const CH_LIST_START = "list:start";
 export const CH_LIST_OPEN_FILE = "list:open-file";
 export const CH_LIST_DISMISS = "list:dismiss-error";
 export const CH_LIST_BACK = "list:back";
+// The room screen's window (docs/design/room-2d.md): `room:state` takes no argument and answers
+// with a RoomFrame; `room:update` is the shell's push of the same. Nothing else is the room's.
+export const CH_ROOM_STATE = "room:state";
+export const CH_ROOM_UPDATE = "room:update";

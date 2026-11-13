@@ -215,8 +215,9 @@ test("the preload bridge: the same four functions, those of pairing (#74) and of
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "room:state", "room:update"],
   );
+  // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
 });
 
 test("no Spotify token, sign-in or developer interface, and no network, in the reader", () => {

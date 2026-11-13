@@ -1,4 +1,4 @@
-// Holds the shell's state and sends snapshots to the presenter. The clock reads the monotonic
+// Holds the shell's state and sends snapshots to the presenter (and to watchers: the room window). The clock reads the monotonic
 // performance.now(), so a change of the system clock never moves class time.
 import { performance } from "node:perf_hooks";
 import type { WebContents } from "electron";
@@ -23,6 +23,10 @@ export interface Controller {
   music(action: TransportAction): Snapshot;
   /** Calls the listener once when the open class's clock reaches its end. */
   onEnded(listener: () => void): void;
+  /** Calls the listener each time a class opens for play (a file or a list's class that read). */
+  onOpened(listener: () => void): void;
+  /** Calls the listener with every snapshot the presenter is pushed, also while no presenter is attached. */
+  watch(listener: (s: Snapshot) => void): void;
   attach(target: () => WebContents | null): void;
   stop(): void;
 }
@@ -42,6 +46,8 @@ export function createController(now: () => number = () => performance.now(), re
   // that ran past a window's end.
   let endedLoad = 0;
   const enders: (() => void)[] = [];
+  const openers: (() => void)[] = [];
+  const watchers: ((s: Snapshot) => void)[] = [];
   const snapshot = (): Snapshot => {
     const t = now();
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
@@ -58,7 +64,11 @@ export function createController(now: () => number = () => performance.now(), re
   const sync = (): void => reader.setActive?.(isFollowing(state));
   const push = (): void => {
     const wc = target();
-    if (wc && !wc.isDestroyed() && !wc.isCrashed()) wc.send(CH_UPDATE, snapshot());
+    const live = wc && !wc.isDestroyed() && !wc.isCrashed() ? wc : null;
+    if (live === null && watchers.length === 0) return;
+    const snap = snapshot();
+    live?.send(CH_UPDATE, snap);
+    for (const w of watchers) w(snap);
   };
 
   return {
@@ -67,7 +77,9 @@ export function createController(now: () => number = () => performance.now(), re
       state = openText(state, fileName, text, classSchema, now(), reader.kind !== "manual", !onDemand);
       sync();
       push();
-      return snapshot();
+      const snap = snapshot();
+      if (snap.error === null && snap.doc !== null) for (const l of openers) l();
+      return snap;
     },
     refuse(message) {
       state = refuse(state, message);
@@ -89,6 +101,12 @@ export function createController(now: () => number = () => performance.now(), re
     },
     onEnded(listener) {
       enders.push(listener);
+    },
+    onOpened(listener) {
+      openers.push(listener);
+    },
+    watch(listener) {
+      watchers.push(listener);
     },
     attach(t) {
       target = t;
