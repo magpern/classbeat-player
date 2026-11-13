@@ -237,6 +237,11 @@ _TYPED_OBJECT = {"type": "object", "additionalProperties": False, "properties": 
             lambda d: d.update({"if": {"patternProperties": {"^x": {}}}}),
         ),
         ("a boolean condition", lambda d: d.update({"not": False})),
+        ("a string without maxLength", lambda d: d["properties"].update(extra={"type": "string"})),
+        (
+            "a pattern-only string without maxLength",
+            lambda d: d["properties"].update(extra={"type": "string", "pattern": "^a+$"}),
+        ),
     ],
 )
 def test_the_closed_shape_check_refuses_every_opening(label: str, mutate: Any) -> None:
@@ -330,3 +335,9 @@ def test_http_errors_are_the_closed_enum() -> None:
     # Every failure of the cookie route is one answer: it tells nothing about the session.
     assert by_route["POST /api/live/controller"] & {"invalid_code", "controllers_full"} == set()
     assert "cannot_control" not in by_route["POST /api/live/control"]
+    # The routing table lists only the answers a route gives: the cookie route never answers 429.
+    assert by_route["POST /api/live/controller"] == {
+        "invalid_request",
+        "cannot_control",
+        "internal_error",
+    }

@@ -18,6 +18,7 @@ class ControlCode(BaseModel):
         str,
         Field(
             description='The control code as XXXX-XXXX.',
+            max_length=9,
             pattern='^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$',
         ),
     ]

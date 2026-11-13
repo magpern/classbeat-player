@@ -22,7 +22,8 @@
     },
     "token": {
       "type": "string",
-      "pattern": "^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$"
+      "pattern": "^cbp_(hst|ctl|rdr)_[A-Za-z0-9_-]{43}$",
+      "maxLength": 51
     }
   }
 }

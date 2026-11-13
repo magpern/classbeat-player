@@ -68,13 +68,20 @@ const OPENINGS: [string, (d: any) => void][] = [
   ["dependentSchemas", (d) => (d.dependentSchemas = { v: {} })],
   ["prefixItems", (d) => (d.properties.extra = { type: "array", maxItems: 1, prefixItems: [{}], items: { type: "null" } })],
   ["additionalProperties true", (d) => (d.additionalProperties = true)],
+  ["additionalProperties a schema", (d) => (d.additionalProperties = {})],
   ["an object without additionalProperties", (d) => delete d.additionalProperties],
   ["a nested open object", (d) => (d.properties.extra = { type: "object", properties: { x: { type: "string" } } })],
   ["an untyped anyOf branch", (d) => (d.properties.extra = { anyOf: [{ type: "null" }, {}] })],
   ["allOf", (d) => (d.allOf = [{ type: "object", additionalProperties: false, properties: {} }])],
+  ["oneOf", (d) => (d.properties.extra = { oneOf: [{ type: "null" }] })],
+  ["a type outside the set", (d) => (d.properties.extra = { type: "number" })],
+  ["an array without items", (d) => (d.properties.extra = { type: "array", maxItems: 1 })],
   ["an array of anything", (d) => (d.properties.extra = { type: "array", maxItems: 1, items: {} })],
   ["a remote $ref", (d) => (d.properties.extra = { $ref: "other.schema.json" })],
   ["patternProperties inside a condition", (d) => (d.if = { patternProperties: { "^x": {} } })],
+  ["a boolean condition", (d) => (d.not = false)],
+  ["a string without maxLength", (d) => (d.properties.extra = { type: "string" })],
+  ["a pattern-only string without maxLength", (d) => (d.properties.extra = { type: "string", pattern: "^a+$" })],
 ];
 for (const [label, mutate] of OPENINGS) {
   test(`the closed-shape check refuses ${label}`, () => {
@@ -84,6 +91,10 @@ for (const [label, mutate] of OPENINGS) {
     assert.notDeepEqual(problems(doc), []);
   });
 }
+
+test("the closed-shape check covers the same 23 openings as the Python suite", () => {
+  assert.equal(OPENINGS.length, 23);
+});
 
 test("the command actions are exactly the ADR 0005 table, nudge exactly ±5000 ms", () => {
   for (const name of ["command", "command-forwarded"]) {

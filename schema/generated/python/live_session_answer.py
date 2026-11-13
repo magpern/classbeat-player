@@ -14,13 +14,19 @@ class SessionAnswer(BaseModel):
     )
     sessionId: Annotated[
         str,
-        Field(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
+        Field(
+            max_length=36,
+            pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        ),
     ]
     joinCode: Annotated[
         str,
         Field(
             description='Short code, shown as XXXX-XXXX.',
+            max_length=9,
             pattern='^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$',
         ),
     ]
-    hostToken: Annotated[str, Field(pattern='^cbp_hst_[A-Za-z0-9_-]{43}$')]
+    hostToken: Annotated[
+        str, Field(max_length=51, pattern='^cbp_hst_[A-Za-z0-9_-]{43}$')
+    ]

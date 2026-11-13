@@ -23,6 +23,8 @@ const NARROWING = ["if", "then", "else", "not"];
 const SHAPE = new Set([...ANNOTATIONS, ...CONSTRAINTS, ...NARROWING, "properties", "items", "$defs", "anyOf", "$ref"]);
 const CONDITION = new Set([...ANNOTATIONS, ...CONSTRAINTS, ...NARROWING, "properties", "anyOf", "contains"]);
 
+const BOUNDED = ["maxLength", "const", "enum"];
+
 type Node = Record<string, unknown>;
 const isNode = (v: unknown): v is Node => v !== null && typeof v === "object" && !Array.isArray(v);
 
@@ -92,6 +94,7 @@ export function problems(root: unknown): string[] {
     } else if ("items" in node) {
       out.push(`${path}: items on a shape that is not an array`);
     }
+    if (types !== null && types.has("string") && !BOUNDED.some((k) => k in node)) out.push(`${path}: a string must have maxLength`);
     for (const [name, sub] of Object.entries(isNode(node.properties) ? node.properties : {})) {
       shape(sub, `${path}/properties/${name}`);
     }

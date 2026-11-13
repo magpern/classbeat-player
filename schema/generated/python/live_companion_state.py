@@ -151,6 +151,7 @@ class CompanionState(BaseModel):
         str,
         Field(
             description="The class run's id: 16 random bytes, base64url without padding, new for each class run.",
+            max_length=22,
             pattern='^[A-Za-z0-9_-]{22}$',
         ),
     ]

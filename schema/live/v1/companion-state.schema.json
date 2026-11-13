@@ -33,6 +33,7 @@
     "run": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22}$",
+      "maxLength": 22,
       "description": "The class run's id: 16 random bytes, base64url without padding, new for each class run."
     },
     "seq": {

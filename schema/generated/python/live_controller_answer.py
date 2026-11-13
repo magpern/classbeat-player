@@ -12,4 +12,6 @@ class ControllerAnswer(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    controllerToken: Annotated[str, Field(pattern='^cbp_ctl_[A-Za-z0-9_-]{43}$')]
+    controllerToken: Annotated[
+        str, Field(max_length=51, pattern='^cbp_ctl_[A-Za-z0-9_-]{43}$')
+    ]
