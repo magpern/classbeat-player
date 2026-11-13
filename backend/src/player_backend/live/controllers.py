@@ -55,15 +55,33 @@ class Controllers(Table):
         return None if slot is None else Granted(session.id, slot, token, session.device_hash)
 
     def sign_in_controller(
-        self, session_id: UUID, account_id: UUID, site_session_hash: bytes
+        self, session_id: UUID, account_id: UUID, site_session_hash: bytes, now: float
     ) -> Granted | None:
         """A controller for a sign-in of the session's own account; None for any other account,
-        when both places are held, or when the session is gone."""
+        when both places are held, or when the session is gone. A session past its lifetime
+        ends, as in `host_session`."""
         with self._lock:
             session = self._sessions.get(session_id)
             if session is None or session.account_id != account_id:
                 return None
-            return self._grant(session, site_session_hash)
+            ended = self._expired(session, now)
+            if ended is None:
+                return self._grant(session, site_session_hash)
+        self._tell([ended])
+        return None
+
+    def release(self, granted: Granted) -> bool:
+        """Take back a grant whose token was never given out: its place is freed while that
+        token still holds it. No watcher is told, as no phone holds the token."""
+        hashed = token_hash(granted.token)
+        with self._lock:
+            session = self._sessions.get(granted.session_id)
+            held = None if session is None else session.controllers.get(granted.slot)
+            if session is None or held is None or held.token_hash != hashed:
+                return False
+            del session.controllers[granted.slot]
+            self._by_controller.pop(hashed, None)
+            return True
 
     def make_code(self, session_id: UUID, now: float) -> MadeCode | None:
         """A new control code for the host, replacing the current one; None when the session is
@@ -80,20 +98,27 @@ class Controllers(Table):
 
     def exchange(self, raw_session: object, raw_code: object, now: float) -> Exchange:
         """`POST /api/live/control`: the join code names the session; the code is compared with
-        that session's current one only (live_code_policy.py)."""
+        that session's current one only (live_code_policy.py). A session past its lifetime ends,
+        as in `host_session`, and its join code names no session any more."""
         join, code = normalise_code(raw_session), normalise_code(raw_code)
         with self._lock:
             found = None if join is None else self._by_code.get(join)
             session = None if found is None else self._sessions.get(found)
-            if session is None:
-                return Exchange(None, "unknown", None, b"")
-            if code is None:  # not reached: the route checks the body's schema first
-                return Exchange(None, "wrong", None, session.device_hash)
-            tried = session.code.tried(code_hash(code), session.free_slot() is not None, now)
-            granted = self._grant(session, None) if tried.outcome == "right" else None
-            ended = tried.cancelled
-            cancelled = None if ended is None else CodeCancelled(session.id, ended)
-        self._tell([cancelled] if cancelled else [])
+            ended = None if session is None else self._expired(session, now)
+            if session is None or ended is not None:
+                exchanged = Exchange(None, "unknown", None, b"")
+            else:
+                exchanged = self._tried(session, code, now)
+        self._tell([e for e in (ended, exchanged.cancelled) if e is not None])
+        return exchanged
+
+    def _tried(self, session: HeldSession, code: str | None, now: float) -> Exchange:
+        if code is None:  # not reached: the route checks the body's schema first
+            return Exchange(None, "wrong", None, session.device_hash)
+        tried = session.code.tried(code_hash(code), session.free_slot() is not None, now)
+        granted = self._grant(session, None) if tried.outcome == "right" else None
+        ended = tried.cancelled
+        cancelled = None if ended is None else CodeCancelled(session.id, ended)
         refusal = None if granted else ("wrong" if tried.outcome == "wrong" else "full")
         return Exchange(granted, refusal, cancelled, session.device_hash)
 

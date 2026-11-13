@@ -15,7 +15,7 @@ from uuid import UUID
 from player_backend.live.events import Ended
 from player_backend.live.watchers import Watcher, Watchers
 from player_backend.live_code_policy import ControlCode
-from player_backend.live_session_policy import Clocks, EndReason
+from player_backend.live_session_policy import Clocks, EndReason, expiry
 
 # ADR 0002, section 8: at most 2 controllers per session, in slots 1 and 2.
 SLOTS: Final = (1, 2)
@@ -75,3 +75,9 @@ class Table:
         for held in session.controllers.values():
             self._by_controller.pop(held.token_hash, None)
         return Ended(session.id, session.account_id, session.device_id, session.device_hash, reason)
+
+    def _expired(self, session: HeldSession, now: float) -> Ended | None:
+        """End `session` when its lifetime is over by `now`, as the sweep would; hold `_lock`
+        and tell the watchers of what it returns once the lock is released."""
+        reason = expiry(session.clocks(), now)
+        return None if reason is None else self._remove(session.id, reason)

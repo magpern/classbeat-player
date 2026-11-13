@@ -14,11 +14,13 @@ sections 5, 8 and 10; ADR 0005, sections 3 and 4).
 - A body is checked with the contract's schema before anything is looked up; it must be sent
   as JSON. The answer, the contract's `controller-answer`, holds the controller token, given out
   once, here (`Cache-Control: no-store`, like every API answer).
+- A sign-in grant whose answer is never sent is taken back: anything that fails after the
+  grant, the audit write or the site session's commit, frees the place again (`_Grant`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Generator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -26,6 +28,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from player_backend.http_errors import ApiError
+from player_backend.live.events import Granted
 from player_backend.live.schemas import valid
 from player_backend.live.state import live_service
 from player_backend.live_wire_policy import Message, decode
@@ -80,9 +83,32 @@ def _token(token: str) -> JSONResponse:
     return JSONResponse({"controllerToken": token})
 
 
+class _Grant:
+    """The controller a sign-in request was granted, while its answer is not yet sent."""
+
+    def __init__(self) -> None:
+        self.granted: Granted | None = None
+
+
+def _taken_back_on_failure(request: Request) -> Generator[_Grant]:
+    """Free the place of a grant whose answer is never sent. Declared before `site_session`,
+    this exits after it, so a failed commit of the site session's transaction (which runs as
+    `site_session` exits, after the route has returned) reaches here as well as a failed
+    audit write. Declared after the body, as it counts as a dependency that holds a
+    transaction (guards/test_guard_body_order.py)."""
+    grant = _Grant()
+    try:
+        yield grant
+    except BaseException:
+        if grant.granted is not None:
+            live_service(request).release(grant.granted)
+        raise
+
+
 @sign_in_router.post("/controller", dependencies=[Depends(same_origin)])
 def by_sign_in(
     raw: RawBody,
+    grant: Annotated[_Grant, Depends(_taken_back_on_failure, scope="function")],
     context: SiteSession,
     cookie: Annotated[str | None, Depends(session_cookie_token)],
     who: TheCaller,
@@ -98,6 +124,7 @@ def by_sign_in(
     )
     if granted is None:
         raise ApiError(403, "cannot_control")
+    grant.granted = granted
     return _token(granted.token)
 
 
