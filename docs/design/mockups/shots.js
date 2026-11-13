@@ -95,6 +95,7 @@ const SHOTS = [
   room('running', 1920, 1080, true, 'reduce'), // the beat dot is off with reduced motion
   ...WORST.flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_WORST.has(`${s}-${w}x${h}`)))),
   ...CONTROLS.map((s) => room(s, 1920, 1080)),
+  ...['starting', 'reconnecting', 'refused', 'ended'].map((k) => room(`controls-slot-${k}`, 1920, 1080, false)), // the slot's other states
   room('controls-running', 1440, 1080), // 4:3
   room('controls-running', 1920, 1080, true, 'reduce'), // the band appears and fades at once
   ...SIZES.map(([w, h]) => room('controls-worst', w, h, KEEP_CONTROLS.has(`controls-worst-${w}x${h}`))),
