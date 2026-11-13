@@ -85,6 +85,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
       - name: npm ci and npm test in every package
         run: bash scripts/run-node-packages.sh .
+      # Runs only when the run produced the screenshots (hashFiles is empty when the folder is
+      # missing or empty), so main stays green before the class list screenshots exist.
+      - name: Keep the class list screenshots
+        if: hashFiles('player/app/screenshots/**') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: class-list-screenshots
+          path: player/app/screenshots/
+          if-no-files-found: error
+          retention-days: 14
 
   # The desktop app on the three systems it ships for (plan section 12, PL4): lint, types, unit
   # tests, then the e2e test (a display is present on the macOS and Windows runners; Linux runs
