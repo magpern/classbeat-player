@@ -43,6 +43,10 @@ SESSION_COOKIE_ROUTES = frozenset(
         # Section 12: the account's export and its deletion, both behind a recent sign-in.
         ("POST", "/api/site/account/export"),
         ("POST", "/api/site/account/delete"),
+        # Plan, section 5, "Class library", and section 12: the account's classes on the site.
+        ("GET", "/api/site/classes"),
+        ("GET", "/api/site/classes/{class_id}"),
+        ("DELETE", "/api/site/classes/{class_id}"),
     }
 )
 # The app's routes: pairing takes the device code in the body, the player API a device token
@@ -178,6 +182,7 @@ def test_no_route_takes_a_token_in_its_path() -> None:
         "/api/site/source-links/{link_id}",
         "/api/source/classes/{source_class_id}",
         "/api/player/classes/{class_id}",
+        "/api/site/classes/{class_id}",
     }
 
 

@@ -1,0 +1,26 @@
+{
+  "changes": [
+    {
+      "class_id": "11111111-1111-4111-8111-111111111111",
+      "source": "classbeat",
+      "source_class_id": "one",
+      "publication_number": 1,
+      "removed": false,
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "published_at": "2026-11-01T10:00:00+00:00",
+      "position": 1
+    },
+    {
+      "class_id": "22222222-2222-4222-8222-222222222222",
+      "source": "classbeat",
+      "source_class_id": "gone",
+      "publication_number": 2,
+      "removed": true,
+      "content_hash": null,
+      "published_at": "2026-11-02T10:00:00.123456+00:00",
+      "position": 2
+    }
+  ],
+  "cursor": 2,
+  "more": false
+}

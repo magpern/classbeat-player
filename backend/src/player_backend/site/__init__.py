@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from player_backend.site.account import router as account_router
+from player_backend.site.classes import router as classes_router
 from player_backend.site.deps import same_origin
 from player_backend.site.devices import router as devices_router
 from player_backend.site.pairing import router as pairing_router
@@ -23,3 +24,4 @@ router.include_router(pairing_router)
 router.include_router(devices_router)
 router.include_router(source_links_router)
 router.include_router(account_router)
+router.include_router(classes_router)

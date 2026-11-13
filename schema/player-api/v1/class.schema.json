@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/player-api/v1/class.schema.json",
+  "title": "HeldClassAnswer",
+  "description": "The answer of GET /api/player/classes/{class_id} (ADR 0002, section 7): one class the account holds now, with its document. A removal, an unknown id and another account's id are the error `not_found`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "class_id",
+    "source",
+    "source_class_id",
+    "publication_number",
+    "content_hash",
+    "position",
+    "document"
+  ],
+  "properties": {
+    "class_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_class_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "publication_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "position": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "document": {
+      "$ref": "../../class-format/v1/class.schema.json"
+    }
+  }
+}

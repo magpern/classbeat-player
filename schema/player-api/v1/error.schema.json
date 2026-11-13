@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/player-api/v1/error.schema.json",
+  "title": "ErrorBody",
+  "description": "The body of every error answer of the three routes: a stable code, and for resync_required the account's current cursor. 401 answers carry WWW-Authenticate: Bearer; 429 answers carry Retry-After (seconds). Readers must tolerate a code they do not know.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "error"
+  ],
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "422 invalid_request, 404 not_found, 409 resync_required, 401 invalid_token, token_unknown, token_expired or token_revoked, 429 too_many_requests, 500 internal_error.",
+      "enum": [
+        "invalid_request",
+        "not_found",
+        "resync_required",
+        "invalid_token",
+        "token_unknown",
+        "token_expired",
+        "token_revoked",
+        "too_many_requests",
+        "internal_error"
+      ]
+    },
+    "cursor": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    }
+  },
+  "if": {
+    "required": [
+      "error"
+    ],
+    "properties": {
+      "error": {
+        "const": "resync_required"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "cursor"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "cursor"
+      ]
+    }
+  }
+}
