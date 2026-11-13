@@ -60,6 +60,10 @@ interface Words {
   readonly hidden?: readonly string[];
   readonly estimated: boolean;
   readonly keys?: readonly string[];
+  /** The text of the `.pill` in the clock's label, when the state has one. */
+  readonly pill?: string;
+  /** Keys (by data-action) that must be live: present and not greyed (aria-disabled). */
+  readonly live?: readonly string[];
 }
 const showing = (state: State, w: Words): Stage =>
   inState(state, async (f) => {
@@ -70,6 +74,12 @@ const showing = (state: State, w: Words): Stage =>
     for (const word of w.hidden ?? []) assert.ok(!body.toLowerCase().includes(word.toLowerCase()), `"${word}" is on the page`);
     assert.equal(await f.page.locator(".count.est").count(), w.estimated ? 1 : 0, w.estimated ? "the countdown is not marked estimated" : "the countdown is marked estimated");
     for (const key of w.keys ?? []) assert.ok((await f.page.locator(`[data-action=${key}]`).count()) > 0, `no ${key} key`);
+    if (w.pill !== undefined) assert.equal((await f.page.locator(".pill").allInnerTexts()).join("|").trim(), w.pill, `the .pill is not "${w.pill}"`);
+    for (const key of w.live ?? []) {
+      const keys = f.page.locator(`[data-action=${key}]`);
+      assert.ok((await keys.count()) > 0, `no ${key} key`);
+      assert.equal(await f.page.locator(`[data-action=${key}][aria-disabled=true]`).count(), 0, `a ${key} key is greyed`);
+    }
   });
 const FOLLOW = (state: string, change: State = {}): State => variant(FOLLOWING, { link: { mode: "following", state, canUndo: false, announcement: null }, ...change });
 
@@ -128,7 +138,7 @@ const STATES: Readonly<Record<string, StateDef>> = {
   },
   "paused-following": {
     open: live,
-    stage: showing(FOLLOW("paused", { status: "paused", allowed: ["resume", "skip"] }), { shown: ["Music paused", "Paused"], hidden: ["Following the music", "estimated"], estimated: false, keys: ["resume"] }),
+    stage: showing(FOLLOW("paused", { status: "paused", allowed: ["resume", "skip"] }), { shown: ["Music paused"], pill: "Paused", hidden: ["Following the music", "estimated"], estimated: false, keys: ["resume"] }),
   },
   coasting: {
     open: live,
@@ -139,7 +149,7 @@ const STATES: Readonly<Record<string, StateDef>> = {
     stage: showing(FOLLOW("ambiguous"), { shown: ["Song is in twice"], hidden: ["Following the music", "estimated", "about"], estimated: false }),
   },
   "last-interval": { open: live, stage: inState(variant(FOLLOWING, { next: [], nextSong: null })) },
-  paused: { open: live, stage: showing(recorded("manual-paused-last-interval"), { shown: ["Manual clock", "Paused"], estimated: false, keys: ["resume", "nudge"] }) },
+  paused: { open: live, stage: showing(recorded("manual-paused-last-interval"), { shown: ["Manual clock"], pill: "Paused", estimated: false, keys: ["resume"], live: ["nudge"] }) },
   "before-start": { open: live, stage: inState(recorded("not-started")) },
   resynced: { open: live, stage: inState(recorded("resync-announced")) },
   finished: { open: live, stage: inState(variant(MANUAL, { status: "ended", allowed: [] })) },
