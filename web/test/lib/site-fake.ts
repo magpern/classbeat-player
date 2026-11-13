@@ -7,6 +7,8 @@ import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, Request, Route } from "playwright-core";
 import { chromePath, DIST } from "./browser.ts";
+import { instrument } from "./site-instrument.ts";
+import type { Passkey } from "./site-instrument.ts";
 
 export const ORIGIN = "https://site.test";
 /** The backend's own header (backend/src/player_backend/request_policy.py); a drift test compares the two. */
@@ -64,10 +66,17 @@ export interface FakeSite {
   readonly crossSite: string[];
   /** Console output and page errors. */
   readonly console: string[];
+  /**
+   * Every other realm the page opened, seen from the browser's side, so no script in the page can
+   * hide one: a frame (an iframe, even one removed at once), another page (a popup) or a dedicated
+   * worker. Shared and service workers are noted by the trap (kind `realm`).
+   * The trap is installed in the page's own realm only, so the checks require none (#293).
+   */
+  readonly realms: string[];
   release(): Promise<void>;
 }
 
-export type Passkey = "ok" | "cancel" | "hold" | "absent";
+export type { Passkey };
 
 export interface OpenOptions {
   readonly width: number;
@@ -76,111 +85,29 @@ export interface OpenOptions {
   readonly passkey?: Passkey;
   /** The browser's default font size in px (16 is 100 %, 32 is 200 %). */
   readonly fontSize?: number;
-}
-
-// Runs in the page before its own script (Playwright's init script is not subject to the page's CSP).
-// It records what the checks need and stands in for the passkey prompt.
-function instrument(mode: Passkey): void {
-  type Trap = { kind: string; detail: string };
-  const traps: Trap[] = [];
-  (globalThis as unknown as { __traps: Trap[] }).__traps = traps;
-  const note = (kind: string, detail: unknown): void => {
-    traps.push({ kind, detail: String(detail) });
-  };
-  for (const name of ["setItem", "getItem", "removeItem", "clear", "key"] as const) {
-    const orig = Storage.prototype[name] as (...a: unknown[]) => unknown;
-    Storage.prototype[name] = function (this: Storage, ...a: unknown[]) {
-      note("storage", `${name} ${a.join(" ")}`);
-      return orig.apply(this, a);
-    } as never;
-  }
-  const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
-  Object.defineProperty(Document.prototype, "cookie", {
-    get() { note("cookie", "read"); return cookie?.get?.call(this); },
-    set(v: string) { note("cookie", `write ${v}`); cookie?.set?.call(this, v); },
-  });
-  const idb = indexedDB.open.bind(indexedDB);
-  indexedDB.open = ((n: string, v?: number) => { note("indexeddb", n); return idb(n, v); }) as typeof indexedDB.open;
-  if (globalThis.caches) {
-    const open = caches.open.bind(caches);
-    caches.open = (n: string) => { note("cache", n); return open(n); };
-  }
-  for (const k of ["log", "info", "warn", "error", "debug", "trace", "dir", "table"] as const) {
-    console[k] = ((...a: unknown[]) => note("console", `${k} ${a.map(String).join(" ")}`)) as never;
-  }
-  for (const k of ["pushState", "replaceState"] as const) {
-    const orig = History.prototype[k];
-    History.prototype[k] = function (this: History, state: unknown, unused: string, url?: string | URL | null) {
-      note("history", `${k} ${String(url ?? "")}`);
-      return orig.call(this, state, unused, url);
-    };
-  }
-  // Turning a string into markup, however the name was written (#260; ui/dom.ts sets text only).
-  for (const [proto, prop] of [[Element.prototype, "innerHTML"], [Element.prototype, "outerHTML"], [ShadowRoot.prototype, "innerHTML"], [HTMLIFrameElement.prototype, "srcdoc"]] as const) {
-    const d = Object.getOwnPropertyDescriptor(proto, prop);
-    Object.defineProperty(proto, prop, { get() { return d?.get?.call(this); }, set(v: string) { note("markup", prop); d?.set?.call(this, v); } });
-  }
-  for (const [proto, name] of [[Element.prototype, "insertAdjacentHTML"], [Element.prototype, "setHTMLUnsafe"], [Element.prototype, "setHTML"], [ShadowRoot.prototype, "setHTMLUnsafe"], [ShadowRoot.prototype, "setHTML"], [Document.prototype, "write"], [Document.prototype, "writeln"], [Range.prototype, "createContextualFragment"], [DOMParser.prototype, "parseFromString"]] as const) {
-    const orig = (proto as unknown as Record<string, unknown>)[name];
-    if (typeof orig !== "function") continue;
-    (proto as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
-      note("markup", proto === ShadowRoot.prototype ? `ShadowRoot.${name}` : name);
-      return (orig as (...x: unknown[]) => unknown).apply(this, a);
-    };
-  }
-  // Static Document.parseHTMLUnsafe / Document.parseHTML, and an iframe's srcdoc set as an attribute.
-  for (const name of ["parseHTMLUnsafe", "parseHTML"] as const) {
-    const orig = (Document as unknown as Record<string, unknown>)[name];
-    if (typeof orig !== "function") continue;
-    (Document as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
-      note("markup", `Document.${name}`);
-      return (orig as (...x: unknown[]) => unknown).apply(this, a);
-    };
-  }
-  const setAttribute = Element.prototype.setAttribute;
-  Element.prototype.setAttribute = function (this: Element, name: string, value: string) {
-    if (String(name).toLowerCase() === "srcdoc") note("markup", "setAttribute srcdoc");
-    return setAttribute.call(this, name, value);
-  };
-  document.addEventListener("securitypolicyviolation", (e) => note("csp", `${e.violatedDirective} ${e.blockedURI}`));
-  // The passkey prompt.
-  if (mode === "absent") {
-    delete (globalThis as { PublicKeyCredential?: unknown }).PublicKeyCredential;
-    return;
-  }
-  const bytes = (s: string): ArrayBuffer => new TextEncoder().encode(s).buffer as ArrayBuffer;
-  const get = (options?: CredentialRequestOptions): Promise<Credential | null> => {
-    const pk = options?.publicKey;
-    const challenge = pk ? new Uint8Array(pk.challenge as ArrayBuffer) : new Uint8Array();
-    note("passkey", `get challenge=${[...challenge].join(",")} allow=${pk?.allowCredentials?.length ?? "none"} uv=${pk?.userVerification ?? ""} rp=${pk?.rpId ?? ""}`);
-    if (mode === "hold") return new Promise(() => undefined);
-    if (mode === "cancel") return Promise.reject(new DOMException("The operation either timed out or was not allowed.", "NotAllowedError"));
-    return Promise.resolve({
-      id: "Y3JlZC0x",
-      type: "public-key",
-      rawId: bytes("cred-1"),
-      authenticatorAttachment: "platform",
-      response: { clientDataJSON: bytes('{"type":"webauthn.get"}'), authenticatorData: bytes("auth"), signature: bytes("sig"), userHandle: bytes("user") },
-    } as unknown as Credential);
-  };
-  Object.defineProperty(navigator.credentials, "get", { value: get });
+  /** A script run in the page ahead of the trap; only the trap's own checks use it. */
+  readonly before?: string;
 }
 
 /** Opens `path` on the fake site. */
 export async function openSite(browser: Browser, path: string, o: OpenOptions): Promise<FakeSite> {
   const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, reducedMotion: "no-preference" });
   await context.addInitScript("globalThis.__name = (f) => f;");
+  if (o.before) await context.addInitScript(o.before);
   await context.addInitScript(instrument, o.passkey ?? "ok");
   const page = await context.newPage();
   if (o.fontSize && o.fontSize !== 16) {
     const cdp = await context.newCDPSession(page);
     await cdp.send("Page.setFontSizes", { fontSizes: { standard: o.fontSize, fixed: Math.round(o.fontSize * 0.8125) } });
   }
-  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], release: async () => undefined };
+  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], realms: [], release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
   page.on("console", (m) => site.console.push(`${m.type()} ${m.text()}`));
   page.on("pageerror", (e) => site.console.push(`pageerror ${e.message}`));
+  page.on("frameattached", (f) => site.realms.push(`frame ${f.name()}`));
+  page.on("worker", (w) => site.realms.push(`worker ${w.url()}`));
+  context.on("page", (p) => site.realms.push(`page ${p.url()}`));
   site.release = async () => {
     for (const r of held.splice(0)) await r.fulfill({ status: 200, contentType: "application/json", body: "{}" });
   };
