@@ -56,3 +56,16 @@ test("a different note is news again; a slot that is not a passing note is shown
   assert.deepEqual(shownSlot(n), on);
   assert.deepEqual(shownSlot(hide(slotArrived(n, { slot: "starting" }))), { slot: "starting" });
 });
+
+test("a note repeated before the band shows is not lost: the first one shows at the next show and goes at the next hide (#224 N1)", () => {
+  // The band starts hidden, Off; the note arrives, then the same note again, still hidden.
+  let n = slotArrived(NO_NOTE, OFF);
+  n = slotArrived(n, AWAY);
+  n = slotArrived(n, AWAY);
+  n = show(n);
+  assert.deepEqual(shownSlot(n), AWAY);
+  n = hide(n);
+  assert.deepEqual(shownSlot(n), OFF);
+  n = show(n);
+  assert.deepEqual(shownSlot(n), OFF);
+});

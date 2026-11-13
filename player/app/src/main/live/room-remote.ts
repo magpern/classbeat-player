@@ -4,7 +4,7 @@
 // told is the service's room view only, as remoteViewOf leaves it, and only when it changed.
 import { remoteViewOf } from "../../core/room/remote.ts";
 import type { RemoteView, RoomRemote } from "../../core/room/remote.ts";
-import { listenerLine } from "./live-service.ts";
+import { listenerLine } from "./log-lines.ts";
 import type { LiveService } from "./live-service.ts";
 
 export interface LiveRoomRemote extends RoomRemote {

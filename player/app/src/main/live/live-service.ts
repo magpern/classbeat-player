@@ -17,6 +17,8 @@ import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/li
 import type { BackendCall } from "../pairing/http.ts";
 import { endSession } from "./ender.ts";
 import { endLive } from "./end-live.ts";
+import { failedLine, listenerLine } from "./log-lines.ts";
+export { failedLine };
 import type { Farewell } from "./farewell.ts";
 import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
@@ -45,13 +47,6 @@ export interface LiveDeps {
   /** Where a failed step is written: one fixed line and the error's kind, never its text. Default console.warn. */
   readonly log?: (line: string) => void;
 }
-
-/** Only a plain error name, never a message or a stack (#211). */
-const errorName = (e: unknown): string => (e instanceof Error && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "error");
-/** The line for a tracked step that failed. */
-export const failedLine = (e: unknown): string => `live session: a step after a backend answer failed (${errorName(e)})`;
-/** The line for a change listener that threw. */
-export const listenerLine = (e: unknown): string => `live session: a change listener failed (${errorName(e)})`;
 
 export interface LiveService {
   view(): LivePanelView;
