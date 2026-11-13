@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-12.
+Updated 2026-11-13.
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -65,7 +65,8 @@ Merged: #30 and its findings (#53).
   deadline (#101 review); a separate budget for document reads so a first sync of 2,000 classes
   does not take 34 minutes, cursors bound to an account, a resync on a format-version change (#96).
 - Docs: the presenter spec's minimum window size; the short next row's dropped fields called a
-  choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows).
+  choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
+  section 6 bullet on one device token per account against one pairing at a time).
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
 
