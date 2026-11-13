@@ -243,7 +243,7 @@ default: no source can be linked.
 
 | Route (all under `/api/site/`) | Does |
 |---|---|
-| `POST account/export` | `200`, a JSON download (`Content-Disposition: attachment`) made for this request: the account's email and creation time, its classes with their documents and removal markers, devices, source links, passkey names, sessions and audit events. No hash, token, key, account id or passkey user handle. Writes `account.exported` first, so the export holds its own event. `429` over 3 a day per account |
+| `POST account/export` | `200`, a JSON download (`Content-Disposition: attachment`) streamed for this request: the account's email and creation time, its classes with their documents and removal markers, devices, source links, passkey names, sessions and audit events. No hash, token, key, account id or passkey user handle. Writes `account.exported` first, so the export holds its own event. `429` over 3 a day per account |
 | `POST account/delete` `{confirm}` | `confirm` is the account's email as typed (case and surrounding spaces aside); anything else is `422 confirmation_mismatch`. `204`, and the cookie is cleared. Writes no event |
 
 - Both need a sign-in within the last 10 minutes (`403 recent_sign_in_required`) and are
@@ -258,6 +258,11 @@ default: no source can be linked.
   not changed.
 - The export count is kept by `rate_limit_hit` under a hash of the account id, with the
   number passed in like the source API's: it bounds a client, not the backend's role.
+- The export is streamed. The checks, the count and the event commit with the request; the
+  account's small parts come first, then its classes, read in sync order a page of 16 at a
+  time, each page in its own short transaction that enters the session again. If the session
+  has ended or the account is gone before a page, the stream stops there and the download is
+  not valid JSON. No connection is held between pages.
 
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 

@@ -1,8 +1,13 @@
 """Data access of the account's export and its deletion (ADR 0002, sections 9, 11 and 12).
 
-Both run in the signed-in request's transaction and filter by its account in the code.
+Every read filters by the account in the code; the policy is the backstop.
 
-- `export` reads the account's own rows, column by column, and writes the "export made" event.
+- `export_head` runs in the signed-in request's transaction: it writes the "export made" event
+  and reads the account's small parts, column by column.
+- `class_pages` reads the classes after that transaction has committed, while the answer is
+  streamed: one page of at most 16 at a time, each page in a short transaction of its own that
+  enters the session again first. When the session has ended or the account is gone, the
+  stream stops. No connection is held between pages, and nothing is stored.
 - `delete` deletes the account row. Everything the account owns goes with it by cascade, in the
   same transaction: classes and their markers, the sync cursor, devices, source links,
   sessions, passkeys, approved pairings, link codes and audit events. The cascade runs as the
@@ -12,20 +17,27 @@ Both run in the signed-in request's transaction and filter by its account in the
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Literal
+from uuid import UUID
 
+from player_backend import account_policy
 from player_backend.account_policy import (
     EXPORT_MAX,
+    EXPORT_PAGE,
     EXPORT_WINDOW,
     EXPORTED,
+    ExportStopped,
+    class_entry,
     confirmed,
-    export_document,
     export_limit_key,
     text_or_none,
     when,
 )
 from player_backend.client_policy import ClientInfo
+from player_backend.db import site_sessions
 from player_backend.db.context import AccountContext
+from player_backend.db.executor import Pool
 from player_backend.db.queries import account as q
 
 
@@ -42,8 +54,8 @@ def _email(ctx: AccountContext) -> tuple[str, object] | None:
     return found[0][0], found[0][1]
 
 
-def export(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
-    """The account's own data as one JSON object, or None when the account is gone."""
+def export_head(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
+    """The export without its classes, or None when the account is gone."""
     found = _email(ctx)
     if found is None:
         return None
@@ -54,17 +66,6 @@ def export(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
     )
     key = (ctx.account_id,)
     parts: dict[str, list[dict[str, object]]] = {
-        "classes": [
-            {
-                "source": source,
-                "source_class_id": class_id,
-                "publication_number": number,
-                "removed": kind == "removal",
-                "published_at": when(published),
-                "document": document,
-            }
-            for source, class_id, number, kind, published, document in ctx.db.rows(q.CLASSES, key)
-        ],
         "devices": [
             {
                 "id": str(device_id),
@@ -119,7 +120,34 @@ def export(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:
         ],
     }
     account = {"email": email, "created_at": when(created_at)}
-    return export_document(account, parts, ctx.entered_at)
+    return account_policy.export_head(account, parts, ctx.entered_at)
+
+
+def class_pages(pool: Pool, token_hash: bytes, account_id: UUID) -> Iterator[dict[str, object]]:
+    """The account's classes in sync order, read a page at a time.
+
+    Raises `ExportStopped` before a page when the session no longer enters this account. A
+    class published again while the export runs moves to a later position; it is given once,
+    as it was first read.
+    """
+    after = 0
+    seen: set[tuple[object, object]] = set()
+    while True:
+        with site_sessions.entered(pool, token_hash) as ctx:
+            if ctx is None or ctx.account_id != account_id:
+                raise ExportStopped
+            rows = ctx.db.rows(q.CLASS_PAGE, (account_id, after, EXPORT_PAGE))
+        # The page's transaction has ended: nothing is held while the page is written.
+        for row in rows:
+            position = row[6]
+            if not isinstance(position, int):
+                raise ExportStopped
+            after = position
+            if (row[0], row[1]) not in seen:
+                seen.add((row[0], row[1]))
+                yield class_entry(row[:6])
+        if len(rows) < EXPORT_PAGE:
+            return
 
 
 type Deletion = Literal["deleted", "not_confirmed", "gone"]

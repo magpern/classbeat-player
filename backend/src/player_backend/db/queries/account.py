@@ -13,13 +13,17 @@ LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)")
 
 ACCOUNT: Final[Query] = Query("SELECT email, created_at FROM player.accounts WHERE id = %s")
 
-# Committed classes and the markers of removed ones; the placeholder (number 0) is no class.
-CLASSES: Final[Query] = Query(
+# One page of the export's classes: committed classes and the markers of removed ones, after a
+# sync position, in sync order (the placeholder, number 0, is no class and has no position).
+# The page size is the export's constant, passed as the limit.
+CLASS_PAGE: Final[Query] = Query(
     """
-SELECT source_id, source_class_id, publication_number, kind, published_at, document
+SELECT source_id, source_class_id, publication_number, kind, published_at, document,
+       sync_position
 FROM player.classes
-WHERE account_id = %s AND publication_number > 0
-ORDER BY sync_position, source_id, source_class_id
+WHERE account_id = %s AND publication_number > 0 AND sync_position > %s
+ORDER BY sync_position
+LIMIT %s
 """
 )
 
