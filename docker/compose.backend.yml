@@ -1,0 +1,167 @@
+# The class player backend on one server (issue #95). Nothing here deploys anything: the owner
+# runs it (docs/runbooks/backend-deploy.md). Settings are read from docker/.env, which is never
+# committed; docker/.env.example lists each one.
+#
+#   docker compose -f docker/compose.backend.yml config     # what CI checks, with placeholder secrets
+#   docker compose -f docker/compose.backend.yml up -d --build --wait
+#
+# Rules this file keeps:
+# - No secret in a value. Every password is a file mounted at /run/secrets (`secrets:` below), read
+#   at start-up. The files are mode 0440 and group 10010 on the host (runbook, "Secrets").
+#   Nothing secret is in the image.
+# - The secret files are read by group 10010 (services run as 10001 with group_add) except by db,
+#   which reads them as root in db-entrypoint.sh.
+# - The database is on an internal network: no published port, no route out.
+# - The app runs as the role player_app. Migrations and the purge run as player_owner, from
+#   containers that never run the web server.
+# - ONE backend process. Live sessions keep their state in the memory of one process (plan,
+#   section 5): never add `--workers`, `deploy.replicas` or `--scale backend=2`.
+
+name: classbeat-player-backend
+
+x-backend: &backend
+  image: classbeat-player-backend:${PLAYER_BACKEND_VERSION:-local}
+  # Fixed user (see backend.Dockerfile) plus the group that may read the secret files.
+  user: "10001:10001"
+  group_add: ["10010"]
+  read_only: true
+  tmpfs: ["/tmp"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  db:
+    image: postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ${PLAYER_DB_NAME:-player}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    # Starts as root on purpose: db-entrypoint.sh reads the secret files as root (they are not
+    # mounted with any group here), copies the two role passwords for the init script to a tmpfs
+    # that only postgres can read, and then hands over to the image's entrypoint.
+    entrypoint: ["/bin/sh", "/usr/local/bin/db-entrypoint.sh"]
+    command: ["postgres"]
+    tmpfs: ["/run/dbinit:mode=0700,uid=999,gid=999,size=64k"]
+    secrets: [postgres_password, player_owner_password, player_app_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # First start only (empty data directory): the three roles, then their passwords.
+      - ../backend/db/init/10-roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+      - ./postgres/20-passwords.sh:/docker-entrypoint-initdb.d/20-passwords.sh:ro
+      - ./postgres/set-role-password.sh:/usr/local/bin/set-role-password.sh:ro
+      - ./postgres/db-entrypoint.sh:/usr/local/bin/db-entrypoint.sh:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  # Runs once per start, as player_owner, and exits. The server starts only after it succeeded.
+  migrate:
+    <<: *backend
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    restart: "no"
+    command: ["migrate"]
+    environment:
+      PLAYER_DB_HOST: db
+      PLAYER_DB_NAME: ${PLAYER_DB_NAME:-player}
+    secrets: [player_owner_password]
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [data]
+
+  # The server, as player_app. Reachable from the host's reverse proxy on 127.0.0.1 only; TLS and
+  # the domain belong to that proxy.
+  backend:
+    <<: *backend
+    command: ["app"]
+    environment:
+      PLAYER_DB_HOST: db
+      PLAYER_DB_NAME: ${PLAYER_DB_NAME:-player}
+      PLAYER_SITE_ORIGIN: ${PLAYER_SITE_ORIGIN:?set PLAYER_SITE_ORIGIN in docker/.env}
+      PLAYER_TRUSTED_PROXIES: ${PLAYER_TRUSTED_PROXIES:-}
+      PLAYER_SOURCES: ${PLAYER_SOURCES:-}
+      PLAYER_LOG_LEVEL: ${PLAYER_LOG_LEVEL:-INFO}
+      # Mail: no PLAYER_SMTP_HOST means no SMTP, and every mail is dropped (NoMailer).
+      # Passed only when set in docker/.env (a name with no value): the backend refuses any
+      # PLAYER_SMTP_ setting, even an empty default, unless PLAYER_SMTP_HOST is set.
+      PLAYER_SMTP_HOST:
+      PLAYER_SMTP_TLS:
+      PLAYER_SMTP_PORT:
+      PLAYER_SMTP_FROM:
+      PLAYER_SMTP_USER:
+      PLAYER_SMTP_PASSWORD_FILE:
+      PLAYER_SMTP_HELO_NAME:
+    secrets: [player_app_password, player_smtp_password]
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:${PLAYER_BACKEND_PORT:-8000}:8000"
+    networks: [data, edge]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  # The hourly purge: a small scheduler that runs `python -m player_backend.admin purge` at minute
+  # 17 of every hour, as player_owner (docker/purge-loop.sh). It never serves a request and has
+  # no published port.
+  purge:
+    <<: *backend
+    entrypoint: ["purge-loop.sh"]
+    command: []
+    environment:
+      PLAYER_DB_HOST: db
+      PLAYER_DB_NAME: ${PLAYER_DB_NAME:-player}
+      PLAYER_PURGE_MINUTE: ${PLAYER_PURGE_MINUTE:-17}
+    secrets: [player_owner_password]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [data]
+
+networks:
+  # No route out: the database, the migrations and the purge need none.
+  data:
+    internal: true
+  # The server's own network, with a fixed address range so that the address the host's reverse
+  # proxy shows up as is known: the range's .1 (PLAYER_TRUSTED_PROXIES, .env.example). Outside
+  # Docker's default pools (172.17-31/16, 192.168/16); PLAYER_EDGE_SUBNET changes it. Also lets the
+  # backend reach the mail server.
+  edge:
+    ipam:
+      config:
+        - subnet: ${PLAYER_EDGE_SUBNET:-10.213.80.0/24}
+
+volumes:
+  pgdata:
+
+# Files, never values. PLAYER_SECRETS_DIR is a directory outside the repository (runbook).
+secrets:
+  postgres_password:
+    file: ${PLAYER_SECRETS_DIR:?set PLAYER_SECRETS_DIR in docker/.env}/postgres_password
+  player_owner_password:
+    file: ${PLAYER_SECRETS_DIR:?set PLAYER_SECRETS_DIR in docker/.env}/player_owner_password
+  player_app_password:
+    file: ${PLAYER_SECRETS_DIR:?set PLAYER_SECRETS_DIR in docker/.env}/player_app_password
+  # Mail password. Holds a placeholder line until PLAYER_SMTP_* is set (runbook).
+  player_smtp_password:
+    file: ${PLAYER_SECRETS_DIR:?set PLAYER_SECRETS_DIR in docker/.env}/player_smtp_password

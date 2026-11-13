@@ -9,22 +9,24 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--stage); color: var(--light-1); font-family: var(--face-text);
-    font-variant-numeric: tabular-nums; width: 1280px; height: 800px; overflow: hidden;
-    display: grid; grid-template-columns: 768px 1fr; gap: 32px; padding: 24px 32px;
+    font-variant-numeric: tabular-nums; width: 100vw; height: 100vh; overflow: hidden;
+    display: grid; grid-template-columns: var(--pw) 1fr; gap: 32px; padding: 24px 32px;
+    --pw: 768px; --ps: 0.4; /* the room preview's width, and its scale from 1920 */
   }
+  /* The player's default window (1000x760 with its title bar): a smaller preview, the same type. */
+  @media (max-width: 1100px) { body { --pw: 560px; --ps: 0.29167; gap: 24px; padding: 20px 24px; } }
   .lbl { font-size: 15px; color: var(--light-3); line-height: 1.2; }
   .n { font-family: var(--face-number); font-weight: 800; }
   h2 { font-size: 15px; font-weight: 400; color: var(--light-3); margin-bottom: 8px; }
-  .preview { width: 768px; height: 432px; overflow: hidden; outline: 1px solid var(--stage-line); }
-  .preview iframe { width: 1920px; height: 1080px; border: 0; transform: scale(0.4); transform-origin: 0 0; }
+  .preview { width: var(--pw); height: calc(var(--pw) * 9 / 16); overflow: hidden; outline: 1px solid var(--stage-line); }
+  .preview iframe { width: 1920px; height: 1080px; border: 0; transform: scale(var(--ps)); transform-origin: 0 0; }
   .cue { font-size: 28px; font-weight: 700; line-height: 1.2; margin-top: 20px; max-width: 30em; }
   .list { margin-top: 20px; display: grid; grid-template-columns: auto 1fr auto auto auto; column-gap: 20px; row-gap: 8px; align-items: baseline; }
   .list .chip { font-family: var(--face-number); font-weight: 800; font-size: 26px; background: var(--zone); color: var(--ink); padding: 2px 8px 0; line-height: 1; }
   .list .v { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1; }
   .list .dim { color: var(--light-2); }
   .side { display: flex; flex-direction: column; gap: 22px; }
-  .state { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-  .state::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--light-1); }
+  .state { font-size: 22px; font-weight: 700; }
   .detail { font-size: 17px; color: var(--light-2); margin-top: 4px; line-height: 1.35; }
   .notice { background: var(--light-1); color: var(--ink); padding: 14px 16px; display: flex; align-items: center; gap: 16px; border-radius: 6px; }
   .notice p { font-size: 18px; font-weight: 700; line-height: 1.25; flex: 1; }
@@ -35,17 +37,19 @@
   }
   button:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }
   .notice button { background: var(--ink); color: var(--light-1); border-color: var(--ink); }
-  .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .controls .main { grid-column: span 3; font-size: 20px; padding: 14px; background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
-  .controls .wide { grid-column: span 3; }
+  .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .controls .main { grid-column: span 2; font-size: 20px; padding: 14px; background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
+  .controls .wide { grid-column: span 2; }
   .kbd { font-size: 14px; color: var(--light-2); font-weight: 400; margin-left: 6px; }
   .main .kbd { color: var(--stage-line); }
   .song .v { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1.05; }
 </style>
 </head>
 <body>
-<!-- Presenter window at 1280x800: the room preview (the room screen drawn at 768x432),
-     the cue, the next intervals, the music link with a resync notice, and the controls. -->
+<!-- Presenter window at 1280x800 and at the player's default 1000x720 (inside a 1000x760 window):
+     the room preview (the room screen drawn at 768x432, or 560x315),
+     the cue, the next intervals, the clock and music link lines with a resync notice, and the
+     controls with their longest labels. Wording convention: presenter.md. -->
 <main>
   <h2 data-tier="label">Room screen</h2>
   <div class="preview"><iframe src="room-running.html" title="Room screen preview" tabindex="-1"></iframe></div>
@@ -58,7 +62,8 @@
 </main>
 <aside class="side">
   <section>
-    <h2 data-tier="label">Music</h2>
+    <h2 data-tier="label">Clock and music</h2>
+    <p class="state" data-tier="minor">Holding at the end of the song</p>
     <p class="state" data-tier="minor">Following Spotify</p>
     <p class="detail" data-tier="minor" data-lines="2">Neon Avenue, 2:51 of 3:37. Crossfade planned 9 s, measured 6 s.</p>
   </section>
@@ -73,10 +78,11 @@
   </section>
   <section class="controls">
     <button class="main" data-tier="minor">Pause <span class="kbd">Space</span></button>
-    <button data-tier="minor">−1 s <span class="kbd">←</span></button>
-    <button data-tier="minor">+1 s <span class="kbd">→</span></button>
+    <button data-tier="minor">Back 5 s <span class="kbd">←</span></button>
+    <button data-tier="minor">Forward 5 s <span class="kbd">→</span></button>
     <button data-tier="minor">Next song</button>
-    <button class="wide" data-tier="minor">Use the manual clock</button>
+    <button data-tier="minor">Manual clock</button>
+    <button class="wide" data-tier="minor">Previous interval (stops following)</button>
   </section>
 </aside>
 </body>

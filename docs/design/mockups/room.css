@@ -123,6 +123,17 @@ body {
    and narrower is sized for it (see the media query). */
 .metric .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; white-space: nowrap; }
 .metric .v small { font-size: var(--t-minor); font-weight: 600; color: var(--light-2); margin-left: 0.6vw; }
+/* The beat dot after the BPM: only while the link is locked and the song has beat anchors. It is
+   lit for about a third of the period on each beat of the beat anchors, two lights at least
+   1/3 s apart (every second beat above 180 BPM in steady time) and drawn in the text colour, so the checks count it as part
+   of the value. With reduced motion it is not shown. */
+.beat {
+  display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-left: 0.18em;
+  background: currentColor; vertical-align: 0.5em;
+  animation: beat var(--beat, 500ms) steps(1, end) infinite;
+}
+@keyframes beat { 0% { opacity: 1; } 30% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .beat { display: none; animation: none; } }
 
 .cue {
   position: absolute; left: 31vw; right: var(--safe-x); top: 54.5vh;
@@ -181,7 +192,12 @@ body {
   column-gap: 1vw; row-gap: 5vh; overflow: hidden; white-space: nowrap;
   font-size: var(--t-label); line-height: 1.1;
 }
+/* The title and the occurrence marker ("1st of 2", the ambiguous state) form one unit on the
+   first row: the title gives up width to its ellipsis, the marker never does. */
+.clip .head { display: flex; min-width: 0; column-gap: 0.6vw; }
 .clip b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Plain bold text after the title's ellipsis; no outline, which would touch a moment's label below. */
+.clip .occ { flex: none; font-weight: 700; }
 .clip .a { color: var(--light-2); }
 .clip .bpm { margin-left: 1vw; color: var(--light-2); }
 .moment { position: absolute; top: 4.2vh; bottom: 0; width: 0.35vw; background: var(--light-1); }
@@ -250,6 +266,18 @@ body {
   .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
   .next { left: var(--safe-x); top: 78vh; }
+  /* A cue that needs a fourth line (only wide capitals near 120 characters) takes the next row's
+     place for that interval: four lines at --t-text-min, line height 1.02. The next row moves up
+     beside the foot of the gel, short: "Next", the zone chip, the name and the length (cadence
+     and position are left out). The gaps around the countdown close up by 2.1 vh to make that
+     room; every size stays as it is. The product measures; the mock-ups mark such a cue "four". */
+  .cue.four { top: 62.8vh; max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); line-height: 1.02; }
+  body:has(.cue.four) .clock { top: 10.5vh; }
+  body:has(.cue.four) .count { margin-top: 0.4vh; }
+  body:has(.cue.four) .bars { margin-top: 0.6vh; }
+  body:has(.cue.four) .metrics { top: 44.4vh; }
+  body:has(.cue.four) .next { left: 34vw; top: 56.5vh; }
+  body:has(.cue.four) .next .v.dim { display: none; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
   .block .n { font-size: 4vh; }
