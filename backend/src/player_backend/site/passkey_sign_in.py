@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 
 from player_backend.db import passkey_login
 from player_backend.http_errors import ApiError
-from player_backend.lock_registry import PASSKEY_FAILED
 from player_backend.login_policy import retry_after
 from player_backend.passkey_policy import (
     BUSY_RETRY_SECONDS,
@@ -114,7 +113,7 @@ def sign_in(
     outcome = passkey_login.sign_in(
         state.pool,
         failed_key=failed_key,
-        failed_lock=(PASSKEY_FAILED, failed_lock_key(failed_key)),
+        failed_lock=failed_lock_key(failed_key),
         failed_window=FAILED_WINDOW,
         failed_max=FAILED_MAX,
         credential_id=credential_id_of(body.credential.rawId),

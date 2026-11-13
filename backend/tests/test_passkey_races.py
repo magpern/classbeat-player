@@ -22,7 +22,7 @@ import psycopg
 import pytest
 
 from player_backend.client_policy import address_hash
-from player_backend.lock_registry import ACCOUNT_SESSIONS, PASSKEY_ADDITIONS, PASSKEY_FAILED
+from player_backend.lock_registry import ACCOUNT_SESSIONS, PASSKEY_ADDITIONS
 from player_backend.passkey_policy import BUSY_RETRY_SECONDS, failed_limit_key, failed_lock_key
 from tests.dbhelp import Conn
 from tests.passkeyhelp import OPTIONS, PASSKEYS, Authenticator, options_of, register, sign_in
@@ -205,11 +205,37 @@ def test_two_additions_at_once_leave_10_passkeys(site: Site, two: tuple[Conn, Co
     assert count == (10,)
 
 
-def _app_waits_for_a_lock(site: Site) -> list[tuple[object, ...]]:
-    """The backend's connections (as player_app) waiting for a lock of any kind."""
-    return site.su.execute(
-        "SELECT pid FROM pg_stat_activity WHERE usename = 'player_app' AND wait_event_type = 'Lock'"
+def _app_waits_for_a_lock(site: Site) -> bool:
+    """Whether a connection of the backend (player_app) waits for a lock of any kind."""
+    found = site.su.execute(
+        "SELECT count(*) FROM pg_stat_activity "
+        "WHERE usename = 'player_app' AND wait_event_type = 'Lock'"
+    ).fetchone()
+    return found != (0,)
+
+
+def _ends_without_waiting(site: Site, thread: threading.Thread) -> None:
+    """`thread`'s request ends within 3 seconds, and no connection of the backend is seen
+    waiting for a lock while it runs (sampled every few milliseconds)."""
+    deadline = time.monotonic() + 3
+    while thread.is_alive() and time.monotonic() < deadline:
+        assert not _app_waits_for_a_lock(site), "the attempt waited for a lock"
+        time.sleep(0.002)
+    assert not thread.is_alive(), "the attempt did not end"
+
+
+def _one_key_locks(site: Site, granted: bool) -> list[int]:
+    """The one-key (bigint) advisory locks held, or waited for, as the signed key."""
+    found = site.su.execute(
+        "SELECT ((classid::bigint << 32) | objid::bigint) FROM pg_locks "
+        "WHERE locktype = 'advisory' AND objsubid = 1 AND granted = %s",
+        (granted,),
     ).fetchall()
+    return [_signed64(int(str(key))) for (key,) in found]
+
+
+def _signed64(key: int) -> int:
+    return key - (1 << 64) if key >= 1 << 63 else key
 
 
 def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
@@ -218,10 +244,14 @@ def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
     """Nine failures are counted. The other attempt holds the address's lock: it has passed its
     check (the tenth may still be tried) and has not counted its failure yet. A second attempt
     does not wait for it: it is answered 429 with `Retry-After: 1` while the lock is still
-    held, reads and counts nothing, and leaves no connection of the backend waiting. Once the
-    first has counted its failure, the next attempt is over the limit. Without the lock both
-    would pass the check, and 11 failures get through; with a lock that waits, the second
-    attempt holds a pool connection until the first commits."""
+    held, counts nothing, and no connection of the backend is seen waiting. Once the first has
+    counted its failure, the next attempt is over the limit. Without the lock both would pass
+    the check, and 11 failures get through; with a lock that waits, the second attempt holds a
+    pool connection until the first commits.
+
+    The holder also locks the counter's row, as the first attempt's count does. So an attempt
+    that read the counter before taking the address's lock (a stale check) would wait for that
+    row, and fail the test, instead of passing unseen."""
     site.allow(EMAIL)
     authenticator = Authenticator()
     assert register(site.sign_in(EMAIL), authenticator).status_code == 201
@@ -235,10 +265,12 @@ def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
     hits = "SELECT hits FROM player.rate_limits WHERE key_hash = %s"
 
     holder, _ = two
-    holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", (PASSKEY_FAILED, lock))
+    holder.execute("SELECT pg_advisory_xact_lock(%s::bigint)", (lock,))
     holder.execute("SAVEPOINT look")
     assert holder.execute(hit, (failed,)).fetchone() == (False,)  # the tenth may be tried
     holder.execute("ROLLBACK TO SAVEPOINT look")
+    row = "SELECT hits FROM player.rate_limits WHERE key_hash = %s FOR UPDATE"
+    assert holder.execute(row, (failed,)).fetchone() == (9,)
 
     def second_attempt() -> object:
         answer = sign_in(browser, authenticator, rp_id="evil.test")
@@ -246,14 +278,11 @@ def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
 
     thread, result = _in_background(second_attempt)
     try:
-        thread.join(3)
-        assert not thread.is_alive(), "the second attempt waited for the address's lock"
-        assert _app_waits_for_a_lock(site) == []
+        _ends_without_waiting(site, thread)
         busy = (429, str(BUSY_RETRY_SECONDS), {"error": "too_many_requests"})
         assert _finished(thread, result) == busy
-        assert _advisory(site, granted=True) == [
-            (PASSKEY_FAILED, lock & 0xFFFFFFFF, "ExclusiveLock")
-        ]
+        assert _one_key_locks(site, granted=True) == [lock]
+        assert _one_key_locks(site, granted=False) == []
         assert site.su.execute(hits, (failed,)).fetchone() == (9,)  # the busy one counted nothing
         assert holder.execute(hit, (failed,)).fetchone() == (False,)  # its failure, the tenth
     finally:

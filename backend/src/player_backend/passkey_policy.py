@@ -32,8 +32,8 @@ PASSKEYS_MAX: Final = 10
 FAILED_WINDOW: Final = timedelta(minutes=10)
 FAILED_MAX: Final = 10
 # The failed sign-ins of one address are counted one attempt at a time, under the advisory
-# lock `lock_registry.PASSKEY_FAILED` (its second key comes from the counter's key). An attempt
-# that finds the lock taken does not wait for it: it is answered 429 with this `Retry-After`.
+# lock `lock_registry.PASSKEY_FAILED` (one key, from the counter's key). An attempt that finds
+# the lock taken does not wait for it: it is answered 429 with this `Retry-After`.
 BUSY_RETRY_SECONDS: Final = 1
 # Section 10: challenge starts, 30 per 10 minutes per address (sign-in) and per account
 # (registration), then 429.
@@ -75,10 +75,10 @@ def failed_limit_key(address_hash: bytes) -> bytes:
 
 
 def failed_lock_key(failed_key: bytes) -> int:
-    """The second key of the advisory lock on one address's failed sign-ins: a 32-bit integer
-    from the counter's key. Two addresses that share it only answer each other's parallel
-    attempts with 429."""
-    return int.from_bytes(failed_key[:4], "big", signed=True)
+    """The key of the advisory lock on one address's failed sign-ins: the signed 64-bit integer
+    of the counter's key's first 8 bytes, so two addresses share it only by chance (one in 2^64),
+    and only then answer each other's parallel attempts with 429."""
+    return int.from_bytes(failed_key[:8], "big", signed=True)
 
 
 def sign_in_starts_key(address_hash: bytes) -> bytes:

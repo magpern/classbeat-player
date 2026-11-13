@@ -11,7 +11,7 @@ LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)")
 # One attempt at a time per address, from its check of the failures to its commit, so parallel
 # attempts cannot all pass the check before any has counted its failure. True when taken; an
 # attempt that finds it taken never waits, so it holds no pool connection while another runs.
-TRY_LOCK_FAILED: Final[Query] = Query("SELECT pg_try_advisory_xact_lock(%s, %s)")
+TRY_LOCK_FAILED: Final[Query] = Query("SELECT pg_try_advisory_xact_lock(%s::bigint)")
 
 NEW_CHALLENGE: Final[Query] = Query("SELECT player.auth_new_login_challenge(%s, %s)")
 
