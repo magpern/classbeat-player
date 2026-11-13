@@ -26,6 +26,8 @@ SESSIONS = "/api/site/sessions"
 CHANGES = "/api/player/changes"
 PLAYER_CLASSES = "/api/player/classes"
 CURSOR = "/api/player/cursor"
+EXPORT = "/api/site/account/export"
+DELETE_ACCOUNT = "/api/site/account/delete"
 
 
 @dataclass(frozen=True)
@@ -212,7 +214,33 @@ def _revoke_own_device(site: Site, a: Actor) -> None:
     assert a.app.get(DEVICE, headers=bearer(a.token)).status_code == 401
 
 
-# In this order: the last two end A's device and A's sessions.
+def _export(site: Site, a: Actor) -> None:
+    answer = a.browser.post(EXPORT)
+    assert answer.status_code == 200
+    body = answer.json()
+    assert body["account"]["email"] == A
+    assert [device["name"] for device in body["devices"]] == ["A PC"]
+    # A's own classes, with B's class of the same source class id not among them.
+    listed = [(c["source_class_id"], c["publication_number"]) for c in body["classes"]]
+    assert sorted(listed) == [("b-only", 9), ("shared", 1)]
+    assert body["source_links"] == []  # A's source ended its own link in an earlier case
+    # B's ids, B's email and B's device names are known here; none of them is in A's export.
+    for value in (B, "B PC", "B waiting", a.other.session_id, a.other.device_id, a.other.link_id):
+        assert value not in answer.text
+    for class_id in a.other.class_ids:
+        assert class_id not in answer.text
+
+
+def _delete_account(site: Site, a: Actor) -> None:
+    # B's email is known to A here; typing it deletes nothing.
+    assert a.browser.post(DELETE_ACCOUNT, json={"confirm": B}).status_code == 422
+    assert a.browser.post(DELETE_ACCOUNT, json={"confirm": A}).status_code == 204
+    gone = site.su.execute("SELECT count(*) FROM player.accounts WHERE email = %s", (A,))
+    assert gone.fetchone() == (0,)
+
+
+# In this order: the third and second last end A's device and A's sessions, and the last one
+# deletes A.
 CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/site/sessions"): _list,
     ("DELETE", "/api/site/sessions/{session_id}"): _end_one,
@@ -233,7 +261,9 @@ CASES: dict[tuple[str, str], Callable[[Site, Actor], None]] = {
     ("GET", "/api/player/classes/{class_id}"): _held_class,
     ("GET", "/api/player/cursor"): _cursor,
     ("DELETE", "/api/player/device"): _revoke_own_device,
+    ("POST", EXPORT): _export,
     ("POST", "/api/site/sessions/end-all"): _end_all,
+    ("POST", DELETE_ACCOUNT): _delete_account,
 }
 
 
@@ -315,7 +345,10 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
     a_source = sh.link(site, first)
     a_server = sh.server(site, "192.0.2.21")
     assert first.post("/api/site/sign-out").status_code == 204
-    for case in CASES.values():
+    for route, case in CASES.items():
+        if route == ("POST", DELETE_ACCOUNT):
+            # Before A is gone: the cases before it did act on A's own rows.
+            _acted_on_own_rows(site)
         site.su.execute("DELETE FROM player.rate_limits")
         a = Actor(
             site.sign_in(A, site.browser("198.51.100.1")),
@@ -341,8 +374,13 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
         b_sync = b_app.get(CHANGES, headers=bearer(other.token)).json()
         assert [c["class_id"] for c in b_sync["changes"]] == list(other.class_ids)
         assert b_sync["cursor"] == other.cursor
-    # And the cases did act on A's own rows: A's classes are A's, A's source ended its own link,
-    # and the last two revoked A's device and ended every session of A.
+    # The last case deleted A, and A alone.
+    assert site.su.execute("SELECT email FROM player.accounts").fetchall() == [(B,)]
+
+
+def _acted_on_own_rows(site: Site) -> None:
+    # A's classes are A's, A's source ended its own link, and the cases that revoke A's device
+    # and end every session of A did so.
     assert sorted(row[:3] for row in sh.class_rows(site, A)) == [
         ("b-only", 9, "removal"),
         ("shared", 1, "class"),

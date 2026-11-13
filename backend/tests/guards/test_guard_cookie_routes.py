@@ -40,6 +40,9 @@ SESSION_COOKIE_ROUTES = frozenset(
         ("POST", "/api/site/source-links/approve"),
         ("GET", "/api/site/source-links"),
         ("DELETE", "/api/site/source-links/{link_id}"),
+        # Section 12: the account's export and its deletion, both behind a recent sign-in.
+        ("POST", "/api/site/account/export"),
+        ("POST", "/api/site/account/delete"),
     }
 )
 # The app's routes: pairing takes the device code in the body, the player API a device token
