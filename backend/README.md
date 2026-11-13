@@ -320,6 +320,24 @@ default: no source can be linked.
 - `create_app(..., live_recheck=None)` runs no re-check loop; the tests use it so, except
   `tests/test_live_recheck.py`.
 
+## The companion page at `/control` (ADR 0005, section 8)
+
+- `control_page.py` serves the web lane's build, `web/dist/control/` next to `backend/` (`npm run
+  build` in `web/`), at `/control`: `index.html` at `/control` (and `/control/`) only, its
+  scripts, style sheets and fonts under `/control/`. `create_app(..., control_dir=...)` points
+  it elsewhere. The files are read once when the app is made; without a build, `/control` is a
+  404 and a warning is logged.
+- Only `.js`, `.css` and `.woff2` files with plain lower-case names, at most one folder deep,
+  are served (`control_page_policy.asset_type`); no symbolic link is followed. A request is
+  answered by exact lookup in that table: any other path under `/control` is
+  `404 {"error": "not_found"}` and never reaches another route or file.
+- Every answer under `/control` carries `control_page_policy.control_headers`: a content
+  security policy with `default-src 'none'`, the page's own origin for its scripts, styles and
+  fonts, and `connect-src` limited to `/api/live/`, `/api/site/sessions` and the live WebSocket
+  `wss://…/api/live/ws`; `frame-ancestors 'none'` and `X-Frame-Options: DENY`;
+  `Referrer-Policy: no-referrer`; `X-Content-Type-Options: nosniff`; `Cache-Control: no-store`
+  on the page and `no-cache` on its assets.
+
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 
 Two layers.

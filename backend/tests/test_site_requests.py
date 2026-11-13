@@ -8,6 +8,7 @@ import uuid
 import pytest
 from httpx import Response
 
+from player_backend.control_page_policy import control_headers, is_control_path
 from player_backend.db import login
 from tests.routehelp import routes_of
 from tests.sitehelp import FIREFOX, ORIGIN, Site
@@ -26,12 +27,18 @@ def _calls(site: Site) -> list[tuple[str, str]]:
         path = path.replace("{source_class_id}", "c1")
         path = path.replace("{class_id}", str(uuid.uuid4()))
         path = path.replace("{passkey_id}", str(uuid.uuid4()))
+        path = path.replace("{name:path}", "companion.js")
         assert "{" not in path, "a new path parameter needs a value here"
         found.append((route.method, path))
     return found
 
 
 def _assert_headers(response: Response, path: str) -> None:
+    if is_control_path(path):
+        # The companion page's own (ADR 0005, section 8), each one: tests/test_control_page.py.
+        for name, value in control_headers(path, ORIGIN).items():
+            assert response.headers[name] == value, (path, name)
+        return
     assert response.headers["content-security-policy"] == CSP
     assert response.headers["referrer-policy"] == "no-referrer"
     if path.startswith(("/api/site/", "/api/pairing/", "/api/player/", "/api/source/")):
