@@ -92,14 +92,12 @@ async def _hello(hub: Hub, websocket: WebSocket, origin: str | None, site: str) 
         await _refuse(websocket, HELLO_REFUSED)
         return None
     registry = hub.service.registry
-    # Looked up on a thread: a session found past its lifetime ends there, and its
-    # `live.session_ended` is written to the database before the answer comes back.
     if role == "host":
-        session_id = await asyncio.to_thread(registry.host_session, token, hub.service.clock())
+        session_id = registry.host_session(token, hub.service.clock())
         if session_id is not None:
             return hub.attach_host(websocket, session_id)
     else:
-        seat = await asyncio.to_thread(registry.controller_seat, token, hub.service.clock())
+        seat = registry.controller_seat(token, hub.service.clock())
         if seat is not None:
             return hub.attach_controller(websocket, seat)
     await _refuse(websocket, HELLO_REFUSED)

@@ -31,6 +31,7 @@ from tests.livehelp import (
     nothing,
     recv,
     result,
+    until,
 )
 
 
@@ -129,6 +130,7 @@ def test_a_controllers_hello_to_a_session_past_its_lifetime_is_refused(live: Any
         assert closed(ws) == 4401
     assert live.registry.running() == []
     # Ended there, as the sweep would have ended it, and recorded once.
+    assert until(lambda: live.ends != [])
     assert live.ends == [(started.session_id, "host_away")]
 
 
@@ -142,6 +144,7 @@ def test_a_hosts_hello_to_a_session_past_its_lifetime_is_refused_and_recorded(
             ws.send_json(hello(started.host_token))
             assert closed(ws) == 4401
     assert live.registry.running() == []
+    assert until(lambda: live.ends != [])
     assert live.ends == [(started.session_id, "host_away")]
 
 

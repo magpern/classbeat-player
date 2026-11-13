@@ -6,8 +6,9 @@ hanging. Tokens are made at run time; none is written in a file."""
 from __future__ import annotations
 
 import json
+import time
 import uuid
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -90,6 +91,17 @@ class Live:
             ws.send_json(hello(token))
             assert recv(ws)["type"] == "welcome"
             yield ws
+
+
+def until(check: Callable[[], bool], seconds: float = 3.0) -> bool:
+    """Whether `check` holds within `seconds` (an expired session's end is written off the
+    event loop, on a worker thread)."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if check():
+            return True
+        time.sleep(0.01)
+    return check()
 
 
 def hello(token: str) -> dict[str, object]:
