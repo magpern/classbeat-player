@@ -14,10 +14,12 @@ from __future__ import annotations
 import smtplib
 import socket
 import ssl
+import threading
 from collections.abc import Mapping
 from email.message import EmailMessage
 from email.policy import SMTP as SMTP_POLICY
 from email.utils import formatdate, make_msgid
+from typing import Any
 
 from player_backend.mail import Mail
 from player_backend.smtp_deadline import Deadline
@@ -40,14 +42,45 @@ def _checked(context: ssl.SSLContext) -> ssl.SSLContext:
     return context
 
 
+type _Address = tuple[socket.AddressFamily, socket.SocketKind, int, str, Any]
+
+
+def _addresses(deadline: Deadline, host: str, port: int) -> list[_Address]:
+    """The addresses of `host`, looked up within the time that is left (#101 review, note 3).
+
+    The system's lookup cannot be interrupted, so it runs on a thread of its own and is waited
+    for no longer than the time left. A lookup that takes longer is left to finish on its own;
+    what it finds is dropped.
+    """
+    found: list[_Address] = []
+    failed: list[BaseException] = []
+    done = threading.Event()
+
+    def look_up() -> None:
+        try:
+            found.extend(socket.getaddrinfo(host, port, type=socket.SOCK_STREAM))
+        except BaseException as error:
+            failed.append(error)
+        finally:
+            done.set()
+
+    threading.Thread(target=look_up, name="smtp-lookup", daemon=True).start()
+    if not done.wait(deadline.left()):
+        raise TimeoutError("the mail service took too long")
+    if failed:
+        raise failed[0]
+    return found
+
+
 def _connect(deadline: Deadline, host: str, port: int) -> socket.socket:
     """A connection to the first address of `host` that answers, all within the time left.
 
-    Address by address, each held by the deadline and given only the time that is left, so
-    several addresses that do not answer cannot take more than the whole limit together.
+    The lookup, then address by address, each held by the deadline and given only the time that
+    is left, so a slow lookup and several addresses that do not answer cannot take more than the
+    whole limit together.
     """
     last: OSError = OSError("the mail service's host has no address")
-    for family, kind, proto, _, address in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM):
+    for family, kind, proto, _, address in _addresses(deadline, host, port):
         sock = socket.socket(family, kind, proto)
         try:
             deadline.hold(sock)
@@ -132,7 +165,9 @@ class SmtpMailer:
             client.sendmail(s.sender, [to], content)
             try:
                 deadline.step()
-                client.quit()
+                # Not `quit()`, which closes the socket while the deadline still holds it: the
+                # socket is released first and closed after, below.
+                client.docmd("QUIT")
             except (smtplib.SMTPException, OSError):
                 # The mail was handed over: a failed goodbye does not make it unsent.
                 pass

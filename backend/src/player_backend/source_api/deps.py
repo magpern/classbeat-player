@@ -28,7 +28,6 @@ from player_backend.bearer_policy import (
 )
 from player_backend.db import sources
 from player_backend.db.context import undone_on_error
-from player_backend.db.devices import BearerKeys
 from player_backend.http_errors import ApiError
 from player_backend.login_policy import retry_after
 from player_backend.player_api.deps import bearer_blocks
@@ -72,7 +71,7 @@ def source_token(request: Request, who: TheCaller) -> Generator[sources.SourceEn
         # Refused by its shape, before any lookup: no token, another type, another scheme.
         raise ApiError(401, "invalid_token", _CHALLENGE)
     digest = token_hash(token)
-    keys = BearerKeys(
+    keys = sources.SourceKeys(
         same_token=same_token_key(digest, who.address_hash),
         unknown_tokens=unknown_tokens_key(who.address_hash),
         requests=requests_key(digest),

@@ -42,6 +42,13 @@ class Refused:
 
 
 @dataclass(frozen=True)
+class SourceKeys(BearerKeys):
+    """The keys of one request's counters, and that of the source token's own requests."""
+
+    requests: bytes
+
+
+@dataclass(frozen=True)
 class SourceEntry:
     """A source-token request: its account context and the source the token is for."""
 
@@ -87,7 +94,7 @@ def _enter(db: Handle, token_hash: bytes) -> SourceEntry | None:
 
 
 @contextmanager
-def entered(pool: Pool, token_hash: bytes, keys: BearerKeys) -> Generator[SourceEntry | Refused]:
+def entered(pool: Pool, token_hash: bytes, keys: SourceKeys) -> Generator[SourceEntry | Refused]:
     """The transaction of a source-token request, or why the token sets no account.
 
     Committed when the block ends, rolled back when it raises. For a `Refused` the caller

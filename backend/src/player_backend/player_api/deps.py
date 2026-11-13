@@ -5,7 +5,8 @@ page in a browser, and a body sent as JSON. It runs before anything is counted o
 
 `device_token` is the one dependency of the device credential: it takes the token from
 `Authorization: Bearer` (never a cookie), opens the request's transaction, calls
-`auth_enter_device` as its first statement and yields the `AccountContext`. A token that sets
+`auth_enter_device` (after naming the request's budget: a document read, or the rest;
+bearer_policy.py), which counts the request, and yields the `AccountContext`. A token that sets
 no account is answered after its transaction has been committed, so its counters stay. A route
 that refuses the request (an `ApiError`: a 404) has its own writes rolled back, and the count
 of the token's requests and the device's "last used" kept: the token was used. Any other error
@@ -27,7 +28,7 @@ from player_backend.bearer_policy import (
     SAME_TOKEN_WINDOW,
     UNKNOWN_WINDOW,
     bearer_device_token,
-    requests_key,
+    budget_of,
     same_token_key,
     unknown_tokens_key,
 )
@@ -62,6 +63,13 @@ def app_only(request: Request) -> None:
         raise ApiError(415, "unsupported_media_type")
 
 
+def _route_of(request: Request) -> str | None:
+    """The path template of the route the request was matched to (FastAPI sets it)."""
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else None
+
+
 def _limited(seconds: int) -> ApiError:
     return ApiError(429, "too_many_requests", {"Retry-After": str(seconds)})
 
@@ -75,7 +83,6 @@ def device_token(request: Request, who: TheCaller) -> Generator[AccountContext]:
     keys = devices.BearerKeys(
         same_token=same_token_key(digest, who.address_hash),
         unknown_tokens=unknown_tokens_key(who.address_hash),
-        requests=requests_key(digest),
     )
     blocks = bearer_blocks(request)
     now = time.time()
@@ -85,7 +92,8 @@ def device_token(request: Request, who: TheCaller) -> Generator[AccountContext]:
         raise _limited(left)
     refused: devices.Refused | None = None
     refusal: ApiError | None = None
-    with devices.entered(site_state(request).pool, digest, keys) as entry:
+    budget = budget_of(request.method, _route_of(request))
+    with devices.entered(site_state(request).pool, digest, keys, budget) as entry:
         if isinstance(entry, AccountContext):
             try:
                 # What the route wrote is undone when it refuses, and nothing else is.

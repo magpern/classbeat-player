@@ -31,4 +31,5 @@ SQL_FILES: Final = (
     "0006_pairing_and_devices.sql",
     "0007_pairing_hardening.sql",
     "0008_source_api.sql",
+    "0009_device_budgets.sql",
 )

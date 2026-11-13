@@ -65,8 +65,8 @@ the owner's choice (`docs/owner.md`).
   least. With `starttls`, a server that offers no STARTTLS gets no login and no mail. After
   STARTTLS nothing read before it is kept.
 - `send` keeps to the limit `deliver` gives it (10 seconds) for the whole conversation: each step
-  gets the time that is left, and a watchdog shuts the connection when it runs out. Only the
-  name lookup of the host is the system's.
+  gets the time that is left, and a watchdog shuts the connection when it runs out. The name
+  lookup of the host runs on a thread of its own and is waited for no longer than the time left.
 - Nothing of a mail is logged or printed; a failure reaches the log as its type alone
   (`mail not sent: SMTPAuthenticationError`).
 - Tests: a fake server on loopback with certificates made for the run (`tests/smtphelp.py`).
@@ -156,7 +156,7 @@ deploy files run it as the `purge` service of `docker/compose.backend.yml`; see
   their `404` instead of raising it, so the request's transaction commits and the count stays.
   The `409` is returned the same way, so its `pairing.refused` event stays.
 - A device-token request is one transaction: `device_token` (`player_api/deps.py`) calls
-  `auth_enter_device` as its first statement and yields an `AccountContext`. A token that does
+  `auth_enter_device` (after naming the budget, below) and yields an `AccountContext`. A token that does
   not work is answered `401` with `token_revoked`, `token_unknown` or `token_expired` and
   `WWW-Authenticate: Bearer`, after its transaction (and so its counters) has been committed.
   Anything that is not a `cbp_dev_` bearer token is `401 invalid_token`, with nothing looked up.
@@ -184,11 +184,29 @@ its first publication, and it only grows.
 | `GET /api/player/classes/{class_id}` | One class the account holds now: `{class_id, source, source_class_id, publication_number, content_hash, position, document}`. A removal's marker, an unknown id and another account's id are all `404 not_found` |
 | `GET /api/player/cursor` | `{cursor}` |
 
-Each request counts towards the device token's 60 a minute; nothing else is written. `after`,
+Each request counts towards one of the device token's two budgets, both counted inside
+`auth_enter_device` with their numbers as constants (migration `0009`, principle 7): reads of one
+class's document (`GET /api/player/classes/{class_id}`) towards 600 a minute, everything else
+(pages, the cursor, the device's own routes) towards 60 a minute. `device_token` names the
+budget from the route it was matched to (`bearer_policy.budget_of`) in the transaction-local
+setting `app.device_budget`, which the function reads and clears; any other value is the 60.
+A refused request keeps its count and "last used". Nothing else is written. `after`,
 `limit` and `class_id` are taken as raw text and parsed by `sync_policy.py` (ASCII digits only;
 a class id only in its canonical 8-4-4-4-12 form), so a malformed one is refused by the route
 with `422 invalid_request` and still counts: a value the framework refused would be refused
 inside the device token's transaction and roll back its count.
+
+## Request bodies (ADR 0002, section 10)
+
+Every body is held to 16 KiB (`body_policy.py`) by the middleware `BodyCap` (`body_cap.py`),
+inside the access log and outside every route: a `Content-Length` over the cap is answered
+`413 body_too_large` before the app sees the request, and a body sent without one is counted as
+it is read and refused at the read that goes over. The rest is never read. A route reads its
+body before its credential (`tests/guards/test_guard_body_order.py`), so the 413 comes before any
+credential is looked at or any transaction is opened. The one exception is
+`POST /api/source/publications`, which reads its own body no further than 2 MiB and refuses an
+oversized one inside the source token's transaction, so that it counts as the token's use while
+a slow upload still holds no pool connection.
 
 ## Linking a source, the source token and publications (ADR 0002, sections 3, 7, 10 and 11)
 
@@ -202,7 +220,7 @@ default: no source can be linked.
 | `POST /api/site/source-links/approve` `{source, redirect_uri, state, code_challenge, code_challenge_method?}` | Session cookie | `200 {redirect}`: the redirect address with `code` (`cbp_lc_`, 60 seconds, single use) and `state`, for the page's script to go to. `409 too_many_links` at 5 links; `422` for a challenge that is not S256 or a bad state. The account gets a mail |
 | `GET /api/site/source-links`, `DELETE /api/site/source-links/{link_id}` | Session cookie | The account's links (source, linked, last used); revoking deletes the link, the classes stay |
 | `POST /api/source/token` `{source, code, redirect_uri, code_verifier}` | The link code, in the body | `200 {source_token, token_type}` once. `400 invalid_grant` for every refusal (a code that is not `cbp_lc_` is refused before any lookup); `429` over 10 exchanges a minute per address |
-| `POST /api/source/publications` (ADR 0003, section 6) | `Authorization: Bearer cbp_src_…` | `200 {status: applied or repeat, highest_publication_number}`; `409 stale_publication` or `publication_conflict` with `highest_publication_number`; `409 too_many_classes` at 2,000; `422` (`invalid_publication`, `content_hash_mismatch`, `unsupported_format_version`); `413 document_too_large` over 1 MiB |
+| `POST /api/source/publications` (ADR 0003, section 6) | `Authorization: Bearer cbp_src_…` | `200 {status: applied or repeat, highest_publication_number}`; `409 stale_publication` or `publication_conflict` with `highest_publication_number`; `409 too_many_classes` at 2,000; `422` (`invalid_publication`, `content_hash_mismatch`, `unsupported_format_version`); `413 document_too_large` over 1 MiB (a body over 2 MiB is not read further), answered inside the token's transaction, so it counts |
 | `GET /api/source/classes/{source_class_id}` | Source token | The highest number seen and whether it was a removal. Numbers only |
 | `DELETE /api/source/link` | Source token | The source ends its own link |
 

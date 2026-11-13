@@ -3,7 +3,8 @@
 A socket timeout alone bounds each read, not the conversation: a server that answers one byte
 at a time could hold the thread for good. So every step gets the time that is left as its
 socket timeout, and a watchdog shuts the connection down when the limit is reached, which ends
-a read that is still waiting. Name resolution is the system's and is not bounded here.
+a read that is still waiting. The name lookup cannot be interrupted, so the mailer waits for it
+no longer than the time left (smtp_mailer.py, `_addresses`).
 """
 
 from __future__ import annotations

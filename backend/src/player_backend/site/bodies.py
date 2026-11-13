@@ -3,7 +3,9 @@
 A body model the framework validated would be refused inside the session's transaction and
 roll back the session's "last used" (param_policy.py). So a signed-in route takes `RawBody`,
 declared before its session so the body is read before the transaction opens, and parses it
-with `parsed`, which answers `422 invalid_request` from inside the route.
+with `parsed`, which answers `422 invalid_request` from inside the route. The order is held by
+tests/guards/test_guard_body_order.py. The body is held to 16 KiB as it is read (body_cap.py):
+an oversized one is answered 413 before the session is looked at.
 """
 
 from __future__ import annotations
