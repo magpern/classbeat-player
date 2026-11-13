@@ -46,6 +46,10 @@ export interface Rig {
   paired: boolean;
   /** The pairing's backend; set it to pair the computer again with another one. */
   origin: string;
+  /** The lines the live service logged. */
+  readonly logs: string[];
+  /** When set, opening a socket throws it (a step after the start answer failing). */
+  connectThrows: Error | null;
   /** The fake clock's timers, for what the tests build beside the live client. */
   readonly setTimer: (fn: () => void, ms: number) => unknown;
   readonly clearTimer: (handle: unknown) => void;
@@ -70,6 +74,8 @@ export function rig(): Rig {
     classOpen: true,
     paired: true,
     origin: ORIGIN,
+    logs: [],
+    connectThrows: null,
     setTimer,
     clearTimer,
     answer: { kind: "http", status: 200, body: { sessionId: SESSION_ID, joinCode: JOIN_CODE, hostToken: HOST_TOKEN }, retryAfterS: null },
@@ -103,6 +109,7 @@ export function rig(): Rig {
       return r.answer;
     },
     connect: (url, on: SocketEvents) => {
+      if (r.connectThrows !== null) throw r.connectThrows;
       const s: FakeSocket = {
         url,
         sent: [],
@@ -122,6 +129,7 @@ export function rig(): Rig {
     secondDisplay: () => r.secondDisplay,
     setTimer,
     clearTimer,
+    log: (line) => void r.logs.push(line),
   });
   return r;
 }

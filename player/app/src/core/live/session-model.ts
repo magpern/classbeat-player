@@ -7,8 +7,8 @@
 // - Started only on the instructor's request, while a class is open, by a paired app. Off at each
 //   start of the app. The class run ending (another class opened, the window closed) ends it.
 // - The host token lives in this state, in the main process's memory, and leaves it only in the
-//   `hello` and `end_session` effects, each of which puts it in a `hello`. The presenter's view
-//   (panel-view.ts) never holds it.
+//   `hello`, `end_live` and `end_session` effects, each of which can only put it in a `hello`. The
+//   presenter's view (panel-view.ts) never holds it.
 // - A session the host is not in is still ended on the backend (#203): End, the app quitting or
 //   another class while starting, connecting or reconnecting, and a late start answer for a run
 //   that is no longer waiting for it, each give `end_session`. None leaves it for 15 minutes.
@@ -50,13 +50,17 @@ function finish(m: LiveModel, reason: EndReason, extra: readonly LiveEffect[] = 
 
 /**
  * The instructor ends it, the app quits or the class run ends. Live, `end` goes over the host's
- * connection; connecting or reconnecting, over one of its own (`end_session`). While starting
- * there is no session yet: the answer, when it comes, is ended (`answer` below).
+ * connection, which is kept until the session is ended (`end_live`, #211: the quit waits for it);
+ * connecting or reconnecting, over one of its own (`end_session`). While starting there is no
+ * session yet: the answer, when it comes, is ended (`answer` below).
  */
 function endHere(m: LiveModel, reason: EndReason): Step {
   if (m.phase === "starting") return same(rest(m, { phase: "ended", ended: reason }));
   if (!isRunning(m)) return same(m);
-  if (m.phase === "live") return finish(m, reason, [{ kind: "send", message: { v: 1, type: "end" } }]);
+  if (m.phase === "live" && m.session !== null) {
+    const effects: LiveEffect[] = [{ kind: "end_live", socket: m.socket, token: m.session.hostToken }];
+    return { model: rest(m, { phase: "ended", ended: reason }), effects };
+  }
   return finish(m, reason, m.session === null ? [] : [{ kind: "end_session", token: m.session.hostToken }]);
 }
 

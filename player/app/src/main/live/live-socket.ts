@@ -1,7 +1,9 @@
 // The host's one outbound WebSocket to the live process (ADR 0005 section 1), from the main
 // process only, over the runtime's own WebSocket. Nothing listens on this computer. Text frames
 // only; a binary frame is not read. Never logs and never throws: every failure is a close, told
-// once. The token is never in the address: it goes in the `hello` message.
+// once. The token is never in the address: it goes in the `hello` message. It imports nothing:
+// the code told for a close without one is core's CLOSE_ABNORMAL, handed in by setup.ts, so 1006 is
+// defined once (core/live/session-model.ts).
 
 export interface LiveSocket {
   send(text: string): void;
@@ -11,7 +13,7 @@ export interface LiveSocket {
 export interface SocketEvents {
   open(): void;
   message(text: string): void;
-  /** Told exactly once, with the close code (1006 when the connection failed without one). */
+  /** Told exactly once, with the close code (the `abnormal` code when the connection failed without one). */
   closed(code: number): void;
 }
 
@@ -28,9 +30,8 @@ type OpenSocket = (url: string) => RuntimeSocketLike;
 
 const runtimeSocket: OpenSocket = (url) => new WebSocket(url);
 
-const ABNORMAL = 1006;
-
-export function webSocketConnect(openSocket: OpenSocket = runtimeSocket): Connect {
+/** `abnormal`: the code told when the connection failed or dropped without a close code of its own. */
+export function webSocketConnect(abnormal: number, openSocket: OpenSocket = runtimeSocket): Connect {
   return (url, on) => {
     let done = false;
     const closed = (code: number): void => {
@@ -42,7 +43,7 @@ export function webSocketConnect(openSocket: OpenSocket = runtimeSocket): Connec
     try {
       ws = openSocket(url);
     } catch {
-      queueMicrotask(() => closed(ABNORMAL));
+      queueMicrotask(() => closed(abnormal));
       return { send: () => undefined, close: () => undefined };
     }
     ws.addEventListener("open", () => {
@@ -51,7 +52,7 @@ export function webSocketConnect(openSocket: OpenSocket = runtimeSocket): Connec
     ws.addEventListener("message", (e) => {
       if (!done && typeof e.data === "string") on.message(e.data);
     });
-    ws.addEventListener("close", (e) => closed(typeof e.code === "number" ? e.code : ABNORMAL));
+    ws.addEventListener("close", (e) => closed(typeof e.code === "number" ? e.code : abnormal));
     // An error is always followed by a close; nothing from it is kept (it could quote the request).
     ws.addEventListener("error", () => undefined);
     return {
