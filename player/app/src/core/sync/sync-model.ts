@@ -11,13 +11,19 @@
 // - A class being played is a snapshot the edge holds; sync never changes it. A newer version is
 //   cached and shown as available; it applies after the class.
 // - `token_revoked`, `token_unknown` and the pairing ending wipe the cache, after any class being
-//   played has ended (ADR 0002, section 6). A wipe is done only when the edge says it is on disk:
-//   until then nothing is synced, for any account, and nothing is pinned; a failed wipe is tried
-//   again with a backoff and at every start (the edge keeps a marker on disk until it succeeds). `token_expired` keeps it (the same table): the app
-//   stops asking until it is paired again, and a new pairing to the same account continues.
+//   played has ended (ADR 0002, section 6). Only the cache waits for the class: the pairing
+//   deletes its token at once. A wipe is done only when the edge says it is on disk: until then
+//   nothing is synced, for any account, and nothing is pinned. A failed wipe is tried again with
+//   a backoff and at every start (the edge keeps a marker on disk until it succeeds).
+// - `token_expired` keeps the cache (the same table): the app stops asking until it is paired
+//   again, and a new pairing to the same account continues.
+// - Nothing syncs before the cache is read. A cache shown to be another account's, or to hold
+//   classes with no cursor, is wiped. A cache that cannot be read (a disk fault) is kept as it
+//   is: sync shows "unavailable" and the read is tried again with the fault backoff.
 // - No answer, a 5xx or a 429 never deletes anything; the app asks again later. Only the server's
 //   own word deletes a class: a removal, `not_found`, a full resync that no longer lists it, or
-//   the pairing gone. A class answer that cannot be kept is skipped, its cached copy kept.
+//   the pairing gone. A class answer that cannot be kept is skipped, its cached copy kept, and
+//   the cursor moves past it: it is fetched again only once it is published again or on a resync.
 import type { Change, FetchResult, ListResult, Refusal } from "./answers.ts";
 import { backoffMs, retryWaitMs, SYNC_EVERY_MS } from "./backoff-policy.ts";
 
@@ -27,7 +33,8 @@ export interface Credential {
   readonly expired: boolean;
 }
 
-export type Status = "unpaired" | "syncing" | "synced" | "offline" | "waiting" | "expired";
+/** `unavailable`: the cache could not be read; it is kept, and read again later. */
+export type Status = "unpaired" | "syncing" | "synced" | "offline" | "waiting" | "expired" | "unavailable";
 
 type Applied = { readonly set: readonly [string, string] } | { readonly drop: readonly string[] } | { readonly cursor: number };
 type Wait = { readonly for: "list" } | { readonly for: "fetch"; readonly id: string } | { readonly for: "write"; readonly then: Applied };
@@ -66,6 +73,8 @@ export interface SyncState {
   readonly wipeAfterPin: boolean;
   /** A wipe was asked and has not yet been reported done: nothing syncs or plays until it is. */
   readonly wipePending: boolean;
+  /** The cache is not read yet, or its read failed: nothing syncs or plays until it is. */
+  readonly unread: boolean;
 }
 
 export type Effect =
@@ -74,6 +83,8 @@ export type Effect =
   | { readonly do: "keep"; readonly run: number; readonly account: string; readonly id: string; readonly hash: string; readonly document: Readonly<Record<string, unknown>> }
   | { readonly do: "remove"; readonly run: number; readonly ids: readonly string[] }
   | { readonly do: "commit"; readonly run: number; readonly account: string; readonly cursor: number }
+  /** Read the cache; the result goes back in as `loaded` or `unreadable`. */
+  | { readonly do: "load" }
   /** Delete every cached class and the cursor; the result goes back in as `wiped`. */
   | { readonly do: "wipe" }
   /** Tell the pairing what the server said about its token. */
@@ -84,6 +95,8 @@ export type Effect =
 export type SyncEvent =
   /** The cache on disk at start; `wipePending` when an earlier wipe did not finish. */
   | { readonly type: "loaded"; readonly account: string | null; readonly cursor: number; readonly held: ReadonlyMap<string, string>; readonly wipePending: boolean }
+  /** The cache could not be read: a disk fault, not a cache shown to be another account's. */
+  | { readonly type: "unreadable" }
   | { readonly type: "due"; readonly credential: Credential | null }
   | { readonly type: "listed"; readonly run: number; readonly answer: ListResult }
   | { readonly type: "fetched"; readonly run: number; readonly id: string; readonly answer: FetchResult }
@@ -102,7 +115,7 @@ export interface Step {
 }
 
 const EMPTY: ReadonlyMap<string, string> = new Map();
-export const INITIAL: SyncState = { account: null, cursor: 0, held: EMPTY, run: null, runs: 0, failures: 0, status: "unpaired", pinned: null, wipeAfterPin: false, wipePending: false };
+export const INITIAL: SyncState = { account: null, cursor: 0, held: EMPTY, run: null, runs: 0, failures: 0, status: "unpaired", pinned: null, wipeAfterPin: false, wipePending: false, unread: true };
 
 const stay = (state: SyncState): Step => ({ state, effects: [] });
 const later = (state: SyncState, at: number, effects: readonly Effect[] = []): Step => ({ state, effects: [...effects, { do: "wake", at }] });
@@ -122,6 +135,8 @@ function due(s: SyncState, c: Credential | null, now: number): Step {
   if (s.run !== null || s.wipeAfterPin) return stay(s);
   // An unfinished wipe comes first, whoever is paired, or nobody.
   if (s.wipePending) return { state: s, effects: [{ do: "wipe" }] };
+  // Then the cache is read: nothing is synced into a folder whose contents are not known.
+  if (s.unread) return { state: s, effects: [{ do: "load" }] };
   if (c === null) return later({ ...s, status: "unpaired" }, now + SYNC_EVERY_MS);
   if (c.expired) return later({ ...s, status: "expired" }, now + SYNC_EVERY_MS);
   // A cache of another account (or of none recorded) is never shown to this one.
@@ -142,7 +157,8 @@ function forgotten(s: SyncState): Step {
 
 function wiped(s: SyncState, ok: boolean, now: number): Step {
   if (!s.wipePending) return stay(s);
-  if (ok) return later({ ...s, wipePending: false, failures: 0 }, now);
+  // Wiped, the folder is known to be empty: there is nothing left to read.
+  if (ok) return later({ ...s, wipePending: false, unread: false, failures: 0 }, now);
   const failures = s.failures + 1;
   return later({ ...s, failures }, now + backoffMs(failures));
 }
@@ -218,11 +234,19 @@ function fetched(s: SyncState, run: Run, id: string, a: FetchResult, now: number
 export function step(s: SyncState, e: SyncEvent, now: number): Step {
   const run = s.run;
   switch (e.type) {
-    case "loaded":
-      if (s.runs !== 0 || run !== null) return stay(s);
+    case "loaded": {
+      if (!s.unread || run !== null) return stay(s);
+      const read: SyncState = { ...s, unread: false, status: "unpaired" };
       // A wipe asked before the cache was read, or left unfinished on disk, holds nothing.
-      if (s.wipePending || e.wipePending) return stay({ ...emptied(s), wipePending: true });
-      return stay({ ...s, account: e.account, cursor: e.cursor, held: e.held });
+      if (s.wipePending || e.wipePending) return stay({ ...emptied(read), wipePending: true });
+      return stay({ ...read, account: e.account, cursor: e.cursor, held: e.held });
+    }
+    case "unreadable": {
+      // The files stay as they are; the read is tried again after the fault backoff.
+      if (!s.unread) return stay(s);
+      const failures = s.failures + 1;
+      return later({ ...s, failures, status: "unavailable" }, now + backoffMs(failures));
+    }
     case "due":
       return due(s, e.credential, now);
     case "listed":
@@ -240,7 +264,7 @@ export function step(s: SyncState, e: SyncEvent, now: number): Step {
       return forgotten(s);
     case "pin":
       // Only a class held now, as it is now, and never while a wipe waits.
-      return !s.wipeAfterPin && !s.wipePending && s.held.get(e.id) === e.hash ? stay({ ...s, pinned: { id: e.id, hash: e.hash } }) : stay(s);
+      return !s.wipeAfterPin && !s.wipePending && !s.unread && s.held.get(e.id) === e.hash ? stay({ ...s, pinned: { id: e.id, hash: e.hash } }) : stay(s);
     case "unpin":
       if (s.pinned === null) return stay(s);
       if (s.wipeAfterPin) return wiping({ ...s, pinned: null });
