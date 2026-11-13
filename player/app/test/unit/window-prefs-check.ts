@@ -11,6 +11,8 @@
 //   of a template), no `Reflect`, no member name built from strings (`o[\`a${b}\`]`, `o["a" + b]`).
 // - A `new` names a host, a name imported unaliased, a class of the same file, or a global
 //   constructor from GLOBAL_NEW that the file does not redeclare; nothing else (#149, N4).
+// - A class `extends` only a name imported unaliased, never a host, an expression or a local
+//   binding (#151 review, N4).
 // - A checked `new` has an object literal whose keys are plain identifiers; spreads only before
 //   `webPreferences`, written once and out in full.
 // - `webPreferences` is `secureWebPreferences(...)`, or `{ ...secureWebPreferences(...), k: v }`
@@ -36,7 +38,7 @@ export interface Found {
   readonly windows: number;
 }
 
-const isTypePosition = (n: ts.Node): boolean => {
+export const isTypePosition = (n: ts.Node): boolean => {
   for (let p: ts.Node | undefined = n.parent; p; p = p.parent) {
     // `extends BrowserWindow` makes a constructor under another name.
     if (ts.isHeritageClause(p) || ts.isExpressionWithTypeArguments(p)) return false;
@@ -153,6 +155,13 @@ export function checkSource(text: string, file: string): Found {
     if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword) say(n, "a dynamic import");
     if (ts.isImportEqualsDeclaration(n)) say(n, "an import = require(...)");
     if (ts.isElementAccessExpression(n) && builtString(n.argumentExpression)) say(n, "a member name built from strings");
+    if ((ts.isClassDeclaration(n) || ts.isClassExpression(n)) && n.heritageClauses) {
+      for (const t of n.heritageClauses.filter((h) => h.token === ts.SyntaxKind.ExtendsKeyword).flatMap((h) => h.types)) {
+        const e = t.expression;
+        const imported = ts.isIdentifier(e) && !HOSTS.has(e.text) && known.imported.has(e.text) && !known.declared.has(e.text) && !known.classes.has(e.text);
+        if (!imported) say(t, `a class that extends ${t.expression.getText()}, not a name imported unaliased`);
+      }
+    }
     if (ts.isNewExpression(n)) {
       const e = n.expression;
       const name = newName(e);

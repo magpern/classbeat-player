@@ -32,6 +32,8 @@ const PRESENTER_URL = pathToFileURL(PRESENTER_FILE).href;
 const LIST_FILE = join(DIST, "classlist.html");
 const LIST_URL = pathToFileURL(LIST_FILE).href;
 const ROOM_FILE = join(DIST, "room.html");
+const PRESENTER_PRELOAD = join(DIST, "preload.cjs");
+const ROOM_PRELOAD = join(DIST, "room-preload.cjs");
 
 // The one window: it shows the class list first, and the presenter once a class is started.
 let presenter: BrowserWindow | null = null;
@@ -44,7 +46,7 @@ const controller = createController(undefined, music.reader, music.transport);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 // The room screen's own window: it opens with every class that opens, and closes with the class.
-const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: join(DIST, "room-preload.cjs"), presenter: live });
+const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: ROOM_PRELOAD, presenter: live });
 const pinned = (): boolean => (sync?.view().pinned ?? null) !== null;
 // Whether the main window is on the class list, as the shell asked for it: set when the shell starts
 // a page load, so a command right after "Class list" already sees the list (the URL changes only
@@ -105,7 +107,7 @@ function createPresenter(): void {
     ...PRESENTER_SIZE,
     title: "Class player",
     show: true,
-    webPreferences: secureWebPreferences(join(DIST, "preload.cjs")),
+    webPreferences: secureWebPreferences(PRESENTER_PRELOAD),
   });
   // On Windows the constructor's minimum is applied to the outer window, so the content area could
   // shrink by the frame; setMinimumSize takes the outer size, so add the frame to the content minimum.
@@ -135,7 +137,7 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
   void app.whenReady().then(() => {
-    hardenSession(APP_DIR_URL);
+    hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD]);
     const paired = setupPairing();
     pairing = paired;
     // Keeps the account's classes offline, and the class list shows them.

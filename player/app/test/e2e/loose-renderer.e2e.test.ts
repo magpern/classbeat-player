@@ -91,6 +91,49 @@ test("a window on another session is destroyed and never loads", async () => {
   assertRefused(await makeWindow({ ...secureWebPreferences(preload), partition: "loose-test" }));
 });
 
+// The keys Electron does not report (#151 review, N2): the preload and the spell checker.
+test("the session's spell checker is off and no session preload is registered", async () => {
+  const r = await app.evaluate(({ session }) => ({ spell: session.defaultSession.isSpellCheckerEnabled(), preloads: session.defaultSession.getPreloadScripts().length }));
+  assert.deepEqual(r, { spell: false, preloads: 0 });
+});
+
+test("a window with another preload, or none, is destroyed and never loads", async () => {
+  assertRefused(await makeWindow({ ...secureWebPreferences(join(APP_DIR, "dist", "other-preload.cjs")) }));
+  const none: Record<string, unknown> = { ...secureWebPreferences(preload) };
+  delete none.preload;
+  assertRefused(await makeWindow(none));
+});
+
+test("the room preload is allowed, as the room window has it (control)", async () => {
+  const s = await app.evaluate(
+    async ({ BrowserWindow }, { webPreferences, presenterFile }) => {
+      const w = new BrowserWindow({ show: false, webPreferences });
+      await w.loadFile(presenterFile);
+      const alive = !w.isDestroyed();
+      w.destroy();
+      return alive;
+    },
+    { webPreferences: secureWebPreferences(join(APP_DIR, "dist", "room-preload.cjs")) as unknown as Record<string, unknown>, presenterFile },
+  );
+  assert.equal(s, true);
+});
+
+test("with the spell checker back on, or a session preload, a hardened window is refused", async () => {
+  const secure = secureWebPreferences(preload) as unknown as Record<string, unknown>;
+  await app.evaluate(({ session }) => session.defaultSession.setSpellCheckerEnabled(true));
+  try {
+    assertRefused(await makeWindow(secure));
+  } finally {
+    await app.evaluate(({ session }) => session.defaultSession.setSpellCheckerEnabled(false));
+  }
+  const id = await app.evaluate(({ session }, filePath) => session.defaultSession.registerPreloadScript({ type: "frame", filePath }), preload);
+  try {
+    assertRefused(await makeWindow(secure));
+  } finally {
+    await app.evaluate(({ session }, id) => session.defaultSession.unregisterPreloadScript(id), id);
+  }
+});
+
 test("a view with loose preferences is destroyed and never loads", async () => {
   const s = await app.evaluate(
     async ({ WebContentsView }, { webPreferences, presenterFile }) => {

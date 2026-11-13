@@ -92,6 +92,13 @@ test("the check refuses each way of loosening a window", () => {
     "new of a parameter": ["const f = (C: typeof BrowserWindow) => new C({});"],
     "a global shadowed": ["const Map = pick(); new Map({});"],
     "an aliased import as callee": ['import { Thing as Map } from "./x.ts";\nnew Map({});'],
+    "a subclass of a looked-up constructor (review 3, N4)": ["class Win extends (Object.getPrototypeOf(w)[k] as typeof BrowserWindow) {} new Win({ webPreferences: { sandbox: false } });"],
+    "a class expression extending a call": ["const Win = class extends pick() {}; new Win({});"],
+    "a subclass of a member": ['import { Thing } from "./x.ts";\nclass Win extends Thing.Inner {} new Win({});'],
+    "a subclass of a local value": ["const Base = pick(); class Win extends Base {} new Win({});"],
+    "a subclass of a class of the file": ["class Base {} class Win extends Base {} new Win({});"],
+    "a subclass of an aliased import": ['import { Thing as Base } from "./x.ts";\nclass Win extends Base {} new Win({});'],
+    "a subclass of a global": ["class Oops extends Error {} new Oops();"],
     "a parameter secureWebPreferences": ["const f = (secureWebPreferences: (p: string) => object) => new BrowserWindow({ webPreferences: secureWebPreferences(p) });"],
   };
   for (const [what, [code]] of Object.entries(bad)) assert.notDeepEqual(ok(code), [], what);
@@ -101,6 +108,8 @@ test("the check refuses each way of loosening a window", () => {
   assert.match(said("const C = presenter.constructor; new C({ webPreferences: {} });"), /a new of C, not an import/);
   assert.match(said('import electron = require("electron");\nconst w = "Window"; new electron[`Browser${w}`]({});'), /an import = require/);
   assert.match(said('import electron = require("electron");\nconst w = "Window"; new electron[`Browser${w}`]({});'), /a member name built from strings/);
+  // The route of the third review is refused by the extends rule.
+  assert.match(said("class Win extends (Object.getPrototypeOf(w)[k] as typeof BrowserWindow) {} new Win({ webPreferences: { sandbox: false } });"), /a class that extends .*not a name imported unaliased/);
   // An import of another function under the name, or of the real one from elsewhere or renamed.
   const imports: Record<string, string> = {
     "renamed into the name": 'import { BrowserWindow } from "electron";\nimport { loose as secureWebPreferences } from "./web-preferences.ts";\n',
@@ -119,6 +128,7 @@ test("the check accepts the windows as the shell writes them", () => {
   assert.deepEqual(ok("let w: BrowserWindow | null = null; const f = (x: typeof BrowserWindow): void => void x;"), [], "types");
   assert.deepEqual(ok("BrowserWindow.getFocusedWindow()?.focus(); BrowserWindow.getAllWindows();"), [], "finding windows");
   assert.deepEqual(ok('new Map(); new Set([1]); new Intl.Collator("sv"); new URL("file:///x"); new Error("e");'), [], "built-in constructors");
+  assert.deepEqual(ok('import { Thing } from "./x.ts";\nclass Own extends Thing implements Shape {}\nnew Own();\ninterface I extends Shape {}'), [], "a subclass of an import");
   assert.deepEqual(ok('import { Menu } from "electron";\nclass Own {}\nnew Menu(); new Own(); const k = `a${1}`; rows[i + 1];'), [], "imports, own classes, templates, arithmetic keys");
   assert.deepEqual(checkSource('import { BrowserWindow } from "electron";\nimport { secureWebPreferences } from "../web-preferences.ts";\nnew BrowserWindow({ webPreferences: secureWebPreferences(p) });', ROOM).problems, []);
 });

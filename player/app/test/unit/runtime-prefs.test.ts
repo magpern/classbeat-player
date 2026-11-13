@@ -2,7 +2,7 @@
 // it finds loose): every hardening key Electron reports, value by value, and the session.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { looseKeys, REPORTED_KEYS, secureWebPreferences } from "../../src/main/web-preferences.ts";
+import { looseExtras, looseKeys, REPORTED_KEYS, secureWebPreferences } from "../../src/main/web-preferences.ts";
 
 // What Electron reports for the presenter (getLastWebPreferences), the keys it adds included.
 const HARDENED: Record<string, unknown> = {
@@ -53,4 +53,33 @@ test("the reported keys are every hardening key but the three Electron does not 
   assert.deepEqual(unreported, ["navigateOnDragDrop", "preload", "spellcheck"]);
   const reported = Object.keys(HARDENED).filter((k) => (REPORTED_KEYS as readonly string[]).includes(k));
   assert.deepEqual(reported.sort(), [...REPORTED_KEYS].sort(), "Electron reports them all");
+});
+
+// The three keys Electron does not report (N2): the preload and the spell checker read another way.
+const ALLOWED = ["/app/dist/preload.cjs", "/app/dist/room-preload.cjs"];
+const CLEAN = { preload: { filePath: "/app/dist/preload.cjs", id: "", type: "frame" }, sessionPreloads: 0, spellChecker: false };
+
+test("an allowed preload, no session preloads and the spell checker off are not loose", () => {
+  assert.deepEqual(looseExtras(CLEAN, ALLOWED), []);
+  assert.deepEqual(looseExtras({ ...CLEAN, preload: { ...CLEAN.preload, filePath: "/app/dist/room-preload.cjs" } }, ALLOWED), []);
+});
+
+test("another preload, none, or one Electron cannot say is loose", () => {
+  const preloads: Record<string, unknown> = {
+    another: { filePath: "/tmp/evil.cjs", id: "", type: "frame" },
+    "the same file by another path": { filePath: "/app/dist/../dist/preload.cjs", id: "", type: "frame" },
+    "not a frame preload": { filePath: "/app/dist/preload.cjs", id: "", type: "service-worker" },
+    "no path": { id: "", type: "frame" },
+    none: null,
+    "cannot say": undefined,
+    "a bare string": "/app/dist/preload.cjs",
+  };
+  for (const [what, preload] of Object.entries(preloads)) assert.deepEqual(looseExtras({ ...CLEAN, preload }, ALLOWED), ["preload"], what);
+  assert.deepEqual(looseExtras(CLEAN, []), ["preload"], "nothing allowed");
+});
+
+test("a session preload or the spell checker on is loose", () => {
+  assert.deepEqual(looseExtras({ ...CLEAN, sessionPreloads: 1 }, ALLOWED), ["sessionPreloads"]);
+  assert.deepEqual(looseExtras({ ...CLEAN, spellChecker: true }, ALLOWED), ["spellcheck"]);
+  assert.deepEqual(looseExtras({ preload: null, sessionPreloads: 2, spellChecker: true }, ALLOWED), ["preload", "sessionPreloads", "spellcheck"]);
 });
