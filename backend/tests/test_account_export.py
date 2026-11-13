@@ -71,10 +71,12 @@ def test_the_export_holds_the_callers_data_only_and_no_secret(site: Site) -> Non
     assert [p["name"] for p in body["passkeys"]] == ["Laptop key"]
     assert sorted(
         (c["source_class_id"], c["publication_number"], c["removed"]) for c in body["classes"]
-    ) == [("kept", 1, False), ("removed", 2, True)]
+    ) == [("kept", 1, False), ("removed", 2, True), ("site-deleted", 1, True)]
     kept = next(c for c in body["classes"] if c["source_class_id"] == "kept")
     assert kept["document"]["class"]["title"] == "Class of " + A
-    assert next(c for c in body["classes"] if c["removed"])["document"] is None
+    assert all(c["document"] is None for c in body["classes"] if c["removed"])
+    # The class library's event of the class deleted on the site.
+    assert "class.deleted" in [e["event"] for e in body["audit_events"]]
     assert [s["current"] for s in body["sessions"]].count(True) == 1
     # The export's own event is in it.
     assert body["audit_events"][-1]["event"] == EXPORTED

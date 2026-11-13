@@ -8,7 +8,7 @@ from psycopg import sql
 
 from tests import pairhelp
 from tests import sourcehelp as sh
-from tests.accounthelp import DELETE, Held, full_account, owned_tables
+from tests.accounthelp import DELETE, LIBRARY, Held, full_account, owned_tables
 from tests.pairhelp import DEVICE, bearer, poll
 from tests.sitehelp import SESSION_COOKIE, Site
 
@@ -55,6 +55,15 @@ def test_deleting_the_account_removes_every_row_it_owns_and_nothing_else(site: S
     before_a, before_b = _rows(site, a), _rows(site, b)
     # A really owns a row in every one of them, so that the check below means something.
     assert all(before_a[table] for table in KNOWN), {t for t in KNOWN if not before_a[t]}
+    # The class library's own rows among them: a class deleted on the site and its event.
+    library = (
+        "SELECT (SELECT count(*) FROM player.classes WHERE account_id = %(a)s "
+        "        AND source_class_id = 'site-deleted' AND kind = 'removal' AND document IS NULL),"
+        "       (SELECT count(*) FROM player.audit_events WHERE account_id = %(a)s "
+        "        AND event = 'class.deleted')"
+    )
+    assert site.su.execute(library, {"a": a.account_id}).fetchone() == (1, 1)
+    assert site.su.execute(library, {"a": b.account_id}).fetchone() == (1, 1)
     answer = a.browser.post(DELETE, json={"confirm": A})
     assert answer.status_code == 204
     assert SESSION_COOKIE in answer.headers["set-cookie"]
@@ -64,7 +73,12 @@ def test_deleting_the_account_removes_every_row_it_owns_and_nothing_else(site: S
     assert site.su.execute(
         "SELECT count(*) FROM player.audit_events WHERE account_id = %s", (a.account_id,)
     ).fetchone() == (0,)
+    assert site.su.execute(library, {"a": a.account_id}).fetchone() == (0, 0)
     assert _rows(site, b) == before_b
+    assert site.su.execute(library, {"a": b.account_id}).fetchone() == (1, 1)
+    # B's class library still answers, with B's classes.
+    listed = b.browser.get(LIBRARY)
+    assert listed.status_code == 200 and "Class of " + B in listed.text
 
 
 def test_after_the_deletion_every_token_of_the_account_is_refused(site: Site) -> None:

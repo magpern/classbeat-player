@@ -16,6 +16,7 @@ from tests.sitehelp import SESSION_COOKIE, Browser, Site
 
 EXPORT = "/api/site/account/export"
 DELETE = "/api/site/account/delete"
+LIBRARY = "/api/site/classes"
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,16 @@ def full_account(site: Site, email: str, address: str, server_address: str) -> H
     ):
         published = sh.publish(server, source, sh.envelope(class_id, number, document))
         assert published.status_code == 200 and published.json()["status"] == "applied"
+    # A class deleted in the class library on the site: its marker and its `class.deleted` event.
+    published = sh.publish(server, source, sh.envelope("site-deleted", 1, sh.document(title)))
+    assert published.status_code == 200 and published.json()["status"] == "applied"
+    row = site.su.execute(
+        "SELECT c.id FROM player.classes c JOIN player.accounts a ON a.id = c.account_id "
+        "WHERE a.email = %s AND c.source_class_id = 'site-deleted'",
+        (email,),
+    ).fetchone()
+    assert row is not None
+    assert browser.delete(f"{LIBRARY}/{row[0]}").status_code == 204
     row = site.su.execute("SELECT id FROM player.accounts WHERE email = %s", (email,)).fetchone()
     assert row is not None and isinstance(row[0], UUID)
     account_id = row[0]
