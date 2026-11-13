@@ -110,6 +110,13 @@ test("the check refuses each way of loosening a window", () => {
   assert.match(said('import electron = require("electron");\nconst w = "Window"; new electron[`Browser${w}`]({});'), /a member name built from strings/);
   // The route of the third review is refused by the extends rule.
   assert.match(said("class Win extends (Object.getPrototypeOf(w)[k] as typeof BrowserWindow) {} new Win({ webPreferences: { sandbox: false } });"), /a class that extends .*not a name imported unaliased/);
+  // An imported name shadowed by a local is the local, not the import (#154 review, N-1).
+  for (const code of [
+    'import { Thing } from "./x.ts";\nfunction f(): void { const Thing = pick(); class W extends Thing {} void W; }',
+    'import { Thing } from "./x.ts";\nconst f = (Thing: Ctor): unknown => class extends Thing {};',
+  ]) {
+    assert.match(said(code), /a class that extends Thing, not a name imported unaliased/, code);
+  }
   // An import of another function under the name, or of the real one from elsewhere or renamed.
   const imports: Record<string, string> = {
     "renamed into the name": 'import { BrowserWindow } from "electron";\nimport { loose as secureWebPreferences } from "./web-preferences.ts";\n',

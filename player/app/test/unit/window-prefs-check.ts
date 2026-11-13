@@ -49,7 +49,7 @@ export const isTypePosition = (n: ts.Node): boolean => {
 };
 const plainName = (n: ts.PropertyName): string | null => (ts.isIdentifier(n) ? n.text : null);
 /** A string built at run time: a template with substitutions, or `+` with a string in it. */
-const builtString = (e: ts.Expression): boolean => {
+export const builtString = (e: ts.Expression): boolean => {
   if (ts.isParenthesizedExpression(e)) return builtString(e.expression);
   if (ts.isTemplateExpression(e)) return true;
   if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) {

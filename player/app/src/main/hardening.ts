@@ -2,24 +2,25 @@
 // windows, no webviews, no permissions. Side effects only; the rules are in web-preferences.ts.
 import { app, session } from "electron";
 import type { WebContents } from "electron";
-import { isAllowedRequest, looseExtras, looseKeys } from "./web-preferences.ts";
+import { looseRenderer } from "./loose-renderer.ts";
+import type { LiveRenderer } from "./loose-renderer.ts";
+import { isAllowedRequest } from "./web-preferences.ts";
 
 // Every renderer, however it was made (a window, a view, window.open), is compared with
-// secureWebPreferences as it is created; one that differs is closed before it loads anything.
+// secureWebPreferences as it is created, and again as each navigation starts, loadFile and reload
+// included (#154 review, N-3: a session preload registered later applies from the next load); one
+// that differs is closed. The spell checker turned on with no load after it is left to the static
+// rule (test/unit/shell-guard-check.ts): nothing outside hardening.ts may set it.
 // The static check (test/unit/window-prefs-check.ts) is the early warning; this is the guarantee.
-// The keys Electron does not report are read another way (looseExtras): the preload through
-// Electron's own `_getPreloadScript` (no public getter; a version without it refuses every renderer),
-// the session's preload scripts and its spell checker.
+// The keys Electron does not report are read another way (loose-renderer.ts); a getter that throws,
+// or Electron's `_getPreloadScript` missing after an upgrade, refuses the renderer.
 function refuseLoose(contents: WebContents, preloads: readonly string[]): void {
-  const live = contents as unknown as { getLastWebPreferences(): Record<string, unknown> | null; _getPreloadScript?: () => unknown };
-  const ses = contents.session;
-  const preload = typeof live._getPreloadScript === "function" ? live._getPreloadScript() : undefined;
-  const extras = { preload, sessionPreloads: ses.getPreloadScripts().length, spellChecker: ses.isSpellCheckerEnabled() };
-  const loose = [...looseKeys(live.getLastWebPreferences(), ses === session.defaultSession), ...looseExtras(extras, preloads)];
+  if (contents.isDestroyed()) return;
+  const loose = looseRenderer(contents as unknown as LiveRenderer, () => session.defaultSession, preloads);
   if (loose.length === 0) return;
   console.error(`Refused a renderer that is not hardened (${loose.join(", ")}).`);
-  // Closed at once, while it is being created. Inside a window.open that a handler wrongly allowed,
-  // this can leave the opener waiting: that fails closed, and guardContents denies every window.open.
+  // Closed at once. Inside a window.open that a handler wrongly allowed, this can leave the opener
+  // waiting: that fails closed, and guardContents denies every window.open.
   contents.close();
 }
 
@@ -52,5 +53,6 @@ export function hardenSession(appDirUrl: string, preloads: readonly string[]): v
   app.on("web-contents-created", (_e, contents) => {
     guardContents(contents);
     refuseLoose(contents, preloads);
+    contents.on("did-start-navigation", () => refuseLoose(contents, preloads));
   });
 }

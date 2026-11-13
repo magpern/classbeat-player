@@ -79,6 +79,11 @@ test("session handlers, protocols, preloads and the spell checker are set only i
     "ses.setPreloads([f]);",
     "ses.setSpellCheckerEnabled(true);",
     "ses.setSpellCheckerDictionaryDownloadURL(u);",
+    // Only a comparison makes reading `protocol` harmless (#154 review, N-1).
+    'const p = (ses.protocol || x); p.handle("app", h);',
+    'const p = (ses.protocol ?? x); p.handle("app", h);',
+    "const p = ses.protocol && x; void p;",
+    "if (ses.protocol) void 0;",
   ];
   for (const code of bad) assert.notDeepEqual(problems(code), [], code);
   for (const code of bad) assert.deepEqual(problems(code, true), [], `${code} (hardening.ts)`);
@@ -90,10 +95,48 @@ test("the names stay usable where they set nothing", () => {
     'if (u?.protocol !== "file:") throw new Error("x");',
     "const off = (): void => undefined; off(); const timers = [off];",
     "type H = Parameters<Session['setPermissionRequestHandler']>[0]; type O = typeof app.off;",
-    "const flags = { off: true, protocol: 1 }; class C { off(): void {} }",
+    "type F = { off: boolean; protocol: number }; const flags: F = JSON.parse(t) as F; void flags;",
     "const [off] = pair; void off;",
     "interface X { removeListener(): void; webRequest: unknown }",
   ];
   for (const code of fine) assert.deepEqual(problems(code), [], code);
   assert.ok([...RESERVED].every((n) => !REMOVAL.has(n)));
+});
+
+// An object literal or class carrying a guarded name can be copied onto a contents or the app
+// (#154 review, N-4): such keys are refused, outside hardening.ts for a reserved name, everywhere for
+// a removal.
+test("a guarded name is never the key of an object literal or a class", () => {
+  const reserved = [
+    "Object.assign(Object.getPrototypeOf(contents), { setWindowOpenHandler: noop });",
+    "Object.assign(proto, { setWindowOpenHandler() {} });",
+    "const setWindowOpenHandler = noop; Object.assign(proto, { setWindowOpenHandler });",
+    "Object.assign(proto, { get webRequest() { return fake; } });",
+    "Object.assign(ses, { protocol: fake });",
+    "const setPermissionCheckHandler = 1; Object.assign(ses, { [setPermissionCheckHandler]: noop });",
+    'Object.assign(proto, { ["setWindowOpenHandler"]: noop });',
+    "Object.assign(proto, { [`setWindowOpenHandler`]: noop });",
+    "class Fake { setWindowOpenHandler = noop; } Object.assign(proto, new Fake());",
+    "class Fake { setSpellCheckerEnabled(): void {} }",
+  ];
+  for (const code of reserved) {
+    assert.notDeepEqual(problems(code), [], code);
+    assert.deepEqual(problems(code, true).filter((p) => !/a string/.test(p)), [], `${code} (hardening.ts)`);
+  }
+  const removal = [
+    "Object.assign(app, { removeAllListeners: noop });",
+    "const off = noop; Object.assign(app, { off });",
+    "Object.assign(contents, { removeListener() {} });",
+    "class C { off(): void {} }",
+  ];
+  for (const code of removal) {
+    assert.notDeepEqual(problems(code), [], code);
+    assert.notDeepEqual(problems(code, true), [], `${code} (hardening.ts)`);
+  }
+  // A key built from strings names nothing the checker can read, so it is refused too.
+  for (const code of ['Object.assign(proto, { ["setWindow" + "OpenHandler"]: noop });', "Object.assign(proto, { [`set${x}`]: noop });"]) {
+    assert.match(problems(code).join("\n"), /a key built from strings/, code);
+  }
+  // Interface and type keys define no value.
+  assert.deepEqual(problems("interface I { setWindowOpenHandler(h: H): void; off: number } type T = { protocol: string };"), []);
 });
