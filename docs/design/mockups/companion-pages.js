@@ -99,35 +99,38 @@ add('worst-wide', 'Companion: worst case, wide cue', 'Worst case by width: a 120
   run(WORST() + cue(WIDE_CUE) + runKeys({ follow: true }), 'tighter'));
 
 // ---------- Getting control, and losing it ----------
-const SIGNIN = p('Signed in on this phone? Sign in, then only the class code is needed.', true);
-add('code', 'Companion: enter the codes', 'State: /control opened without a code (the QR code fills both fields and goes straight to "connecting"). Not signed in.',
-  page(h1('Steer the class from this phone') + p('Scan the QR code in the presenter window, or type the two codes it shows.', true),
-    field('Class code', { ph: '8 letters', value: 'BCDF-GHJK' }) + field('Control code', { ph: '8 letters', focus: true })
-    + key('control', 'Get control', { main: true, full: true }) + SIGNIN));
+// One screen first (plan section 3): the usual way in is sign-in plus the class code the room
+// screen shows. The control code exists only with a second display, in the presenter window.
+const SECOND = p('Second display? The presenter window shows a control code and its QR code: scan it, or type the code here.', true);
+add('code', 'Companion: get control', 'State: /control without a site session. Opened plain, or from a QR code of /control#<join code>, which only fills the class code. Sign-in is the way in; the control code is the second-display option.',
+  page(h1('Steer the class from this phone') + p('Sign in with the account that runs the class, and type the class code from the room screen.', true)
+    + field('Class code', { ph: '8 letters', value: 'BCDF-GHJK' }) + key('sign_in', 'Sign in to steer', { main: true, full: true }),
+    SECOND + field('Control code', { ph: '8 letters' }) + key('control', 'Get control', { full: true })));
 add('code-signed-in', 'Companion: signed in', 'State: /control with a site session. The class code names the class; the sign-in gives control.',
   page(h1('Steer the class from this phone') + T('label', 'Signed in as ana@example.com', 2, ' class="who"'),
     field('Class code', { ph: '8 letters', focus: true }) + key('control', 'Steer this class', { main: true, full: true })
-    + p('The class code is in the presenter window. Control needs the account that runs the class.', true)));
-add('code-wrong', 'Companion: code did not work', 'State: invalid_code from POST /api/live/control (unknown class, wrong, used or expired code: one answer). cannot_control on the sign-in route reads alike.',
-  page(h1('Steer the class from this phone') + p('Scan the QR code in the presenter window, or type the two codes it shows.', true),
-    field('Class code', { value: 'BCDF-GHJK' }) + field('Control code', { value: 'LMNP-QRST', error: 'That did not work. A control code works once, for 2 minutes. Ask the computer for a new one.' })
+    + p('The class code is on the room screen. Control needs the account that runs the class.', true)));
+add('code-wrong', 'Companion: code did not work', 'State: invalid_code from POST /api/live/control (unknown class, wrong, used or expired code: one answer). cannot_control on the sign-in route reads alike, with its own words.',
+  page(h1('Steer the class from this phone') + p('Sign in with the account that runs the class, and type the class code from the room screen.', true)
+    + field('Class code', { value: 'BCDF-GHJK' }) + key('sign_in', 'Sign in to steer', { main: true, full: true }),
+    SECOND + field('Control code', { value: 'LMNP-QRST', error: 'That did not work. A control code works once, for 2 minutes. Ask the computer for a new one.' })
+    + key('control', 'Get control', { full: true })));
+add('full', 'Companion: two phones already', 'State: controllers_full from POST /api/live/control: the code was right, both places are held. Dropping a phone ends that code (ADR 0005 section 3), so the field is cleared for a new one.',
+  page(h1('Two phones already steer this class') + p('The class goes on. Drop a phone on the computer, then ask it for a new control code.', true),
+    field('Class code', { value: 'BCDF-GHJK' }) + field('Control code', { ph: 'New code, 8 letters', focus: true })
     + key('control', 'Get control', { main: true, full: true })));
-add('full', 'Companion: two phones already', 'State: controllers_full from POST /api/live/control: the code was right, both places are held. The code is not used up.',
-  page(h1('Two phones already steer this class') + p('The class goes on. Drop a phone on the computer, then use the code again.', true),
-    field('Class code', { value: 'BCDF-GHJK' }) + field('Control code', { value: 'LMNP-QRST' })
-    + key('control', 'Try again', { main: true, full: true })));
 add('connecting', 'Companion: connecting', 'State: a controller token was given; the WebSocket is opening and waiting for the first state message.',
   page(h1('Connecting to the class') + `<div class="work" role="status">${T('minor', 'Getting the class from the computer', 2)}</div>`,
     key('cancel', 'Cancel', { full: true })));
 add('lost', 'Companion: not connected', 'State: no connection for 10 s. No countdown. The phone tries again by itself with its token; the class goes on on the computer.',
   page(plate('Not connected', 'The class goes on on the computer. Trying again…') + gel(4, 'Threshold', [], { down: true, label: 'Last seen 0:12 ago' }),
     key('reconnect', 'Try again now', { full: true }) + p('Nothing you press here reaches the class until the phone is back.', true)));
-add('dropped', 'Companion: control ended', 'State: ended, reason dropped (the computer freed this phone\'s place), or the token was refused on reconnect (the sign-in ended).',
-  page(h1('This phone no longer steers the class') + p('The computer ended its control, or your sign-in ended. The class goes on.', true),
-    key('get_control', 'Get control again', { full: true }) + p('You need a new control code from the computer, or your sign-in.', true)));
-add('ended', 'Companion: session ended', 'State: ended, reason host_ended, revoked or expired.',
-  page(h1('The class session has ended') + p('There is nothing more to steer.', true),
-    key('get_control', 'Steer another class', { full: true })));
+add('dropped', 'Companion: control ended', 'State: ended, reason dropped: the computer freed this phone\'s place.',
+  page(h1('This phone no longer steers the class') + p('The computer ended its control. The class goes on.', true),
+    key('get_control', 'Get control again', { full: true }) + p('Sign in again, or ask the computer for a new control code.', true)));
+add('ended', 'Companion: session ended', 'State: ended, reason host_ended, revoked or expired; or the token refused on reconnect (the live process restarted, or the sign-in ended: ADR 0005 section 6).',
+  page(h1('The class session has ended') + p('There is nothing more to steer from this phone. If the class is still running, get control again.', true),
+    key('get_control', 'Get control again', { full: true })));
 
 const NAMES = Object.keys(pages);
 if (require.main === module) {

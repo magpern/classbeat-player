@@ -29,7 +29,7 @@ function pageChecks() {
   // The contract's command actions (schema/live/v1/command.schema.json), exactly, and the page's
   // own actions that send no command. Nothing here controls equipment (rule 2).
   const COMMANDS = ['start', 'pause', 'resume', 'skip', 'nudge', 'undo_resync'];
-  const ACTIONS = COMMANDS.concat(['control', 'cancel', 'reconnect', 'get_control']);
+  const ACTIONS = COMMANDS.concat(['sign_in', 'control', 'cancel', 'reconnect', 'get_control']);
   // Presses that move the class on are held to confirm; stopping, the nudges and the undo are one touch.
   const HOLD = ['start', 'resume', 'skip'];
   const ONE_TOUCH = ['pause', 'nudge', 'undo_resync'];

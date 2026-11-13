@@ -28,13 +28,19 @@ resistance, speed, incline or brake, no sensor, no Bluetooth. It is nothing to i
 ## Getting control (rule 14)
 
 Control needs **the instructor's sign-in** or **a one-time control code shown only in the
-presenter window**. A rider's join code alone never gives control (ADR 0005, section 3).
+presenter window**. A rider's join code alone never gives control (ADR 0005, section 3). One
+screen is the default (plan section 3, "One screen first"), so sign-in is the usual way in.
 
 | Way | What the instructor does | What the page sends |
 |---|---|---|
-| QR code (the usual way) | Scans the QR code in the presenter window: `https://<site>/control#<join code>.<control code>` | `POST /api/live/control` with `session` and `code`, at once; the page shows "Connecting" |
-| Typed codes | Types the class code and the control code the presenter window shows as text | The same |
-| Sign-in | Signed in on the phone with the account that runs the class; types the class code | `POST /api/live/controller` with `session` |
+| Sign-in (the usual way, one screen) | Signs in on the phone with the account that runs the class and types the class code the room screen shows | `POST /api/live/controller` with `session` |
+| `/control#<join code>` | Opens a link or QR code that carries the class code only | Nothing: the page fills the class code and offers sign-in; signed in, it shows "Steer this class" for one tap. The join code alone gives no control |
+| QR code (second display only) | Scans the QR code in the presenter window: `https://<site>/control#<join code>.<control code>` | `POST /api/live/control` with `session` and `code`, at once; the page shows "Connecting" |
+| Typed control code (second display only) | Types the class code and the control code the presenter window shows as text | The same |
+
+**Requirement:** the control code, and any QR code that carries it (`#<join code>.<control
+code>`), is shown only in the presenter window, never on the room screen, in one-screen mode
+too. The room screen shows the class code alone.
 
 - The fragment is read once and removed from the address bar at once. Codes are typed as
   `XXXX-XXXX`. The page ignores case, spaces and hyphens and sends the shown form. A code that is
@@ -46,8 +52,8 @@ presenter window**. A rider's join code alone never gives control (ADR 0005, sec
 - The controller token lives in `sessionStorage` only and is sent in `hello`. It is never in the
   address, never logged, never shown.
 - **For the presenter window (PL5 spec):** besides the QR code it must show both codes as text,
-  labelled "Class code" and "Control code", so the typed way works. One display has no control
-  code: the page offers sign-in only.
+  labelled "Class code" and "Control code", so the typed way works. When the app offers no
+  control code (one display), the phone uses sign-in.
 
 ## Content, in priority order
 
@@ -232,7 +238,8 @@ computer does that.
     `not_allowed` ([refused](mockups/companion-refused-390x844.png));
   - "Too late, try again" for `stale`, `stale_run`, `invalid` and `rate`;
   - "Not connected" for `host_away`.
-- **No `ack` within 3 s:** treated as "Too late, try again".
+- **No `ack` within 3 s:** the key returns and the notice says "No answer. Check the class."
+  An `ack` or a state that arrives later wins: it replaces the notice at once.
 - **Vibration:** 30 ms where the browser offers it, to mark a fired hold. It is never the only
   feedback.
 
@@ -245,17 +252,21 @@ Every state has a mock-up and screenshots at 390 × 844 and 844 × 390, and is c
 
 | State | When | What the page shows | Mock-up |
 |---|---|---|---|
-| Enter the code | `/control` opened without a usable fragment, not signed in | "Steer the class from this phone", Class code and Control code fields, "Get control"; a line that signing in needs only the class code | [html](mockups/companion-code.html), [portrait](mockups/companion-code-390x844.png), [landscape](mockups/companion-code-844x390.png) |
+| Enter the code | `/control` opened not signed in, plain or with `#<join code>` (which fills the class code) | "Steer the class from this phone"; "Sign in with the account that runs the class, and type the class code from the room screen."; the Class code field and "Sign in to steer" first; below, the second-display line and the Control code field with "Get control" | [html](mockups/companion-code.html), [portrait](mockups/companion-code-390x844.png), [landscape](mockups/companion-code-844x390.png) |
 | Enter the code, signed in | The same with a site session | "Signed in as …", the Class code field, "Steer this class" | [html](mockups/companion-code-signed-in.html), [portrait](mockups/companion-code-signed-in-390x844.png), [landscape](mockups/companion-code-signed-in-844x390.png) |
 | Code did not work | `invalid_code` or `cannot_control` | The fields kept, and under the control code: "That did not work. A control code works once, for 2 minutes. Ask the computer for a new one." Signed in, it says instead: "This phone cannot steer that class. Check the class code and that you are signed in with the account that runs it." | [html](mockups/companion-code-wrong.html), [portrait](mockups/companion-code-wrong-390x844.png), [landscape](mockups/companion-code-wrong-844x390.png) |
-| Two phones already | `controllers_full`: the code was right, but both places are held. The code is not used up | "Two phones already steer this class. Drop a phone on the computer, then use the code again." "Try again" | [html](mockups/companion-full.html), [portrait](mockups/companion-full-390x844.png), [landscape](mockups/companion-full-844x390.png) |
+| Two phones already | `controllers_full`: both places are held. The code is not used up while they are, but a Drop ends it (ADR 0005, section 3), so a new code is needed | "Two phones already steer this class. The class goes on. Drop a phone on the computer, then ask it for a new control code." The class code is kept and the control-code field is cleared for the new code; "Get control". Signed in, the same without the control-code field: "Drop a phone on the computer, then tap Steer this class." | [html](mockups/companion-full.html), [portrait](mockups/companion-full-390x844.png), [landscape](mockups/companion-full-844x390.png) |
 | Connecting | A controller token was given; `hello` sent, waiting for `welcome` and the first `companion_state` | "Connecting to the class", a hollow circle, Cancel | [html](mockups/companion-connecting.html), [portrait](mockups/companion-connecting-390x844.png), [landscape](mockups/companion-connecting-844x390.png) |
 | Connected | The first `companion_state` arrived | The class view in the state the class is in (below) | |
 | Reconnecting | The phone's own connection dropped, under 10 s ago | Plate "Reconnecting"; the countdown runs on from the last state, dimmed and dashed, labelled "Not live"; the keys give way to "Keys work again when the phone is back" | [html](mockups/companion-reconnecting.html), [portrait](mockups/companion-reconnecting-390x844.png), [landscape](mockups/companion-reconnecting-844x390.png) |
 | Computer not connected | `host_status` `connected` false | Plate "Computer not connected"; the same "Not live" view for 10 s, then the not-connected view with no countdown; the keys: "Keys work again when the computer is back" | [html](mockups/companion-host-away.html), [portrait](mockups/companion-host-away-390x844.png), [landscape](mockups/companion-host-away-844x390.png) |
 | Not connected | 10 s without a connection (ADR 0005, section 6) | Plate "Not connected. The class goes on on the computer. Trying again…"; the last zone seen, lights down, with "Last seen 0:12 ago"; no countdown; "Try again now". It reconnects by itself with its token: after 1 and 2 s, then every 5 s | [html](mockups/companion-lost.html), [portrait](mockups/companion-lost-390x844.png), [landscape](mockups/companion-lost-844x390.png) |
-| Control ended | `ended` with reason `dropped` (the computer freed this phone's place), or `hello` refused on reconnect (the token ended with its site session) | "This phone no longer steers the class"; "Get control again" | [html](mockups/companion-dropped.html), [portrait](mockups/companion-dropped-390x844.png), [landscape](mockups/companion-dropped-844x390.png) |
-| Session ended | `ended` with reason `host_ended`, `revoked` or `expired` | "The class session has ended. There is nothing more to steer." "Steer another class" | [html](mockups/companion-ended.html), [portrait](mockups/companion-ended-390x844.png), [landscape](mockups/companion-ended-844x390.png) |
+| Control ended | `ended` with reason `dropped` (the computer freed this phone's place) | "This phone no longer steers the class. The computer ended its control. The class goes on."; "Get control again"; "Sign in again, or ask the computer for a new control code." | [html](mockups/companion-dropped.html), [portrait](mockups/companion-dropped-390x844.png), [landscape](mockups/companion-dropped-844x390.png) |
+| Session ended | `ended` with reason `host_ended`, `revoked` or `expired`; or `hello` refused on reconnect (the live process restarted or the sign-in ended: ADR 0005, section 6) | "The class session has ended. There is nothing more to steer from this phone. If the class is still running, get control again."; "Get control again" | [html](mockups/companion-ended.html), [portrait](mockups/companion-ended-390x844.png), [landscape](mockups/companion-ended-844x390.png) |
+
+| Something went wrong | `invalid_request` or `internal_error` from an HTTP route | The fields kept, and the line "Something went wrong. Try again." with "Get control" or "Sign in to steer" as before. No mock-up of its own: it is the Code did not work layout with this line | see [code-wrong](mockups/companion-code-wrong-390x844.png) |
+
+A socket that closes without `ended` is treated as Reconnecting.
 
 The class never depends on the phone. Wherever a state could worry the instructor, it says "The
 class goes on". A `companion_state` with a lower `seq` in the same `run` is ignored. One with a
@@ -354,8 +365,11 @@ beyond the merged contract. Where a field it would like is missing, it shows wha
 below say, and "Contract gaps" lists the additions.
 
 - **Countdown between messages:** the page counts down from `now.remainingMs` from the moment
-  the state arrived, at most 3 s past it (states come at least once a second), and freezes unless
-  `status` is `running`.
+  the state arrived, and only while `status` is `running`. States come at least once a second.
+  While connected it runs live for at most 3 s past the last state. After that, and while
+  Reconnecting or Computer not connected, it is marked "Not live" (dimmed, dashed) and runs on
+  until 10 s after the last state; then it goes and the Not connected view shows no countdown
+  (ADR 0005, section 6).
 - **Estimated:** derived from `link.state` `coasting` or `off_the_list`.
 - **Last interval:** derived from `next` being empty.
 - **Song change:** given in time, never in bars.
@@ -367,19 +381,32 @@ below say, and "Contract gaps" lists the additions.
 None of these is needed for the page to work. Each would add something the instructor would use,
 and each needs a contract pull request and an ADR 0005 amendment before the page can show it.
 
-| Proposal | Where | What the page would show | Without it |
-|---|---|---|---|
-| Cadence (an RPM range or "on the beat"), position, and for running classes the incline word, per interval | `now`, `next[]` | Cadence and position beside the countdown and in the next rows, as on the room screen | Nothing. The cue carries them when the class author writes them |
-| Zone targets (%FTP, RPE, %HRmax) | `now.zone` | The targets under the zone name on the gel | Number and name only |
-| Bars and beats to the song change, while it lies in a song with beat anchors and the clock is not estimated | `nextSong` | "in 37 bars", "in 3 beats" | Time only: "in 1:22" |
-| The interval's FTP-test flag | `now`, `next[]` | The outlined "FTP test" tag | No tag |
-| The class title | `companion_state`, before the start and at the end | The title on "Before the start" and "Class complete" | The first cue; the class length |
-| The music app's name | `link` | "Following Spotify" | "Following the music" |
-| An `ended` reason for a controller whose site session ended | `ended.reason` | "Your sign-in ended" | The `hello` refusal on reconnect leads to "This phone no longer steers the class" |
+**Guard words.** Rows marked "Guard: open question" name things whose plain words are on the rule
+guards' word lists (`equipment-words.txt`: cadence, rpm, incline, target(s); `rider-words.txt`:
+ftp, hr, heart). They are open questions for the Orchestrator and `docs/owner.md`, not routine
+contract pull requests. They may land only with every guard list unchanged and without a field
+renamed to dodge a guard word. Until then the page shows what the "Without it" column says.
+
+| Proposal | Where | What the page would show | Without it | Guard |
+|---|---|---|---|---|
+| Cadence (an RPM range or "on the beat"), position, and for running classes the incline word, per interval | `now`, `next[]` | Cadence and position beside the countdown and in the next rows, as on the room screen | Nothing. The cue carries them when the class author writes them | Open question: cadence, rpm, incline |
+| Zone targets (%FTP, RPE, %HRmax) | `now.zone` | The targets under the zone name on the gel | Number and name only | Open question: target(s), ftp, hr, heart |
+| Bars and beats to the song change, while it lies in a song with beat anchors and the clock is not estimated | `nextSong` | "in 37 bars", "in 3 beats" | Time only: "in 1:22" | None |
+| The interval's FTP-test flag | `now`, `next[]` | The outlined "FTP test" tag | No tag | Open question: ftp |
+| The class title | `companion_state`, before the start and at the end | The title on "Before the start" and "Class complete" | The first cue; the class length | None |
+| The music app's name | `link` | "Following Spotify" | "Following the music" | None |
+| An `ended` reason for a controller whose site session ended | `ended.reason` | "Your sign-in ended" | The `hello` refusal on reconnect leads to "The class session has ended" | None |
 
 None of these proposals adds rider data, a token or code, the join code, or anything that sets
-resistance, speed, incline, a brake or any other equipment value. The incline word is shown to
-the instructor; the phone never sends it.
+an equipment value. Whatever the instructor reads, the phone never sends.
+
+## Page hardening (for the phone page issue)
+
+From ADR 0005, section 8, for the page that builds this spec:
+
+- a Content-Security-Policy with no third-party origins;
+- `Referrer-Policy: no-referrer`;
+- `history.replaceState` removes the fragment before any other script runs.
 
 ## What the page never shows or does (plan section 3)
 
@@ -397,5 +424,5 @@ the instructor; the phone never sends it.
 | 11. Nothing from past sessions | None |
 | 12. No camera | The phone's own camera app reads the QR code and opens the address; the page itself never asks for the camera |
 | 13. Rider data one way | No rider data, count or list on this page; `companion_state` has no rider field |
-| 14. Join code is a session id only | Control by sign-in or a control code from the presenter window only |
+| 14. Join code is a session id only | Control by sign-in, or by a control code shown only in the presenter window; `/control#<join code>` fills the class code and nothing more |
 | 15. No team games | None |
