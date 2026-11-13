@@ -58,6 +58,8 @@ export interface FakeSite {
   readonly external: string[];
   /** API requests with no answer in the script (answered 500). */
   readonly unscripted: string[];
+  /** API requests the backend would refuse as cross-site (answered 403 `cross_site_request`). */
+  readonly crossSite: string[];
   /** Console output and page errors. */
   readonly console: string[];
   release(): Promise<void>;
@@ -145,7 +147,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
     const cdp = await context.newCDPSession(page);
     await cdp.send("Page.setFontSizes", { fontSizes: { standard: o.fontSize, fixed: Math.round(o.fontSize * 0.8125) } });
   }
-  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], console: [], release: async () => undefined };
+  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
   page.on("console", (m) => site.console.push(`${m.type()} ${m.text()}`));
@@ -170,7 +172,12 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
 
 async function answer(site: FakeSite, script: Script, turns: Map<string, number>, held: Route[], route: Route, request: Request, url: URL): Promise<void> {
   const key = `${request.method()} ${url.pathname.slice("/api/site/".length)}`;
-  site.api.push({ method: request.method(), route: key, url: request.url(), body: request.postData(), headers: await request.allHeaders() });
+  const headers = await request.allHeaders();
+  site.api.push({ method: request.method(), route: key, url: request.url(), body: request.postData(), headers });
+  if (crossSite(request.method(), headers)) {
+    site.crossSite.push(key);
+    return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"cross_site_request"}', headers: { "Cache-Control": "no-store" } });
+  }
   const entry = script[key];
   if (!entry) {
     site.unscripted.push(key);
@@ -190,6 +197,18 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
     headers: { "Cache-Control": "no-store", "Content-Security-Policy": CSP, ...(reply.body === undefined ? {} : { "Content-Type": "application/json" }), ...reply.headers },
     body: reply.body === undefined ? "" : JSON.stringify(reply.body),
   });
+}
+
+/**
+ * The backend's cross-site rule (backend/src/player_backend/request_policy.py,
+ * `cross_site_refusal`): a state change needs `Origin` equal to the site's origin, and a
+ * `Sec-Fetch-Site` other than `same-origin` is refused. The fake applies it to every request.
+ */
+export function crossSite(method: string, headers: Readonly<Record<string, string>>): boolean {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase())) return false;
+  if (headers["origin"] !== ORIGIN) return true;
+  const fetchSite = headers["sec-fetch-site"];
+  return fetchSite !== undefined && fetchSite !== "same-origin";
 }
 
 function serveFile(route: Route, pathname: string): Promise<void> {

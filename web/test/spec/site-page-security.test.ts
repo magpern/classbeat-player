@@ -60,6 +60,7 @@ describe("nothing secret leaves the page, in any state", () => {
       assert.deepEqual(site.console.filter((c) => !c.includes("Failed to load resource")), []);
       assert.deepEqual(site.external, [], "a request to another origin");
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
+      assert.deepEqual(site.crossSite, [], "an API request the backend refuses as cross-site");
       for (const a of site.api) {
         assert.equal(a.headers["referer"], undefined, `Referer on ${a.route}`);
         assert.equal(new URL(a.url).search, "", `a query on ${a.route}`);
