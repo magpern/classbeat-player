@@ -134,11 +134,6 @@ def list_devices(ctx: AccountContext) -> list[DeviceInfo]:
     ]
 
 
-def count_active(ctx: AccountContext) -> int:
-    """How many of the account's devices count towards the cap."""
-    return int(str(ctx.db.rows(q.COUNT_ACTIVE_DEVICES, (ctx.account_id,))[0][0]))
-
-
 def own_device(ctx: AccountContext) -> DeviceInfo | None:
     """The device of a device-token request: its own row and nothing else of the account."""
     if ctx.credential_kind != "device":

@@ -92,9 +92,8 @@ def test_malformed_requests_count_towards_the_source_tokens_limit(site: Site) ->
     for n in range(60):
         case = SOURCE_CASES[n % len(SOURCE_CASES)]
         headers = {**sh.bearer(token), **(case.headers or {})}
-        statuses.append(
-            server.request(case.method, case.path, content=case.content, headers=headers).status_code
-        )
+        answer = server.request(case.method, case.path, content=case.content, headers=headers)
+        statuses.append(answer.status_code)
     assert set(statuses) == {422}
     used = site.su.execute("SELECT last_used_at IS NOT NULL FROM player.source_links")
     assert used.fetchone() == (True,)

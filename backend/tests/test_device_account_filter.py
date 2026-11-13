@@ -74,7 +74,6 @@ def test_the_device_queries_keep_to_their_account_without_the_policy(
     assert su.execute("SELECT count(*) FROM player.devices").fetchone() == (2,)
     as_a = _context(db, a, a_device)
     assert [device.id for device in devices.list_devices(as_a)] == [a_device]
-    assert devices.count_active(as_a) == 1
     # A device id of another account, as the credential or as the target, finds nothing.
     assert devices.own_device(_context(db, a, b_device)) is None
     assert devices.revoke(as_a, b_device, CLIENT) is False

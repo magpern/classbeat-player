@@ -29,18 +29,6 @@ ORDER BY created_at DESC, id
 """
 )
 
-# The devices that count towards the cap of 10: the same rule as in auth_decide_pairing.
-COUNT_ACTIVE_DEVICES: Final[Query] = Query(
-    """
-SELECT count(*)
-FROM player.devices
-WHERE account_id = %s
-  AND revoked_at IS NULL
-  AND coalesce(last_used_at, created_at) > now() - interval '180 days'
-  AND (last_used_at IS NOT NULL OR created_at > now() - interval '24 hours')
-"""
-)
-
 ONE_DEVICE: Final[Query] = Query(
     """
 SELECT name, platform, version, created_at

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from typing import Any
+
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute

@@ -218,6 +218,15 @@ def test_a_nul_in_a_document_string_is_refused(site: Site, linked: tuple[Browser
     assert site.su.execute("SELECT count(*) FROM player.classes").fetchone() == (0,)
 
 
+def test_a_nul_in_a_document_key_is_refused(site: Site, linked: tuple[Browser, str]) -> None:
+    app, token = linked
+    # A newer minor's field this backend does not know is kept, so its key would reach storage.
+    doc = {**sh.document(), "format_version": "1.7", "later_field": {"x\x00": 1}}
+    answer = sh.publish(app, token, sh.envelope("c1", 1, doc))
+    assert answer.status_code == 422 and answer.json() == {"error": "invalid_publication"}
+    assert site.su.execute("SELECT count(*) FROM player.classes").fetchone() == (0,)
+
+
 def test_a_source_never_reads_another_sources_numbers(
     site: Site, linked: tuple[Browser, str]
 ) -> None:

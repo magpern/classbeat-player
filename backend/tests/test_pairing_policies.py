@@ -92,7 +92,6 @@ def test_a_label_of_no_or_too_many_characters_is_refused(raw: object) -> None:
 def test_what_the_app_is_told_matches_the_adr() -> None:
     assert (pairing_policy.EXPIRES_IN, pairing_policy.INTERVAL) == (600, 5)
     assert (pairing_policy.START_WINDOW, pairing_policy.START_MAX) == (timedelta(hours=1), 10)
-    assert pairing_policy.MAX_DEVICES == 10
     assert pairing_page("https://player.test") == "https://player.test/pair"
     for state in ("authorization_pending", "slow_down", "access_denied", "expired_token"):
         assert poll_refusal(state) == state

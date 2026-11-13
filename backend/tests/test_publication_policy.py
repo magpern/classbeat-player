@@ -43,6 +43,16 @@ def test_a_newer_minor_with_fields_this_backend_does_not_know_is_accepted() -> N
 
 
 @pytest.mark.parametrize(
+    "unknown",
+    [{"later\x00field": 1}, {"later_field": {"x\x00": 1}}, {"later_field": [{"\x00": "y"}]}],
+)
+def test_a_nul_in_a_key_the_backend_does_not_know_is_refused(unknown: dict[str, object]) -> None:
+    # Readers' mode keeps unknown fields, so the key would reach `jsonb`, which cannot hold it.
+    doc = {**document(), "format_version": "1.7", **unknown}
+    assert _check(envelope("c1", 1, doc)) == Refusal(422, "invalid_publication")
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         b"",
