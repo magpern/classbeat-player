@@ -16,6 +16,7 @@ const NAMES = [
 const TITLE = "Thursday threshold builder: long climbing intervals with a final all-out finish";
 const SEGMENT = "Main set, part two: the long climbing intervals before the final sprint finish!";
 const CUE_LONG = "Uncompromisingly smooth: counterclockwise shoulders, breathe, recover, then accelerate progressively through the chorus.";
+const CUE_CAPS = "UNCOMPROMISINGLY SMOOTH: COUNTERCLOCKWISE SHOULDERS, BREATHE, RECOVER, THEN ACCELERATE PROGRESSIVELY THROUGH THE CHORUS.";
 const CUE_60 = "Extraordinarily controlled, uninterrupted, wholehearted spin";
 
 const LENGTH_S = 11_093; // 3:04:53
@@ -89,6 +90,8 @@ export const WORST_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     "worst-off-list": withLink(offList, "Off the list"),
     "worst-running": withLink(running, "Locked"),
     "worst-paused": withLink(paused, "Paused"),
+    // Wide capitals: the cue that needs a fourth line at 3:2 and narrower.
+    "worst-cue-caps": withLink(worstClass({ zone: 3, nextCadence: { from: 105, to: 120 }, nextPosition: "standing", cue: CUE_CAPS }), "Locked"),
     "worst-before-start": snapshot(running, 0, "Locked", "ready"),
     "worst-finished": snapshot(running, LENGTH_S * 1000, "Locked", "ended"),
   };

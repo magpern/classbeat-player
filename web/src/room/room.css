@@ -182,6 +182,10 @@ body {
   column-gap: 1vw; row-gap: 5vh; overflow: hidden; white-space: nowrap;
   font-size: var(--t-label); line-height: 1.1;
 }
+/* The title and the occurrence marker ("1st of 2", the ambiguous state) form one unit on the first
+   row: the title gives up width to its ellipsis, the marker never does. */
+.clip .head { display: flex; min-width: 0; column-gap: 0.6vw; }
+.clip .occ { flex: none; font-weight: 700; }
 .clip b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .clip .a { color: var(--light-2); }
 .clip .bpm { margin-left: 1vw; color: var(--light-2); }
@@ -251,6 +255,17 @@ body {
   .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
   .next { left: var(--safe-x); top: 78vh; }
+  /* A cue that needs a fourth line (only wide capitals near 120 characters) takes the next row's
+     place for that interval: four lines at --t-text-min. The next row moves up beside the foot of
+     the gel, short (Next, the chip, the name, the length); the gaps around the countdown close up
+     by 2.1 vh. mount.ts adds .four after measuring the cue. */
+  .cue.four { top: 62.8vh; max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); line-height: 1.02; }
+  body:has(.cue.four) .clock { top: 10.5vh; }
+  body:has(.cue.four) .count { margin-top: 0.4vh; }
+  body:has(.cue.four) .bars { margin-top: 0.6vh; }
+  body:has(.cue.four) .metrics { top: 44.4vh; }
+  body:has(.cue.four) .next { left: 34vw; top: 56.5vh; }
+  body:has(.cue.four) .next .v.dim { display: none; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
   .block .n { font-size: 4vh; }
@@ -280,10 +295,18 @@ body {
 .score .scroll { position: absolute; inset: 0; }
 :root[data-reduced-motion] { --m-change: 0ms linear; --m-flash: 0ms; --m-state: 0ms linear; }
 
-/* The beat dot beside the BPM. It is only made when the link is locked, the song has beat anchors
-   and motion is allowed; its flash is driven from mount.ts. */
-.metric { position: relative; }
-.metric .beat { position: absolute; top: 0.4vh; right: 0; width: 1.6vh; height: 1.6vh; border-radius: 50%; background: var(--light-1); opacity: 0.2; }
+/* The beat dot after the BPM (spec: room.css on 78-room-spec-follow-ups): only while the link is
+   locked and the song has beat anchors. Lit for about a third of the period on each beat, two
+   lights at least 1/3 s apart, drawn in the text colour so the checks count it as part of the
+   value. mount.ts sets --beat (the period) and the delay (the phase); with reduced motion it is
+   not made at all. */
+.beat {
+  display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-left: 0.18em;
+  background: currentColor; vertical-align: 0.5em;
+  animation: beat var(--beat, 500ms) steps(1, end) infinite;
+}
+@keyframes beat { 0% { opacity: 1; } 30% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .beat { display: none; animation: none; } }
 
 /* The harness's "freeze" (screenshots and checks): nothing transitions, so a screenshot is never
    taken half way through a colour change. The product never sets it. */

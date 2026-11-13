@@ -62,8 +62,9 @@ describe("score rules", () => {
 
   it("an ambiguous recording says which occurrence the clip is, and drops the artist", () => {
     const s = scoreOf("running", { ambiguity: { songIndex: 5, ordinal: 1, total: 2 } });
-    const clip = s.clips.find((c) => c.title?.startsWith("Neon Avenue"));
-    assert.equal(clip?.title, "Neon Avenue, 1st of 2");
+    const clip = s.clips.find((c) => c.title === "Neon Avenue");
+    assert.equal(clip?.title, "Neon Avenue");
+    assert.equal(clip?.occurrence, "1st of 2");
     assert.equal(clip?.artist, null);
     assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22].map(ordinalText), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd"]);
   });

@@ -73,7 +73,7 @@ describe("adapter: the states of room-2d.md", () => {
   it("ambiguous: 'Song is in twice' and the clip says which occurrence", () => {
     const m = model("ambiguous");
     assert.equal(m.rail.link?.text, "Song is in twice");
-    assert.ok(m.score?.clips.some((c) => c.title === "Neon Avenue, 1st of 2" && c.artist === null));
+    assert.ok(m.score?.clips.some((c) => c.title === "Neon Avenue" && c.occurrence === "1st of 2" && c.artist === null));
   });
 
   it("manual clock: a grey marker, not a plate; no bar count", () => {
@@ -111,7 +111,7 @@ describe("adapter: the states of room-2d.md", () => {
 
   it("every state of the spec has a fixture", () => {
     assert.deepEqual([...STATE_NAMES].sort(), ["ambiguous", "before-start", "coasting", "finished", "ftp-test", "last-interval", "manual", "off-list", "paused", "running"]);
-    assert.equal(WORST_NAMES.length, 5);
+    assert.equal(WORST_NAMES.length, 6);
   });
 });
 

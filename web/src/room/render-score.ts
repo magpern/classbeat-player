@@ -29,7 +29,11 @@ function renderClip(c: ScoreClip): HTMLElement {
   const style: Record<string, string> = { left: vw(c.left), width: vw(c.width), ...pads(c.padLeft, c.padRight) };
   if (c.phrase !== null) style["--phrase"] = vw(c.phrase);
   const kids: Node[] = [];
-  if (c.title !== null) kids.push(el("b", { tier: "label", clamp: 1, text: c.title }));
+  if (c.title !== null) {
+    const head: Node[] = [el("b", { tier: "label", clamp: 1, text: c.title })];
+    if (c.occurrence !== null) head.push(el("span", { class: "occ", tier: "label", text: c.occurrence }));
+    kids.push(el("span", { class: "head" }, head));
+  }
   if (c.artist !== null) kids.push(el("span", { class: "a", tier: "label", fit: "hide", text: c.artist }));
   if (c.bpm !== null) kids.push(el("span", { class: "bpm", tier: "label", fit: "hide", text: `${Math.round(c.bpm)} bpm` }));
   return el("div", { class: "clip", style }, kids);

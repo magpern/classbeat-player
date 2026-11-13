@@ -35,10 +35,9 @@ export function renderMetrics(metrics: readonly MetricModel[], beat: HTMLElement
   const items = metrics.map((m, i) => {
     const value: Child[] = [m.value];
     if (m.unit) value.push(el("small", { tier: "minor", text: m.unit }));
-    const kids: Node[] = [el("span", { class: "lbl", tier: "label", text: m.label }), el("span", { class: "v n", tier: "value" }, value)];
-    // The beat dot sits beside the BPM, the last metric.
-    if (beat && i === metrics.length - 1) kids.push(beat);
-    return el("div", { class: "metric" }, kids);
+    // The beat dot follows the BPM, the last metric, inside its value.
+    if (beat && i === metrics.length - 1) value.push(beat);
+    return el("div", { class: "metric" }, [el("span", { class: "lbl", tier: "label", text: m.label }), el("span", { class: "v n", tier: "value" }, value)]);
   });
   return el("section", { class: "metrics" }, items);
 }

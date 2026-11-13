@@ -23,24 +23,28 @@ export interface RoomScreen {
   destroy(): void;
 }
 
-/** The beat dot: it flashes 120 ms on the beat and is not made at all with reduced motion. */
-function beatDot(beat: BeatModel | null, reduced: boolean, animate: boolean): HTMLElement | null {
+/**
+ * The beat dot after the BPM: the CSS animation (room.css) runs at the beat's period; the delay
+ * puts the next light `phaseMs` from now. Not made at all with reduced motion.
+ */
+function beatDot(beat: BeatModel | null, reduced: boolean): HTMLElement | null {
   if (!beat || reduced) return null;
   const dot = el("span", { class: "beat" });
-  if (animate && typeof dot.animate === "function") {
-    const flashShare = Math.min(0.5, 120 / beat.periodMs);
-    const a = dot.animate(
-      [
-        { opacity: 1, offset: 0 },
-        { opacity: 0.2, offset: flashShare },
-        { opacity: 0.2, offset: 1 },
-      ],
-      { duration: beat.periodMs, iterations: Infinity },
-    );
-    // The next flash falls `phaseMs` from now.
-    a.currentTime = (beat.periodMs - (beat.phaseMs % beat.periodMs)) % beat.periodMs;
-  }
+  dot.style.setProperty("--beat", `${beat.periodMs}ms`);
+  dot.style.animationDelay = `${-(beat.periodMs - (beat.phaseMs % beat.periodMs))}ms`;
   return dot;
+}
+
+/**
+ * A cue that needs a fourth line at 3:2 and narrower takes the next row's place for that interval
+ * (room-2d.md); the product measures it: the cue box clips at three lines until `.four` is set.
+ */
+function fitCue(cue: HTMLElement | null): void {
+  if (!cue) return;
+  cue.classList.remove("four");
+  const narrow = typeof matchMedia === "function" && matchMedia("(max-aspect-ratio: 3/2)").matches;
+  const lineHeight = parseFloat(getComputedStyle(cue).lineHeight);
+  if (narrow && cue.scrollHeight > lineHeight * 3.5) cue.classList.add("four");
 }
 
 export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen {
@@ -68,6 +72,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
   const fit = (): void => {
     const h1 = dyn.querySelector<HTMLElement>(".intro h1");
     if (h1) fitTitle(h1);
+    fitCue(dyn.querySelector<HTMLElement>(".cue"));
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
   resize?.observe(root);
@@ -83,7 +88,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       if (m.gel) gel.update(m.gel, changed);
       const parts: HTMLElement[] = [renderRail(m.rail)];
       if (m.clock) parts.push(renderClock(m.clock));
-      if (m.metrics.length) parts.push(renderMetrics(m.metrics, beatDot(m.beat, reduced, animate)));
+      if (m.metrics.length) parts.push(renderMetrics(m.metrics, beatDot(m.beat, reduced)));
       if (m.cue) parts.push(renderCue(m.cue));
       if (m.next) parts.push(renderNext(m.next));
       if (m.intro) parts.push(renderIntro(m.intro));

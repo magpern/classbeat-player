@@ -46,6 +46,8 @@ export interface ScoreClip {
   readonly padLeft: number | null;
   readonly padRight: number | null;
   readonly title: string | null;
+  /** "1st of 2": the recording is in the class twice; the title gives way to it, it never does. */
+  readonly occurrence: string | null;
   readonly artist: string | null;
   readonly bpm: number | null;
 }
@@ -153,12 +155,13 @@ function clipFor(song: Song, index: number, inp: ScoreInput): ScoreClip | null {
   const base = { left: r2(left), width: r2(right - left), phrase };
   // Wholly past: history, no label. Beginning past the visible room for a title: no label.
   const room = Math.min(right, SAFE_RIGHT) - Math.max(left, NOW_X) - 2 * PAD;
-  if (right <= NOW_X || room < TITLE_MIN_W) return { ...base, padLeft: null, padRight: null, title: null, artist: null, bpm: null };
+  if (right <= NOW_X || room < TITLE_MIN_W) return { ...base, padLeft: null, padRight: null, title: null, occurrence: null, artist: null, bpm: null };
   const amb = inp.ambiguity?.songIndex === index ? inp.ambiguity : null;
   return {
     ...base,
     ...padsFor(left, right),
-    title: amb ? `${song.title}, ${ordinalText(amb.ordinal)} of ${amb.total}` : song.title,
+    title: song.title,
+    occurrence: amb ? `${ordinalText(amb.ordinal)} of ${amb.total}` : null,
     artist: amb ? null : song.artist,
     bpm: song.bpm ?? null,
   };
