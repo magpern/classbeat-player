@@ -24,35 +24,95 @@ export interface CompanionResult {
   readonly margins: Readonly<Record<string, number>>;
 }
 
-/** Every colour of design/tokens.css written as a hex value, as the computed style prints it. */
-function tokenColours(): string[] {
-  const css = readFileSync(join(WEB_DIR, "src", "design", "tokens.css"), "utf8");
-  return [...css.matchAll(/--[\w-]+:\s*#([0-9a-f]{6})\b/gi)].map((m) => {
-    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-    return `rgb(${r}, ${g}, ${b})`;
-  });
+type Rgba = readonly [number, number, number, number];
+
+/** One CSS colour as the computed style would print it, as [r, g, b, alpha]; null for anything else (a var(), a keyword). */
+export function parseColour(raw: string): Rgba | null {
+  const v = raw.trim().toLowerCase();
+  if (v === "transparent") return [0, 0, 0, 0];
+  const hex = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(v);
+  if (hex) {
+    const h = hex[1].length <= 4 ? [...hex[1]].map((d) => d + d).join("") : hex[1];
+    const [r, g, b, a] = [0, 2, 4, 6].map((i) => (h.length > i ? parseInt(h.slice(i, i + 2), 16) : 255));
+    return [r, g, b, Math.round((a / 255) * 100) / 100];
+  }
+  const fn = /^rgba?\(([^)]*)\)$/.exec(v);
+  if (!fn) return null;
+  const n = fn[1].split(/[\s,/]+/).filter(Boolean);
+  if (n.length < 3 || n.length > 4) return null;
+  const [r, g, b] = n.slice(0, 3).map((x) => (x.endsWith("%") ? (parseFloat(x) * 255) / 100 : parseFloat(x)));
+  const a = n[3] === undefined ? 1 : n[3].endsWith("%") ? parseFloat(n[3]) / 100 : parseFloat(n[3]);
+  if ([r, g, b, a].some(Number.isNaN)) return null;
+  return [Math.round(r), Math.round(g), Math.round(b), Math.round(a * 100) / 100];
 }
 
-/** K10: every border that is drawn, on an element or on its ::before or ::after, is a token colour. */
+/** Every colour design/tokens.css gives a custom property, however it writes it (#rgb, #rrggbb, #rrggbbaa, rgb(), rgba(), transparent). */
+export function tokenColours(css = readFileSync(join(WEB_DIR, "src", "design", "tokens.css"), "utf8")): Rgba[] {
+  const out: Rgba[] = [];
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/--[\w-]+:\s*([^;]+);/g)) {
+    const c = parseColour(m[1]);
+    if (c) out.push(c);
+  }
+  return out;
+}
+
+/**
+ * K10: every border that is drawn, on any side of an element or of its ::before or ::after, and every
+ * drawn outline is a token colour. A drawn transparent border passes only if a token is transparent.
+ */
 async function borderTokens(page: Page): Promise<Row[]> {
-  const off = await page.evaluate((tokens) => {
-    const found: string[] = [];
+  const tokens = tokenColours().map((t) => t.join(","));
+  const drawn = await page.evaluate(() => {
+    const found: { where: string; colour: string }[] = [];
     for (const el of document.querySelectorAll("body *")) {
       for (const pseudo of [null, "::before", "::after"]) {
         const c = getComputedStyle(el, pseudo);
         if (pseudo && c.content === "none") continue;
-        for (const side of ["Top", "Right", "Bottom", "Left"]) {
-          const style = c.getPropertyValue(`border-${side.toLowerCase()}-style`);
-          const width = c.getPropertyValue(`border-${side.toLowerCase()}-width`);
-          const colour = c.getPropertyValue(`border-${side.toLowerCase()}-color`);
-          if (style === "none" || style === "hidden" || parseFloat(width) === 0) continue;
-          if (!tokens.includes(colour)) found.push(`${el.className || el.tagName}${pseudo ?? ""} border-${side.toLowerCase()} ${colour}`);
+        const name = `${el.className || el.tagName}${pseudo ?? ""}`;
+        for (const side of ["top", "right", "bottom", "left"]) {
+          const style = c.getPropertyValue(`border-${side}-style`);
+          if (style === "none" || style === "hidden" || parseFloat(c.getPropertyValue(`border-${side}-width`)) === 0) continue;
+          found.push({ where: `${name} border-${side}`, colour: c.getPropertyValue(`border-${side}-color`) });
         }
+        if (c.outlineStyle !== "none" && parseFloat(c.outlineWidth) > 0) found.push({ where: `${name} outline`, colour: c.outlineColor });
       }
     }
     return found;
-  }, tokenColours());
-  return off.map((t) => ({ tier: "token", text: t.slice(0, 40), result: "FAIL border colour is not a design token (K10)" }));
+  });
+  return drawn
+    .filter((d) => {
+      const p = parseColour(d.colour);
+      return !p || !tokens.includes(p.join(","));
+    })
+    .map((d) => ({ tier: "token", text: `${d.where} ${d.colour}`.slice(0, 40), result: "FAIL border or outline colour is not a design token (K10)" }));
+}
+
+/** K8 on borders: outside a zone, no side of any border, on an element or its ::before or ::after, carries a hue. */
+async function borderHues(page: Page): Promise<Row[]> {
+  const found = await page.evaluate(() => {
+    const chroma = (s: string): number => {
+      const m = s.match(/[\d.]+/g);
+      if (!m || (m[3] !== undefined && Number(m[3]) === 0)) return 0;
+      const [r, g, b] = m.slice(0, 3).map(Number);
+      return Math.max(r, g, b) - Math.min(r, g, b);
+    };
+    const out: string[] = [];
+    for (const el of document.querySelectorAll("body *")) {
+      if (el.closest(".z1, .z2, .z3, .z4, .z5, .z6, .z7")) continue;
+      for (const pseudo of [null, "::before", "::after"]) {
+        const c = getComputedStyle(el, pseudo);
+        if (pseudo && c.content === "none") continue;
+        for (const side of ["top", "right", "bottom", "left"]) {
+          const style = c.getPropertyValue(`border-${side}-style`);
+          if (style === "none" || style === "hidden" || parseFloat(c.getPropertyValue(`border-${side}-width`)) === 0) continue;
+          const colour = c.getPropertyValue(`border-${side}-color`);
+          if (chroma(colour) > 24) out.push(`${el.className || el.tagName}${pseudo ?? ""} border-${side} ${colour}`);
+        }
+      }
+    }
+    return out;
+  });
+  return found.map((h) => ({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" }));
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */
@@ -138,6 +198,7 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (K10)" });
   for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" });
   for (const [text, result] of pageRows) rows.push({ tier: "companion", text, result });
+  rows.push(...(await borderHues(page)));
   rows.push(...(await borderTokens(page)));
   rows.push(...(await motion(page)));
   return { rows, png, margins };
