@@ -1,4 +1,5 @@
-// What the window may know about class sync. Pure. No token, no document, no account key.
+// What the window may know about class sync. Pure. No token, no document, no account key. While
+// the status is "unavailable" the cache could not be read: its files are kept, none is shown.
 import type { Status, SyncState } from "./sync-model.ts";
 
 export interface SyncView {

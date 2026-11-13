@@ -9,6 +9,8 @@
 // Every class file names its account. A file that does not read back as exactly this is dropped,
 // never guessed at. The cache is loaded only as one account's: a class file of another account,
 // or class files with no cursor of their account, mean the cache is wiped before anything syncs.
+// A file or folder that cannot be read at all (a disk fault) decides nothing: the load throws and
+// every file stays, to be read again later.
 // While the wipe marker is there nothing is loaded, kept, committed or read for play. A class is
 // read for play only when its document still has the hash it was kept with.
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, writeSync } from "node:fs";
@@ -34,6 +36,7 @@ export interface CachedClass {
 }
 
 export interface ClassCache {
+  /** Throws on a fault reading the folder or a file other than its absence; nothing is deleted then. */
   load(): StoredSync;
   /** Throws when the class could not be kept, or while a wipe is unfinished. */
   keep(account: string, id: string, hash: string, document: Readonly<Record<string, unknown>>): void;
@@ -59,10 +62,33 @@ const FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.j
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
-function readJson(file: string, max: number): unknown {
+/** Reads a file of the cache: its bytes, or null when it is not a plain file within the cap. */
+export type CacheReader = (file: string, max: number) => Buffer | null;
+
+/** No such file. */
+const MISSING = Symbol("missing");
+/** A link where a file should be: shown not to be the cache's own file, like one that is not JSON. */
+const LINK_CODES = new Set(["ELOOP", "EMLINK"]);
+const codeOf = (e: unknown): unknown => (e !== null && typeof e === "object" ? (e as { code?: unknown }).code : undefined);
+
+/**
+ * The file's JSON; `undefined` when it is shown not to be such a file (not JSON, not a plain file,
+ * over the cap); MISSING when there is none. Any other fault (a disk error, no permission) throws:
+ * nothing is decided about a file that could not be read.
+ */
+function readJson(read: CacheReader, file: string, max: number): unknown {
+  let data: Buffer | null;
   try {
-    const data = readCapped(file, max);
-    return data === null ? undefined : JSON.parse(data.toString("utf8"));
+    data = read(file, max);
+  } catch (e) {
+    const code = codeOf(e);
+    if (code === "ENOENT") return MISSING;
+    if (typeof code === "string" && LINK_CODES.has(code)) return undefined;
+    throw e;
+  }
+  if (data === null) return undefined;
+  try {
+    return JSON.parse(data.toString("utf8"));
   } catch {
     return undefined;
   }
@@ -91,9 +117,10 @@ function writeAtomic(file: string, text: string): void {
 
 /**
  * `account` is an opaque key (64 hex characters), never an address or a token. `remove` deletes a
- * path (`rmSync`; a test stands in a delete that fails, as a locked file does on Windows).
+ * path (`rmSync`; a test stands in a delete that fails, as a locked file does on Windows), and
+ * `read` reads a file (`readCapped`; a test stands in a disk fault).
  */
-export function classCache(dir: string, remove: (path: string, options?: RmOptions) => void = rmSync): ClassCache {
+export function classCache(dir: string, remove: (path: string, options?: RmOptions) => void = rmSync, read: CacheReader = readCapped): ClassCache {
   const classes = join(dir, CLASSES_DIR);
   const marker = join(dir, WIPE_FILE);
   const unfinished = (): boolean => existsSync(marker);
@@ -111,8 +138,10 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
     mkdirSync(classes, { recursive: true, mode: 0o700 });
     tighten();
   };
-  const entry = (id: string): CachedClass | null => {
-    const raw = readJson(classFile(id), MAX_CACHED_FILE_BYTES);
+  /** The class file as kept; MISSING when there is none, null when it is not one. Throws on a fault. */
+  const entry = (id: string): CachedClass | null | typeof MISSING => {
+    const raw = readJson(read, classFile(id), MAX_CACHED_FILE_BYTES);
+    if (raw === MISSING) return MISSING;
     if (!isObject(raw) || raw.v !== 1 || typeof raw.account !== "string" || !KEY.test(raw.account) || typeof raw.hash !== "string" || !HASH.test(raw.hash) || !isObject(raw.document)) return null;
     return { account: raw.account, hash: raw.hash, document: raw.document };
   };
@@ -126,7 +155,7 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
       } catch {
         // Tried again before the next write, which then fails instead.
       }
-      const meta = readJson(join(dir, SYNC_FILE), MAX_SYNC_FILE_BYTES);
+      const meta = readJson(read, join(dir, SYNC_FILE), MAX_SYNC_FILE_BYTES);
       const ok = isObject(meta) && meta.v === 1 && typeof meta.account === "string" && KEY.test(meta.account) && Number.isSafeInteger(meta.cursor) && (meta.cursor as number) >= 0;
       const account = ok ? (meta.account as string) : null;
       const cursor = ok ? (meta.cursor as number) : 0;
@@ -135,18 +164,28 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
       let names: string[] = [];
       try {
         names = readdirSync(classes);
-      } catch {
-        // No folder yet: nothing is held.
+      } catch (e) {
+        // No folder yet: nothing is held. Any other fault throws, and nothing is decided.
+        if (codeOf(e) !== "ENOENT") throw e;
       }
       for (const name of names) {
         const id = name.match(FILE)?.[1];
         const found = id === undefined ? null : entry(id);
+        // Gone since the folder was listed: nothing to hold.
+        if (found === MISSING) continue;
         if (id !== undefined && found !== null) {
           if (found.account === account) held.set(id, found.hash);
           else foreign = true;
         }
-        // A leftover temporary file or a class file that does not read back is dropped.
-        else if (id !== undefined || name.endsWith(".json.tmp")) rmSync(join(classes, name), { force: true });
+        // A leftover temporary file or a class file shown not to read back is dropped (if it
+        // cannot be, it is tried again at the next load; it is not held either way).
+        else if (id !== undefined || name.endsWith(".json.tmp")) {
+          try {
+            rmSync(join(classes, name), { force: true });
+          } catch {
+            // Not held, so nothing reads it.
+          }
+        }
       }
       // Nothing of another account, or of no account on record, is ever loaded as this one's.
       if (foreign) return { ...none, wipePending: true };
@@ -170,7 +209,7 @@ export function classCache(dir: string, remove: (path: string, options?: RmOptio
       try {
         if (unfinished()) return null;
         const found = entry(id);
-        return found !== null && contentHash(found.document) === found.hash ? found : null;
+        return found !== null && found !== MISSING && contentHash(found.document) === found.hash ? found : null;
       } catch {
         return null;
       }

@@ -32,11 +32,11 @@ export interface SyncDeps {
 }
 
 export interface SyncService {
-  /** Reads the cache, once, at startup, and syncs. */
+  /** Reads the cache at startup (again later, after a fault reading it), and syncs. */
   start(): void;
   /** Syncs now, unless a sync is running (a new pairing, or the user asked). */
   syncNow(): void;
-  /** The pairing ended: the cache is wiped, after any class being played. */
+  /** The pairing ended (its token is already deleted): the cache is wiped, after any class being played. */
   forgotten(): void;
   view(): SyncView;
   /**
@@ -83,8 +83,25 @@ export function createSyncService(d: SyncDeps): SyncService {
     dispatch({ type: "written", run, ok });
   };
 
+  /** Reads the cache into the model; true when it could be read. A fault keeps every file. */
+  const load = (): boolean => {
+    let stored;
+    try {
+      stored = d.cache.load();
+    } catch {
+      dispatch({ type: "unreadable" });
+      return false;
+    }
+    dispatch({ type: "loaded", ...stored });
+    return true;
+  };
+
   function run(e: Effect): void {
     switch (e.do) {
+      case "load":
+        // Read at last: sync goes on as it would have at start.
+        if (load()) due();
+        return;
       case "list": {
         const c = credentialFor(e.run);
         if (c === null) return dispatch({ type: "listed", run: e.run, answer: { kind: "unexpected" } });
@@ -154,15 +171,8 @@ export function createSyncService(d: SyncDeps): SyncService {
 
   return {
     start() {
-      let stored;
-      try {
-        stored = d.cache.load();
-      } catch {
-        // A cache that cannot be read is not trusted: it is wiped and synced again.
-        stored = { account: null, cursor: 0, held: new Map<string, string>(), wipePending: true };
-      }
-      dispatch({ type: "loaded", ...stored });
-      due();
+      // A cache that cannot be read is neither used nor wiped: the model asks to read it again later.
+      if (load()) due();
     },
     syncNow: due,
     forgotten() {

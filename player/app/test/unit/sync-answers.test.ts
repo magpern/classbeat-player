@@ -106,6 +106,8 @@ test("a page must make sense for its cursor", () => {
   assert.equal(parseChanges(ok(page([], 3)), 4).kind, "unexpected");
   assert.equal(parseChanges(ok(page([], 4, true)), 4).kind, "unexpected");
   assert.equal(parseChanges(ok(page([], 2 ** 53)), 0).kind, "unexpected");
+  // A change's place past 2^53 is refused too, never rounded onto a neighbour.
+  assert.equal(parseChanges(ok(page([changeOf(ID_A, 2 ** 53, null)], 2 ** 53)), 0).kind, "unexpected");
   // An unknown field, or more than the contract's 500 changes.
   assert.equal(parseChanges(ok({ ...page([], 4), extra: 1 }), 4).kind, "unexpected");
   assert.equal(parseChanges(ok(page(Array.from({ length: 501 }, (_, i) => changeOf(ID_A, i + 1, null)), 501)), 0).kind, "unexpected");
@@ -117,6 +119,7 @@ test("a class is kept only for the id asked, with its own hash", () => {
   assert.equal(held(classBody(ID_A, doc), ID_B).kind, "unusable");
   assert.equal(held({ ...classBody(ID_A, doc), content_hash: contentHash(document("Other")) }).kind, "unusable");
   assert.equal(held({ ...classBody(ID_A, doc), extra: true }).kind, "unusable");
+  assert.equal(held(classBody(ID_A, doc, 2 ** 53)).kind, "unusable");
   // Not JSON at all (a body over the cap reads as none) is not the server's word on the class.
   assert.equal(held(undefined).kind, "unexpected");
 });
