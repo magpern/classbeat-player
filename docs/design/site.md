@@ -89,7 +89,7 @@ The email link, a passkey, and the pages around them. One narrow column.
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
-| Start | "Sign in", an email field, "Email me a sign-in link", "or", "Sign in with a passkey" | `POST sign-in/link`; `POST sign-in/passkey/options`, `.../passkey/complete` (working names) | [sign-in](mockups/site-sign-in.html) |
+| Start | "Sign in", an email field, "Email me a sign-in link", "or", "Sign in with a passkey" | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
 | Not an email | Field error "That does not look like an email address", the typed text kept | 422 `invalid_email` | [invalid](mockups/site-sign-in-invalid-email.html) |
 | Too many requests | Plate "Too many sign-in requests", "try again in about N minutes" from `Retry-After`; the form stays | 429 `too_many_requests` | [limited](mockups/site-sign-in-limited.html) |
 | Check your mail | Note "A link is on its way if *address* can sign in", how long it works (once, 15 minutes, this browser), a hint about spam and spelling, "Send the link again", "Use a different address" | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
@@ -98,7 +98,7 @@ The email link, a passkey, and the pages around them. One narrow column.
 | Signing in | The button disabled, "Signing you in…" | pending | [working](mockups/site-sign-in-link-working.html) |
 | Link expired, used or refused | Plate "This link cannot be used" with the three possible reasons, and the sign-in form to ask for a new link. One page for every refusal (expired, used, unknown, other browser) | 401 `sign_in_refused` | [refused](mockups/site-sign-in-link-refused.html) |
 | Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button disabled | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
-| Passkey failed | Plate "That passkey could not be used", "Try again", and the email form. A 429 shows the "Too many sign-in requests" plate | 401 from complete; 429 | [failed](mockups/site-sign-in-passkey-failed.html) |
+| Passkey failed | Plate "That passkey could not be used", "Try again", and the email form. A 429 shows the "Too many sign-in requests" plate | 401 from `POST sign-in/passkey`; 429 | [failed](mockups/site-sign-in-passkey-failed.html) |
 | Session ended | Note "Your session ended" above the form | 401 `not_signed_in` | [ended](mockups/site-sign-in-session-ended.html) |
 | Signed out | Note "You are signed out" | `POST sign-out` (204) | [signed out](mockups/site-signed-out.html) |
 | Account deleted | Note "Your account was deleted", "Devices remove their saved classes the next time they connect" | `POST account/delete` (204) | [deleted](mockups/site-account-deleted.html) |
@@ -154,7 +154,7 @@ everywhere?", "Every browser is signed out, this one too. Devices running the pl
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
-| List | "3 of 10 passkeys", "Add a passkey", rows with name, added date, last used or "Not used yet", "Rename", "Remove" | `GET passkeys` (working name) | [passkeys](mockups/site-account-passkeys.html) |
+| List | "3 of 10 passkeys", "Add a passkey", rows with name, added date, last used or "Not used yet", "Rename", "Remove" | `GET passkeys` | [passkeys](mockups/site-account-passkeys.html) |
 | None | An explanation and "Add a passkey" | the same | [empty](mockups/site-account-passkeys-empty.html) |
 | Add | A panel with a name field (1 to 40 characters) and "Add passkey", "Cancel"; the browser's prompt follows | `POST passkeys/options`, then `POST passkeys` | [add](mockups/site-passkey-add.html) |
 | Added | Note "Passkey added", "We emailed you to say a passkey was added" (ADR 0002 section 6) | 200 | [added](mockups/site-passkey-added.html) |

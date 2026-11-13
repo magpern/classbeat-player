@@ -2,7 +2,7 @@
   "name": "classbeat-player-web",
   "version": "0.0.0",
   "private": true,
-  "description": "The class player's screens: design tokens and the plain 2D room screen (issue #77).",
+  "description": "The class player's screens: design tokens, the plain 2D room screen (issue #77) and the website (issue #144).",
   "type": "module",
   "engines": {
     "node": ">=22.18"
