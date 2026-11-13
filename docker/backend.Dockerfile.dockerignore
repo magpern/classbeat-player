@@ -6,6 +6,7 @@
 !backend/db
 !schema/python
 !schema/class-format
+!schema/live/v1
 !docker/backend-entrypoint.sh
 !docker/purge-loop.sh
 **/.venv

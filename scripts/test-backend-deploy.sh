@@ -223,6 +223,11 @@ if grep -Eq '^COPY schema/live/v1 schema/live/v1$' "$root/docker/backend.Dockerf
 else
   bad "the Dockerfile does not copy schema/live/v1"
 fi
+if grep -Eq '^!schema/live/v1$' "$root/docker/backend.Dockerfile.dockerignore"; then
+  ok "the Dockerfile's dockerignore lets schema/live/v1 into the build"
+else
+  bad "backend.Dockerfile.dockerignore does not allow schema/live/v1"
+fi
 # The built image holds the schemas where the backend reads them, and the backend loads them.
 # Needs a Docker daemon and the network an image build already uses (base image, PyPI).
 if docker info >/dev/null 2>&1; then
