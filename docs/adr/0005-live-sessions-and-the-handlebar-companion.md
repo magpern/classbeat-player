@@ -142,8 +142,9 @@ against the merged contract.
 
 `session` is the join code, naming the session only. Refusals: `cannot_control` (controller);
 `invalid_code`, `controllers_full` (control); `sessions_full` (409, sessions); a malformed body
-on any of them, `invalid_request` (422). They share ADR 0002's error shape as a closed
-enum, plus 429 with `Retry-After` from section 10 of ADR 0002.
+on the controller and control routes, `invalid_request` (422; the sessions route takes no body);
+a body over the cap on any of them, `body_too_large` (413, before routing; #236). They share ADR
+0002's error shape as a closed enum, plus 429 with `Retry-After` from section 10 of ADR 0002.
 
 **WebSocket messages.** The table is the routing allowlist for the companion; the server checks
 each message against the schema for its sender's role and drops (and counts) anything else.

@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #225).
+Updated 2026-11-13 (after #245).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -35,8 +35,10 @@ panel (#173, #200; the `WebSocket` exception decided by the owner), the session 
 #204) and its hardening (#205, #210), the control code as a QR (#201, #206), the quit that waits
 for the live `end` (#211, #212) and its hardening (#216, #217), the audit of sessions that end on
 expiry outside the sweep (#220, #225), the tighter routing table and string bounds (#221, #223)
-and the live publisher and listener hardening (#222, #224). The companion page (#174) waits
-with #144 on the owner's web-lane answer.
+the live publisher and listener hardening (#222, #224), the contract tests (#228, #229), the
+backend hardening (#227, #230), the body cap in the live contract (#234, #235; #237, #238; #236,
+#239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
+#245). The companion page (#174) waits with #144 on the owner's web-lane answer.
 
 ## PL2: backend and sign-in
 
