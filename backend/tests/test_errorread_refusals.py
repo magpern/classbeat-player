@@ -106,3 +106,14 @@ def test_the_forms_it_reads_are_read() -> None:
     reader = Reader()
     reader.function(_readable)
     assert reader.raised == {(401, "not_signed_in"), (409, "gone")}
+
+
+def _local_import() -> None:
+    from player_backend.http_errors import ApiError as Local
+
+    raise Local(410, "gone")
+
+
+def test_an_import_inside_a_function_is_unreadable() -> None:
+    with pytest.raises(Unreadable, match="import inside"):
+        Reader().function(_local_import)

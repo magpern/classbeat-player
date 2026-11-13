@@ -97,6 +97,9 @@ class Reader:
         names: dict[str, Any] = getattr(fn, "__globals__", {})
         handled = _skipped(tree)
         for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                # A name bound inside the function is not in its globals: it would go unseen.
+                raise Unreadable(f"{fn.__qualname__}: an import inside the function")
             if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Name):
                 target = names.get(node.exc.id)
                 if _is_form(target):
