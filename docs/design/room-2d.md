@@ -561,8 +561,7 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 
 **While the End question is open**, Space, the arrows (with or without Shift), Page Up and Page
 Down do nothing, so a stray clicker press or a nudged key cannot move the class or answer the
-question. Esc, Enter, Tab, Undo (Ctrl+Z), F and End still work (End leaves the focus on "Keep
-going").
+question. Esc, Enter, Tab, Undo (Ctrl+Z), F and End still work.
 
 Clicker keys, as built (#207): F5 and Shift+F5 are Start only before the class starts; B and
 period do nothing, so the room never goes blank; Page Up and Page Down are Previous and Next.
