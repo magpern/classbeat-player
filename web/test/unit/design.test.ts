@@ -18,6 +18,21 @@ function walk(dir: string): string[] {
   });
 }
 
+const REMOTE = /^\s*(?:https?:)?\/\//i;
+
+/** Remote font references in a CSS or HTML text: a remote url() in an @font-face, a remote @import, a remote <link href>. */
+function remoteFontRefs(text: string): string[] {
+  const found: string[] = [];
+  for (const m of text.matchAll(/@font-face\s*\{[^}]*\}/gi))
+    for (const u of m[0].matchAll(/url\(\s*["']?([^)"'\s]+)/gi)) if (REMOTE.test(u[1] ?? "")) found.push(u[1] ?? "");
+  for (const m of text.matchAll(/@import\s+(?:url\(\s*)?["']?([^)"';\s]+)/gi)) if (REMOTE.test(m[1] ?? "")) found.push(m[1] ?? "");
+  for (const m of text.matchAll(/<link\b[^>]*>/gi)) {
+    const href = /\bhref\s*=\s*["']?([^"'\s>]+)/i.exec(m[0])?.[1] ?? "";
+    if (REMOTE.test(href)) found.push(href);
+  }
+  return found;
+}
+
 describe("design tokens", () => {
   it("tokens.css is the reference copy, unchanged (a value changes in a design pull request first)", () => {
     const reference = readFileSync(join(WEB, "..", "docs", "design", "mockups", "tokens.css"), "utf8");
@@ -64,6 +79,17 @@ describe("the web lane stands alone", () => {
       const name = relative(WEB, p);
       assert.doesNotMatch(text, /from\s+["'][^"']*\/player\//, `${name} imports from player/`);
     }
+  });
+
+  it("no CSS or HTML file loads a remote font (@font-face, @import or <link>); bundled fonts and fetch in code stay fine", () => {
+    for (const p of sources.filter((f) => /\.(css|html)$/.test(f))) assert.deepEqual(remoteFontRefs(readFileSync(p, "utf8")), [], relative(WEB, p));
+    assert.deepEqual(remoteFontRefs("@font-face{font-family:A;src:url(./fonts/a.woff2) format('woff2')}"), []);
+    assert.deepEqual(remoteFontRefs("@font-face{src:url('https://x.test/a.woff2')}"), ["https://x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs("@font-face{src:local(A),url( //x.test/a.woff2 )}"), ["//x.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs('@import url("https://fonts.test/css");'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href="https://fonts.test/css">'), ["https://fonts.test/css"]);
+    assert.deepEqual(remoteFontRefs('<link rel="preload" as="font" href="//f.test/a.woff2">'), ["//f.test/a.woff2"]);
+    assert.deepEqual(remoteFontRefs('<link rel="stylesheet" href="./room/room.css">'), []);
   });
 
   it("nothing from a class file becomes markup", () => {
