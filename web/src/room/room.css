@@ -239,7 +239,7 @@ body {
      three targets, or when it needs more than two lines, it is --t-minor on at most two lines
      (the gel is 60 vh high: room-2d.md, "Fitting text"). */
   .gel-name { font-size: min(var(--t-value), 5.75vw); } /* 23 vw inside: 4 em */
-  .gel-name.two { font-size: min(6.9vh, 5.75vw); }
+  .gel-name.two { font-size: min(7.1vh, 5.75vw); } /* spec: 6.9vh; +3 % for a margin over the 5.5 % cap height on another Chrome */
   .gel.t3 .gel-name.two { --tier: minor; font-size: var(--t-minor); line-height: 1.05; }
   .gel-name.long { -webkit-line-clamp: 2; }
   .rail, .clock, .intro { left: 34vw; }
