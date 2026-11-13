@@ -283,14 +283,17 @@ def test_a_result_for_a_command_sent_before_the_phone_reconnected_reaches_no_one
     assert live.hub.dropped["unmatched_result"] == 1
 
 
-def test_make_code_and_drop_are_taken_from_the_host_and_not_built_yet(live: Any) -> None:
+def test_make_code_and_drop_from_the_host_are_taken(live: Any) -> None:
+    # What they do is tests/test_live_control_codes.py's; here: routed, not dropped.
     with ExitStack() as stack:
         host, one, _ = _all_in(live, stack)
         host.send_json({"v": 1, "type": "make_code"})
+        assert recv(host)["type"] == "control_code"
         host.send_json({"v": 1, "type": "drop", "slot": 1})
-        nothing(host)
-        nothing(one)
-        assert live.hub.dropped["not_built"] == 2
+        assert recv(one) == {"v": 1, "type": "ended", "reason": "dropped"}
+        assert closed(one) == 4403
+        assert recv(host)["type"] == "controller_left"
+        assert sum(live.hub.dropped.values()) == 0
 
 
 def test_nothing_the_hub_sends_skips_the_allowlist(live: Any) -> None:

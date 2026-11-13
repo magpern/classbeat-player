@@ -4,13 +4,16 @@ The live process reads the database as `player_app` only through the functions o
 
 - the re-check: `auth_device_active` for each session's device token hash and
   `auth_session_active` for each controller got by sign-in, many hashes in one statement;
-- the audit events "live session started" and "ended": started in the transaction of the
-  device-token request that started it; ended in a transaction of its own that first calls
-  `auth_enter_device` with the session's stored hash. When the device no longer works that sets
-  no account, and nothing is written (the site's own event is the record then);
+- the audit events "live session started" and "ended", "controller added" and "control code
+  cancelled" (after wrong tries): started in the transaction of the device-token request that
+  started it, a controller added by sign-in in the transaction of the site session that asked;
+  the others in a transaction of their own that first calls `auth_enter_device` with the
+  session's stored hash. When the device no longer works that sets no account, and nothing is
+  written (the site's own event is the record then);
 - the listening connection, a connection of its own (executor/_listen.py).
 
-No token, code or hash is in an event's detail: the session's id and why it ended.
+No token, code or hash is in an event's detail: the session's id, why it ended, how a
+controller was added or why a code was cancelled.
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from player_backend.db.queries import live as q
 # Section 11.
 STARTED = "live.session_started"
 ENDED = "live.session_ended"
+CONTROLLER_ADDED = "live.controller_added"
+CODE_CANCELLED = "live.control_code_cancelled"
 
 
 def add_event(
@@ -37,11 +42,15 @@ def add_event(
     session_id: UUID,
     client: ClientInfo,
     reason: str | None = None,
+    via: str | None = None,
 ) -> None:
-    """Write a live session's event in the request's transaction (a device-token request)."""
+    """Write a live session's event in the request's transaction (a device-token request, or
+    the site session that asked for a controller)."""
     detail: dict[str, str] = {"session_id": str(session_id)}
     if reason is not None:
         detail["reason"] = reason
+    if via is not None:
+        detail["via"] = via
     ctx.db.rows(
         dq.ADD_DEVICE_EVENT,
         (
@@ -61,7 +70,18 @@ RECORDED = "recorded"
 
 
 def record_end(pool: Pool, device_hash: bytes, session_id: UUID, reason: str) -> str:
-    """Write "live session ended" after `auth_enter_device` with the session's stored hash.
+    """Write "live session ended" after `auth_enter_device` with the session's stored hash."""
+    return record_event(pool, device_hash, ENDED, {"session_id": str(session_id), "reason": reason})
+
+
+def record_event(
+    pool: Pool,
+    device_hash: bytes,
+    event: str,
+    detail: dict[str, str],
+    client: ClientInfo | None = None,
+) -> str:
+    """Write a live session's event after `auth_enter_device` with the session's stored hash.
 
     `RECORDED` when written. Otherwise nothing is written and the answer is the device's state
     from `auth_enter_device` (`revoked`, `expired`, `unknown`, or `limited` when over its
@@ -74,8 +94,18 @@ def record_end(pool: Pool, device_hash: bytes, session_id: UUID, reason: str) ->
         device_id, state = found[0] if len(found) == 1 else (None, "unknown")
         if state != "ok" or not isinstance(account_id, UUID) or not isinstance(device_id, UUID):
             return str(state)
-        detail = json.dumps({"session_id": str(session_id), "reason": reason})
-        db.rows(dq.ADD_DEVICE_EVENT, (account_id, ENDED, "device", device_id, None, "", detail))
+        db.rows(
+            dq.ADD_DEVICE_EVENT,
+            (
+                account_id,
+                event,
+                "device",
+                device_id,
+                None if client is None else client.network,
+                "" if client is None else client.family,
+                json.dumps(detail),
+            ),
+        )
         return RECORDED
 
 

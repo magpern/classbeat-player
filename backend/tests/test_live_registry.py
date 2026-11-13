@@ -11,6 +11,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from player_backend.live.registry import Dropped, Ended, Registry, Started
+from player_backend.live.watchers import Event
 from player_backend.live_session_policy import HOST_AWAY_LIMIT, LIFETIME_LIMIT, UNCONFIRMED_LIMIT
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_hash, token_string
@@ -31,8 +32,8 @@ def _start(
     return started
 
 
-def _watched(registry: Registry) -> list[Ended | Dropped]:
-    seen: list[Ended | Dropped] = []
+def _watched(registry: Registry) -> list[Event]:
+    seen: list[Event] = []
     registry.watch(seen.append)
     return seen
 

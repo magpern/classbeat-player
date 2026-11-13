@@ -21,6 +21,7 @@ from player_backend.db.executor import open_pool
 from player_backend.live.recheck import RecheckLoop, RecheckTiming
 from player_backend.live.registry import Dropped, Ended, Registry
 from player_backend.live.service import LiveService
+from player_backend.live.watchers import Event
 from player_backend.token_policy import token_hash
 from tests import pairhelp
 from tests.pairhelp import DEVICES, bearer
@@ -66,8 +67,8 @@ def _running(site: Site) -> set[str]:
     return {str(r.session_id) for r in _service(site).registry.running()}
 
 
-def _watched(site: Site) -> list[Ended | Dropped]:
-    seen: list[Ended | Dropped] = []
+def _watched(site: Site) -> list[Event]:
+    seen: list[Event] = []
     _service(site).registry.watch(seen.append)
     return seen
 
@@ -88,7 +89,7 @@ def periodic(app_url: str, db_url: str) -> Iterator[Site]:
         yield site
 
 
-def _ended(seen: list[Ended | Dropped], session_id: str) -> list[str]:
+def _ended(seen: list[Event], session_id: str) -> list[str]:
     return [e.reason for e in seen if isinstance(e, Ended) and str(e.session_id) == session_id]
 
 

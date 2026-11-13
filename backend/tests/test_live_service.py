@@ -23,6 +23,7 @@ from player_backend.db.context import AccountContext
 from player_backend.db.executor import DatabaseError, Pool
 from player_backend.live.registry import Dropped, Ended, Registry
 from player_backend.live.service import LiveService
+from player_backend.live.watchers import Event
 from player_backend.live_session_policy import RECHECK_EVERY, UNCONFIRMED_LIMIT
 
 ACCOUNT = uuid.uuid4()
@@ -78,7 +79,7 @@ def test_a_confirmed_session_outlives_the_unconfirmed_limit(
 def test_a_start_whose_events_fail_is_taken_back(monkeypatch: pytest.MonkeyPatch) -> None:
     clock = Clock()
     service = _service(clock)
-    seen: list[Ended | Dropped] = []
+    seen: list[Event] = []
     service.registry.watch(seen.append)
 
     def refuse(*_args: object) -> None:
@@ -113,7 +114,7 @@ def test_the_recheck_drops_only_the_controller_that_held_the_ended_site_session(
         return dict.fromkeys(hashes, False)
 
     monkeypatch.setattr(live, "sessions_active", sessions_active)
-    seen: list[Ended | Dropped] = []
+    seen: list[Event] = []
     registry.watch(seen.append)
     assert service.recheck() is True
     # The one drop is the sign-in's own; the new controller's site session was never found
@@ -134,10 +135,10 @@ def test_a_raising_watcher_costs_no_event_and_no_audit(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(live, "record_end", record_end)
 
-    def broken(_event: Ended | Dropped) -> None:
+    def broken(_event: Event) -> None:
         raise RuntimeError("a watcher's bug")
 
-    seen: list[Ended | Dropped] = []
+    seen: list[Event] = []
     service.registry.watch(broken)
     service.registry.watch(seen.append)
     ids: list[uuid.UUID] = []
