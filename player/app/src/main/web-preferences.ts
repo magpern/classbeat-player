@@ -70,7 +70,8 @@ export const EXTRA_KEYS: ReadonlySet<string> = new Set(["backgroundThrottling"])
 /**
  * The hardening keys Electron reports back for a live renderer (`getLastWebPreferences`): every key
  * of `secureWebPreferences` except `preload`, `navigateOnDragDrop` and `spellcheck`, which it does
- * not report and the static check covers.
+ * not report. The static check covers all three; `looseExtras` checks the preload and the spell
+ * checker at run time, and hardening.ts refuses every navigation, a drop's too.
  */
 export const REPORTED_KEYS = [
   "contextIsolation",
@@ -95,6 +96,31 @@ export function looseKeys(reported: Readonly<Record<string, unknown>> | null, on
   const want = secureWebPreferences("") as unknown as Record<string, unknown>;
   const out: string[] = reported === null ? ["webPreferences"] : REPORTED_KEYS.filter((k) => reported[k] !== want[k]);
   if (!onDefaultSession) out.push("session");
+  return out;
+}
+
+/** What the runtime guard sees of a renderer beyond its reported preferences (N2 of #151's review). */
+export interface RendererExtras {
+  /** The renderer's own preload as Electron holds it (`_getPreloadScript()`), or undefined when it cannot say. */
+  readonly preload: unknown;
+  /** How many preload scripts the renderer's session adds to every page. */
+  readonly sessionPreloads: number;
+  /** Whether the renderer's session has the spell checker on. */
+  readonly spellChecker: boolean;
+}
+
+/**
+ * The keys Electron does not report, checked another way: the preload is exactly one of `allowed`
+ * (a frame preload, compared as written), the session adds no preload of its own and its spell
+ * checker is off (hardening.ts turns it off). Anything it cannot read counts as loose.
+ */
+export function looseExtras(seen: RendererExtras, allowed: readonly string[]): string[] {
+  const out: string[] = [];
+  const p = seen.preload as { filePath?: unknown; type?: unknown } | null | undefined;
+  const path = typeof p === "object" && p !== null && p.type === "frame" ? p.filePath : undefined;
+  if (typeof path !== "string" || !allowed.includes(path)) out.push("preload");
+  if (seen.sessionPreloads !== 0) out.push("sessionPreloads");
+  if (seen.spellChecker !== false) out.push("spellcheck");
   return out;
 }
 
