@@ -13,6 +13,9 @@ import { renderScore } from "./render-score.ts";
 import type { ScoreView } from "./render-score.ts";
 import { scoreShiftVw } from "./score.ts";
 
+/** The faces the screen measures with (system.md, Type); loaded explicitly so the first fit is not made with a fallback. */
+const FONT_FACES = ['600 1em "Big Shoulders Display"', '800 1em "Big Shoulders Display"', '400 1em "Atkinson Hyperlegible"', '700 1em "Atkinson Hyperlegible"'];
+
 export interface RoomOptions {
   /** Defaults to the system's `prefers-reduced-motion`; the player's own setting passes true. */
   readonly reducedMotion?: boolean;
@@ -98,7 +101,13 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
   resize?.observe(root);
-  void document.fonts?.ready.then(fit);
+  // Measure again once the real fonts are in: fonts load when text first needs them, so `ready` alone
+  // can resolve before they are requested, and a measurement taken with the fallback face is wrong.
+  const fonts = document.fonts;
+  if (fonts) {
+    fonts.addEventListener("loadingdone", fit);
+    void Promise.all(FONT_FACES.map((f) => fonts.load(f))).then(() => fonts.ready).then(fit, fit);
+  }
 
   return {
     update(input) {
@@ -125,6 +134,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
     destroy() {
       cancelAnimationFrame(raf);
       resize?.disconnect();
+      fonts?.removeEventListener("loadingdone", fit);
       root.remove();
     },
   };
