@@ -1,5 +1,7 @@
 // The zone name's size (room-2d.md, "Zone name on the gel"): a name that fits is at the full size,
 // and the same name is the same size in running, hold and paused, at every size, on every load.
+// It loads the page the way the screenshot harness does (freeze=1, the default of harnessUrl), so
+// it guards what C1 to C4 see; a throttled CPU stands in for a slow machine that loads fonts late.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { Browser } from "playwright-core";
@@ -13,13 +15,13 @@ after(async () => {
   await browser.close();
 });
 
-const SIZES: readonly (readonly [number, number])[] = [[1920, 1080], [1680, 1050], [1440, 1080]];
+const SIZES: readonly (readonly [number, number])[] = [[1920, 1080], [1680, 1050], [1440, 1080], [1280, 1024]];
 
 async function nameSize(fixture: string, w: number, h: number, throttle: number): Promise<{ px: number; expected: number; text: string }> {
   const page = await newPage(browser, { width: w, height: h });
   // A slow machine loads the fonts late: the name must be measured with the real fonts.
   if (throttle > 1) await (await page.context().newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
-  await page.goto(harnessUrl(fixture, ""));
+  await page.goto(harnessUrl(fixture));
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(100);
   const r = await page.evaluate(() => {

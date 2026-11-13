@@ -14,6 +14,7 @@ import collect from "../spec/page/collect.js";
 import type { Item } from "../spec/page/collect.js";
 import ink, { INK } from "../spec/page/ink.js";
 import { harnessUrl, newPage, settle } from "./browser.ts";
+import { MIN_NEXT_GAP, nameDrawnSmaller, nextRowAndScore, zoneWordsBroken } from "./fit-checks.ts";
 
 /** Minimum cap height (share of the screen height) and contrast per type tier (room-2d.md, C1, C2). */
 export const TIERS = {
@@ -124,30 +125,6 @@ function shadowHues(page: Page): Promise<string[]> {
   }, CHROMA_OUTSIDE_ZONE);
 }
 
-/**
- * A zone name that would fit whole at the full size is never drawn smaller (room-2d.md, "Zone name
- * on the gel"): when the gel's name is stepped down, put it back at full size and see whether it fits.
- */
-function nameDrawnSmaller(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const gel = document.querySelector(".gel") as HTMLElement | null;
-    const name = gel?.querySelector(".gel-name") as HTMLElement | null;
-    if (!gel || !name || !name.classList.contains("long")) return [];
-    const saved = name.className;
-    const found: string[] = [];
-    for (const cls of ["gel-name n", "gel-name n two"]) {
-      name.className = cls;
-      name.style.overflowWrap = "normal";
-      const lines = Math.round(name.getBoundingClientRect().height / parseFloat(getComputedStyle(name).lineHeight));
-      const fits = name.scrollWidth <= name.clientWidth + 1 && lines <= 2 && gel.scrollHeight <= gel.clientHeight + 1;
-      name.style.overflowWrap = "";
-      if (fits) found.push(`name "${(name.textContent ?? "").slice(0, 20)}" drawn smaller although it fits at "${cls}"`);
-    }
-    name.className = saved;
-    return found;
-  });
-}
-
 /** C7: with reduced motion, no transition or animation lasts longer than 0. */
 async function movingWithReducedMotion(browser: Browser, s: Shot): Promise<string[]> {
   const page = await newPage(browser, { width: s.width, height: s.height, reducedMotion: true });
@@ -212,6 +189,14 @@ export async function checkShot(browser: Browser, probe: Page, s: Shot): Promise
     rows.push({ tier: "zone", text: `zone ${z.z} ${z.name}`.slice(0, 30), result: problems.length ? `FAIL ${problems.join("; ")}` : "ok" });
   }
   for (const p of await nameDrawnSmaller(page)) rows.push({ tier: "gel", text: p.slice(0, 40), result: `FAIL ${p}` });
+  for (const p of await zoneWordsBroken(page)) rows.push({ tier: "text", text: p.slice(0, 40), result: `FAIL ${p}` });
+  // The next row's ink keeps its distance from the score (room-2d.md, "Layout"), at every room size.
+  const next = await nextRowAndScore(page);
+  const nextInk = items.filter((it) => next.items.includes(it.i) && it.ink);
+  if (s.room && next.scoreTop !== null && nextInk.length) {
+    const gap = next.scoreTop - Math.max(...nextInk.map((it) => it.ink!.y1));
+    rows.push({ tier: "text", text: "next row above the score", result: gap < s.height * MIN_NEXT_GAP - 0.5 ? `FAIL next row ends ${(gap / s.height * 100).toFixed(2)} vh above the score, at least ${(MIN_NEXT_GAP * 100).toFixed(1)} vh` : "ok" });
+  }
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (C8)" });
   for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (C6)" });
   const moving = await movingWithReducedMotion(browser, s);

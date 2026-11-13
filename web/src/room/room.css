@@ -252,9 +252,11 @@ body {
   .metrics { left: 34vw; width: auto; top: 46.5vh; flex-direction: row; justify-content: space-between; gap: 1.6vw; }
   .metric .v { font-size: min(7.55vh, 5.7vw); } /* spec: min(7.4vh, 5.55vw); +2.7 % so a different Chrome's metrics still leave 5.5 % cap height (CI measured 5.47 % on the spec value) */
   /* Full width: two lines at --t-text, three at --t-text-min. */
-  .cue { left: var(--safe-x); top: 62vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
+  /* Two vh higher than the spec's 62 and 78 vh: with 3 lines the next row's ink stood less than
+     0.1 vh above the score; the room keeps at least 0.8 vh clear (measure.ts, "next row clear"). */
+  .cue { left: var(--safe-x); top: 60vh; max-height: calc(3 * 1.12 * var(--t-text-min) + 0.5vh); }
   .cue.long { line-height: 1.12; }
-  .next { left: var(--safe-x); top: 78vh; }
+  .next { left: var(--safe-x); top: 76vh; }
   /* A cue that needs a fourth line (only wide capitals near 120 characters) takes the next row's
      place for that interval: four lines at --t-text-min. The next row moves up beside the foot of
      the gel, short (Next, the chip, the name, the length); the gaps around the countdown close up
@@ -275,7 +277,11 @@ body {
   .intro h1 { font-size: 9vh; }
   .intro h1.long { font-size: 7.4vh; -webkit-line-clamp: 2; }
   .facts { gap: 2.4vw; }
-  .zones { column-gap: 2vw; }
+  /* The widest word of a zone name ("Neuromuscular", 22 vh at --t-label) must fit its column whole:
+     at 5:4 that needs the list 2.5 vw wider to the left (still 1.5 vw clear of the gel), a narrower
+     chip and tighter gaps. Nothing changes in type size. */
+  .zones { column-gap: 1.2vw; margin-left: -2.5vw; }
+  .zones > div { grid-template-columns: 4.4vh 10.3vh 1fr; column-gap: 0.7vw; }
 }
 
 /* ---------- The product's own additions ---------- */
