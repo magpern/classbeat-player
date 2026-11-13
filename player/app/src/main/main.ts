@@ -153,7 +153,16 @@ enableSandboxUnlessTest();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  const quit = quitAfterLive({
+    live: () => phoneRemote,
+    exit: () => app.exit(0),
+    relaunch: () => app.relaunch(),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
+  });
   app.on("second-instance", () => {
+    // A launch while the quit waits for the phone remote starts the app again after it (#211).
+    if (quit.launchedAgain()) return;
     const win = live();
     if (!win) return;
     if (win.isMinimized()) win.restore();
@@ -198,7 +207,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("will-quit", () => pairing?.stop());
   app.on("will-quit", () => sync?.stop());
   // Last, so the rest has stopped: ends the phone remote's session, waiting a little for it (#205).
-  app.on("will-quit", quitAfterLive({ live: () => phoneRemote, exit: () => app.exit(0), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as NodeJS.Timeout) }));
+  app.on("will-quit", quit.willQuit);
   app.on("window-all-closed", () => {
     controller.stop();
     app.quit();

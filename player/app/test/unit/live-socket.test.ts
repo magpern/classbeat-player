@@ -2,6 +2,9 @@
 // only, the close told once, nothing thrown, and our own close not told back. No network.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { CLOSE_ABNORMAL } from "../../src/core/live/session-model.ts";
 import { webSocketConnect } from "../../src/main/live/live-socket.ts";
 
 type Fn = (e: { data?: unknown; code?: number }) => void;
@@ -31,7 +34,7 @@ class FakeWs {
 
 function open() {
   const events: unknown[] = [];
-  const s = webSocketConnect((url) => new FakeWs(url))("wss://player.example.test/api/live/ws", {
+  const s = webSocketConnect(CLOSE_ABNORMAL, (url) => new FakeWs(url))("wss://player.example.test/api/live/ws", {
     open: () => events.push("open"),
     message: (t) => events.push(["message", t]),
     closed: (c) => events.push(["closed", c]),
@@ -73,7 +76,29 @@ test("a constructor that throws is a close, never a throw", async () => {
     }
   }
   const events: unknown[] = [];
-  webSocketConnect(Throws as never)("x", { open: () => undefined, message: () => undefined, closed: (c) => events.push(c) });
+  webSocketConnect(CLOSE_ABNORMAL, Throws as never)("x", { open: () => undefined, message: () => undefined, closed: (c) => events.push(c) });
   await Promise.resolve();
   assert.deepEqual(events, [1006]);
+});
+
+test("a close without a code is told with the code it is handed: 1006 has one definition, in core", async () => {
+  assert.equal(CLOSE_ABNORMAL, 1006);
+  const events: unknown[] = [];
+  const s = webSocketConnect(4999, (url) => new FakeWs(url))("x", { open: () => undefined, message: () => undefined, closed: (c) => events.push(c) });
+  FakeWs.last.fire("close", {});
+  assert.deepEqual(events, [4999]);
+  s.close();
+  class Throws {
+    constructor() {
+      throw new Error("bad url");
+    }
+  }
+  webSocketConnect(4998, Throws as never)("x", { open: () => undefined, message: () => undefined, closed: (c) => events.push(c) });
+  await Promise.resolve();
+  assert.deepEqual(events, [4999, 4998]);
+  // The socket file names no close code of its own and imports nothing; setup.ts hands it core's.
+  const src = join(import.meta.dirname, "..", "..", "src", "main", "live");
+  const socket = readFileSync(join(src, "live-socket.ts"), "utf8").replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(socket, /\b1006\b|^import\b/m);
+  assert.match(readFileSync(join(src, "setup.ts"), "utf8"), /webSocketConnect\(CLOSE_ABNORMAL\)/);
 });

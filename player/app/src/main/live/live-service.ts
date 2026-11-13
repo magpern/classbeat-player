@@ -3,6 +3,7 @@
 // The host token stays in this process's memory, in the model, and leaves it only in `hello` (on
 // the host's connection, or on the ender's when a session the host is not in is ended: ender.ts);
 // it is never stored, logged or sent to a window. The presenter gets `view()` and nothing else.
+// Ending while live keeps the host's connection until the session is ended (farewell.ts, #211).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
@@ -12,6 +13,8 @@ import { OFF } from "../../core/live/session-types.ts";
 import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-types.ts";
 import type { BackendCall } from "../pairing/http.ts";
 import { endSession } from "./ender.ts";
+import { farewell } from "./farewell.ts";
+import type { Farewell } from "./farewell.ts";
 import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
 import type { LiveHost, Publisher } from "./publisher.ts";
@@ -36,7 +39,15 @@ export interface LiveDeps {
   readonly secondDisplay: () => boolean;
   readonly setTimer: (fn: () => void, ms: number) => unknown;
   readonly clearTimer: (handle: unknown) => void;
+  /** Where a failed step is written: one fixed line and the error's kind, never its text. Default console.warn. */
+  readonly log?: (line: string) => void;
 }
+
+/** The line for a tracked step that failed: only a plain error name, never a message or a stack (#211). */
+export const failedLine = (e: unknown): string => {
+  const name = e instanceof Error && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "error";
+  return `live session: a step after a backend answer failed (${name})`;
+};
 
 export interface LiveService {
   view(): LivePanelView;
@@ -50,9 +61,10 @@ export interface LiveService {
   tick(): void;
   /** The app quits or the presenter closed: ends the session. */
   stop(): void;
-  /** Whether a start answer is awaited or an ender still runs: a session may be left to end (#205). */
+  /** Whether a start answer is awaited, an `end` on the host's connection is not yet answered or an
+   * ender still runs: a session may be left to end (#205, #211). */
   busy(): boolean;
-  /** Resolves once no start answer is awaited and no ender runs. Never rejects. */
+  /** Resolves once none of those is left. Never rejects. */
   settled(): Promise<void>;
 }
 
@@ -62,16 +74,24 @@ export function createLiveService(d: LiveDeps): LiveService {
   let socket: LiveSocket | null = null;
   let publisher: Publisher | null = null;
   let retry: unknown = null;
-  // The start requests awaiting their answer and the enders still running, for the quit (#205).
+  const log = d.log ?? ((line: string) => console.warn(line));
+  // The start requests awaiting their answer, the farewells and the enders still running, for the
+  // quit (#205). A step that throws is logged without its text, which could hold a token.
   const inFlight = new Set<Promise<unknown>>();
   const track = (p: Promise<unknown>): void => {
     const done = (): void => void inFlight.delete(p);
     inFlight.add(p);
-    p.then(done, done);
+    p.then(done, (e: unknown) => {
+      done();
+      log(failedLine(e));
+    });
   };
+  // The host connections that ended their session and wait for its answer, by connection number.
+  const farewells = new Map<number, Farewell>();
 
   /** Every connection, the host's and the ender's, goes to the live socket of the session's backend. */
   const dial = (at: string, on: SocketEvents): LiveSocket => d.connect(liveSocketUrl(at), on);
+  const ender = (at: string, token: string): Promise<void> => endSession({ open: (on) => dial(at, on), setTimer: d.setTimer, clearTimer: d.clearTimer }, token);
   const cancelRetry = (): void => {
     if (retry !== null) d.clearTimer(retry);
     retry = null;
@@ -113,7 +133,31 @@ export function createLiveService(d: LiveDeps): LiveService {
       case "end_session": {
         // Only to the backend the session was started on, never to another address.
         if (at === null) return;
-        track(endSession({ open: (on) => dial(at, on), setTimer: d.setTimer, clearTimer: d.clearTimer }, x.token));
+        track(ender(at, x.token));
+        return;
+      }
+      case "end_live": {
+        if (at === null) return;
+        // The run's connection and publisher are the farewell's now: nothing else uses them.
+        const s = socket;
+        const p = publisher;
+        const n = x.socket;
+        socket = null;
+        publisher = null;
+        if (s === null || p === null) {
+          s?.close();
+          p?.stop();
+          track(ender(at, x.token));
+          return;
+        }
+        const token = x.token;
+        const f = farewell({ socket: s, sendEnd: (sent) => p.last({ v: 1, type: "end" }, sent), endElsewhere: () => ender(at, token), setTimer: d.setTimer, clearTimer: d.clearTimer });
+        farewells.set(n, f);
+        const forget = (): void => {
+          farewells.delete(n);
+          p.stop();
+        };
+        track(f.done.then(forget, forget));
         return;
       }
       case "connect": {
@@ -121,8 +165,14 @@ export function createLiveService(d: LiveDeps): LiveService {
         const n = x.socket;
         socket = dial(origin, {
           open: () => dispatch({ type: "open", socket: n }),
-          message: (text) => onFrame(n, text),
+          message: (text) => {
+            const f = farewells.get(n);
+            if (f !== undefined) f.message(text);
+            else onFrame(n, text);
+          },
           closed: (code) => {
+            const f = farewells.get(n);
+            if (f !== undefined) return f.closed(code);
             if (model.socket === n) publisher?.disconnected();
             dispatch({ type: "closed", socket: n, code });
           },
