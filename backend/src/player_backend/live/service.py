@@ -13,11 +13,13 @@
 - `sweep`: the lifetimes, of the sessions and of their control codes.
 - `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
   `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
-  transaction (taken back if writing fails); by a code, and "control code cancelled" after wrong
-  tries, after `auth_enter_device` with the session's stored hash. On `by_code`, a join code
-  that names no session is counted for the caller's address (live_code_policy.py,
-  `UnknownSessions`). On `by_sign_in`, one that names no session of the account is counted for
-  the account, and calls without a site session for the address (live_signin_policy.py).
+  transaction; if writing it or committing that transaction fails, the place is freed again
+  (`release`; the route calls it for the commit, control_routes.py). By a code, and "control
+  code cancelled" after wrong tries, after `auth_enter_device` with the session's stored
+  hash. On `by_code`, a join code that names no session is counted for the caller's address
+  (live_code_policy.py, `UnknownSessions`). On `by_sign_in`, one that names no session of the
+  account is counted for the account, and calls without a site session for the address
+  (live_signin_policy.py).
 
 A database error is logged by its type alone and never stops the caller. Logs name an event, an
 error type, an end reason or a device state, never a token, code or hash; the log formatter
@@ -145,16 +147,24 @@ class LiveService:
         session_id = self._session_of_account(raw_session, ctx.account_id)
         if session_id is None:
             return None
-        granted = self.registry.sign_in_controller(session_id, ctx.account_id, site_hash)
+        granted = self.registry.sign_in_controller(
+            session_id, ctx.account_id, site_hash, self.clock()
+        )
         if granted is None:
             return None
         try:
             live.add_event(ctx, live.CONTROLLER_ADDED, session_id, client, via="sign_in")
         except BaseException:
-            self.registry.drop_controller(session_id, granted.slot, site_hash)
+            self.release(granted)
             raise
         _logged("live.controller_added", "sign_in")
         return granted
+
+    def release(self, granted: Granted) -> None:
+        """Free the place of a grant whose token is never given out (its audit write or the
+        site session's commit failed)."""
+        if self.registry.release(granted):
+            _logged("live.controller_taken_back", "sign_in")
 
     def by_code(
         self, raw_session: object, raw_code: object, address_hash: bytes, client: ClientInfo
