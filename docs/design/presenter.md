@@ -6,6 +6,12 @@ them (design notes on #65 and #69). Mock-up: [mockups/presenter.html](mockups/pr
 ([1280×800](mockups/presenter-1280x800.png), and [1000×720](mockups/presenter-1000x720.png), the
 smallest content area the window allows; the player opens with a 1000×760 content area, #126).
 
+**Optional: for a second display only** (plan section 3, "One screen first", owner 2026-11-13).
+A class runs on one screen from the room screen's own controls ([room-2d.md](room-2d.md),
+"Controls on the room screen"); the presenter window is never needed to run one. With a second
+display it keeps everything below. With one display the room screen fills the display and this
+window lies behind it (class-list.md, "Where the room window goes").
+
 ## One convention
 
 - **Sentence case** for every status line, link line and control: a capital first letter, then
@@ -44,7 +50,7 @@ The same words as the room screen's plates (room-2d.md, "Link plates"):
 | Off the list | Not a class song | Plate |
 | Ambiguous | Song is in twice | Plate, with "Which one is playing?" and the choices on the presenter |
 | Manual | Manual clock | Same, grey with a square marker |
-| Manual, before the start | Press Start | Same |
+| Manual, before the start | Press Start | Same; the Start it names is the room screen's own Start (shown before the start with one display), Space, or this window's Start |
 
 The presenter's lines carry no marker. The round dot (following) and the square marker (manual)
 belong to the room screen, where they tell the link states apart from across the room; on the
@@ -60,6 +66,14 @@ presenter is built:
   is unavailable on this computer") move to the grey second line.
 
 ## Controls
+
+**The room screen has five of them; the rest are here.** The room screen's control band carries
+only Start, Pause and Resume, Previous, Next and End (the owner's five), with the same routing
+and the same "stops following" wording as a second line (room-2d.md). Back 5 s, Forward 5 s,
+"Follow the music", "Manual clock", "Undo" and picking an occurrence of a repeated song stay on
+this window and, where they have one, on a key (room-2d.md, "Keyboard": Shift+arrows for the
+5 s steps, Ctrl+Z / Cmd+Z for Undo). The keys of that table work in this window too when it has
+the focus.
 
 Labels as the player routes them (#69): "Pause", "Resume", "Start", "Back 5 s", "Forward 5 s",
 "Next song" (sent to the music app), "Next interval", "Previous interval", and, when the press

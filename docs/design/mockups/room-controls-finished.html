@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room screen: controls, finished</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="room.css">
+<link rel="stylesheet" href="controls.css">
+</head>
+<body class="shown">
+<!-- Class Complete: one control, Close class, with no question (nothing is lost).
+     Base:  State: the class has ended. House lights up: a white gel, no zone. Seven zones, two long names. -->
+<aside class="gel blank">
+  <div class="gel-head"><span class="lbl" data-tier="label">Class</span></div>
+  <span class="gel-name n" data-tier="value">Complete</span>
+  <div class="gel-targets" data-tier="minor"><span>42:00</span></div>
+</aside>
+
+<header class="rail">
+
+  <span class="lbl seg"></span>
+  <span class="link" data-tier="label">Following Spotify</span>
+</header>
+
+<section class="intro">
+  <h1 data-tier="value">Thursday threshold</h1>
+  <div class="facts">
+    <div><span class="lbl" data-tier="label">Ridden</span><span class="v n" data-tier="value">42:00</span></div>
+    <div><span class="lbl" data-tier="label">Songs</span><span class="v n" data-tier="value">11</span></div>
+    <div><span class="lbl" data-tier="label">Class load, planned</span><span class="v n" data-tier="value">58</span></div>
+  </div>
+  <span class="lbl ztitle" data-tier="label">Time in each zone, as planned</span>
+  <div class="zones">
+    <div class="z1"><span class="n" data-tier="minor">1</span><span class="tm" data-tier="minor">6:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Recovery</span></div>
+    <div class="z2"><span class="n" data-tier="minor">2</span><span class="tm" data-tier="minor">11:30</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Endurance, the aerobic base for long steady rides</span></div>
+    <div class="z3"><span class="n" data-tier="minor">3</span><span class="tm" data-tier="minor">8:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Tempo</span></div>
+    <div class="z4"><span class="n" data-tier="minor">4</span><span class="tm" data-tier="minor">7:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Threshold</span></div>
+    <div class="z5"><span class="n" data-tier="minor">5</span><span class="tm" data-tier="minor">5:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">VO2 max</span></div>
+    <div class="z6"><span class="n" data-tier="minor">6</span><span class="tm" data-tier="minor">3:00</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Anaerobic capacity</span></div>
+    <div class="z7"><span class="n" data-tier="minor">7</span><span class="tm" data-tier="minor">1:30</span><span class="t" data-tier="label" data-lines="2" data-clamp="2">Neuromuscular power</span></div>
+  </div>
+</section>
+
+<section class="score">
+  <div class="track iv">
+    <div class="block gone" style="left:-25.00vw;width:50.00vw"></div>
+  </div>
+  <div class="track songs">
+    <div class="clip" style="left:-25.00vw;width:50.00vw;--phrase:2.778vw"></div>
+  </div>
+  <div class="end" style="left:25.00vw"><span data-tier="label">End</span></div>
+  <div class="past"></div>
+  <div class="now"></div>
+</section>
+<nav class="controls" aria-label="Class controls"><button class="btn main quit" style="margin-left:auto"><span class="w" data-tier="label">Close class</span><span class="sub" data-tier="label">Back to the class list</span></button></nav>
+</body>
+</html>
