@@ -124,7 +124,7 @@ function instrument(mode: Passkey): void {
     const orig = (proto as unknown as Record<string, unknown>)[name];
     if (typeof orig !== "function") continue;
     (proto as unknown as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
-      note("markup", name);
+      note("markup", proto === ShadowRoot.prototype ? `ShadowRoot.${name}` : name);
       return (orig as (...x: unknown[]) => unknown).apply(this, a);
     };
   }
