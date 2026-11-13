@@ -75,11 +75,24 @@ def test_the_start_keys_are_their_own() -> None:
     assert len(registration_starts_key(account)) == 32
 
 
-@pytest.mark.parametrize("head", [b"\x00\x00\x00\x00", b"\x7f\xff\xff\xff", b"\x80\x00\x00\x00"])
-def test_the_lock_key_is_a_signed_32_bit_integer_of_the_counters_key(head: bytes) -> None:
-    found = failed_lock_key(head + b"z" * 28)
-    assert -(2**31) <= found < 2**31
+@pytest.mark.parametrize(
+    "head",
+    [
+        b"\x00" * 8,
+        b"\x7f" + b"\xff" * 7,
+        b"\x80" + b"\x00" * 7,
+        b"\x00\x00\x00\x00\x01\x00\x00\x00",
+    ],
+)
+def test_the_lock_key_is_a_signed_64_bit_integer_of_the_counters_key(head: bytes) -> None:
+    found = failed_lock_key(head + b"z" * 24)
+    assert -(2**63) <= found < 2**63
     assert found == int.from_bytes(head, "big", signed=True)
+
+
+def test_addresses_that_share_32_bits_have_different_lock_keys() -> None:
+    """The lock uses 64 bits: keys that agree in their first 4 bytes are not one lock."""
+    assert failed_lock_key(b"abcd" + b"1" * 28) != failed_lock_key(b"abcd" + b"2" * 28)
 
 
 @pytest.mark.parametrize(

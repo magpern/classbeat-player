@@ -15,7 +15,7 @@ from player_backend.client_policy import ClientInfo
 from player_backend.db.executor import Handle, Pool
 from player_backend.db.queries import passkey_login as q
 
-type SignInOutcome = Literal["signed_in", "refused", "limited"]
+type SignInOutcome = Literal["signed_in", "refused", "limited", "busy"]
 # Given the passkey's public key, the authenticator's counter when the signature checks out.
 type Verify = Callable[[bytes], int | None]
 
@@ -65,7 +65,7 @@ def sign_in(
     pool: Pool,
     *,
     failed_key: bytes,
-    failed_lock: tuple[int, int],
+    failed_lock: int,
     failed_window: timedelta,
     failed_max: int,
     credential_id: bytes | None,
@@ -85,10 +85,14 @@ def sign_in(
 
     The attempts of one address are taken one at a time under the advisory lock
     `failed_lock`, held from the check to the commit, so the check and the count are one step:
-    of parallel failing attempts, no more pass the check than the limit leaves.
+    of parallel failing attempts, no more pass the check than the limit leaves. An attempt that
+    finds the lock taken is `busy` at once, with nothing read or written: it never waits for
+    the lock on a pool connection. The lock is the transaction's first statement, so no
+    attempt reads the counter before it holds the lock.
     """
     with pool.handle() as db, db.transaction():
-        db.rows(q.LOCK_FAILED, failed_lock)
+        if db.rows(q.TRY_LOCK_FAILED, (failed_lock,))[0][0] is not True:
+            return "busy"
         if _over_already(db, failed_key, failed_window, failed_max):
             return "limited"
         done = False

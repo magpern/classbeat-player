@@ -1,6 +1,7 @@
 """Two things at once with passkeys (ADR 0002, sections 4, 5 and 10): a passkey sign-in and a
 link sign-in to one account leave at most 20 sessions, two additions leave at most 10 passkeys,
-and parallel failed sign-ins from one address pass no more checks than the limit leaves.
+and parallel failed sign-ins from one address pass no more checks than the limit leaves: the
+second is answered 429 at once instead of waiting for the first on a pool connection.
 
 As in tests/test_sign_in_races.py, one call's transaction is held open on a connection of its
 own, the second call is started and seen to wait for the account's lock, and only then does the
@@ -21,7 +22,8 @@ import psycopg
 import pytest
 
 from player_backend.client_policy import address_hash
-from player_backend.passkey_policy import FAILED_LOCK, failed_limit_key, failed_lock_key
+from player_backend.lock_registry import ACCOUNT_SESSIONS, PASSKEY_ADDITIONS
+from player_backend.passkey_policy import BUSY_RETRY_SECONDS, failed_limit_key, failed_lock_key
 from tests.dbhelp import Conn
 from tests.passkeyhelp import OPTIONS, PASSKEYS, Authenticator, options_of, register, sign_in
 from tests.sitehelp import Site
@@ -32,8 +34,8 @@ REQUEST = f"SELECT player.auth_request_login(%s, %s, %s, %s, {CLIENT})"
 COMPLETE_LINK = f"SELECT player.auth_complete_login(%s, %s, %s, {CLIENT})"
 NEW_CHALLENGE = "SELECT player.auth_new_login_challenge(%s, %s)"
 COMPLETE_PASSKEY = f"SELECT player.auth_complete_passkey(%s, %s, %s, %s, %s, {CLIENT})"
-SESSION_LOCK = 7270003
-ADDITIONS_LOCK = 7270011
+SESSION_LOCK = ACCOUNT_SESSIONS
+ADDITIONS_LOCK = PASSKEY_ADDITIONS
 LOCK_TIMEOUT = "5s"
 
 
@@ -203,12 +205,53 @@ def test_two_additions_at_once_leave_10_passkeys(site: Site, two: tuple[Conn, Co
     assert count == (10,)
 
 
+def _app_waits_for_a_lock(site: Site) -> bool:
+    """Whether a connection of the backend (player_app) waits for a lock of any kind."""
+    found = site.su.execute(
+        "SELECT count(*) FROM pg_stat_activity "
+        "WHERE usename = 'player_app' AND wait_event_type = 'Lock'"
+    ).fetchone()
+    return found != (0,)
+
+
+def _ends_without_waiting(site: Site, thread: threading.Thread) -> None:
+    """`thread`'s request ends within 3 seconds, and no connection of the backend is seen
+    waiting for a lock while it runs (sampled every few milliseconds)."""
+    deadline = time.monotonic() + 3
+    while thread.is_alive() and time.monotonic() < deadline:
+        assert not _app_waits_for_a_lock(site), "the attempt waited for a lock"
+        time.sleep(0.002)
+    assert not thread.is_alive(), "the attempt did not end"
+
+
+def _one_key_locks(site: Site, granted: bool) -> list[int]:
+    """The one-key (bigint) advisory locks held, or waited for, as the signed key."""
+    found = site.su.execute(
+        "SELECT ((classid::bigint << 32) | objid::bigint) FROM pg_locks "
+        "WHERE locktype = 'advisory' AND objsubid = 1 AND granted = %s",
+        (granted,),
+    ).fetchall()
+    return [_signed64(int(str(key))) for (key,) in found]
+
+
+def _signed64(key: int) -> int:
+    return key - (1 << 64) if key >= 1 << 63 else key
+
+
 def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
     site: Site, two: tuple[Conn, Conn]
 ) -> None:
-    """Nine failures are counted. The other attempt has passed its check (the tenth may still
-    be tried) and has not counted its failure yet: a second attempt waits for it, and is then
-    over the limit. Without the lock both would pass the check, and 11 failures get through."""
+    """Nine failures are counted. The other attempt holds the address's lock: it has passed its
+    check (the tenth may still be tried) and has not counted its failure yet. A second attempt
+    does not wait for it: it is answered 429 with `Retry-After: 1` while the lock is still
+    held, counts nothing, and no connection of the backend is seen waiting. Once the first has
+    counted its failure, the next attempt is over the limit. Without the lock both would pass
+    the check, and 11 failures get through; with a lock that waits, the second attempt holds a
+    pool connection until the first commits.
+
+    The holder also locks the counter's row, as the first attempt's count does. So an attempt
+    that read the counter before taking the address's lock (a stale check) would wait for that
+    row, and fail the test, instead of passing unseen."""
     site.allow(EMAIL)
     authenticator = Authenticator()
     assert register(site.sign_in(EMAIL), authenticator).status_code == 201
@@ -219,23 +262,32 @@ def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
     failed = failed_limit_key(address_hash(ipaddress.ip_address(address)))
     lock = failed_lock_key(failed)
     hit = "SELECT player.rate_limit_hit(%s, interval '10 minutes', 10)"
+    hits = "SELECT hits FROM player.rate_limits WHERE key_hash = %s"
 
     holder, _ = two
-    holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", (FAILED_LOCK, lock))
+    holder.execute("SELECT pg_advisory_xact_lock(%s::bigint)", (lock,))
     holder.execute("SAVEPOINT look")
     assert holder.execute(hit, (failed,)).fetchone() == (False,)  # the tenth may be tried
     holder.execute("ROLLBACK TO SAVEPOINT look")
+    row = "SELECT hits FROM player.rate_limits WHERE key_hash = %s FOR UPDATE"
+    assert holder.execute(row, (failed,)).fetchone() == (9,)
 
     def second_attempt() -> object:
-        return sign_in(browser, authenticator, rp_id="evil.test").status_code
+        answer = sign_in(browser, authenticator, rp_id="evil.test")
+        return (answer.status_code, answer.headers.get("Retry-After"), answer.json())
 
     thread, result = _in_background(second_attempt)
-    _wait_for_a_waiter(site, (FAILED_LOCK, lock & 0xFFFFFFFF, "ExclusiveLock"))
-    assert result == []
-    assert holder.execute(hit, (failed,)).fetchone() == (False,)  # its failure, the tenth
-    holder.commit()
-    assert _finished(thread, result) == 429
-    hits = site.su.execute(
-        "SELECT hits FROM player.rate_limits WHERE key_hash = %s", (failed,)
-    ).fetchone()
-    assert hits == (11,)  # ten failures and the refused look
+    try:
+        _ends_without_waiting(site, thread)
+        busy = (429, str(BUSY_RETRY_SECONDS), {"error": "too_many_requests"})
+        assert _finished(thread, result) == busy
+        assert _one_key_locks(site, granted=True) == [lock]
+        assert _one_key_locks(site, granted=False) == []
+        assert site.su.execute(hits, (failed,)).fetchone() == (9,)  # the busy one counted nothing
+        assert holder.execute(hit, (failed,)).fetchone() == (False,)  # its failure, the tenth
+    finally:
+        holder.commit()
+        thread.join(10)
+    over = sign_in(browser, authenticator, rp_id="evil.test")
+    assert over.status_code == 429 and over.headers["Retry-After"] != ""
+    assert site.su.execute(hits, (failed,)).fetchone() == (11,)  # ten failures, the refused look

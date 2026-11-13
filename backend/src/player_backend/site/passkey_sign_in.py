@@ -4,7 +4,8 @@ Neither route takes a session or an email, and the challenge's options list no c
 browser offers the passkeys it has. Both read the browser token's cookie, which binds the
 challenge to the browser that asked. Challenge starts and refused sign-ins are counted per
 address (section 10); a refused sign-in is answered the same way whatever was wrong; over
-either limit the answer is 429.
+either limit the answer is 429. So is a sign-in from an address whose other attempt is still
+being checked: it does not wait for it (`Retry-After: 1`).
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ from player_backend.db import passkey_login
 from player_backend.http_errors import ApiError
 from player_backend.login_policy import retry_after
 from player_backend.passkey_policy import (
+    BUSY_RETRY_SECONDS,
     CHALLENGE_BYTES,
-    FAILED_LOCK,
     FAILED_MAX,
     FAILED_WINDOW,
     STARTS_MAX,
@@ -112,7 +113,7 @@ def sign_in(
     outcome = passkey_login.sign_in(
         state.pool,
         failed_key=failed_key,
-        failed_lock=(FAILED_LOCK, failed_lock_key(failed_key)),
+        failed_lock=failed_lock_key(failed_key),
         failed_window=FAILED_WINDOW,
         failed_max=FAILED_MAX,
         credential_id=credential_id_of(body.credential.rawId),
@@ -122,6 +123,8 @@ def sign_in(
         client=who.info,
         verify=verify,
     )
+    if outcome == "busy":
+        raise ApiError(429, "too_many_requests", {"Retry-After": str(BUSY_RETRY_SECONDS)})
     if outcome == "limited":
         after = retry_after(time.time(), FAILED_WINDOW)
         raise ApiError(429, "too_many_requests", {"Retry-After": str(after)})
