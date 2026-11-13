@@ -152,6 +152,14 @@ Merged: #30 and its findings (#53).
   conversion; `time_in_zone_ms` key type.
 - `worktree.sh rm` never deletes squash-merged branches (#13 review).
 
+## One screen (owner, 2026-11-13)
+
+The owner tried the Mac build on one screen: the room window hid the presenter window and its
+Start button. The owner decided the class runs on one screen (plan section 3). Next: a Designer
+spec for the room screen's own controls (Start, Pause, Previous, Next, End, shown on mouse move
+and fading out) and the phone join code on it, then the issues to build it. The presenter window
+stays for a second display.
+
 ## Waiting for the owner
 
 See [owner.md](owner.md).

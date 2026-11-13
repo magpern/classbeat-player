@@ -24,6 +24,8 @@ Requirements as given by the owner (2026-11-12):
 - Possibly a web app on a phone, and phones joining a class the instructor is running.
 - The music must keep playing and stay in step: Spotify first, Swedebeat perhaps.
 - A backend of its own, for many users.
+- One screen (owner, 2026-11-13): the class runs on a single screen, with its controls on it
+  (section 3).
 - Bluetooth is not needed now. Later, optionally, read a bike (and perhaps a treadmill) over the
   standard protocol.
 
@@ -192,8 +194,14 @@ product (owner, 2026-11-12).
 - **Text stays text.** Numbers and cues are large type over the scene, sized to be read from the
   back of a room, never baked into the picture. The zone is always a number and a name as well
   as a colour. Which part draws that text depends on the scene technology (section 9).
-- **Presenter view:** the room sees the scene on the projector while the instructor's own screen
-  shows the cue, the next intervals and the controls.
+- **One screen first (owner, 2026-11-13).** The usual studio has one screen, and the room
+  screen must be fully usable on it alone. Its controls are on that screen: Start, Pause (and
+  Resume), Previous, Next and End. They appear when the mouse moves and fade out after a few idle
+  seconds, never covering the numbers riders read while hidden. The code that lets a phone join
+  the class is shown on that screen too. The keyboard keeps working with the controls hidden.
+- **Presenter view, when there is a second display:** the room sees the scene on the projector
+  while the instructor's own screen shows the cue, the next intervals and the controls. It is an
+  option, never needed to run a class.
 - **Plain mode:** a 2D screen with the same information, for weak studio computers and for
   reduced motion. It is built first and stays as the fallback.
 
