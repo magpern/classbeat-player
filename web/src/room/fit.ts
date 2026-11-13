@@ -25,8 +25,9 @@ export function beatPeriodMs(bpm: number): number {
   const minPeriod = 1000 / MAX_FLASHES_PER_SECOND;
   let period = 60_000 / bpm;
   while (period < minPeriod - 1e-9) period *= 2;
-  // Rounded up: two lights are never closer than 1/3 s. Every beat up to 180 BPM.
-  return Math.ceil(period);
+  // The exact period, so the dot does not drift off the beat: every beat up to 180 BPM, every
+  // second (fourth ...) beat above it.
+  return period;
 }
 
 /** The beat dot needs a tempo and anchors; it never claims to hit a beat it cannot measure. */

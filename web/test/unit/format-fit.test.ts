@@ -68,11 +68,11 @@ describe("fit", () => {
   it("nothing flashes more than three times a second at any tempo", () => {
     for (let bpm = 30; bpm <= 300; bpm += 1) {
       const period = beatPeriodMs(bpm);
-      assert.ok(1000 / period <= 3, `${bpm} bpm flashes ${(1000 / period).toFixed(2)} times a second`);
+      assert.ok(1000 / period <= 3 + 1e-9, `${bpm} bpm flashes ${(1000 / period).toFixed(2)} times a second`);
     }
     assert.equal(beatPeriodMs(120), 500); // every beat when that is slow enough
-    assert.equal(beatPeriodMs(180), 334); // every beat up to 180 bpm, 1/3 s rounded up
-    assert.equal(beatPeriodMs(181), 663); // every second beat above it
+    assert.ok(Math.abs(beatPeriodMs(180) - 1000 / 3) < 1e-9); // every beat up to 180 bpm, exactly 1/3 s
+    assert.ok(Math.abs(beatPeriodMs(181) - 60_000 / 181 * 2) < 1e-9); // every second beat above it
     assert.equal(beatPeriodMs(200), 600); // every second beat when it would be too fast
   });
 

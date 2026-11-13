@@ -147,10 +147,11 @@ function beatFor(view: View, link: LinkInput | null, song: Song | null): BeatMod
   const rel = view.classMs - song.start_ms;
   const anchor = [...anchors.anchors].reverse().find((x) => x.at_ms <= rel) ?? anchors.anchors[0];
   if (!canShowBeat(anchor.bpm, true)) return null;
-  const beat = 60_000 / anchor.bpm;
+  // Lights fall on every k-th beat counted from the anchor: the period is k beats, exactly.
+  const period = beatPeriodMs(anchor.bpm);
   const sinceAnchor = rel - anchor.at_ms;
-  const toNext = beat - (((sinceAnchor % beat) + beat) % beat);
-  return { periodMs: beatPeriodMs(anchor.bpm), phaseMs: Math.round(toNext), key: `${song.start_ms}:${anchor.at_ms}:${anchor.bpm}` };
+  const toNext = period - (((sinceAnchor % period) + period) % period);
+  return { periodMs: period, phaseMs: toNext, key: `${song.start_ms}:${anchor.at_ms}:${anchor.bpm}` };
 }
 
 function nextFor(doc: Class, view: View): NextModel {
