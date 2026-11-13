@@ -175,6 +175,57 @@ describe("a passkey (ADR 0002, section 4)", () => {
     }
   });
 
+  describe("a busy answer: one resend of the same signed answer after Retry-After (ADR 0002, section 10; #260)", () => {
+    const busy = { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "1" } } as const;
+    const signedIn = { status: 200, body: { status: "signed_in" } } as const;
+    const assertions = (site: FakeSite) => site.api.filter((a) => a.route === "POST sign-in/passkey");
+
+    it("resends the same answer once after the wait, without a second prompt, and signs in", async () => {
+      const site = await open("/sign-in", { script: { ...PASSKEY_OK, "POST sign-in/passkey": [busy, signedIn], ...CLASSES } });
+      await press(site.page, "Sign in with a passkey");
+      await site.page.waitForSelector("nav .a.cur");
+      assert.deepEqual(site.api.map((a) => a.route), ["POST sign-in/passkey/options", "POST sign-in/passkey", "POST sign-in/passkey", "GET classes"]);
+      const [first, second] = assertions(site);
+      assert.ok(first.body !== null && first.body.length > 0);
+      assert.equal(second.body, first.body, "the same signed answer");
+      assert.ok(second.at - first.at >= 950, `resent after ${second.at - first.at} ms, not after Retry-After`);
+      assert.equal((await traps(site.page)).filter((x) => x.kind === "passkey").length, 1, "one prompt");
+      // Held in memory only: nothing stored, logged or put in an address.
+      assert.deepEqual((await traps(site.page)).filter((x) => !["passkey", "history"].includes(x.kind)), []);
+      for (const a of site.api) assert.equal(new URL(a.url).search, "");
+      await site.context.close();
+    });
+
+    it("resends once only, then shows the busy plate", async () => {
+      const site = await open("/sign-in", { script: { ...PASSKEY_OK, "POST sign-in/passkey": [busy, busy, signedIn] } });
+      await press(site.page, "Sign in with a passkey");
+      await site.page.waitForSelector(".plate");
+      // A second resend would come one second after the second answer.
+      await site.page.waitForTimeout(1600);
+      assert.equal(assertions(site).length, 2);
+      assert.equal(assertions(site)[1].body, assertions(site)[0].body);
+      assert.match(await site.page.innerText(".plate"), /Please try again in a moment\./);
+      assert.equal(path(site.page), "/sign-in");
+      await site.context.close();
+    });
+
+    it("resends nothing for the failed sign-ins' limit or a busy-looking options answer", async () => {
+      const cases = [
+        { name: "failed limit", script: { ...PASSKEY_OK, "POST sign-in/passkey": [{ ...busy, headers: { "Retry-After": "2" } }, signedIn] }, route: "POST sign-in/passkey" },
+        { name: "no wait", script: { ...PASSKEY_OK, "POST sign-in/passkey": [{ status: 429, body: { error: "too_many_requests" } }, signedIn] }, route: "POST sign-in/passkey" },
+        { name: "options", script: { "POST sign-in/passkey/options": [busy, { status: 200, body: PASSKEY_OPTIONS }] }, route: "POST sign-in/passkey/options" },
+      ];
+      for (const c of cases) {
+        const site = await open("/sign-in", { script: c.script });
+        await press(site.page, "Sign in with a passkey");
+        await site.page.waitForSelector(".plate");
+        await site.page.waitForTimeout(1300);
+        assert.equal(site.api.filter((a) => a.route === c.route).length, 1, c.name);
+        await site.context.close();
+      }
+    });
+  });
+
   it("is not offered where the browser has no passkeys", async () => {
     const site = await open("/sign-in", { passkey: "absent" });
     assert.doesNotMatch(await site.page.innerText("main"), /passkey/i);

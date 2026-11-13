@@ -56,6 +56,15 @@ export type PasskeyOutcome = "cancelled" | { readonly step: "options" | "asserti
 export const BUSY_RETRY_SECONDS = 1;
 
 /**
+ * The wait before the one resend of a signed passkey answer, in seconds, or null for none (ADR
+ * 0002, section 10). Only a `busy` 429 of `POST sign-in/passkey` is resent: its `Retry-After` is
+ * at most `BUSY_RETRY_SECONDS`. A longer wait, or none, is a limit and is shown.
+ */
+export function busyResendAfter(a: Answer): number | null {
+  return a.kind === "too_many" && a.retryAfter !== null && a.retryAfter <= BUSY_RETRY_SECONDS ? a.retryAfter : null;
+}
+
+/**
  * A passkey 429. Only the failed sign-ins' limit names failed sign-ins; the options' limit (how
  * many sign-ins are started) and a busy answer get neutral words, as does a 429 with no wait.
  */

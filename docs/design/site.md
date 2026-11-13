@@ -97,15 +97,40 @@ The email link, a passkey, and the pages around them. One narrow column.
 | Link opened | "Finish signing in", a "Sign in" button, "This works only in the browser where you asked for the link". The token is read from the fragment and removed from the address bar; opening the page signs nobody in | `POST sign-in/complete` on the button | [link](mockups/site-sign-in-link.html) |
 | Signing in | The button disabled, "Signing you in…" | pending | [working](mockups/site-sign-in-link-working.html) |
 | Link expired, used or refused | Plate "This link cannot be used" with the three possible reasons, and the sign-in form to ask for a new link. One page for every refusal (expired, used, unknown, other browser) | 401 `sign_in_refused` | [refused](mockups/site-sign-in-link-refused.html) |
-| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button disabled | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
+| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button and "Email me a sign-in link" both disabled, so only one request is under way (disabled text keeps 7 : 1, S2). It lasts until the answer is in, through the one resend after a busy answer (below) | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
 | Passkey failed | Plate "That passkey could not be used", "Try again", and the email form | 401 from `POST sign-in/passkey` | [failed](mockups/site-sign-in-passkey-failed.html) |
-| Passkey limit | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "After 10 passkey sign-ins that fail within 10 minutes, this network connection has to wait"; the form stays | 429 from `POST sign-in/passkey` with a `Retry-After` over 1 second | [limited](mockups/site-sign-in-limited.html) |
-| Passkey wait | Plate "Too many sign-in requests", then only "Please try again in about N minutes" from `Retry-After`, or "Please try again in a moment" when it is 1 second. Nothing about failed sign-ins: the person may have made none. The form stays | 429 from `POST sign-in/passkey/options` (sign-ins started); 429 from `POST sign-in/passkey` with `Retry-After: 1` (another attempt still being checked) or none | [limited](mockups/site-sign-in-limited.html) |
+| Passkey limit | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "After 10 passkey sign-ins that fail within 10 minutes, this network connection has to wait"; the form stays | 429 from `POST sign-in/passkey` with a `Retry-After` over 1 second | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-limited-*` show them |
+| Passkey wait | Plate "Too many sign-in requests", then only "Please try again in about N minutes" from `Retry-After`, or "Please try again in a moment" when it is 1 second. Nothing about failed sign-ins: the person may have made none. The form stays | 429 from `POST sign-in/passkey/options` (sign-ins started); 429 from `POST sign-in/passkey` with no `Retry-After`; 429 from `POST sign-in/passkey` with `Retry-After: 1` (another attempt still being checked) on the one resend too | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-wait-*` and `site-sign-in-passkey-busy-*` show them |
 | Session ended | Note "Your session ended" above the form | 401 `not_signed_in` | [ended](mockups/site-sign-in-session-ended.html) |
 | Signed out | Note "You are signed out" | `POST sign-out` (204) | [signed out](mockups/site-signed-out.html) |
 | Account deleted | Note "Your account was deleted", "Devices remove their saved classes the next time they connect" | `POST account/delete` (204) | [deleted](mockups/site-account-deleted.html) |
 
 A browser without passkey support shows no passkey button and no explanation.
+
+**A busy passkey answer is sent again once** (ADR 0002, section 10). A 429 from
+`POST sign-in/passkey` with `Retry-After: 1` means another sign-in from the same network
+connection was still being checked, and nothing was used up. The page waits for `Retry-After`,
+then sends the same signed answer once more, with no second prompt; "Waiting for a passkey" stays
+on the page meanwhile. What the resend brings is shown as usual: signed in, "Passkey failed",
+"Passkey limit", or, when it is busy again, "Passkey wait" with "Please try again in a moment".
+There is never a second resend. A 429 from the options, or one with a longer wait or none, is not
+sent again. The signed answer is held in the page's memory for that one resend only: it is never
+stored and never logged.
+
+**The last second of the failed sign-ins' limit.** A refusal for that limit in the last second of
+its window also carries `Retry-After: 1`, and the page cannot tell it from a busy answer. It is
+treated as busy: one resend, which the new window checks afresh, and the neutral "Passkey wait"
+words only if that is busy again. Those words are still true, and they name no failed sign-ins.
+
+**One heading for every passkey 429.** "Too many sign-in requests" heads the limit, the wait and
+the busy plate alike, because the page cannot always tell them apart (the last second above). The
+busy plate only appears after the resend was refused too, so the person has waited once already.
+A softer "One moment" was weighed and not taken.
+
+**The "or" and "Try again".** The "or" between the email form and the passkey button is a label:
+14 px, `--light-3`, held to 4.5 : 1 (S1, S2). "Try again" on a plate, "Passkey failed" included,
+is a quiet, outlined button. Where a mock-up shows a larger "or" or a filled "Try again", this
+text and S1 and S2 hold.
 
 ### Classes
 
@@ -208,9 +233,9 @@ person: they press it again.
 | State | What the person sees | When | Mock-up |
 |---|---|---|---|
 | Too many requests | Plate "Please wait a little", the wait from `Retry-After` in minutes, "Nothing was changed", "Try again" | 429 with `Retry-After` | [429](mockups/site-error-too-many.html) |
-| Offline | Plate "You are offline": what is shown may be out of date, changes wait; the page tries again by itself when the browser says it is online, and "Try again". Content already shown stays; a button that needs the server is disabled and says so | A request fails with no answer | [offline](mockups/site-error-offline.html) |
+| Offline | Plate "You are offline": what is shown may be out of date, changes wait; the page tries again by itself when the browser says it is online, and "Try again". Content already shown stays; a button that needs the server is disabled and says so. Until the classes page lands (the second website issue) there is no content to keep, so the plate sits under the page title alone; this state is checked again with the class list shown when it does | A request fails with no answer | [offline](mockups/site-error-offline.html) |
 | Server fault | Plate "That did not work, and it was not your doing", "Try again in a moment. If you were changing something, check that it happened before you repeat it." No code, no technical word | 5xx, or an answer the page does not understand | [server](mockups/site-error-server.html) |
-| Not found | "That page is not here", a button to Classes | An address the site does not have | [404](mockups/site-error-not-found.html) |
+| Not found | "That page is not here", a button to Classes. No section of the header is marked: no 3 px bar and no `aria-current`, because the page is none of them. The mock-up marks Classes; this row holds | An address the site does not have | [404](mockups/site-error-not-found.html) |
 
 A 403 `cross_site_request` is not shown as such: it is the server-fault page.
 
