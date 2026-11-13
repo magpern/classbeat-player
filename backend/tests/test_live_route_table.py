@@ -1,4 +1,6 @@
-"""The judgement of the live routing table, on today's table and on the planned one (#234).
+"""The judgement of the live routing table, on today's table and on the planned one (#234, #237).
+The tables below are fixed copies in this file: none is read from `routing.json`, so the
+contract can change without this file moving.
 
 Today `routing.json` lists no 413 and lists `invalid_request` for `POST /api/live/sessions`
 (which takes no body); the contract will list `body_too_large` for every live route and drop
@@ -16,17 +18,52 @@ from fastapi.responses import JSONResponse
 
 from tests.routehelp import http_contexts
 from tests.routetable import BODY_CAP, problems, takes_input
-from tests.test_live_route_errors import ERROR_ENUM, ROUTING
 
 SESSIONS = "POST /api/live/sessions"
-TODAY: dict[str, set[str]] = {r["route"]: set(r["errors"]) for r in ROUTING["http"]}
-# What each route sends: today's entries, but `invalid_request` only where a body is taken.
-ANSWERED = {n: set(e) - ({"invalid_request"} if n == SESSIONS else set()) for n, e in TODAY.items()}
+CONTROLLER = "POST /api/live/controller"
+CONTROL = "POST /api/live/control"
+# Fixed copies of the two shapes, not read from routing.json (that table is checked against the
+# real routes in test_live_route_errors.py); `routetable.py` is tested against these alone.
+_SESSIONS_SENDS = {
+    "invalid_token",
+    "token_unknown",
+    "token_expired",
+    "token_revoked",
+    "sessions_full",
+    "too_many_requests",
+    "internal_error",
+}
+ANSWERED: dict[str, set[str]] = {
+    SESSIONS: _SESSIONS_SENDS,
+    CONTROLLER: {"invalid_request", "cannot_control", "internal_error"},
+    CONTROL: {
+        "invalid_request",
+        "invalid_code",
+        "controllers_full",
+        "too_many_requests",
+        "internal_error",
+    },
+}
+TODAY: dict[str, set[str]] = {n: set(c) for n, c in ANSWERED.items()}
+TODAY[SESSIONS].add("invalid_request")  # listed, never sent: the route takes no body
+# The error enum of today's schema (no `body_too_large`).
+ERROR_ENUM = {
+    "invalid_request",
+    "invalid_token",
+    "token_unknown",
+    "token_expired",
+    "token_revoked",
+    "sessions_full",
+    "cannot_control",
+    "invalid_code",
+    "controllers_full",
+    "too_many_requests",
+    "internal_error",
+}
 
 
 def _planned() -> dict[str, set[str]]:
-    table = copy.deepcopy(TODAY)
-    table[SESSIONS].discard("invalid_request")
+    table = copy.deepcopy(ANSWERED)
     for entry in table.values():
         entry.add(BODY_CAP)
     return table
