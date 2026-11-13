@@ -110,11 +110,11 @@ The gel is 30 vw by 60 vh; the numeral 31.5 vh; the countdown at most 28 vh; a z
 needs two lines is set at 7.1 vh (at most 5.75 vw); the metrics sit in a row under the countdown,
 spread to the safe edge with at least 1.6 vw between them, values at min(7.55 vh, 5.7 vw) so
 "On the beat", "Standing" and "Song, planned" fit on one line down to 5:4 (7.12 vh there, 7.55 vh
-at 4:3). These two sizes are the **product's**: they are 3 % and 2.7 % above the nominal 6.9 vh
-and min(7.4 vh, 5.55 vw) of the mock-ups, a margin because the product is measured in its own
+at 4:3). These two sizes are the **product's**: the first is 3 % above the mock-ups' nominal 6.9 vh,
+and the second is 2 % (its vh term) and 2.7 % (its vw term) above their min(7.4 vh, 5.55 vw), a margin because the product is measured in its own
 browser (see C1), whose font metrics give cap heights about 2.3 % lower; the mock-ups keep the
-nominal sizes, and both stay above the 5.5 % floor; the cue (from 62 vh, two lines at `--t-text`, three at `--t-text-min`) and the next
-interval (78 vh) use the full width (a four-line cue moves the next row up beside the gel: see
+nominal sizes, and both stay above the 5.5 % floor; the cue (from 60 vh, two lines at
+`--t-text`, three at `--t-text-min`) and the next interval (76 vh) use the full width (a four-line cue moves the next row up beside the gel: see
 "Cue" under "Fitting text"); the score is 83 to 95 vh; the segment name is dropped from
 the rail. Switch point: any aspect ratio of 3:2 or narrower. 5:4 screenshot:
 [last interval at 1280×1024](mockups/room-last-interval-1280x1024.png) ("On the beat") and the
@@ -173,8 +173,11 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
 - **Time-in-zone list** (B2, before the start and finished): one row per zone the class uses,
   1 to 7, in two columns of up to four rows filled top to bottom (so 7 zones are 4 + 3). A row is
   the zone chip (colour and number), its planned time (a column 10.5 vh wide, so that a zone of an
-  hour or more, such as `1:27:38`, stays on one line; 9 vh is not enough), and its name at `--t-label`. A name wraps
-  to two lines; a longer one ends in an ellipsis after the second line, and the full name is on
+  hour or more, such as `1:27:38`, stays on one line; 9 vh is not enough), and its name at
+  `--t-label`. At 3:2 and narrower the list starts 2.5 vw further left (still 1.5 vw clear of the
+  gel), the chip column is 4.4 vh, the time column 10.3 vh, and the gaps are 0.7 vw inside a row
+  and 1.2 vw between the columns, so that a zone-name word of up to 16 letters stays whole in its
+  column (CI checks it). A name wraps to two lines; a longer one ends in an ellipsis after the second line, and the full name is on
   the gel when that zone plays. The list ends above 76 vh, clear of the score, at every layout;
   the first cue is not shown before the start (it appears with the first interval). Fixture:
   seven zones with "Endurance, the aerobic base for long steady rides" (49 characters, ends in an
@@ -203,7 +206,8 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   the past are grey with no number: history, not information, and no zone colour without its
   number. A block with **under 3 vw ahead of "now"** (a block that began in the past counts from
   "now") cannot hold its number whole: it is drawn as a **neutral sliver**, the same grey as
-  history, with no zone colour, no number and no label. A block that begins right of 91 vw has no
+  history, with no zone colour, no number and no label. A block that begins right of 91 vw
+  (`NUMBER_FITS_UNTIL` in `web/src/room/score.ts`; the sliver rule is applied first) has no
   room for its number inside the safe area and is not drawn (the next row names the next zone).
   Labels that would cross the safe edge are left out, not cut.
 - **Song clips**: title first, ending in an ellipsis when it is longer than the clip; the artist
@@ -336,7 +340,7 @@ fixture by size. Every check passes on every shot.
 | C1. Text height | **Measured in the product's own browser** on the real screen (the CI Chromium), not on the mock-ups: its font metrics give cap heights about 2.3 % lower than the mock-up browser, which is why the product's value sizes carry the margin given under "Layout". The floors below are not lowered. Cap height as a share of the screen height, at every room size: countdown at least 20 %; gel numeral at least 25 %; values (zone name, cadence, position, BPM) at least 5.5 % (a zone name stepped down by the fitting rules: 3 %); the cue, class time and the next interval at least 3 %; labels and score text at least 2 %. Not applied to the presenter window or the preview |
 | C2. Contrast | WCAG 2 ratio between the text colour and the worst rendered background pixel inside the text's ink: at least 7 : 1 for everything except labels, at least 4.5 : 1 for labels |
 | C3. Safe area | All text ink within 5 % of every edge |
-| C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole; the ink of the next row ends at least 5 px above the top of the score at every size (a minimum: no design may go below it) |
+| C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole; the ink of the next row ends at least 0.7 vh above the top of the score at every size (5.04 px at 1280×720; a minimum: no design may go below it; CI checks it on every room screenshot) |
 | C5. Zone | Every zone colour carries its number; the gel, the next row and the time-in-zone list also carry the name; a score block shows its name if and only if the whole name fits beside the number, and never draws it cut. Past score blocks carry no zone colour |
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
 | C7. Motion | With reduced motion, no transition or animation lasts longer than 0; without it, nothing that repeats (the beat dot) cycles more than three times a second. The mock-ups can only check CSS animations and transitions: PL4 CI must also cover the beat dot's real timing (at least 1/3 s between the starts of two lights, including with tempo drift near 180 BPM), the 160 ms edge flash and the score's movement (continuous, and whole-second steps with reduced motion) |

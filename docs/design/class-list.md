@@ -79,7 +79,7 @@ wide, centred; side padding 32 px; vertical order is fixed.
 | 1280×800 | As drawn | 8 / 7 |
 | 1000×720 (the player's default window less its title bar, and the smallest) | As drawn | 7 / 6 |
 
-The class list keeps the presenter's minimum window size, 1000×720, because both use the same window; nothing smaller is a design size. The shell does not enforce that minimum today: setting it is a gap covered by #123 (open PR #126).
+The class list keeps the presenter's minimum window size, 1000×720, because both use the same window; nothing smaller is a design size. The shell sets that minimum (#123, merged in #126).
 
 | Region | Content | Behaviour |
 |---|---|---|
