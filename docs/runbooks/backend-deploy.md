@@ -150,6 +150,16 @@ compose exec -T db sh -c 'pg_dump -U postgres -Fc "$POSTGRES_DB"' >player-$(date
 
 Store the dump encrypted and off the server. The dump holds hashes, never a token or a password.
 
+To restore, with `backend` and `purge` stopped, into the database the dump came from:
+
+```bash
+compose stop backend purge
+compose exec -T db sh -c 'pg_restore -U postgres --clean --if-exists -d "$POSTGRES_DB"' <player-YYYY-MM-DD.dump
+compose up -d --wait
+```
+
+`compose up` runs `migrate` again, which applies only the migrations the dump does not have.
+
 ## Rotating a database password
 
 1. Overwrite the file in `PLAYER_SECRETS_DIR` **in place** (`cat >file`, not a new file that

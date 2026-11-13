@@ -288,7 +288,7 @@ direction is enough, and the plan describes this one.
 
 | Answer | When | The app |
 |---|---|---|
-| `token_revoked` | The user revoked the device | Deletes that account's cached classes and the token, after any class being played has ended |
+| `token_revoked` | The user revoked the device | Deletes the token at once, and that account's cached classes once any class being played has ended |
 | `token_unknown` | No such token: the account was deleted, or the row is gone | The same |
 | `token_expired` | 180 days without use | Keeps the cache, shows "pair again", and syncs after a new pairing to the same account |
 
@@ -367,7 +367,11 @@ ADR 0003, section 6: `source_class_id`, `publication_number`, `removed`, `conten
   bring the class back. The backend's role has no `DELETE` on `classes` (section 9). A later,
   higher-numbered publication with a document stores the class again: that is the user sending
   it again.
-- Deleting a class on the site writes the same marker at the highest number seen.
+- Deleting a class on the site writes the same marker at the highest number seen. So the same
+  number again is `409 publication_conflict`, a lower one `409 stale_publication`, and a higher
+  one stores the class again (#110). Deleting a class needs no recent sign-in: it can come back
+  only by the source sending it again. Reading a marker on the site answers `404 not_found`, as
+  the player API does.
 - A source that lost its counter reads the highest number from the 409 answer or from
   `GET /api/source/classes/{id}` (numbers only) and continues above it.
 - Limits: a document is at most 1 MiB, an account holds at most 2,000 classes, a token may send
@@ -903,6 +907,11 @@ the database's log is covered too:
   marker that it was removed stays". This ADR reads that as the marker of a deleted *class*. A
   deleted *account* leaves no marker and no row at all. Its devices learn of it through
   `token_unknown` at their next contact and wipe that account's cache (section 6).
+- **What an account deletion leaves.** Two tables hold an email and are not owned by an account,
+  so the cascade does not reach them: `login_links`, whose rows expire within 15 minutes and are
+  removed by the hourly purge, and `signup_allowlist`, which is the operator's list and is
+  changed only with `admin allowlist remove` (backend deploy runbook). Neither holds a class,
+  a device or an event (#112).
 - Rate-limit counters hold only hashes and expire with their windows.
 - Backups and how long they are kept belong to the deploy runbook (PL7).
 

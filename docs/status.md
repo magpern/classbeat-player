@@ -29,13 +29,15 @@ pairing hardening (#71, #79), pairing in the app (#74, #84; hardening #87, #89),
 (#92, #96), refused requests counted on every credentialed route and review notes (#98, #101),
 backend deploy files with the hourly purge (#95, #97, #99, #100), the body size cap, a budget of
 600 document reads a minute, counted oversized publications and the SMTP deadline over DNS and
-connect (#103, #104). Next: the class library,
-passkeys; purge counts (needs a migration); the player API answers in `schema/`.
+connect (#103, #104), the player API answers in `schema/` (#106, #109), the class library on the
+site (#107, #110), account export and deletion (#108, #112). In progress: hardening from those
+reviews (#115). Next: the website pages, passkeys, purge counts (needs a migration).
 
 ## PL4: screens
 
 Merged: the design system and the plain 2D room screen spec (#22, #31), and its follow-ups (#78,
-#91). In progress: the room screen (#77, PR #85).
+#91); class sync and the offline cache (#111, #113). In progress: the room screen (#77, PR #85),
+sync hardening (#114), the class list spec (#116).
 
 ## Infra
 
@@ -64,12 +66,21 @@ Merged: #30 and its findings (#53).
 - Backend: the `auth_session_active` and `auth_device_active` stubs (PL8); packaging of `schema/`
   (#86); cursors bound to an account, a resync on a format-version change (#96); the body cap
   keyed on the request path, which would cap publications at 16 KiB if the app were served under
-  a path prefix (#104 review).
+  a path prefix (#104 review). These are in #115. Also: the inner-document 413 counted as use, and
+  one long line (#102 notes).
 - Docs: the presenter spec's minimum window size; the short next row's dropped fields called a
   choice (#91 reviews); ADR 0002 notes from #94 (the Linux keychain backends, idle link rows, the
   section 6 bullet on one device token per account against one pairing at a time).
+- Player: a class answered `unusable` is skipped and the cursor moves past it, so an older cached
+  copy stays with nothing marked newer, by design; the class list should say so (#113 N2).
+  Positions above 2^53 are refused, which stalls sync rather than corrupting it (#113 N4).
 - Player: pairing keychain notes from #89 (the redundant chmod, the cleanup error, a two-origin
   test).
+
+## Carried into PL8
+
+- Deleting an account ends its live sessions (ADR 0002 section 12, #112 review): an acceptance
+  criterion of the live-session issues.
 
 ## Carried into PL1
 
