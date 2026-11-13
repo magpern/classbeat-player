@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { END_TRY_MS } from "../../src/main/live/ender.ts";
-import { failedLine } from "../../src/main/live/live-service.ts";
+import { failedLine } from "../../src/main/live/log-lines.ts";
 import { HOST_TOKEN, rig, started } from "./live-relay.ts";
 import type { Rig } from "./live-relay.ts";
 

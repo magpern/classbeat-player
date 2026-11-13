@@ -110,13 +110,13 @@ test("after last, queue, command, joined and tick do nothing, and only end goes 
 test("last on a publisher with no connection queues nothing, tells nobody and sends nothing, now or after a reconnect (#212 N1)", () => {
   const b = bench();
   b.p.disconnected();
-  const before = b.sent.length;
   let told = 0;
   assert.equal(b.p.last(END, () => void (told += 1)), false);
   b.p.connected((text) => void b.sent.push(JSON.parse(text) as { type: string }));
+  // Exactly what the reconnect sent on its own: one more state, and no end.
+  assert.deepEqual(b.sent.map((m) => m.type), ["companion_state", "companion_state"]);
   b.advance(10 * WINDOW_MS);
   assert.equal(b.sent.filter((m) => m.type === "end").length, 0);
-  assert.ok(b.sent.length >= before);
   assert.equal(told, 0);
   b.p.stop();
   assert.equal(b.p.last(END, () => void (told += 1)), false);
@@ -127,7 +127,11 @@ test("a second last is refused: its callback is never told and only one end goes
   const b = bench();
   let first = 0;
   let second = 0;
+  // The second's budget is spent, so the first end is still waiting (the budget is not cleared)
+  // when the second `last` comes: only the `lastSent !== null` guard can refuse it.
+  while (b.sent.length < MAX_PER_WINDOW) b.p.queue(result(100 + b.sent.length));
   assert.equal(b.p.last(END, () => void (first += 1)), true);
+  assert.equal(b.sent.length, MAX_PER_WINDOW);
   assert.equal(b.p.last(END, () => void (second += 1)), false);
   b.advance(10 * WINDOW_MS);
   assert.equal(b.sent.filter((m) => m.type === "end").length, 1);
