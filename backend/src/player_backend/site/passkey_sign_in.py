@@ -29,8 +29,6 @@ from player_backend.passkey_policy import (
     STARTS_MAX,
     STARTS_WINDOW,
     challenge_hash,
-    challenge_of,
-    credential_id_of,
     failed_limit_key,
     failed_lock_key,
     sign_in_starts_key,
@@ -41,6 +39,7 @@ from player_backend.site.state import site_state
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_hash
 from player_backend.webauthn_check import sign_in_options, verified_sign_in
+from player_backend.webauthn_data_policy import challenge_of, credential_id_of
 
 router = APIRouter()
 

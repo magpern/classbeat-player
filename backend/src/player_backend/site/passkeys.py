@@ -33,13 +33,13 @@ from player_backend.passkey_policy import (
     NewPasskey,
     added_mail,
     challenge_hash,
-    challenge_of,
     clean_name,
 )
 from player_backend.site.bodies import RawBody, parsed
 from player_backend.site.deps import RecentSignIn, SiteSession, TheCaller
 from player_backend.site.state import site_state
 from player_backend.webauthn_check import registration_options, verified_registration
+from player_backend.webauthn_data_policy import challenge_of
 
 router = APIRouter()
 
