@@ -1,11 +1,11 @@
-"""The SECURITY DEFINER functions without a body yet fail closed; the purge works."""
+"""Every SECURITY DEFINER function has its body (no stub is left); the purge works."""
 
 from __future__ import annotations
 
 import uuid
 
 import pytest
-from psycopg import errors, sql
+from psycopg import errors
 
 from tests.dbhelp import Conn, as_role
 from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
@@ -13,7 +13,8 @@ from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
 # Given their bodies by migration 0004 (tests/test_login_functions.py and the site tests), by
 # migration 0006 (tests/test_pairing_functions.py, tests/test_device_functions.py) and by
 # migration 0008 (tests/test_source_functions.py) and by migration 0011
-# (tests/test_passkey_functions.py and the passkey tests).
+# (tests/test_passkey_functions.py and the passkey tests) and by migration 0013
+# (tests/test_live_check_functions.py).
 IMPLEMENTED = {
     "auth_enter_session",
     "auth_request_login",
@@ -30,25 +31,22 @@ IMPLEMENTED = {
     "auth_new_login_challenge",
     "auth_passkey_for_login",
     "auth_complete_passkey",
+    "auth_device_active",
+    "auth_session_active",
 }
-STUBS = sorted(SECURITY_DEFINER_FUNCTIONS - IMPLEMENTED - {"auth_purge_expired"})
+STUB_TEXT = "is not implemented"
 
 
-def _call_with_nulls(conn: Conn, name: str) -> None:
-    row = conn.execute(
-        "SELECT pronargs FROM pg_proc WHERE proname = %s AND pronamespace = 'player'::regnamespace",
-        (name,),
-    ).fetchone()
-    assert row is not None
-    nulls = sql.SQL(", ").join([sql.NULL] * int(str(row[0])))
-    conn.execute(sql.SQL("SELECT * FROM player.{}({})").format(sql.Identifier(name), nulls))
-
-
-@pytest.mark.parametrize("name", STUBS)
-def test_every_stub_fails_closed(su: Conn, name: str) -> None:
-    as_role(su, "player_app")
-    with pytest.raises(errors.FeatureNotSupported):
-        _call_with_nulls(su, name)
+def test_every_function_has_its_body(su: Conn) -> None:
+    # The list of ADR 0002 is complete: every function in it is accounted for above, and none
+    # still raises its stub's error (migration 0003).
+    assert SECURITY_DEFINER_FUNCTIONS == IMPLEMENTED | {"auth_purge_expired"}
+    stubs = su.execute(
+        "SELECT proname FROM pg_proc WHERE pronamespace = 'player'::regnamespace "
+        "AND prosrc LIKE %s",
+        ("%" + STUB_TEXT + "%",),
+    ).fetchall()
+    assert stubs == []
 
 
 def _account(su: Conn) -> uuid.UUID:

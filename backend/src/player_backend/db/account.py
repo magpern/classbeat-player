@@ -13,6 +13,8 @@ Every read filters by the account in the code; the policy is the backstop.
   sessions, passkeys, approved pairings, link codes and audit events. The cascade runs as the
   tables' owner, so row-level security does not stop it and `player_app` needs no `DELETE` on
   those tables. Every token of the account is refused from the next request on: its row is gone.
+  The same transaction sends the account's `live_revocations` notice (`revocation.notify`), so
+  the live process ends the account's live sessions at once.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ from player_backend.account_policy import (
     when,
 )
 from player_backend.client_policy import ClientInfo
-from player_backend.db import site_sessions
+from player_backend.db import revocation, site_sessions
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Pool
 from player_backend.db.queries import account as q
@@ -162,4 +164,5 @@ def delete(ctx: AccountContext, typed: str) -> Deletion:
         return "not_confirmed"
     if not ctx.db.rows(q.DELETE_ACCOUNT, (ctx.account_id,)):
         return "gone"
+    revocation.notify(ctx)
     return "deleted"

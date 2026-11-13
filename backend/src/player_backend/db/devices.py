@@ -27,6 +27,7 @@ from player_backend.bearer_policy import (
     DeviceRefusal,
 )
 from player_backend.client_policy import ClientInfo
+from player_backend.db import revocation
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Handle, Pool
 from player_backend.db.queries import devices as q
@@ -160,9 +161,13 @@ def own_device(ctx: AccountContext) -> DeviceInfo | None:
 
 
 def revoke(ctx: AccountContext, device_id: UUID, client: ClientInfo) -> bool:
-    """Revoke one device of the account. False when the account has no such live device."""
+    """Revoke one device of the account. False when the account has no such live device.
+
+    The transaction sends the account's `live_revocations` notice: the live process ends the
+    device's live session at once."""
     if not ctx.db.rows(q.REVOKE_DEVICE, (ctx.account_id, device_id)):
         return False
+    revocation.notify(ctx)
     detail = {"device_id": str(device_id), "live_sessions": "ended"}
     ctx.db.rows(
         q.ADD_DEVICE_EVENT,
