@@ -801,6 +801,15 @@ gets 429 with `Retry-After`, except where the table says otherwise. Live limits 
 the live process's memory. A request a route refuses keeps what its credential check wrote (the
 counters, "last used"); any other error undoes the whole request.
 
+So that the framework's own refusals count too, every route that holds a credential's
+transaction (site sessions, device tokens, source tokens) takes its path, query and body values
+as raw text. It parses them with pure functions (`param_policy.py`, `sync_policy.py`) and
+answers `422 invalid_request` itself. Site bodies are read before the session's transaction
+opens. A guard test (`tests/guards/test_guard_raw_parameters.py`) fails on a typed parameter,
+a length limit, an alias or a body model on any such route. Routes without a credential
+(pairing start and poll, sign-in, the code exchange) look nothing up before their body is
+valid, so the framework's `422` there counts nothing and reaches nothing (#96, #98).
+
 | What | Limit | Over the limit |
 |---|---|---|
 | Sign-in link requests, per email and requesting address together | 3 per 15 minutes, 10 per day | The usual answer; no mail |
