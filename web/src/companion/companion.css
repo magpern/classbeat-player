@@ -10,7 +10,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* Portrait (the default): sizes in vh, capped by vw so a narrow phone keeps its line lengths. */
 :root {
   --c-gel: min(10.6dvh, 23vw); /* zone numeral */
-  --c-hero: min(10dvh, 21.5vw); /* time left in the interval */
+  --c-hero: min(10.5dvh, 23vw); /* time left in the interval; cap clears K1 8 % with margin across font rasterisers */
   --c-value: min(4.6dvh, 9.4vw); /* zone name, cadence, position */
   --c-text: min(4.2dvh, 8.6vw); /* the cue, up to 60 characters */
   --c-text-min: min(3.4dvh, 7vw); /* a longer cue */
