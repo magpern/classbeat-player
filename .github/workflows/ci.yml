@@ -140,6 +140,43 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+  # The web lane (screens): web/ci.sh runs lint, types, build, unit tests and the spec's measurable
+  # checks (docs/design/room-2d.md C1 to C9) on the real screen in the runner's Chrome at every state
+  # and size. The screenshots are kept as an artefact for the Designer.
+  # It also runs when player/ or schema/ change, but then only the drift test (web/test/unit/
+  # snapshot-compat.test.ts, which reads the player's clock and link views and the class types as
+  # text), so a change there that the room screen does not follow fails in that pull request.
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.player == 'true' || needs.changes.outputs.schema == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Web checks
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web
+        run: bash ci.sh
+      - name: Drift test only (player/ or schema/ changed, web/ did not)
+        if: needs.changes.outputs.web != 'true'
+        working-directory: web
+        run: node --import tsx --test test/unit/snapshot-compat.test.ts
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: room-screenshots
+          path: web/screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Runs schema/ci.sh: install from lockfiles, generated types current, Python and TypeScript
   # checks. A failure fails this job, and `ci` below fails when it fails.
   schema:
@@ -206,7 +243,7 @@ jobs:
 
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, desktop-app, schema, backend]
+    needs: [changes, repo-checks, node-packages, desktop-app, web, schema, backend]
     if: always()
     runs-on: ubuntu-latest
     steps:

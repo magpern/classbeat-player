@@ -1,0 +1,90 @@
+/* Design tokens: the reference copy (docs/design/system.md).
+   The product ships these as web/src/design/tokens.css; that file copies the values below
+   and nothing else. Sizes are shares of the screen height (vh) so a room screen reads the
+   same at any resolution. */
+
+@font-face {
+  font-family: "Big Shoulders Display";
+  src: url("fonts/big-shoulders-display-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-display: block;
+}
+@font-face {
+  font-family: "Big Shoulders Display";
+  src: url("fonts/big-shoulders-display-latin-800-normal.woff2") format("woff2");
+  font-weight: 800;
+  font-display: block;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
+:root {
+  /* Stage: no light at all. On a projector, black is "lamp off". */
+  --stage: #000000;
+  --stage-raised: #17171c; /* song clips, panels */
+  --stage-line: #3a3a42; /* rules, past score */
+
+  /* Light that is not a zone: white only, never a hue (rule 7). */
+  --light-1: #f6f4ef; /* numbers, cues */
+  --light-2: #bdbab2; /* secondary values */
+  --light-3: #9a978f; /* labels */
+  --ink: #000000; /* text knocked out of a lit zone */
+
+  /* Zone gels. Colour means the planned zone and nothing else (rule 7). */
+  --zone-1: #6fa8ff; /* sky */
+  --zone-2: #22d3c5; /* teal */
+  --zone-3: #81b250; /* grass */
+  --zone-4: #ffe626; /* yellow */
+  --zone-5: #ff8940; /* orange */
+  --zone-6: #ff6680; /* coral */
+  --zone-7: #bb8cff; /* ultraviolet */
+
+  /* Type */
+  --face-number: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --face-text: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+
+  /* Type scale, font size as a share of screen height. Cap heights in system.md. */
+  --t-hero: 36vh; /* interval countdown, at most: see .count in room.css */
+  --t-gel: 46vh; /* zone numeral in the gel */
+  --t-value: 8.4vh; /* zone name, cadence, position, BPM */
+  --t-text: 5.4vh; /* cue (steps down to --t-text-min for long cues) */
+  --t-text-min: 4.6vh;
+  --t-minor: 4.6vh; /* next interval, class time */
+  --t-label: 3.1vh; /* labels, link state, score text */
+
+  /* Space */
+  --safe-x: 5vw;
+  --safe-y: 5vh;
+  --gap: 2vh;
+
+  /* Motion */
+  --m-change: 700ms cubic-bezier(0.2, 0.7, 0.2, 1); /* interval change */
+  --m-flash: 160ms; /* white edge on the gel at a change */
+  --m-state: 300ms ease-out; /* link state, pause */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m-change: 0ms linear;
+    --m-flash: 0ms;
+    --m-state: 0ms linear;
+  }
+}
+
+.z1 { --zone: var(--zone-1); }
+.z2 { --zone: var(--zone-2); }
+.z3 { --zone: var(--zone-3); }
+.z4 { --zone: var(--zone-4); }
+.z5 { --zone: var(--zone-5); }
+.z6 { --zone: var(--zone-6); }
+.z7 { --zone: var(--zone-7); }
