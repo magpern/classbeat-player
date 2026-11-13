@@ -68,12 +68,12 @@ def _answer(served: Served | None) -> Response:
 def control_router(files: ControlFiles) -> APIRouter:
     router = APIRouter()
 
-    @router.api_route(CONTROL_PATH, methods=["GET", "HEAD"])
+    @router.api_route(CONTROL_PATH, methods=["GET"])
     def page() -> Response:  # pyright: ignore[reportUnusedFunction]
         return _answer(files.page)
 
     # Every other path under /control ends here, found or not: it never reaches another route.
-    @router.api_route(CONTROL_PATH + "/{name:path}", methods=["GET", "HEAD"])
+    @router.api_route(CONTROL_PATH + "/{name:path}", methods=["GET"])
     def asset(name: str) -> Response:  # pyright: ignore[reportUnusedFunction]
         return _answer(files.page if name == "" else files.assets.get(name))
 

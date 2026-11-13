@@ -114,8 +114,9 @@ def test_the_page_is_served_at_control_with_every_header(app: FastAPI) -> None:
         assert answer.content == PAGE
         assert answer.headers["content-type"] == "text/html; charset=utf-8"
         _assert_headers(answer, "no-store")
+    # GET only: any other method is a 405 (test_another_method_is_refused_with_every_header).
     head = _send(app, "HEAD", "/control")
-    assert head.status_code == 200
+    assert head.status_code == 405
     _assert_headers(head, "no-store")
 
 

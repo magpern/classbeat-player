@@ -98,9 +98,7 @@ NO_CREDENTIAL_ROUTES = frozenset(
 PAGE_ROUTES = frozenset(
     {
         ("GET", "/control"),
-        ("HEAD", "/control"),
         ("GET", "/control/{name:path}"),
-        ("HEAD", "/control/{name:path}"),
     }
 )
 # The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
@@ -196,7 +194,7 @@ def test_the_page_routes_take_no_dependency_and_only_read() -> None:
     pages = [r for r in _routes() if (r.method, r.path) in PAGE_ROUTES]
     assert {(r.method, r.path) for r in pages} == PAGE_ROUTES
     assert all(not r.dependencies for r in pages)
-    assert all(r.method in {"GET", "HEAD"} and r.path.startswith("/control") for r in pages)
+    assert all(r.method == "GET" and r.path.startswith("/control") for r in pages)
 
 
 def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_alone() -> None:
