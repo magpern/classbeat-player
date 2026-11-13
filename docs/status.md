@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #151).
+Updated 2026-11-13 (after #160).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -32,7 +32,8 @@ backend deploy files with the hourly purge (#95, #97, #99, #100), the body size 
 connect (#103, #104), the player API answers in `schema/` (#106, #109), the class library on the
 site (#107, #110), account export and deletion (#108, #112), cursors bound to an account, the
 body cap keyed on the route and the class paging index (#115, #127), passkeys (#130, #134) and
-their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry), the
+their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry; #158,
+#160: the account-sessions and passkey-additions locks wait at most 2 s), the
 website pages spec (#131, #137). In progress: the website shell and sign-in (#144), held on a
 question for the owner (owner.md). Next: the other website pages, purge counts (needs a
 migration).
@@ -45,8 +46,10 @@ built (#124) and its hardening (#119, #128, which also settles #122); sync harde
 the presenter window's minimum size (#123, #126); the class list spec (#116, #125) and its data
 (#129, #132); the class list screen (#133, #138) and its hardening (#142, #143); the room screen
 in its own window (#141, #148) and its follow-ups (#149, #151: the presenter kept clear, File >
-Show the room screen, a run-time check that refuses any renderer with loose web preferences).
-In progress: shell hardening from the #151 review (#152).
+Show the room screen, a run-time check that refuses any renderer with loose web preferences);
+shell hardening (#152, #154; #155, #156: preloads, spell checker, shell handlers, re-checked on
+every navigation); keep-awake while a class runs (#157, #159). Every PL4 item is merged; the
+Verifier's run on `main` is in progress.
 
 ## Infra
 
@@ -92,7 +95,15 @@ Merged: #30 and its findings (#53).
   the app"; one word when the panel is next touched (#143 design review). The #143 source test
   of the wiring catches a deleted line, not a semantic change; moving that glue into a unit-tested
   module, and making the drop callback of `registerHandlers` required (#143 review).
-- Backend: the account locks 7270003 and 7270011 still wait without a limit (#147).
+- Backend: from the #160 review, a table test that only 55P03 counts as `busy` (N1), a test that
+  a transaction goes on after a timed-out `lock_additions` (N2), and `passkey_policy.py` at 157
+  lines (N3).
+- Player: from the #156 review, e2e tests 11 and 12 should also assert that `did-navigate` never
+  fires and the session preload never runs; `refuseLoose` calls `isDestroyed`, `console.error`
+  and `close` outside its `try`; a timeout on each e2e test. From the #159 review, nothing tests
+  the keep-awake release on presenter `closed` and `will-quit` in `main.ts`.
+- Screens: the website should resend after `Retry-After` on link completion and passkey
+  addition as well as passkey sign-in (#160; for #144).
 - Screens: the one-display rehearsal room window draws a narrow strip at about 490 px wide; an
   issue if instructors find it unreadable (#151 design review). The presenter spec (PL5) should
   say one line on the fallback where the room window sits behind the presenter.

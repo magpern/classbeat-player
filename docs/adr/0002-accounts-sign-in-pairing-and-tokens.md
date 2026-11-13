@@ -870,6 +870,13 @@ address answers `busy` again, and a pairing or source-link call that takes the c
 lock waits for that transaction to end. Every advisory lock number and key form is listed in
 `lock_registry.py`.
 
+Two account locks are still waited for, but never for long (#158): the account-sessions
+lock (7270003), taken when a sign-in link or a passkey sign-in completes, and the
+passkey-additions lock (7270011). Each wait is bounded at 2 seconds, a constant in the database
+function for the first and `passkey_policy.ADDITIONS_LOCK_WAIT` for the second. A wait that runs
+out answers 429 with `Retry-After: 1` and is rolled back, so nothing is written or used up: the
+link, the signed answer or the registration challenge still works on the next try.
+
 The live limits are sized for a class of 40 to 60 riders who join in the same minute from one
 studio address: nothing that a rider with the right code does is counted per address.
 
