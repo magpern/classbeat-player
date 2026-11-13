@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { DIST } from "../lib/browser.ts";
 import { ORIGIN, launchOffline, openSite, traps, waitForApi } from "../lib/site-fake.ts";
+import { heapHolds } from "../lib/site-heap.ts";
 import type { FakeSite, OpenOptions } from "../lib/site-fake.ts";
 import { LINK_TOKEN, PASSKEY_OPTIONS } from "../lib/site-states.ts";
 
@@ -91,11 +92,15 @@ describe("the link token (ADR 0002, section 4, steps 5 and 6)", () => {
 
   it("is dropped when refused: the link cannot be sent again", async () => {
     const site = await open(`/sign-in#${LINK_TOKEN}`, { script: { "POST sign-in/complete": { status: 401, body: { error: "sign_in_refused" } } } });
+    await site.page.waitForSelector(".btn.primary:focus");
+    // The heap search finds the token while the page holds it, so its absence below is a drop.
+    assert.equal(await heapHolds(site.page, LINK_TOKEN.slice(7)), true, "the page holds the token before it is used");
     await press(site.page, "Sign in");
     await site.page.waitForSelector(".plate");
     assert.match(await site.page.innerText(".plate"), /This link cannot be used/);
     assert.equal(await site.page.getByRole("button", { name: "Sign in", exact: true }).count(), 0);
     assert.equal(site.api.length, 1);
+    assert.equal(await heapHolds(site.page, LINK_TOKEN.slice(7)), false, "the refused token is still held by the page");
     await site.context.close();
   });
 
@@ -150,6 +155,24 @@ describe("a passkey (ADR 0002, section 4)", () => {
     assert.deepEqual(refused.api.map((a) => a.route), ["POST sign-in/passkey/options", "POST sign-in/passkey", "POST sign-in/passkey/options", "POST sign-in/passkey", "GET classes"]);
     await refused.context.close();
     await cancelled.context.close();
+  });
+
+  it("names failed sign-ins only on their own limit, not on the options' limit or a busy answer (#257)", async () => {
+    const tooMany = (wait: string) => ({ status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": wait } });
+    const cases = [
+      { name: "failed sign-ins", script: { ...PASSKEY_OK, "POST sign-in/passkey": tooMany("420") }, words: /^Please try again in about 7 minutes\. After 10 passkey sign-ins that fail within 10 minutes/ },
+      { name: "options' limit", script: { "POST sign-in/passkey/options": tooMany("420") }, words: /^Please try again in about 7 minutes\.$/ },
+      { name: "busy", script: { ...PASSKEY_OK, "POST sign-in/passkey": tooMany("1") }, words: /^Please try again in a moment\.$/ },
+    ];
+    for (const c of cases) {
+      const site = await open("/sign-in", { script: c.script });
+      await press(site.page, "Sign in with a passkey");
+      await site.page.waitForSelector(".plate");
+      const [head, detail] = (await site.page.innerText(".plate")).split("\n").map((s) => s.trim()).filter(Boolean);
+      assert.equal(head, "Too many sign-in requests", c.name);
+      assert.match(detail, c.words, c.name);
+      await site.context.close();
+    }
   });
 
   it("is not offered where the browser has no passkeys", async () => {

@@ -203,6 +203,10 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
  * The backend's cross-site rule (backend/src/player_backend/request_policy.py,
  * `cross_site_refusal`): a state change needs `Origin` equal to the site's origin, and a
  * `Sec-Fetch-Site` other than `same-origin` is refused. The fake applies it to every request.
+ *
+ * What the browser checks observe: Playwright's interception does not show the `Sec-Fetch-*`
+ * headers, so on a page request only the `Origin` half can refuse. The `Sec-Fetch-Site` half is
+ * checked directly, as a table (site-page-security.test.ts).
  */
 export function crossSite(method: string, headers: Readonly<Record<string, string>>): boolean {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase())) return false;
