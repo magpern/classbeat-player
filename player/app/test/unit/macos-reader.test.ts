@@ -4,8 +4,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isCurrent } from "../../src/core/link/index.ts";
-import { MAC_POLL_MS, MAC_SCRIPTS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../../src/core/link/macos-scripts.ts";
-import { createMacMusic, EXEC_OPTIONS, GIVE_UP_MS } from "../../src/main/macos-reader.ts";
+import { describeReason, reasonForFailure } from "../../src/core/link/macos-reason.ts";
+import { MAC_FIRST_READ_MS, MAC_POLL_MS, MAC_SCRIPTS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../../src/core/link/macos-scripts.ts";
+import { createMacMusic, EXEC_OPTIONS, FIRST_GIVE_UP_MS, FIRST_READ_OPTIONS, GIVE_UP_MS } from "../../src/main/macos-reader.ts";
 import type { ExecFileFn, ExecOptions, MacMusic } from "../../src/main/macos-reader.ts";
 
 const PLAYING = "playing\tspotify:track:X\tSong\tArtist\t10.0\t180000\n";
@@ -40,10 +41,10 @@ test("the scripts are exactly these, and every one returns before it could start
     read: [
       guard,
       'tell application "Spotify"',
-      "set st to player state as string",
-      'if st is "stopped" then return "stopped"',
-      "set tr to current track",
-      "return st & tab & (id of tr) & tab & (name of tr) & tab & (artist of tr) & tab & (player position as string) & tab & (duration of tr as string)",
+      "set playerStateText to player state as string",
+      'if playerStateText is "stopped" then return "stopped"',
+      "set currentTrackRef to current track",
+      "return playerStateText & tab & (id of currentTrackRef) & tab & (name of currentTrackRef) & tab & (artist of currentTrackRef) & tab & (player position as string) & tab & (duration of currentTrackRef as string)",
       "end tell",
     ],
     play: [guard, 'tell application "Spotify" to play'],
@@ -92,9 +93,11 @@ test("a reading: osascript by absolute path, the fixed read script, no shell, a 
   const call = r.calls[0];
   assert.equal(call.file, "/usr/bin/osascript");
   assert.deepEqual(call.args, READ_ARGS);
-  assert.deepEqual(call.options, { timeout: MAC_TIMEOUT_MS, maxBuffer: 8192, killSignal: "SIGKILL", windowsHide: true, shell: false, encoding: "utf8" });
-  assert.equal(call.options, EXEC_OPTIONS);
-  assert.ok(Object.isFrozen(EXEC_OPTIONS));
+  assert.deepEqual(EXEC_OPTIONS, { timeout: MAC_TIMEOUT_MS, maxBuffer: 8192, killSignal: "SIGKILL", windowsHide: true, shell: false, encoding: "utf8" });
+  // Until Spotify has answered once, the read may wait for the Automation prompt; the child is killed at that limit.
+  assert.deepEqual(call.options, { ...EXEC_OPTIONS, timeout: MAC_FIRST_READ_MS });
+  assert.equal(call.options, FIRST_READ_OPTIONS);
+  assert.ok(Object.isFrozen(EXEC_OPTIONS) && Object.isFrozen(FIRST_READ_OPTIONS));
   assert.ok(MAC_TIMEOUT_MS <= 1000 && MAC_POLL_MS === 250);
 
   r.clock.t = 1080;
@@ -195,16 +198,19 @@ test("Spotify not running, or with nothing loaded: no reading, and nothing is do
 test("a call that never answers is given up, and a late answer to it is dropped", () => {
   const r = rig();
   r.mac.setActive(true);
-  r.clock.t = GIVE_UP_MS - 1;
+  r.calls[0].done(null, PLAYING);
+  r.clock.t = 250;
   r.tick();
-  assert.equal(r.calls.length, 1);
-  r.clock.t = GIVE_UP_MS;
+  r.clock.t = 250 + GIVE_UP_MS - 1;
   r.tick();
   assert.equal(r.calls.length, 2);
-  r.calls[0].done(null, PLAYING);
-  assert.equal(r.mac.latest(r.clock.t), null, "the old call's answer is not a reading");
-  r.calls[1].done(null, PLAYING);
-  r.calls[1].done(null, "notrunning\n");
+  r.clock.t = 250 + GIVE_UP_MS;
+  r.tick();
+  assert.equal(r.calls.length, 3);
+  r.calls[1].done(null, "playing\tid\tOld\tArtist\t1.0\t1000\n");
+  assert.notEqual(r.mac.latest(r.clock.t)?.title, "Old", "the old call's answer is not a reading");
+  r.calls[2].done(null, PLAYING);
+  r.calls[2].done(null, "notrunning\n");
   assert.equal(r.mac.latest(r.clock.t)?.title, "Song", "a call answers once");
 });
 
@@ -256,4 +262,136 @@ test("play, pause and next run their fixed scripts, one at a time, and their out
     r.calls[n + 1].done(null, "notrunning\n");
   }
   assert.equal(r.mac.latest(0), before);
+});
+
+// Issue #458: the variable names, the wait for the Automation prompt and the reasons.
+
+// AppleScript's own terms and short names: any of them as a variable can stop the script
+// compiling on a real Mac (spike 1: "Expected expression but found st", -2741).
+const RESERVED = new Set(["it", "me", "my", "id", "name", "text", "date", "result", "item", "first", "last", "count", "version", "class", "index", "number", "string", "list", "record"]);
+const variableNames = (lines: readonly string[]): string[] => lines.flatMap((l) => [...l.matchAll(/\b(?:set|copy)\s+([A-Za-z_]\w*)\s+to\b/g)].map((m) => m[1]));
+const badVariableName = (n: string): boolean => n.length < 6 || RESERVED.has(n.toLowerCase());
+
+test("no AppleScript variable has a short or reserved name, and the check catches the old script", () => {
+  const names = Object.values(MAC_SCRIPTS).flatMap((lines) => variableNames(lines));
+  assert.deepEqual(names, ["playerStateText", "currentTrackRef"]);
+  assert.deepEqual(names.filter(badVariableName), []);
+  const old = ["set st to player state as string", "set tr to current track"];
+  assert.deepEqual(variableNames(old).filter(badVariableName), ["st", "tr"], "restoring st fails the test");
+  for (const n of ["st", "tr", "it", "me", "id", "name"]) assert.equal(badVariableName(n), true, n);
+});
+
+test("the first read waits for the Automation prompt: an answer after 5 s is accepted", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  for (let t = 250; t <= 5000; t += 250) {
+    r.clock.t = t;
+    r.tick();
+  }
+  assert.equal(r.calls.length, 1, "no second read joins the one that waits for the prompt");
+  r.calls[0].done(null, PLAYING);
+  assert.equal(r.mac.latest(5000)?.title, "Song");
+  assert.equal(r.mac.reason(), null);
+  // The answer was Spotify's own: from now on the normal limit holds.
+  r.clock.t = 5250;
+  r.tick();
+  assert.equal(r.calls[1].options, EXEC_OPTIONS);
+});
+
+test("a first read that comes back not running does not end the wait", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  r.calls[0].done(null, "notrunning\n");
+  r.clock.t = 250;
+  r.tick();
+  assert.equal(r.calls[1].options, FIRST_READ_OPTIONS, "Spotify has not been asked yet, so no prompt has been answered");
+});
+
+test("after one answer a read past 700 ms is not answering, even if the runner ignored the limit", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  r.calls[0].done(null, PLAYING);
+  r.clock.t = 250;
+  r.tick();
+  r.clock.t = 250 + MAC_TIMEOUT_MS + 1;
+  r.calls[1].done(null, PLAYING.replace("Song", "Late"));
+  assert.equal(r.mac.latest(r.clock.t)?.title, "Song", "the late answer is not a reading");
+  assert.equal(r.mac.reason(), "not-answering");
+  r.tick();
+  r.clock.t += 100;
+  r.calls[2].done(null, PLAYING.replace("Song", "Next"));
+  assert.equal(r.mac.latest(r.clock.t)?.title, "Next");
+  assert.equal(r.mac.reason(), null);
+});
+
+test("a runner that never settles does not block the poll loop, before or after the first answer", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  r.clock.t = FIRST_GIVE_UP_MS - 1;
+  r.tick();
+  assert.equal(r.calls.length, 1);
+  r.clock.t = FIRST_GIVE_UP_MS;
+  r.tick();
+  assert.equal(r.calls.length, 2, "the first read is given up after its long limit and asked again");
+  r.calls[1].done(null, PLAYING);
+  r.clock.t += 250;
+  r.tick();
+  r.clock.t += GIVE_UP_MS;
+  r.tick();
+  assert.equal(r.calls.length, 4, "after an answer the normal limit holds");
+});
+
+const osascriptError = (text: string): Error => Object.assign(new Error(`Command failed: osascript\n${text}`), { code: 1 });
+
+const REASONS: readonly [string, Error, string][] = [
+  ["Automation refused (-1743)", osascriptError("execution error: Not authorized to send Apple events to Spotify. (-1743)"), "not-permitted"],
+  ["Spotify not running (-600)", osascriptError("execution error: Spotify got an error: Application isn’t running. (-600)"), "not-running"],
+  ["a syntax error (-2741)", osascriptError('96:98: syntax error: Expected expression but found "st". (-2741)'), "script-failed"],
+  ["a call killed at its limit", Object.assign(new Error("killed"), { killed: true, signal: "SIGKILL" }), "not-answering"],
+  ["osascript missing", Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" }), "script-failed"],
+];
+
+for (const [label, error, reason] of REASONS) {
+  test(`${label} gives the reason "${reason}", and the next good read clears it`, () => {
+    const r = rig();
+    r.mac.setActive(true);
+    assert.equal(r.mac.reason(), null);
+    r.calls[0].done(error, "");
+    assert.equal(r.mac.reason(), reason);
+    assert.equal(r.mac.latest(0), null);
+    r.clock.t = 250;
+    r.tick();
+    r.calls.at(-1)?.done(null, PLAYING);
+    assert.equal(r.mac.reason(), null);
+  });
+}
+
+test("-1743, -600 and a syntax error are three distinct reasons, each with its own text", () => {
+  const got = REASONS.slice(0, 3).map(([, e]) => reasonForFailure(e));
+  assert.equal(new Set(got).size, 3);
+  assert.match(describeReason("not-permitted"), /System Settings, Privacy & Security, Automation/);
+  const texts = (["not-running", "not-permitted", "not-answering", "script-failed"] as const).map(describeReason);
+  assert.equal(new Set(texts).size, 4);
+});
+
+test("Spotify's own not-running answer, and an unreadable one, are reasons; stopping forgets them", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  r.calls[0].done(null, "notrunning\n");
+  assert.equal(r.mac.reason(), "not-running");
+  r.clock.t = 250;
+  r.tick();
+  r.calls[1].done(null, "something else\n");
+  assert.equal(r.mac.reason(), "script-failed");
+  r.mac.setActive(false);
+  assert.equal(r.mac.reason(), null);
+});
+
+test("only the newest read says why: a given-up call that answers late does not", () => {
+  const r = rig();
+  r.mac.setActive(true);
+  r.clock.t = FIRST_GIVE_UP_MS;
+  r.tick();
+  r.calls[0].done(osascriptError("x (-1743)"), "");
+  assert.equal(r.mac.reason(), null);
 });

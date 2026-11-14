@@ -24,10 +24,11 @@ export interface CallSlot {
 }
 
 /** `giveUpMs` may be Infinity: then only an answer, or `clear`, ends a call. */
-export function createCallSlot(now: () => number, giveUpMs: number): CallSlot {
+export function createCallSlot(now: () => number, giveUpMs: number | (() => number)): CallSlot {
+  const limit = (): number => (typeof giveUpMs === "number" ? giveUpMs : giveUpMs());
   let since: number | null = null;
   let turn = 0;
-  const busy = (): boolean => since !== null && now() - since < giveUpMs;
+  const busy = (): boolean => since !== null && now() - since < limit();
   const clear = (): void => {
     since = null;
     turn += 1;
