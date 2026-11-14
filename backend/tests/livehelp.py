@@ -57,6 +57,8 @@ class Live:
     events: list[tuple[str, dict[str, str]]] = field(
         default_factory=list[tuple[str, dict[str, str]]]
     )
+    # The place replay after each host `welcome` read by `joined`, in order.
+    replays: list[list[dict[str, Any]]] = field(default_factory=list[list[dict[str, Any]]])
 
     @property
     def registry(self) -> Registry:
@@ -107,11 +109,29 @@ class Live:
 
     @contextmanager
     def joined(self, token: str, origin: str | None = SITE) -> Generator[WebSocketTestSession]:
-        """Connected and said `hello`; its `welcome` is read and checked."""
+        """Connected and said `hello`; its `welcome` is read and checked, and for a host the
+        replay of both places after it (kept in `replays`)."""
         with self.connect(origin) as ws:
             ws.send_json(hello(token))
-            assert recv(ws)["type"] == "welcome"
+            welcome = recv(ws)
+            assert welcome["type"] == "welcome"
+            if welcome["role"] == "host":
+                self.replays.append(places(ws))
             yield ws
+
+
+def places(ws: WebSocketTestSession) -> list[dict[str, Any]]:
+    """The replay of both places a host is sent right after its `welcome`, in slot order."""
+    replay = [recv(ws), recv(ws)]
+    assert all(m["type"] in ("controller_joined", "controller_left") for m in replay)
+    assert [m["slot"] for m in replay] == [1, 2]
+    return replay
+
+
+FREE = [
+    {"v": 1, "type": "controller_left", "slot": 1, "reason": "free"},
+    {"v": 1, "type": "controller_left", "slot": 2, "reason": "free"},
+]
 
 
 def until(check: Callable[[], bool], seconds: float = 3.0) -> bool:

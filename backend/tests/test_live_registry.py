@@ -193,9 +193,13 @@ def test_two_controllers_at_most_and_a_drop_frees_the_place() -> None:
     assert [(c.session_id, c.slot) for c in listed] == [(started.session_id, 1)]
     assert registry.signed_in_controllers(OTHER) == []
     # Dropping by the site session it holds: another site session's hash drops nothing.
-    assert not registry.drop_controller(started.session_id, 1, b"x" * 32)
-    assert registry.drop_controller(started.session_id, 1, site_session)
-    assert seen == [Dropped(started.session_id, 1, "session_ended")]
+    ended = "session_ended"
+    assert not registry.drop_controller(started.session_id, 1, ended, site_session_hash=b"x" * 32)
+    # A token got by a control code holds no site session: no site session's end drops it.
+    assert not registry.drop_controller(started.session_id, 2, ended, site_session_hash=bytes(32))
+    assert registry.places(started.session_id) == {1: "sign_in", 2: "code"}
+    assert registry.drop_controller(started.session_id, 1, ended, site_session_hash=site_session)
+    assert seen == [Dropped(started.session_id, 1, "session_ended", "sign_in")]
     assert registry.add_controller(started.session_id, b"d" * 32, None) == 1
     assert registry.add_controller(uuid.uuid4(), b"e" * 32, None) is None
 

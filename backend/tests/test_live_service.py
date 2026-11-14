@@ -109,7 +109,7 @@ def test_the_recheck_drops_only_the_controller_that_held_the_ended_site_session(
 
     def sessions_active(_pool: Pool, hashes: Sequence[bytes]) -> dict[bytes, bool]:
         # While the re-check asks, slot 1 is freed and taken by another sign-in.
-        assert registry.drop_controller(session_id, 1)
+        assert registry.drop_controller(session_id, 1, "dropped")
         assert registry.add_controller(session_id, b"b" * 32, NEW_SITE) == 1
         return dict.fromkeys(hashes, False)
 
@@ -119,7 +119,7 @@ def test_the_recheck_drops_only_the_controller_that_held_the_ended_site_session(
     assert service.recheck() is True
     # The one drop is the sign-in's own; the new controller's site session was never found
     # ended, so the re-check drops nothing more and the new controller stays.
-    assert seen == [Dropped(session_id, 1, "dropped")]
+    assert seen == [Dropped(session_id, 1, "dropped", "sign_in")]
     held = registry.signed_in_controllers()
     assert [(c.slot, c.site_session_hash) for c in held] == [(1, NEW_SITE)]
 

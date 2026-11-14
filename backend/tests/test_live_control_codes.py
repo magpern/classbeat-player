@@ -8,6 +8,9 @@ ADR 0002, sections 8 and 10; ADR 0005, sections 3 and 4).
   (`wrong_tries`, and the audit event); a right code while both places are held is 409
   `controllers_full`, neither used up nor a wrong try;
 - `drop` drops the slot's phone and ends the current code, and the host is sent nothing for it;
+- the host's `cancel_code` ends the current code the same way, and only the host's: from a
+  controller or a rider it is dropped and counted (`not_from_role`) and ends nothing (ADR 0005
+  section 10, amended 2026-11-14);
 - sessions are apart: one session's code does nothing for another, and wrong tries count
   against the session the join code names;
 - join codes that name no session count for the address: past 60 a minute, 429;
@@ -25,7 +28,15 @@ import pytest
 
 from player_backend.code_policy import ALPHABET
 from player_backend.db import live as db_live
-from tests.livehelp import closed, hello, live_app, nothing, recv, validator
+from tests.livehelp import (
+    SITE_SESSION,
+    closed,
+    hello,
+    live_app,
+    nothing,
+    recv,
+    validator,
+)
 
 CONTROL = "/api/live/control"
 
@@ -175,8 +186,19 @@ def test_at_most_two_controllers_and_a_right_code_while_full_is_kept(live: Any) 
         for _ in range(8):  # neither used up nor counted as a wrong try
             _refused(_try(live, started.join_code, code), 409, "controllers_full")
         nothing(host)
-        # The re-check frees a place (a sign-in ended); the same code now works.
-        assert live.registry.drop_controller(started.session_id, 2)
+        # The re-check frees a place (a sign-in ended); the same code now works. The host is
+        # told, though that phone had no connection.
+        ended = live.registry.drop_controller(
+            started.session_id, 2, "session_ended", site_session_hash=SITE_SESSION
+        )
+        assert ended
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 2,
+            "via": "sign_in",
+            "reason": "session_ended",
+        }
         _granted(_try(live, started.join_code, code))
         assert recv(host) == {"v": 1, "type": "code_cancelled", "reason": "used"}
         _refused(_try(live, started.join_code, _code(host)), 409, "controllers_full")
@@ -205,16 +227,43 @@ def test_drop_drops_the_phone_and_ends_the_code_telling_the_host_nothing(live: A
         _granted(_try(live, started.join_code, _code(host)))
 
 
-def test_cancel_code_is_not_built_yet_and_ends_nothing(live: Any) -> None:
-    # Pinned exactly until the backend builds it (ADR 0005 section 10, amended 2026-11-14): the
-    # host's `cancel_code` is routed, dropped and counted, and the host is sent nothing.
+CANCEL = {"v": 1, "type": "cancel_code"}
+
+
+def test_cancel_code_ends_the_code_and_the_host_is_sent_nothing(live: Any) -> None:
     started = live.session()
     with live.joined(started.host_token, None) as host:
         code = _code(host)
-        host.send_json({"v": 1, "type": "cancel_code"})
+        host.send_json(CANCEL)
+        nothing(host)  # no `code_cancelled`: the app stopped showing the code itself
+        _refused(_try(live, started.join_code, code), 403, "invalid_code")
+        assert sum(live.hub.dropped.values()) == 0
+        _sweep_after(live, 200.0, started)
+        nothing(host)  # a cancelled code does not run out again
+        host.send_json(CANCEL)  # no current code: nothing ends, nothing is sent
         nothing(host)
-        assert live.hub.dropped["not_built_yet"] == 1
-        _granted(_try(live, started.join_code, code))
+        assert sum(live.hub.dropped.values()) == 0
+        # A new code works as before; the places were not touched.
+        _granted(_try(live, started.join_code, _code(host, live=live)))
+        assert recv(host) == {"v": 1, "type": "code_cancelled", "reason": "used"}
+
+
+def test_cancel_code_from_a_controller_or_a_rider_is_dropped_and_ends_nothing(live: Any) -> None:
+    started = live.session()
+    with ExitStack() as stack:
+        host = stack.enter_context(live.joined(started.host_token, None))
+        phone = stack.enter_context(live.joined(live.controller(started)))
+        assert recv(host)["type"] == "controller_joined"
+        rider = stack.enter_context(live.riding(live.rider(started.join_code)))
+        assert recv(host)["type"] == "rider_joined"
+        code = _code(host)
+        phone.send_json(CANCEL)
+        rider.send_json(CANCEL)
+        nothing(host)
+        nothing(phone)
+        assert live.hub.dropped["not_from_role"] == 2
+        assert sum(live.hub.dropped.values()) == 2
+        _granted(_try(live, started.join_code, code))  # the code was still current
         assert recv(host) == {"v": 1, "type": "code_cancelled", "reason": "used"}
 
 

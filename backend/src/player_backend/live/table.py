@@ -18,7 +18,6 @@ import threading
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Final
 from uuid import UUID
 
 from player_backend.code_issue import new_code
@@ -26,11 +25,9 @@ from player_backend.live.events import Ended
 from player_backend.live.watchers import Watcher, Watchers
 from player_backend.live_code_policy import ControlCode
 from player_backend.live_limit_policy import Window
+from player_backend.live_place_policy import SLOTS
 from player_backend.live_rider_policy import JOIN_CODES_PER_HOUR, JOINS_PER_MINUTE
 from player_backend.live_session_policy import Clocks, EndReason, expiry
-
-# ADR 0002, section 8: at most 2 controllers per session, in slots 1 and 2.
-SLOTS: Final = (1, 2)
 
 
 @dataclass

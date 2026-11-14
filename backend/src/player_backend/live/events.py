@@ -14,6 +14,10 @@ from player_backend.live_code_policy import CancelReason
 from player_backend.live_session_policy import EndReason
 from player_backend.live_token_policy import Via
 
+# Why a controller's token ended while its session goes on (ADR 0005 section 10, amended
+# 2026-11-14): the host's `drop`, or the end of its site session (sign-in tokens only).
+type DropReason = Literal["dropped", "session_ended"]
+
 
 @dataclass(frozen=True)
 class Ended:
@@ -28,12 +32,14 @@ class Ended:
 
 @dataclass(frozen=True)
 class Dropped:
-    """A controller dropped from a session that goes on. Its connection is closed with 4403.
+    """A controller dropped from a session that goes on. Its connection, if any, is closed with
+    4403, and the host is told `controller_left` with `reason` and `via`, connected or not.
     `reason`: `dropped` by the host, `session_ended` with its site session (the re-check)."""
 
     session_id: UUID
     slot: int
-    reason: Literal["dropped", "session_ended"]
+    reason: DropReason
+    via: Via
 
 
 @dataclass(frozen=True)

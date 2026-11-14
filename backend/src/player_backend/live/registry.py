@@ -32,8 +32,9 @@ from player_backend.live.events import (
     Started,
 )
 from player_backend.live.riders import Riders
-from player_backend.live.table import SLOTS, HeldSession
+from player_backend.live.table import HeldSession
 from player_backend.live.watchers import Watcher
+from player_backend.live_place_policy import SLOTS
 from player_backend.live_session_policy import EndReason, Held, expiry, plan_start
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash

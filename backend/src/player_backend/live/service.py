@@ -275,5 +275,7 @@ class LiveService:
                 self.end(r.session_id, "revoked")
         for c in controllers:
             if sessions.get(c.site_session_hash) is not True:
-                self.registry.drop_controller(c.session_id, c.slot, c.site_session_hash)
+                self.registry.drop_controller(
+                    c.session_id, c.slot, "session_ended", site_session_hash=c.site_session_hash
+                )
         return True

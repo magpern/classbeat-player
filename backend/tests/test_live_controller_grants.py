@@ -107,7 +107,7 @@ def test_a_grant_is_taken_back_only_while_its_token_holds_the_place(
     first = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert first is not None
     registry = service.registry
-    assert registry.drop_controller(started.session_id, first.slot)
+    assert registry.drop_controller(started.session_id, first.slot, "dropped")
     # The same sign-in asks again and gets the same place, with another token.
     second = service.by_sign_in(CTX, started.join_code, SITE, CLIENT)
     assert second is not None and second.slot == first.slot
