@@ -1,6 +1,7 @@
 // The instructor's controls over the link: undo a resync, go to the manual clock, follow the
 // music again, pick an occurrence of a repeated recording. Pure.
 import type { ClockState } from "../clock/clock.ts";
+import { NO_TORN } from "./torn.ts";
 import { setClock } from "./clock-moves.ts";
 import { DEFAULT_LINK_CONFIG } from "./types.ts";
 import type { LinkConfig, LinkEvent, LinkModel } from "./types.ts";
@@ -21,7 +22,7 @@ export function undo(link: LinkModel, clock: ClockState, now: number): CommandRe
     return { link: { ...link, undo: null, announce: null }, clock, event: "undo_unavailable" };
   }
   return {
-    link: { ...link, mode: "manual", state: "Manual", undo: null, announce: null, held: false, holdUntil: null, force: false },
+    link: { ...link, mode: "manual", state: "Manual", undo: null, announce: null, held: false, holdUntil: null, force: false, ...NO_TORN },
     clock: setClock(clock, link.undo.clockMs + Math.max(0, now - link.undo.at), true, now),
     event: "undo",
   };
@@ -29,19 +30,19 @@ export function undo(link: LinkModel, clock: ClockState, now: number): CommandRe
 
 /** Choose the manual clock; the clock keeps going as it is. */
 export function goManual(link: LinkModel, clock: ClockState): CommandResult {
-  return { link: { ...link, mode: "manual", state: "Manual", undo: null, announce: null, held: false, holdUntil: null }, clock, event: "manual" };
+  return { link: { ...link, mode: "manual", state: "Manual", undo: null, announce: null, held: false, holdUntil: null, ...NO_TORN }, clock, event: "manual" };
 }
 
 /** A control that moves the clock itself while following: manual from now on, and said so. */
 export function handOver(link: LinkModel, clock: ClockState, now: number, cfg: LinkConfig = DEFAULT_LINK_CONFIG): CommandResult {
   const announce = { text: HANDOVER_TEXT, deltaMs: 0, until: now + cfg.undoWindowMs };
-  return { link: { ...link, mode: "manual", state: "Manual", undo: null, announce, held: false, holdUntil: null, force: false }, clock, event: "manual" };
+  return { link: { ...link, mode: "manual", state: "Manual", undo: null, announce, held: false, holdUntil: null, force: false, ...NO_TORN }, clock, event: "manual" };
 }
 
 /** Follow the music again: the next fresh reading goes to where the music is (a resync). */
 export function relink(link: LinkModel, clock: ClockState, following: boolean): CommandResult {
   if (!following) return { link, clock, event: null };
-  return { link: { ...link, mode: "following", state: "Manual", undo: null, announce: null }, clock, event: "relink" };
+  return { link: { ...link, mode: "following", state: "Manual", undo: null, announce: null, ...NO_TORN }, clock, event: "relink" };
 }
 
 /** Pick an occurrence of a repeated recording. Only while Ambiguous, and only one of its candidates. */
