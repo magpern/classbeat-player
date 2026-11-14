@@ -36,6 +36,8 @@ export interface Decision {
   running: boolean;
   songIndex: number | null;
   candidates: number[];
+  /** How the reading matched: trackId, title_duration, title_duration_minus_crossfade, title_no_duration. */
+  matchedBy: string | null;
   /** song_change, seek, relock, locked, coasting, off_list, pause, resume, undo, ... or null. */
   event: string | null;
   /** New clock minus where the clock would have been by itself. */
