@@ -207,6 +207,14 @@ Changing the email address is not part of PL2. When it is added it gets its own 
 - Cookie `__Host-cbp_session=<cbp_ses_ token>`; `Secure`; `HttpOnly`; `SameSite=Lax`; `Path=/`;
   no `Domain`. `Max-Age` equals the absolute lifetime.
 - A new token is issued at every sign-in. A token from before sign-in is never upgraded.
+- A sign-in ends the session the browser held before it (the session in its cookie, if still
+  live), once the new session is issued, as signing out with it would: the same
+  `session.signed_out` event on that session's account and the same `live_revocations` notice,
+  so a live controller taken with that session (section 8) is dropped and is taken again with
+  the new one. A refused sign-in ends nothing. The ending runs after the new session is
+  committed, so if it fails the route answers `500`, sets no cookie and leaves a new session row
+  that expires on its own. This holds for the email link and for passkeys alike (amended
+  2026-11-14, #431).
 - Lifetime: 14 days without use, 60 days in total. "Last used" is written at most once every 5
   minutes, when the session is checked at the start of a request, so a signed-in request that
   is refused later (for example for want of a recent sign-in) still counts as use. At most 20
@@ -220,7 +228,9 @@ Changing the email address is not part of PL2. When it is added it gets its own 
   enabled.
 - **Where the session cookie is accepted.** By the site's API (`/api/site/`), and by exactly one
   live route, `POST /api/live/controller` (section 8), which applies the same
-  `Origin` and `Sec-Fetch-Site` checks. Nowhere else: the player API, the source API, every other
+  `Origin` and `Sec-Fetch-Site` checks. The two routes that complete a sign-in
+  (`POST /api/site/sign-in/complete`, `POST /api/site/sign-in/passkey`) read it as well, only to
+  end that session; they never act with it (amended 2026-11-14, #431). Nowhere else: the player API, the source API, every other
   live route and the WebSocket ignore cookies and take a token in `Authorization: Bearer`, in the
   request body, or in the first WebSocket message. A guard test lists the routes that read the
   cookie and compares them with this list.
@@ -317,7 +327,9 @@ direction is enough, and the plan describes this one.
    addresses allowed.
 2. The source sends the user's browser to `https://<site>/link/source` with `source`,
    `redirect_uri`, `state` and `code_challenge` (S256). An unknown source or redirect address is
-   refused without redirecting.
+   refused without redirecting. A redirect address holds no backslash: the setting refuses one, and the
+   site's check and approve routes refuse one as well (`400 unknown_source`; amended 2026-11-14,
+   #431).
 3. The signed-in user sees which product asks and what it may do, and approves. The page sends
    the approval as a script request (a POST to the site's API), not as a form submission.
 4. The answer holds the address to go back to: the redirect address with a `cbp_lc_` code and
