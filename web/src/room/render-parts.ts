@@ -8,7 +8,7 @@ import type { ClockModel, MetricModel, NextModel, RailModel } from "./model.ts";
 export function renderRail(rail: RailModel): HTMLElement {
   const parts: Node[] = [];
   if (rail.left !== null) parts.push(el("span", { class: "val", tier: "minor" }, digits(rail.left)), el("span", { class: "lbl", tier: "label", text: "left" }));
-  if (rail.done !== null) parts.push(el("span", { class: "val", tier: "minor" }, digits(rail.done)), el("span", { class: "lbl", tier: "label", text: "done" }));
+  if (rail.done !== null) parts.push(el("span", { class: "val done", tier: "minor" }, digits(rail.done)), el("span", { class: "lbl done", tier: "label", text: "done" }));
   // The segment name takes the space that is left and ends in an ellipsis.
   parts.push(rail.segment ? el("span", { class: "lbl seg", tier: "label", clamp: 1, text: rail.segment }) : el("span", { class: "lbl seg" }));
   if (rail.link) parts.push(el("span", { class: `link${rail.link.look === "quiet" ? "" : ` ${rail.link.look}`}${rail.link.news ? " handover" : ""}`, tier: "label", text: rail.link.text }));
@@ -55,8 +55,11 @@ export function renderNext(next: NextModel): HTMLElement {
       el("span", { class: "v nm", tier: "minor", clamp: 1, text: next.name }),
       el("span", { class: "v", tier: "minor", text: next.length }),
     );
-    if (next.cadence) kids.push(el("span", { class: "v dim", tier: "minor", text: next.cadence }));
-    if (next.position) kids.push(el("span", { class: "v dim", tier: "minor", text: next.position }));
+    // Cadence and position share a wrapper that takes no part in the room's layout (display: contents); the phone layouts move it to a second line.
+    const more: Node[] = [];
+    if (next.cadence) more.push(el("span", { class: "v dim", tier: "minor", text: next.cadence }));
+    if (next.position) more.push(el("span", { class: "v dim", tier: "minor", text: next.position }));
+    if (more.length) kids.push(el("span", { class: "more" }, more));
   }
   return el("div", { class: "next" }, kids);
 }

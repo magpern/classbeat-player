@@ -40,9 +40,19 @@ export interface LinkInput {
   readonly classRemainingMs: number;
 }
 
+/**
+ * A notice the web player page puts in the link slot (docs/design/play.md): fixed words only, white
+ * with the square marker. Not part of the player's snapshot; only /play sets it.
+ */
+export type PlayNotice = "screen-may-turn-off" | "reloaded";
+
 /** What the room screen is given: a recorded or live snapshot. */
 export interface RoomInput {
   readonly doc: Class | null;
   readonly view: ClockInput | null;
   readonly link: LinkInput | null;
+  /** The web player page's own notice for the link slot; absent in the player's window. */
+  readonly notice?: PlayNotice | null;
+  /** The web player page: the clock is not started and its starting point may be moved (Previous, Next); the screen stays the one before the start. */
+  readonly startingPoint?: boolean;
 }

@@ -322,3 +322,9 @@ body {
 /* The harness's "freeze" (screenshots and checks): nothing transitions, so a screenshot is never
    taken half way through a colour change. The product never sets it. */
 :root[data-freeze] *, :root[data-freeze] *::before, :root[data-freeze] *::after { transition: none !important; animation: none !important; }
+
+/* Wrappers that take no part in the room's own layout: cadence and position in the next row, and the
+   zones with their title. The web player page's phone layouts (play/room-play.css) give them a box. */
+.next .more { display: contents; }
+.next .more > * { flex: none; }
+.intro .zwrap { display: contents; }

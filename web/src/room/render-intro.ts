@@ -24,7 +24,8 @@ export function renderIntro(intro: IntroModel): HTMLElement {
       ]),
     ),
   );
-  return el("section", { class: "intro" }, [h1, facts, el("span", { class: "lbl ztitle", tier: "label", text: intro.zonesTitle }), zones]);
+  // The zones and their title share a wrapper that takes no part in the room's layout (display: contents).
+  return el("section", { class: "intro" }, [h1, facts, el("div", { class: "zwrap" }, [el("span", { class: "lbl ztitle", tier: "label", text: intro.zonesTitle }), zones])]);
 }
 
 /**
