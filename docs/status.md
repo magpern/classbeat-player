@@ -55,14 +55,17 @@ cannot blind, captured built-ins and navigation sinks (#315, #318), the private-
 must-fail cases (#343, #345), the asset-rule parser, path table and limit plate checks (#344, #346)
 and the web job on a change of the backend's control-page table (#347, #348).
 
-**Riders (ADR 0007, built on fakes; Verifier run in progress):** ADR 0007 (#349), the design
+**Riders (ADR 0007, done on fakes; Verifier clean on 70e101f and d5e45c4 (music link)):** ADR 0007 (#349), the design
 specs for the rider page, the riders panel and the room QR codes (#358), the rider contract and
 join route (#355), the rider page served at `/j` (#364), the `rider_state` builder and publish
 policy (#363), the join route, rider tokens, lock, new code and remove (#367), the WebSocket rider
 role (#370), the rider page (#369) and its address and header hardening (#374), the live client's
 rider side with the riders panel and room join codes (#371), and the web job on a change of a page
 policy the web tests read (#377). The companion page's CSP is the header policy only (#378).
-Open: hardening from the reviews (#381 player, #382 backend).
+Open: hardening from the reviews (#381 player, #382 backend). The Verifier ran join, remove, lock,
+new code, rider isolation, the QR codes, the page address, the place states and `cancel_code` on
+fakes at 70e101f, and the music link (follow, pause, Coasting, "Music not heard", relink) at
+d5e45c4, Linux reader only, with no gaps.
 
 **ADR 0005 amendment (2026-11-14, #354):** a controller token that ends frees its place, and the
 app cancels a control code it no longer shows. Built: the contract's `controller_left` reason and

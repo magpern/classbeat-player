@@ -1,6 +1,6 @@
 # 0007. Riders in a live session
 
-Status: Proposed
+Status: Accepted (built in #355, #363, #364, #367, #369, #370, #371 and #374; verified on fakes on main at 70e101f)
 
 ## Context
 
