@@ -41,7 +41,7 @@ echo "package ${1##*/} $3" >>"$LOG"
 F
 cat >"$bin/fetch" <<'F'
 #!/usr/bin/env bash
-echo "fetch in ${PWD##*/}" >>"$LOG"
+echo "fetch in ${PWD##*/} cache=${ELECTRON_CACHE:-}" >>"$LOG"
 [ -n "${FAKE_FETCH_EMPTY:-}" ] || mkdir -p node_modules/electron/dist
 F
 cat >"$bin/tar" <<'F'
@@ -65,12 +65,17 @@ export BUILD_MAC_UNAME="$bin/uname" BUILD_MAC_NODE="$bin/node" BUILD_MAC_NPM="$b
 export BUILD_MAC_XCODE_SELECT="$bin/xcode-select" BUILD_MAC_PACKAGE="$bin/package"
 export BUILD_MAC_ELECTRON_FETCH="$bin/fetch" BUILD_MAC_TAR="$bin/tar" BUILD_MAC_OPEN="$bin/open"
 
-# The app folder is a scratch copy so tests never write into the repository.
-run() { : >"$LOG"; rm -rf "$tmp/app"; mkdir -p "$tmp/app"; export BUILD_MAC_APP_DIR="$tmp/app"; set +e; out="$(bash "$here/build-mac.sh" "$@" 2>&1)"; rc=$?; set -e; }
+# The app and schema folders are scratch copies so tests never write into the repository.
+# run starts from a fresh checkout (no node_modules); rerun keeps what the last run installed.
+export BUILD_MAC_SCHEMA_DIR="$tmp/ts" BUILD_MAC_APP_DIR="$tmp/app"
+fresh() { rm -rf "$tmp/app" "$tmp/ts"; mkdir -p "$tmp/app" "$tmp/ts"; for d in app ts; do echo '{}' >"$tmp/$d/package.json"; echo '{"v":1}' >"$tmp/$d/package-lock.json"; done; }
+rerun() { : >"$LOG"; set +e; out="$(bash "$here/build-mac.sh" "$@" 2>&1)"; rc=$?; set -e; }
+run() { fresh; rerun "$@"; }
 
 run --help
 check "help exits 0" 0 "$rc"
 has "help mentions --out" "--out DIR" "$out"
+has "help mentions --clean" "--clean" "$out"
 check "help runs nothing" "" "$(cat "$LOG")"
 
 run --bogus
@@ -110,20 +115,62 @@ has "prints unpack hint" "Electron.app" "$out"
 FAKE_ARCH=x86_64 run --out "$tmp/out"
 has "intel label" "package app macos-x64" "$(cat "$LOG")"
 
+export ELECTRON_CACHE="$tmp/cache"
 FAKE_SKIP_SCRIPTS=1 run --out "$tmp/out"
 check "runtime missing: fetch runs, then packages" 0 "$rc"
 expected="npm ci in ts
 npm ci in app
 npm run build in app
-fetch in app
+fetch in app cache=$tmp/cache
 package app macos-arm64"
 check "runtime missing: fetch between build and package" "$expected" "$(cat "$LOG")"
 has "runtime missing: says so" "Electron runtime missing" "$out"
+
+unset ELECTRON_CACHE
+FAKE_SKIP_SCRIPTS=1 run --out "$tmp/out"
+has "fetch defaults the Electron cache" "cache=$HOME/Library/Caches/electron" "$(cat "$LOG")"
 
 FAKE_SKIP_SCRIPTS=1 FAKE_FETCH_EMPTY=1 run --out "$tmp/out"
 check "fetch producing nothing fails" 1 "$rc"
 has "fetch failure message" "no Electron runtime after fetching it" "$out"
 case "$(cat "$LOG")" in *package*) echo "FAIL packaged after a failed fetch" >&2; fail=1 ;; *) echo "ok   no packaging after a failed fetch" ;; esac
+
+# Reuse: a second run with unchanged lockfiles skips npm ci and the fetch.
+run --out "$tmp/out"
+rerun --out "$tmp/out"
+check "second run exits 0" 0 "$rc"
+check "second run: no npm ci, no fetch, still builds and packages" "npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
+has "second run says it reuses" "reusing the installed dependencies" "$out"
+
+rerun --clean --out "$tmp/out"
+check "--clean runs npm ci in both" "npm ci in ts
+npm ci in app
+npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
+
+echo '{"v":2}' >"$tmp/app/package-lock.json"
+rerun --out "$tmp/out"
+check "changed app lockfile: only the app reinstalls" "npm ci in app
+npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
+
+echo '{"v":2}' >"$tmp/ts/package-lock.json"
+rerun --out "$tmp/out"
+check "changed schema lockfile: only schema reinstalls" "npm ci in ts
+npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
+
+rm -rf "$tmp/app/node_modules/electron/dist"
+rerun --out "$tmp/out"
+check "missing electron/dist: npm ci runs again" "npm ci in app
+npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
+
+FAKE_SKIP_SCRIPTS=1 run --out "$tmp/out"
+FAKE_SKIP_SCRIPTS=1 rerun --out "$tmp/out"
+check "after a fetched runtime the next run reuses and does not fetch" "npm run build in app
+package app macos-arm64" "$(cat "$LOG")"
 
 run --out "$tmp/out"
 case "$(cat "$LOG")" in *"open "*|*"tar "*) echo "FAIL without --open: tar or open ran" >&2; fail=1 ;; *) echo "ok   without --open: no tar, no open" ;; esac
