@@ -119,7 +119,9 @@ export function addressUse(fileName: string, source: string): AddressUse {
       const e = n.expression;
       if (ts.isIdentifier(e) && (e.text === "document" || e.text === "History")) flag(n, `${e.text} read by a computed name`);
     }
-    if (ts.isIdentifier(n) && (n.text === "pushState" || n.text === "History")) flag(n, `the name ${n.text}`);
+    // The Navigation API (`navigation.navigate`) changes the address too; the page has no use for it.
+    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.parent && ts.isElementAccessExpression(n.parent) && n.parent.argumentExpression === n && n.text === "navigation") flag(n, "the name navigation");
+    if (ts.isIdentifier(n) && (n.text === "pushState" || n.text === "History" || n.text === "Navigation" || (n.text === "navigation" && !own.has(n.text)))) flag(n, `the name ${n.text}`);
     else if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n) || ts.isRegularExpressionLiteral(n)) && /pushState/.test(n.text ?? n.getText(sf))) flag(n, "the name pushState in text");
     ts.forEachChild(n, visit);
   };

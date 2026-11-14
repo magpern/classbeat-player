@@ -52,10 +52,36 @@ describe("the meta reader", () => {
     assert.deepEqual(policyMetas(page('<meta http-equiv="Content-Security-Policy" content="default&hyphen;src &#x27;self&#39; &lt;">')), ["default-src 'self' <"]);
   });
 
-  it("finds none where there is none, and none in a comment, a script or a title", () => {
+  it("finds none where there is none", () => {
     assert.ok(!hasPolicyMeta(page('<meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="5">')));
-    assert.ok(!hasPolicyMeta(page(`<!-- a > ${OLD} --><title>${OLD}</title><script>var a = '${OLD}';</script><style>/* ${OLD} */</style>`)));
-    assert.ok(!hasPolicyMeta(page("<p>http-equiv=Content-Security-Policy</p>")));
+    assert.ok(!hasPolicyMeta(page("<p>Content-Security-Policy</p><!-- http-equiv --><script>var a = 1;</script>")));
+    assert.equal(policyMetaCount(page('<meta http-equiv="refresh" content="5">')), 0);
+  });
+
+  it("counts policy text the tokenizer skips, as the old pattern did: a comment, a script, a title, a style", () => {
+    for (const hidden of [`<!-- ${OLD} -->`, `<title>${OLD}</title>`, `<script>var a = '${OLD}';</script>`, `<style>/* ${OLD} */</style>`, "<p>http-equiv=Content-Security-Policy</p>", `<!-- unterminated ${OLD}`]) {
+      assert.ok(hasPolicyMeta(page(hidden)), hidden);
+      assert.equal(policyMetaCount(page(hidden)), 1, hidden);
+    }
+    assert.equal(policyMetaCount(page(OLD + `<!-- ${OLD} -->`)), 2);
+  });
+
+  it("ends a comment where the HTML standard does: after `<!-->`, `<!--->` and `--!>` as after `-->`", () => {
+    // The tag after the comment is read as a tag, in the policy list, and the old pattern saw it too.
+    const encoded = '<meta http-equiv="Content&#45;Security-Policy" content="default-src \'self\'">';
+    for (const html of [`<!-- x -->${OLD}`, `<!-->${OLD}`, `<!--->${OLD}`, `<!-- x --!>${OLD}`, `<!-->${encoded}`, `<!--->${encoded}`, `<!-- x --!>${encoded}`]) {
+      assert.deepEqual(policyMetas(page(html)), ["default-src 'self'"], html);
+      assert.equal(policyMetaCount(page(html)), 1, html);
+    }
+    // After the comment's real end, not before it: `<!--` followed by text is still one comment.
+    assert.equal(policyMetaCount(page(`<!-- > ${OLD} -->`)), 1);
+  });
+
+  it("finds a Report-Only policy, as the old prefix match did", () => {
+    const tag = '<meta http-equiv="Content&#45;Security-Policy-Report-Only" content="default-src \'self\'">';
+    assert.ok(hasPolicyMeta(page(tag)));
+    assert.deepEqual(policyMetas(page(tag)), ["default-src 'self'"]);
+    assert.equal(policyMetaCount(page(tag)), 1);
   });
 
   it("counts every policy: two are two", () => {
