@@ -7,7 +7,7 @@ import { test } from "node:test";
 import type { HostInbound } from "../../src/core/live/host-wire.ts";
 import { BACKOFF_MS, CLOSE_ENDED, CLOSE_HELLO_REFUSED, CLOSE_REPLACED, KEEP_MS, step } from "../../src/core/live/session-model.ts";
 import { OFF } from "../../src/core/live/session-types.ts";
-import type { LiveEffect, LiveEvent, LiveModel } from "../../src/core/live/session-types.ts";
+import type { LiveEffect, LiveEvent, LiveModel, Place } from "../../src/core/live/session-types.ts";
 import { RUN } from "./live-rig.ts";
 
 const TOKEN = `cbp_hst_${randomBytes(32).toString("base64url")}`;
@@ -140,8 +140,62 @@ test("phones' places: joined, left (away), joined again; the joined phone gets t
   assert.deepEqual(r.effects, [{ kind: "joined" }]);
   r = step(r.model, msg({ type: "controller_left", slot: 2, via: "code", reason: "disconnected" }), 0);
   assert.deepEqual(r.model.places, ["none", "away"]);
+  assert.deepEqual(r.effects, []);
+  // A token held but not connected (the replay names it so) is "away" whatever was shown before.
   r = step(r.model, msg({ type: "controller_left", slot: 1, via: "sign_in", reason: "disconnected" }), 0);
-  assert.deepEqual(r.model.places, ["none", "away"]);
+  assert.deepEqual(r.model.places, ["away", "away"]);
+  r = step(r.model, msg({ type: "controller_joined", slot: 2, via: "code" }), 0);
+  assert.deepEqual(r.model.places, ["away", "connected"]);
+});
+
+test("a place whose token ended is free: its site session ended or the host dropped it, connected or not (#352)", () => {
+  for (const reason of ["session_ended", "dropped"] as const) {
+    for (const before of ["connected", "away"] as const) {
+      let m = step(live(), msg({ type: "controller_joined", slot: 2, via: "sign_in" }), 0).model;
+      if (before === "away") m = step(m, msg({ type: "controller_left", slot: 2, via: "sign_in", reason: "disconnected" }), 0).model;
+      assert.equal(m.places[1], before);
+      const r = step(m, msg({ type: "controller_left", slot: 2, via: "sign_in", reason }), 0);
+      assert.deepEqual(r.model.places, ["none", "none"], `${reason} from ${before}`);
+      assert.deepEqual(r.effects, [], `${reason} from ${before}: nothing sent`);
+    }
+  }
+});
+
+test("a disconnect that crossed the host's drop is followed by its dropped, which frees the place (#352)", () => {
+  let m = step(live(), msg({ type: "controller_joined", slot: 1, via: "code" }), 0).model;
+  m = step(m, { type: "drop", slot: 1 }, 0).model;
+  m = step(m, msg({ type: "controller_left", slot: 1, via: "code", reason: "disconnected" }), 0).model;
+  assert.deepEqual(m.places, ["away", "none"]);
+  m = step(m, msg({ type: "controller_left", slot: 1, via: "code", reason: "dropped" }), 0).model;
+  assert.deepEqual(m.places, ["none", "none"]);
+});
+
+const say = (slot: 1 | 2, p: Place): HostInbound =>
+  p === "connected"
+    ? { type: "controller_joined", slot, via: "sign_in" }
+    : p === "away"
+      ? { type: "controller_left", slot, via: "sign_in", reason: "disconnected" }
+      : { type: "controller_left", slot, reason: "free" };
+
+test("the replay after each host welcome sets both places from itself alone (#352)", () => {
+  // Before the connection was lost: phone 1 steering, phone 2 not connected.
+  let m = run([say(1, "connected"), say(2, "away")].map((message) => msg(message)), live()).model;
+  m = step(m, { type: "closed", socket: 1, code: 1006 }, 0).model;
+  assert.deepEqual(m.places, ["away", "away"]);
+  // While the host was away phone 1 signed out and phone 2 came back.
+  m = run([{ type: "retry" }, { type: "open", socket: 2 }, msg({ type: "welcome" }, 2), msg(say(1, "none"), 2), msg(say(2, "connected"), 2)], m, 1000).model;
+  assert.equal(m.phase, "live");
+  assert.deepEqual(m.places, ["none", "connected"]);
+  // Whatever was shown before, the replay's word is what is shown: each of the nine pairs.
+  const places = ["connected", "away", "none"] as const;
+  for (const shown of places) {
+    for (const told of places) {
+      let x = run([msg(say(1, shown), 2), msg(say(2, shown), 2)], m, 1000).model;
+      x = run([{ type: "closed", socket: 2, code: 1006 }, { type: "retry" }, { type: "open", socket: 3 }, msg({ type: "welcome" }, 3), msg(say(1, told), 3), msg(say(2, told), 3)], x, 2000).model;
+      assert.equal(x.phase, "live");
+      assert.deepEqual(x.places, [told, told], `shown ${shown}, told ${told}`);
+    }
+  }
 });
 
 test("a control code only on request, live, with a second display; it is kept until cancelled", () => {

@@ -15,10 +15,13 @@
 // - A connection lost is tried again after 1, 2, 4, 8 and then every 15 s, for the 15 minutes the
 //   live process keeps the session. A `hello` refused on reconnect (4401: the live process
 //   restarted), the session ended (4403) or a newer connection with the token (4409) end it here.
+// - Each phone's place is set outright by every `controller_joined` and `controller_left`
+//   (place-policy.ts), so the replay after each host `welcome` rebuilds both (ADR 0005 section 10).
 // - The control code is offered only with a second display, and is only ever in this state and the
 //   presenter's view. A `drop` frees a phone's place and ends the shown code (ADR 0005 section 3).
 //   With one display left the held code is cancelled on the server too (code-cancel.ts, #353).
 import type { HostInbound, Slot } from "./host-wire.ts";
+import { placeOf } from "./place-policy.ts";
 import { OFF } from "./session-types.ts";
 import type { EndReason, LiveEffect, LiveEvent, LiveModel, Place, Refusal, Step } from "./session-types.ts";
 import { oneDisplay, welcomedFirst } from "./code-cancel.ts";
@@ -99,9 +102,10 @@ function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
       return { model, effects: [{ kind: "welcomed", socket: m.socket, first }] };
     }
     case "controller_joined":
-      return { model: { ...m, places: setPlace(m, msg.slot, "connected") }, effects: [{ kind: "joined" }] };
+      return { model: { ...m, places: setPlace(m, msg.slot, placeOf(msg)) }, effects: [{ kind: "joined" }] };
     case "controller_left":
-      return same(m.places[msg.slot - 1] === "connected" ? { ...m, places: setPlace(m, msg.slot, "away") } : m);
+      // Free once its token ended (its site session, a drop) or the replay says so (place-policy.ts).
+      return same({ ...m, places: setPlace(m, msg.slot, placeOf(msg)) });
     case "control_code":
       return same({ ...m, code: { code: msg.code, expiresAt: now + msg.expiresInMs }, codeNote: null });
     case "code_cancelled":
