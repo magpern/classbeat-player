@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
 import pageChecks, { CONTRAST, FLOORS } from "../spec/page/companion-checks.js";
-import { chroma, drawnBorders } from "./border-walk.ts";
+import { borderHues, drawnBorders } from "./border-walk.ts";
 import { WEB_DIR } from "./browser.ts";
 import { HIDE, inkOf, shadowHues } from "./measure.ts";
 import type { Row } from "./measure.ts";
@@ -69,13 +69,6 @@ async function borderTokens(page: Page): Promise<Row[]> {
       return !p || !tokens.includes(p.join(","));
     })
     .map((d) => ({ tier: "token", text: `${d.where} ${d.colour}`.slice(0, 40), result: "FAIL border or outline colour is not a design token (K10)" }));
-}
-
-/** K8 on borders: outside a zone, no side of any border and no outline, on an element or its ::before or ::after, carries a hue. */
-async function borderHues(page: Page): Promise<Row[]> {
-  return (await drawnBorders(page))
-    .filter((d) => !d.inZone && chroma(d.colour) > 24)
-    .map((d) => ({ tier: "hue", text: `${d.where} ${d.colour}`.slice(0, 40), result: "FAIL hue outside a zone (K8)" }));
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */
@@ -159,9 +152,8 @@ export async function checkCompanion(page: Page, probe: Page, width: number, hei
     rows.push({ tier: "zone", text: `zone ${z.z} ${z.name}`.slice(0, 30), result: problems.length ? `FAIL ${problems.join("; ")}` : "ok" });
   }
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (K10)" });
-  for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" });
+  for (const h of [...hues, ...(await shadowHues(page)), ...(await borderHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" });
   for (const [text, result] of pageRows) rows.push({ tier: "companion", text, result });
-  rows.push(...(await borderHues(page)));
   rows.push(...(await borderTokens(page)));
   rows.push(...(await motion(page)));
   return { rows, png, margins };

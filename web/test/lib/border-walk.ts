@@ -48,3 +48,8 @@ export function chroma(colour: string): number {
   const [r, g, b] = m.slice(0, 3).map(Number);
   return Math.max(r, g, b) - Math.min(r, g, b);
 }
+
+/** K8 / C6 / S4 on borders: outside a zone, no drawn side or outline carries a hue. One line per finding. */
+export async function borderHues(page: Page): Promise<string[]> {
+  return (await drawnBorders(page)).filter((d) => !d.inZone && chroma(d.colour) > 24).map((d) => `${d.where} ${d.colour}`);
+}
