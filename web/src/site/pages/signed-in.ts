@@ -7,6 +7,7 @@ import { call } from "../net/api.ts";
 import { h1, working } from "../ui/kit.ts";
 import { offlinePlate, serverFault, tooMany } from "./errors.ts";
 import { shownByDevicePage } from "./device-pages.ts";
+import { shownByAccountPage } from "./account.ts";
 import type { View } from "./view.ts";
 
 export interface SignedInEnv {
@@ -15,6 +16,12 @@ export interface SignedInEnv {
   readonly current: () => boolean;
   /** Opens a page of this site (after a deletion, back to the list). */
   readonly open: (path: string) => void;
+  /** Signs this browser out, as the header's "Sign out" does. */
+  readonly signOut: () => void;
+  /** This browser was signed out (by "Sign out everywhere"): Sign in, with "You are signed out". */
+  readonly signedOut: () => void;
+  /** "Confirm it is you" by email: Sign in, which comes back to this page afterwards. */
+  readonly confirmByLink: () => void;
 }
 
 export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedInEnv, view?: View): void {
@@ -24,10 +31,11 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
     waitingOnline = false;
     if (env.current()) void load();
   };
-  // What a page without a view of its own shows: a page of the Devices section, else its heading only.
+  // What a page without a view of its own shows: a page of the Devices or Account section, else its heading only.
   const shown = (body: unknown): boolean => {
     const focus = main.contains(document.activeElement) && document.activeElement !== main;
     if (shownByDevicePage(main, page, body, env, focus, () => void load())) return true;
+    if (shownByAccountPage(main, page, body, env, focus, () => void load())) return true;
     main.replaceChildren(h1(page.title));
     return false;
   };

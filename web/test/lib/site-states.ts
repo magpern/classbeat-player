@@ -5,6 +5,7 @@ import type { Page } from "playwright-core";
 import { CLASS_STATES } from "./class-states.ts";
 import type { Passkey, Script } from "./site-fake.ts";
 import { DEVICE_STATES } from "./site-device-states.ts";
+import { ACCOUNT_STATES } from "./site-account-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -97,4 +98,5 @@ export const STATES: readonly State[] = [
   // The Classes pages (issue #413).
   ...CLASS_STATES,
   ...DEVICE_STATES,
+  ...ACCOUNT_STATES,
 ];

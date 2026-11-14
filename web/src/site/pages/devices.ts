@@ -6,22 +6,12 @@ import { countWords, devicesOf, lastUsedWords, pairedWords, platformWords, revok
 import type { Day, Device, DevicePlate } from "../core/devices-model.ts";
 import { pairPlateWords } from "../core/pairing-model.ts";
 import { call } from "../net/api.ts";
+import { dayOf, today } from "../ui/day.ts";
 import { el, t, uid } from "../ui/dom.ts";
 import { button, buttons, h2, note, p, plate } from "../ui/kit.ts";
 import { linkButton, serverFault } from "./errors.ts";
 import type { SignedInEnv } from "./signed-in.ts";
 import "./devices.css";
-
-/** The calendar day of an instant in the page's own time zone, or null for a date it cannot read. */
-function dayOf(iso: string): Day | null {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
-}
-
-const today = (): Day => {
-  const d = new Date();
-  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
-};
 
 const readable = (list: readonly Device[]): boolean => list.every((d) => dayOf(d.pairedAt) !== null && (d.lastUsedAt === null || dayOf(d.lastUsedAt) !== null));
 
