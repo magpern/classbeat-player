@@ -86,13 +86,15 @@ export interface AddPanel {
 }
 
 /** The add form: a name, "Add passkey" and "Cancel". The browser's prompt follows "Add passkey". */
-export function addPanel(v: AddPanel, add: (typed: string) => void, cancel: () => void, waiting: Node | null): HTMLElement {
+export function addPanel(v: AddPanel, add: (typed: string) => void, cancel: () => void, waiting: Node | null, why?: string): HTMLElement {
   const head = el("h2", { id: uid("add") }, [t("h2", PASSKEY_WORDS.addPanel, 3)]);
   const f = field(PASSKEY_WORDS.nameLabel, { type: "text", name: "name", value: v.typed, hint: v.nameError ? undefined : PASSKEY_WORDS.nameHint, error: v.nameError ? NAME_ERROR : undefined });
   f.input.autocomplete = "off";
   f.input.readOnly = v.busy;
   const ok = button(PASSKEY_WORDS.addButton, { primary: true, full: true, submit: true, disabled: v.busy });
   const no = button(PASSKEY_WORDS.cancel, { full: true, disabled: v.busy, onPress: cancel });
+  // A plate above says why it did not work (offline): the button points at it.
+  if (why) ok.setAttribute("aria-describedby", why);
   const actions = el("div", { class: "btns" }, [ok, no]);
   const form = el("form", { class: "ac-panel panel", "aria-labelledby": head.id }, [head, f.root, waiting, actions]);
   form.dataset.add = "";
