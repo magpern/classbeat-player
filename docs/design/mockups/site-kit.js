@@ -29,7 +29,7 @@ const lab = (text) => T('label', text, 3);
 // A button. opts: primary, dis, focus, block, q (outlined, inside a plate), link (a real link that looks like the button).
 function btn(text, o = {}) {
   const c = ['btn', o.primary && 'primary', o.dis && 'dis', o.focus && 'focus', o.block && 'full', o.q && 'q'].filter(Boolean).join(' ');
-  return `<span class="${c}" role="${o.link ? 'link' : 'button'}"${o.dis ? ' aria-disabled="true"' : ''}>${T('btn', text, 2)}</span>`;
+  return `<span class="${c}" role="${o.link ? 'link' : 'button'}"${o.dis ? ' aria-disabled="true"' : ''}${o.by ? ` aria-describedby="${o.by}"` : ''}>${T('btn', text, 2)}</span>`;
 }
 const btns = (...list) => `<div class="btns">${list.join('')}</div>`;
 
@@ -43,7 +43,7 @@ function field(label, o = {}) {
 }
 
 // A plate: white, black text, for a state that needs the person. A note: outlined, for "done".
-const plate = (head, detail, buttons = '') => `<div class="plate" role="alert"><div class="head2"><span class="mark away"></span>${T('title', head, 3)}</div>${detail ? `<p class="dt">${T('body', detail)}</p>` : ''}${buttons ? `<div class="btns">${buttons}</div>` : ''}</div>`;
+const plate = (head, detail, buttons = '', id = '') => `<div class="plate"${id ? ` id="${id}"` : ''} role="alert"><div class="head2"><span class="mark away"></span>${T('title', head, 3)}</div>${detail ? `<p class="dt">${T('body', detail)}</p>` : ''}${buttons ? `<div class="btns">${buttons}</div>` : ''}</div>`;
 const note = (head, detail = '') => `<div class="note" role="status"><div class="head2"><span class="mark ok"></span>${T('title', head, 3)}</div>${detail ? `<p class="dt">${T('small', detail)}</p>` : ''}</div>`;
 const status = (text, kind = 'work') => `<div class="status" role="status"><span class="mark ${kind}"></span>${T('body', text, 3)}</div>`;
 
