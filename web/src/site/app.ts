@@ -2,7 +2,7 @@
 // a sign-in. The page that asked is kept in memory only (never in storage), and only as a path of
 // this site or an entry of the fixed table of other pages (core/routes.ts). A page of the site
 // is opened in place; another page (the companion at /control) is loaded.
-import { pageOf, returnEntryOf, returnPathOf } from "./core/routes.ts";
+import { entryBackOf, pageOf, returnPathOf } from "./core/routes.ts";
 import { NOTICES } from "./core/sign-in-model.ts";
 import type { Notice, SignInView } from "./core/sign-in-model.ts";
 import { fragmentOf } from "./core/link-token.ts";
@@ -13,8 +13,12 @@ import { signedInPage } from "./pages/signed-in.ts";
 import { signInPage } from "./pages/sign-in.ts";
 import { frame, PRODUCT } from "./ui/shell.ts";
 
-/** Where a sign-in goes back to: a page of this site, or another page that has to be loaded. */
-let returnTo: { readonly to: string; readonly load: boolean } | null = null;
+/**
+ * Where a sign-in goes back to: a page of this site, or another page that has to be loaded. An
+ * entry of the table read from a sign-in fragment also keeps its name (`control[.CODE]`), which
+ * a link request carries (ADR 0006, decision 5).
+ */
+let returnTo: { readonly to: string; readonly load: boolean; readonly entry?: string } | null = null;
 let shown = 0;
 
 const noticeOf = (state: unknown): Notice | undefined => {
@@ -52,10 +56,11 @@ function render(focus: "heading" | "none"): void {
   }
   if (page.kind === "sign-in") {
     // The token leaves the address bar before anything else happens (ADR 0002, section 4, step 5).
-    // A fragment that is not a token may name an entry to return to (/control): kept in memory.
+    // The fragment may name an entry to return to (/control), after a token or alone (ADR 0006,
+    // decision 4): kept in memory, also after a refused link.
     const fragment = fragmentOf(location.hash);
-    const entry = fragment.kind === "none" ? returnEntryOf(location.hash) : null;
-    if (entry !== null) returnTo = { to: entry, load: true };
+    const entry = fragment.kind === "token" ? (fragment.back ?? null) : fragment.kind === "none" ? entryBackOf(location.hash) : null;
+    if (entry !== null) returnTo = { to: entry.path, load: true, entry: entry.field };
     if (location.hash || location.search) history.replaceState(history.state, "", "/sign-in");
     document.title = `Sign in · ${PRODUCT}`;
     const main = frame({ narrow: true });
@@ -67,7 +72,9 @@ function render(focus: "heading" | "none"): void {
       if (back.load) location.assign(back.to);
       else go(back.to);
     };
-    signInPage(main, start, { passkey: passkeySupported(), signedIn }, fragment.kind === "token" ? fragment.token : null, fragment.kind === "token" ? "auto" : focus);
+    // Only an entry read from a sign-in fragment goes with a link request, never a path (ADR 0006, decision 5).
+    const returnEntry = (): string | null => returnTo?.entry ?? null;
+    signInPage(main, start, { passkey: passkeySupported(), signedIn, returnEntry }, fragment.kind === "token" ? fragment.token : null, fragment.kind === "token" ? "auto" : focus);
     return;
   }
   if (page.kind === "not-found") {

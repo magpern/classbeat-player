@@ -8,6 +8,7 @@ import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, Request, Route } from "playwright-core";
 import { chromePath, DIST } from "./browser.ts";
 import { instrument } from "./site-instrument.ts";
+import { linkRequest } from "./site-mail.ts";
 import type { Passkey } from "./site-instrument.ts";
 import { passkeyStandIn } from "./site-passkey.ts";
 import { trapKit } from "./site-trap-kit.ts";
@@ -89,6 +90,8 @@ export interface OpenOptions {
   readonly fontSize?: number;
   /** A script run in the page ahead of the trap; only the trap's own checks use it. */
   readonly before?: string;
+  /** Given, `POST sign-in/link` is answered by the fake's mail (site-mail.ts), and each mailed link is added here. */
+  readonly mailbox?: string[];
 }
 
 /** Opens `path` on the fake site. */
@@ -130,7 +133,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
       site.external.push(request.url());
       return route.abort();
     }
-    if (url.pathname.startsWith("/api/site/")) return answer(site, o.script ?? {}, turns, held, route, request, url);
+    if (url.pathname.startsWith("/api/site/")) return answer(site, o.script ?? {}, turns, held, route, request, url, o.mailbox);
     return serveFile(route, url.pathname);
   });
   await page.goto(ORIGIN + path);
@@ -138,7 +141,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   return site;
 }
 
-async function answer(site: FakeSite, script: Script, turns: Map<string, number>, held: Route[], route: Route, request: Request, url: URL): Promise<void> {
+async function answer(site: FakeSite, script: Script, turns: Map<string, number>, held: Route[], route: Route, request: Request, url: URL, mailbox?: string[]): Promise<void> {
   const key = `${request.method()} ${url.pathname.slice("/api/site/".length)}`;
   const headers = await request.allHeaders();
   site.api.push({ method: request.method(), route: key, url: request.url(), body: request.postData(), headers, at: Date.now() });
@@ -146,6 +149,7 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
     site.crossSite.push(key);
     return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"cross_site_request"}', headers: { "Cache-Control": "no-store" } });
   }
+  if (mailbox && key === "POST sign-in/link") return mailed(route, request, mailbox);
   const entry = script[key];
   if (!entry) {
     site.unscripted.push(key);
@@ -165,6 +169,12 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
     headers: { "Cache-Control": "no-store", "Content-Security-Policy": CSP, ...(reply.body === undefined ? {} : { "Content-Type": "application/json" }), ...reply.headers },
     body: reply.body === undefined ? "" : JSON.stringify(reply.body),
   });
+}
+
+async function mailed(route: Route, request: Request, mailbox: string[]): Promise<void> {
+  const a = linkRequest(ORIGIN, request.postData());
+  if (a.link !== undefined) mailbox.push(a.link);
+  return route.fulfill({ status: a.status, contentType: "application/json", body: JSON.stringify(a.body), headers: { "Cache-Control": "no-store" } });
 }
 
 /**

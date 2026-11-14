@@ -11,6 +11,8 @@ import { button, buttons, field, h1, h2, note, or, p, plate, small, working } fr
 export interface SignInEnv {
   readonly passkey: boolean;
   readonly signedIn: () => void;
+  /** The entry to return to, as a link request carries it (`control[.CODE]`), or null (ADR 0006). */
+  readonly returnEntry: () => string | null;
 }
 
 type Form = Extract<SignInView, { screen: "form" }>;
@@ -45,7 +47,8 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
     if (email === "") return show({ screen: "form", email: raw, emailError: true });
     // Working: every button waits for the answer (the page does not redraw, so nothing moves).
     for (const b of main.querySelectorAll("button")) b.disabled = true;
-    const answer = await call("POST", "sign-in/link", { email });
+    const back = env.returnEntry();
+    const answer = await call("POST", "sign-in/link", back === null ? { email } : { email, return_to: back });
     show(afterLinkAsked(email, answer));
   }
 
