@@ -14,6 +14,7 @@ ADR that changes a decision says which one it replaces.
 | [0006](0006-sign-in-link-return-entry.md) | The sign-in link carries its return entry | Accepted |
 | [0007](0007-riders-in-a-live-session.md) | Riders in a live session | Accepted |
 | [0008](0008-the-player-as-a-web-app.md) | The player as a web app on a phone or tablet | Proposed |
+| [0009](0009-the-room-scene-is-web-3d.md) | The room's 3D scene is web 3D | Accepted |
 
 ## Template
 
