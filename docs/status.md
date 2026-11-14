@@ -241,7 +241,9 @@ screen's controls spec (#195, #209, #214), the room window bridge (#197, #199), 
 with clicker keys and the room window filling a single display (#198, #207), the phone-remote
 slot joined to the live client (#202, #213), its "Can't reach site" retry (#215, #218) and the
 rail texts for following stopped (#208, #251; pushed at the owner's request). The presenter
-window stays for a second display.
+window stays for a second display. The studio's one screen is mirrored on the projector (owner,
+2026-11-14), so spike 2 is run that way: plan section 9 updated, the harness's one-screen mode is
+#447.
 
 ## Waiting for the owner
 

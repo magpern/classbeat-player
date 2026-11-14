@@ -157,7 +157,8 @@ conflict with a rule stops and is written in `docs/owner.md`.
   not every screen (owner, 2026-11-14), and records `Design review: PASS` or `FAIL` on the
   pull request.
 - A pull request that changes only documentation (`docs/` and root `*.md` files) runs no tests in
-  CI, only the title check and the never-commit check (owner, 2026-11-14, #437).
+  CI, only the title check, the never-commit check and the provider guard (owner, 2026-11-14,
+  #437).
 - The owner sees results afterwards and may ask for changes as new issues. Nothing waits for it.
 
 ## 8. Safety
