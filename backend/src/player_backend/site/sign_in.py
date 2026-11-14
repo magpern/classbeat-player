@@ -44,7 +44,9 @@ BrowserToken = Annotated[str | None, Depends(login_cookie_token)]
 class LinkRequest(BaseModel):
     email: str = Field(max_length=1000)
     # Missing or null: none. Any string is accepted here and checked by `is_return_entry`, so
-    # every string that is not a return entry gets the same `invalid_return`.
+    # every string that is not a return entry gets the same `invalid_return`, in its order (after
+    # the 429 and `invalid_email`). Its bound is `RETURN_MAX` there, for the same reason: a
+    # `max_length` here would answer `invalid_request` before the requester's limit.
     return_to: str | None = None
 
 

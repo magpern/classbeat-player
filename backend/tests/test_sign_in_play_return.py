@@ -13,9 +13,9 @@ from psycopg import sql
 
 from player_backend.db import login
 from player_backend.logging_setup import configure_logging
+from tests.dbhelp import every_value
 from tests.sitehelp import ORIGIN, Site
 from tests.test_play_return_entry_policy import CLASS_ID, PLAY_INVALID
-from tests.test_sign_in_return import _every_value  # pyright: ignore[reportPrivateUsage]
 
 EMAIL = "rider@example.test"
 LINK = "/api/site/sign-in/link"
@@ -107,7 +107,7 @@ def test_the_class_id_is_kept_in_no_row(site: Site) -> None:
     site.sign_in(EMAIL)  # the account exists, so the request writes an audit event too
     asked = site.browser().post(LINK, json={"email": EMAIL, "return_to": "play." + CLASS_ID})
     assert asked.status_code == 200 and len(site.mailer.sent) == 2
-    stored = _every_value(site)
+    stored = every_value(site.su)
     for needle in (CLASS_ID, CLASS_ID.replace("-", ""), "play.", "return="):
         assert needle not in stored
 

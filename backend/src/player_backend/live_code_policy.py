@@ -6,7 +6,7 @@
   `full`: not used up and not a wrong try.
 - 5 wrong tries cancel the code (per session and code: a new code starts again at 0). With no
   current code there is nothing to guess: a try is wrong and counts nothing.
-- The host's `drop` ends the current code; the host is sent nothing for that.
+- The host's `drop` or `cancel_code` ends the current code; the host is sent nothing for that.
 - Requests that name an unknown session (a join code that names none) are counted per address:
   60 a minute. Past that, every such request from the address is refused until its minute ends.
 

@@ -6,7 +6,8 @@ drop then closes only the dropped token's own connection, and never shows the ne
 place as free: a held place with no connection is told as the replay tells it (ADR 0005, the
 2026-11-14 amendment), `controller_left` `disconnected` with the holder's `via`, and a new
 holder already connected (its `controller_joined` sent) is told nothing more. A late drop with
-no new holder is told as before.
+no new holder is told as before. The dropped phone is closed as a drop (`ended` `dropped`,
+4403) whichever comes first, the drop or the new holder's connection (#397, from #385 N3).
 
 The drop is held back here: the hub's event handler is wrapped so that a `Dropped` waits until
 the test lets it through, the way a busy loop would hold it.
@@ -84,7 +85,8 @@ def test_a_late_drop_leaves_the_new_holders_connection_and_place(
         # The place goes to a new phone, which connects before the drop reaches the hub.
         new = live.controller(started, signed_in=True)
         with live.joined(new) as newer:
-            assert closed(phone) == 4409  # its slot's connection was replaced
+            # Its token was dropped, so it is closed as a drop, not as a replaced connection.
+            _ended_dropped(phone)
             assert recv(host) == _joined(1, "sign_in")
             held.deliver()
             # Nothing about the new holder's place: it is not shown free, its phone stays.

@@ -5,7 +5,9 @@
   and so does a token that left and comes back; unlocking lets joins in again;
 - `new_join_code`: answered `join_code` to the host only; from then on the old code finds
   nothing for joins and for the controller routes, and the current control code ends; riders
-  and controllers in stay; the lock survives it; past 10 an hour it is dropped and counted;
+  and controllers in stay; the lock survives it; past 10 an hour it is dropped and counted
+  (`join_code_limit`); for a session past its lifetime it ends the session and is counted as
+  `session_gone`;
 - `drop_rider`: the rider gets `ended` `dropped` and 4403, its token is gone, the host gets
   `rider_left` `dropped`, and the rider can join again with the current code;
 - the session's end: every rider gets `ended` and 4403.
@@ -119,6 +121,7 @@ def test_new_join_codes_past_ten_an_hour_are_dropped_and_counted(live: Any) -> N
         host.send_json(LOCK)  # the probe: the eleventh got no answer
         assert recv(host)["type"] == "lock_state"
         assert live.hub.dropped["join_code_limit"] == 1
+        assert live.hub.dropped["session_gone"] == 0
         # Nothing changed: the tenth code is still the session's, and the earlier ones are not.
         assert [live.registry.session_of_code(c) for c in codes] == [None] * 9 + [
             started.session_id
@@ -138,6 +141,9 @@ def test_a_new_join_code_for_a_session_past_its_lifetime_ends_it(live: Any) -> N
             assert closed(ws) == 4403
     assert live.registry.running() == []
     assert live.ends == [(started.session_id, "lifetime")]
+    # Counted as a session that is gone, not as one past its 10 codes an hour (#385 N4).
+    assert live.hub.dropped["session_gone"] == 1
+    assert live.hub.dropped["join_code_limit"] == 0
 
 
 def test_a_removed_rider_can_join_again_with_the_current_code(live: Any) -> None:

@@ -21,6 +21,7 @@ import httpx
 import pytest
 
 from player_backend.code_policy import normalise_code
+from player_backend.live.events import NoJoinCode
 from tests.livehelp import live_app, nothing, recv
 
 JOIN = "/api/live/join"
@@ -105,7 +106,9 @@ def test_the_lock_of_a_session_that_is_gone_is_none(live: Any) -> None:
     live.registry.end(started.session_id, "host_ended")
     assert live.registry.lock(started.session_id, True) is None
     assert live.registry.locked(started.session_id) is None
-    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert live.registry.new_join_code(started.session_id, live.clock()) == NoJoinCode(
+        "session_gone"
+    )
     assert live.registry.drop_rider(started.session_id, "AAAAAAAAAAA") is False
 
 
@@ -117,7 +120,7 @@ def test_after_a_new_join_code_the_earlier_one_finds_nothing(live: Any) -> None:
     with live.joined(started.host_token, None) as host:
         control = _control_code(host)
         new = live.registry.new_join_code(started.session_id, live.clock())
-        assert new is not None and new != started.join_code
+        assert isinstance(new, str) and new != started.join_code
         assert normalise_code(new) is not None and len(new) == 9
         # The joins and the controller routes (the sign-in route looks the code up here).
         _cannot_join(_join(live, started.join_code))
@@ -141,7 +144,7 @@ def test_riders_and_controllers_in_stay_after_a_new_join_code(live: Any) -> None
     left = _seat(live, _token(live, started.join_code, "Lee"))
     live.registry.rider_disconnected(started.session_id, left.rider, live.clock())
     live.registry.lock(started.session_id, True)
-    assert live.registry.new_join_code(started.session_id, live.clock()) is not None
+    assert isinstance(live.registry.new_join_code(started.session_id, live.clock()), str)
     assert live.registry.controller_seat(controller, live.clock()) is not None
     assert [r.rider for r in live.registry.riders_in(started.session_id)] == [seat.rider]
     assert _seat(live, token).rider == seat.rider
@@ -152,8 +155,10 @@ def test_riders_and_controllers_in_stay_after_a_new_join_code(live: Any) -> None
 def test_ten_new_join_codes_an_hour_then_ignored_and_counted(live: Any) -> None:
     started = live.session()
     codes = [live.registry.new_join_code(started.session_id, live.clock()) for _ in range(10)]
-    assert None not in codes and len(set(codes)) == 10
-    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert all(isinstance(c, str) for c in codes) and len(set(codes)) == 10
+    assert live.registry.new_join_code(started.session_id, live.clock()) == NoJoinCode(
+        "join_code_limit"
+    )
     assert live.registry.ignored["join_code_limit"] == 1
     # Ignored: the current code still names the session.
     assert live.registry.session_of_code(codes[-1]) == started.session_id
@@ -161,20 +166,24 @@ def test_ten_new_join_codes_an_hour_then_ignored_and_counted(live: Any) -> None:
     live.clock.now += 3600.0
     live.registry.confirm([started.session_id], live.clock())
     live.registry.host_connected(started.session_id)
-    assert live.registry.new_join_code(started.session_id, live.clock()) is not None
+    assert isinstance(live.registry.new_join_code(started.session_id, live.clock()), str)
 
 
 def test_a_new_join_code_for_a_session_past_its_lifetime_ends_it(live: Any) -> None:
     # As the sweep would end it, and as a join does (test_live_join.py): no code is made.
     started = live.session()
     live.clock.now += 12 * 3600.0
-    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert live.registry.new_join_code(started.session_id, live.clock()) == NoJoinCode(
+        "session_gone"
+    )
     assert live.registry.running() == []
     assert live.registry.session_of_code(started.join_code) is None
     assert live.ends == [(started.session_id, "lifetime")]
     assert live.registry.ignored["join_code_limit"] == 0
     # It ended once: a second ask finds no session and records nothing more.
-    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert live.registry.new_join_code(started.session_id, live.clock()) == NoJoinCode(
+        "session_gone"
+    )
     assert live.ends == [(started.session_id, "lifetime")]
 
 

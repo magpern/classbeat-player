@@ -167,7 +167,7 @@ def test_one_answer_for_an_unknown_code_a_locked_a_full_session_and_an_old_code(
         _seat(live, _token(_join(live, full.join_code)))
     answers.append(_join(live, full.join_code))
     renewed = live.session()
-    assert live.registry.new_join_code(renewed.session_id, live.clock()) is not None
+    assert isinstance(live.registry.new_join_code(renewed.session_id, live.clock()), str)
     answers.append(_join(live, renewed.join_code))
     for answer in answers:
         _cannot_join(answer)
@@ -273,7 +273,7 @@ def test_unknown_codes_count_for_the_address(live: Any) -> None:
 
 def test_an_earlier_join_code_counts_for_the_address_as_an_unknown_one(live: Any) -> None:
     started = live.session()
-    assert live.registry.new_join_code(started.session_id, live.clock()) is not None
+    assert isinstance(live.registry.new_join_code(started.session_id, live.clock()), str)
     for _ in range(60):
         _cannot_join(_join(live, started.join_code))
     answer = _join(live, started.join_code)
