@@ -45,6 +45,8 @@ export const DEVICE_STATES: readonly State[] = [
   { name: "devices-revoked", path: "/devices", script: { ...LISTED, [`DELETE devices/${DEVICES[0].id}`]: { status: 204 } }, steps: then(revokeFirst, press("Revoke device")), ready: ".note", clock: "day" },
   { name: "devices-revoke-offline", path: "/devices", script: { ...LISTED, [`DELETE devices/${DEVICES[0].id}`]: { status: 0, fail: true } }, steps: then(revokeFirst, press("Revoke device")), ready: ".plate", clock: "day" },
   { name: "devices-server", path: "/devices", script: { "GET devices": { status: 500, body: { error: "internal" } } }, ready: ".plate" },
+  { name: "devices-refused", path: "/devices", script: { "GET devices": { status: 403, body: { error: "forbidden" } } }, ready: ".plate" },
+  { name: "pair-refused", path: "/pair", script: { "GET sessions": { status: 403, body: { error: "forbidden" } } }, ready: ".plate" },
   { name: "pair", path: "/pair", script: signedIn, ready: "input[name=code]", main: true },
   { name: "pair-invalid-code", path: "/pair", script: signedIn, steps: typeCode(SHORT_CODE), ready: ".field.err" },
   { name: "pair-not-found", path: "/pair", script: { ...signedIn, "POST pairing/find": { status: 404, body: { error: "pairing_not_found" } } }, steps: typeCode(UNKNOWN_CODE), ready: ".plate" },

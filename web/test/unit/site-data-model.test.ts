@@ -1,13 +1,13 @@
 // Your data's rules (src/site/core/data-model.ts; docs/design/site.md, "Your data") and how the
 // export is handed to the browser (src/site/net/export.ts): what each answer means, the hours from
-// `Retry-After`, and that the one link to the file is revoked at once and never put in the page.
+// `Retry-After`, and that the one link to the file is revoked shortly after the click and never put in the page.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it, mock } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Answer } from "../../src/site/core/answer.ts";
 import { canDelete, DATA_WORDS, deleteOutcomeOf, EXPORT_FILE, exportOutcomeOf, hoursWords } from "../../src/site/core/data-model.ts";
-import { exportAccount, saveFile } from "../../src/site/net/export.ts";
+import { exportAccount, REVOKE_AFTER_MS, saveFile } from "../../src/site/net/export.ts";
 import { impurities } from "../lib/core-purity.ts";
 
 const RECENT: Answer = { kind: "refused", status: 403, code: "recent_sign_in_required" };
@@ -58,7 +58,11 @@ describe("handing the file to the browser", () => {
     URL.revokeObjectURL = realRevoke;
     delete g.document;
     g.fetch = realFetch;
+    mock.timers.reset();
   });
+
+  const alive = (): void => mock.timers.enable({ apis: ["setTimeout"] });
+  const always = (): boolean => true;
 
   function stand(): { log: string[]; anchor: Record<string, unknown> } {
     const log: string[] = [];
@@ -69,30 +73,56 @@ describe("handing the file to the browser", () => {
     return { log, anchor };
   }
 
-  it("clicks a detached link with the file name, then revokes it", () => {
+  it("clicks a detached link with the file name, then revokes it a little later, not at once", () => {
+    alive();
     const { log, anchor } = stand();
     saveFile(new Blob(["{}"]), EXPORT_FILE);
-    assert.deepEqual(log, ["create", "element a", `click blob:https://site.test/1 ${EXPORT_FILE}`, "revoke blob:https://site.test/1"]);
+    assert.deepEqual(log, ["create", "element a", `click blob:https://site.test/1 ${EXPORT_FILE}`]);
+    mock.timers.tick(REVOKE_AFTER_MS - 1);
+    assert.equal(log.length, 3, "not yet");
+    mock.timers.tick(1);
+    assert.equal(log.at(-1), "revoke blob:https://site.test/1");
     assert.equal(anchor.rel, "noopener");
   });
 
   it("revokes the link even when the click throws", () => {
+    alive();
     const { log, anchor } = stand();
     anchor.click = () => {
       throw new Error("blocked");
     };
     assert.throws(() => saveFile(new Blob(["{}"]), EXPORT_FILE));
+    mock.timers.tick(REVOKE_AFTER_MS);
     assert.equal(log.at(-1), "revoke blob:https://site.test/1");
   });
 
   it("saves only a success; a refusal is read as an answer and nothing is saved", async () => {
+    alive();
     const { log } = stand();
     g.fetch = (() => Promise.resolve(new Response('{"error":"too_many_requests"}', { status: 429, headers: { "Retry-After": "60" } }))) as typeof fetch;
-    assert.deepEqual(await exportAccount(), { kind: "too_many", retryAfter: 60 });
+    assert.deepEqual(await exportAccount(always), { kind: "too_many", retryAfter: 60 });
     assert.deepEqual(log, []);
     g.fetch = (() => Promise.resolve(new Response('{"a":1}', { status: 200 }))) as typeof fetch;
-    assert.equal(await exportAccount(), "saved");
-    assert.equal(log.length, 4);
+    assert.equal(await exportAccount(always), "saved");
+    assert.equal(log.length, 3);
+  });
+
+  it("a browser that refuses the file is the server's answer, not a save", async () => {
+    alive();
+    const { anchor } = stand();
+    anchor.click = () => {
+      throw new Error("blocked");
+    };
+    g.fetch = (() => Promise.resolve(new Response('{"a":1}', { status: 200 }))) as typeof fetch;
+    assert.deepEqual(await exportAccount(always), { kind: "server" });
+  });
+
+  it("drops a file that arrives after the page was left, saving nothing", async () => {
+    alive();
+    const { log } = stand();
+    g.fetch = (() => Promise.resolve(new Response('{"a":1}', { status: 200 }))) as typeof fetch;
+    assert.equal(await exportAccount(() => false), "dropped");
+    assert.deepEqual(log, []);
   });
 });
 

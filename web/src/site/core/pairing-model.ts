@@ -100,11 +100,17 @@ export function afterFind(typed: string, code: string, a: Answer): PairNext {
   return { screen: "enter", typed, plate: plateOf(a) };
 }
 
+/** The name the backend stored, when it answered with one (it may have trimmed or changed what was sent). */
+function answeredName(body: unknown): string | null {
+  const n = typeof body === "object" && body !== null ? (body as { name?: unknown }).name : undefined;
+  return typeof n === "string" && n.trim() !== "" ? n : null;
+}
+
 /** After `POST pairing/decide` on the "Found" view, approving with `name` or denying. */
 export function afterDecide(found: Extract<PairView, { screen: "found" }>, approve: boolean, name: string, a: Answer): PairNext {
   if (a.kind === "not_signed_in") return { screen: "ended" };
   const status = a.kind === "ok" && typeof a.body === "object" && a.body !== null ? (a.body as { status?: unknown }).status : undefined;
-  if (a.kind === "ok" && approve && status === "approved") return { screen: "approved", name };
+  if (a.kind === "ok" && approve && status === "approved") return { screen: "approved", name: answeredName(a.body) ?? name };
   if (a.kind === "ok" && !approve && status === "denied") return { screen: "denied" };
   const again = { ...found, name, nameError: false };
   if (a.kind === "refused" && a.status === 409 && approve) return { screen: "limit" };
