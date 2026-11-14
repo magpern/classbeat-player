@@ -2,6 +2,8 @@
 // Pure: takes a document that already passed the schema, returns violations. No I/O.
 // Twin of python/src/classformat/semantic.py; both return the same (code, pointer) pairs.
 
+import { checkPatterns } from "./pattern.ts";
+
 export type Violation = readonly [code: string, pointer: string];
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -117,6 +119,7 @@ export function checkSemantics(doc: unknown): Violation[] {
   checkSegments(doc, out);
   checkZones(doc, out);
   checkTotals(doc, out);
+  checkPatterns(doc, out);
   return sortViolations(out);
 }
 

@@ -10,6 +10,7 @@ from classformat import (
     Stored,
     check_document,
     check_publication,
+    check_warnings,
     content_hash,
     decide,
     reader_schema,
@@ -44,6 +45,25 @@ def test_valid_documents_pass_in_both_modes(path) -> None:
     doc = load(path)
     assert check_document(CLASS_SCHEMA, doc, "strict") == []
     assert check_document(CLASS_SCHEMA, doc, "reader") == []
+
+
+WARNING_EXPECT = load(EXAMPLES / "warnings.json")
+
+
+@pytest.mark.parametrize("path", VALID, ids=lambda p: p.name)
+def test_warnings_of_a_valid_document(path) -> None:
+    """Warnings never make a document invalid; each valid vector has its expected warnings."""
+    expected = [(c, p) for c, p in WARNING_EXPECT.get(path.name, [])]
+    assert check_warnings(load(path)) == expected
+
+
+def test_pattern_document_is_1_1_and_labelled_1_0_is_refused() -> None:
+    doc = load(EXAMPLES / "valid" / "class-pattern-climb-and-jumps.json")
+    assert doc["format_version"] == "1.1"
+    assert check_document(CLASS_SCHEMA, doc, "strict") == []
+    doc["format_version"] = "1.0"
+    for mode in ("strict", "reader"):
+        assert check_document(CLASS_SCHEMA, doc, mode) != []
 
 
 @pytest.mark.parametrize("path", INVALID, ids=lambda p: p.name)

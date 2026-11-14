@@ -11,5 +11,6 @@
       "schema",
       "/format_version"
     ]
-  ]
+  ],
+  "accepted-pattern-in-future-minor.json": []
 }

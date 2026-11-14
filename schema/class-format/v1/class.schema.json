@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["format_version", "class", "music", "zone_scale", "totals", "intervals", "songs"],
   "properties": {
-    "format_version": { "const": "1.0" },
+    "format_version": { "$ref": "#/$defs/formatVersion" },
     "class": { "$ref": "#/$defs/classInfo" },
     "music": { "$ref": "#/$defs/music" },
     "zone_scale": { "type": "array", "minItems": 1, "maxItems": 7, "items": { "$ref": "#/$defs/zoneDef" } },
@@ -17,6 +17,10 @@
     "songs": { "type": "array", "items": { "$ref": "#/$defs/song" } }
   },
   "allOf": [
+    {
+      "if": { "properties": { "format_version": { "const": "1.0" } }, "required": ["format_version"] },
+      "then": { "properties": { "intervals": { "items": { "not": { "required": ["pattern"] } } } } }
+    },
     {
       "if": { "properties": { "music": { "properties": { "source": { "const": "none" } } } } },
       "then": {
@@ -41,7 +45,7 @@
           "intervals": {
             "items": {
               "required": ["incline"],
-              "not": { "anyOf": [{ "required": ["cadence"] }, { "required": ["position"] }, { "required": ["test"] }] }
+              "not": { "anyOf": [{ "required": ["cadence"] }, { "required": ["position"] }, { "required": ["pattern"] }, { "required": ["test"] }] }
             }
           }
         }
@@ -49,6 +53,7 @@
     }
   ],
   "$defs": {
+    "formatVersion": { "enum": ["1.0", "1.1"] },
     "ms": { "type": "integer", "minimum": 0 },
     "positiveMs": { "type": "integer", "minimum": 1 },
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
@@ -132,6 +137,23 @@
         }
       ]
     },
+    "positionPattern": {
+      "description": "Format 1.1. Position changes counted in beats, repeated over the interval. positions and beats have the same length (semantic rule pattern_length_mismatch).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "positions", "beats"],
+      "properties": {
+        "kind": { "const": "alternate" },
+        "positions": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "enum": ["seated", "standing"] } },
+        "beats": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "type": "integer", "minimum": 1, "maximum": 64 }
+        },
+        "start_on": { "enum": ["interval_start", "next_downbeat"] }
+      }
+    },
     "interval": {
       "type": "object",
       "additionalProperties": false,
@@ -142,6 +164,7 @@
         "zone": { "type": "integer", "minimum": 1, "maximum": 7 },
         "cadence": { "$ref": "#/$defs/cadence" },
         "position": { "enum": ["seated", "standing"] },
+        "pattern": { "$ref": "#/$defs/positionPattern" },
         "incline": { "enum": ["flat", "raised"] },
         "cue": { "type": "string", "maxLength": 120 },
         "test": {

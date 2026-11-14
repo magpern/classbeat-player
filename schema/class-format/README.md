@@ -35,6 +35,7 @@ examples/valid/                  strict-valid documents (also valid for readers)
 examples/invalid/<rule>.json     one broken rule each; expected.json says which code and where
 examples/reader/                 reader-mode vectors (future minor accepted, unknown major refused)
 examples/publications/valid|invalid/
+examples/warnings.json           expected warnings per valid vector (none listed means none)
 examples/sequences.json          publication sequencing table
 ```
 
@@ -67,7 +68,7 @@ The valid vectors are hand-maintained. Changing a valid document means recomputi
    `song_timing: missing`; any other source requires at least one song. Anchors or moments of
    quality `missing` must be empty lists; of any other quality, non-empty.
 5. **Producers strict, readers lax.** One schema file, strict (`additionalProperties: false`
-   everywhere, `format_version` exactly `"1.0"`). The reader schema is derived from it in code
+   everywhere, `format_version` `"1.0"` or `"1.1"`, the minors this schema knows). The reader schema is derived from it in code
    (`reader_schema`): unknown fields allowed, any `1.x` accepted. A reader first checks the
    version string: an unknown major gives `unsupported_major` (the plain "needs a newer version"
    message is the player's), a malformed string a `schema` error. Everything else (types,
@@ -105,6 +106,63 @@ Other choices where the ADR is silent (strictest safe reading unless noted):
   type is an intersection with an index signature because of the top-level `allOf`. The
   validators, not the types, are the contract.
 
+## Format 1.1: beat-counted position patterns (issue #469)
+
+Minor 1.1 is additive: it adds one optional field, `interval.pattern`, and nothing else. Every
+1.0 document is a valid 1.1 document and is unchanged (the 1.0 vectors are untouched). A 1.0
+reader accepts a 1.1 document by the reader rules (a newer minor with unknown fields) and
+ignores `pattern`; it still finds `position` on every cycling interval, which is why `position`
+stays required (choice 2).
+
+```json
+"pattern": { "kind": "alternate", "positions": ["seated", "standing"], "beats": [8, 8], "start_on": "next_downbeat" }
+```
+
+`positions` and `beats` have 2 to 4 entries; each `beats` value is an integer from 1 to 64,
+counted on the song's beat. The beat comes from `bpm` and `beat_anchors` when present;
+otherwise the player counts time from `bpm` alone. `start_on` is optional:
+`interval_start` (the default) or `next_downbeat`. The pattern repeats until the interval
+ends. A climb inside a song needs no new field (intervals sit on the class timeline, not on
+songs); `valid/class-pattern-climb-and-jumps.json` shows three intervals inside one song plus
+an 8 up, 8 down jumps interval.
+
+Choices the issue left open:
+
+1. **Strict producers must write `"1.1"` to use a pattern.** The strict schema accepts
+   `format_version` `"1.0"` or `"1.1"`; a document labelled `"1.0"` that carries a `pattern`
+   is a schema error in both modes (`schema-pattern-in-format-1-0`), because 1.0 has no such
+   field. A later minor (1.2 and up) in reader mode may carry it.
+2. **`position` stays required and the pattern wins.** The issue allowed "both is an error, or
+   one wins". Making them exclusive would drop `position` from patterned intervals, and a 1.0
+   reader would then refuse the document for a missing required field, breaking additivity. So
+   a cycling interval with a pattern still carries `position`, and it must equal
+   `positions[0]` (the position the interval starts in): `pattern_position_mismatch` at
+   `/intervals/<i>/position`. For a reader that understands 1.1 the pattern decides what the
+   rider does after the start; `position` is the fallback for older readers.
+3. **Lists of different length: error `pattern_length_mismatch`** at
+   `/intervals/<i>/pattern/beats` (JSON Schema cannot compare two arrays). Length 2 to 4 and
+   the 1 to 64 beat range are schema errors.
+4. **Cycling only.** A running interval carrying a `pattern` is a schema error, like `position`.
+5. **A song without `bpm` is a warning, not an error: `pattern_without_bpm`** at
+   `/intervals/<i>/pattern`. Why a warning: the document still describes the class correctly;
+   the player merely cannot count beats there (it falls back to the time the interval gives).
+   It is raised when any song window overlapping the interval has no `bpm`, or no song
+   overlaps it (music source `none`). `beat_anchors` alone do not count as a `bpm`. Warnings
+   come only from `check_warnings` (Python) / `checkWarnings` (TypeScript); `check_document`
+   never returns them, so a document with warnings is valid in strict and reader mode. The
+   expected warnings of each valid vector are in `examples/warnings.json`.
+6. **No cross-check of beats against the interval length.** An interval shorter than one full
+   cycle, or one that ends mid-cycle, is valid: the player cuts the pattern at the interval end.
+7. **Generated types.** `format_version` is a schema `$defs` entry (`formatVersion`) because a
+   two-valued enum written inline in the class schema stops the Pydantic generator from
+   emitting the publication module. The types in `generated/` carry the new field; the player
+   and screens code reads them unchanged (rendering the beat count is a follow-up issue).
+
+New vectors: `valid/class-pattern-climb-and-jumps.json`, `valid/class-pattern-song-without-bpm.json`
+(warning), `reader/accepted-pattern-in-future-minor.json`, and the `invalid/*pattern*` files
+(bad lengths, beat counts of 0, 65 and 7.5, unknown kind, `start_on` and position, one and
+five positions, `position` differing from `positions[0]`, a 1.0 label, a running interval).
+
 ## Where each ADR rule is enforced
 
 `S` = JSON Schema, `V` = semantic validator (`semantic.py` / `semantic.ts`), `P` = publication
@@ -116,7 +174,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s1 types generated; stale types fail CI | `generate.sh`, `check-generated.sh` | edit-without-regenerating check; `tests/test_generated.py`, `test/generated-types.test.ts` (round trip) |
 | s2 times are whole milliseconds | S (`integer`) | `schema-time-not-integer` |
 | s2 cue at most 120 characters, names at most 80 | S | `schema-cue-over-120-chars`, `schema-title-over-80-chars` |
-| s3 `format_version` `"1.0"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-1`, `reader/` |
+| s3 `format_version` `"1.0"` or `"1.1"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-2`, `reader/` |
 | s3 required top-level fields, no unknown fields (no games, no colour) | S | `schema-missing-required-music`, `schema-unknown-field-games`, `schema-unknown-nested-field-colour` |
 | s3 sport, music source, `design_crossfade_ms` at least 0, `song_timing` values | S | `schema-sport-unknown`, `schema-source-none-timing-not-missing` |
 | s3 zone scale: unique numbers, ranges | S, V | `zone-scale-duplicate`, `zone-scale-range-inverted`, `schema-zone-out-of-1-to-7` |
