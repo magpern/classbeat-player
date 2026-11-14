@@ -2,7 +2,8 @@
 // companion_state, takes the phones' commands through the pure intake and applies them down the
 // presenter's own path, all within the send budget. The decisions are the pure modules'
 // (companion-state.ts, intake.ts, send-budget.ts); this only carries them out, with one timer.
-// Nothing is buffered for a connection that is not there: a lost connection drops its queue.
+// Nothing is buffered for a connection that is not there: a lost connection drops its queue, and
+// hands what it still held to the session, which keeps only `cancel_code` and `drop` (held-over.ts).
 // The run's `end` is its last message (`last`): once it is sent, nothing more is.
 // It also publishes the riders' rider_state (ADR 0007) in the room the budget leaves (rider-send.ts).
 import type { ClockCommand } from "../../core/commands.ts";
@@ -37,8 +38,8 @@ export interface PublisherDeps {
 export interface Publisher {
   /** A connection is in (`welcome`): a fresh budget, `first` ahead of everything, then the state at once. */
   connected(send: (text: string) => void, first?: readonly HostMessage[]): void;
-  /** The connection is gone: its queue goes with it. */
-  disconnected(): void;
+  /** The connection is gone: its queue goes with it, and what it still held unsent is returned. */
+  disconnected(): readonly HostMessage[];
   joined(): void;
   queue(message: HostMessage): void;
   /** A forwarded command, untrusted. */
@@ -132,9 +133,11 @@ export function createPublisher(d: PublisherDeps): Publisher {
       pump();
     },
     disconnected() {
+      const unsent = budget?.queue ?? [];
       cancel();
       send = null;
       budget = null;
+      return unsent;
     },
     joined() {
       if (budget === null || lastSent !== null) return;

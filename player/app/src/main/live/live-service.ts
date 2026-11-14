@@ -6,7 +6,8 @@
 // `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else; the riders' list
 // (`riders()`) is in this memory and the presenter's view only (ADR 0007 section 4).
 // Ending while live keeps the host's connection until the session is ended (end-live.ts, farewell.ts, #211).
-// With only one display left a held control code is cancelled (core/live/code-cancel.ts, #353).
+// With only one display left a held control code is cancelled (core/live/code-cancel.ts, #353);
+// one still queued when the connection is lost, or a drop, goes after the next welcome (#381).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
@@ -15,13 +16,15 @@ import { ridersView } from "../../core/live/riders-view.ts";
 import type { RidersView } from "../../core/live/riders-view.ts";
 import { roomSlotOf } from "../../core/live/room-slot.ts";
 import type { RemoteView } from "../../core/room/remote.ts";
+import { heldOver } from "../../core/live/held-over.ts";
 import { step } from "../../core/live/session-model.ts";
 import { OFF } from "../../core/live/session-types.ts";
 import type { Credential, LiveEffect, LiveEvent, LiveModel } from "../../core/live/session-types.ts";
 import type { BackendCall } from "../pairing/http.ts";
 import { endSession } from "./ender.ts";
 import { endLive } from "./end-live.ts";
-import { failedLine, listenerLine } from "./log-lines.ts";
+import { createInFlight } from "./in-flight.ts";
+import { listenerLine } from "./log-lines.ts";
 import type { Farewell } from "./farewell.ts";
 import type { Connect, LiveSocket, SocketEvents } from "./live-socket.ts";
 import { createPublisher } from "./publisher.ts";
@@ -89,17 +92,9 @@ export function createLiveService(d: LiveDeps): LiveService {
   let retry: unknown = null;
   const listeners: (() => void)[] = [];
   const log = d.log ?? ((line: string) => console.warn(line));
-  // The start requests awaiting their answer, the farewells and the enders still running, for the
-  // quit (#205). A step that throws is logged without its text, which could hold a token.
-  const inFlight = new Set<Promise<unknown>>();
-  const track = (p: Promise<unknown>): void => {
-    const done = (): void => void inFlight.delete(p);
-    inFlight.add(p);
-    p.then(done, (e: unknown) => {
-      done();
-      log(failedLine(e));
-    });
-  };
+  // The start requests awaiting their answer, the farewells and the enders still running (in-flight.ts).
+  const inFlight = createInFlight(log);
+  const track = inFlight.track;
   // The host connections that ended their session and wait for its answer, by connection number.
   const farewells = new Map<number, Farewell>();
 
@@ -185,8 +180,9 @@ export function createLiveService(d: LiveDeps): LiveService {
           closed: (code) => {
             const f = farewells.get(n);
             if (f !== undefined) return f.closed(code);
-            if (model.socket === n) publisher?.disconnected();
-            dispatch({ type: "closed", socket: n, code });
+            // A `cancel_code` or `drop` the lost queue still held goes after the next welcome (held-over.ts).
+            const unsent = model.socket === n ? heldOver(publisher?.disconnected() ?? []) : [];
+            dispatch({ type: "closed", socket: n, code, unsent });
           },
         });
         return;
@@ -289,10 +285,7 @@ export function createLiveService(d: LiveDeps): LiveService {
       dropPublisher();
       cancelRetry();
     },
-    busy: () => inFlight.size > 0,
-    async settled() {
-      // An answer that comes while waiting may start an ender: it is tracked before the answer's own promise settles.
-      while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
-    },
+    busy: inFlight.busy,
+    settled: inFlight.settled,
   };
 }

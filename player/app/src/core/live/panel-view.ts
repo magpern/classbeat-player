@@ -4,6 +4,7 @@
 // with a second display, the control code; never the host token, the session id or anything about
 // a phone but its place. Sentence case, one fact a line (presenter.md).
 import { clockText } from "../format.ts";
+import { mayDrop } from "./drop-policy.ts";
 import type { Slot } from "./host-wire.ts";
 import type { Applied, EndReason, LiveModel, Place, Refusal } from "./session-types.ts";
 
@@ -121,7 +122,10 @@ export function livePanelView(m: LiveModel, f: PanelFacts): LivePanelView {
   const slots: SlotView[] = running
     ? ([1, 2] as const).map((slot) => {
         const p = m.places[slot - 1];
-        return { slot, text: `Phone ${slot}: ${PLACE_TEXT[p]}`, canDrop: live && p !== "none" };
+        // While this place's last drop waits for the server's answer (drop-policy.ts, #381) a phone
+        // shown in it reads "dropping", with no Drop; the line reads "free" once the server frees it.
+        const waiting = p !== "none" && !mayDrop(m.drops, slot);
+        return { slot, text: `Phone ${slot}: ${waiting ? "dropping" : PLACE_TEXT[p]}`, canDrop: live && p !== "none" && !waiting };
       })
     : [];
   return {

@@ -9,6 +9,9 @@ import type { MakeCode } from "../../../../../schema/generated/ts/live-make-code
 import type { NewJoinCode } from "../../../../../schema/generated/ts/live-new-join-code.d.ts";
 import type { CompanionAction } from "./actions.ts";
 import type { HostInbound, Slot, StartAnswer, StartRefusal, StartedSession } from "./host-wire.ts";
+import { NO_DROPS } from "./drop-policy.ts";
+import type { Drops } from "./drop-policy.ts";
+import type { HeldOver } from "./held-over.ts";
 import { NO_RIDERS } from "./riders-model.ts";
 import type { Riders } from "./riders-model.ts";
 
@@ -49,6 +52,8 @@ export interface LiveModel {
   readonly codeNote: Exclude<CodeCancelled["reason"], "replaced"> | null;
   /** A control code stopped being shown while the host was away: `cancel_code` goes first after the next `welcome` (code-cancel.ts). */
   readonly cancelPending: boolean;
+  /** Each place's drop waiting for the server's answer, or to go again after the next `welcome` (drop-policy.ts). */
+  readonly drops: Drops;
   readonly line: Applied | null;
   /** The riders in (riders-model.ts): memory only, gone with the session. */
   readonly riders: Riders;
@@ -61,7 +66,8 @@ export type LiveEvent =
   | { readonly type: "answer"; readonly request: number; readonly answer: StartAnswer }
   | { readonly type: "open"; readonly socket: number }
   | { readonly type: "message"; readonly socket: number; readonly message: HostInbound }
-  | { readonly type: "closed"; readonly socket: number; readonly code: number }
+  /** `unsent`: what the lost connection's queue still held of what must not be lost (held-over.ts). */
+  | { readonly type: "closed"; readonly socket: number; readonly code: number; readonly unsent?: readonly HeldOver[] }
   | { readonly type: "retry" }
   | { readonly type: "make_code"; readonly secondDisplay: boolean }
   /** Only one display is left: no control code is offered, so the one held ends (code-cancel.ts). */
@@ -114,6 +120,7 @@ export const OFF: LiveModel = {
   code: null,
   codeNote: null,
   cancelPending: false,
+  drops: NO_DROPS,
   line: null,
   riders: NO_RIDERS,
 };

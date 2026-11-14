@@ -67,6 +67,14 @@ async function states(): Promise<Shot[]> {
   out.push(shot("phone-not-connected", places));
   places.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in", reason: "session_ended" });
   out.push(shot("phone-session-ended", places));
+  // One drop per press (#381): phone 1 was dropped and shows again before the server's answer, so
+  // it reads "dropping", with no Drop, until the place is free; phone 2 keeps its Drop.
+  const waiting = await started();
+  waiting.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
+  waiting.socket().server({ v: 1, type: "controller_joined", slot: 2, via: "sign_in" });
+  waiting.live.drop(1);
+  waiting.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
+  out.push(shot("phone-drop-waiting", waiting));
   const one = rig();
   one.secondDisplay = false;
   await started(one);
@@ -156,7 +164,7 @@ after(async () => {
 test("the phone-remote panel in each state: rendered, the control code only where it is offered", { timeout: 180_000 }, async () => {
   assert.deepEqual(
     shots.map((s) => s.name),
-    ["off", "starting", "on", "control-code", "code-used", "code-expired", "two-phones-line", "phone-not-connected", "phone-session-ended", "one-display", "reconnecting", "ended", "refused"],
+    ["off", "starting", "on", "control-code", "code-used", "code-expired", "two-phones-line", "phone-not-connected", "phone-session-ended", "phone-drop-waiting", "one-display", "reconnecting", "ended", "refused"],
   );
   for (const s of shots) {
     for (const size of SIZES) {
@@ -217,6 +225,10 @@ test("the phone-remote panel in each state: rendered, the control code only wher
   assert.deepEqual(
     by.get("phone-session-ended")!.slots.map((x) => [x.text, x.canDrop]),
     [["Phone 1: steering", true], ["Phone 2: free", false]],
+  );
+  assert.deepEqual(
+    by.get("phone-drop-waiting")!.slots.map((x) => [x.text, x.canDrop]),
+    [["Phone 1: dropping", false], ["Phone 2: steering", true]],
   );
 });
 

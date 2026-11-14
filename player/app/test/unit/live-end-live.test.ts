@@ -23,7 +23,7 @@ function parts(): { seen: Seen; deps: EndLiveDeps; socket: { send(t: string): vo
   const seen: Seen = { closed: 0, stopped: 0, sent: [], enders: [], tracked: 0, timers: 0 };
   const publisher: Publisher = {
     connected: () => undefined,
-    disconnected: () => undefined,
+    disconnected: () => [],
     joined: () => undefined,
     queue: () => undefined,
     command: () => undefined,
