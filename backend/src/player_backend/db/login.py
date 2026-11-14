@@ -32,8 +32,9 @@ def request_link(
 ) -> LinkOutcome:
     """Count the requester's own limit, then make the one sign-in call.
 
-    `limited` is the only outcome that depends on the requester alone. `mail` and `no_mail`
-    must look the same to them. `email` is None when what was typed is not an address.
+        `limited` is the only outcome that depends on the requester alone. `mail` and `no_mail`
+        must look the same to them. `email` is None when the input is not valid (what was typed is
+    not an address, or the return entry is not one): then the sign-in call is not made.
     """
     with pool.handle() as db, db.transaction():
         over = db.rows(q.ADDRESS_LIMIT_HIT, (address_key, address_window, address_max))
