@@ -20,7 +20,7 @@ export function s3Visible(page: Page, height: number, screens: number): Promise<
       at("header", height);
       at("h1", height);
       at(".plate, .note", height);
-      at("form input, form button[type=submit], .panel", height * screens);
+      at("form input, form button[type=submit], .panel, .class-panel", height * screens);
       return out;
     },
     { height, screens },

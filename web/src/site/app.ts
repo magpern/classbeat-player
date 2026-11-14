@@ -9,7 +9,9 @@ import { fragmentOf } from "./core/link-token.ts";
 import { call } from "./net/api.ts";
 import { passkeySupported } from "./net/passkey.ts";
 import { notFound, offlinePlate, serverPlate, tooManyPlate } from "./pages/errors.ts";
+import { viewOf } from "./pages/class-views.ts";
 import { signedInPage } from "./pages/signed-in.ts";
+import type { SignedInEnv } from "./pages/signed-in.ts";
 import { signInPage } from "./pages/sign-in.ts";
 import { frame, PRODUCT } from "./ui/shell.ts";
 
@@ -87,8 +89,9 @@ function render(focus: "heading" | "none"): void {
     document.title = `${page.title} · ${PRODUCT}`;
     const main = frame({ nav: page.nav, onSignOut: () => void signOut(main) });
     const asked = returnPathOf(location.pathname, location.search);
-    signedInPage(main, page, {
+    const env: SignedInEnv = {
       current: () => ticket === shown,
+      open: (path) => go(path),
       sessionEnded: () => {
         returnTo = asked === null ? null : { to: asked, load: false };
         go("/sign-in", "ended");
@@ -103,7 +106,8 @@ function render(focus: "heading" | "none"): void {
         returnTo = asked === null ? null : { to: asked, load: false };
         go("/sign-in");
       },
-    });
+    };
+    signedInPage(main, page, env, viewOf(page, env));
   }
   if (focus === "heading") document.querySelector<HTMLElement>("main h1")?.focus();
 }
