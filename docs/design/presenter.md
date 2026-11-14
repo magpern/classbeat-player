@@ -68,6 +68,40 @@ presenter is built:
 - the details now in brackets after the link line ("the clock is guessing", "following the music
   is unavailable on this computer") move to the grey second line.
 
+## Phone remote: the two places
+
+The phone remote panel lists the two phones' places, one line each, "Phone 1: ..." and
+"Phone 2: ...", with **Drop** beside a place that holds a phone (ADR 0005 section 3). The words
+come from `panel-view.ts`; a place shows one of four lines:
+
+| Line | When | Drop | Non-colour cue |
+|---|---|---|---|
+| Phone 1: steering | A phone holds the place and is connected | shown | a filled square before the line, the line in full-strength text |
+| Phone 1: not connected | A phone holds the place but its connection is away (it may come back; the place is still held) | shown | a hollow square (a 2 px outline, nothing inside) before the line, the line in full-strength text |
+| Phone 1: dropping | Drop was pressed and the server has not answered yet | hidden (a second press is not offered) | the hollow square, the line in grey |
+| Phone 1: free | No phone holds the place (also once the server has freed a dropped place) | hidden | no square, the line in grey |
+
+- **Text heights.** The presenter is read at arm's length, so its type is set in pixels (the
+  convention above), not as a share of the screen. Every place line is **17 px**, the same size as
+  the control labels, in Atkinson 700; the place number and the state word are on one line (no
+  wrapping at 1000 px wide: the longest line is "Phone 2: not connected", 22 characters). Drop is
+  at least 44 px high, as Remove is in [riders-panel.md](riders-panel.md).
+- **Telling "not connected" apart from "free" without colour.** The words differ, and so does the
+  mark: "not connected" has the hollow square and a Drop; "free" has no mark and no Drop. Grey
+  alone never carries the difference. No hue is used (plan section 3, rule 7).
+- "Dropping" is shown only while the place's last drop waits for the server (`drop-policy.ts`); it
+  is the wait between the press and "free", so the instructor sees that the press took.
+
+The code today is unstyled markup; the squares, greys and sizes above are what PL5 draws. The
+words, the Drop rules and the four states are what the code already does.
+
+## PL5 note: the riders list scrolls inside the drawer
+
+The riders list (riders-panel.md) scrolls inside the riders drawer; the head, the actions and the
+note never scroll, and the window never grows. Without this, 60 riders (ADR 0002's cap) push the
+status line and the transport controls about 1500 px down the window, out of reach while a class
+runs. PL5's layout keeps the drawer a fixed share of the window and gives the list the rest.
+
 ## Controls
 
 **The room screen has five of them; the rest are here.** The room screen's control band carries

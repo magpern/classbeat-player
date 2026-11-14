@@ -169,6 +169,22 @@ companion's landscape tokens (numeral min(22 vh, 11.6 vw), countdown min(18 vh, 
 min(8.2 vh, 4.3 vw), minor min(5.6 vh, 3.1 vw), labels min(4.4 vh, 2.35 vw)). Landscape is the
 steadier way round on a handlebar mount; both are first-class.
 
+### Sizes the page uses
+
+The page's sizes are the companion's, a step larger, so every floored text keeps its 5 % margin
+over R1's floors whatever whole pixel a browser rounds a cap height to. They replace the companion
+tokens in the numbers above (`--c-hero`, `--c-value`, `--c-minor`, `--c-label`; the companion's
+`--c-gel` stays):
+
+| Token | Portrait | Landscape |
+|---|---|---|
+| `--c-hero` (countdown) | min(10.85dvh, 23.8vw) | min(18.9dvh, 10.6vw) |
+| `--c-value` | min(5.05dvh, 10.4vw) | min(8.2dvh, 4.6vw) |
+| `--c-minor` | min(3.4dvh, 7vw) | min(5.95dvh, 3.4vw) |
+| `--c-label` | min(2.7dvh, 5.3vw) | min(4.7dvh, 2.7vw) |
+
+The effort block's gap between rows is 1.1dvh in portrait and **1.4dvh in landscape**.
+
 ### Fitting text
 
 - **Countdown**: as the companion: `M:SS` below 10 minutes, `MM:SS` to 99:59, `99+` above, digits
@@ -251,7 +267,7 @@ screen to stay on" (not mocked; the companion's words).
 | State | When | What the page shows | Mock-up |
 |---|---|---|---|
 | Removed | `ended` with reason `dropped` (the instructor removed this rider) | "The instructor removed you from this class", "To join again, scan the code on the room screen." **No rejoin button**: scanning again works unless the instructor has locked joining or made a new code (ADR 0007 section 3) | [html](mockups/rider-removed.html), [portrait](mockups/rider-removed-390x844.png), [landscape](mockups/rider-removed-844x390.png) |
-| Ended | `ended` with reason `host_ended`, `revoked` or `expired` | "The class has ended", "You can close this page." | [html](mockups/rider-ended.html), [portrait](mockups/rider-ended-390x844.png), [landscape](mockups/rider-ended-844x390.png) |
+| Ended | `ended` with reason `host_ended`, `revoked` or `expired`; or the connection closes with code 4403 (the class ended) or 4409 (replaced by another tab or phone using the same token) | "The class has ended", "You can close this page." | [html](mockups/rider-ended.html), [portrait](mockups/rider-ended-390x844.png), [landscape](mockups/rider-ended-844x390.png) |
 
 After Removed, the page forgets its token. A reload shows the entry form (the code is still in the
 address); that is the same as scanning again, and the same refusals apply.
@@ -274,7 +290,7 @@ exclamation marks and no generated text (rule 10). Link words and plates are whi
 
 | Where | Words |
 |---|---|
-| Top line | "Joined as Anna" (the nickname, one line, ellipsis); plates "Waiting for the instructor", "Reconnecting" |
+| Top line | "Joined as Anna" (the nickname, one line, ellipsis); after a reload just "Joined", because the nickname is never stored; plates "Waiting for the instructor", "Reconnecting" |
 | Countdown labels | "Interval left", "First interval", "Last interval", "Until the next song", "Interval left, not live" |
 | Effort | "Power", "Heart rate", "RPE"; units "W", "bpm", "FTP", "max"; the hint |
 | Keys | "Join the class", "Joining…", "Forget", "My numbers", "Done", "Try again" |
