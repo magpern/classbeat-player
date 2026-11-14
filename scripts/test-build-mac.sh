@@ -44,13 +44,26 @@ cat >"$bin/fetch" <<'F'
 echo "fetch in ${PWD##*/}" >>"$LOG"
 [ -n "${FAKE_FETCH_EMPTY:-}" ] || mkdir -p node_modules/electron/dist
 F
+cat >"$bin/tar" <<'F'
+#!/usr/bin/env bash
+echo "tar $*" >>"$LOG"
+# Fake unpack: -C DIR is the 4th argument; leave a marker so a stale unpack is detectable.
+mkdir -p "$4/classbeat-player-macos-arm64/Electron.app"
+ls "$4/classbeat-player-macos-arm64" >>"$LOG"
+touch "$4/classbeat-player-macos-arm64/new-$(date +%s%N)"
+F
+cat >"$bin/open" <<'F'
+#!/usr/bin/env bash
+echo "open $*" >>"$LOG"
+[ -z "${FAKE_OPEN_FAIL:-}" ]
+F
 chmod +x "$bin"/*
 
 export LOG="$tmp/log" ROOT_FOR_LOG
 ROOT_FOR_LOG="$(cd "$here/.." && pwd)"
 export BUILD_MAC_UNAME="$bin/uname" BUILD_MAC_NODE="$bin/node" BUILD_MAC_NPM="$bin/npm"
 export BUILD_MAC_XCODE_SELECT="$bin/xcode-select" BUILD_MAC_PACKAGE="$bin/package"
-export BUILD_MAC_ELECTRON_FETCH="$bin/fetch"
+export BUILD_MAC_ELECTRON_FETCH="$bin/fetch" BUILD_MAC_TAR="$bin/tar" BUILD_MAC_OPEN="$bin/open"
 
 # The app folder is a scratch copy so tests never write into the repository.
 run() { : >"$LOG"; rm -rf "$tmp/app"; mkdir -p "$tmp/app"; export BUILD_MAC_APP_DIR="$tmp/app"; set +e; out="$(bash "$here/build-mac.sh" "$@" 2>&1)"; rc=$?; set -e; }
@@ -112,6 +125,26 @@ check "fetch producing nothing fails" 1 "$rc"
 has "fetch failure message" "no Electron runtime after fetching it" "$out"
 case "$(cat "$LOG")" in *package*) echo "FAIL packaged after a failed fetch" >&2; fail=1 ;; *) echo "ok   no packaging after a failed fetch" ;; esac
 
+run --out "$tmp/out"
+case "$(cat "$LOG")" in *"open "*|*"tar "*) echo "FAIL without --open: tar or open ran" >&2; fail=1 ;; *) echo "ok   without --open: no tar, no open" ;; esac
+
+rm -rf "$tmp/out2"
+run --open --out "$tmp/out2"
+check "--open exits 0" 0 "$rc"
+has "--open unpacks the archive" "tar -xzf $tmp/out2/classbeat-player-macos-arm64-unsigned.tar.gz -C $tmp/out2" "$(cat "$LOG")"
+has "--open starts the app" "open $tmp/out2/classbeat-player-macos-arm64/Electron.app" "$(cat "$LOG")"
+mkdir -p "$tmp/out2/classbeat-player-macos-arm64"
+touch "$tmp/out2/classbeat-player-macos-arm64/stale-file"
+run --open --out "$tmp/out2"
+check "--open twice exits 0" 0 "$rc"
+stale=gone; [ ! -e "$tmp/out2/classbeat-player-macos-arm64/stale-file" ] || stale=present
+check "--open twice: second unpack replaced the first" gone "$stale"
+has "--open twice starts the app again" "open $tmp/out2/classbeat-player-macos-arm64/Electron.app" "$(cat "$LOG")"
+
+FAKE_OPEN_FAIL=1 run --open --out "$tmp/out2"
+check "--open: refused open exits 1" 1 "$rc"
+has "--open: refused open prints right-click step" "right-click Electron.app" "$out"
+
 touch "$tmp/afile"
 run --out "$tmp/afile"
 check "bad --out fails" 1 "$rc"
@@ -119,10 +152,10 @@ has "bad --out message" "cannot use --out directory" "$out"
 check "bad --out runs no npm" "" "$(cat "$LOG")"
 
 # The script must not touch quarantine or Gatekeeper.
-if grep -Ev '^[[:space:]]*#' "$here/build-mac.sh" | grep -Eq 'xattr|spctl|codesign'; then
-  echo "FAIL build-mac.sh calls xattr, spctl or codesign" >&2; fail=1
+if grep -Ev '^[[:space:]]*#' "$here/build-mac.sh" | grep -Eiq 'xattr|spctl|codesign|quarantine'; then
+  echo "FAIL build-mac.sh calls xattr, spctl, codesign or quarantine" >&2; fail=1
 else
-  echo "ok   no xattr, spctl or codesign"
+  echo "ok   no xattr, spctl, codesign or quarantine"
 fi
 
 exit "$fail"

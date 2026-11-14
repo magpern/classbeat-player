@@ -52,9 +52,9 @@ until a backend is running somewhere. Details: [build-on-a-mac.md](build-on-a-ma
 
 ```bash
 cd ~/classbeat-player        # or wherever you cloned it: the repository's top folder
-scripts/build-mac.sh --out ~/Desktop/cb
+scripts/build-mac.sh --out ~/Desktop/cb --open
 ```
 
-It prints the archive's path; unpack it with `tar -xzf <archive> -C ~/Desktop/cb` and open
-`Electron.app` in the unpacked folder. The build is unsigned, so macOS may refuse to open it; whether
+With `--open` it unpacks the archive into that folder (replacing an earlier unpack) and starts the app. The
+build is unsigned, so macOS may refuse to open it; the script then prints the right-click, Open step. Whether
 to allow it is your decision on your own Mac.
