@@ -99,6 +99,20 @@ const presenterRiders = (name, w, h) => ({
 const JOIN = ['join-before-start', 'join-new-code', 'join-running'];
 const KEEP_JOIN = new Set(['join-before-start-1440x1080', 'join-worst-1280x1024', 'join-worst-1650x1080', 'join-worst-1280x720']);
 
+// The web player page (play.md): every room state at the four reference sizes (phone and tablet,
+// each way up; kept), the main and worst states at the smallest phone each way up (checked; the
+// running one kept), and the phone with the browser's bars showing (full screen not available,
+// kept). The picker and its states are website pages (site.md's checks) at four widths.
+const { NAMES: PLAY_NAMES, SITE_NAMES: PLAY_SITE } = require('./play-pages');
+const PLAY_SIZES = [[390, 844], [844, 390], [768, 1024], [1024, 768]];
+const PLAY_SMALL = ['before-start', 'running', 'running-band', 'paused', 'end-asked', 'worst', 'worst-band', 'worst-before-start'];
+const playRoom = (name, w, h, save = true, motion = null) => ({
+  file: `play-${name}.html`, png: `play-${name}${motion ? '-reduced' : ''}-${w}x${h}.png`, w, h, room: false, play: true, save, motion,
+});
+const playSite = (name, w) => ({
+  file: `play-${name}.html`, png: `play-${name}-${w}.png`, w, h: 0, auto: true, room: false, presenter: true, site: true, save: w === 390 || w === 1024,
+});
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -138,6 +152,11 @@ const SHOTS = [
   ...SIZES.map(([w, h]) => room('join-worst', w, h, KEEP_JOIN.has(`join-worst-${w}x${h}`))),
   ...PR_NAMES.flatMap((n) => [[1000, 720], [1280, 800]].map(([w, h]) => presenterRiders(n, w, h))),
   ...RIDER_NAMES.flatMap((n) => COMPANION_SIZES.filter(([w, h]) => !RIDER_FORMS.includes(n) || h > w).map(([w, h]) => rider(n, w, h))),
+  ...PLAY_NAMES.flatMap((n) => PLAY_SIZES.map(([w, h]) => playRoom(n, w, h))),
+  ...PLAY_SMALL.flatMap((n) => [[360, 640], [640, 360]].map(([w, h]) => playRoom(n, w, h, n === 'running'))),
+  playRoom('running', 390, 664), // the browser's bars showing: full screen not available
+  playRoom('running-band', 390, 844, false, 'reduce'), // the band appears and goes at once
+  ...PLAY_SITE.flatMap((n) => [390, 768, 844, 1024].map((w) => playSite(n, w))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS, FOLLOW };
