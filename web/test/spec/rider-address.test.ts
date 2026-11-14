@@ -69,6 +69,22 @@ describe("rider page: the address keeps only the join code", () => {
     });
   }
 
+  it("a class restored from the tab's token, with no code in the address, keeps none: a bare code typed later is dropped", async () => {
+    // The intent (app.ts, onHash): in a class the address holds the class's code and nothing else, so
+    // a class that has no code of its own (the page was reloaded with the token, and no fragment)
+    // holds none. The form is not on screen to take a typed code, and the address stays `/j`.
+    const f = await open({ stored: TOKEN, hash: "", clock: false });
+    try {
+      await f.live.ready();
+      await f.page.evaluate(() => (location.hash = "#KXPD-RMTB"));
+      await f.page.waitForFunction(() => location.href === "https://site.test/j");
+      await f.page.evaluate(() => (location.hash = "#junk"));
+      await f.page.waitForFunction(() => location.href === "https://site.test/j");
+    } finally {
+      await f.context.close();
+    }
+  });
+
   it("cleans a fragment changed later, and in a class keeps the class's code", async () => {
     // A real clock: waitForFunction polls on the page's own timers.
     const f = await open({ ...JOIN, hash: "", clock: false });

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
 import { CSP, ORIGIN, crossSite, launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
+import { policyMetaCount, policyMetas, referrerMetas } from "../lib/html-meta.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
@@ -31,14 +32,16 @@ describe("the page's CSP", () => {
 
   it("is in the page too, and the page has no inline script, style or handler", () => {
     const html = readFileSync(join(DIST, "site", "index.html"), "utf8");
-    const meta = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html);
-    assert.ok(meta, "no CSP meta");
-    assert.match(meta[1], /^default-src 'self';/);
-    assert.ok(!/unsafe-|https?:|\*/.test(meta[1]));
+    // Read by tokenizing the page (test/lib/html-meta.ts): exactly one policy meta, however it is written.
+    assert.equal(policyMetaCount(html), 1, "not exactly one CSP meta");
+    const [policy] = policyMetas(html);
+    assert.ok(policy !== undefined, "the CSP meta could not be read");
+    assert.match(policy, /^default-src 'self';/);
+    assert.ok(!/unsafe-|https?:|\*/.test(policy));
     for (const tag of html.match(/<script\b[^>]*>/g) ?? []) assert.match(tag, /\ssrc="\/[\w.]+"/, `inline script: ${tag}`);
     assert.doesNotMatch(html, /<script\b[^>]*>[^<]+<\/script>/);
     assert.doesNotMatch(html, /<style\b|\sstyle=|\son\w+=/i);
-    assert.match(html, /<meta name="referrer" content="no-referrer">/);
+    assert.deepEqual(referrerMetas(html), ["no-referrer"]);
   });
 
   it("is met by the bundle: no eval and no other origin", () => {

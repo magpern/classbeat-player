@@ -8,6 +8,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { addressUse } from "../lib/address-guard.ts";
+import { hasPolicyMeta, referrerMetas } from "../lib/html-meta.ts";
 import { RIDER_ALLOWED, impurities } from "../lib/core-purity.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 
@@ -63,16 +65,17 @@ describe("the rider page's structure", () => {
   });
 
   it("only app.ts changes the address, and only in place: no pushState, no assignment to the location", () => {
+    // Read from each file's syntax tree (test/lib/address-guard.ts, tested in address-guard.test.ts).
     for (const p of files(RIDER)) {
-      const text = code(p);
       const name = relative(RIDER, p);
-      assert.doesNotMatch(text, /pushState|location\.(hash|href|search)\s*=|location\s*=|location\.(assign|replace)\(/, name);
-      if (name !== "app.ts") assert.doesNotMatch(text, /replaceState/, name);
+      const use = addressUse(name, readFileSync(p, "utf8"));
+      assert.deepEqual(use.problems, [], name);
+      if (name !== "app.ts") assert.deepEqual(use.replaceStateCalls, [], name);
     }
     // Every replaceState puts back a target worked out from the address's own rule or a sent class code.
-    assert.deepEqual(code(join(RIDER, "app.ts")).match(/history\.replaceState\([^;]*\);/g), [
-      'history.replaceState(null, "", target);',
-      'history.replaceState(null, "", `${location.pathname}#${r.send.session}`);',
+    assert.deepEqual(addressUse("app.ts", readFileSync(join(RIDER, "app.ts"), "utf8")).replaceStateCalls, [
+      'history.replaceState(null, "", target)',
+      'history.replaceState(null, "", `${location.pathname}#${r.send.session}`)',
     ]);
   });
 
@@ -80,7 +83,8 @@ describe("the rider page's structure", () => {
     // A <meta> policy cannot name the site's origin for connect-src, so it could only be looser than
     // the header (rider_page_policy.py); the two would apply together and the meta would add nothing.
     const html = readFileSync(join(RIDER, "index.html"), "utf8");
-    assert.doesNotMatch(html, /http-equiv\s*=\s*["']?content-security-policy/i);
-    assert.match(html, /<meta name="referrer" content="no-referrer">/);
+    // Read by tokenizing the page (test/lib/html-meta.ts), so an entity-encoded name cannot slip by.
+    assert.equal(hasPolicyMeta(html), false);
+    assert.deepEqual(referrerMetas(html), ["no-referrer"]);
   });
 });

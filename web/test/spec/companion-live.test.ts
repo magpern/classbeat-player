@@ -11,6 +11,7 @@ import { NO_ANSWER, REFUSAL_WORDS } from "../../src/companion/core/words.ts";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
 import { ORIGIN, controlCsp, launchOffline, openCompanion } from "../lib/companion-fake.ts";
 import type { Fake, OpenOptions } from "../lib/companion-fake.ts";
+import { hasPolicyMeta, referrerMetas } from "../lib/html-meta.ts";
 import { SECRET43, examples } from "../lib/live-examples.ts";
 
 const TOKEN = `cbp_ctl_${SECRET43}`;
@@ -254,8 +255,9 @@ describe("companion live: the end, the wake lock and the page's policy", () => {
     // the header (control_page_policy.py); the two would apply together and the meta would add nothing.
     for (const p of [join(WEB_DIR, "src", "companion", "index.html"), join(DIST, "control", "index.html")]) {
       const html = readFileSync(p, "utf8");
-      assert.doesNotMatch(html, /http-equiv\s*=\s*["']?content-security-policy/i, p);
-      assert.match(html, /<meta name="referrer" content="no-referrer">/, p);
+      // Read by tokenizing the page (test/lib/html-meta.ts), so an entity-encoded name cannot slip by.
+      assert.equal(hasPolicyMeta(html), false, p);
+      assert.deepEqual(referrerMetas(html), ["no-referrer"], p);
     }
     // The page itself is served with the fake's header policy, which companion-fake-headers.test.ts
     // ties to the backend's text.

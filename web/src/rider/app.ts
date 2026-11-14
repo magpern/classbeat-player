@@ -28,11 +28,12 @@ const now = (): number => performance.now();
 /**
  * The class code in the address, with the address made to hold at most `/j#<code>` (core/address.ts):
  * a query string, a control code or any other fragment is replaced in place, so it stays in neither
- * the address nor the history. `keep`, in a class or while joining, is the code the address keeps.
+ * the address nor the history. `held`, in a class or while joining, is the code the address keeps,
+ * which may be none (a class restored with no fragment): then the address holds no code either.
  */
-function codeInAddress(keep: string | null = null): string | null {
+function codeInAddress(held?: { readonly code: string | null }): string | null {
   const a = riderAddress(location.pathname, location.hash);
-  const target = keep !== null ? `${location.pathname}#${keep}` : a.target;
+  const target = held === undefined ? a.target : held.code !== null ? `${location.pathname}#${held.code}` : location.pathname;
   if (location.href !== location.origin + target) history.replaceState(null, "", target);
   return a.join;
 }
@@ -80,9 +81,12 @@ export class RiderApp {
   }
 
   private onHash(): void {
-    // The address is cleaned on every change; in a class or while joining, the code stays the same.
+    // The address is cleaned on every change. In a class or while joining the address holds the
+    // code it had and nothing else, so a class restored from the tab's token with no fragment has
+    // none, and a bare code typed into the address later is dropped, not kept (the form is not on
+    // screen then). Only outside a class does a typed code become the form's.
     const settled = this.live !== null || this.form.busy;
-    const code = codeInAddress(settled ? this.address : null);
+    const code = codeInAddress(settled ? { code: this.address } : undefined);
     if (settled) return;
     this.address = code;
     this.form = { ...this.form, code };
