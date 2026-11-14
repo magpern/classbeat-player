@@ -146,10 +146,20 @@ text and S1 and S2 hold.
 | List | "Classes" and the count, the filter (from 8 classes), column labels, one row per class: title (a link), length `m:ss` or `h:mm:ss`, source, changed date. **Title A to Z**, case and accents ignored, equal titles by id; never by date or use (rules 10 and 13) | `GET classes` | [classes](mockups/site-classes.html) |
 | Loading | "Loading your classes…" | `GET classes`, every page | [loading](mockups/site-classes-loading.html) |
 | Empty | "No classes yet", how classes arrive ("In classbeat, choose Connect player"), a button to Linked apps | `GET classes` | [empty](mockups/site-classes-empty.html) |
-| Class details | Title; length, sport, music source and song count, source, changed date; "Delete class"; **Time in zone** (zone number in an outlined box, name, time); **Songs** (number, title, artist, length); **Intervals** (start and length, zone as number and name, cadence and position or the running target, the cue text). Read only | `GET classes/{id}` | [detail](mockups/site-class-detail.html) |
+| Class details | Title; length, sport, music source and song count, source, changed date; **the actions row** ("Play on this device", then "Delete class"); **Time in zone** (zone number in an outlined box, name, time); **Songs** (number, title, artist, length); **Intervals** (start and length, zone as number and name, cadence and position or the running target, the cue text). Read only | `GET classes/{id}` | [detail](mockups/site-class-detail.html) |
 | Delete, confirming | Panel "Delete this class?", "It is removed from your library at once, and from each of your devices when it next syncs. It cannot be undone here.", "Keep the class" (default, focused), "Delete class" | `DELETE classes/{id}` | [delete](mockups/site-class-delete.html) |
 | Deleted | Back on the list with the note "Deleted “*title*”", "Your devices remove it the next time they sync"; the selection is not kept | 204 | [deleted](mockups/site-classes-deleted.html) |
 | Not found | "That class is not here": a deleted class, an unknown id, another account's id and a removal marker all give this | 404 `not_found` | [not found](mockups/site-class-not-found.html) |
+
+**The actions row on class details** sits under the title and the facts line and before "Time in
+zone". "Play on this device" comes first and "Delete class" second, at least 8 px apart (12 px in
+the mock-up) and wrapping onto a second line on a narrow screen (S7). Both are the quiet, outlined
+button: "Delete class" keeps its style, and neither is the filled primary. "Play on this device" is
+a real link to `/play#<class id>`, loaded in full (an ordinary page load, not opened in place by
+the site's router), so the play page starts clean. It carries words only, no icon, and meets S7
+and S8. It shows only when the class exists and has a canonical id: not while loading, not on an
+error and not on "That class is not here". While the delete panel is open the row is replaced by
+the panel, as today.
 
 Notes: the route answers latest change first, 50 to 200 to a page. The page reads every page and
 sorts here, so the order is the title's (see "What the backend would need"). Removal markers carry no
