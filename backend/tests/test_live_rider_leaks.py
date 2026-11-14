@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from player_backend.code_policy import ALPHABET
+from player_backend.live.events import NoJoinCode
 from tests.livehelp import SCHEMA, live_app, recv, until
 
 JOIN = "/api/live/join"
@@ -63,8 +64,10 @@ def test_no_rider_value_in_any_log_record_or_audit_event(
     live.registry.lock(started.session_id, False)
     for _ in range(10):
         made = live.registry.new_join_code(started.session_id, live.clock())
+        assert isinstance(made, str)
         secret += [made, made.replace("-", "")]
-    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    limited = live.registry.new_join_code(started.session_id, live.clock())
+    assert limited == NoJoinCode("join_code_limit")
     current = secret[-2]
     assert join(started.join_code).status_code == 403  # an earlier code
     for _ in range(120):

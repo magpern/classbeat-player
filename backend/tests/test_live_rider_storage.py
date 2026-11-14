@@ -68,7 +68,7 @@ def test_no_rider_data_reaches_the_database(site: Site) -> None:
     assert refused.status_code == 403
     service.registry.lock(session_id, False)
     code = service.registry.new_join_code(session_id, service.clock())
-    assert code is not None
+    assert isinstance(code, str)
     old = phone.post(JOIN, json={"session": started["joinCode"], "nickname": "Old"})
     assert old.status_code == 403
     service.sweep()

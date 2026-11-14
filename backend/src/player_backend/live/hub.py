@@ -2,7 +2,8 @@
 ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
 
 - One connection per token: a new host connection, or a controller's with the same token,
-  replaces the old one, which is closed with 4409.
+  replaces the old one, which is closed with 4409. A phone whose slot a newer token's phone
+  takes was dropped (the drop not yet here): it gets `ended` `dropped` and 4403, as in a drop.
 - The host is told `welcome`, then, in the same step, both places in slot order
   (live_place_policy.py: `controller_joined`, `controller_left` `disconnected` or `free`); a
   controller is told `welcome` with its slot and whether the host is in. Controllers get
@@ -59,7 +60,6 @@ from player_backend.live_route_policy import inbound
 from player_backend.live_session_policy import wire_reason
 from player_backend.live_token_policy import Via
 from player_backend.live_wire_policy import (
-    ENDED,
     REPLACED,
     LeftReason,
     Message,
@@ -142,8 +142,7 @@ class Hub:
         self.commands.forget(event.session_id, (1, 2))
         message = ended(wire_reason(event.reason))
         for link in links:
-            self._send(link, message)
-            link.close(ENDED)
+            self.sender.end(link, message)
         self.riders.end(event.session_id, message)
 
     def _dropped(self, event: Dropped) -> None:
@@ -156,8 +155,7 @@ class Hub:
             if link.token_hash != event.token_hash:
                 return  # the newer token's phone: its `controller_joined` was sent
             del phones[event.slot]
-            self._send(link, ended("dropped"))
-            link.close(ENDED)
+            self.sender.end(link, ended("dropped"))
         via = self.service.registry.places(event.session_id).get(event.slot)
         if via is not None:
             return self._left(event.session_id, event.slot, via, "disconnected")
@@ -194,7 +192,9 @@ class Hub:
         phones = self._controllers.setdefault(seat.session_id, {})
         old = phones.get(seat.slot)
         phones[seat.slot] = link
-        if old is not None:
+        if old is not None and old.token_hash != seat.token_hash:
+            self.sender.end(old, ended("dropped"))  # its token lost the place: a late drop
+        elif old is not None:
             old.close(REPLACED)
         host = self._hosts.get(seat.session_id)
         self._send(link, welcome_controller(seat.slot, host is not None))

@@ -28,7 +28,7 @@ from typing import cast
 from uuid import UUID
 
 from player_backend.code_policy import normalise_code, show_code
-from player_backend.live.events import JoinRefusal, RiderIn, RiderSeat
+from player_backend.live.events import JoinRefusal, NoJoinCode, RiderIn, RiderSeat
 from player_backend.live.table import HeldRider, HeldSession, Table
 from player_backend.live_rider_policy import RIDER_ID_BYTES, gone, has_place, rider_id
 from player_backend.token_issue import new_token
@@ -155,24 +155,25 @@ class Riders(Table):
             session = self._sessions.get(session_id)
             return None if session is None else session.locked
 
-    def new_join_code(self, session_id: UUID, now: float) -> str | None:
+    def new_join_code(self, session_id: UUID, now: float) -> str | NoJoinCode:
         """A new join code for the session, as shown; the earlier one finds nothing from now on,
-        and the current control code ends, telling no one. None when the session is gone, or
-        past its 10 an hour: then nothing changes, and the request is counted. A session past
-        its lifetime ends, as in `host_session`, and gets no code."""
+        and the current control code ends, telling no one. `NoJoinCode`, with nothing changed,
+        when the session is gone (`session_gone`), or past its 10 an hour (`join_code_limit`,
+        also counted here). A session past its lifetime ends, as in `host_session`, and gets
+        no code: `session_gone`."""
         with self._lock:
             session = self._sessions.get(session_id)
             ended = None if session is None else self._expired(session, now)
             if session is not None and ended is None:
                 return self._new_join_code(session, now)
         self._expiry_told(ended)
-        return None
+        return NoJoinCode("session_gone")
 
-    def _new_join_code(self, session: HeldSession, now: float) -> str | None:
+    def _new_join_code(self, session: HeldSession, now: float) -> str | NoJoinCode:
         """`new_join_code` for a running session. Hold `_lock`."""
         if not session.join_codes.take(now):
             self.ignored["join_code_limit"] += 1
-            return None
+            return NoJoinCode("join_code_limit")
         code = self._new_code()
         del self._by_code[session.join_code]
         session.join_code = code

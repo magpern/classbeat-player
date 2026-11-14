@@ -9,7 +9,8 @@ sections 2 and 6).
 - a controller dropped (on any thread) is closed the same way, the host told `controller_left`
   `dropped`, and its token says `hello` no more;
 - the sweep ending a session by its lifetimes: `ended` `expired`;
-- a hub event that fails is logged by its type and costs no other event.
+- a hub event that fails is logged by its type and costs no other event;
+- a host's `end` whose work fails is logged as `live.end_failed`, by the error's type only.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ import pytest
 from player_backend.db import live as db_live
 from player_backend.db.executor import Pool
 from player_backend.live_session_policy import HOST_AWAY_LIMIT
-from tests.livehelp import closed, command, hello, live_app, nothing, recv
+from tests.livehelp import closed, command, hello, live_app, nothing, recv, until
 
 
 @pytest.fixture
@@ -170,3 +171,29 @@ def test_a_failing_event_is_logged_and_costs_no_other(
         nothing(one)  # its event failed: logged, and the next was still handled
     assert [r.getMessage() for r in caplog.records] == ["live: RuntimeError"]
     assert "boom" not in caplog.text
+
+
+def test_a_failing_end_is_logged_by_its_type(
+    live: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    started = live.session()
+    calls: list[tuple[object, str]] = []
+
+    def failing(session_id: object, reason: str) -> None:  # on the worker thread
+        calls.append((session_id, reason))
+        raise RuntimeError("boom " + started.host_token)
+
+    monkeypatch.setattr(live.hub.service, "end", failing)
+    with (
+        caplog.at_level(logging.ERROR, "player_backend.live"),
+        live.joined(started.host_token, None) as host,
+    ):
+        host.send_json({"v": 1, "type": "end"})
+        assert until(lambda: bool(caplog.records)), "the failed end was not logged"
+        nothing(host)  # the end did not happen, and the host is told nothing of it
+    assert calls == [(started.session_id, "host_ended")]
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage() == "live: RuntimeError"
+    assert getattr(record, "fields", None) == {"event": "live.end_failed"}
+    assert "boom" not in caplog.text and started.host_token not in caplog.text

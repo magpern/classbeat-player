@@ -29,6 +29,9 @@ _CLASS_ID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 RETURN_ENTRY: Final = re.compile(
     r"control(\." + _CODE_HALF + "-" + _CODE_HALF + r")?|play(\." + _CLASS_ID + ")?"
 )
+# A bound on what is matched at all, above the longest entry (`play.` and a class id, 41): a
+# longer string is not a return entry and never reaches the pattern.
+RETURN_MAX: Final = 64
 
 
 def normalise_email(raw: str) -> str | None:
@@ -42,8 +45,9 @@ def normalise_email(raw: str) -> str | None:
 
 
 def is_return_entry(raw: str) -> bool:
-    """Whether `raw` is, as a whole, a return entry the mailed link may carry."""
-    return RETURN_ENTRY.fullmatch(raw) is not None
+    """Whether `raw` is, as a whole, a return entry the mailed link may carry. Its length is
+    checked first: over `RETURN_MAX` it is not one, and the pattern is not run."""
+    return len(raw) <= RETURN_MAX and RETURN_ENTRY.fullmatch(raw) is not None
 
 
 def address_limit_key(address_hash: bytes) -> bytes:

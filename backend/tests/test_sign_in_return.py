@@ -8,11 +8,14 @@ import json
 import logging
 
 import pytest
-from psycopg import sql
 
+from player_backend import login_policy
 from player_backend.db import login
 from player_backend.logging_setup import configure_logging
+from player_backend.login_policy import RETURN_MAX
+from tests.dbhelp import every_value
 from tests.sitehelp import ORIGIN, Site
+from tests.test_return_entry_bound import Spy
 from tests.test_return_entry_policy import INVALID
 
 EMAIL = "rider@example.test"
@@ -114,6 +117,35 @@ def test_a_value_that_is_not_a_string_gets_the_framework_answer(
     assert site.mailer.sent == [] and _links(site) == 0
 
 
+# Over the bound: the longest accepted entry with more after it, and one near the body's cap.
+OVER = ["play.3f2a9c4e-8b1d-4e6f-a0c7-5d9e1b2f4a68" + "0" * (RETURN_MAX - 40), "control" * 2000]
+
+
+@pytest.mark.parametrize("value", OVER)
+def test_a_value_over_the_bound_is_invalid_return_in_its_order(
+    site: Site, value: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert len(value) > RETURN_MAX
+    site.allow(EMAIL)
+    spy = Spy()
+    monkeypatch.setattr(login_policy, "RETURN_ENTRY", spy)
+    calls = _no_sign_in_call(monkeypatch)
+    here = site.browser()
+    bad_email = here.post(LINK, json={"email": "not an address", "return_to": value})
+    assert bad_email.status_code == 422 and bad_email.json() == INVALID_EMAIL
+    refused = here.post(LINK, json={"email": EMAIL, "return_to": value})
+    assert refused.status_code == 422 and refused.json() == INVALID_RETURN
+    assert value not in refused.text
+    # Not `invalid_request` from the body's reading: the data access ran, given no email.
+    assert calls == [None, None] and spy.seen == []
+    assert site.mailer.sent == [] and _links(site) == 0
+    for _ in range(8):  # the rest of the requester's own limit; then the 429 comes first
+        assert here.post(LINK, json={"email": EMAIL, "return_to": value}).status_code == 422
+    limited = here.post(LINK, json={"email": "not an address", "return_to": value})
+    assert limited.status_code == 429 and limited.json() == {"error": "too_many_requests"}
+    assert spy.seen == []
+
+
 def test_a_bad_email_is_answered_before_a_bad_return_entry(site: Site) -> None:
     for email in ("not an address", "a@"):
         for value in ("", "Control", "control." + CODE.lower(), "/control"):
@@ -158,23 +190,6 @@ def test_neither_422_counts_toward_the_limits_of_the_email(site: Site) -> None:
     assert sent == [True, True, True, False]
 
 
-def _every_value(site: Site) -> str:
-    """Every row of every table of the backend's schemas, as text."""
-    tables = site.su.execute(
-        "SELECT table_schema, table_name FROM information_schema.tables "
-        "WHERE table_type = 'BASE TABLE' "
-        "AND table_schema NOT IN ('pg_catalog', 'information_schema')"
-    ).fetchall()
-    assert tables
-    dumped: list[str] = []
-    for schema, table in tables:
-        query = sql.SQL("SELECT t::text FROM {}.{} t").format(
-            sql.Identifier(str(schema)), sql.Identifier(str(table))
-        )
-        dumped += [str(row[0]) for row in site.su.execute(query).fetchall()]
-    return "\n".join(dumped)
-
-
 def test_the_return_entry_is_kept_in_no_column_and_no_row(site: Site) -> None:
     site.allow(EMAIL)
     site.sign_in(EMAIL)  # the account exists, so the request writes an audit event too
@@ -182,7 +197,7 @@ def test_the_return_entry_is_kept_in_no_column_and_no_row(site: Site) -> None:
     asked = browser.post(LINK, json={"email": EMAIL, "return_to": "control." + CODE})
     assert asked.status_code == 200 and len(site.mailer.sent) == 2
     assert _links(site) == 1
-    stored = _every_value(site)
+    stored = every_value(site.su)
     for needle in (CODE, CODE.replace("-", ""), "return="):
         assert needle not in stored
     columns = site.su.execute(

@@ -16,7 +16,8 @@ registry's (live/riders.py); this module holds the connections and tells who nee
 - `drop_rider`: the token is dropped; its connection gets `ended` `dropped` and is closed with
   4403; the host gets `rider_left` `dropped`. A rider id the session does not hold is dropped
   and counted. `lock` is answered `lock_state`; `new_join_code` is answered `join_code`, or,
-  past its 10 an hour, dropped and counted with nothing changed.
+  past its 10 an hour, dropped and counted (`join_code_limit`) with nothing changed; for a
+  session gone or past its lifetime, dropped and counted as `session_gone`.
 - The session's end: every rider gets `ended` and is closed with 4403.
 
 Nothing here is logged: a nickname is only ever in `rider_joined`, to the host's connection.
@@ -28,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from uuid import UUID
 
-from player_backend.live.events import RiderSeat
+from player_backend.live.events import NoJoinCode, RiderSeat
 from player_backend.live.link import Link, Socket
 from player_backend.live.registry import Registry
 from player_backend.live.sender import Sender
@@ -121,8 +122,8 @@ class RiderRole:
 
     def new_join_code(self, host: Link) -> None:
         code = self._registry.new_join_code(host.session_id, self._clock())
-        if code is None:
-            return self._sender.drop(host, "join_code_limit")
+        if isinstance(code, NoJoinCode):  # counted by why: `session_gone` or `join_code_limit`
+            return self._sender.drop(host, code.reason)
         self._sender.send_one(host, join_code(code))
 
     def end(self, session_id: UUID, message: Message) -> None:

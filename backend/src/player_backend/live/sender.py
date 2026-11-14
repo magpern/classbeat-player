@@ -21,7 +21,7 @@ from collections.abc import Iterable
 from player_backend.live.link import Link
 from player_backend.live.schemas import routes, valid
 from player_backend.live_route_policy import Role, outbound
-from player_backend.live_wire_policy import Message, encode
+from player_backend.live_wire_policy import ENDED, Message, encode
 
 _log = logging.getLogger("player_backend.live")
 
@@ -62,6 +62,11 @@ class Sender:
             text = texts[link.role]
             if text is not None:
                 link.put(text)
+
+    def end(self, link: Link, message: Message) -> None:
+        """`message` (an `ended`) to the connection, then its close with 4403."""
+        self.send_one(link, message)
+        link.close(ENDED)
 
     def drop(self, link: Link, reason: str) -> None:
         self.dropped[reason] += 1

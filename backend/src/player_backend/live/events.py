@@ -126,6 +126,18 @@ class Exchange:
 type JoinRefusal = Literal["unknown", "refused"]
 
 
+# Why the host's `new_join_code` got no code: its session is gone (or has just ended, past its
+# lifetime), or it is past its 10 an hour (ADR 0007, section 3). Each is the hub's drop label.
+type JoinCodeRefusal = Literal["session_gone", "join_code_limit"]
+
+
+@dataclass(frozen=True)
+class NoJoinCode:
+    """The host's `new_join_code` made no code: `reason` says why."""
+
+    reason: JoinCodeRefusal
+
+
 @dataclass(frozen=True)
 class RiderSeat:
     """A rider token's connection, counted (ADR 0007, section 2): its session, its rider id
