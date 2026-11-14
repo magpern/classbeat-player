@@ -5,6 +5,10 @@ transaction, calls `auth_enter_session` as its first statement and yields the `A
 The transaction is committed when the route's function has returned, before the response is
 sent. A route that refuses the request (an `ApiError`: a 403 or a 404) has its own writes rolled
 back and the session's "last used" kept: the session was used. Any other error rolls back all.
+
+`asking_session` is the session cookie's one other reader, for the two routes that complete a
+sign-in alone: it only hashes the token, so that the sign-in can end the session it replaces
+(section 5).
 """
 
 from __future__ import annotations
@@ -82,6 +86,17 @@ def site_session(
         raise refusal
 
 
+def asking_session(
+    token: Annotated[str | None, Depends(session_cookie_token)],
+) -> bytes | None:
+    """For the routes that sign in: the hash of the session the browser holds, or None.
+
+    It gives no access. Its only use is to end that session once a new one has been issued
+    (`site_sessions.end_asking_session`), so the browser leaves no second row behind.
+    """
+    return None if token is None else token_hash(token)
+
+
 def recent_sign_in(
     context: Annotated[AccountContext, Depends(site_session, scope="function")],
 ) -> AccountContext:
@@ -95,3 +110,4 @@ def recent_sign_in(
 SiteSession = Annotated[AccountContext, Depends(site_session, scope="function")]
 RecentSignIn = Annotated[AccountContext, Depends(recent_sign_in)]
 TheCaller = Annotated[Caller, Depends(caller)]
+AskingSession = Annotated[bytes | None, Depends(asking_session)]

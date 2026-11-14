@@ -2,10 +2,11 @@
 
 Neither route takes a session or an email, and the challenge's options list no credentials: the
 browser offers the passkeys it has. Both read the browser token's cookie, which binds the
-challenge to the browser that asked. Challenge starts and refused sign-ins are counted per
-address (section 10); a refused sign-in is answered the same way whatever was wrong; over
-either limit the answer is 429. So is a sign-in from an address whose other attempt is still
-being checked: it does not wait for it (`Retry-After: 1`).
+challenge to the browser that asked. A sign-in also reads the session cookie the browser may
+hold, only to end that session once the new one is issued (section 5). Challenge starts and
+refused sign-ins are counted per address (section 10); a refused sign-in is answered the same
+way whatever was wrong; over either limit the answer is 429. So is a sign-in from an address
+whose other attempt is still being checked: it does not wait for it (`Retry-After: 1`).
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from player_backend.db import passkey_login
+from player_backend.db import passkey_login, site_sessions
 from player_backend.http_errors import ApiError
 from player_backend.login_policy import retry_after
 from player_backend.passkey_policy import (
@@ -34,7 +35,7 @@ from player_backend.passkey_policy import (
     sign_in_starts_key,
 )
 from player_backend.site.cookies import login_cookie_token, put_login_cookie, put_session_cookie
-from player_backend.site.deps import TheCaller
+from player_backend.site.deps import AskingSession, TheCaller
 from player_backend.site.state import site_state
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_hash
@@ -92,9 +93,13 @@ def options(request: Request, who: TheCaller, browser: BrowserToken) -> JSONResp
 
 @router.post("/sign-in/passkey")
 def sign_in(
-    body: PasskeySignIn, request: Request, who: TheCaller, browser: BrowserToken
+    body: PasskeySignIn,
+    request: Request,
+    who: TheCaller,
+    browser: BrowserToken,
+    asking: AskingSession,
 ) -> JSONResponse:
-    """Answer a challenge with a passkey. Issues a new session."""
+    """Answer a challenge with a passkey. Issues a new session and ends the one it replaces."""
     state = site_state(request)
     origin = state.settings.site_origin
     credential = body.credential.model_dump(exclude_none=True)
@@ -131,6 +136,11 @@ def sign_in(
         # One answer for every refusal: an unknown passkey, a bad signature, a used, expired
         # or other browser's challenge, and the counter rule.
         raise ApiError(401, "sign_in_refused")
+    if asking is not None:
+        # Section 5: confirming it is you ends the session that asked, as signing out does, so
+        # the browser leaves no second row behind (#427). Only after a sign-in: a refused one
+        # ends nothing.
+        site_sessions.end_asking_session(state.pool, asking, who.info)
     response = JSONResponse({"status": "signed_in"})
     put_session_cookie(response, session_token)
     return response

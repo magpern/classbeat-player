@@ -46,6 +46,11 @@ def test_allowed_redirect_addresses(uri: str) -> None:
         "https://classbeat.test/c b",
         "javascript:alert(1)",
         "https:///nohost",
+        # #427: a browser reads `\` as `/` (host `classbeat.test`), `urlsplit` does not.
+        "https://classbeat.test\\.evil.test/cb",
+        "https://classbeat.test/cb\\x",
+        "https:\\\\classbeat.test/cb",
+        "http://127.0.0.1\\@evil.test/cb",
         "https://classbeat.test/" + "x" * 2000,
         None,
     ],
@@ -72,6 +77,7 @@ def test_a_known_source_is_found_only_with_its_exact_address() -> None:
         {**ENTRY, "redirect_uris": []},
         {**ENTRY, "redirect_uris": ["http://classbeat.test/"]},
         {**ENTRY, "redirect_uris": [5]},
+        {**ENTRY, "redirect_uris": ["https://classbeat.test\\.evil.test/cb"]},
         {**ENTRY, "extra": 1},
     ],
 )

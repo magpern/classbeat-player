@@ -1,7 +1,9 @@
 """Email link sign-in (ADR 0002, section 4): ask for a link, and use one.
 
 Neither route takes a session. Both read the browser token's cookie, which proves only "the
-same browser". The link token arrives in the body of a POST, never in a URL.
+same browser". The link token arrives in the body of a POST, never in a URL. Using a link also
+reads the session cookie the browser may hold, only to end that session once the new one is
+issued (section 5).
 
 A link request may carry a return entry (ADR 0006): it is checked, put into the mailed link's
 fragment and kept nowhere else, not in the database, the counters or the logs.
@@ -17,7 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, BeforeValidator, Field
 from starlette.background import BackgroundTask
 
-from player_backend.db import login
+from player_backend.db import login, site_sessions
 from player_backend.http_errors import ApiError
 from player_backend.login_policy import (
     ADDRESS_MAX_REQUESTS,
@@ -32,7 +34,7 @@ from player_backend.login_policy import (
 from player_backend.mail_delivery import deliver
 from player_backend.passkey_policy import BUSY_RETRY_SECONDS
 from player_backend.site.cookies import login_cookie_token, put_login_cookie, put_session_cookie
-from player_backend.site.deps import TheCaller
+from player_backend.site.deps import AskingSession, TheCaller
 from player_backend.site.state import site_state
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash
@@ -106,16 +108,22 @@ def request_link(
 
 @router.post("/sign-in/complete")
 def complete(
-    body: LinkUse, request: Request, who: TheCaller, browser: BrowserToken
+    body: LinkUse,
+    request: Request,
+    who: TheCaller,
+    browser: BrowserToken,
+    asking: AskingSession,
 ) -> JSONResponse:
-    """Use a link: once, within 15 minutes, in the browser that asked. Issues a new session."""
+    """Use a link: once, within 15 minutes, in the browser that asked. Issues a new session and
+    ends the one it replaces."""
     if not is_token("ml", body.token):
         raise ApiError(401, "sign_in_refused")
     session_token = new_token("ses")
     # Without the browser's own token nothing can match: a token made here is in no link.
     browser_token = browser or new_token("lgn")
+    pool = site_state(request).pool
     outcome = login.complete(
-        site_state(request).pool,
+        pool,
         link_hash=token_hash(body.token),
         browser_hash=token_hash(browser_token),
         session_hash=token_hash(session_token),
@@ -128,6 +136,11 @@ def complete(
     if outcome != "signed_in":
         # One answer for every refusal: ask for a new link from this browser.
         raise ApiError(401, "sign_in_refused")
+    if asking is not None:
+        # Section 5: the session this browser held is ended, as signing out ends it, so the
+        # browser leaves no second row behind (#427). Only after a sign-in: a refused link ends
+        # nothing.
+        site_sessions.end_asking_session(pool, asking, who.info)
     response = JSONResponse({"status": "signed_in"})
     put_session_cookie(response, session_token)
     return response

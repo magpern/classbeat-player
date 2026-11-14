@@ -67,11 +67,13 @@ def test_a_later_sign_in_uses_the_account_and_issues_a_new_token(site: Site) -> 
     site.sign_in(EMAIL, browser)
     assert browser.cookies.get(SESSION_COOKIE) != before
     assert site.su.execute("SELECT count(*) FROM player.accounts").fetchone() == (1,)
-    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (2,)
+    # A new row, never the old one upgraded; the old one is ended, as signing out ends it (#427).
+    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
     assert [event for event, _ in site.events(EMAIL)] == [
         "login.signed_in",
         "login.link_requested",
         "login.signed_in",
+        "session.signed_out",
     ]
     assert site.events(EMAIL)[2] == (
         "login.signed_in",

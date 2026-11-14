@@ -1,7 +1,9 @@
 """Guard: the routes that read a cookie equal the written list (ADR 0002, section 5).
 
 The session cookie is accepted by the site's API (`/api/site/`) and by exactly one live route,
-`POST /api/live/controller` (PL8). Nowhere else. A new route that reads a cookie
+`POST /api/live/controller` (PL8). Nowhere else. The two routes that complete a sign-in read it
+too, through `asking_session` alone, only to end that session once a new one is issued (#427).
+A new route that reads a cookie
 fails here until it is listed, and it can be listed only if the ADR allows it.
 """
 
@@ -15,7 +17,7 @@ from player_backend.app import create_app
 from player_backend.player_api.deps import app_only, device_token
 from player_backend.settings import Settings
 from player_backend.site.cookies import login_cookie_token, session_cookie_token
-from player_backend.site.deps import same_origin, site_session
+from player_backend.site.deps import asking_session, same_origin, site_session
 from player_backend.source_api.deps import source_token
 from tests.guards.cookie_source_check import READERS, check_source, check_tree
 from tests.routehelp import RouteInfo, routes_of
@@ -109,6 +111,14 @@ PAGE_ROUTES = frozenset(
         ("GET", "/j/{name:path}"),
     }
 )
+# Section 5 (#427): a sign-in ends the session the browser held. These two routes read the
+# session cookie through `asking_session`, which only hashes it, and never through `site_session`.
+ASKING_SESSION_ROUTES = frozenset(
+    {
+        ("POST", "/api/site/sign-in/complete"),
+        ("POST", "/api/site/sign-in/passkey"),
+    }
+)
 # The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
 LOGIN_COOKIE_ROUTES = frozenset(
     {
@@ -139,7 +149,7 @@ def _using(dependency: object) -> set[tuple[str, str]]:
 
 
 def test_the_routes_that_read_the_session_cookie_equal_the_list() -> None:
-    assert _using(session_cookie_token) == SESSION_COOKIE_ROUTES
+    assert _using(session_cookie_token) == SESSION_COOKIE_ROUTES | ASKING_SESSION_ROUTES
 
 
 def test_the_routes_that_read_the_browser_tokens_cookie_equal_the_list() -> None:
@@ -151,8 +161,13 @@ def test_the_readers_checked_here_are_all_the_readers() -> None:
 
 
 def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
-    # One dependency per credential type: no route reads the cookie beside it.
-    assert _using(session_cookie_token) == _using(site_session)
+    # One dependency per credential type: no route reads the cookie beside it. The one other
+    # reader, `asking_session`, is on the two routes that complete a sign-in and nowhere else.
+    assert _using(site_session) == SESSION_COOKIE_ROUTES
+    assert _using(asking_session) == ASKING_SESSION_ROUTES
+    assert _using(session_cookie_token) == _using(site_session) | _using(asking_session)
+    assert not _using(asking_session) & _using(site_session)
+    assert ASKING_SESSION_ROUTES < LOGIN_COOKIE_ROUTES
 
 
 def test_the_routes_that_take_a_device_token_equal_the_list_and_read_no_cookie() -> None:
