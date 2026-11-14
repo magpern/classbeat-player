@@ -59,7 +59,9 @@ function render(focus: "heading" | "none"): void {
     // The fragment may name an entry to return to (/control), after a token or alone (ADR 0006,
     // decision 4): kept in memory, also after a refused link.
     const fragment = fragmentOf(location.hash);
-    const entry = fragment.kind === "token" ? (fragment.back ?? null) : fragment.kind === "none" ? entryBackOf(location.hash) : null;
+    let entry: ReturnType<typeof entryBackOf> = null;
+    if (fragment.kind === "token") entry = fragment.back ?? null;
+    else if (fragment.kind === "none") entry = entryBackOf(location.hash);
     if (entry !== null) returnTo = { to: entry.path, load: true, entry: entry.field };
     if (location.hash || location.search) history.replaceState(history.state, "", "/sign-in");
     document.title = `Sign in · ${PRODUCT}`;

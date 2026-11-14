@@ -48,6 +48,35 @@ describe("the companion fake's /control headers", () => {
     for (const p of ["/control/", "/control/index.html", "/control/companion.js.map", "/control/a/b/c.js", "/control/Upper.js"]) assert.deepEqual(controlHeaders(p), expected("no-store"), p);
   });
 
+  it("agrees with the backend's is_asset_path on a table of paths", () => {
+    // Expected values follow control_page_policy.is_asset_path / asset_type by hand.
+    const table: ReadonlyArray<readonly [string, boolean]> = [
+      ["/control/companion.js", true],
+      ["/control/companion.css", true],
+      ["/control/fonts/ui.woff2", true],
+      ["/control/a/b/c.js", false], // deeper than MAX_DEPTH
+      ["/control/Upper.js", false], // upper case is not a segment
+      ["/control/companion.js.map", false],
+      ["/control/index.html", false],
+      ["/control/", false],
+      ["/control", false],
+      ["/controls/a.js", false],
+      ["/control/.js", false], // no name before the dot
+      ["/control/noext", false],
+      ["/control/fonts//ui.woff2", false], // empty segment
+      ["/control/../x.js", false],
+      ["/control/a b.js", false],
+      ["/other/a.js", false],
+    ];
+    const rule = parseAssetRule(SOURCE);
+    for (const [path, expected] of table) assert.equal(isAssetPathBy(rule, path), expected, path);
+  });
+
+  it("reads a single-quoted asset type key and fails loudly on one it cannot read", () => {
+    assert.deepEqual([...parseAssetRule(SOURCE.replace('".css":', "'.css':")).extensions].sort(), [".css", ".js", ".woff2"]);
+    assert.throws(() => parseAssetRule(SOURCE.replace('".css":', "(1):")), /not found/);
+  });
+
   it("reads the asset rule from the backend file", () => {
     const rule = parseAssetRule(SOURCE);
     assert.deepEqual([...rule.extensions].sort(), [".css", ".js", ".woff2"]);

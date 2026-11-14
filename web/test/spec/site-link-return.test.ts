@@ -156,6 +156,18 @@ describe("a sign-in by email link in a new tab (ADR 0006, decisions 4 and 5)", (
     await tab.context.close();
   });
 
+  it("lets the script answer the link request first, so a 429 can be scripted while a mailbox is set", async () => {
+    const mailbox: string[] = [];
+    const site = await open("/sign-in", { mailbox, script: { "POST sign-in/link": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "3000" } } } });
+    await site.page.waitForSelector("input[name=email]");
+    await site.page.fill("input[name=email]", EMAIL);
+    await press(site.page, "Email me a sign-in link");
+    await site.page.waitForSelector(".plate");
+    assert.equal(site.api.filter((a) => a.route === "POST sign-in/link").length, 1);
+    assert.deepEqual(mailbox, [], "no link is mailed for a refused request");
+    await site.context.close();
+  });
+
   it("shows a link with other text after the token as broken, without asking the backend", async () => {
     const tab = await open(`/sign-in#${LINK_TOKEN}&next=//evil.example`);
     await tab.page.waitForSelector(".plate");
