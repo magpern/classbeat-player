@@ -96,8 +96,12 @@ export interface OpenOptions {
    * test can script the per-address 429 (nothing is mailed then).
    */
   readonly mailbox?: string[];
-  /** Install Playwright's clock, paused, before the page loads: time moves only when the test runs it on (page.clock.runFor). */
-  readonly clock?: boolean;
+  /**
+   * Install Playwright's clock before the page loads. `true`: paused, so time moves only when the test runs it on
+   * (page.clock.runFor). `"day"`: the date is fixed at 13 Nov 2026 but time keeps running, for a page that shows a
+   * date and is measured with real animation frames.
+   */
+  readonly clock?: boolean | "day";
   /** The system asks for reduced motion (prefers-reduced-motion: reduce). */
   readonly reducedMotion?: boolean;
 }
@@ -149,7 +153,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   });
   if (o.clock) {
     await page.clock.install({ time: new Date("2026-11-13T10:00:00Z") });
-    await page.clock.pauseAt(new Date("2026-11-13T10:00:01Z"));
+    if (o.clock === true) await page.clock.pauseAt(new Date("2026-11-13T10:00:01Z"));
   }
   await page.goto(ORIGIN + path);
   await page.evaluate(() => document.fonts.ready);

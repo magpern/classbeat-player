@@ -78,7 +78,7 @@ async function inkOf(page: Page, probe: Page, w: number, h: number, it: Item) {
 
 /** Opens the state on the fake backend at the shot's width and text size, then fits the window to the page. */
 export async function reach(browser: Browser, s: SiteShot): Promise<FakeSite> {
-  const site = await openSite(browser, s.state.path, { width: s.width, height: 800, script: s.state.script, passkey: s.state.passkey, fontSize: 16 * s.zoom });
+  const site = await openSite(browser, s.state.path, { width: s.width, height: 800, script: s.state.script, passkey: s.state.passkey, fontSize: 16 * s.zoom, clock: s.state.clock });
   await s.state.steps?.(site.page);
   await site.page.waitForSelector(s.state.ready, { timeout: 5000 });
   await site.page.evaluate(() => document.fonts.ready);

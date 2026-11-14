@@ -81,6 +81,30 @@ describe("the requests of every state are the ADR's list", () => {
   });
 });
 
+/** Run in the page ahead of its own: notes the state of every face at the moment the room first enters the page. */
+const FACES_AT_ROOM = `window.__facesAtRoom = null;
+new MutationObserver(() => {
+  if (window.__facesAtRoom === null && document.querySelector(".room")) window.__facesAtRoom = [...document.fonts].map((f) => f.family.replace(/"/g, "") + " " + f.weight + " " + f.status);
+}).observe(document, { childList: true, subtree: true });`;
+const FONT_FILES = OWN_FILES.filter((f) => f.endsWith(".woff2"));
+
+describe("every asset is in before Start", () => {
+  it("all four font files are asked for before Start, and every face is loaded when the room first enters the page", async () => {
+    const site = await openPlay(browser, { width: 390, height: 844, hash: `#${CLASS_ID}`, script: classScript(BASE_DOC), before: FACES_AT_ROOM });
+    await opened(site.page);
+    assert.equal(FONT_FILES.length, 4);
+    for (const f of FONT_FILES) assert.ok(requested(site).includes(f), `${f} is not asked for before Start`);
+    // A face is only fetched when text first needs it, so what proves the page asked for them all is
+    // that none was still unloaded when the room appeared (the first draw is what would ask).
+    const faces = await site.page.evaluate(() => (window as unknown as { __facesAtRoom: string[] | null }).__facesAtRoom);
+    assert.ok(faces !== null, "the room was never seen entering the page");
+    const ours = faces.filter((f) => /^(Big Shoulders Display|Atkinson Hyperlegible) /.test(f));
+    assert.equal(ours.length, 4, ours.join(", "));
+    assert.deepEqual(ours.filter((f) => !f.endsWith(" loaded")), [], "a face not yet loaded when the room appeared");
+    await site.context.close();
+  });
+});
+
 describe("while a class runs the list of requests is empty", () => {
   it("across a run with Start, Pause, Resume, Next, Previous, the 5 s jumps, the band, End, Keep going and the end of the class", async () => {
     const site = await openPlay(browser, { width: 390, height: 844, hash: `#${CLASS_ID}`, script: classScript(BASE_DOC) });
