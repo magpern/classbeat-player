@@ -65,16 +65,21 @@ def string_violations(tree: ast.Module) -> list[tuple[int, str]]:
 
 
 def backstop_violations(source: str) -> list[tuple[int, str]]:
-    """`starlette . _x` in the code's tokens, comments and strings left out."""
-    lines: dict[int, list[str]] = {}
+    """`starlette . _x` in the code's tokens, comments and strings left out; each match is
+    reported at the line its `starlette` token is on."""
+    # Joined across lines too, so a chain split over a line break is still seen.
+    pieces: list[str] = []
+    starts: list[tuple[int, int]] = []  # (offset in the joined text, source line)
+    offset = 0
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type not in _SKIPPED:
-            lines.setdefault(token.start[0], []).append(token.string)
-    # Joined across lines too, so a chain split over a line break is still seen.
-    rows = sorted(lines)
-    text = " ".join(" ".join(lines[r]) for r in rows)
-    return [
-        (rows[0] if rows else 0, f"private name in code: starlette.{m.group(1)}")
-        for m in _BACKSTOP.finditer(text)
-        if is_private(m.group(1))
-    ]
+            starts.append((offset, token.start[0]))
+            pieces.append(token.string)
+            offset += len(token.string) + 1
+    text = " ".join(pieces)
+    found: list[tuple[int, str]] = []
+    for m in _BACKSTOP.finditer(text):
+        if is_private(m.group(1)):
+            line = max(ln for off, ln in starts if off <= m.start())
+            found.append((line, f"private name in code: starlette.{m.group(1)}"))
+    return found
