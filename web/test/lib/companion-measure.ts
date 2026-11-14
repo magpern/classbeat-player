@@ -99,12 +99,18 @@ async function motion(page: Page): Promise<Row[]> {
   ];
 }
 
-export async function checkCompanion(page: Page, probe: Page, width: number, height: number): Promise<CompanionResult> {
+/** A page's own checks, run inside it: [check, result] rows. The rider page brings its own (page/rider-checks.js). */
+export interface PageChecks {
+  readonly run: (arg: { form: boolean }) => [string, string][];
+  readonly form: boolean;
+}
+
+export async function checkCompanion(page: Page, probe: Page, width: number, height: number, own?: PageChecks): Promise<CompanionResult> {
   await page.evaluate(() => document.fonts.ready);
   await flush(page);
   const png = await page.screenshot();
   const { items, zones, hues, loose } = await page.evaluate(collect);
-  const pageRows = await page.evaluate(pageChecks);
+  const pageRows = own ? await page.evaluate(own.run, { form: own.form }) : await page.evaluate(pageChecks);
   // A constructed sheet: the page's CSP refuses an added <style>, as it should. Corners are
   // squared while the ink is measured (the kept screenshot above is the real page): Chromium
   // re-rasterises an anti-aliased rounded corner between two shots, and the ink diff would take

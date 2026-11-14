@@ -6,6 +6,8 @@ import ts from "typescript";
 
 /** Other core modules, the room's pure formatting, and the contract's generated types. */
 const ALLOWED = /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/;
+/** The rider's core: as the companion's, plus the companion's pure code, shape and answer modules. */
+export const RIDER_ALLOWED = /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|\.\.\/\.\.\/companion\/core\/(codes|shape|answer)\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/;
 
 /** Globals that reach the page, the network, storage, time or the machine. */
 export const BANNED_GLOBALS = new Set([
@@ -28,12 +30,12 @@ function isMemberName(id: ts.Identifier): boolean {
 }
 
 /** The problems of one core module's source; empty when it is pure. */
-export function impurities(fileName: string, source: string): string[] {
+export function impurities(fileName: string, source: string, allowed: RegExp = ALLOWED): string[] {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const out: string[] = [];
   const named = (spec: ts.Expression | undefined, how: string): void => {
     if (!spec || !ts.isStringLiteral(spec)) out.push(`${how} of a computed module`);
-    else if (!ALLOWED.test(spec.text)) out.push(`${how} "${spec.text}"`);
+    else if (!allowed.test(spec.text)) out.push(`${how} "${spec.text}"`);
   };
   // Names the module declares itself (variables, parameters, functions, classes, imports): a
   // local `top` or `close` is not the global of that name.
