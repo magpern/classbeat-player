@@ -41,9 +41,9 @@ backend hardening (#227, #230), the body cap in the live contract (#234, #235; #
 #245), the companion page (#174, #261; network calls in web code allowed by the owner, #252,
 #253), sign-in returning to the companion page (#263, #274), the `/me` answer in the contract
 (#264, #272) and its backend route (#265, #283) with its account-filter tests (#295, #299;
-#304, #305), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
+#304, #305; #321, #322), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
 and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
-#292), the companion fake on the `/control` headers (#278, #286) and wider markup and stylesheet
+#292), the companion fake on the `/control` headers (#278, #286; #324, #327) and wider markup and stylesheet
 guards (#267, #276), the companion CI states for paused-following, music not heard and song twice
 (#282, #297), the companion spec asserting each state's words, the paused pill, live nudges and
 token and zone colours on every border (#303, #306; #310, #311), zone outlines and every drawn side,
@@ -92,7 +92,7 @@ Merged: the desktop app built and tested on Linux, macOS and Windows, with unsig
 screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` job also runs for
 the shared design tokens and the request policy (#268, #271); the backend image ships
 `web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
-check compares the whole file in order (#289, #291; #294, #296; #298, #300).
+check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326).
 
 ## Scene spike
 
@@ -162,10 +162,7 @@ Merged: #30 and its findings (#53).
 - PL8 notes: from #274, `RETURN_ENTRIES` could use `satisfies`, a sign-in by email link opened
   in a new tab lands on `/classes` (needs a return entry in the mailed link), and `site.md`
   wording; from #275, `companion-pages.js:117` still shows a sample signed-in address; from #273,
-  HEAD on `/control` answers 405; from #286, the fake's header check ignores headers with constant
-  values, copies the asset rule, and the socket entry is only text-checked; from #292, the
-  private-import scan misses dynamic forms; from #300, an empty dockerignore fails without a
-  message.
+  HEAD on `/control` answers 405; from #292, the private-import scan misses dynamic forms.
 
 ## Carried into PL8
 
