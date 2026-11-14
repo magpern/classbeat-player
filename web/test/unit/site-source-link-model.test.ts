@@ -116,6 +116,25 @@ describe("the address to go back to", () => {
     }
   });
 
+  it("is never left for when the address asked for holds a query or a fragment (#422 N1)", () => {
+    // The approval's answer would begin with the asked address and "?", so only this rule refuses it.
+    for (const uri of [`${URI}#`, `${URI}#frag`, `${URI}?`, `${URI}?x=1`]) {
+      assert.equal(backAddressOf({ ...ASK, redirectUri: uri }, `${uri}?code=c&state=s1`), null, uri);
+      assert.deepEqual(afterApprove({ ...ASK, redirectUri: uri }, ok({ redirect: `${uri}?code=c&state=s1` })), { kind: "plate", plate: { kind: "server" } }, uri);
+    }
+  });
+
+  it("is never an address holding a backslash, anywhere in it (#422 N2)", () => {
+    // The browser reads `\` as `/`, so `https://a.test\.b.test/cb` has the host a.test here and
+    // another host to a parser that does not; an address with one is refused wherever it is.
+    for (const uri of ["https://a.test\\.b.test/cb", "https://source.test\\player/linked", "https://source.test/player\\linked"]) {
+      assert.equal(backAddressOf({ ...ASK, redirectUri: uri }, `${uri}?code=c&state=s1`), null, uri);
+    }
+    for (const tail of ["?code=c\\&state=s1", "?code=c&state=s1\\", "?code=c&state=%5C\\"]) assert.equal(backAddressOf(ASK, `${URI}${tail}`), null, tail);
+    // The same address without one is still left for.
+    assert.equal(backAddressOf(ASK, `${URI}?code=c&state=%5C`), `${URI}?code=c&state=%5C`);
+  });
+
   it("the approval goes back only by that address", () => {
     assert.deepEqual(afterApprove(ASK, ok({ redirect: back })), { kind: "done", to: back });
     assert.deepEqual(afterApprove(ASK, ok({ redirect: "https://evil.test/?code=c" })), { kind: "plate", plate: { kind: "server" } });

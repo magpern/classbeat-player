@@ -28,13 +28,15 @@ const open = async (script: Script, path = CONNECT_PATH, ready = "[data-connect]
 const press = (page: Page, name: string): Promise<void> => page.getByRole("button", { name, exact: true }).click();
 const routes = (site: FakeSite): string[] => site.api.map((a) => a.route);
 const bodyOf = (site: FakeSite, route: string): unknown => JSON.parse(site.api.find((a) => a.route === route)?.body ?? "null");
-/** Everything the page asked for or left for, and the page's own markup: none of it may name the attacker. */
-async function neverEvil(site: FakeSite, checked = false): Promise<void> {
+/** Everything the page asked for or left for, and the page's own markup: none of it may name the attacker, and the page left only for `left`. */
+async function neverEvil(site: FakeSite, left: readonly string[], checked = false): Promise<void> {
   await settled(site);
   for (const u of [...site.urls.slice(1), ...site.left, ...site.external]) assert.ok(!u.includes("evil"), `went to ${u}`);
   // The check may carry the address the query asked for: the backend decides, and the page never goes there.
   for (const a of site.api) if (!(checked && a.route === "POST source-links/check")) assert.ok(!(a.body ?? "").includes("evil"), `sent to ${a.route}`);
   assert.deepEqual(site.external, []);
+  // Once settled: only the navigations the flow expects, so none comes late (#422 N4).
+  assert.deepEqual(site.left, left, "the navigations to the linked app's site");
   assert.ok(new URL(site.page.url()).origin === "https://site.test", site.page.url());
 }
 
@@ -68,7 +70,7 @@ describe("on load", () => {
     assert.equal(await site.page.locator("[data-connect]").count(), 0);
     assert.ok(!routes(site).includes("POST source-links/approve"));
     assert.deepEqual(site.left, []);
-    await neverEvil(site, true);
+    await neverEvil(site, [], true);
     await site.context.close();
   });
 
@@ -124,7 +126,7 @@ describe("approve", () => {
     await press(site.page, "Back to classbeat");
     await settled(site);
     assert.deepEqual(site.left, [BACK, BACK]);
-    await neverEvil(site);
+    await neverEvil(site, [BACK, BACK]);
     await site.context.close();
   });
 
@@ -138,7 +140,7 @@ describe("approve", () => {
       assert.equal(new URL(site.page.url()).pathname, "/link/source");
       // The question stays, so the person may press again.
       assert.equal(await site.page.locator("[data-connect]").isEnabled(), true);
-      await neverEvil(site);
+      await neverEvil(site, []);
       await site.context.close();
     }
   });
