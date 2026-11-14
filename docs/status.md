@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-13 (after #261).
+Updated 2026-11-14 (after #380).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -55,9 +55,19 @@ cannot blind, captured built-ins and navigation sinks (#315, #318), the private-
 must-fail cases (#343, #345), the asset-rule parser, path table and limit plate checks (#344, #346)
 and the web job on a change of the backend's control-page table (#347, #348).
 
-**Riders:** ADR 0007 (riders in a live session) proposes the contract, the rider page, lock, new
-code and remove, and the issue split of its section 8. A Verifier run of the companion's "done
-when" on fakes comes first.
+**Riders (ADR 0007, built on fakes; Verifier run in progress):** ADR 0007 (#349), the design
+specs for the rider page, the riders panel and the room QR codes (#358), the rider contract and
+join route (#355), the rider page served at `/j` (#364), the `rider_state` builder and publish
+policy (#363), the join route, rider tokens, lock, new code and remove (#367), the WebSocket rider
+role (#370), the rider page (#369) and its address and header hardening (#374), the live client's
+rider side with the riders panel and room join codes (#371), and the web job on a change of a page
+policy the web tests read (#377). The companion page's CSP is the header policy only (#378).
+Open: hardening from the reviews (#381 player, #382 backend).
+
+**ADR 0005 amendment (2026-11-14, #354):** a controller token that ends frees its place, and the
+app cancels a control code it no longer shows. Built: the contract's `controller_left` reason and
+`cancel_code` (#368), the backend's reasons, place replay and `cancel_code` (#372), the presenter
+freeing the place (#379) and the cancel when one display is left (#380).
 
 ## PL2: backend and sign-in
 
