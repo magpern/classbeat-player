@@ -14,6 +14,13 @@ class Via(StrEnum):
     code = 'code'
 
 
+class Reason(StrEnum):
+    disconnected = 'disconnected'
+    session_ended = 'session_ended'
+    dropped = 'dropped'
+    free = 'free'
+
+
 class ControllerLeft(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -28,4 +35,10 @@ class ControllerLeft(BaseModel):
             le=2,
         ),
     ]
-    via: Annotated[Via, Field(description='How the controller got its token.')]
+    via: Annotated[
+        Via | None,
+        Field(description='How the controller got its token. Absent with `free`.'),
+    ] = None
+    reason: Annotated[
+        Reason, Field(description='Why the place has no connected controller.')
+    ]

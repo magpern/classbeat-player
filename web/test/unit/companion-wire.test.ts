@@ -28,7 +28,7 @@ describe("companion wire: what a controller is sent", () => {
   });
 
   it("messages routed only to the host are never taken", () => {
-    for (const schema of ["controller-joined", "controller-left", "control-code", "code-cancelled", "command-forwarded", "command", "hello", "make-code", "drop", "end", "command-result"]) {
+    for (const schema of ["controller-joined", "controller-left", "control-code", "code-cancelled", "command-forwarded", "command", "hello", "make-code", "cancel-code", "drop", "end", "command-result"]) {
       for (const ex of examples(schema, "valid")) assert.equal(parseInbound(ex.text), null, ex.name);
     }
   });

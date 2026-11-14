@@ -6,7 +6,7 @@
  */
 
 /**
- * Server to host: the controller in this slot left or was dropped.
+ * Server to host: the place in this slot has no connected controller, and why (ADR 0005 section 10, amended 2026-11-14). `disconnected`: the controller's connection closed and its token is still valid. `session_ended`: its token ended with its site session. `dropped`: the host dropped it. `free`: only in the replay after each host welcome, for a place that holds no token. `via` is present with every reason but `free`, and absent with `free`.
  */
 export interface ControllerLeft {
   /**
@@ -19,7 +19,11 @@ export interface ControllerLeft {
    */
   slot: number;
   /**
-   * How the controller got its token.
+   * How the controller got its token. Absent with `free`.
    */
-  via: "sign_in" | "code";
+  via?: "sign_in" | "code";
+  /**
+   * Why the place has no connected controller.
+   */
+  reason: "disconnected" | "session_ended" | "dropped" | "free";
 }

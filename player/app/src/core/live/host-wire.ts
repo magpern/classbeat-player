@@ -3,6 +3,7 @@
 // shape, the contract's patterns and ranges. Anything else is dropped. A forwarded `command` is
 // passed on untouched to the command intake (intake.ts), which checks it itself.
 import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
+import type { ControllerLeft } from "../../../../../schema/generated/ts/live-controller-left.d.ts";
 import type { Ended } from "../../../../../schema/generated/ts/live-ended.d.ts";
 import type { LiveErrorBody } from "../../../../../schema/generated/ts/live-error.d.ts";
 import type { HttpAnswer } from "../pairing/protocol.ts";
@@ -28,11 +29,14 @@ export type StartAnswer = { readonly ok: true; readonly session: StartedSession 
 
 export type Slot = 1 | 2;
 export type Via = "sign_in" | "code";
+/** Why a place has no connected controller (ADR 0005 section 10, amended 2026-11-14). */
+export type LeftReason = ControllerLeft["reason"];
 
 export type HostInbound =
   | { readonly type: "welcome" }
   | { readonly type: "controller_joined"; readonly slot: Slot; readonly via: Via }
-  | { readonly type: "controller_left"; readonly slot: Slot; readonly via: Via }
+  | { readonly type: "controller_left"; readonly slot: Slot; readonly reason: "free" }
+  | { readonly type: "controller_left"; readonly slot: Slot; readonly reason: Exclude<LeftReason, "free">; readonly via: Via }
   | { readonly type: "control_code"; readonly code: string; readonly expiresInMs: number }
   | { readonly type: "code_cancelled"; readonly reason: CodeCancelled["reason"] }
   | { readonly type: "ended"; readonly reason: Ended["reason"] }
@@ -51,6 +55,7 @@ const isSlot = (v: unknown): v is Slot => v === 1 || v === 2;
 const isVia = (v: unknown): v is Via => v === "sign_in" || v === "code";
 const oneOf = <T extends string>(v: unknown, values: readonly T[]): v is T => typeof v === "string" && (values as readonly string[]).includes(v);
 
+export const LEFT_REASONS: readonly LeftReason[] = ["disconnected", "session_ended", "dropped", "free"];
 const CANCEL_REASONS: readonly CodeCancelled["reason"][] = ["wrong_tries", "expired", "used", "replaced"];
 const ENDED_REASONS: readonly Ended["reason"][] = ["host_ended", "revoked", "expired", "dropped"];
 const ERRORS: readonly LiveErrorBody["error"][] = ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
@@ -92,8 +97,14 @@ export function parseHostMessage(v: unknown): HostInbound | null {
       // The host's welcome holds its role and nothing else (no slot, no host status).
       return hasKeys(v, ["v", "type", "role"]) && v.role === "host" ? { type: "welcome" } : null;
     case "controller_joined":
-    case "controller_left":
-      return hasKeys(v, ["v", "type", "slot", "via"]) && isSlot(v.slot) && isVia(v.via) ? { type: v.type, slot: v.slot, via: v.via } : null;
+      return hasKeys(v, ["v", "type", "slot", "via"]) && isSlot(v.slot) && isVia(v.via) ? { type: "controller_joined", slot: v.slot, via: v.via } : null;
+    case "controller_left": {
+      // `via` with every reason but `free`, and none with `free`.
+      const { slot, via, reason } = v;
+      if (!isSlot(slot) || !oneOf(reason, LEFT_REASONS)) return null;
+      if (reason === "free") return hasKeys(v, ["v", "type", "slot", "reason"]) ? { type: "controller_left", slot, reason } : null;
+      return hasKeys(v, ["v", "type", "slot", "via", "reason"]) && isVia(via) ? { type: "controller_left", slot, reason, via } : null;
+    }
     case "control_code": {
       if (!hasKeys(v, ["v", "type", "code", "expiresInMs"])) return null;
       const { code, expiresInMs } = v;

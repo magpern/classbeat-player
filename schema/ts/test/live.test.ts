@@ -9,9 +9,11 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { Ack } from "../../generated/ts/live-ack.d.ts";
+import type { CancelCode } from "../../generated/ts/live-cancel-code.d.ts";
 import type { Command } from "../../generated/ts/live-command.d.ts";
 import type { ForwardedCommand } from "../../generated/ts/live-command-forwarded.d.ts";
 import type { CompanionState } from "../../generated/ts/live-companion-state.d.ts";
+import type { ControllerLeft } from "../../generated/ts/live-controller-left.d.ts";
 import type { Hello } from "../../generated/ts/live-hello.d.ts";
 import type { JoinAnswer } from "../../generated/ts/live-join-answer.d.ts";
 import type { JoinRequest } from "../../generated/ts/live-join-request.d.ts";
@@ -36,8 +38,8 @@ function validator(name: string) {
   return ajv.compile(load(join(V1, `${name}.schema.json`)));
 }
 
-test("the live contract has 32 schemas", () => {
-  assert.equal(NAMES.length, 32);
+test("the live contract has 33 schemas", () => {
+  assert.equal(NAMES.length, 33);
 });
 
 for (const name of NAMES) {
@@ -303,6 +305,24 @@ test("literals of the generated types are valid messages", () => {
   assert.equal(validator("command")(withSlot), false);
   assert.equal(validator("command")(previous), false);
   assert.equal(validator("command")(far), false);
+});
+
+test("literals of the generated controller_left and cancel_code types are valid messages", () => {
+  const left: ControllerLeft = { v: 1, type: "controller_left", slot: 1, via: "sign_in", reason: "session_ended" };
+  const free: ControllerLeft = { v: 1, type: "controller_left", slot: 2, reason: "free" };
+  const cancel: CancelCode = { v: 1, type: "cancel_code" };
+  // @ts-expect-error controller_left always says why.
+  const noReason: ControllerLeft = { v: 1, type: "controller_left", slot: 1, via: "code" };
+  // @ts-expect-error cancel_code holds nothing.
+  const withCode: CancelCode = { ...cancel, code: "BCDF-GHJK" };
+  assert.equal(validator("controller-left")(left), true);
+  assert.equal(validator("controller-left")(free), true);
+  assert.equal(validator("cancel-code")(cancel), true);
+  assert.equal(validator("controller-left")(noReason), false);
+  assert.equal(validator("cancel-code")(withCode), false);
+  // The schema, not the generated type, holds the via rule: none with `free`, one with the rest.
+  assert.equal(validator("controller-left")({ ...free, via: "code" }), false);
+  assert.equal(validator("controller-left")({ v: 1, type: "controller_left", slot: 1, reason: "session_ended" }), false);
 });
 
 test("literals of the generated rider types are valid messages", () => {

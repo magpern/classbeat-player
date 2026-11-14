@@ -48,6 +48,7 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("host_status", "host-status.schema.json", ("server",), ("controller", "rider")),
     ("controller_joined", "controller-joined.schema.json", ("server",), ("host",)),
     ("controller_left", "controller-left.schema.json", ("server",), ("host",)),
+    ("cancel_code", "cancel-code.schema.json", ("host",), ("server",)),
     ("make_code", "make-code.schema.json", ("host",), ("server",)),
     ("control_code", "control-code.schema.json", ("server",), ("host",)),
     ("code_cancelled", "code-cancelled.schema.json", ("server",), ("host",)),
@@ -68,9 +69,12 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("new_join_code", "new-join-code.schema.json", ("host",), ("server",)),
     ("join_code", "join-code.schema.json", ("server",), ("host",)),
 )
-# What may reach a rider at all (ADR 0007 section 2), and the host's messages about riders.
+# What may reach a rider at all (ADR 0007 section 2), the host's messages about riders, and the
+# host's messages that the hub does not act on yet (dropped and counted as `not_built_yet`):
+# `cancel_code` (ADR 0005 section 10, amended 2026-11-14).
 TO_RIDER = {"welcome", "host_status", "rider_state", "ended"}
 HOST_ABOUT_RIDERS = {"rider_state", "drop_rider", "lock", "new_join_code"}
+HOST_NOT_BUILT_YET = {"cancel_code"}
 ROUTES = schemas.routes()
 
 
@@ -115,7 +119,8 @@ def test_a_malformed_table_is_refused(raw: object) -> None:
 def test_each_role_may_send_exactly_what_the_contract_lets_it() -> None:
     expected: dict[Role, set[str]] = {
         "host": {"make_code", "drop", "companion_state", "command_result", "end"}
-        | HOST_ABOUT_RIDERS,
+        | HOST_ABOUT_RIDERS
+        | HOST_NOT_BUILT_YET,
         "controller": {"command"},
         "rider": set[str](),  # a rider sends `hello` only, as its first message
     }
@@ -172,7 +177,7 @@ def test_a_rider_token_is_a_riders_only_and_the_hub_acts_on_no_rider_message() -
     assert hello_role(new_token("rdr")) == "rider"
     assert hello_role(new_token("hst")) == "host"
     assert hello_role(new_token("ctl")) == "controller"
-    # The hub's handlers are keyed by these types (live/hub.py): exactly what a host or a
+    # The hub's handlers are keyed by these types (live/dispatch.py): exactly what a host or a
     # controller may send after `hello`, and nothing a rider sends.
     kinds = {r.type for r in ROUTES}
     taken = {k for k in kinds if any(not isinstance(inbound(role, k), str) for role in ROLES)}
@@ -202,6 +207,7 @@ def test_a_rider_token_is_a_riders_only_and_the_hub_acts_on_no_rider_message() -
         ("drop_rider", set[str]()),
         ("lock", set[str]()),
         ("new_join_code", set[str]()),
+        ("cancel_code", set[str]()),
     ],
 )
 def test_who_receives_each_message(kind: str, receivers: set[str]) -> None:

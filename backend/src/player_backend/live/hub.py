@@ -6,10 +6,11 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
 - The host is told `welcome`, then `controller_joined` for each phone connected; a controller
   is told `welcome` with its slot and whether the host is in. Controllers get `host_status`
   when the host comes and goes, and nothing else while it is away; the host gets
-  `controller_joined` and `controller_left` as phones come and go.
+  `controller_joined`, and `controller_left` with its reason (ADR 0005 section 10, amended
+  2026-11-14; no replay and no `free` yet), as phones come and go.
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
   its schema for its sender's role; anything else is dropped and counted in `dropped`. The
-  handlers are keyed by the routed type (`acted_on`), one `_on_<type>` each. Every message the
+  handlers are keyed by the routed type (live/dispatch.py), one `_on_<type>` each. Every message the
   hub sends goes through live/sender.py's allowlist; one that fails is not sent (`refused`).
 - Riders (ADR 0007) are live/rider_role.py's: a rider sends nothing after `hello` (no route
   names it a sender); the host's rider operations, comings and goings and the end go there.
@@ -34,11 +35,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
+from collections.abc import Coroutine
 from typing import Any, cast
 from uuid import UUID
 
 from player_backend.live.command_relay import CommandRelay
+from player_backend.live.dispatch import by_type
 from player_backend.live.events import CodeCancelled, Dropped, Ended, RiderSeat, Seat
 from player_backend.live.link import Link, Socket
 from player_backend.live.rider_role import RiderRole
@@ -49,11 +51,12 @@ from player_backend.live.service import LiveService
 from player_backend.live.watchers import Event
 from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate
 from player_backend.live_relay_policy import Outstanding
-from player_backend.live_route_policy import acted_on, inbound
+from player_backend.live_route_policy import inbound
 from player_backend.live_session_policy import wire_reason
 from player_backend.live_wire_policy import (
     ENDED,
     REPLACED,
+    LeftReason,
     Message,
     code_cancelled,
     control_code,
@@ -65,18 +68,6 @@ from player_backend.live_wire_policy import (
     welcome_controller,
     welcome_host,
 )
-
-type Handler = Callable[[Link, Message], None]
-
-
-def _by_type(*handlers: Handler) -> dict[str, Handler]:
-    """The handlers keyed by `_on_<type>`: exactly the types a connection may send after `hello`
-    (`acted_on`), or the hub fails at start. Each type is listed once, so a handler for a type
-    that two roles may send must check `link.role` itself (no type has two senders today)."""
-    table = {h.__name__.removeprefix("_on_"): h for h in handlers}
-    if len(table) != len(handlers) or set(table) != set(acted_on(routes())):
-        raise RuntimeError("the live hub's handlers are not the routing table's types")
-    return table
 
 
 class Hub:
@@ -90,7 +81,7 @@ class Hub:
         self._send, self._drop = self.sender.send_one, self.sender.drop
         self.riders = RiderRole(service.registry, self.sender, service.clock)
         self.commands = CommandRelay(self.sender, service.clock)
-        self._on = _by_type(
+        self._on = by_type(
             self._on_make_code,
             self._on_drop,
             self._on_companion_state,
@@ -101,6 +92,7 @@ class Hub:
             self._on_drop_rider,
             self._on_lock,
             self._on_new_join_code,
+            self._on_cancel_code,
         )
         self._loop: asyncio.AbstractEventLoop | None = None
         self._hosts: dict[UUID, Link] = {}
@@ -156,7 +148,7 @@ class Hub:
             return
         self._send(link, ended("dropped"))
         link.close(ENDED)
-        self._left(link)
+        self._left(link, event.reason)
 
     def _cancelled(self, event: CodeCancelled) -> None:
         host = self._hosts.get(event.session_id)
@@ -217,12 +209,12 @@ class Hub:
         del phones[link.slot]
         if not phones:
             self._controllers.pop(session_id, None)
-        self._left(link)
+        self._left(link, "disconnected")
 
-    def _left(self, link: Link) -> None:
+    def _left(self, link: Link, reason: LeftReason) -> None:
         host = self._hosts.get(link.session_id)
         if host is not None and link.slot is not None:
-            self._send(host, controller_left(link.slot, link.via or "code"))
+            self._send(host, controller_left(link.slot, link.via or "code", reason))
 
     def _phones(self, session_id: UUID) -> list[Link]:
         return list(self._controllers.get(session_id, {}).values())
@@ -263,6 +255,9 @@ class Hub:
 
     def _on_new_join_code(self, link: Link, _message: Message) -> None:
         self.riders.new_join_code(link)
+
+    def _on_cancel_code(self, link: Link, _message: Message) -> None:
+        self._drop(link, "not_built_yet")  # #357 builds it (ADR 0005 section 10)
 
     def _on_make_code(self, link: Link, _message: Message) -> None:
         made = self.service.registry.make_code(link.session_id, self.service.clock())

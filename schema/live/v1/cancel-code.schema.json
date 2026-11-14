@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/cancel-code.schema.json",
+  "title": "CancelCode",
+  "description": "Host to server: end the session's current control code, if any, as `drop` does; the host is sent nothing for it (ADR 0005 section 10, amended 2026-11-14).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "cancel_code"
+    }
+  }
+}

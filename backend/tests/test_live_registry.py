@@ -195,7 +195,7 @@ def test_two_controllers_at_most_and_a_drop_frees_the_place() -> None:
     # Dropping by the site session it holds: another site session's hash drops nothing.
     assert not registry.drop_controller(started.session_id, 1, b"x" * 32)
     assert registry.drop_controller(started.session_id, 1, site_session)
-    assert seen == [Dropped(started.session_id, 1)]
+    assert seen == [Dropped(started.session_id, 1, "session_ended")]
     assert registry.add_controller(started.session_id, b"d" * 32, None) == 1
     assert registry.add_controller(uuid.uuid4(), b"e" * 32, None) is None
 

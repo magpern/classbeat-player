@@ -183,7 +183,13 @@ def test_no_host_or_controller_message_from_a_rider_does_anything(live: Any) -> 
     started = live.session()
     phone_token = live.controller(started)
     other = live.rider(started.join_code, "Alex")
-    assert {kind for kind, _ in HOST_AND_CONTROLLER} >= {"end", "make_code", "drop", "lock"}
+    assert {kind for kind, _ in HOST_AND_CONTROLLER} >= {
+        "end",
+        "make_code",
+        "drop",
+        "lock",
+        "cancel_code",
+    }
     with (
         live.joined(started.host_token, None) as host,
         live.joined(phone_token) as phone,
