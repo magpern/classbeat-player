@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .pattern import check_patterns
+
 Violation = tuple[str, str]
 
 RUNNING_MAX_ZONE = 5
@@ -133,4 +135,5 @@ def check_semantics(doc: dict[str, Any]) -> list[Violation]:
     _check_segments(doc, out)
     _check_zones(doc, out)
     _check_totals(doc, out)
+    check_patterns(doc, out)
     return sorted(out)

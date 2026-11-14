@@ -11,7 +11,7 @@
 export type Class = {
   [k: string]: unknown;
 } & {
-  format_version: "1.0";
+  format_version: FormatVersion;
   class: ClassInfo;
   music: Music;
   /**
@@ -34,6 +34,7 @@ export type Class = {
   intervals: [Interval, ...Interval[]];
   songs: Song[];
 };
+export type FormatVersion = "1.0" | "1.1";
 export type Name = string;
 export type Quality = "measured" | "estimated" | "missing";
 /**
@@ -87,12 +88,33 @@ export interface Interval {
   zone: number;
   cadence?: Cadence;
   position?: "seated" | "standing";
+  pattern?: PositionPattern;
   incline?: "flat" | "raised";
   cue: string;
   test?: {
     kind: "ftp";
     minutes: 3 | 5 | 20;
   };
+}
+/**
+ * Format 1.1. Position changes counted in beats, repeated over the interval. positions and beats have the same length (semantic rule pattern_length_mismatch).
+ */
+export interface PositionPattern {
+  kind: "alternate";
+  /**
+   * @minItems 2
+   * @maxItems 4
+   */
+  positions:
+    | ["seated" | "standing", "seated" | "standing"]
+    | ["seated" | "standing", "seated" | "standing", "seated" | "standing"]
+    | ["seated" | "standing", "seated" | "standing", "seated" | "standing", "seated" | "standing"];
+  /**
+   * @minItems 2
+   * @maxItems 4
+   */
+  beats: [number, number] | [number, number, number] | [number, number, number, number];
+  start_on?: "interval_start" | "next_downbeat";
 }
 export interface Song {
   title: string;
