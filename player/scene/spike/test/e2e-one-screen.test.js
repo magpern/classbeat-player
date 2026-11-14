@@ -155,6 +155,6 @@ test('one display: the overlay Quit button quits the whole app, not only the ove
   const room = await roomPage();
   await room.waitForFunction(() => window.__roomState && document.getElementById('band'), null, { timeout: 20000 });
   const closed = new Promise((resolve) => app.process().once('exit', resolve));
-  await room.click('#band button.quit');
+  room.click('#band button.quit').catch(() => {}); // the page goes away under the click when the app quits
   await Promise.race([closed, sleep(10000).then(() => { throw new Error('app still running after Quit'); })]);
 });
