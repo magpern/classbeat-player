@@ -1,13 +1,15 @@
 // A fake of the site and its live process for the rider page's checks: recorded messages and
 // answers, no network. Every request of the page goes through Playwright's router: the page's own
 // files are served from dist/j/ with the companion page's headers (ADR 0007: "/j with the companion
-// page's headers"), whose connect-src allows only the join route and the live socket; the join route
+// page's headers"; backend/src/player_backend/rider_page_policy.py, checked against that file by
+// rider-fake-headers.test.ts), whose connect-src allows only the join route and the live socket; the join route
 // answers from the test's script; the live WebSocket is a scripted fake; any other request is
 // aborted and recorded. Chrome itself is cut off from every network as well (launchOffline).
 import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import type { Browser, BrowserContext, Page, WebSocketRoute } from "playwright-core";
 import { DIST } from "./browser.ts";
+import { ASSET_RULE, isAssetPathBy } from "./control-rule.ts";
 import type { Reply, Seen } from "./companion-fake.ts";
 
 export { launchOffline } from "./companion-fake.ts";
@@ -16,8 +18,27 @@ export const PAGE_URL = `${ORIGIN}/j`;
 export const TOKEN_KEY = "classbeat.rider.token";
 export const NUMBERS_KEY = "classbeat.rider.numbers";
 
-/** The rider page's policy: the companion's, with connect-src only the join route and the live socket. */
-export const RIDER_CSP = `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src ${ORIGIN}/api/live/join wss://site.test/api/live/ws; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
+export const RIDER_PATH = "/j";
+const FETCHED = ["/api/live/join"];
+const LIVE_WS = "/api/live/ws";
+
+/** The rider page's policy (rider_page_policy.py, content_security_policy): the companion's, with connect-src only the join route and the live socket. */
+export function riderCsp(siteOrigin: string): string {
+  const socket = "wss://" + siteOrigin.replace(/^https:\/\//, "");
+  const connect = [...FETCHED.map((p) => siteOrigin + p), socket + LIVE_WS].join(" ");
+  return `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
+}
+
+/** The headers of every answer under /j, found or not (rider_page_policy.py, rider_headers). */
+export function riderHeaders(path: string, siteOrigin: string = ORIGIN): Record<string, string> {
+  return {
+    "Content-Security-Policy": riderCsp(siteOrigin),
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": isAssetPathBy(ASSET_RULE, path, RIDER_PATH) ? "no-cache" : "no-store",
+  };
+}
 const RIDER_DIR = join(DIST, "j");
 const TYPES: Readonly<Record<string, string>> = { ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".html": "text/html; charset=utf-8" };
 
@@ -150,9 +171,7 @@ export async function openRider(browser: Browser, o: RiderOptions): Promise<Ride
       return route.fulfill({ status: r.status, headers: { "content-type": "application/json", ...r.headers }, body: r.body === undefined ? "" : JSON.stringify(r.body) });
     }
     const f = serveFile(url.pathname);
-    const cache = /\.(js|css|woff2)$/.test(url.pathname) ? "no-cache" : "no-store";
-    const headers = { "Content-Security-Policy": RIDER_CSP, "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Cache-Control": cache };
-    return route.fulfill({ status: f.status, contentType: f.contentType, body: f.body, headers });
+    return route.fulfill({ status: f.status, contentType: f.contentType, body: f.body, headers: riderHeaders(url.pathname) });
   });
   let ws: WebSocketRoute | null = null;
   let greeted: WebSocketRoute | null = null;

@@ -1,7 +1,8 @@
 // The rider page's structure guards (CLAUDE.md, "Pure core first"; rider.md, "Fields and limits"):
 // its core imports no DOM or I/O, no source turns a string into markup, the page sends nothing but
 // `hello` on the socket and nothing but the join body over HTTP, and nothing reads or writes
-// localStorage outside store.ts.
+// localStorage outside store.ts. The address is only ever replaced, never pushed or assigned, and
+// the page carries no content security policy of its own: the backend's header is the only one.
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -18,10 +19,10 @@ function files(dir: string): string[] {
 const code = (p: string): string => readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 
 describe("the rider page's structure", () => {
-  it("its core (effort_calc, the fields, the join form, the wire, the session, the view) imports no DOM or I/O", () => {
+  it("its core (the address, effort_calc, the fields, the join form, the wire, the session, the view) imports no DOM or I/O", () => {
     const dir = join(RIDER, "core");
     const list = readdirSync(dir).filter((f) => f.endsWith(".ts"));
-    assert.deepEqual(list.sort(), ["effort-calc.ts", "fields.ts", "join.ts", "session.ts", "view.ts", "wire.ts"]);
+    assert.deepEqual(list.sort(), ["address.ts", "effort-calc.ts", "fields.ts", "join.ts", "session.ts", "view.ts", "wire.ts"]);
     for (const f of list) assert.deepEqual(impurities(f, readFileSync(join(dir, f), "utf8"), RIDER_ALLOWED), [], f);
   });
 
@@ -59,5 +60,27 @@ describe("the rider page's structure", () => {
     const store = code(join(RIDER, "store.ts"));
     assert.equal(store.match(/localStorage\.setItem/g)?.length, 1);
     assert.match(store, /localStorage\.setItem\(NUMBERS_KEY, text\)/);
+  });
+
+  it("only app.ts changes the address, and only in place: no pushState, no assignment to the location", () => {
+    for (const p of files(RIDER)) {
+      const text = code(p);
+      const name = relative(RIDER, p);
+      assert.doesNotMatch(text, /pushState|location\.(hash|href|search)\s*=|location\s*=|location\.(assign|replace)\(/, name);
+      if (name !== "app.ts") assert.doesNotMatch(text, /replaceState/, name);
+    }
+    // Every replaceState puts back a target worked out from the address's own rule or a sent class code.
+    assert.deepEqual(code(join(RIDER, "app.ts")).match(/history\.replaceState\([^;]*\);/g), [
+      'history.replaceState(null, "", target);',
+      'history.replaceState(null, "", `${location.pathname}#${r.send.session}`);',
+    ]);
+  });
+
+  it("the page has no content security policy of its own: the backend's header policy is the only one", () => {
+    // A <meta> policy cannot name the site's origin for connect-src, so it could only be looser than
+    // the header (rider_page_policy.py); the two would apply together and the meta would add nothing.
+    const html = readFileSync(join(RIDER, "index.html"), "utf8");
+    assert.doesNotMatch(html, /http-equiv\s*=\s*["']?content-security-policy/i);
+    assert.match(html, /<meta name="referrer" content="no-referrer">/);
   });
 });

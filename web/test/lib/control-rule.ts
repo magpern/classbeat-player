@@ -30,13 +30,14 @@ export function parseAssetRule(source: string): AssetRule {
 }
 
 /**
- * Whether a path under /control names a script, a style sheet or a font. Mirrors the backend's
- * `is_asset_path` and `asset_type` (control_page_policy.py); only the constants are read from it,
- * so companion-fake-headers.test.ts checks this logic against a table of paths.
+ * Whether a path under /control (or under `base`: the rider page's /j, rider_page_policy.py, uses
+ * the same rule) names a script, a style sheet or a font. Mirrors the backend's `is_asset_path` and
+ * `asset_type` (control_page_policy.py); only the constants are read from it, so
+ * companion-fake-headers.test.ts checks this logic against a table of paths.
  */
-export function isAssetPathBy(rule: AssetRule, path: string): boolean {
-  const rel = path.replace(/^\/control\//, "");
-  if (rel === path) return false;
+export function isAssetPathBy(rule: AssetRule, path: string, base = "/control"): boolean {
+  if (!path.startsWith(base + "/")) return false;
+  const rel = path.slice(base.length + 1);
   const segments = rel.split("/");
   if (segments.length > rule.maxDepth || !segments.every((s) => rule.segment.test(s))) return false;
   const name = segments[segments.length - 1];
