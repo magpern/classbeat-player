@@ -26,7 +26,7 @@ export function deletePanel(o: DeleteOptions): { readonly panel: HTMLElement; re
   const head = el("h2", { id: headId }, [t("h2", "Delete this class?", 3)]);
   const keep = button("Keep the class", { primary: true, onPress: o.keep });
   const del = button("Delete class", { onPress: () => void run() });
-  const panel = el("div", { class: "panel", role: "alertdialog", "aria-labelledby": headId }, [
+  const panel = el("div", { class: "class-panel", role: "alertdialog", "aria-labelledby": headId }, [
     head,
     p("It is removed from your library at once, and from each of your devices when it next syncs. It cannot be undone here."),
     buttons(keep, del),

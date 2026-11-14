@@ -239,7 +239,7 @@ describe("deleting a class", () => {
     const site = await open(detail, withDelete({ status: 204 }));
     await site.page.waitForSelector(".zrow");
     await press(site, "Delete class");
-    const panel = site.page.locator(".panel[role=alertdialog]");
+    const panel = site.page.locator(".class-panel[role=alertdialog]");
     assert.equal(await panel.locator("h2").textContent(), "Delete this class?");
     assert.deepEqual(await panel.locator("button").allTextContents(), ["Keep the class", "Delete class"], "the safe button first");
     assert.equal(await active(site), "Keep the class");
@@ -254,7 +254,7 @@ describe("deleting a class", () => {
     await site.page.waitForSelector(".zrow");
     await press(site, "Delete class");
     await site.page.keyboard.press("Escape");
-    assert.equal(await site.page.locator(".panel").count(), 0);
+    assert.equal(await site.page.locator(".class-panel").count(), 0);
     assert.equal(await active(site), "Delete class");
     assert.equal(await site.page.getByRole("link", { name: "Play on this device" }).count(), 1, "the row is back with Play");
     assert.ok(!site.api.some((a) => a.method === "DELETE"));
@@ -266,7 +266,7 @@ describe("deleting a class", () => {
     await site.page.waitForSelector(".zrow");
     await press(site, "Delete class");
     await press(site, "Keep the class");
-    assert.equal(await site.page.locator(".panel").count(), 0);
+    assert.equal(await site.page.locator(".class-panel").count(), 0);
     assert.equal(await active(site), "Delete class");
     await site.context.close();
   });
@@ -328,11 +328,11 @@ describe("deleting a class", () => {
       await site.page.waitForSelector(".zrow");
       await press(site, "Delete class");
       await press(site, "Delete class");
-      await site.page.waitForSelector(".panel .plate");
-      assert.match(await site.page.locator(".panel .plate").innerText(), new RegExp(plate));
+      await site.page.waitForSelector(".class-panel .plate");
+      assert.match(await site.page.locator(".class-panel .plate").innerText(), new RegExp(plate));
       assert.equal(await site.page.locator(".zrow").count(), 5, "the class stays on the page");
       assert.equal(await site.page.getByRole("button", { name: "Keep the class" }).isEnabled(), true);
-      await site.page.locator(".panel .plate").getByRole("button", { name: "Try again" }).click();
+      await site.page.locator(".class-panel .plate").getByRole("button", { name: "Try again" }).click();
       await site.page.waitForSelector(".note");
       assert.equal(site.api.filter((a) => a.method === "DELETE").length, 2);
       await site.context.close();
@@ -344,8 +344,8 @@ describe("deleting a class", () => {
     await site.page.waitForSelector(".zrow");
     await press(site, "Delete class");
     await press(site, "Delete class");
-    await site.page.waitForSelector(".panel .plate");
-    assert.match(await site.page.locator(".panel .plate").innerText(), /You are offline/);
+    await site.page.waitForSelector(".class-panel .plate");
+    assert.match(await site.page.locator(".class-panel .plate").innerText(), /You are offline/);
     assert.equal(await site.page.getByRole("button", { name: "Delete class" }).isDisabled(), true, "a button that needs the server is off");
     assert.equal(await site.page.locator(".zrow").count(), 5);
     await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
