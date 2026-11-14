@@ -8,30 +8,20 @@ import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, WebSocketRoute } from "playwright-core";
 import { DIST, chromePath } from "./browser.ts";
+import { ASSET_RULE, isAssetPathBy } from "./control-rule.ts";
 
 export const ORIGIN = "https://site.test";
 export const PAGE_URL = `${ORIGIN}/control`;
-/** The website's own page headers (backend/src/player_backend/request_policy.py), for its sign-in stand-in. */
+/** The website's own page headers (backend/src/player_backend/request_policy.py, response_headers: the policy and Referrer-Policy only, no nosniff), for its sign-in stand-in. */
 const SITE_CSP = "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const FETCHED = ["/api/live/controller", "/api/live/control", "/api/site/sessions"];
 const LIVE_WS = "/api/live/ws";
-const ASSET_SEGMENT = /^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$/;
 
 /** The companion page's policy (backend/src/player_backend/control_page_policy.py, content_security_policy). */
 export function controlCsp(siteOrigin: string): string {
   const socket = "wss://" + siteOrigin.replace(/^https:\/\//, "");
   const connect = [...FETCHED.map((p) => siteOrigin + p), socket + LIVE_WS].join(" ");
   return `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
-}
-
-function isAssetPath(path: string): boolean {
-  const rel = path.replace(/^\/control\//, "");
-  if (rel === path) return false;
-  const segments = rel.split("/");
-  if (segments.length > 2 || !segments.every((s) => ASSET_SEGMENT.test(s))) return false;
-  const name = segments[segments.length - 1];
-  const dot = name.lastIndexOf(".");
-  return dot > 0 && [".js", ".css", ".woff2"].includes(name.slice(dot));
 }
 
 /** The headers of every answer under /control (backend control_page_policy.py, control_headers). */
@@ -41,7 +31,7 @@ export function controlHeaders(path: string, siteOrigin: string = ORIGIN): Recor
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Cache-Control": isAssetPath(path) ? "no-cache" : "no-store",
+    "Cache-Control": isAssetPathBy(ASSET_RULE, path) ? "no-cache" : "no-store",
   };
 }
 const CONTROL_DIR = join(DIST, "control");
@@ -208,7 +198,7 @@ export async function openCompanion(browser: Browser, o: OpenOptions): Promise<F
     }
     const f = serveFile(url.pathname);
     const onControl = url.pathname === "/control" || url.pathname.startsWith("/control/");
-    const headers = onControl ? controlHeaders(url.pathname) : { "Content-Security-Policy": SITE_CSP, "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
+    const headers = onControl ? controlHeaders(url.pathname) : { "Content-Security-Policy": SITE_CSP, "Referrer-Policy": "no-referrer" };
     return route.fulfill({ status: f.status, contentType: f.contentType, body: f.body, headers });
   });
   let ws: WebSocketRoute | null = null;
@@ -228,6 +218,8 @@ export async function openCompanion(browser: Browser, o: OpenOptions): Promise<F
     },
     refuse: false,
   };
+  // routeWebSocket replaces WebSocket inside the page, so the page's CSP never sees the socket: the
+  // wss entry of connect-src is checked only as text (test/unit/companion-fake-headers.test.ts).
   await page.routeWebSocket(/.*/, (route) => {
     live.urls.push(route.url());
     if (live.refuse || !route.url().startsWith("wss://site.test/api/live/ws")) {
