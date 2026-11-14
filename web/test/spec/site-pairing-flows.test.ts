@@ -276,6 +276,39 @@ describe("refusals and errors", () => {
     await site.context.close();
   });
 
+  it("an offline look-up is tried again once, by itself, when the browser is back online", async () => {
+    const site = await open({ "POST pairing/find": [{ status: 0, fail: true }, FOUND] });
+    await typeCode(site.page, PAIR_CODE);
+    await site.page.waitForSelector(".plate");
+    await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await site.page.waitForSelector(".dev-codebox");
+    assert.deepEqual(finds(site), [JSON.stringify({ code: PAIR_LETTERS }), JSON.stringify({ code: PAIR_LETTERS })]);
+    // Once only: a later `online` sends nothing more.
+    await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await settled(site);
+    assert.equal(finds(site).length, 2);
+    await site.context.close();
+  });
+
+  it("no retry on `online` once the page has moved on: another code was typed, or the look-up was not offline", async () => {
+    const moved = await open({ "POST pairing/find": [{ status: 0, fail: true }, NOT_FOUND] });
+    await typeCode(moved.page, PAIR_CODE);
+    await moved.page.waitForSelector(".plate");
+    await typeCode(moved.page, "BCDF-GHJL");
+    await moved.page.waitForFunction(() => /not found/.test(document.querySelector(".plate")?.textContent ?? ""));
+    await moved.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await settled(moved);
+    assert.deepEqual(finds(moved), [JSON.stringify({ code: PAIR_LETTERS }), JSON.stringify({ code: "BCDFGHJL" })]);
+    await moved.context.close();
+    const server = await open({ "POST pairing/find": { status: 500, body: { error: "internal" } } });
+    await typeCode(server.page, PAIR_CODE);
+    await server.page.waitForSelector(".plate");
+    await server.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await settled(server);
+    assert.equal(finds(server).length, 1);
+    await server.context.close();
+  });
+
   it("a session that ended goes to Sign in, and the code goes nowhere", async () => {
     const site = await open({ "POST pairing/find": { status: 401, body: { error: "not_signed_in" } } });
     await typeCode(site.page, PAIR_CODE);

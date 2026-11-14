@@ -41,7 +41,17 @@ export function pairPage(main: HTMLElement, env: SignedInEnv, focusHeading: bool
     busy = true;
     again = () => void find(typed);
     for (const b of main.querySelectorAll("button")) b.disabled = true;
-    show(afterFind(typed, code, await call("POST", "pairing/find", { code })));
+    const result = afterFind(typed, code, await call("POST", "pairing/find", { code }));
+    show(result);
+    if (result.screen === "enter" && result.plate?.kind === "offline") retryOnline(result, typed);
+  }
+
+  // A look-up decides nothing, so one made offline is tried again once the browser is back online
+  // (site.md, "Errors"), unless the page has moved on. A decision never is.
+  function retryOnline(shown: PairView, typed: string): void {
+    window.addEventListener("online", () => {
+      if (env.current() && view === shown) void find(typed);
+    }, { once: true });
   }
 
   async function decide(found: Found, approve: boolean, typedName: string): Promise<void> {

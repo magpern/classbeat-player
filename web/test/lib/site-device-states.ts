@@ -8,6 +8,9 @@ import type { State } from "./site-states.ts";
 /** A code as the player shows it, and the same eight letters as the page sends them. */
 export const PAIR_CODE = "BCDF-GHJK";
 export const PAIR_LETTERS = "BCDFGHJK";
+/** The codes the refusal states type: one too short, one not found. */
+export const SHORT_CODE = "BCDF-GH";
+export const UNKNOWN_CODE = "BCDF-GHJL";
 
 export const DEVICES = [
   { id: "6a1f3c2e-4b5d-4e6f-8a7b-9c0d1e2f3a4b", name: "Studio PC", platform: "Windows", version: "0.4.0", paired_at: "2026-11-03T09:12:00.123456+00:00", last_used_at: "2026-11-13T09:30:00+00:00" },
@@ -43,8 +46,8 @@ export const DEVICE_STATES: readonly State[] = [
   { name: "devices-revoke-offline", path: "/devices", script: { ...LISTED, [`DELETE devices/${DEVICES[0].id}`]: { status: 0, fail: true } }, steps: then(revokeFirst, press("Revoke device")), ready: ".plate", clock: "day" },
   { name: "devices-server", path: "/devices", script: { "GET devices": { status: 500, body: { error: "internal" } } }, ready: ".plate" },
   { name: "pair", path: "/pair", script: signedIn, ready: "input[name=code]", main: true },
-  { name: "pair-invalid-code", path: "/pair", script: signedIn, steps: typeCode("BCDF-GH"), ready: ".field.err" },
-  { name: "pair-not-found", path: "/pair", script: { ...signedIn, "POST pairing/find": { status: 404, body: { error: "pairing_not_found" } } }, steps: typeCode("BCDF-GHJL"), ready: ".plate" },
+  { name: "pair-invalid-code", path: "/pair", script: signedIn, steps: typeCode(SHORT_CODE), ready: ".field.err" },
+  { name: "pair-not-found", path: "/pair", script: { ...signedIn, "POST pairing/find": { status: 404, body: { error: "pairing_not_found" } } }, steps: typeCode(UNKNOWN_CODE), ready: ".plate" },
   { name: "pair-offline", path: "/pair", script: { ...signedIn, "POST pairing/find": { status: 0, fail: true } }, steps: typeCode(PAIR_CODE), ready: ".plate" },
   { name: "pair-found", path: "/pair", script: found(), steps: reachFound, ready: "h1:focus", main: true },
   { name: "pair-approved", path: "/pair", script: found({ status: 200, body: { status: "approved" } }), steps: then(reachFound, press("Pair this device")), ready: ".note" },
@@ -53,3 +56,8 @@ export const DEVICE_STATES: readonly State[] = [
   { name: "pair-invalid-name", path: "/pair", script: found({ status: 422, body: { error: "invalid_name" } }), steps: then(reachFound, press("Pair this device")), ready: ".field.err" },
   { name: "pair-decide-server", path: "/pair", script: found({ status: 503, body: { error: "unavailable" } }), steps: then(reachFound, press("Pair this device")), ready: ".plate" },
 ];
+
+/** What each pairing state types, so its guard can look for that code everywhere it must not be. */
+export const PAIR_TYPED: Readonly<Record<string, string>> = Object.fromEntries(
+  DEVICE_STATES.filter((s) => s.name.startsWith("pair")).map((s) => [s.name, s.name === "pair-invalid-code" ? SHORT_CODE : s.name === "pair-not-found" ? UNKNOWN_CODE : PAIR_CODE]),
+);
