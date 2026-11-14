@@ -38,7 +38,7 @@ check_shards() {
   on_disk="$(cd test/spec && find . -maxdepth 1 -name '*.test.ts' | sed 's|^\./||' | sort)"
   listed="$(manifest_lines | cut -d';' -f2 | sort -u)"
   while IFS=';' read -r shard file part; do
-    case "$shard" in 1 | 2 | 3 | 4) ;; *) echo "spec-shards: bad shard '$shard' for $file" >&2; bad=1 ;; esac
+    case "$shard" in 1 | 2 | 3 | 4 | 5) ;; *) echo "spec-shards: bad shard '$shard' for $file" >&2; bad=1 ;; esac
     [ -f "test/spec/$file" ] || { echo "spec-shards: $file is not a spec file in test/spec/" >&2; bad=1; }
   done < <(manifest_lines)
   while read -r f; do
@@ -109,7 +109,7 @@ case "${1:-all}" in
   check) check_shards ;;
   shard)
     check_shards
-    run_shard "${2:?usage: ci.sh shard <1-4>}"
+    run_shard "${2:?usage: ci.sh shard <1-5>}"
     ;;
   *)
     echo "usage: ci.sh [all|static|check|shard <n>]" >&2

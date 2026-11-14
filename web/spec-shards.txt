@@ -1,53 +1,55 @@
 # The spec files in test/spec/, split into the shards the `web-specs` CI job runs in parallel (issue #435).
 # One line per piece of work:  <shard> <file under test/spec/> [<part>]
-#   <shard>  1 to 4, the same numbers as the matrix in .github/workflows/ci.yml.
+#   <shard>  1 to 5, the same numbers as the matrix in .github/workflows/ci.yml.
 #   <part>   only for a file whose shots are split over shards (SPEC_ONLY, see the file's header): a
 #            regular expression on the shot name, or `*` for every shot no other part of that file takes.
 # A file with no part is run whole and listed once. A split file is listed with two or more parts and
 # exactly one `*`, so no shot can fall in no part. `bash ci.sh check` fails on a spec file that is in
 # no shard, a file listed twice, a name that is not a spec file, or a split without its `*`.
-# Balanced by the durations of a green `web` job (run 43624556503, seconds on one runner): room-checks
-# 669 (split four ways by screen size), site-checks 310 (split two ways), companion-checks 90,
-# play-checks 89, site-page-security 78, rider-checks 67, play-picker-checks 35, the other files
-# about 300 together. To re-balance, edit this file only.
-1 room-checks.test.ts -(2560x1080|1280x1024)$
-1 room-checks.test.ts -(1920x1080|1680x1050)$
-1 play-checks.test.ts
-2 room-checks.test.ts -(1650x1080|1620x1080|1024x768)$
+# Balanced by the durations of the first sharded run (seconds on one runner): room-checks 139 + 133 +
+# 223 + 215 in four parts by screen size, site-checks 118 (200 % text) + 303 in four parts by width,
+# companion-checks 92, play-checks 89, site-page-security 78, the other files about 350 together.
+# To re-balance, edit this file only.
+1 room-checks.test.ts -(1650x1080|1620x1080|1024x768)$
+1 site-checks.test.ts -1280$
 2 room-checks.test.ts *
-2 companion-checks.test.ts
-3 site-checks.test.ts -text200$
-3 site-checks.test.ts *
-3 site-page-security.test.ts
-3 site-sign-in-flows.test.ts
-3 site-data-flows.test.ts
-3 site-data-secrecy.test.ts
-4 rider-checks.test.ts
-4 play-picker-checks.test.ts
-4 play-controls.test.ts
-4 play-requests.test.ts
-4 gel-name.test.ts
-4 motion.test.ts
-4 rider-address.test.ts
-4 play-screen.test.ts
-4 site-pairing-flows.test.ts
-4 site-passkeys-flows.test.ts
-4 site-account-secrecy.test.ts
-4 site-devices-flows.test.ts
-4 site-links-flows.test.ts
-4 companion-token.test.ts
-4 site-classes-flows.test.ts
-4 site-connect-flows.test.ts
-4 site-link-secrecy.test.ts
-4 site-sessions-flows.test.ts
-4 site-trap-integrity.test.ts
-4 site-pairing-secrecy.test.ts
-4 play-routes.test.ts
-4 site-play-return.test.ts
-4 play-two-lines.test.ts
-4 companion-live.test.ts
-4 rider-token.test.ts
-4 companion-retry.test.ts
-4 site-link-return.test.ts
-4 site-signed-in.test.ts
-4 cue-four.test.ts
+2 play-checks.test.ts
+2 site-checks.test.ts *
+3 room-checks.test.ts -(2560x1080|1280x1024)$
+3 room-checks.test.ts -(1920x1080|1680x1050)$
+3 companion-checks.test.ts
+4 site-checks.test.ts -text200$
+4 site-checks.test.ts -390$
+4 site-page-security.test.ts
+4 site-sign-in-flows.test.ts
+4 site-data-flows.test.ts
+4 site-data-secrecy.test.ts
+5 rider-checks.test.ts
+5 play-picker-checks.test.ts
+5 play-controls.test.ts
+5 play-requests.test.ts
+5 gel-name.test.ts
+5 motion.test.ts
+5 rider-address.test.ts
+5 play-screen.test.ts
+5 site-pairing-flows.test.ts
+5 site-passkeys-flows.test.ts
+5 site-account-secrecy.test.ts
+5 site-devices-flows.test.ts
+5 site-links-flows.test.ts
+5 companion-token.test.ts
+5 site-classes-flows.test.ts
+5 site-connect-flows.test.ts
+5 site-link-secrecy.test.ts
+5 site-sessions-flows.test.ts
+5 site-trap-integrity.test.ts
+5 site-pairing-secrecy.test.ts
+5 play-routes.test.ts
+5 site-play-return.test.ts
+5 play-two-lines.test.ts
+5 companion-live.test.ts
+5 rider-token.test.ts
+5 companion-retry.test.ts
+5 site-link-return.test.ts
+5 site-signed-in.test.ts
+5 cue-four.test.ts
