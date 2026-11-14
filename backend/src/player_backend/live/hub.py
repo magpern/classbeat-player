@@ -70,9 +70,9 @@ type Handler = Callable[[Link, Message], None]
 
 
 def _by_type(*handlers: Handler) -> dict[str, Handler]:
-    """The handlers keyed by the routed type each is named for (`_on_<type>`). They must be the
-    types the table lets a connection send after `hello` (`acted_on`), exactly, or there is no
-    hub: a routed type with no handler, or a handler for no routed type, fails at start."""
+    """The handlers keyed by `_on_<type>`: exactly the types a connection may send after `hello`
+    (`acted_on`), or the hub fails at start. Each type is listed once, so a handler for a type
+    that two roles may send must check `link.role` itself (no type has two senders today)."""
     table = {h.__name__.removeprefix("_on_"): h for h in handlers}
     if len(table) != len(handlers) or set(table) != set(acted_on(routes())):
         raise RuntimeError("the live hub's handlers are not the routing table's types")

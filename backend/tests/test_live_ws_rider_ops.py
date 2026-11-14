@@ -149,6 +149,23 @@ def test_a_removed_rider_can_join_again_with_the_current_code(live: Any) -> None
             assert message["type"] == "rider_joined" and message["rider"] != rider_id
 
 
+def test_removing_a_rider_that_has_left_tells_the_host_nothing_more(live: Any) -> None:
+    # The host was told `rider_left` `left` when it went; within its 5 minutes the host may
+    # still remove it: its token is gone, and there is no second `rider_left`.
+    started = live.session()
+    token = live.rider(started.join_code)
+    with live.joined(started.host_token, None) as host:
+        with live.riding(token):
+            rider_id = str(recv(host)["rider"])
+        assert recv(host) == {"v": 1, "type": "rider_left", "rider": rider_id, "reason": "left"}
+        host.send_json({"v": 1, "type": "drop_rider", "rider": rider_id})
+        nothing(host)
+        assert not live.hub.dropped
+        with live.connect() as ws:
+            ws.send_json(hello(token))
+            assert closed(ws) == 4401
+
+
 def test_the_end_reaches_every_rider(live: Any) -> None:
     started = live.session()
     tokens = [live.rider(started.join_code, name) for name in ("Sam", "Alex")]
