@@ -2,12 +2,16 @@
 
 Status: Accepted (2026-11-14, owner: "ok, go web 3d")
 
+Settles the scene technology that [ADR 0001](0001-application-stack-music-link-and-timing.md)
+left open (Godot 4 the leading candidate, web 3D the alternative). The rest of ADR 0001 stands.
+
 ## Context
 
 Plan section 9 left the technology for the room's 3D scene open until spike 2. Godot 4 was the
 leading candidate, and web 3D was the alternative. Spike 2 (`player/scene/spike/`) built the same rough
 light-show scene three ways and ran them on the owner's Mac (Apple Silicon, one screen, as in the
-studio) on 2026-11-14:
+studio) on 2026-11-14. The owner reported the results to the Orchestrator in its session that
+day; this ADR is the record of them:
 
 | Variant | What the owner saw |
 |---|---|
@@ -28,7 +32,8 @@ class clock state and it draws. The plain 2D screen remains the fallback.
 
 **Re-check (measurable):** on a studio-class computer, the PL6 scene at its default quality level
 keeps a median of at least 58 frames per second over a full class, and no second has fewer than 30.
-The frame-rate log the scene writes is the evidence. If it misses this target at the lowest quality
+The evidence is a frame-rate log. In the spike the shell's main process writes `fps.log` from
+what the room window reports; PL6 provides the same log for the real scene. If it misses this target at the lowest quality
 level, the Orchestrator reopens this decision with Godot native as the alternative. Its window and
 focus problem on macOS must then be solved first.
 
@@ -48,5 +53,6 @@ focus problem on macOS must then be solved first.
 - PL6 builds the scene in `player/scene/` with three.js, against `docs/design/scene.md`.
 - The spike harness (`player/scene/spike/`) and its Godot project are throwaway, as planned
   (plan section 9). They are deleted once PL6's first scene pull request merges.
+- PL6 includes a frame-rate log (once a second, with the quality level) as in the spike.
 - No Godot toolchain is needed in CI or on the owner's machines.
 - The phone and tablet player (ADR 0008) can reuse the same scene code where the device allows it.

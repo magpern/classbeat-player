@@ -47,8 +47,8 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    This is the main thing to prove first (section 12, spike 1).
 4. **Recommended technology:** a web-technology application on every device (in a desktop
    shell on computers), because it lets a rider's phone join with nothing to install. The room's
-   3D scene is a replaceable part: the free Godot engine is the leading candidate for it, with
-   web 3D as the alternative, settled by a small trial (sections 8 and 9). For the
+   3D scene is a replaceable part, drawn with web 3D (three.js), decided after a small trial
+   (sections 8 and 9; ADR 0009). For the
    backend, Python with FastAPI and PostgreSQL (section 5).
 5. **An own player does not make classbeat independent of MOWL yet.** Class design still reads
    each song's length, BPM and sections through the user's MOWL account. The
@@ -580,8 +580,8 @@ three ways to join, and they differ in who owns the projector window and who dra
 | Godot's web export running inside the shell | The shell's | HTML over the scene | Godot's simpler web renderer, not its best one |
 | A transparent shell window laid over Godot's | Both | HTML | Fragile across systems and in full screen; not recommended |
 
-**The choice does not have to be made now**, but it is made on the integrated application, not on
-pictures alone. The real shell, class clock and plain 2D screen are the same in every case and
+The choice was made after spike 2 (ADR 0009), on the integrated application, not on pictures
+alone. The real shell, class clock and plain 2D screen are the same in every case and
 are built in phases PL4 and PL5. Spike 2 runs earlier, in PL0, on a **throwaway harness**: a
 minimal shell with a presenter window, a fake class clock and the 2D screen as a stub, written
 only for the trial and deleted after it. Its result is required before phase PL6 starts. Spike 2 builds the same rough light-show scene in web 3D
@@ -733,10 +733,7 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
   III.6; whether the Web API sees an offline desktop app; current position accuracy of the Windows
   media session and of AppleScript with crossfade on (spike 1 measures both).
 - Whether Sweden qualifies for Microsoft's signing service as an individual, and its price.
-- 3D frame rate on studio-class integrated graphics and on phones (spike 2).
-- Godot's web export on iPhone: its 4.2 documentation says it does not run there; later versions
-  are said to have improved it, not confirmed.
-- Whether any Godot Bluetooth plugin covers iPhone and Android.
+- 3D frame rate on studio-class integrated graphics and on phones: the re-check in ADR 0009.
 - Bluefy on iPhone with bike and heart-rate sensors: not tested. It is a third party's app; if it
   stops working, iPhone sensors stop with it.
 - Which Bluetooth services each studio bike and treadmill model really exposes.
