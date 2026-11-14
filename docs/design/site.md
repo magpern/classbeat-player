@@ -39,8 +39,8 @@ player" in the header, one string to replace.
 A signed-in page reached while signed out (a 401 `not_signed_in` from any route) goes to Sign in
 with the note "Your session ended" and, after sign-in, returns to the page that asked. **Only a
 path of this site from the table above is ever returned to** (no address typed by anyone else is
-followed, no open redirect), and the `/pair` and `/link/source` query is kept with it. The page
-that was asked for is never put in the sign-in address and never holds a token.
+followed, no open redirect), and the `/pair` and `/link/source` query is kept with it. No page
+address is ever put in the sign-in address, and it never holds a token. The one thing the sign-in address may carry is a **return entry** in the fragment (never a query), taken from a fixed table in the site's code (today one entry, `control`, which means `/control`). The fragment is `#return=control`, or `#return=control.<class code>` when the rider has typed a class code in full or arrived with `#<join code>`; the class code only names the session and gives no control, and the control code is never sent. The page reads the entry, keeps it in memory only and removes it from the address bar at once, before any request. Anything that is not in the table, or a code that is not in the class-code alphabet, is ignored and the sign-in goes to the default page (`/classes`). After sign-in the page returns by a full page load (`/control` is a separate bundle), to `/control` or `/control#<class code>`. Nothing is written to storage. A sign-in by email link opened in a new tab returns to the companion too (ADR 0006); the page looks the same.
 
 ## What every page has
 
@@ -96,7 +96,7 @@ The email link, a passkey, and the pages around them. One narrow column.
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
-| Start | "Sign in", an email field, "Email me a sign-in link", the label "or", "Sign in with a passkey" and the line "A passkey uses this device's fingerprint, face or screen lock." | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
+| Start | "Sign in", an email field, "Email me a sign-in link", the label "or", "Sign in with a passkey" and the line "A passkey uses this device's fingerprint, face or screen lock." From the steering page, `/sign-in#return=control[.<code>]` looks the same as Start: no extra text. | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
 | Not an email | Field error "That does not look like an email address", the typed text kept | 422 `invalid_email` | [invalid](mockups/site-sign-in-invalid-email.html) |
 | Too many requests | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "One network connection can ask for 10 sign-in links an hour, whatever the email address"; the form stays | 429 `too_many_requests` | [limited](mockups/site-sign-in-limited.html) |
 | Check your mail | Note "A link is on its way if *address* can sign in", how long it works (once, 15 minutes, this browser), a hint about spam and spelling, "Send the link again", "Use a different address" | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |

@@ -114,7 +114,7 @@ add('code', 'Companion: get control', 'State: /control without a site session. O
     + field('Class code', { ph: '8 letters', value: 'BCDF-GHJK' }) + key('sign_in', 'Sign in to steer', { main: true, full: true }),
     SECOND + field('Control code', { ph: '8 letters' }) + key('control', 'Get control', { full: true })));
 add('code-signed-in', 'Companion: signed in', 'State: /control with a site session. The class code names the class; the sign-in gives control.',
-  page(h1('Steer the class from this phone') + T('label', 'Signed in as ana@example.com', 2, ' class="who"'),
+  page(h1('Steer the class from this phone') + T('label', 'Signed in on this phone', 2, ' class="who"'),
     field('Class code', { ph: '8 letters', focus: true }) + key('control', 'Steer this class', { main: true, full: true })
     + p('The class code is on the room screen. Control needs the account that runs the class.', true)));
 add('code-wrong', 'Companion: code did not work', 'State: invalid_code from POST /api/live/control (unknown class, wrong, used or expired code: one answer). cannot_control on the sign-in route reads alike, with its own words.',
