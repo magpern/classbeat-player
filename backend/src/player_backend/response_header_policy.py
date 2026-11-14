@@ -22,6 +22,7 @@ def headers_for(path: str, root_path: str, site_origin: str) -> dict[str, str]:
         headers = control_headers(routed, site_origin)
     else:
         headers = response_headers(routed)
-    if path.startswith(NEVER_STORED):
+    # Either path is enough, whichever branch chose the rest (#339).
+    if path.startswith(NEVER_STORED) or routed.startswith(NEVER_STORED):
         headers["Cache-Control"] = "no-store"
     return headers
