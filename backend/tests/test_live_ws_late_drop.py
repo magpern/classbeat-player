@@ -2,9 +2,11 @@
 
 The registry tells the hub of a drop from whichever thread made it; the hub acts on it on its
 event loop, later. By then the place can have gone to a new token, connected or not. The late
-drop then closes only the dropped token's own connection, and tells the host nothing about the
-new holder's place: neither that it is free, nor anything else. A late drop with no new holder
-is told as before.
+drop then closes only the dropped token's own connection, and never shows the new holder's
+place as free: a held place with no connection is told as the replay tells it (ADR 0005, the
+2026-11-14 amendment), `controller_left` `disconnected` with the holder's `via`, and a new
+holder already connected (its `controller_joined` sent) is told nothing more. A late drop with
+no new holder is told as before.
 
 The drop is held back here: the hub's event handler is wrapped so that a `Dropped` waits until
 the test lets it through, the way a busy loop would hold it.
@@ -97,7 +99,7 @@ def test_a_late_drop_leaves_the_new_holders_connection_and_place(
             nothing(host)
 
 
-def test_a_late_drop_tells_nothing_of_a_place_a_new_token_holds_unconnected(
+def test_a_late_drop_with_neither_phone_connected_names_the_new_holders_via(
     live: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     started = live.session()
@@ -107,13 +109,15 @@ def test_a_late_drop_tells_nothing_of_a_place_a_new_token_holds_unconnected(
         held = HeldBack(live, monkeypatch)
         host.send_json(DROP)
         held.wait()
-        new = live.controller(started)  # slot 1 again, not connected yet
+        new = live.controller(started, signed_in=True)  # slot 1 again, not connected yet
         held.deliver()
+        # Held, not connected, by the new token: its `via`, not the dropped one's.
+        assert recv(host) == _left(1, "sign_in", "disconnected")
         nothing(host)
-        assert live.registry.places(started.session_id) == {1: "code"}
+        assert live.registry.places(started.session_id) == {1: "sign_in"}
         assert live.registry.controller_seat(old, live.clock()) is None
         with live.joined(new):
-            assert recv(host) == _joined(1, "code")
+            assert recv(host) == _joined(1, "sign_in")
 
 
 def test_a_late_drop_closes_the_dropped_phone_but_not_the_new_holders_place(
@@ -126,11 +130,14 @@ def test_a_late_drop_closes_the_dropped_phone_but_not_the_new_holders_place(
         held = HeldBack(live, monkeypatch)
         host.send_json(DROP)
         held.wait()
-        live.controller(started)  # slot 1 again, not connected
+        live.controller(started, signed_in=True)  # slot 1 again, not connected
         held.deliver()
         _ended_dropped(phone)  # the dropped token's own connection goes
-        nothing(host)  # and the new holder's place is not shown free
+        # The phone the host saw join is gone; the place is held, not free, and not connected.
+        assert recv(host) == _left(1, "sign_in", "disconnected")
+        nothing(host)
         assert live.hub.connected(started.session_id) == (True, ())
+        assert live.registry.places(started.session_id) == {1: "sign_in"}
 
 
 def test_a_late_drop_with_no_new_holder_is_told_as_ever(

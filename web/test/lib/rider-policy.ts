@@ -30,6 +30,11 @@ export const SHARED = ["is_page_path", "page_policy", "is_asset_path", "page_hea
 /** The control file's `_LIVE_WS` line and each SHARED function, as written there (docstrings and all). */
 export function sharedOf(control: string): string {
   const parts = [found(/^_LIVE_WS: Final = .*$/m, control, "_LIVE_WS")[0]];
+  for (const name of ["_LIVE_WS", ...SHARED]) {
+    // Bound once at the top level: a second definition or assignment would go unread.
+    const bound = control.match(new RegExp(`^(?:(?:async )?def ${name}\\b|${name}\\s*[:=])`, "gm")) ?? [];
+    if (bound.length !== 1) throw new Error(`the backend's ${name} is bound ${bound.length} times in control_page_policy.py`);
+  }
   for (const name of SHARED) {
     const start = control.search(new RegExp(`^def ${name}\\(`, "m"));
     if (start < 0) throw new Error(`the backend's ${name} was not found`);
