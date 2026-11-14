@@ -3,6 +3,7 @@
 // steps a person takes. The checks and the flows both use this table.
 import type { Page } from "playwright-core";
 import type { Passkey, Script } from "./site-fake.ts";
+import { DEVICE_STATES } from "./site-device-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -92,4 +93,5 @@ export const STATES: readonly State[] = [
   { name: "error-offline", path: "/classes", script: { "GET classes": { status: 0, fail: true } }, ready: ".plate" },
   { name: "error-server", path: "/classes", script: { "GET classes": { status: 500, body: { error: "internal" } } }, ready: ".plate" },
   { name: "error-not-found", path: "/no-such-page", ready: "h1" },
+  ...DEVICE_STATES,
 ];

@@ -6,6 +6,7 @@ import { call } from "../net/api.ts";
 import { h1 } from "../ui/kit.ts";
 import { offlinePlate, serverFault, tooMany } from "./errors.ts";
 import { playLink } from "./play-link.ts";
+import { shownByDevicePage } from "./device-pages.ts";
 
 export interface SignedInEnv {
   readonly sessionEnded: () => void;
@@ -39,6 +40,7 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
         waitingOnline = true;
         break;
       default:
+        if (shownByDevicePage(main, page, answer.kind === "ok" ? answer.body : undefined, env, focus, () => void load())) return;
         main.replaceChildren(h1(page.title), playLink(page.load) ?? "");
     }
     if (focus || answer.kind !== "ok") main.querySelector<HTMLElement>(".plate")?.focus();
