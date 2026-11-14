@@ -3,12 +3,11 @@
 // for request_policy.py, so the fake cannot drift from the backend.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, it } from "node:test";
-import { WEB_DIR } from "../lib/browser.ts";
 import { ORIGIN, controlCsp, controlHeaders } from "../lib/companion-fake.ts";
+import { POLICY_SOURCE, isAssetPathBy, parseAssetRule } from "../lib/control-rule.ts";
 
-const SOURCE = readFileSync(join(WEB_DIR, "..", "backend", "src", "player_backend", "control_page_policy.py"), "utf8");
+const SOURCE = readFileSync(POLICY_SOURCE, "utf8");
 const strings = (text: string): string[] => [...text.matchAll(/f?"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
 const body = (name: string): string => {
   const m = new RegExp(`def ${name}\\([^]*?(?=\\n(?:def |\\S)|$)`).exec(SOURCE.slice(SOURCE.indexOf(`def ${name}`)));
@@ -27,6 +26,8 @@ describe("the companion fake's /control headers", () => {
     const connect = [...strings(fetched[1]).map((p) => origin + p), "wss://site.example" + ws[1]].join(" ");
     const expected = strings(ret[1]).join("").replace("{connect}", connect);
     assert.equal(controlCsp(origin), expected);
+    // Only this text comparison covers the wss entry: the browser tests cannot, because Playwright's
+    // routeWebSocket replaces WebSocket in the page and a CSP never sees the socket.
     assert.equal(controlCsp(ORIGIN), expected.replaceAll("site.example", "site.test"));
     for (const bad of ["unsafe-", "data:", "blob:", "http:", "*"]) assert.ok(!expected.includes(bad), bad);
   });
@@ -39,11 +40,27 @@ describe("the companion fake's /control headers", () => {
     const cache = pairs.find(([k]) => k === "Cache-Control")?.[1] ?? "";
     assert.equal(strings(cache).join("|"), "no-cache|no-store", "the backend's cache rule changed");
     assert.deepEqual(Object.keys(fixed).sort(), ["Referrer-Policy", "X-Content-Type-Options", "X-Frame-Options"]);
-    const page = controlHeaders("/control");
-    assert.deepEqual(Object.keys(page).sort(), [...Object.keys(fixed), "Cache-Control", "Content-Security-Policy"].sort());
-    for (const [k, v] of Object.entries(fixed)) assert.equal(page[k], v, k);
-    assert.equal(page["Cache-Control"], "no-store");
-    for (const p of ["/control/companion.js", "/control/companion.css", "/control/fonts/ui.woff2"]) assert.equal(controlHeaders(p)["Cache-Control"], "no-cache", p);
-    for (const p of ["/control/", "/control/index.html", "/control/companion.js.map", "/control/a/b/c.js", "/control/Upper.js"]) assert.equal(controlHeaders(p)["Cache-Control"], "no-store", p);
+    // Every header's key and value, in full, for each kind of path.
+    const csp = controlCsp(ORIGIN);
+    const expected = (cacheControl: string): Record<string, string> => ({ ...fixed, "Content-Security-Policy": csp, "Cache-Control": cacheControl });
+    assert.deepEqual(controlHeaders("/control"), expected("no-store"));
+    for (const p of ["/control/companion.js", "/control/companion.css", "/control/fonts/ui.woff2"]) assert.deepEqual(controlHeaders(p), expected("no-cache"), p);
+    for (const p of ["/control/", "/control/index.html", "/control/companion.js.map", "/control/a/b/c.js", "/control/Upper.js"]) assert.deepEqual(controlHeaders(p), expected("no-store"), p);
+  });
+
+  it("reads the asset rule from the backend file", () => {
+    const rule = parseAssetRule(SOURCE);
+    assert.deepEqual([...rule.extensions].sort(), [".css", ".js", ".woff2"]);
+    assert.equal(rule.maxDepth, 2);
+    assert.ok(isAssetPathBy(rule, "/control/fonts/ui.woff2"));
+    assert.ok(!isAssetPathBy(rule, "/control/a/b/c.js"));
+    // A change to the backend's rule changes what the fake does.
+    const deeper = parseAssetRule(SOURCE.replace("MAX_DEPTH: Final = 2", "MAX_DEPTH: Final = 3"));
+    assert.ok(isAssetPathBy(deeper, "/control/a/b/c.js"));
+    const more = parseAssetRule(SOURCE.replace('".woff2": "font/woff2",', '".woff2": "font/woff2",\n    ".svg": "image/svg+xml",'));
+    assert.ok(isAssetPathBy(more, "/control/logo.svg"));
+    const upper = parseAssetRule(SOURCE.replace("[a-z0-9][a-z0-9_-]*", "[A-Za-z0-9][A-Za-z0-9_-]*"));
+    assert.ok(isAssetPathBy(upper, "/control/Upper.js"));
+    assert.throws(() => parseAssetRule(SOURCE.replace("MAX_DEPTH", "MAX_LEVELS")), /not found/);
   });
 });

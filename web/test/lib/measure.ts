@@ -8,12 +8,12 @@
 // light-on-dark ink box by about a pixel at its edges, which C1 to C4 tolerate.
 //
 // C1 cap height, C2 contrast, C3 safe area, C4 collisions, C5 zone, C6 hue (text, fills, borders,
-// box-shadows and gradients), C7 reduced motion, C8 coverage.
+// box-shadows and gradients; borders are read in border-walk.ts), C7 reduced motion, C8 coverage.
 import type { Browser, Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
-import { borderHues } from "./border-walk.ts";
 import type { Item } from "../spec/page/collect.js";
 import ink, { INK } from "../spec/page/ink.js";
+import { borderHues } from "./border-walk.ts";
 import { harnessUrl, newPage, settle } from "./browser.ts";
 import { MIN_NEXT_GAP, nameDrawnSmaller, nextRowAndScore, zoneWordsBroken } from "./fit-checks.ts";
 

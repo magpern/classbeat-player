@@ -4,14 +4,14 @@
 // with the page without text. The page is measured at its full height (the mock-ups' fit.js).
 import type { Browser, Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
-import { borderHues } from "./border-walk.ts";
-import ink, { INK } from "../spec/page/ink.js";
 import type { Item } from "../spec/page/collect.js";
+import ink, { INK } from "../spec/page/ink.js";
+import { borderHues } from "./border-walk.ts";
 import { settle } from "./browser.ts";
 import { openSite, traps } from "./site-fake.ts";
 import type { FakeSite } from "./site-fake.ts";
-import type { State } from "./site-states.ts";
 import { focusRing, layoutChecks, motionAndPictures, s3Visible } from "./site-page-checks.ts";
+import type { State } from "./site-states.ts";
 
 export interface SiteShot {
   readonly state: State;
