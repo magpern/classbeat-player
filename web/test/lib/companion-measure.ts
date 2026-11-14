@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
 import pageChecks, { CONTRAST, FLOORS } from "../spec/page/companion-checks.js";
+import { chroma, drawnBorders } from "./border-walk.ts";
 import { WEB_DIR } from "./browser.ts";
 import { HIDE, inkOf, shadowHues } from "./measure.ts";
 import type { Row } from "./measure.ts";
@@ -62,24 +63,7 @@ export function tokenColours(css = readFileSync(join(WEB_DIR, "src", "design", "
  */
 async function borderTokens(page: Page): Promise<Row[]> {
   const tokens = tokenColours().map((t) => t.join(","));
-  const drawn = await page.evaluate(() => {
-    const found: { where: string; colour: string }[] = [];
-    for (const el of document.querySelectorAll("body *")) {
-      for (const pseudo of [null, "::before", "::after"]) {
-        const c = getComputedStyle(el, pseudo);
-        if (pseudo && c.content === "none") continue;
-        const name = `${el.className || el.tagName}${pseudo ?? ""}`;
-        for (const side of ["top", "right", "bottom", "left"]) {
-          const style = c.getPropertyValue(`border-${side}-style`);
-          if (style === "none" || style === "hidden" || parseFloat(c.getPropertyValue(`border-${side}-width`)) === 0) continue;
-          found.push({ where: `${name} border-${side}`, colour: c.getPropertyValue(`border-${side}-color`) });
-        }
-        if (c.outlineStyle !== "none" && parseFloat(c.outlineWidth) > 0) found.push({ where: `${name} outline`, colour: c.outlineColor });
-      }
-    }
-    return found;
-  });
-  return drawn
+  return (await drawnBorders(page))
     .filter((d) => {
       const p = parseColour(d.colour);
       return !p || !tokens.includes(p.join(","));
@@ -87,32 +71,11 @@ async function borderTokens(page: Page): Promise<Row[]> {
     .map((d) => ({ tier: "token", text: `${d.where} ${d.colour}`.slice(0, 40), result: "FAIL border or outline colour is not a design token (K10)" }));
 }
 
-/** K8 on borders: outside a zone, no side of any border, on an element or its ::before or ::after, carries a hue. */
+/** K8 on borders: outside a zone, no side of any border and no outline, on an element or its ::before or ::after, carries a hue. */
 async function borderHues(page: Page): Promise<Row[]> {
-  const found = await page.evaluate(() => {
-    const chroma = (s: string): number => {
-      const m = s.match(/[\d.]+/g);
-      if (!m || (m[3] !== undefined && Number(m[3]) === 0)) return 0;
-      const [r, g, b] = m.slice(0, 3).map(Number);
-      return Math.max(r, g, b) - Math.min(r, g, b);
-    };
-    const out: string[] = [];
-    for (const el of document.querySelectorAll("body *")) {
-      if (el.closest(".z1, .z2, .z3, .z4, .z5, .z6, .z7")) continue;
-      for (const pseudo of [null, "::before", "::after"]) {
-        const c = getComputedStyle(el, pseudo);
-        if (pseudo && c.content === "none") continue;
-        for (const side of ["top", "right", "bottom", "left"]) {
-          const style = c.getPropertyValue(`border-${side}-style`);
-          if (style === "none" || style === "hidden" || parseFloat(c.getPropertyValue(`border-${side}-width`)) === 0) continue;
-          const colour = c.getPropertyValue(`border-${side}-color`);
-          if (chroma(colour) > 24) out.push(`${el.className || el.tagName}${pseudo ?? ""} border-${side} ${colour}`);
-        }
-      }
-    }
-    return out;
-  });
-  return found.map((h) => ({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (K8)" }));
+  return (await drawnBorders(page))
+    .filter((d) => !d.inZone && chroma(d.colour) > 24)
+    .map((d) => ({ tier: "hue", text: `${d.where} ${d.colour}`.slice(0, 40), result: "FAIL hue outside a zone (K8)" }));
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */

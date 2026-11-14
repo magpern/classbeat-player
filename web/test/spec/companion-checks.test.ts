@@ -62,7 +62,7 @@ interface Words {
   readonly keys?: readonly string[];
   /** The text of the `.pill` in the clock's label, when the state has one. */
   readonly pill?: string;
-  /** Keys (by data-action) that must be live: present and not greyed (aria-disabled). */
+  /** Keys (by data-action) that must be live: present and greyed in no form (not aria-disabled, not .dis on it or an ancestor, not :disabled, not aria-busy). */
   readonly live?: readonly string[];
 }
 const showing = (state: State, w: Words): Stage =>
@@ -78,7 +78,8 @@ const showing = (state: State, w: Words): Stage =>
     for (const key of w.live ?? []) {
       const keys = f.page.locator(`[data-action=${key}]`);
       assert.ok((await keys.count()) > 0, `no ${key} key`);
-      assert.equal(await f.page.locator(`[data-action=${key}][aria-disabled=true]`).count(), 0, `a ${key} key is greyed`);
+      const greyed = `[data-action=${key}][aria-disabled=true], [data-action=${key}].dis, .dis [data-action=${key}], [data-action=${key}]:disabled, [data-action=${key}][aria-busy=true]`;
+      assert.equal(await f.page.locator(greyed).count(), 0, `a ${key} key is greyed`);
     }
   });
 const FOLLOW = (state: string, change: State = {}): State => variant(FOLLOWING, { link: { mode: "following", state, canUndo: false, announcement: null }, ...change });
