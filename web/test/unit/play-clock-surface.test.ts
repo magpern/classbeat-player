@@ -9,8 +9,11 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { build } from "esbuild";
 import { WEB_DIR } from "../lib/browser.ts";
 import { reach, specifiersOf } from "../lib/play-graph.ts";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { impurities } from "../lib/core-purity.ts";
 
 const REPO = resolve(WEB_DIR, "..");
@@ -41,6 +44,14 @@ describe("the shared clock surface", () => {
   it("the play bundle reaches no player file but clock.ts, plan.ts and view.ts", () => {
     assert.deepEqual(outsideSurface(play.files), []);
     assert.deepEqual([], play.computed, "a module named by something that is not a string literal");
+    assert.deepEqual(play.unresolved, [], "a relative import that resolves to no file");
+  });
+
+  it("the shipped build, as esbuild resolves it, reaches no player file but the three", async () => {
+    const result = await build({ absWorkingDir: WEB_DIR, entryPoints: { play: "src/play/main.ts" }, bundle: true, format: "iife", outdir: "unused", write: false, metafile: true, logLevel: "silent" });
+    const inputs = Object.keys(result.metafile.inputs).map((f) => resolve(WEB_DIR, f));
+    assert.deepEqual(outsideSurface(inputs), []);
+    for (const f of SURFACE) assert.ok(inputs.includes(f), rel(f));
   });
 
   it("the play bundle does take all three, and nothing from player/ in any other way", () => {
@@ -65,6 +76,31 @@ describe("the shared clock surface", () => {
       for (const spec of specifiersOf(f, readFileSync(f, "utf8"))) if (spec === null || /(^|\/)player(\/|$)/.test(spec)) bad.push(`${rel(f)} names ${spec}`);
     }
     assert.deepEqual(bad, []);
+  });
+});
+
+describe("the graph walk resolves as the bundler does and fails closed", () => {
+  const PLAYER = join(CLOCK_DIR, "..", "room", "keys.ts");
+  function tree(files: Record<string, string>): string {
+    const dir = mkdtempSync(join(tmpdir(), "play-graph-"));
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(join(dir, name, ".."), { recursive: true });
+      writeFileSync(join(dir, name), text.replace("@P@", relative(join(dir, name, ".."), PLAYER).split("\\").join("/")));
+    }
+    return join(dir, "main.ts");
+  }
+
+  it("follows an import without its extension, a side-effect import and a directory import", () => {
+    for (const main of ['import "./extra";', 'import { x } from "./extra";', 'export * from "./extra";', 'import "./dir";']) {
+      const r = reach(tree({ "main.ts": main, "extra.ts": `import "@P@";`, "dir/index.ts": `import "@P@";` }));
+      assert.deepEqual(outsideSurface(r.files), ["player/app/src/core/room/keys.ts"], main);
+      assert.deepEqual(r.unresolved, []);
+    }
+  });
+
+  it("reports a relative import that resolves to no file", () => {
+    const r = reach(tree({ "main.ts": 'import "./missing"; import "./gone.ts";' }));
+    assert.deepEqual(r.unresolved.map(([, n]) => n), ["./missing", "./gone.ts"]);
   });
 });
 
