@@ -348,6 +348,10 @@ describe("deleting a class", () => {
     assert.match(await site.page.locator(".class-panel .plate").innerText(), /You are offline/);
     assert.equal(await site.page.getByRole("button", { name: "Delete class" }).isDisabled(), true, "a button that needs the server is off");
     assert.equal(await site.page.locator(".zrow").count(), 5);
+    // The disabled button points at the plate that says why.
+    const why = await site.page.getByRole("button", { name: "Delete class" }).getAttribute("aria-describedby");
+    assert.ok(why);
+    assert.equal(await site.page.locator(".class-panel .plate").getAttribute("id"), why);
     await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
     await site.page.waitForSelector(".note");
     assert.equal(site.api.filter((a) => a.method === "DELETE").length, 2, "one more request, not several");

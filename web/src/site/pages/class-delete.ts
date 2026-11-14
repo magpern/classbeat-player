@@ -50,6 +50,7 @@ export function deletePanel(o: DeleteOptions): { readonly panel: HTMLElement; re
   };
   async function run(): Promise<void> {
     setBusy(true);
+    del.removeAttribute("aria-describedby");
     panel.querySelectorAll(".plate, .status").forEach((x) => x.remove());
     const status = working("Deleting the class…");
     status.tabIndex = -1;
@@ -70,10 +71,14 @@ export function deletePanel(o: DeleteOptions): { readonly panel: HTMLElement; re
       case "too_many":
         setBusy(false);
         return showPlate(tooManyPlate(answer.retryAfter, () => void run()));
-      case "offline":
+      case "offline": {
         // The delete waits: it needs the server, so it stays off until the browser is back online.
         keep.disabled = false;
-        showPlate(offlinePlate(() => void run()));
+        const off = offlinePlate(() => void run());
+        off.id = uid("delete-offline");
+        // The disabled button says why in words: the plate (site.md, "Errors").
+        del.setAttribute("aria-describedby", off.id);
+        showPlate(off);
         if (!waitingOnline) {
           waitingOnline = true;
           window.addEventListener(
@@ -86,6 +91,7 @@ export function deletePanel(o: DeleteOptions): { readonly panel: HTMLElement; re
           );
         }
         return;
+      }
       default:
         setBusy(false);
         return showPlate(serverPlate(() => void run()));
