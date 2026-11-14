@@ -5,7 +5,7 @@ import type { Row } from "../core/classes-model.ts";
 import type { Answer } from "../core/answer.ts";
 import { call } from "./api.ts";
 
-/** The most a page of the list may hold (the route takes 50 to 200). */
+/** The most a page of the list may hold (the route takes 50 to 200). The first request names no limit and so carries no query (the site's pages send none); later pages ask for the most. */
 const LIMIT = 200;
 /** A library cannot have more pages than this: a cursor that never ends is a fault, not a long list. */
 const MAX_PAGES = 50;
@@ -16,7 +16,7 @@ export async function readAllClasses(): Promise<Answer> {
   const seen = new Set<string>();
   let cursor: string | null = null;
   for (let n = 0; n < MAX_PAGES; n += 1) {
-    const route: string = cursor === null ? `classes?limit=${LIMIT}` : `classes?before=${encodeURIComponent(cursor)}&limit=${LIMIT}`;
+    const route: string = cursor === null ? "classes" : `classes?before=${encodeURIComponent(cursor)}&limit=${LIMIT}`;
     const answer = await call("GET", route);
     if (answer.kind !== "ok") return answer;
     const page = pageOf(answer.body);

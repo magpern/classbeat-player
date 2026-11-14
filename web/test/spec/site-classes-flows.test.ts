@@ -37,7 +37,7 @@ describe("the class list", () => {
     await site.page.waitForSelector(".rows .row");
     assert.deepEqual(await rowTitles(site), ["Apple", "banana", "éclair", "Same", "same"], "title order; ties by id (4 before 5); the removal marker is not shown");
     assert.deepEqual(site.api.map((a) => a.route), ["GET classes", "GET classes"]);
-    assert.deepEqual(site.api.map((a) => new URL(a.url).search), ["?limit=200", "?before=cursor%20one&limit=200"]);
+    assert.deepEqual(site.api.map((a) => new URL(a.url).search), ["", "?before=cursor%20one&limit=200"]);
     assert.equal(await site.page.locator(".count").textContent(), "5 classes");
     const link = site.page.locator(".rows .row a").first();
     assert.equal(await link.getAttribute("href"), `/classes/${idOf(3)}`);
