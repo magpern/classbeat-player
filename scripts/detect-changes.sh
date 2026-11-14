@@ -47,10 +47,12 @@ flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
 # control page's header table), so a backend PR that changes only that file must run the web job (#347).
 # web/test/lib/rider-policy.ts and its control equivalent read backend/src/player_backend/
 # rider_page_policy.py and control_page_policy.py, so a backend-only change to either runs the web job (#375).
+# The browser page imports player/app/src/core/clock/{clock,plan,view}.ts, the shared clock surface, so a
+# change to any of those three files runs the web job (ADR 0008 section 4, #391). The rest of core/clock/ is not shared.
 # A change there must run the whole web job, or main can go red unseen (issue #268).
 # player/app/src/core/** and schema/generated/ts are already covered by the drift-only step,
 # through the player and schema flags.
-flag web '^(web/|docs/design/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$)'
+flag web '^(web/|docs/design/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$)'
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.
 flag desktop '^(player/|web/|schema/|scripts/(build|package|release)[^/]*|\.github/workflows/|(.*/)?(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml|Cargo\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt))'
