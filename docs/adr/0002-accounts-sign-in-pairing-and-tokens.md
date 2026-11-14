@@ -129,12 +129,15 @@ proves only "the same browser".
 
 **Email link.**
 
-1. The user enters an email. The answer is always the same page and status ("if this address
+1. The user enters an email (amended by ADR 0006: and, from the companion, an optional
+   `return_to`). The answer is always the same page and status ("if this address
    can sign in, a link is on its way"). It is the same for an unknown address, an address that
    is not allowed, and an address over its limits (section 10). Only the per-address limit, which
    does not depend on the email, answers 429, and input that is not an email address at all
    answers `422` (step 2).
-2. The request makes the same two calls for every address (amended 2026-11-12). First,
+2. The request makes the same two calls for every address (amended 2026-11-12; amended by
+   ADR 0006: an invalid `return_to` answers `422 invalid_return` after the email check and
+   makes no second call). First,
    `rate_limit_hit` for the requesting address alone, which answers the 429 of step 1 before
    the email is looked at. Then `auth_request_login`, in the same transaction: the counters
    are kept and a row is written to `login_links` with the hash of a new `cbp_ml_` token, the
@@ -157,8 +160,10 @@ proves only "the same browser".
    limits cancels nothing. Whether the address can sign in plays no part (amended 2026-11-12).
    Links asked from other browsers stay valid: each works only in its own browser, so
    nothing is lost, and a stranger who knows the email cannot cancel the user's link.
-4. The mail holds `https://<site>/sign-in#<token>`. The token is in the fragment.
-5. The page reads the fragment, removes it from the address bar (`history.replaceState`) and
+4. The mail holds `https://<site>/sign-in#<token>`. The token is in the fragment. (Amended by
+   ADR 0006: with a valid `return_to`, `#<token>&return=<return_to>`.)
+5. The page reads the fragment (amended by ADR 0006: by its parsing rule, the return part into
+   memory only), removes it from the address bar (`history.replaceState`) and
    shows a "Sign in" button. Pressing it sends the token in the body of a POST. A mail scanner
    that opens the link uses nothing up.
 6. The server accepts the token once, within 15 minutes, and only with the matching browser
