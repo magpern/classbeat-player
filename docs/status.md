@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-14 (after #423).
+Updated 2026-11-14 (after #439).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -105,8 +105,13 @@ website pages spec (#131, #137), the website shell, sign-in and error pages (#14
 (#257, #259) and the passkey busy retry (#260, #262), and the other website pages on fakes: the
 classes list, class details with "Play on this device" and delete (#418, #419), devices and
 pairing (#420), account sessions, passkeys and "Confirm it is you" (#421), linked apps and
-connecting an app (#422), and the data page with export and account deletion (#423). Next: the
-site spec and mock-ups as built, their hardening, purge counts (needs a migration).
+connecting an app (#422), and the data page with export and account deletion (#423); the site
+spec and mock-ups as built (#428, #434); the follow-ups for export, devices, deletion and the
+refused first request (#426, #430), the tighter site guards with a backslash refused in the
+connect return address (#425, #436), and on the backend a sign-in ending the session the
+browser held, a backslash refused in redirect addresses (#427, #431) and ADR 0002 as built
+(#432, #433). Next: the offline and guard follow-ups (#441) and the spec touch-ups (#442),
+purge counts (needs a migration).
 
 ## PL4: screens
 
@@ -131,7 +136,9 @@ screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` j
 the shared design tokens and the request policy (#268, #271); the backend image ships
 `web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
 check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326); the
-backend image ships `web/dist/j` too, with its contents checked (#387, #388).
+backend image ships `web/dist/j` too, with its contents checked (#387, #388); the web spec
+checks run in five parallel shards (about 8 minutes instead of 27) and a change to documentation
+only runs no tests (#435, #437; follow-ups #438, #439).
 
 ## Scene spike
 
@@ -198,12 +205,11 @@ Merged: #30 and its findings (#53).
   Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
 
-- Website, from the #419 to #423 reviews: the history trap in the site checks records only the
-  address, not the state object (#420, #423); the passkey and link secrecy tie covers only some
-  states (#421); a thrown file save leaves export stuck and the export link is revoked at once
-  (#423); a passkey confirm leaves the old session alive and a backslash in a redirect address
-  is not refused (#421, #422, backend). Issues #425 (guards), #426 (web), #427 (backend) and
-  #428 (spec and mock-ups) hold them.
+- Website: the notes from the #419 to #423 reviews are done (#430, #431, #434, #436). Open: no
+  site state opens `/` or `/account`, so the redirect there is outside the history allowlist
+  (#436 N1), the offline export and add-passkey buttons (#430 design), and the shared shot names
+  (#439 N2), in #441 and #442. From #431: no test that a busy or rate-limited passkey sign-in
+  ends nothing (N3).
 
 - PL8 notes: from #273, HEAD on `/control` answers 405 (by design); from #340, the
   private-import guard does not follow names reached through a container or `self`.

@@ -21,7 +21,7 @@ Aliases, not version numbers, so each role moves to the newest model of its tier
 |---|---|---|
 | Orchestrator (main session) | `opus` | |
 | Developer | `sonnet` | `opus` for security-critical issues |
-| Reviewer | `sonnet` | `opus` for security-critical and rule-sensitive pull requests and the first review of a new security design |
+| Reviewer | `sonnet` | `opus` for security-critical and rule-sensitive pull requests and the first review of a new security design; an as-built docs pull request stays `sonnet` (owner, 2026-11-14) |
 | Designer | `sonnet` for verdicts | `opus` when setting a new visual direction |
 | Verifier | `sonnet` | |
 | Explorer | `haiku` | |
