@@ -13,3 +13,8 @@ export function takeDeleted(): string | null {
   deleted = null;
   return t;
 }
+
+/** Drops the note unseen: the account was deleted, so what it held goes with it. */
+export function clearDeleted(): void {
+  deleted = null;
+}

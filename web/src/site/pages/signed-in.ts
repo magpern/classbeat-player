@@ -64,8 +64,9 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
           if (!view.refused(main, answer)) serverFault(main, () => void load());
           break;
         }
-        // A page without a view sees every other answer here, a refusal included (body undefined).
-        if (shown(undefined)) return;
+        // A page without a view: a refused first request (403, 404 and the like) is the server fault,
+        // also on a page that only reads `sessions` to know the person is signed in (/pair, Your data).
+        serverFault(main, () => void load());
         break;
       default:
         if (view) view.show(main, answer.body, () => void load());

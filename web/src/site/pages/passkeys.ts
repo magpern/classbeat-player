@@ -165,7 +165,10 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
     if (done?.kind === "removed") out.push(note(PASSKEY_WORDS.removed(done.name), PASSKEY_WORDS.removedDetail));
     if (mode.kind === "add") {
       const waiting = mode.busy ? working(PASSKEY_WORDS.waiting) : null;
-      return [...out, p(PASSKEY_WORDS.intro), addPanel(mode, (typed) => void add(typed), () => toList("[data-add]"), waiting)];
+      // "You are offline" is described to the add button, as the export's plate is to its button.
+      const offline = messages.plate?.kind === "offline" ? out.find((n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains("plate")) : undefined;
+      if (offline) offline.id = uid("add-offline");
+      return [...out, p(PASSKEY_WORDS.intro), addPanel(mode, (typed) => void add(typed), () => toList("[data-add]"), waiting, offline?.id)];
     }
     const plain = !hasMessage(messages) && done === null && mode.kind === "list";
     if (plain || !list.length) out.push(p(PASSKEY_WORDS.intro));

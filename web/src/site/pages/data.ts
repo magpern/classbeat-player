@@ -10,6 +10,7 @@ import { el, t, uid } from "../ui/dom.ts";
 import { button, buttons, field, h2, note, p, plate, small, working } from "../ui/kit.ts";
 import { focusMessage, hasMessage, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
 import type { Messages } from "./account-messages.ts";
+import { clearDeleted } from "./deleted-note.ts";
 import type { SignedInEnv } from "./signed-in.ts";
 
 type ExportView = { readonly kind: "idle" } | { readonly kind: "working" } | { readonly kind: "started" } | { readonly kind: "limit"; readonly retryAfter: number | null };
@@ -44,8 +45,8 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
     if (exp.kind === "working" || exp.kind === "limit") return;
     [exp, messages] = [{ kind: "working" }, NO_MESSAGES];
     draw(".status");
-    const r = await exportAccount();
-    if (!env.current()) return;
+    const r = await exportAccount(env.current);
+    if (r === "dropped" || !env.current()) return;
     if (r === "saved") {
       exp = { kind: "started" };
       return draw(".note");
@@ -68,7 +69,11 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
     for (const i of box.querySelectorAll<HTMLInputElement>(".ac-panel input")) i.readOnly = true;
     const o = deleteOutcomeOf(await call("POST", "account/delete", { confirm: typed }));
     if (!env.current()) return;
-    if (o.kind === "deleted") return env.deleted();
+    if (o.kind === "deleted") {
+      // A class note held for the list is not carried to whoever signs in next in this browser.
+      clearDeleted();
+      return env.deleted();
+    }
     if (o.kind === "ended") return env.sessionEnded();
     if (o.kind === "mismatch") {
       panel = { typed, mismatch: true, busy: false };

@@ -135,6 +135,11 @@ describe("after the decision", () => {
     assert.equal(afterDecide(FOUND, false, "x", ok({ status: "approved" })).screen, "found");
   });
 
+  it("the Paired name is the one the backend answered, else the one sent", () => {
+    assert.deepEqual(afterDecide(FOUND, true, "Studio PC", ok({ status: "approved", name: "Studio PC (2)" })), { screen: "approved", name: "Studio PC (2)" });
+    for (const name of ["", "  ", 7, null]) assert.deepEqual(afterDecide(FOUND, true, "Studio PC", ok({ status: "approved", name })), { screen: "approved", name: "Studio PC" });
+  });
+
   it("too many devices, a name not valid, and a pairing gone", () => {
     assert.deepEqual(afterDecide(FOUND, true, "Studio PC", refused(409, "too_many_devices")), { screen: "limit" });
     assert.deepEqual(afterDecide(FOUND, true, "bad", refused(422, "invalid_name")), { ...FOUND, name: "bad", nameError: true });

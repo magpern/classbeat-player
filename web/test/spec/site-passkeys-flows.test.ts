@@ -93,6 +93,17 @@ describe("adding a passkey", () => {
     await site.context.close();
   });
 
+  it("offline, the form stays under the 'You are offline' plate and the add button points at it", async () => {
+    const site = await open({ "POST passkeys/options": { status: 0, fail: true } });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate");
+    assert.match(await site.page.locator(".plate").innerText(), /You are offline/);
+    const why = await site.page.locator("form[data-add] button[type=submit]").getAttribute("aria-describedby");
+    assert.ok(why);
+    assert.equal(await site.page.locator(".plate").getAttribute("id"), why);
+    await site.context.close();
+  });
+
   it("checks the name first and sends nothing for an empty one", async () => {
     const site = await open();
     await addAs(site, "   ");

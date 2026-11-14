@@ -50,7 +50,9 @@ export function pairPage(main: HTMLElement, env: SignedInEnv, focusHeading: bool
   // (site.md, "Errors"), unless the page has moved on. A decision never is.
   function retryOnline(shown: PairView, typed: string): void {
     window.addEventListener("online", () => {
-      if (env.current() && view === shown) void find(typed);
+      // Text typed meanwhile is the person's: it is never replaced by a look-up of the older code.
+      const now = main.querySelector<HTMLInputElement>("input[name=code]")?.value;
+      if (env.current() && view === shown && now === typed) void find(typed);
     }, { once: true });
   }
 
