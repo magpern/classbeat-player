@@ -51,7 +51,13 @@ token and zone colours on every border (#303, #306; #310, #311), zone outlines a
 ancestor states and decoration colour in the companion, room and site checks (#316, #317; #319, #320), and the sink trap's iframe
 realms and attribute-node writes (#293, #302), CSS `src()`, service workers, XHR and XSLT
 documents (#307, #309), URL part setters with each value converted once (#312, #313), and a record page code
-cannot blind, captured built-ins and navigation sinks (#315, #318).
+cannot blind, captured built-ins and navigation sinks (#315, #318), the private-import guard's
+must-fail cases (#343, #345), the asset-rule parser, path table and limit plate checks (#344, #346)
+and the web job on a change of the backend's control-page table (#347, #348).
+
+**Riders:** ADR 0007 (riders in a live session) proposes the contract, the rider page, lock, new
+code and remove, and the issue split of its section 8. A Verifier run of the companion's "done
+when" on fakes comes first.
 
 ## PL2: backend and sign-in
 
