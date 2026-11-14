@@ -1,0 +1,53 @@
+# The spec files in test/spec/, split into the shards the `web-specs` CI job runs in parallel (issue #435).
+# One line per piece of work:  <shard> <file under test/spec/> [<part>]
+#   <shard>  1 to 4, the same numbers as the matrix in .github/workflows/ci.yml.
+#   <part>   only for a file whose shots are split over shards (SPEC_ONLY, see the file's header): a
+#            regular expression on the shot name, or `*` for every shot no other part of that file takes.
+# A file with no part is run whole and listed once. A split file is listed with two or more parts and
+# exactly one `*`, so no shot can fall in no part. `bash ci.sh check` fails on a spec file that is in
+# no shard, a file listed twice, a name that is not a spec file, or a split without its `*`.
+# Balanced by the durations of a green `web` job (run 43624556503, seconds on one runner): room-checks
+# 669 (split four ways by screen size), site-checks 310 (split two ways), companion-checks 90,
+# play-checks 89, site-page-security 78, rider-checks 67, play-picker-checks 35, the other files
+# about 300 together. To re-balance, edit this file only.
+1 room-checks.test.ts -(2560x1080|1280x1024)$
+1 room-checks.test.ts -(1920x1080|1680x1050)$
+1 play-checks.test.ts
+2 room-checks.test.ts -(1650x1080|1620x1080|1024x768)$
+2 room-checks.test.ts *
+2 companion-checks.test.ts
+3 site-checks.test.ts -text200$
+3 site-checks.test.ts *
+3 site-page-security.test.ts
+3 site-sign-in-flows.test.ts
+3 site-data-flows.test.ts
+3 site-data-secrecy.test.ts
+4 rider-checks.test.ts
+4 play-picker-checks.test.ts
+4 play-controls.test.ts
+4 play-requests.test.ts
+4 gel-name.test.ts
+4 motion.test.ts
+4 rider-address.test.ts
+4 play-screen.test.ts
+4 site-pairing-flows.test.ts
+4 site-passkeys-flows.test.ts
+4 site-account-secrecy.test.ts
+4 site-devices-flows.test.ts
+4 site-links-flows.test.ts
+4 companion-token.test.ts
+4 site-classes-flows.test.ts
+4 site-connect-flows.test.ts
+4 site-link-secrecy.test.ts
+4 site-sessions-flows.test.ts
+4 site-trap-integrity.test.ts
+4 site-pairing-secrecy.test.ts
+4 play-routes.test.ts
+4 site-play-return.test.ts
+4 play-two-lines.test.ts
+4 companion-live.test.ts
+4 rider-token.test.ts
+4 companion-retry.test.ts
+4 site-link-return.test.ts
+4 site-signed-in.test.ts
+4 cue-four.test.ts

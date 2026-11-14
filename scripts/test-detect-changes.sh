@@ -4,7 +4,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp" "$tmp.out"' EXIT
 fail=0
 check() {
   if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: expected [$2] got [$3]" >&2; fail=1; fi
@@ -22,10 +22,16 @@ commit() { # commit <path>
   git commit -qm "change $1"
 }
 flags() { # flags <event> <base> <head>: the true flags, space separated
-  local o="$tmp/output"
+  local o="$tmp.out"
   : >"$o"
   GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
-  { grep '=true' "$o" || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
+  { grep '=true' "$o" | grep -v '^code=' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
+}
+codeflag() { # codeflag <event> <base> <head>: the `code` output (true or false)
+  local o="$tmp.out"
+  : >"$o"
+  GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
+  grep '^code=' "$o" | sed 's/^code=//'
 }
 
 commit README.md
@@ -51,7 +57,27 @@ commit .github/workflows/ci.yml
 check "workflow change runs backend, schema, player and desktop" "backend schema player desktop" "$(flags push "$before_wf" HEAD)"
 before_tok="$(git rev-parse HEAD)"
 commit docs/design/mockups/tokens.css
-check "design token mock-up change runs web" "web" "$(flags push "$before_tok" HEAD)"
+check "design token mock-up change alone runs nothing (documentation only, #435)" "" "$(flags push "$before_tok" HEAD)"
+check "documentation only: the code flag is false" "false" "$(codeflag push "$before_tok" HEAD)"
+before_docs="$(git rev-parse HEAD)"
+commit docs/plan.md
+commit docs/design/room-2d.md
+commit docs/design/package.json
+commit AGENTS.md
+check "docs/, docs/design/ and root *.md together run nothing (even a package.json under docs/)" "" "$(flags push "$before_docs" HEAD)"
+check "several documentation files: the code flag is false" "false" "$(codeflag push "$before_docs" HEAD)"
+check "a pull request of documentation only runs nothing" "" "$(flags pull_request "$before_docs" HEAD)"
+commit web/src/x.ts
+check "documentation plus one web file runs web and desktop" "web desktop" "$(flags push "$before_docs" HEAD)"
+check "documentation plus one web file: the code flag is true" "true" "$(codeflag push "$before_docs" HEAD)"
+before_rootmd="$(git rev-parse HEAD)"
+commit README.md
+check "a root *.md only runs nothing" "" "$(flags push "$before_rootmd" HEAD)"
+before_sub="$(git rev-parse HEAD)"
+commit web/notes.md
+check "a *.md below web/ is not documentation: it runs web and desktop" "web desktop" "$(flags push "$before_sub" HEAD)"
+check "an unknown base still runs everything (the code flag too)" "true" "$(codeflag pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef HEAD)"
+before_tok="$(git rev-parse HEAD)"
 before_live="$(git rev-parse HEAD)"
 commit schema/live/v1/examples/x.json
 check "live schema example change runs backend, schema, web and desktop" "backend schema web desktop" "$(flags push "$before_live" HEAD)"
