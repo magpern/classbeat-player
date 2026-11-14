@@ -26,10 +26,10 @@ const small = (text) => p(text, 'small');
 const link = (text, extra = '') => `<span class="a ul ${extra}">${T('body', text, 3)}</span>`;
 const lab = (text) => T('label', text, 3);
 
-// A button. opts: primary, dis, focus, block, q (outlined, inside a plate).
+// A button. opts: primary, dis, focus, block, q (outlined, inside a plate), link (a real link that looks like the button).
 function btn(text, o = {}) {
   const c = ['btn', o.primary && 'primary', o.dis && 'dis', o.focus && 'focus', o.block && 'full', o.q && 'q'].filter(Boolean).join(' ');
-  return `<span class="${c}" role="button"${o.dis ? ' aria-disabled="true"' : ''}>${T('btn', text, 2)}</span>`;
+  return `<span class="${c}" role="${o.link ? 'link' : 'button'}"${o.dis ? ' aria-disabled="true"' : ''}>${T('btn', text, 2)}</span>`;
 }
 const btns = (...list) => `<div class="btns">${list.join('')}</div>`;
 
