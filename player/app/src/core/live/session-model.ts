@@ -17,9 +17,11 @@
 //   restarted), the session ended (4403) or a newer connection with the token (4409) end it here.
 // - The control code is offered only with a second display, and is only ever in this state and the
 //   presenter's view. A `drop` frees a phone's place and ends the shown code (ADR 0005 section 3).
+//   With one display left the held code is cancelled on the server too (code-cancel.ts, #353).
 import type { HostInbound, Slot } from "./host-wire.ts";
 import { OFF } from "./session-types.ts";
 import type { EndReason, LiveEffect, LiveEvent, LiveModel, Place, Refusal, Step } from "./session-types.ts";
+import { oneDisplay, welcomedFirst } from "./code-cancel.ts";
 import { ridersWelcomed } from "./riders-model.ts";
 import { onRiderEvent, onRiderMessage } from "./riders-step.ts";
 
@@ -93,7 +95,8 @@ function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
       const places = m.places.map((p) => (p === "connected" ? "away" : p)) as [Place, Place];
       // A reconnect: the server replays the riders and the lock (ADR 0007 section 2).
       const riders = ridersWelcomed(m.riders, m.phase === "reconnecting");
-      return { model: { ...m, phase: "live", attempt: 0, lostAt: null, places, riders }, effects: [{ kind: "welcomed", socket: m.socket }] };
+      const { model, first } = welcomedFirst({ ...m, phase: "live", attempt: 0, lostAt: null, places, riders });
+      return { model, effects: [{ kind: "welcomed", socket: m.socket, first }] };
     }
     case "controller_joined":
       return { model: { ...m, places: setPlace(m, msg.slot, "connected") }, effects: [{ kind: "joined" }] };
@@ -143,6 +146,8 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
     case "make_code":
       if (m.phase !== "live" || !e.secondDisplay) return same(m);
       return { model: { ...m, codeNote: null }, effects: [{ kind: "send", message: { v: 1, type: "make_code" } }] };
+    case "one_display":
+      return oneDisplay(m);
     case "drop":
       if (m.phase !== "live" || m.places[e.slot - 1] === "none") return same(m);
       // A drop ends the current control code too: the shown code goes at once (ADR 0005 section 3).

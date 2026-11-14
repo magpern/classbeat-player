@@ -55,7 +55,7 @@ test("the host token leaves the model only in hello, on the connection it opened
 test("welcome makes it live and asks for the state at once", () => {
   const r = step(run([start, answered, { type: "open", socket: 1 }]).model, msg({ type: "welcome" }), 0);
   assert.equal(r.model.phase, "live");
-  assert.deepEqual(r.effects, [{ kind: "welcomed", socket: 1 }]);
+  assert.deepEqual(r.effects, [{ kind: "welcomed", socket: 1, first: [] }]);
 });
 
 test("reconnect: 1, 2, 4, 8, then every 15 s, each on a new connection", () => {
