@@ -176,7 +176,8 @@ class Controllers(Table):
                 del session.controllers[slot]
                 self._by_controller.pop(held.token_hash, None)
         if dropped:
-            self._tell([Dropped(session_id, slot)])
+            reason = "dropped" if site_session_hash is None else "session_ended"
+            self._tell([Dropped(session_id, slot, reason)])
         return dropped
 
     def host_drop(self, session_id: UUID, slot: int) -> bool:

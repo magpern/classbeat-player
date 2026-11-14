@@ -1,16 +1,18 @@
-"""The live sessions, in the live process's memory only (ADR 0002, section 8; ADR 0005, s. 2, 3).
+"""The live sessions, in the live process's memory only (ADR 0002, section 8; ADR 0005, s. 2, 3;
+ADR 0007, s. 2, 3).
 
 Nothing here is written to the database, and nothing but a watcher's error type to a log. A
 session holds its account, its device, the hash of the device token that started it, the hash of
 its host token, its join code, its control code (as a hash, live_code_policy.py) and its times;
 the clear host token, control code and controller token are each given out once and never kept.
 A controller got by sign-in holds the hash of the site session that asked (for the re-check); a
-controller token is held as its hash only.
+controller token is held as its hash only, and so is a rider token, with its rider id and
+nickname.
 
 Thread-safe: the routes, the WebSocket and the re-check's thread all call it. The state is
-live/table.py's, the controllers and control codes live/controllers.py's; this module starts,
-finds and ends sessions. The watchers (live/watchers.py) are told after the lock is released,
-on the caller's thread.
+live/table.py's, the controllers and control codes live/controllers.py's, the riders, the lock
+and the new join code live/riders.py's; this module starts, finds and ends sessions. The
+watchers (live/watchers.py) are told after the lock is released, on the caller's thread.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ import uuid
 from typing import cast
 from uuid import UUID
 
-from player_backend.code_issue import new_code
 from player_backend.code_policy import normalise_code, show_code
 from player_backend.live.controllers import Controllers
 from player_backend.live.events import (
@@ -30,6 +31,7 @@ from player_backend.live.events import (
     SignedInController,
     Started,
 )
+from player_backend.live.riders import Riders
 from player_backend.live.table import SLOTS, HeldSession
 from player_backend.live.watchers import Watcher
 from player_backend.live_session_policy import EndReason, Held, expiry, plan_start
@@ -49,13 +51,7 @@ __all__ = [
 ]
 
 
-class Registry(Controllers):
-    def _new_code(self) -> str:
-        while True:
-            code = new_code()
-            if code not in self._by_code:
-                return code
-
+class Registry(Controllers, Riders):
     def start(
         self, account_id: UUID, device_id: UUID, device_hash: bytes, now: float
     ) -> Started | None:

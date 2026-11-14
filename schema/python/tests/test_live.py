@@ -44,6 +44,7 @@ def test_the_live_contract_has_every_schema_of_adr_0005() -> None:
             "host-status",
             "controller-joined",
             "controller-left",
+            "cancel-code",
             "make-code",
             "control-code",
             "code-cancelled",

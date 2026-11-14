@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { liveSocketUrl, parseHostFrame, parseHostMessage, parseStartAnswer } from "../../src/core/live/host-wire.ts";
+import { LEFT_REASONS, liveSocketUrl, parseHostFrame, parseHostMessage, parseStartAnswer } from "../../src/core/live/host-wire.ts";
 import { LIVE_V1 } from "./live-rig.ts";
 
 const SECRET = randomBytes(32).toString("base64url");
@@ -33,6 +33,21 @@ test("every invalid example of a message to the host is dropped", () => {
   }
 });
 
+test("controller_left: the reason always, `via` with every reason but `free` and never with it", () => {
+  const schema = JSON.parse(readFileSync(join(LIVE_V1, "controller-left.schema.json"), "utf8"));
+  assert.deepEqual([...LEFT_REASONS], schema.properties.reason.enum);
+  for (const reason of [...LEFT_REASONS, "left", undefined]) {
+    for (const via of ["sign_in", "code", "phone", undefined]) {
+      const raw = { v: 1, type: "controller_left", slot: 2, ...(via === undefined ? {} : { via }), ...(reason === undefined ? {} : { reason }) };
+      const good = reason !== undefined && reason !== "left" && (reason === "free" ? via === undefined : via === "sign_in" || via === "code");
+      const expected = !good ? null : reason === "free" ? { type: "controller_left", slot: 2, reason } : { type: "controller_left", slot: 2, reason, via };
+      assert.deepEqual(parseHostMessage(raw), expected, `${reason} ${via}`);
+    }
+  }
+  for (const slot of [0, 3, "1"]) assert.equal(parseHostMessage({ v: 1, type: "controller_left", slot, reason: "free" }), null, String(slot));
+  assert.equal(parseHostMessage({ v: 1, type: "controller_left", slot: 1, reason: "free", extra: 1 }), null);
+});
+
 test("welcome: only the host's own, with nothing but its role", () => {
   for (const [file, ex] of examples("welcome", "valid")) {
     const host = (ex as { role: string }).role === "host";
@@ -42,7 +57,7 @@ test("welcome: only the host's own, with nothing but its role", () => {
 });
 
 test("messages the host is never sent are dropped: companion_state, ack, host_status, hello", () => {
-  for (const name of ["companion-state", "ack", "host-status", "hello", "make-code", "drop", "end", "rider-state", "drop-rider", "lock", "new-join-code", "join-request", "welcome-rider"]) {
+  for (const name of ["companion-state", "ack", "host-status", "hello", "make-code", "cancel-code", "drop", "end", "rider-state", "drop-rider", "lock", "new-join-code", "join-request", "welcome-rider"]) {
     for (const [file, ex] of examples(name, "valid")) assert.equal(parseHostMessage(ex), null, `${name}/${file}`);
   }
 });

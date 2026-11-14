@@ -35,6 +35,7 @@ class Link:
     session_id: UUID
     slot: int | None = None  # a controller's place
     via: Via | None = None  # how a controller got its token
+    rider: str | None = None  # a rider's id (never its token or nickname)
     messages: Window = field(default_factory=messages_window)  # what it may send
     outstanding: Outstanding = field(default_factory=Outstanding)  # a controller's commands
     writer: asyncio.Task[None] | None = None  # set by the connection that runs `write`

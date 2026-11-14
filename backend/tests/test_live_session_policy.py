@@ -11,7 +11,7 @@ from typing import get_args
 import pytest
 
 from player_backend import live_session_policy as p
-from player_backend.live_token_policy import hello_role, origin_allowed
+from player_backend.live_token_policy import HelloRole, hello_role, origin_allowed
 from player_backend.token_issue import new_token
 from player_backend.token_policy import token_string
 
@@ -101,20 +101,20 @@ def test_a_notice_names_an_account_or_nothing() -> None:
         assert p.notice_account(payload) is None
 
 
-def test_hello_gives_the_host_and_the_controller_a_role_and_a_rider_none() -> None:
+def test_hello_gives_the_host_the_controller_and_the_rider_their_roles() -> None:
     assert hello_role(new_token("hst")) == "host"
     assert hello_role(new_token("ctl")) == "controller"
-    # ADR 0005, section 2: no rider route in the companion part of PL8.
-    assert hello_role(new_token("rdr")) is None
+    assert hello_role(new_token("rdr")) == "rider"  # ADR 0007, section 2
     for kind in ("dev", "ses", "src", "lgn", "ml", "dc", "lc"):
         assert hello_role(new_token(kind)) is None  # pyright: ignore[reportArgumentType]
     for value in (None, 1, "", token_string("hst", "short"), new_token("hst") + "x"):
         assert hello_role(value) is None
 
 
-def test_only_a_controller_needs_the_sites_origin() -> None:
+@pytest.mark.parametrize("role", ["controller", "rider"])
+def test_a_controller_and_a_rider_need_the_sites_origin(role: HelloRole) -> None:
     site = "https://player.example.test"
-    assert origin_allowed("controller", site, site)
+    assert origin_allowed(role, site, site)
     for other in (
         None,
         "",
@@ -123,7 +123,7 @@ def test_only_a_controller_needs_the_sites_origin() -> None:
         site + "/",
         "http://player.example.test",
     ):
-        assert not origin_allowed("controller", other, site)
+        assert not origin_allowed(role, other, site)
     # The host is the app: its handshake's Origin is not checked.
     for any_origin in (None, "", "https://evil.example", site):
         assert origin_allowed("host", any_origin, site)

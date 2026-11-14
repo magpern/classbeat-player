@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://classbeat.example/schema/live/v1/controller-left.schema.json",
   "title": "ControllerLeft",
-  "description": "Server to host: the controller in this slot left or was dropped.",
+  "description": "Server to host: the place in this slot has no connected controller, and why (ADR 0005 section 10, amended 2026-11-14). `disconnected`: the controller's connection closed and its token is still valid. `session_ended`: its token ended with its site session. `dropped`: the host dropped it. `free`: only in the replay after each host welcome, for a place that holds no token. `via` is present with every reason but `free`, and absent with `free`.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "v",
     "type",
     "slot",
-    "via"
+    "reason"
   ],
   "properties": {
     "v": {
@@ -33,7 +33,39 @@
         "sign_in",
         "code"
       ],
-      "description": "How the controller got its token."
+      "description": "How the controller got its token. Absent with `free`."
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "session_ended",
+        "dropped",
+        "free"
+      ],
+      "description": "Why the place has no connected controller."
     }
+  },
+  "if": {
+    "required": [
+      "reason"
+    ],
+    "properties": {
+      "reason": {
+        "const": "free"
+      }
+    }
+  },
+  "then": {
+    "not": {
+      "required": [
+        "via"
+      ]
+    }
+  },
+  "else": {
+    "required": [
+      "via"
+    ]
   }
 }

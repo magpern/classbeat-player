@@ -1,0 +1,7 @@
+{
+  "v": 1,
+  "type": "controller_left",
+  "slot": 1,
+  "via": "sign_in",
+  "reason": "session_ended"
+}

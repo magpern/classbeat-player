@@ -83,7 +83,7 @@ test("the slot follows the session: phones joining and leaving, a lost connectio
   assert.deepEqual(x.pushed.at(-1), ON(1));
   x.r.socket().server({ v: 1, type: "controller_joined", slot: 2, via: "sign_in" });
   assert.deepEqual(x.pushed.at(-1), ON(2));
-  x.r.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in" });
+  x.r.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in", reason: "disconnected" });
   assert.deepEqual(x.pushed.at(-1), ON(1));
   x.r.socket().drop(1006);
   assert.deepEqual(x.pushed.at(-1), ON(0, true));

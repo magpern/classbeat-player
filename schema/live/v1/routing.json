@@ -8,6 +8,7 @@
     { "type": "host_status", "schema": "host-status.schema.json", "from": ["server"], "to": ["controller", "rider"] },
     { "type": "controller_joined", "schema": "controller-joined.schema.json", "from": ["server"], "to": ["host"] },
     { "type": "controller_left", "schema": "controller-left.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "cancel_code", "schema": "cancel-code.schema.json", "from": ["host"], "to": ["server"] },
     { "type": "make_code", "schema": "make-code.schema.json", "from": ["host"], "to": ["server"] },
     { "type": "control_code", "schema": "control-code.schema.json", "from": ["server"], "to": ["host"] },
     { "type": "code_cancelled", "schema": "code-cancelled.schema.json", "from": ["server"], "to": ["host"] },
