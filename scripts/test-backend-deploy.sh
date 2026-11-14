@@ -242,6 +242,8 @@ fi
 # exactly the paths the Dockerfile copies (a missing, extra or wider entry such as !schema/** or
 # !web/ fails), and the **/ lines come after them, so **/tests still removes backend/src/tests.
 # Comments and blank lines are skipped; CRLF and indentation are not trimmed, so they fail.
+# The three player/ lines are the shared clock surface the play page imports (issue #404); no other
+# player/ path may be admitted.
 # web/tsconfig.json is in the list because the web stage copies it (the TypeScript build reads it).
 di="$root/docker/backend.Dockerfile.dockerignore"
 want_di="$(printf '%s\n' \
@@ -250,6 +252,7 @@ want_di="$(printf '%s\n' \
   '!schema/python' '!schema/class-format' '!schema/live/v1' '!schema/generated/python' \
   '!docker/backend-entrypoint.sh' '!docker/purge-loop.sh' \
   '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' \
+  '!player/app/src/core/clock/clock.ts' '!player/app/src/core/clock/plan.ts' '!player/app/src/core/clock/view.ts' \
   '**/.venv' '**/__pycache__' '**/tests' '**/node_modules')"
 # grep exits 1 for an empty file and 2 for a missing one; under pipefail that would end the script
 # before it prints its message, so it is tolerated here and the comparison below fails explicitly.
@@ -280,10 +283,41 @@ fi
 if grep -Eq '^!schema/generated/?(\*)?$' "$root/docker/backend.Dockerfile.dockerignore"; then
   bad "backend.Dockerfile.dockerignore admits more of schema/generated than python/"
 fi
+# The shared clock surface (issue #404): the web stage copies exactly three files of player/, and the
+# dockerignore (compared exactly above) admits exactly those three and no other player/ path.
+want_clock_copy='COPY player/app/src/core/clock/clock.ts player/app/src/core/clock/plan.ts player/app/src/core/clock/view.ts /player/app/src/core/clock/'
+if [ "$(grep -Ec '^COPY player/' "$root/docker/backend.Dockerfile")" = 1 ] \
+  && grep -Fxq "$want_clock_copy" "$root/docker/backend.Dockerfile"; then
+  ok "the Dockerfile's web stage copies exactly the three clock files of player/"
+else
+  bad "the Dockerfile does not copy exactly the three clock files of player/ with one COPY"
+fi
+if [ "$(grep -Ec '^!player/' "$di")" = 3 ] \
+  && [ "$(grep -Ec '^!player/app/src/core/clock/(clock|plan|view)\.ts$' "$di")" = 3 ]; then
+  ok "the dockerignore lets in only the three clock files from player/"
+else
+  bad "the dockerignore admits something other than the three clock files from player/"
+fi
 # The built image holds the schemas where the backend reads them, and the backend loads them.
 # Needs a Docker daemon and the network an image build already uses (base images, PyPI, npm).
 if docker info >/dev/null 2>&1; then
   image="player-backend-test:$$"
+  # The build context holds exactly the three clock files of player/: a fourth file of the same
+  # directory (apply.ts) is not in it. The web stage is built alone and its /player listed.
+  if docker build -q -f "$root/docker/backend.Dockerfile" --target web -t "$image-web" "$root" >"$tmp/web.log" 2>&1; then
+    got_player="$(docker run --rm --entrypoint sh "$image-web" -c 'find /player -type f | sort' 2>&1 || true)"
+    want_player='/player/app/src/core/clock/clock.ts
+/player/app/src/core/clock/plan.ts
+/player/app/src/core/clock/view.ts'
+    if [ "$got_player" = "$want_player" ]; then
+      ok "the web stage holds exactly the three clock files of player/ (apply.ts is not in the context)"
+    else
+      bad "the web stage's /player is not exactly the three clock files: $(printf '%s' "$got_player" | tr '\n' ' ')"
+    fi
+    docker rmi -f "$image-web" >/dev/null 2>&1 || true
+  else
+    bad "the web stage did not build: $(tail -c 400 "$tmp/web.log")"
+  fi
   if docker build -q -f "$root/docker/backend.Dockerfile" -t "$image" "$root" >"$tmp/build.log" 2>&1; then
     if docker run --rm --entrypoint python "$image" -I -c '
 from player_backend.live import schemas
