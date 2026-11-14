@@ -36,6 +36,7 @@ const collect = require('./collect');
 const ink = require('./ink');
 const { fit } = require('./fit');
 const companion = require('./companion-checks');
+const rider = require('./rider-checks');
 
 // Minimums per tier (room-2d.md, "Measurable checks").
 const TIERS = {
@@ -102,8 +103,8 @@ async function check(browser, probe, s) {
   }
   // The presenter window and the room preview are read at arm's length: no room-distance
   // cap heights, and the presenter window has no projector safe area.
-  const preview = !s.companion && (s.h < 600 || !s.room);
-  const tiers = s.companion ? companion.tiersFor(s) : TIERS;
+  const preview = !s.companion && !s.rider && (s.h < 600 || !s.room);
+  const tiers = s.companion || s.rider ? companion.tiersFor(s) : TIERS;
   const rows = [];
   for (const it of items) {
     const t = tiers[it.tier];
@@ -148,6 +149,7 @@ async function check(browser, probe, s) {
     for (const [text, result] of found) rows.push({ tier: 'site', text, lines: '', cap: '', contrast: '', result });
   }
   if (s.companion) for (const [text, result] of await page.evaluate(companion.pageChecks)) rows.push({ tier: 'companion', text, lines: '', cap: '', contrast: '', result });
+  if (s.rider) for (const [text, result] of await page.evaluate(rider.pageChecks, { form: !!s.form })) rows.push({ tier: 'rider', text, lines: '', cap: '', contrast: '', result });
   // Reduced motion.
   const rm = await browser.newPage({ viewport: { width: s.w, height: s.h }, reducedMotion: 'reduce' });
   await rm.goto('file://' + path.join(__dirname, s.file));
@@ -180,7 +182,7 @@ async function measure(shots) {
   console.table(pal.rows);
   let failed = pal.failed;
   const results = [];
-  for (const s of shots.filter((x) => x.room || x.presenter || x.companion)) {
+  for (const s of shots.filter((x) => x.room || x.presenter || x.companion || x.rider)) {
     await fit(browser, s);
     const r = await check(browser, probe, s);
     console.log(`\n${s.png}${r.preview ? " (arm's length: room cap heights not checked)" : ''}`);

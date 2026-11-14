@@ -519,6 +519,12 @@ section 2; companion.md): the join code in the fragment and nothing else. Openin
 fills in the class code on the companion page and offers sign-in; control still needs the
 instructor's sign-in.
 
+**Amended by [room-join.md](room-join.md) (ADR 0007).** The slot's QR code now carries the **riders'**
+address `https://<site>/j#<join code>`; the instructor's `/control#<join code>` code moved to the join
+sheet that room-join.md specifies (shown by itself before the start, and on the J key), which also
+shows the riders' code large. Both carry the join code only; the control code is still never on this
+screen. While the sheet is open the slot shows no QR code and the state line "J hides the codes".
+
 **The slot's states.** A build without the live client always shows the slot absent. With no class open the slot is Absent too: there is nothing to attach a phone remote to, so neither Off nor "Can't reach site" shows then (decision, safe default; if the band can be shown with no class open, a player issue follows to make the slot Absent there).
 
 | State | When (ADR 0005) | The slot shows | Mock-up |
@@ -554,6 +560,7 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | Ctrl+Z (Cmd+Z) | Undo an announced resync while it can be undone (ADR 0001, item 5) | No |
 | F5, Shift+F5 | A presentation clicker's "start the show" key: Start, only before the start; after it, nothing, so a clicker that sends F5 and Esc by turns never pauses a running class | No |
 | B, . (period) | A clicker's "black screen" keys: nothing. The room screen never goes blank | No |
+| J | Opens or closes the join sheet with both QR codes ([room-join.md](room-join.md)); nothing when there is no code | No |
 | F | Follow the music (`follow`), when the music could be followed; otherwise nothing. Named in the rail while the clock is manual ("Back to following the music") | No: the rail names it |
 | Tab, Shift+Tab | Shows the band and moves through its buttons | |
 | Enter | The focused button | |

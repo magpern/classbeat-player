@@ -76,6 +76,29 @@ const companion = (name, w, h) => ({
   save: (w === 390 && h === 844) || (w === 844 && h === 390) || (name === 'running' && w === 360 && h === 640),
 });
 
+// The rider page (rider.md): every state in portrait and landscape at the reference phone (kept)
+// and at the smallest supported size of each orientation (checked; one kept). A form state may
+// scroll vertically (the keyboard is up) and are checked in portrait only (a landscape phone with the
+// keyboard up shows a few lines); every other state fits on the screen.
+const { NAMES: RIDER_NAMES, FORMS: RIDER_FORMS } = require('./rider-pages');
+const rider = (name, w, h) => ({
+  file: `rider-${name}.html`, png: `rider-${name}-${w}x${h}.png`, w, h, room: false, rider: true, form: RIDER_FORMS.includes(name),
+  save: (w === 390 && h === 844) || (w === 844 && h === 390) || (name === 'running' && w === 360 && h === 640),
+});
+
+// The presenter window with the riders panel (riders-panel.md): the window client sizes of
+// presenter.md, 1000x720 (the smallest; every state kept) and 1280x800 (the open drawer and the row kept).
+const { NAMES: PR_NAMES } = require('./presenter-riders-pages');
+const presenterRiders = (name, w, h) => ({
+  file: `presenter-riders-${name}.html`, png: `presenter-riders-${name}-${w}x${h}.png`, w, h, room: false, presenter: true,
+  save: w === 1000 || ['open', 'closed'].includes(name),
+});
+
+// The join sheet (room-join.md): both QR codes on the room screen. Checked at every size; the main
+// state and the worst case are kept at the sizes below.
+const JOIN = ['join-before-start', 'join-new-code', 'join-running'];
+const KEEP_JOIN = new Set(['join-before-start-1440x1080', 'join-worst-1280x1024', 'join-worst-1650x1080', 'join-worst-1280x720']);
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -110,6 +133,11 @@ const SHOTS = [
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
   ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),
+  ...JOIN.map((s) => room(s, 1920, 1080)),
+  ...SIZES.filter(([w, h]) => !(w === 1920 && h === 1080)).map(([w, h]) => room('join-before-start', w, h, KEEP_JOIN.has(`join-before-start-${w}x${h}`))),
+  ...SIZES.map(([w, h]) => room('join-worst', w, h, KEEP_JOIN.has(`join-worst-${w}x${h}`))),
+  ...PR_NAMES.flatMap((n) => [[1000, 720], [1280, 800]].map(([w, h]) => presenterRiders(n, w, h))),
+  ...RIDER_NAMES.flatMap((n) => COMPANION_SIZES.filter(([w, h]) => !RIDER_FORMS.includes(n) || h > w).map(([w, h]) => rider(n, w, h))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS, FOLLOW };
