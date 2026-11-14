@@ -11,6 +11,8 @@
   `schema/live/guard/rider-bound-words.txt` or `credential-words.txt`; a rider sends `hello`
   only, to the server; `rider_state` holds exactly ADR 0007's fields; the join body is exactly
   `session` and `nickname`; the new join code goes to the host only.
+- ADR 0005 section 10 (amended 2026-11-14): what the host sends is pinned, `cancel_code` holds
+  nothing and goes to the server only; `controller_left` has `via` with every reason but `free`.
 - Every object in every live schema is closed.
 
 Changing an expected list here is a rule-sensitive pull request.
@@ -31,6 +33,19 @@ ACTIONS = ["start", "pause", "resume", "skip", "nudge", "undo_resync"]
 JUMP_MS = 5000
 TO_CONTROLLER = {"welcome", "host_status", "companion_state", "ack", "ended"}
 FROM_CONTROLLER = {"hello", "command"}
+FROM_HOST = {
+    "hello",
+    "cancel_code",
+    "make_code",
+    "drop",
+    "companion_state",
+    "command_result",
+    "end",
+    "rider_state",
+    "drop_rider",
+    "lock",
+    "new_join_code",
+}
 # Every entry routed to a rider, in full (ADR 0007 section 2): type, schema, from, to.
 TO_RIDER = {
     ("welcome", "welcome-rider.schema.json", ("server",), ("rider",)),
@@ -510,6 +525,35 @@ def test_what_a_host_hears_of_riders_goes_to_the_host_only() -> None:
     for kind in ("drop_rider", "lock", "new_join_code"):
         (entry,) = [e for e in ws_entries() if e["type"] == kind]
         assert (entry["from"], entry["to"]) == (["host"], ["server"]), kind
+
+
+def test_what_the_host_sends_is_pinned_and_goes_to_the_server_or_its_receivers() -> None:
+    # ADR 0005 section 10 (amended 2026-11-14): the host-sent set grew by `cancel_code` only.
+    from_host = {e["type"] for e in ws_entries() if "host" in e["from"]}
+    assert from_host == FROM_HOST
+    (entry,) = [e for e in ws_entries() if e["type"] == "cancel_code"]
+    assert (entry["from"], entry["to"]) == (["host"], ["server"])
+    assert set(property_names(schema("cancel-code"))) == {"v", "type"}
+    assert schema("cancel-code")["required"] == ["v", "type"]
+
+
+def test_controller_left_has_via_with_every_reason_but_free() -> None:
+    (entry,) = [e for e in ws_entries() if e["type"] == "controller_left"]
+    assert (entry["from"], entry["to"]) == (["server"], ["host"])
+    left = schema("controller-left")
+    assert set(property_names(left)) == {"v", "type", "slot", "via", "reason"}
+    reasons = left["properties"]["reason"]["enum"]
+    assert reasons == ["disconnected", "session_ended", "dropped", "free"]
+    via = left["properties"]["via"]
+    assert (via["type"], via["enum"]) == ("string", ["sign_in", "code"])
+    assert via["enum"] == schema("controller-joined")["properties"]["via"]["enum"]
+    validate = validator("controller-left")
+    for reason, via in itertools.product([*reasons, None], [None, "sign_in", "code"]):
+        doc: dict[str, Any] = {"v": 1, "type": "controller_left", "slot": 1}
+        doc |= {} if reason is None else {"reason": reason}
+        doc |= {} if via is None else {"via": via}
+        expected = reason is not None and (via is None) == (reason == "free")
+        assert validate.is_valid(doc) is expected, (reason, via)
 
 
 def test_companion_state_goes_to_controllers_only() -> None:
