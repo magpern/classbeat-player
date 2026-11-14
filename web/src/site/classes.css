@@ -1,0 +1,49 @@
+/* The Classes pages (docs/design/site.md, "Classes"; the values of docs/design/mockups/site.css,
+   in rem so the browser's own text size works, and breakpoints in em). No hue anywhere (S4): a
+   zone is an outlined number, never a colour. Nothing animates (S10). A link is underlined on
+   its text itself, so it is never told apart by colour. */
+
+.ul > span { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+.back { display: inline-flex; align-items: center; min-height: 2.75rem; margin-bottom: 0.25rem; }
+.count { font-size: 1rem; color: var(--light-2); font-weight: 400; margin-left: 0.75rem; font-family: var(--face-text); }
+.filter { margin: 0.75rem 0 0; }
+p.small[role="status"]:empty { display: none; }
+
+/* The list */
+.rows { border-top: 1px solid var(--stage-line); margin-top: 0.75rem; }
+.row { padding: 0.75rem 0; border-bottom: 1px solid var(--stage-line); display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.875rem; }
+.row .t { flex: 1 1 100%; font-size: 1.25rem; font-weight: 700; line-height: 1.25; }
+.row .t .a { display: inline-flex; align-items: center; min-height: 2.75rem; }
+.row .src, .row .chg { font-size: 1rem; color: var(--light-2); display: flex; flex-wrap: wrap; gap: 0 0.875rem; }
+.row .len { font-family: var(--face-number); font-weight: 600; font-size: 1.625rem; line-height: 1.2; }
+.cols { display: none; font-size: 0.875rem; color: var(--light-3); border-bottom: 1px solid var(--stage-line); }
+
+/* Class details */
+.panel { border: 2px solid var(--light-3); border-radius: 0.375rem; padding: 1rem; margin: 1rem 0; max-width: 40em; background: var(--stage-raised); }
+.panel h2 { margin-top: 0; }
+.panel .plate { margin: 0.75rem 0; }
+.zrow { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 5rem; gap: 0.75rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--stage-line); }
+.zn { font-family: var(--face-number); font-weight: 800; font-size: 1.625rem; border: 2px solid var(--light-1); width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.tm { font-family: var(--face-number); font-weight: 600; font-size: 1.5rem; text-align: right; line-height: 1; }
+.song { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) 4rem; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--stage-line); align-items: baseline; }
+.song .no { color: var(--light-2); font-size: 1rem; }
+.iv { display: grid; grid-template-columns: 8.25rem minmax(0, 1fr); gap: 0.125rem 0.75rem; padding: 0.625rem 0; border-bottom: 1px solid var(--stage-line); align-items: baseline; }
+.iv .when { font-family: var(--face-number); font-weight: 600; font-size: 1.375rem; line-height: 1.2; }
+.iv .zz { font-weight: 700; }
+.iv .dtl { grid-column: 2; color: var(--light-2); font-size: 1rem; }
+.iv .cue { grid-column: 1 / -1; color: var(--light-2); font-size: 1rem; }
+.ivh { display: none; font-size: 0.875rem; color: var(--light-3); }
+
+@media (min-width: 37.5em) {
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 6.875rem 6.875rem; gap: 0 1rem; align-items: center; }
+  .row .t { flex: none; }
+  .row .len { text-align: right; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 6.875rem 6.875rem; gap: 0 1rem; padding: 0.5rem 0 0.375rem; }
+  .cols span:nth-child(2) { text-align: right; }
+  .rows.has-cols { border-top: 0; }
+  .iv, .ivh { grid-template-columns: 8.25rem 10.625rem 11.875rem minmax(0, 1fr); }
+  .ivh { display: grid; gap: 0 0.75rem; padding: 0.5rem 0 0.375rem; border-bottom: 1px solid var(--stage-line); margin-top: 0.75rem; }
+  .iv .dtl { grid-column: 3; }
+  .iv .cue { grid-column: 4; }
+  .song { grid-template-columns: 2.25rem minmax(0, 1fr) 4.5rem; }
+}

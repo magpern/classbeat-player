@@ -2,6 +2,7 @@
 // "Errors"), and how to reach it on the fake backend: the address, the recorded answers and the
 // steps a person takes. The checks and the flows both use this table.
 import type { Page } from "playwright-core";
+import { CLASS_STATES } from "./class-states.ts";
 import type { Passkey, Script } from "./site-fake.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
@@ -92,4 +93,6 @@ export const STATES: readonly State[] = [
   { name: "error-offline", path: "/classes", script: { "GET classes": { status: 0, fail: true } }, ready: ".plate" },
   { name: "error-server", path: "/classes", script: { "GET classes": { status: 500, body: { error: "internal" } } }, ready: ".plate" },
   { name: "error-not-found", path: "/no-such-page", ready: "h1" },
+  // The Classes pages (issue #413).
+  ...CLASS_STATES,
 ];
