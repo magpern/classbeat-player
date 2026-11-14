@@ -223,13 +223,18 @@ if grep -Eq '^COPY schema/live/v1 schema/live/v1$' "$root/docker/backend.Dockerf
 else
   bad "the Dockerfile does not copy schema/live/v1"
 fi
-# The companion page's build stage (issue #277): pinned Node, and only the files it reads.
-if ! grep -Eq '^COPY --from=web /web/dist/control web/dist/control$' "$root/docker/backend.Dockerfile"; then
-  bad "the Dockerfile does not copy web/dist/control from the web stage"
+# The pages' build stage (issues #277, #387): pinned Node, and only the two pages the backend serves.
+# Every `COPY --from=web` line is compared with one exact list, so a third directory of web/dist
+# (or the whole of it) fails, and an image without web/dist/j fails here before it is built.
+got_web_copies="$(grep -E '^COPY --from=' "$root/docker/backend.Dockerfile" || true)"
+want_web_copies='COPY --from=web /web/dist/control web/dist/control
+COPY --from=web /web/dist/j web/dist/j'
+if [ "$got_web_copies" != "$want_web_copies" ]; then
+  bad "the Dockerfile's COPY --from lines are not exactly web/dist/control and web/dist/j: $(printf '%s' "$got_web_copies" | tr '\n' ' ')"
 elif ! grep -Eq '^FROM node:[0-9]+[^ ]*@sha256:[0-9a-f]{64} AS web$' "$root/docker/backend.Dockerfile"; then
   bad "the Dockerfile's web stage is not a pinned Node image"
 else
-  ok "the Dockerfile builds the companion page in a pinned Node stage and copies only web/dist/control"
+  ok "the Dockerfile builds the pages in a pinned Node stage and copies only web/dist/control and web/dist/j"
 fi
 # The whole dockerignore is compared, in order, with one exact list (issues #289, #294, #298). In a
 # dockerignore the later rule wins, so order matters: the catch-all `*` must come first (without it
@@ -351,6 +356,24 @@ assert headers["cache-control"] == "no-store"
       ok "the image serves GET /control: 200 with the CSP, no-referrer, nosniff, DENY and no-store"
     else
       bad "the image does not serve /control as expected: $(tail -c 400 "$tmp/control.log")"
+    fi
+    # The rider page (issue #387): the image holds web/dist/j with its index.html and assets, and
+    # web/dist holds exactly control and j, nothing else.
+    if docker run --rm --entrypoint python "$image" -I -c '
+from pathlib import Path
+
+from player_backend.control_page import RIDER_DIR
+
+dist = Path("/srv/classbeat-player/web/dist")
+assert str(RIDER_DIR) == str(dist / "j"), RIDER_DIR
+assert (RIDER_DIR / "index.html").is_file(), "no rider page"
+assert any(p.suffix == ".js" for p in RIDER_DIR.iterdir()), "no rider script"
+names = sorted(p.name for p in dist.iterdir())
+assert names == ["control", "j"], names
+' >"$tmp/rider.log" 2>&1; then
+      ok "the image holds web/dist/j (index.html and assets) and web/dist holds only control and j"
+    else
+      bad "the image lacks the rider page or holds more of web/dist: $(tail -c 400 "$tmp/rider.log")"
     fi
   else
     bad "the backend image did not build: $(tail -c 400 "$tmp/build.log")"

@@ -10,9 +10,11 @@
 # The site API's answer models, generated in the contract lane, are loaded from
 # `schema/generated/python/` next to `backend/` (site/answers.py: GENERATED_DIR), as they are.
 #
-# The handlebar companion page (`/control`, issue #277) is built in a first stage, with the same
-# Node major as CI, and only `web/dist/control` is copied into the final image, where the backend
-# reads it (control_page.py: CONTROL_DIR). Node and npm stay out of the final image.
+# The handlebar companion page (`/control`, issue #277) and the rider page (`/j`, issue #387) are
+# built in a first stage, with the same Node major as CI, and only `web/dist/control` and
+# `web/dist/j` are copied into the final image, where the backend reads them (control_page.py:
+# CONTROL_DIR, RIDER_DIR). Nothing else from `web/dist` is copied. Node and npm stay out of the
+# final image.
 #
 # Both bases are pinned by digest (the multi-arch indexes of node:24-bookworm-slim and
 # python:3.12-slim-bookworm); update them on purpose.
@@ -42,6 +44,7 @@ COPY backend/pyproject.toml backend/uv.lock backend/
 COPY backend/src backend/src
 COPY backend/db backend/db
 COPY --from=web /web/dist/control web/dist/control
+COPY --from=web /web/dist/j web/dist/j
 RUN cd backend && uv sync --locked --no-dev
 
 COPY docker/backend-entrypoint.sh docker/purge-loop.sh /usr/local/bin/
