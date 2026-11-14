@@ -42,7 +42,13 @@ export interface Kit {
   readonly onSet: (proto: object, prop: string, label: string, before: (self: unknown, v: unknown) => void) => void;
   /** The captured `structuredClone`: a value copied the way `history` copies a state. */
   readonly clone: (v: unknown) => unknown;
-  /** A cloned value written out in full, every string in it quoted, with no method of the page's. */
+  /**
+   * A cloned value written out with no method of the page's: its own keys and values, a Map's or a
+   * Set's entries, a wrapped string's text and a date's time, every string among them quoted. Not
+   * written out: a RegExp's source and flags, an ArrayBuffer's or a DataView's bytes, a Blob's or a
+   * File's content, and a Boolean's or a Number's wrapped value. A state of such a kind is refused
+   * by its shape by the history allowlist (site-page-security.test.ts), not by a scan of strings (#436 N2).
+   */
   readonly shown: (v: unknown) => string;
 }
 

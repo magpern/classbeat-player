@@ -3,6 +3,7 @@
 // Shared by Sessions and Passkeys.
 import { accountPlateWords } from "../core/account-model.ts";
 import type { AccountPlate } from "../core/account-model.ts";
+import { uid } from "../ui/dom.ts";
 import { button, plate } from "../ui/kit.ts";
 import { confirmByPasskey, confirmedNote, confirmNodes } from "./confirm.ts";
 import type { ConfirmView } from "./confirm.ts";
@@ -56,6 +57,14 @@ async function confirmHere(host: MessageHost): Promise<void> {
   if (!host.env.current()) return;
   if (result === "confirmed") return host.readAgain({ ...NO_MESSAGES, confirmed: true });
   host.set({ ...NO_MESSAGES, confirm: { kind: "failed", plate: result } });
+}
+
+/** Gives the plate among `nodes` an id, for a disabled button to point at, and returns it; null when there is none. */
+export function idOfPlate(nodes: readonly Node[], stem: string): string | null {
+  const found = nodes.find((n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains("plate"));
+  if (!found) return null;
+  found.id = uid(stem);
+  return found.id;
 }
 
 /** Where focus goes when messages are shown: the plate, else the note, else the page heading. */

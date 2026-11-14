@@ -5,7 +5,7 @@ import type { Page } from "playwright-core";
 import { CLASS_STATES } from "./class-states.ts";
 import type { Passkey, Script } from "./site-fake.ts";
 import { DEVICE_STATES } from "./site-device-states.ts";
-import { ACCOUNT_STATES } from "./site-account-states.ts";
+import { ACCOUNT_STATES, SESSIONS_LISTED } from "./site-account-states.ts";
 import { LINK_STATES } from "./site-link-states.ts";
 import { DATA_STATES } from "./site-data-states.ts";
 
@@ -83,6 +83,9 @@ export const STATES: readonly State[] = [
   { name: "sign-in-session-ended", path: "/classes", script: { "GET classes": { status: 401, body: { error: "not_signed_in" } } }, ready: ".note" },
   { name: "signed-out", path: "/classes", script: { ...signedInClasses, "POST sign-out": { status: 204 } }, steps: pressText("Sign out"), ready: ".note" },
   { name: "shell-signed-in", path: "/classes", script: signedInClasses, ready: "nav .a.cur", main: true },
+  // The two addresses the router sends on (core/routes.ts): opened, so the guards see its replaceState (#441).
+  { name: "redirect-home", path: "/", script: signedInClasses, ready: "nav .a.cur" },
+  { name: "redirect-account", path: "/account", script: SESSIONS_LISTED, ready: ".tag", clock: "day" },
   // The class details page's link to the web player page (ADR 0008, section 3; issue #396).
   { name: "class-details-play", path: `/classes/${CLASS_DETAILS_ID}`, script: { [`GET classes/${CLASS_DETAILS_ID}`]: { status: 200, body: { class_id: CLASS_DETAILS_ID } } }, ready: ".btns a" },
   { name: "error-too-many", path: "/classes", script: { "GET classes": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "300" } } }, ready: ".plate" },

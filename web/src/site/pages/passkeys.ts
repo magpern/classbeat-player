@@ -11,7 +11,7 @@ import { addPasskey, passkeyCreateSupported } from "../net/passkey-add.ts";
 import { dayOf, today } from "../ui/day.ts";
 import { el, uid } from "../ui/dom.ts";
 import { button, buttons, h2, note, p, small, working } from "../ui/kit.ts";
-import { focusMessage, hasMessage, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
+import { focusMessage, hasMessage, idOfPlate, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
 import type { Messages } from "./account-messages.ts";
 import { serverFault } from "./errors.ts";
 import { addPanel, passkeyRow, removeRow, renameRow } from "./passkey-rows.ts";
@@ -34,6 +34,7 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
   let messages: Messages = NO_MESSAGES;
   let done: Done = null;
   let lastName = "";
+  let waitingOnline = false;
 
   const host = {
     env,
@@ -42,6 +43,7 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       [messages, done] = [m, null];
       draw(null);
       focusMessage(main, box);
+      if (m.plate?.kind === "offline") enableWhenOnline();
     },
     readAgain: (m: Messages) => void readAgain(m),
   };
@@ -131,6 +133,34 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
     draw(next ? `[data-row="${next.id}"][data-act="rename"]` : "[data-add], h1");
   }
 
+  /**
+   * Offline, "Add a passkey" is off under "You are offline". When the browser says it is back
+   * online the plate goes and the button is on again, in place: a rename being typed is left alone,
+   * and nothing is sent by itself (the browser's prompt follows a press).
+   */
+  function enableWhenOnline(): void {
+    if (waitingOnline) return;
+    waitingOnline = true;
+    window.addEventListener(
+      "online",
+      () => {
+        waitingOnline = false;
+        // The add form keeps its plate: its own button stays on and points at it.
+        if (!box.isConnected || !env.current() || messages.plate?.kind !== "offline" || mode.kind === "add") return;
+        messages = NO_MESSAGES;
+        const shownPlate = box.querySelector<HTMLElement>(".plate");
+        const hadFocus = shownPlate !== null && shownPlate.contains(document.activeElement);
+        shownPlate?.remove();
+        const b = box.querySelector<HTMLButtonElement>("button[data-add]");
+        if (b === null) return;
+        b.disabled = atLimit(list.length);
+        if (!b.disabled) b.removeAttribute("aria-describedby");
+        if (hadFocus) b.focus();
+      },
+      { once: true },
+    );
+  }
+
   const toList = (focus: string): void => {
     if (busy()) return;
     mode = LIST;
@@ -180,9 +210,12 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       out.push(limit);
     }
     if (canAdd && !notAdded) {
-      const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full, onPress: openAdd });
+      // Offline, the plate "You are offline" is the reason the button is off (site.md, Errors, Offline).
+      const offline = messages.plate?.kind === "offline" ? idOfPlate(out, "list-offline") : null;
+      const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full || offline !== null, onPress: openAdd });
       b.dataset.add = "";
-      if (limit) b.setAttribute("aria-describedby", limit.id);
+      const why = limit?.id ?? offline;
+      if (why !== null) b.setAttribute("aria-describedby", why);
       out.push(buttons(b));
     }
     if (list.length) {

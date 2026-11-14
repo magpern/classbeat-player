@@ -14,9 +14,18 @@ import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
 import { NOTICES } from "../../src/site/core/sign-in-model.ts";
+import { pageOf } from "../../src/site/core/routes.ts";
 
 /** A history entry as the trap notes it: the call, an address, and a state that is nothing or a notice. */
 const HISTORY_ENTRY = new RegExp(`^(pushState|replaceState) \\S* state (null|\\{"notice":"(${NOTICES.join("|")})"\\})$`);
+
+/** The addresses the router sends on to another (core/routes.ts), with where to. */
+const REDIRECTS = ["/", "/account"].map((path) => {
+  const page = pageOf(path);
+  assert.equal(page.kind, "redirect", path);
+  return { path, to: page.kind === "redirect" ? page.to : "" };
+});
+const redirectOf = (state: { readonly path: string }): string | null => REDIRECTS.find((r) => r.path === new URL(state.path, ORIGIN).pathname)?.to ?? null;
 
 let browser: Browser;
 before(async () => {
@@ -113,6 +122,10 @@ describe("the fake's cross-site refusal (backend `cross_site_refusal`)", () => {
 });
 
 describe("nothing secret leaves the page, in any state", () => {
+  // The router's own replaceState is checked as well: a state opens each address it sends on (#436 N1).
+  it("opens every address the router sends on", () => {
+    for (const r of REDIRECTS) assert.ok(STATES.some((s) => s.path === r.path), `no state opens ${r.path}`);
+  });
   for (const state of STATES) {
     it(state.name, async () => {
       const site = await reach(browser, { state, width: 390, zoom: 1, ink: false });
@@ -140,6 +153,9 @@ describe("nothing secret leaves the page, in any state", () => {
       for (const t of seen) for (const s of secret) assert.ok(!t.detail.includes(s), `secret in ${t.kind}`);
       // A history entry keeps no state but a notice of the site's own (#420 N2, #423 N1).
       for (const t of seen.filter((x) => x.kind === "history")) assert.match(t.detail, HISTORY_ENTRY, "a history entry keeps more than a notice");
+      // An address the router sends on is replaced by its page's, keeping the state it had: none on a first load.
+      const to = redirectOf(state);
+      if (to !== null) assert.ok(seen.some((t) => t.kind === "history" && t.detail === `replaceState ${to} state null`), `the replaceState to ${to} was not seen`);
       assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
       await site.context.close();
     });
