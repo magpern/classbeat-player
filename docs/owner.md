@@ -59,6 +59,8 @@ with other work; nothing in the development loop waits for an answer.
 
 ## Tasks only the owner can run
 
+How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
+
 - **Spike 1 (music):** run the follower tool, once it exists, on a Mac and a Windows machine with
   a real Spotify account, and hand back the log file.
 - **Music link live checks (PL5 is done on fakes).** With a real Spotify account, on macOS,
