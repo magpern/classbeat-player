@@ -1,5 +1,5 @@
 """Pure rules of email link sign-in that the backend itself applies (ADR 0002, sections 4, 10;
-ADR 0006, decisions 1 and 3).
+ADR 0006, decisions 1 and 3; ADR 0008, section 3).
 
 The limits per email are counted inside `auth_request_login`. The one limit that does not
 depend on the email, and so is the only one answered 429, is counted by the request before it.
@@ -20,11 +20,15 @@ ADDRESS_WINDOW: Final = timedelta(hours=1)
 ADDRESS_MAX_REQUESTS: Final = 10
 SIGN_IN_PATH: Final = "/sign-in"
 
-# The return entry a link request may carry (ADR 0006, decision 1): `control`, or `control.`
-# and a class code exactly as shown, upper case with its hyphen. Not `normalise_code`: nothing
-# is folded, trimmed or filled in.
+# The return entry a link request may carry (ADR 0006, decision 1, amended by ADR 0008,
+# section 3): `control`, or `control.` and a class code exactly as shown, upper case with its
+# hyphen; or `play`, or `play.` and a class id as a canonical lower-case uuid with its hyphens.
+# Not `normalise_code`: nothing is folded, trimmed or filled in. Always matched as a whole.
 _CODE_HALF = "[" + ALPHABET + "]{4}"
-RETURN_ENTRY: Final = re.compile(r"control(\." + _CODE_HALF + "-" + _CODE_HALF + ")?")
+_CLASS_ID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+RETURN_ENTRY: Final = re.compile(
+    r"control(\." + _CODE_HALF + "-" + _CODE_HALF + r")?|play(\." + _CLASS_ID + ")?"
+)
 
 
 def normalise_email(raw: str) -> str | None:
