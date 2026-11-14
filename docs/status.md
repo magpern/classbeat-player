@@ -55,7 +55,7 @@ cannot blind, captured built-ins and navigation sinks (#315, #318), the private-
 must-fail cases (#343, #345), the asset-rule parser, path table and limit plate checks (#344, #346)
 and the web job on a change of the backend's control-page table (#347, #348).
 
-**Riders (ADR 0007, done on fakes; Verifier clean on 70e101f, music link included):** ADR 0007 (#349), the design
+**Riders (ADR 0007, done on fakes; Verifier clean on 70e101f and d5e45c4 (music link)):** ADR 0007 (#349), the design
 specs for the rider page, the riders panel and the room QR codes (#358), the rider contract and
 join route (#355), the rider page served at `/j` (#364), the `rider_state` builder and publish
 policy (#363), the join route, rider tokens, lock, new code and remove (#367), the WebSocket rider

@@ -12,7 +12,7 @@ ADR that changes a decision says which one it replaces.
 | [0004](0004-provider-terms.md) | Provider terms | Accepted |
 | [0005](0005-live-sessions-and-the-handlebar-companion.md) | Live sessions and the handlebar companion | Proposed |
 | [0006](0006-sign-in-link-return-entry.md) | The sign-in link carries its return entry | Accepted |
-| [0007](0007-riders-in-a-live-session.md) | Riders in a live session | Proposed |
+| [0007](0007-riders-in-a-live-session.md) | Riders in a live session | Accepted |
 
 ## Template
 
