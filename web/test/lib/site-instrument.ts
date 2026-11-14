@@ -85,7 +85,9 @@ export function instrument(mode: Passkey, kit: Kit, standIn: (mode: Passkey, not
   const attr = (route: string, a: unknown[], ni: number, vi = -1): unknown[] => {
     if (ni >= a.length) return a;
     const hasValue = vi >= 0 && vi < a.length;
-    const [rawName, rawValue] = [a[ni], hasValue ? a[vi] : ""];
+    // Read by index: destructuring would go through the page's array iterator.
+    const rawName = a[ni];
+    const rawValue = hasValue ? a[vi] : "";
     strAt(a, ni, vi);
     check(route, rawName, a[ni] as string, rawValue, hasValue ? (a[vi] as string) : "");
     return a;
@@ -168,15 +170,17 @@ export function instrument(mode: Passkey, kit: Kit, standIn: (mode: Passkey, not
   // A popup's or a named frame's address (#315). The page's own address (location.href, assign,
   // replace) cannot be wrapped: those members are unforgeable, so the fake notes those navigations
   // from the browser's side (site-fake.ts). An absent address is passed on absent, as native code
-  // takes it as the empty string.
-  wrapWith(globalThis, "open", "window.open", (_s, a) => {
+  // takes it as the empty string. `document.open` with three or more arguments is the same call.
+  const popup = (route: string, a: unknown[]): unknown[] => {
     if (!a.length || a[0] === undefined) return a;
     const raw = a[0];
     strAt(a, 0);
-    if (typeof raw !== "string") note("script", "window.open not a string");
-    if (jsUrl(a[0] as string)) note("script", "window.open javascript:");
+    if (typeof raw !== "string") note("script", `${route} not a string`);
+    if (jsUrl(a[0] as string)) note("script", `${route} javascript:`);
     return a;
-  });
+  };
+  wrapWith(globalThis, "open", "window.open", (_s, a) => popup("window.open", a));
+  wrapWith(Document.prototype, "open", "Document.open", (_s, a) => (a.length >= 3 ? popup("document.open", a) : a));
   // Realms the browser does not report to the fake: a shared worker and a service worker.
   for (const name of ["Worker", "SharedWorker"] as const) {
     const C = globalThis[name];
