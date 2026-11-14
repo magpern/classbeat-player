@@ -37,13 +37,34 @@ CREATED = {
 
 @pytest.fixture
 def unheld(db_url: str) -> Iterator[tuple[Handle, Conn]]:
-    """A handle that bypasses row-level security, and the tests' own connection."""
+    """A handle that bypasses row-level security, and the tests' own connection.
+
+    The bypass is checked, not assumed: if `db_url` stopped being a role that bypasses the
+    policy, the tests below would pass for the wrong reason, so this fails first.
+    """
     with psycopg.connect(db_url, autocommit=True) as su, connect(db_url) as db:
         su.execute(_CLEAN)
         try:
+            _assert_unheld(db, su)
             yield db, su
         finally:
             su.execute(_CLEAN)
+
+
+def _assert_unheld(db: Handle, su: Conn) -> None:
+    """Fail loudly unless both the tests' connection and the handle bypass row-level security."""
+    role = su.execute(
+        "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
+    ).fetchone()
+    assert role == (True,), "the tests' connection must bypass row-level security (superuser)"
+    seen = [_account(su, email) for email in (A, B)]
+    assert su.execute("SELECT count(*) FROM player.accounts").fetchone() == (2,)
+    # No account is set on the handle: only a role that bypasses the policy reads these rows.
+    for account_id, email in zip(seen, (A, B), strict=True):
+        assert account.own_email(_context(db, account_id)) == email, (
+            "the handle must bypass row-level security, but it did not see an account's row"
+        )
+    su.execute(_CLEAN)
 
 
 def _account(su: Conn, email: str) -> uuid.UUID:
