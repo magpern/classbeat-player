@@ -1,7 +1,7 @@
 'use strict';
 // Pure validation of presenter commands arriving over IPC. Allowlist: anything else is null.
 const MODES = ['scene', 'plain'];
-const SIMPLE = ['toggle', 'reset', 'kill-scene', 'capture'];
+const SIMPLE = ['toggle', 'reset', 'kill-scene', 'capture', 'quit'];
 const { VARIANTS } = require('./variant');
 
 function parseCommand(cmd) {

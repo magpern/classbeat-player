@@ -12,13 +12,16 @@ const { VARIANTS, parseVariant } = require('./variant');
 const { needsRestart } = require('./native-display');
 const { launchNative, buildArgs, defaultBinary } = require('./godot-native');
 const godotWeb = require('./godot-web');
+const { chooseDisplayMode } = require('./display-mode');
+const { createOverlay } = require('./band-window');
 
 let VARIANT = parseVariant(process.env, process.argv);
 godotWeb.registerScheme(protocol); // must happen before the app is ready
 const TEST = process.env.SPIKE_TEST === '1';
 const ROOM_SIZE = (process.env.SPIKE_ROOM_SIZE || '').split('x').map(Number); // windowed size for tests
 const clock = createClock(CLASS_DEF, () => performance.now()); // monotonic: immune to system clock steps
-let presenter = null;
+let presenter = null; // two-screen mode only
+let overlay = null; // one-screen godot-native only: the transparent controls window above Godot
 let room = null;
 let roomMode = 'scene';
 let roomDisplayId = null;
@@ -30,6 +33,7 @@ let nativeGen = 0; // bumped on every start and stop, so a late event from an ol
 let captureDir = null;
 let lastCapture = null;
 let textH = null;
+let oneScreen = false; // one display: the room is full screen on it and the controls are an overlay drawn on top of it
 
 const log = (line) => { try { fs.appendFileSync(fpsLog, `${new Date().toISOString()} ${line}\n`); } catch { /* ignore */ } };
 
@@ -46,7 +50,7 @@ function guard(win) {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
-const roomUrlOpts = (mode) => ({ query: { mode, variant: VARIANT } });
+const roomUrlOpts = (mode) => ({ query: { mode, variant: VARIANT, overlay: oneScreen ? '1' : '0' } });
 const loadRoom = (mode) => { roomMode = mode; return room.loadFile(path.join(__dirname, 'room.html'), roomUrlOpts(mode)); };
 
 const recovery = createRecovery({
@@ -59,6 +63,18 @@ function showRoom() {
   if (room.isVisible()) return;
   room.showInactive();
   placeRoom(roomDisplayId);
+  closeOverlay(); // the room page draws its own overlay
+  raiseController();
+}
+
+const live = (w) => !!w && !w.isDestroyed();
+const controllers = () => [presenter, overlay, oneScreen ? room : null].filter(live);
+function closeOverlay() { const o = overlay; overlay = null; if (live(o)) o.destroy(); }
+
+// One screen: the keyboard goes to whatever draws the overlay: the transparent window above Godot, else the room.
+function raiseController() {
+  if (!oneScreen) return;
+  if (live(overlay)) { overlay.setBounds(displayBounds()); overlay.moveTop(); overlay.focus(); } else if (live(room) && room.isVisible()) room.focus();
 }
 
 function displayBounds() {
@@ -69,6 +85,7 @@ function displayBounds() {
 function startNative() {
   stopNative();
   roomMode = 'scene';
+  if (oneScreen && !live(overlay)) overlay = createOverlay({ BrowserWindow, webPreferences, guard, bounds: displayBounds() });
   room.hide();
   const gen = ++nativeGen;
   const bounds = displayBounds();
@@ -82,7 +99,7 @@ function startNative() {
   }).then((n) => { if (gen === nativeGen) native = { ...n, bounds }; else n.stop(); })
     .catch((e) => { if (gen === nativeGen) { nativeBounds = null; log(`native launch failed: ${e.message}`); recovery.onSceneGone(); } });
   // Keep the keyboard on the presenter whatever the new window does.
-  setTimeout(() => { if (presenter && !presenter.isDestroyed()) presenter.focus(); }, 1500);
+  setTimeout(() => { if (oneScreen) raiseController(); else if (live(presenter)) presenter.focus(); }, 1500);
 }
 
 function stopNative() { nativeGen++; const n = native; native = null; nativeBounds = null; if (n) n.stop(); }
@@ -122,6 +139,7 @@ function state() {
     lastCapture,
     recovery: lastRecovery,
     displays: listDisplays(),
+    displayMode: oneScreen ? 'one' : 'two',
   };
 }
 
@@ -138,14 +156,14 @@ function listDisplays() {
 
 function placeRoom(displayId) {
   const all = screen.getAllDisplays();
-  const d = all.find((x) => x.id === displayId) || all.find((x) => x.id !== screen.getPrimaryDisplay().id) || all[0];
+  const d = all.find((x) => x.id === displayId) || (oneScreen && screen.getPrimaryDisplay()) || all.find((x) => x.id !== screen.getPrimaryDisplay().id) || all[0];
   roomDisplayId = d.id;
   if (ROOM_SIZE.length === 2 && ROOM_SIZE[0]) { room.setContentSize(ROOM_SIZE[0], ROOM_SIZE[1]); return; }
   // A hidden room window (godot-native) only gets its bounds: full screen could show it over Godot.
   if (!room.isVisible()) { room.setBounds(d.bounds); return; }
   const b = room.getBounds();
-  if (all.length > 1 && room.isFullScreen() && b.x === d.bounds.x && b.y === d.bounds.y && b.width === d.bounds.width && b.height === d.bounds.height) return; // already right: no flicker
-  if (all.length === 1) { room.setFullScreen(false); room.setBounds({ x: d.bounds.x + 40, y: d.bounds.y + 40, width: 1280, height: 720 }); return; }
+  if ((all.length > 1 || oneScreen) && room.isFullScreen() && b.x === d.bounds.x && b.y === d.bounds.y && b.width === d.bounds.width && b.height === d.bounds.height) return; // already right: no flicker
+  if (all.length === 1 && !oneScreen) { room.setFullScreen(false); room.setBounds({ x: d.bounds.x + 40, y: d.bounds.y + 40, width: 1280, height: 720 }); return; }
   room.setFullScreen(false);
   room.setBounds(d.bounds);
   room.setFullScreen(true);
@@ -157,9 +175,14 @@ function restartNativeIfMoved() {
 }
 
 function createWindows() {
-  presenter = new BrowserWindow({ width: 900, height: 700, title: 'Presenter', webPreferences: webPreferences() });
-  guard(presenter);
-  presenter.loadFile(path.join(__dirname, 'presenter.html'));
+  const all = screen.getAllDisplays();
+  oneScreen = chooseDisplayMode({ count: all.length, forced: process.env.SPIKE_DISPLAY_MODE, sized: ROOM_SIZE.length === 2 && ROOM_SIZE[0] > 0 }) === 'one';
+  log(`display mode ${oneScreen ? 'one' : 'two'} displays=${all.length}`);
+  if (!oneScreen) {
+    presenter = new BrowserWindow({ width: 900, height: 700, title: 'Presenter', webPreferences: webPreferences() });
+    guard(presenter);
+    presenter.loadFile(path.join(__dirname, 'presenter.html'));
+  }
   room = new BrowserWindow({
     width: ROOM_SIZE[0] || 1280, height: ROOM_SIZE[1] || 720, useContentSize: true, show: VARIANT !== 'godot-native',
     backgroundColor: '#05050a', title: 'Room', autoHideMenuBar: true,
@@ -176,6 +199,8 @@ function createWindows() {
     }
   });
   placeRoom(null);
+  raiseController();
+  if (oneScreen) watchCursor();
   if (VARIANT === 'godot-native') {
     startNative();
     // The plain 2D screen waits in the hidden room window, ready for recovery.
@@ -184,11 +209,23 @@ function createWindows() {
   const refit = () => {
     if (!room) return;
     placeRoom(roomDisplayId);
+    raiseController();
     restartNativeIfMoved();
   };
   screen.on('display-added', refit);
   screen.on('display-removed', refit);
   screen.on('display-metrics-changed', (_e, display, changed) => { if (display.id === roomDisplayId && changed.includes('bounds')) refit(); });
+}
+
+// One screen: a mouse move anywhere brings the overlay back (the click-through overlay window cannot see the mouse).
+function watchCursor() {
+  let last = screen.getCursorScreenPoint();
+  setInterval(() => {
+    const p = screen.getCursorScreenPoint();
+    if (p.x === last.x && p.y === last.y) return;
+    last = p;
+    for (const w of controllers()) w.webContents.send('wake');
+  }, 200);
 }
 
 function setMode(mode) {
@@ -206,6 +243,7 @@ function command(cmd) {
       break;
     case 'mode': setMode(cmd.mode); break;
     case 'variant': if (cmd.variant !== VARIANT) setVariant(cmd.variant); break;
+    case 'quit': app.quit(); break; // the whole app, not only the overlay window
     case 'capture': capture().catch((e) => log(`capture failed: ${e.message}`)); break;
     case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); restartNativeIfMoved(); break;
     default: break;
@@ -224,22 +262,27 @@ app.whenReady().then(() => {
   // Deny every permission request (camera, notifications, ...): the harness needs none.
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
-  // IPC: only the presenter may command; only the room may report fps; payloads are validated.
+  // IPC: only the presenter may command (in one-screen mode the overlay, in the room page or its own window, is the presenter); only the room may report fps; payloads are validated.
   const from = (e, win) => win && !win.isDestroyed() && e.sender === win.webContents;
-  ipcMain.handle('state', (e) => (from(e, presenter) || from(e, room) ? state() : null));
+  const isController = (e) => controllers().some((w) => from(e, w));
+  ipcMain.handle('state', (e) => (isController(e) || from(e, room) ? state() : null));
   ipcMain.handle('command', (e, cmd) => {
-    const c = from(e, presenter) ? parseCommand(cmd) : null;
+    const c = isController(e) ? parseCommand(cmd) : null;
     return c ? command(c) : null;
   });
+  ipcMain.on('overlay-visible', (e, v) => { if (!from(e, overlay)) return;
+    overlay.setIgnoreMouseEvents(v !== true, { forward: true });
+    // Shown again: the keyboard comes back to the overlay, even after a click went through to Godot.
+    if (v === true && !overlay.isFocused()) { overlay.moveTop(); overlay.focus(); } });
   ipcMain.on('fps', (e, v) => { if (from(e, room) && Number.isFinite(v)) log(`fps mode=${roomMode} ${v.toFixed(1)}`); });
   createWindows();
   if (process.env.SPIKE_START_AT_S) clock.seek(Number(process.env.SPIKE_START_AT_S) * 1000); // test/screenshots only
   if (process.env.SPIKE_AUTOSTART === '1') clock.start();
   setInterval(() => {
     const s = state();
-    for (const w of [presenter, room]) if (w && !w.isDestroyed() && !w.webContents.isCrashed()) w.webContents.send('state', s);
+    for (const w of [presenter, overlay, room]) if (live(w) && !w.webContents.isCrashed()) w.webContents.send('state', s);
     if (native) native.send(sceneState());
   }, 100);
-  if (TEST) process.spikeTest = { getNative: () => native, getNativeBounds: () => nativeBounds, restartNativeIfMoved, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state };
+  if (TEST) process.spikeTest = { getNative: () => native, getNativeBounds: () => nativeBounds, restartNativeIfMoved, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state, getController: () => presenter || overlay || room, getOverlay: () => overlay, isOneScreen: () => oneScreen };
   app.on('window-all-closed', () => app.quit());
 });

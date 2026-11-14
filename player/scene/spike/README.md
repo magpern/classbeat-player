@@ -42,7 +42,9 @@ Three variants of the same rough light-show scene, run in the same shell:
 
 ## Run it on a studio computer (owner)
 
-Needs Node 22 or newer, a second display (a projector counts), and, for the Godot variants, the
+**Run it on the studio's one screen, mirrored on the projector** (owner, 2026-11-14). That is the default: with one display the class view is full screen on it and the controls are an overlay drawn on top of it. A second display is optional (see below).
+
+Needs Node 22 or newer and, for the Godot variants, the
 exported builds (agents can hand you a zip, or run `npm run godot:setup && npm run godot:export`
 once: it downloads the pinned Godot editor and export templates, about 1.3 GB, and checks their
 SHA-512 against `godot/version.json`).
@@ -55,15 +57,20 @@ npm start                # variant web
 npm start -- --variant=godot-native     # or godot-web
 ```
 
-`SPIKE_VARIANT=<variant>` works too. Two windows open: the **presenter** (keep it on the computer's
-own screen, it holds the keyboard) and the **room** window. With a second display the room goes full
-screen on it; with one display it is a 1280x720 window. For `godot-native` the Godot window plays that
-role and the room window stays hidden until a recovery.
+`SPIKE_VARIANT=<variant>` works too. With **one display** (the studio) there is one window, the room, full
+screen on that display, and nothing else: no presenter window and no panel. The controls are an overlay on
+top of the class view (the view is never made smaller). It shows while the class is paused, and while the
+class runs it appears when you move the mouse or press a key and hides again after 4 seconds. The keyboard
+works with it hidden. For `godot-native`, where Godot's own full screen window is on top, the shell puts a
+transparent overlay window of the same size above it that carries the same overlay and the keyboard. With
+**two or more displays** the old layout stays: a **presenter** window on the computer's own screen (it holds
+the keyboard) and the **room** full screen on a second display; for `godot-native` the Godot window plays the
+room's role and the room window stays hidden until a recovery. `SPIKE_DISPLAY_MODE=one` or `two` forces a mode.
 
-Presenter keys: `Space` start/pause, `R` reset, `K` kill the scene (the renderer, or the Godot
+Keys (the same on the overlay and the presenter window): `Space` start/pause, `R` reset, `K` kill the scene (the renderer, or the Godot
 process), `P` plain 2D screen, `S` scene, `V` next variant (or click the variant buttons: you can
 compare all three in one run without restarting), `C` screenshot, `1`-`9` move the room screen to
-display N (the list is on the presenter window).
+display N (the list is on the presenter window; with one screen it does nothing).
 
 The frame rate is logged once a second to `fps.log` in the app's user-data folder
 (Windows: `%APPDATA%\classbeat-player-spike2\fps.log`; or set `SPIKE_FPS_LOG=<file>`), with the
@@ -72,29 +79,30 @@ variant at start and every switch. Recovery times are logged there too. Screensh
 
 ### Owner's comparison run (all three variants, same studio computer)
 
-Run each variant for the same few minutes with the same display set-up and fill the checklist for it.
+Run each variant for the same few minutes on the one mirrored screen and fill the checklist for it.
 Start with `web`, then press `V` for `godot-native`, then `godot-web`; or start each one with its launch
 option for a clean fps log.
 
 ### Checklist (plan section 9), per variant
 
-1. **Look and frame rate:** let it run a few minutes at full screen. Note `fps.log` lines for the
+1. **Look and frame rate:** let it run a few minutes at full screen on the mirrored screen. Note `fps.log` lines for the
    variant, and a photo or screenshot (`C`).
-2. **Full screen on the second display** while the presenter keeps the keyboard: does `Space`
-   still work, does the room stay on top without stealing focus? (Native: does Godot's window take
-   the keyboard when it starts? Does it cover the taskbar or flicker?)
-3. **Text readable at room distance**, and still right after a **resize**, **unplugging** the
-   display and **plugging it in again** (the room window, or the Godot window, should come back to a
-   display by itself).
-4. **Recovery:** press `K`. The room screen must show the plain 2D screen within 2 seconds, and
-   the presenter's clock must not jump or stop. Note "last recovery: ok in N ms" on the presenter.
+2. **One screen, mirrored:** the class view is full screen and the overlay is on top of it. Does
+   `Space` work with the overlay hidden? Does a mouse move or a key show it, and does it hide again after
+   a few seconds with the class running? (Native: does the overlay appear over Godot's window, and does
+   Godot's window take the keyboard when it starts? Does it cover the taskbar or flicker?)
+3. **Text readable at room distance** on the projector, and still right after a **resize**, and (optional)
+   **unplugging** the projector and **plugging it in again** (the room window, or the Godot window, should
+   come back to a display by itself).
+4. **Recovery:** press `K`. The screen must show the plain 2D screen, full screen too, within 2 seconds,
+   and the clock must not jump or stop. Note "last recovery: ok in N ms" on the overlay.
    For `godot-native` also try ending the Godot process in the task manager, and (if you can)
    freezing it. Native text and zone: is the zone a number and a name as well as a colour?
 5. **Start-up:** seconds from start to first frame, per variant; Godot native and web also load their
    engine first.
-   With more than one display, `1`-`9` must also move the Godot window (native Godot is started again on
+   **Optional, only with a second display:** `1`-`9` must also move the Godot window (native Godot is started again on
    the chosen display), and the hidden room window must never appear over Godot while it runs (the shell
-   does not call full screen on it while it is hidden). The restart rule and "same display keeps the same process" are tested; a real second display is not testable headless: check it here.
+   does not call full screen on it while it is hidden). The restart rule and "same display keeps the same process" are tested; a real second display is not testable headless: check it here if you have one.
 6. Anything odd: flicker, tearing, the window on the wrong display, a slow start, antivirus or
    firewall prompts (the native variant opens a loopback socket and starts a second program).
 
@@ -109,7 +117,8 @@ option for a clean fps log.
 | | Headless Linux (xvfb, software GL) | Needs a real studio computer |
 |---|---|---|
 | Godot project imports, exports for Linux, Windows, macOS and Web | yes (`npm run godot:check`) | running the Windows and macOS builds |
-| Native: link, token, text height of the main numbers, fps, Godot's PNG capture, recovery (kill) | yes, with the real Godot | real GPU frame rate, focus and full screen on a second display, display unplug |
+| Native: link, token, text height of the main numbers, fps, Godot's PNG capture, recovery (kill) | yes, with the real Godot | real GPU frame rate, focus and full screen on the real screen (and a second display, display unplug) |
+| One-screen mode: full screen room, overlay on top, mouse and keys show it, keyboard with it hidden, recovery to a full screen 2D screen (web, and native with a fake Godot) | yes (`test/e2e-one-screen.test.js`; Xvfb has no window manager, so size is checked within 2 px) | that the real window manager and the projector mirror show it right; the overlay over the real Godot window |
 | Web in the room window: scene drawn by Godot, HTML text, fps from Godot, recovery | yes | real GPU frame rate and Godot's web engine on the studio's Chromium |
 | Silent or dying Godot, with a fake program | yes (`npm test`) | a really frozen Godot |
 | Screenshots | all variants, 1920x1080 and 1280x720 | the look on the projector |
@@ -137,7 +146,7 @@ headless run only; the app's own windows never set them. Behind a proxy run the 
 
 The end-to-end tests check: the security defaults of both windows, a command from the room window is
 refused, every main number at least 8 % of the window height (scene and plain), the fps log, and
-recovery (scene killed, plain screen within 2 s, clock continuous) for the web and native variants,
+recovery (scene killed, plain screen within 2 s, clock continuous) for the web and native variants (also in one-screen mode),
 including a Godot that goes silent.
 
 Not covered by the spike recovery: a hung renderer (unresponsive) or a lost WebGL context does not
