@@ -5,6 +5,7 @@ import type { SignedInPage } from "../core/routes.ts";
 import { call } from "../net/api.ts";
 import { h1 } from "../ui/kit.ts";
 import { offlinePlate, serverFault, tooMany } from "./errors.ts";
+import { playLink } from "./play-link.ts";
 
 export interface SignedInEnv {
   readonly sessionEnded: () => void;
@@ -38,7 +39,7 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
         waitingOnline = true;
         break;
       default:
-        main.replaceChildren(h1(page.title));
+        main.replaceChildren(h1(page.title), playLink(page.load) ?? "");
     }
     if (focus || answer.kind !== "ok") main.querySelector<HTMLElement>(".plate")?.focus();
   };

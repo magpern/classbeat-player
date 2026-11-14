@@ -5,6 +5,8 @@
 // not a UUID in its canonical lowercase form, as `GET /api/site/classes` gives it, is ignored, and
 // the page shows the class picker.
 
+import { playSignInAddress } from "../site/core/routes.ts";
+
 const CLASS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** The class id of an address fragment (`#<id>`), or null: anything else, in any other form, is no class. */
@@ -18,5 +20,8 @@ export const classAddress = (id: string): string => `/play#${id}`;
 /** The picker's address: no fragment. */
 export const PICKER_ADDRESS = "/play";
 
-/** Where the person signs in; the way back to /play comes with the site's return entries (issue #396). */
+/** Where sign-out goes: the site's sign-in, with no way back. */
 export const SIGN_IN_ADDRESS = "/sign-in";
+
+/** The sign-in that comes back here (ADR 0008, section 3): `play`, or `play.<class id>` when the address names a class. */
+export const signInBackAddress = (hash: string): string => playSignInAddress(classIdOf(hash));

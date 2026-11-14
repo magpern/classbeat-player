@@ -22,6 +22,8 @@ export interface State {
   readonly main?: boolean;
 }
 
+export const CLASS_DETAILS_ID = "3f6d2c1a-8b4e-4f7a-9c2d-1e5a7b9c0d3f";
+
 const askLink = (email: string) => async (page: Page): Promise<void> => {
   await page.fill("input[name=email]", email);
   await page.click("button[type=submit]");
@@ -82,6 +84,8 @@ export const STATES: readonly State[] = [
     ready: ".note",
   },
   { name: "shell-signed-in", path: "/classes", script: signedInClasses, ready: "nav .a.cur", main: true },
+  // The class details page's link to the web player page (ADR 0008, section 3; issue #396).
+  { name: "class-details-play", path: `/classes/${CLASS_DETAILS_ID}`, script: { [`GET classes/${CLASS_DETAILS_ID}`]: { status: 200, body: { class_id: CLASS_DETAILS_ID } } }, ready: ".btns a" },
   { name: "error-too-many", path: "/classes", script: { "GET classes": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "300" } } }, ready: ".plate" },
   { name: "error-offline", path: "/classes", script: { "GET classes": { status: 0, fail: true } }, ready: ".plate" },
   { name: "error-server", path: "/classes", script: { "GET classes": { status: 500, body: { error: "internal" } } }, ready: ".plate" },

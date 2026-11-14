@@ -13,7 +13,7 @@ import { empty, HEADING, loading, notFound, offline, opening, signedOut } from "
 import { classList } from "./picker.ts";
 import { openPlayer } from "./player.ts";
 import type { Player } from "./player.ts";
-import { classIdOf, PICKER_ADDRESS, SIGN_IN_ADDRESS } from "./route.ts";
+import { classIdOf, PICKER_ADDRESS, SIGN_IN_ADDRESS, signInBackAddress } from "./route.ts";
 
 let shown = 0;
 let player: Player | null = null;
@@ -84,7 +84,7 @@ function failure(main: HTMLElement, why: Failure, retryNow: () => void): void {
 }
 
 function signedOutPage(ended: boolean): void {
-  signedOut(page(false), ended);
+  signedOut(page(false), ended, signInBackAddress(location.hash));
 }
 
 async function showPicker(ticket: number): Promise<void> {

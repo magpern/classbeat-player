@@ -71,6 +71,11 @@ export type ReturnEntry = "control";
 // `satisfies` makes a missing or an extra entry a type error.
 export const RETURN_ENTRIES = { control: "/control" } as const satisfies Record<ReturnEntry, string>;
 
+/** The web player page (ADR 0008, section 3): served beside the site, so only a full page load goes there. */
+export const PLAY_PATH = "/play";
+/** A class id as the site's list gives it: a canonical lower-case uuid (ADR 0008, section 2). Never folded or trimmed. */
+const CLASS_ID_ENTRY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** A class (join) code exactly as the companion shows it (ADR 0002's alphabet, `XXXX-XXXX`). */
 const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 const RETURN_FRAGMENT = /^#?return=([a-z]+)(?:\.(.*))?$/;
@@ -85,14 +90,28 @@ export function signInAddressFor(entry: ReturnEntry, join: string | null): strin
   return join !== null && JOIN_CODE.test(join) ? `/sign-in#return=${entry}.${join}` : `/sign-in#return=${entry}`;
 }
 
+/** The class id of a class details page's load route (`classes/<id>`), or null for any other route or id. */
+export function classIdOfPage(load: string): string | null {
+  const id = load.startsWith("classes/") ? load.slice("classes/".length) : "";
+  return CLASS_ID_ENTRY.test(id) ? id : null;
+}
+
+/** The sign-in address that returns to the web player page, to one class when `classId` is a canonical id; any other value is left out. */
+export function playSignInAddress(classId: string | null): string {
+  return classId !== null && CLASS_ID_ENTRY.test(classId) ? `/sign-in#return=play.${classId}` : "/sign-in#return=play";
+}
+
 /**
  * The address a sign-in fragment asks to return to, or null. Only an entry of the table, with a
- * class code for the companion and nothing else; anything other than exactly that is null, and
- * the sign-in then goes to the default page. The result is `/control` or `/control#XXXX-XXXX`.
+ * class code for the companion and nothing else, or `play` with a class id (ADR 0008, section 3);
+ * anything other than exactly that is null, and the sign-in then goes to the default page. The
+ * result is `/control`, `/control#XXXX-XXXX`, `/play` or `/play#<class id>`.
  */
 export function returnEntryOf(hash: string): string | null {
   const m = RETURN_FRAGMENT.exec(hash);
-  if (!m || !Object.hasOwn(RETURN_ENTRIES, m[1])) return null;
+  if (!m) return null;
+  if (m[1] === "play") return m[2] === undefined ? PLAY_PATH : CLASS_ID_ENTRY.test(m[2]) ? `${PLAY_PATH}#${m[2]}` : null;
+  if (!Object.hasOwn(RETURN_ENTRIES, m[1])) return null;
   const path = RETURN_ENTRIES[m[1] as ReturnEntry];
   if (m[2] === undefined) return path;
   return JOIN_CODE.test(m[2]) ? `${path}#${m[2]}` : null;
@@ -101,7 +120,7 @@ export function returnEntryOf(hash: string): string | null {
 /** A way back named by a sign-in fragment: the address to load, and the entry as the site sends it. */
 export interface EntryBack {
   readonly path: string;
-  /** `control` or `control.XXXX-XXXX` (ADR 0006, decision 5): never a path. */
+  /** `control`, `control.XXXX-XXXX`, `play` or `play.<class id>` (ADR 0006, decision 5): never a path. */
   readonly field: string;
 }
 

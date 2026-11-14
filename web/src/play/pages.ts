@@ -3,7 +3,6 @@
 // answer holds becomes markup. Each function replaces the content of `main`.
 import { linkButton } from "../site/pages/errors.ts";
 import { button, buttons, h1, h2, note, p, plate, working } from "../site/ui/kit.ts";
-import { SIGN_IN_ADDRESS } from "./route.ts";
 
 export const HEADING = "Play a class";
 
@@ -15,12 +14,12 @@ export const opening = (main: HTMLElement): void => main.replaceChildren(h1(HEAD
 export const empty = (main: HTMLElement): void =>
   main.replaceChildren(h1(HEADING), h2("No classes yet"), p("Classes you send from classbeat appear here, and on this page."), buttons(linkButton("Classes", "/classes", true)));
 
-/** Signed out, or (`ended`) a session that ended: the same way back, the default sign-in for now. */
-export function signedOut(main: HTMLElement, ended: boolean): void {
+/** Signed out, or (`ended`) a session that ended: Sign in goes to `signInAddress`, which comes back here. */
+export function signedOut(main: HTMLElement, ended: boolean, signInAddress: string): void {
   main.replaceChildren(
     h1(HEADING),
     ended ? note("Your session ended", "Sign in again to carry on where you were.") : p("Sign in to see your classes and run one here."),
-    buttons(linkButton("Sign in", SIGN_IN_ADDRESS, true)),
+    buttons(linkButton("Sign in", signInAddress, true)),
   );
   main.querySelector<HTMLElement>(".note")?.focus();
 }
