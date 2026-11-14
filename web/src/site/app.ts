@@ -2,7 +2,7 @@
 // a sign-in. The page that asked is kept in memory only (never in storage), and only as a path of
 // this site or an entry of the fixed table of other pages (core/routes.ts). A page of the site
 // is opened in place; another page (the companion at /control) is loaded.
-import { entryBackOf, pageOf, returnPathOf } from "./core/routes.ts";
+import { entryBackOf, PLAY_PATH, pageOf, returnPathOf } from "./core/routes.ts";
 import { NOTICES } from "./core/sign-in-model.ts";
 import type { Notice, SignInView } from "./core/sign-in-model.ts";
 import { fragmentOf } from "./core/link-token.ts";
@@ -109,6 +109,8 @@ function onClick(e: MouseEvent): void {
   }
   const url = new URL(a.href);
   if (url.origin !== location.origin) return;
+  // The web player page is not a page of this site: the browser loads it in full (ADR 0008, section 3).
+  if (url.pathname === PLAY_PATH) return;
   e.preventDefault();
   go(url.pathname + url.search);
 }

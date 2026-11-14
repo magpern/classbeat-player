@@ -3,8 +3,8 @@
 // the mail would carry. The fake site answers with it when a test gives it a mailbox. No I/O.
 import { LINK_TOKEN } from "./site-states.ts";
 
-/** ADR 0006, decision 1: exactly this, upper case with its hyphen, in `code_policy.ALPHABET`. */
-export const RETURN_TO = /^control(\.[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4})?$/;
+/** ADR 0006, decision 1, amended by ADR 0008, section 3 (`login_policy.RETURN_ENTRY`): `control` with a class code (upper case with its hyphen, in `code_policy.ALPHABET`), or `play` with a canonical lower-case uuid. */
+export const RETURN_TO = /^(control(\.[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4})?|play(\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?)$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export interface LinkAnswer {

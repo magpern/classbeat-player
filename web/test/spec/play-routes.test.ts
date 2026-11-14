@@ -80,7 +80,7 @@ describe("signed out, offline and not found", () => {
     const site = await open({ hash: "", script: { "GET classes": NOT_SIGNED_IN } });
     await site.page.waitForSelector(".btns a");
     assert.equal(await text(site.page, "p"), "Sign in to see your classes and run one here.");
-    assert.equal(await site.page.locator(".btns a").getAttribute("href"), "/sign-in");
+    assert.equal(await site.page.locator(".btns a").getAttribute("href"), "/sign-in#return=play", "the sign-in comes back to the picker");
     assert.equal(await site.page.locator("nav").count(), 0, "no navigation when signed out");
     assert.equal(await site.page.locator(".note").count(), 0);
     await site.context.close();
@@ -93,6 +93,7 @@ describe("signed out, offline and not found", () => {
   it("a 401 on a class shows the same, and the class is not drawn", async () => {
     const site = await open({ script: { [`GET classes/${CLASS_ID}`]: NOT_SIGNED_IN } });
     await site.page.waitForSelector(".btns a");
+    assert.equal(await site.page.locator(".btns a").getAttribute("href"), `/sign-in#return=play.${CLASS_ID}`, "the sign-in comes back to this class");
     assert.equal(await site.page.locator(".controls").count(), 0);
     await site.context.close();
   });
