@@ -10,7 +10,7 @@ export function renderIntro(intro: IntroModel): HTMLElement {
   const facts = el(
     "div",
     { class: "facts" },
-    intro.facts.map((f) => el("div", {}, [el("span", { class: "lbl", tier: "label", lines: 2, text: f.label }), el("span", { class: "v n", tier: "value", text: f.value })])),
+    intro.facts.map((f) => el("div", {}, [el("span", { class: "lbl", tier: "label", text: f.label }), el("span", { class: "v n", tier: "value", text: f.value })])),
   );
   const zones = el(
     "div",

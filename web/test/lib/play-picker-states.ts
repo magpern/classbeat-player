@@ -25,7 +25,7 @@ export const library = (n: number = CLASSES.length) => CLASSES.slice(0, n).map((
 
 const HELD = { status: 200, hold: true } as const;
 /** Every state of the picker, by name; the path is the page's, with its fragment. */
-export const PICKER_STATES: readonly State[] = [
+const STATES: readonly State[] = [
   { name: "picker", path: "/play", script: { "GET classes": listAnswer(library()) }, ready: ".rows .row", main: true },
   { name: "picker-few", path: "/play", script: { "GET classes": listAnswer(library(3)) }, ready: ".rows .row" },
   { name: "picker-loading", path: "/play", script: { "GET classes": HELD }, ready: ".status" },
@@ -39,3 +39,5 @@ export const PICKER_STATES: readonly State[] = [
   { name: "too-many", path: "/play", script: { "GET classes": { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "300" } } }, ready: ".plate" },
   { name: "server", path: "/play", script: { "GET classes": { status: 500, body: { error: "internal" } } }, ready: ".plate" },
 ];
+/** Each with the page's date fixed at 13 Nov 2026 (the day of the newest class), so the date column reads the same on every day the shots are taken. */
+export const PICKER_STATES: readonly State[] = STATES.map((state) => ({ ...state, clock: "day" as const }));

@@ -6,6 +6,7 @@ import type { SignedInPage } from "../core/routes.ts";
 import { call } from "../net/api.ts";
 import { h1, working } from "../ui/kit.ts";
 import { offlinePlate, serverFault, tooMany } from "./errors.ts";
+import { shownByDevicePage } from "./device-pages.ts";
 import type { View } from "./view.ts";
 
 export interface SignedInEnv {
@@ -22,6 +23,13 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
   const onOnline = (): void => {
     waitingOnline = false;
     if (env.current()) void load();
+  };
+  // What a page without a view of its own shows: a page of the Devices section, else its heading only.
+  const shown = (body: unknown): boolean => {
+    const focus = main.contains(document.activeElement) && document.activeElement !== main;
+    if (shownByDevicePage(main, page, body, env, focus, () => void load())) return true;
+    main.replaceChildren(h1(page.title));
+    return false;
   };
   const load = async (): Promise<void> => {
     const answer = await (view ? view.read() : call("GET", page.load));
@@ -42,15 +50,16 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
         waitingOnline = true;
         break;
       case "refused":
-        if (!view) {
-          main.replaceChildren(h1(page.title));
-        } else if (!view.refused(main, answer)) {
-          serverFault(main, () => void load());
+        if (view) {
+          if (!view.refused(main, answer)) serverFault(main, () => void load());
+          break;
         }
+        // A page without a view sees every other answer here, a refusal included (body undefined).
+        if (shown(undefined)) return;
         break;
       default:
         if (view) view.show(main, answer.body, () => void load());
-        else main.replaceChildren(h1(page.title));
+        else if (shown(answer.body)) return;
     }
     const plate = main.querySelector<HTMLElement>(".plate");
     if (plate && (focus || answer.kind !== "ok")) plate.focus();

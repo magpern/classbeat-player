@@ -17,6 +17,7 @@ export const KIND = {
   len: ["minor", 17],
   strong: ["minor", 12],
   zn: ["minor", 17],
+  code: ["minor", 26],
 } as const;
 export type Kind = keyof typeof KIND;
 
