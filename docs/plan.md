@@ -702,9 +702,9 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
    (three.js), decided after spike 2 (owner, 2026-11-14; ADR 0009).
 4. **Backend stack: decided (2026-11-12).** Python, FastAPI and PostgreSQL, maintained by AI
    agents.
-5. **Accounts:** the product's own accounts, with email link and passkey sign-in and no
-   passwords. Recommended. Alternative: sign in with a classbeat account, which ties the two
-   products together.
+5. **Accounts: decided (owner, 2026-11-14; ADR 0010).** Instructors sign in with their
+   classbeat account; riders need no account. The player's own sign-in is kept for a later
+   follower account.
 6. **Scope of the first version:** the instructor's display only (section 2), cycling first.
    Recommended. Phones joining a live class come next (phase PL8). Games, teams, a group
    display and a virtual world are ruled out (section 3).
