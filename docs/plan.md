@@ -336,8 +336,10 @@ MOWL or Swedebeat connection.
 
 **What it does**
 
-- **Accounts.** The product's own accounts, independent of classbeat's. Recommended sign-in: a
-  link sent by email plus passkeys, with no passwords to store.
+- **Accounts.** An instructor's account is their classbeat account: "Sign in with classbeat"
+  (owner, 2026-11-14; ADR 0010). The player keeps its own sessions, devices and database. Riders
+  need no account. The player's own sign-in (email link and passkeys) is kept for a later
+  read-only follower account.
 - **Class library.** Each account's classes in the published class format, with a content hash
   and the source they came from.
 - **Source API (classes in).** A source such as classbeat sends a class as a **publication**:
