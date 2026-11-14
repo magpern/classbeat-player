@@ -10,17 +10,21 @@
   `auth_session_active` for every controller got by sign-in. Not active: the session ends
   (`revoked`), or that controller is dropped. A re-check the database does not answer changes
   nothing; the sweep ends a session left unconfirmed too long (live_session_policy.py).
-- `sweep`: the lifetimes, of the sessions and of their control codes. A session found past its
-  lifetime outside the sweep (a host's or controller's `hello`, the control-code exchange, a
-  sign-in) ends there and is recorded the same way: the registry hands its end to `_expired`
-  (`record_expiries`, live/table.py), so every path writes one `live.session_ended`. On the event
-  loop (a `hello`), the lookup and the hub's attach stay in one loop step, so a drop or an end
-  from another thread reaches the hub after the attach; only the write goes to a worker thread.
+- `sweep`: the lifetimes, of the sessions, their control codes and their rider tokens (5 minutes
+  without a connection). A session found past its lifetime outside the sweep (a host's or
+  controller's `hello`, the control-code exchange, a sign-in, a join) ends there and is
+  recorded the same way: the registry hands its end to `_expired` (`record_expiries`,
+  live/table.py), so every path writes one `live.session_ended`. On the event loop (a `hello`),
+  the lookup and the hub's attach stay in one loop step, so a drop or an end from another
+  thread reaches the hub after the attach; only the write goes to a worker thread.
   Any failure of that write is logged by its type and never fails the caller.
   On the sign-in path the write takes a second pool connection while the request holds the site
   session's; a full pool waits at most the pool's 5 seconds and is then a `DatabaseError`, logged.
 - `drain`: at shutdown (app.py), the writes still on a worker thread are waited for, for a
   bounded time, before the pool closes, so an end recorded off the loop still gets its event.
+- `join`: a rider token for `POST /api/live/join` (live/riders.py). A join code that names no
+  session is counted for the caller's address, with the control exchanges'. Nothing about a
+  rider is written to the database or the audit events, and no log line holds a nickname.
 - `by_sign_in` and `by_code`: a controller for `POST /api/live/controller` and
   `POST /api/live/control`. "Controller added" by sign-in is written in the site session's
   transaction; if writing it or committing that transaction fails, the place is freed again
@@ -144,6 +148,22 @@ class LiveService:
         for ended in self.registry.end_due(now):
             self._record(ended)
         self.registry.codes_due(now)
+        self.registry.riders_due(now)
+
+    # -- joining as a rider ---------------------------------------------------------------
+
+    def join(self, raw_session: object, nickname: str, address_hash: bytes) -> str | None:
+        """A rider token, or None (`cannot_join`). A join code that names no session, an
+        earlier code included, is counted for the caller's address. Nothing is written and no
+        log line holds the nickname, the code or the token."""
+        joined = self.registry.join(raw_session, nickname, self.clock())
+        if joined == "unknown":
+            self._unknown_session(address_hash)
+        if joined in ("unknown", "refused"):
+            _logged("live.join_refused", level=logging.DEBUG)
+            return None
+        _logged("live.rider_joined")
+        return joined
 
     # -- becoming a controller ------------------------------------------------------------
 

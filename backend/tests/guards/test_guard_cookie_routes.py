@@ -88,6 +88,9 @@ LINK_CODE_ROUTES = frozenset({("POST", "/api/source/token")})
 # Section 8, "Becoming a controller": the join code and the control code in the body, from the
 # phone's page. No cookie and no other credential.
 CONTROL_CODE_ROUTES = frozenset({("POST", "/api/live/control")})
+# Section 8, "Joining as a rider" (ADR 0007): the join code and a nickname in the body, from the
+# rider's page. No cookie and no other credential.
+JOIN_ROUTES = frozenset({("POST", "/api/live/join")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -180,6 +183,13 @@ def test_the_control_code_route_takes_no_cookie_and_no_bearer_token() -> None:
     assert all(path.startswith("/api/live/") for _, path in CONTROL_CODE_ROUTES)
 
 
+def test_the_join_route_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token) | _using(app_only)
+    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    assert not JOIN_ROUTES & (bearer | cookie)
+    assert all(path.startswith("/api/live/") for _, path in JOIN_ROUTES)
+
+
 def test_every_route_is_on_one_of_the_lists() -> None:
     # A new route fails here until someone has said which credential it takes.
     listed = (
@@ -189,6 +199,7 @@ def test_every_route_is_on_one_of_the_lists() -> None:
         | SOURCE_TOKEN_ROUTES
         | LINK_CODE_ROUTES
         | CONTROL_CODE_ROUTES
+        | JOIN_ROUTES
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES | PAGE_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES
