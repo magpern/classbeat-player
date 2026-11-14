@@ -23,6 +23,13 @@ Owner input the same day, binding for this spec:
 3. **"If level is blue, more blue in graphics, if it is red more red."** The whole scene takes
    the current zone's colour, strongly, its energy rises with the zone, and the next zone's
    colour is seen coming before the change.
+4. **Intervals first, songs second**: "we are very song oriented. There could be a climb inside
+   a song. Or 8 beat up and down in a song." The score and the screen are built on the
+   intervals, which sit on the class clock, several inside one song (a climb in three steps,
+   each visible ahead), and on **beat-counted position patterns** (class format 1.1,
+   issue #469: `interval.pattern`, for example seated and standing for 8 beats each). The
+   current side, a big beat count to the next switch and the upcoming patterns are shown;
+   songs stay the score's lower track. See "Intervals first: climbs and patterns".
 
 ## Directions considered
 
@@ -59,12 +66,15 @@ to the 2D screen never loses anything:
 
 1. Time left in the interval, and with beat anchors, the bars to the change.
 2. The zone: number, name and colour, with its target ranges.
-3. Cadence and position.
+3. Cadence and position; in an interval with a position pattern, the **current side and a
+   big beat count to the next switch** ("UP 8 … 1", then "DOWN").
 4. The song's BPM.
 5. The cue.
 6. What comes next: the next zone (number, name, colour), length, cadence, position.
-7. **The score, now 8 minutes ahead** (owner input 1): intervals with zone number, name, length
-   and cue; songs as clips with title, artist, BPM and moments (drop, build, breakdown).
+7. **The score, now 8 minutes ahead** (owner input 1), **intervals first** (owner input 4):
+   intervals with zone number, name, length, pattern and cue, so a climb of three intervals
+   inside one song reads as three steps; under them, songs as clips with title, artist, BPM and
+   moments (drop, build, breakdown).
 8. Time in the class, left and done; the segment.
 9. The music-link state.
 
@@ -101,6 +111,7 @@ nothing gives shape.** No beam angle, length, height or slope is taken from an i
 | A song change | The rig dims for one beat and re-aims to the new song's look in 1.2 s | |
 | Moments (`build`, `drop`, `breakdown`) | Build: the 8 beats before a drop (or the `build` moment) gather every beam to one point, the haze brightens, the lift deepens. Drop: one white burst, then every fixture on and fanned wide for 4 bars. Breakdown: one slow beam and the wall, for 8 bars | |
 | The next interval | **Anticipation**: in the last 10 s before an interval change the back truss and the LED wall turn to the next zone's colour, as a wipe from the far side; the front truss changes at the change | |
+| A position pattern (format 1.1, link locked) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side, and a 25 % accent on the first beat of each side. At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
 | Link state | Without a lock, no beat at all (as the 2D beat dot); see the states | |
 
 ### Energy by zone (owner input 3)
@@ -155,7 +166,8 @@ whole window behind everything; the gel plate and the score are opaque.
 | Rail | 27 vw, 5 vh, to 95 vw | Class time left and done, segment, link state (as room-2d.md) |
 | Metrics | 27 vw, 12 vh, 22 vw wide, stacked | Cadence, position, BPM: label `--t-label`, value 7.6 vh (Big Shoulders 800), unit `--t-minor` |
 | Clock | right-aligned to 95 vw, label at 11 vh | Label, countdown (30 vh, at least 25 vh, see "Fitting"), bars line (`--t-minor`) |
-| Next | right-aligned to 95 vw, under the bars line | "Next", zone chip, name, length, cadence, position (`--t-minor`); two lines at most |
+| Pattern | 50 vw, 11 vh, to the clock's left edge; only in an interval with a pattern | See "Intervals first: climbs and patterns" |
+| Next | right-aligned to 95 vw, under the bars line | "Next", zone chip, name, length, cadence, position or pattern ("8 up, 8 down") (`--t-minor`); two lines at most |
 | Cue | 27 vw to 95 vw, ends by 66 vh | `--t-text`, two lines; over 60 characters `--t-text-min`, three lines |
 | Score | 0, 68 vh, full width, to the bottom | See "The score" |
 | Stage | everything else | The rig at full brightness |
@@ -166,7 +178,10 @@ The gel plate is 30 vw by 50 vh (numeral 28 vh); the clock sits right of it with
 9 vh and the countdown at 25 vh (cap height 20.3 %, still above S1). The metrics become one row
 from 41 vh, values min(7.4 vh, 5.5 vw); the next row runs from 5 vw at 53 vh, the cue from 5 vw at
 58.5 vh to 95 vw (`--t-text-min`, two lines at most, ending by 72 vh), and the score starts at
-74 vh with its lanes compressed (interval blocks 9.4 vh) and **6 minutes ahead**.
+74 vh with its lanes compressed (interval blocks 9.4 vh) and **6 minutes ahead**. In an interval
+with a pattern there is no room for the pattern block: the Position metric becomes the side and
+the count (count at 1.8 × the metric value, at least 13 vh at 4:3), the metrics row moves up to
+36 vh and the bars line is left out (the beat count replaces it).
 
 ### Laptop and phone
 
@@ -197,6 +212,47 @@ from 41 vh, values min(7.4 vh, 5.5 vw); the next row runs from 5 vw at 53 vh, th
 - Text in the score is at the label tier (2 % cap height and above): it is read by the
   instructor at the front and by riders who look for it; the current cue is the large one.
 
+## Intervals first: climbs and patterns (owner input 4)
+
+Intervals sit on the class clock, not on songs (class format: `start_ms`, `length_ms`), so one
+song may hold any number of them. The screen is built on the intervals; the song is context.
+
+- **A climb inside a song** is several intervals in a row, each its own block in the score with
+  its number, name, length and cue ("Climb, step 1 of 3"), so all its steps are visible ahead
+  while the song clip underneath spans them. Nothing joins them into one block, and nothing
+  draws a slope: the steps are blocks of equal height in rising zone colours (rule 4).
+- **A position pattern** (format 1.1, issue #469): `interval.pattern` alternates positions on
+  the song's beat, for example `{"kind": "alternate", "positions": ["standing", "seated"],
+  "beats": [8, 8]}`. It replaces `position` for that interval. The count starts on the first beat
+  at or after the interval's start (`start_on`), from the beat anchors, else from `bpm` alone.
+  The words on screen are **UP** (standing) and **DOWN** (seated).
+
+**Pattern block** (16:9; at 3:2 and narrower it is folded into the Position metric, see
+Layout), top to bottom, all text in `--light-1` unless said:
+
+| Line | Content | Size |
+|---|---|---|
+| Label | The pattern as words: "8 up, 8 down" | `--t-label` (`--light-2`) |
+| Side | **UP** or **DOWN**, the side the room is on now | 9 vh, Big Shoulders 800, capitals (cap 7.3 %) |
+| Count | Beats left on this side, **8 … 1**, stepping on each beat | 22 vh, Big Shoulders 800 (cap 17.9 %) |
+| Beats | One square per beat of this side (only for 8 beats or fewer): filled for the beats left, outlined for those done; then "then down" or "then up" | squares 1.6 vh; `--t-label` (`--light-2`) |
+
+The Position metric shows "Up / down" while the block runs. The bars line under the countdown
+stays (it counts to the interval change, the block counts to the next switch).
+
+- **Without a beat lock** (coasting, off the list, manual clock, hold): the count and the side
+  are **never guessed**. The block keeps its label and says "count from the music"; the
+  instructor counts from what the room hears. The rig drops the pattern accent with the beat.
+- **In the score**: a block with a pattern starts its second line with the pattern in bold
+  ("8 up, 8 down · Jumps on the drop…") and carries a 1 vh strip along its foot, dark on the
+  "up" beats and clear on the "down" beats, on the song's beat grid, so the rhythm of an
+  upcoming pattern is visible minutes ahead. The **next row** names it the same way.
+- **Reduced motion**: the count still steps with the beat (it is information, not decoration);
+  nothing else moves.
+
+The plain 2D screen gets the same block and fold (room-2d.md follows in its own pull request,
+after #469 merges), so a fallback never loses the count.
+
 ## Text over light: the dark-under-text rule
 
 Text is HTML over the scene, never in the picture. The scene keeps the haze **dark under text**:
@@ -226,6 +282,8 @@ straight on the scene.
 | Paused | Lights down: everything to 6 %, frozen where it was | As 2D: gel lights down, "Paused" plate, link plate "Music paused" |
 | Coasting (readings stopped or stale) | No beat at all (the beat cannot be measured); the rig keeps the zone's colour and moves at its energy | As 2D: "estimated", dimmed dashed countdown, link plate "Music not heard" |
 | Off the list | "Holding" look: no beat, movement halved, brightness 60 %, the song look of the interval's planned song | As 2D: link plate "Not a class song", BPM "Song, planned" |
+| Position pattern, locked | The zone's look, beams at full on "up" and 72 % on "down", an accent on each switch | Pattern block: side, beat count, beat squares, "then …" |
+| Position pattern, no lock | No beat, no pattern accent | Pattern block: label and "count from the music"; no side, no count |
 | Ambiguous, manual clock, hold at a song change | Ambiguous as running; manual clock and hold: no beat, movement at the zone's energy | As 2D |
 | Last interval | As its zone | As 2D ("End" mark in the score) |
 | Finished | House lights up: the rig white and still, at 40 %; the wall white | As 2D "Class Complete" (white gel) |
@@ -264,7 +322,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 
 | Check | Requirement |
 |---|---|
-| S1. Text height (cap height / screen height) | Countdown at least **20 %**; zone numeral at least **20 %** (24 % at 16:9 nominal); metric values and zone name at least **5.5 %**; the cue, class time and next row at least **3 %**; labels, link state and score text at least **2 %**. As C1, measured in the product's own browser |
+| S1. Text height (cap height / screen height) | Countdown at least **20 %**; zone numeral at least **20 %** (24 % at 16:9 nominal); metric values, zone name and pattern side at least **5.5 %**; the pattern's beat count at least **10 %** (17.9 % at 16:9); the cue, class time and next row at least **3 %**; labels, link state and score text at least **2 %**. As C1, measured in the product's own browser |
 | S2. Contrast | Text against the worst pixel under its ink, over a sequence of at least 120 frames covering a beat, a build, a drop and an interval change: at least **7 : 1** (4.5 : 1 for labels). The scene's relative luminance inside each text box (grown by 1.2 vh) is at most **0.08** on every frame |
 | S3. Look-ahead | The score shows at least **5 minutes** ahead of "now" at every supported size (**8** at 16:9 and wider, **6** at 3:2 and narrower). Every interval starting within the window and at least 2.5 vw wide shows its zone number; the next interval's number, name, length and cue are always readable (in the score or the next row) |
 | S4. Visible at once | All nine content items in every running state, with the band hidden, at every supported size |
@@ -276,6 +334,8 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 | S10. Fallback | Scene killed: the plain 2D screen within 2 s, the clock continuous (plan section 9) |
 | S11. Reduced motion | With reduced motion the room shows the plain screen; a still-rig screenshot shows no change between two frames 1 s apart except the score's one-second step and the countdown |
 | S12. Hue in the text layer | As C6: hue only on elements that stand for a zone |
+| S13. Intervals first | Every interval is its own block in the score: a test class with three intervals inside one song shows three blocks, each with its number, in the look-ahead window. A song clip never hides, merges or reorders interval blocks |
+| S14. Pattern count | In an interval with a pattern and a lock, the side and the count are on screen at all times; the count steps within **50 ms** of the anchor beat (as S8) and reaches the next side exactly on the switch beat; the next side is named. With no lock, no side and no count is shown. Every pattern starting in the look-ahead window shows its words in the score or the next row |
 
 ## Tokens
 
@@ -295,6 +355,8 @@ pull request:
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
 | `--score-ahead` | 8 min (6 at 3:2 and narrower) | The score's look-ahead |
 | `--score-now` | 10 vw | Where "now" is |
+| `--pattern-count` | 22 vh (16:9) | The pattern's beat count |
+| `--pattern-down` | 0.72 | Beam brightness on the "down" side of a pattern |
 | `--m-change`, `--m-flash` | as system.md | Colour cross and lens flash at an interval change |
 
 Energy by zone is a table in the scene's pure model module (`scene_model`), not a token: it is
@@ -318,18 +380,21 @@ behaviour, and a test holds it to the table above.
 
 [mockups/scene-rig.html](mockups/scene-rig.html): one file, no library and no network (plain
 WebGL and the repository's own fonts and tokens next to it). It plays a fake 24-minute class
-(six songs, zones 1 to 7, four drops, a build, a breakdown, song changes and interval changes)
-on a simulated clock. Open it in Chromium, Edge, Firefox or Safari, full screen (F11 or
+(six songs and twenty intervals: two climbs of three steps inside a song, two "8 up, 8 down"
+patterns and one "4 up, 4 down", zones 1 to 7, four drops, a build, a breakdown) on a simulated
+clock. Open it in Chromium, Edge, Firefox or Safari, full screen (F11 or
 Ctrl+Cmd+F), ideally on the studio projector in the dark.
 
 - Move the mouse to show the mock-up's own panel over the score (mock-up only: the product has
   the control band of room-2d.md there). It jumps to moments (warm-up, zone 4, before a drop,
-  before a song change, before an interval change, zone 7), switches states (running, paused,
+  before a song change, before an interval change, zone 7, a climb inside a song, jumps),
+  switches states (running, paused,
   coasting, off the list, before the start, finished), speed (1 ×, 4 ×), reduced motion, quality,
   and **Sound**: a synthesised beat (kick, hats, a riser and a crash on the drop), so the light can
   be judged against something audible. Nothing is fetched.
 - Keys: Space pause, arrows jump 15 s, `1` to `7` jump to that zone, `D` before the next drop,
-  `S` before the next song change, `I` before the next interval change, `M` reduced motion,
+  `S` before the next song change, `I` before the next interval change, `C` the next climb,
+  `J` the next pattern, `M` reduced motion,
   `Q` quality, `A` sound, `H` hide the panel.
 - It is a reference for the look and the timing, not product code: PL6 builds the scene with its
   own model module, tests and screenshot checks.

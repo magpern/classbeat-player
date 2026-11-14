@@ -70,6 +70,20 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .cue.long { font-size: var(--t-text-min); }
 .title { font: 800 9vh/1 var(--face-number); }
 
+/* ---- Beat-counted position pattern (format 1.1): word, big beat count, beats left ---- */
+.pat { position: absolute; left: 50vw; top: 11vh; display: none; }
+.pat.on { display: block; }
+.pat .pw { font: 800 9vh/0.9 var(--face-number); text-transform: uppercase; margin-top: 0.6vh; white-space: nowrap; }
+.pat .pc { font: 800 22vh/0.82 var(--face-number); margin-top: 0.8vh; }
+.pat .pc.est, .pat .pw.est { color: var(--light-2); }
+.pat .pc:empty, .pat .pw:empty { display: none; }
+.pips { display: flex; gap: 0.5vw; margin-top: 1.6vh; align-items: center; white-space: nowrap; }
+.pips i { width: 1.6vh; height: 1.6vh; border: 0.3vh solid var(--light-3); box-sizing: border-box; }
+.pips i.on { background: var(--light-1); border-color: var(--light-1); }
+.pips .pn { font: 400 var(--t-label)/1 var(--face-text); color: var(--light-2); margin-left: 0.6vw; }
+.metric .v .pw2 { text-transform: uppercase; }
+.metric .v .pc2 { font-size: 1.8em; margin-left: 0.5vw; }
+
 /* ---- The score: opaque, flat, 8 minutes ahead ---- */
 .score { position: fixed; left: 0; right: 0; top: 68vh; bottom: 0; background: var(--stage); z-index: 2; overflow: hidden; border-top: 0.3vh solid var(--stage-line); }
 .blk, .clip { position: absolute; top: 0.8vh; height: 11.2vh; overflow: hidden; background: var(--zone); color: var(--ink); will-change: transform; }
@@ -83,6 +97,8 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .l1 .nm, .l1 .len { font-weight: 700; }
 .l1 .len { font-family: var(--face-number); font-weight: 800; font-size: 1.2em; }
 .l2 { margin-top: 0.6vh; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.l2 b { font-weight: 700; }
+.pst { position: absolute; left: 0; right: 0; bottom: 0; height: 1vh; }
 .clip .in { padding-top: 1vh; }
 .clip .ti { font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 .clip .ar, .clip .bp { color: var(--light-2); margin-left: 1vw; }
@@ -123,6 +139,10 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
   .mom { top: 14.4vh; height: 3vh; padding-top: 0; }
   .now { height: 17.4vh; }
   .mins { top: 17.6vh; }
+  .pst { height: 0.8vh; }
+  .blk .in { padding-top: 0.3vh; }
+  body.patOn .metrics { top: 36vh; }
+  body.patOn .clock .bars { visibility: hidden; }
 }
 </style>
 </head>
@@ -154,6 +174,12 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
     <div class="bars tx" id="bars"></div>
     <div class="next tx" id="next"></div>
   </div>
+  <div class="pat" id="pat">
+    <div class="lbl tx" id="pLbl">Pattern</div>
+    <div class="pw tx" id="pWord">Up</div>
+    <div class="pc n tx" id="pCount">8</div>
+    <div class="pips tx" id="pips"></div>
+  </div>
   <div class="cue tx" id="cue"></div>
 </div>
 
@@ -165,14 +191,14 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 <div class="panel" id="panel">
   <div class="row"><b>Jump</b>
     <button data-j="warm">Warm-up</button><button data-j="z4">Zone 4</button><button data-j="drop">Before a drop (D)</button>
-    <button data-j="song">Before a song change (S)</button><button data-j="int">Before an interval change (I)</button><button data-j="z7">Zone 7</button>
+    <button data-j="song">Before a song change (S)</button><button data-j="int">Before an interval change (I)</button><button data-j="z7">Zone 7</button><button data-j="climb">Climb in a song (C)</button><button data-j="jumps">Jumps 8/8 (J)</button>
     <span class="info" id="info"></span></div>
   <div class="row"><b>State</b>
     <button data-s="running">Running</button><button data-s="paused">Paused</button><button data-s="coasting">Coasting</button>
     <button data-s="offlist">Off the list</button><button data-s="before">Before the start</button><button data-s="finished">Finished</button></div>
   <div class="row"><b>View</b>
     <button data-v="speed">Speed 1×</button><button data-v="rm">Reduced motion: off</button><button data-v="q">Quality: High</button><button data-v="sound">Sound: off</button>
-    <span class="info">Mock-up panel, not product. Keys: Space, ←/→, 1–7, D, S, I, M, Q, A, H</span></div>
+    <span class="info">Mock-up panel, not product. Keys: Space, ←/→, 1–7, C, J, D, S, I, M, Q, A, H</span></div>
 </div>
 
 <script>
@@ -192,24 +218,33 @@ const SONGS = [
   { ti: 'Afterglow Run', ar: 'Signal Fire', a: 950, b: 1200, bpm: 128, m: [[1100, 'drop']] },
   { ti: 'Slow Return', ar: 'Harbour Lights', a: 1200, b: 1440, bpm: 100, m: [] },
 ];
+const UPDN = { Standing: 'up', Seated: 'down' };
+// Interval-first: intervals sit on the class clock, several inside one song (climbs), and
+// format 1.1 patterns count positions on the song's beat ([8, 8] = 8 up, 8 down).
+const J88 = { p: ['Standing', 'Seated'], b: [8, 8] }, J44 = { p: ['Standing', 'Seated'], b: [4, 4] };
 const IV = [
   [0, 120, 1, '80–90', 'Seated', 'Settle in. Shoulders down, find the beat with your feet.'],
   [120, 230, 2, '85–95', 'Seated', 'Add a little load. Breathe through the nose.'],
-  [230, 320, 3, '90–100', 'Seated', 'Tempo: steady pressure, no bounce.'],
-  [320, 396, 4, '90–100', 'Seated', 'Find the beat and hold it. Breathe out on every second bar.'],
-  [396, 470, 6, '70–80', 'Standing', 'Out of the saddle on the drop. Heavy legs, tall chest.'],
+  [230, 280, 3, '90–100', 'Seated', 'Climb, step 1 of 3: a quarter turn on.'],
+  [280, 330, 4, '90–100', 'Seated', 'Climb, step 2 of 3: another quarter turn.'],
+  [330, 396, 5, '85–95', 'Seated', 'Step 3 of 3. Heavy and steady, hold it to the drop.'],
+  [396, 470, 6, '70–80', null, 'Jumps on the drop: 8 up, 8 down. Land soft.', J88],
   [470, 530, 2, '85–95', 'Seated', 'Sit down, spin it out. Drink.'],
-  [530, 640, 5, '95–105', 'Seated', 'Climb out of the breakdown. Add a quarter turn each chorus.'],
+  [530, 600, 5, '95–105', 'Seated', 'Push through the verse. A quarter turn each chorus.'],
+  [600, 640, 3, '90–100', 'Seated', 'Breakdown: ease off, stay on the beat.'],
   [640, 710, 7, '75–85', 'Standing', 'All in on the drop. Thirty seconds, then twenty more.'],
   [710, 770, 1, '80–90', 'Seated', 'Recover. Big breaths, loose hands.'],
   [770, 800, 4, '90–100', 'Seated', 'Build into it: the drop is coming.'],
-  [800, 890, 6, '70–80', 'Standing', 'Climb! Stay with the kick drum.'],
+  [800, 890, 6, '70–80', null, 'Fast jumps: 4 up, 4 down. Stay with the kick drum.', J44],
   [890, 950, 3, '90–100', 'Seated', 'Back to tempo. Smooth circles.'],
-  [950, 1100, 5, '95–105', 'Seated', 'Hold it through the verse, then a little more on the chorus.'],
-  [1100, 1160, 7, '80–90', 'Standing', 'Last big effort. Everything on the drop.'],
+  [950, 1000, 4, '90–100', 'Seated', 'Last climb, step 1 of 3.'],
+  [1000, 1050, 5, '95–105', 'Seated', 'Step 2 of 3. Heavier.'],
+  [1050, 1100, 6, '75–85', 'Standing', 'Step 3 of 3. Out of the saddle, hold for the drop.'],
+  [1100, 1160, 7, '80–90', null, 'Last big effort: 8 up, 8 down on the drop.', J88],
   [1160, 1200, 2, '85–95', 'Seated', 'Spin it out.'],
   [1200, 1440, 1, '75–85', 'Seated', 'Cool down. Thank you, well ridden.'],
-].map(([a, b, z, rpm, pos, cue]) => ({ a, b, z, rpm, pos, cue }));
+].map(([a, b, z, rpm, pos, cue, pat]) => ({ a, b, z, rpm, pos, cue, pat }));
+const patTxt = (p) => p.b.map((n, i) => n + ' ' + UPDN[p.p[i]]).join(', ');
 const END = 1440;
 const SEGS = [[0, 230, 'Warm-up'], [230, 1200, 'Main set'], [1200, 1440, 'Cool-down']];
 const LOOKS = ['fan', 'cross', 'sweep', 'circle', 'split', 'fan'];
@@ -228,6 +263,18 @@ function lin(hex) { const v = parseInt(hex.slice(1), 16); return [16, 8, 0].map(
 let ZC = {}; function loadColours() { for (let z = 1; z <= 7; z++) ZC[z] = lin(css('--zone-' + z) || '#ffffff'); ZC.white = lin('#f6f4ef'); }
 const songAt = (t) => SONGS.findIndex((s) => t >= s.a && t < s.b);
 const ivAt = (t) => IV.findIndex((i) => t >= i.a && t < i.b);
+// Where a pattern stands at time t: counted on the song's beat from the first beat at or after
+// the interval's start (start_on "next_downbeat" in the mock-up).
+function patAt(iv, song, t) {
+  if (!iv.pat || !song) return null;
+  const bl = 60 / song.bpm, s0 = song.a + Math.ceil((iv.a - song.a) / bl - 1e-6) * bl;
+  const p = iv.pat, cyc = p.b.reduce((x, y) => x + y, 0), pos = (t - s0) / bl;
+  const n = Math.floor(pos);
+  if (n < 0) return { i: 0, left: p.b[0], of: p.b[0], nxt: 1 % p.b.length, pre: true, frac: 0, first: false };
+  let k = n % cyc, i = 0;
+  while (k >= p.b[i]) { k -= p.b[i]; i++; }
+  return { i, left: p.b[i] - k, of: p.b[i], nxt: (i + 1) % p.b.length, pre: false, frac: pos - n, first: k === 0 };
+}
 const digits = (str) => str.split('').map((ch) => ch === ':' ? '<span class="c">:</span>' : '<span class="d">' + ch + '</span>').join('');
 
 // ---------- WebGL ----------
@@ -366,8 +413,8 @@ const score = $('score');
 const blocks = IV.map((iv) => {
   const el = document.createElement('div'); el.className = 'blk';
   el.style.setProperty('--zone', css('--zone-' + iv.z));
-  el.innerHTML = `<div class="in"><div class="l1"><span class="num">${iv.z}</span><span class="nm">${ZONES[iv.z][0]}</span><span class="len">${mmss(iv.b - iv.a)}</span></div><div class="l2">${iv.cue}</div></div>`;
-  score.appendChild(el); return { el, iv, inn: el.firstChild, nm: el.querySelector('.nm'), len: el.querySelector('.len'), l2: el.querySelector('.l2'), num: el.querySelector('.num') };
+  el.innerHTML = `<div class="in"><div class="l1"><span class="num">${iv.z}</span><span class="nm">${ZONES[iv.z][0]}</span><span class="len">${mmss(iv.b - iv.a)}</span></div><div class="l2">${iv.pat ? '<b>' + patTxt(iv.pat) + '</b> · ' : ''}${iv.cue}</div></div>${iv.pat ? '<div class="pst"></div>' : ''}`;
+  score.appendChild(el); return { el, iv, inn: el.firstChild, nm: el.querySelector('.nm'), len: el.querySelector('.len'), l2: el.querySelector('.l2'), num: el.querySelector('.num'), pst: el.querySelector('.pst') };
 });
 const clips = SONGS.map((s) => {
   const el = document.createElement('div'); el.className = 'clip';
@@ -413,6 +460,15 @@ function layoutScore(t) {
     b.len.style.display = (w.num + g6 + (showNm ? w.nm + g6 : 0) + w.len <= room) ? '' : 'none';
     b.l2.style.display = room >= 6 * vw ? '' : 'none';
     b.l2.style.maxWidth = Math.max(0, room) + 'px';
+    if (b.pst) {
+      // Up beats as ink bars, down beats empty, on the song's beat grid.
+      const song = SONGS[songAt(b.iv.a)], bl = 60 / song.bpm, p = b.iv.pat;
+      const s0 = song.a + Math.ceil((b.iv.a - song.a) / bl - 1e-6) * bl;
+      let acc = 0; const stops = [];
+      p.b.forEach((n, i) => { const c = p.p[i] === 'Standing' ? 'rgb(0 0 0 / 0.72)' : 'transparent'; stops.push(`${c} ${acc * bl * pps}px ${(acc + n) * bl * pps}px`); acc += n; });
+      b.pst.style.background = `repeating-linear-gradient(90deg, ${stops.join(', ')})`;
+      b.pst.style.backgroundPosition = ((s0 - b.iv.a) * pps) + 'px 0';
+    }
   }
   for (const c of clips) {
     const x0 = X(c.s.a), x1 = X(c.s.b);
@@ -450,6 +506,7 @@ function set(id, html) { if (cache[id] !== html) { cache[id] = html; $(id).inner
 function zoneVars(el, z) { el.style.setProperty('--zone', z ? css('--zone-' + z) : css('--light-1')); }
 let gelZone = 0;
 function updateText(t, iIdx, sIdx, locked) {
+  const est0 = st.state === 'coasting' || st.state === 'offlist';
   const state = st.state, iv = IV[iIdx] || IV[IV.length - 1], nx = IV[iIdx + 1], song = SONGS[sIdx] || SONGS[SONGS.length - 1];
   const gel = $('gel');
   const fin = state === 'finished', bef = state === 'before';
@@ -466,14 +523,38 @@ function updateText(t, iIdx, sIdx, locked) {
   set('link', linkTxt);
   $('link').classList.toggle('plate', ['paused', 'coasting', 'offlist'].includes(state));
   set('mCad', `${iv.rpm}<span class="u">rpm</span>`);
-  set('mPos', iv.pos);
+  const pt = patAt(iv, song, t);
+  const showPat = pt && !fin && !bef;
+  document.body.classList.toggle('patOn', !!showPat);
+  if (showPat) {
+    const p = iv.pat, word = UPDN[p.p[pt.i]], nword = UPDN[p.p[pt.nxt]];
+    const live = locked && !est0;
+    // Without a beat lock the count and the side are not guessed.
+    const cnt = live ? String(pt.left) : '', wordL = live ? word : 'Up / down';
+    if (narrow) {
+      $('pat').classList.remove('on');
+      set('mPos', `<span class="pw2">${wordL}</span><span class="pc2">${cnt}</span>`);
+    } else {
+      $('pat').classList.add('on');
+      set('mPos', 'Up / down');
+      set('pLbl', patTxt(p));
+      set('pWord', live ? word : '');
+      set('pCount', cnt);
+      const pips = live && pt.of <= 8 ? Array.from({ length: pt.of }, (_, k) => `<i class="${k < pt.left ? 'on' : ''}"></i>`).join('') : '';
+      set('pips', pips + `<span class="pn">${live ? 'then ' + nword : 'count from the music'}</span>`);
+      $('pWord').classList.toggle('est', !live); $('pCount').classList.toggle('est', !live);
+    }
+  } else {
+    $('pat').classList.remove('on');
+    set('mPos', iv.pos || '');
+  }
   set('mBpmL', state === 'offlist' ? 'Song, planned' : 'Song');
   if (cache.bpm !== song.bpm) { cache.bpm = song.bpm; $('mBpm').firstChild.nodeValue = song.bpm; }
   const left = iv.b - t, est = state === 'coasting' || state === 'offlist';
   if (bef) {
     set('cLbl', 'Friday ride: Neon climb');
     set('count', digits('24:00'));
-    set('bars', '<span class="w">6 songs, 16 intervals</span>');
+    set('bars', `<span class="w">${SONGS.length} songs, ${IV.length} intervals</span>`);
   } else if (fin) {
     set('cLbl', 'Time ridden'); set('count', digits('24:00')); set('bars', '');
   } else {
@@ -486,7 +567,7 @@ function updateText(t, iIdx, sIdx, locked) {
   $('now').classList.toggle('est', est);
   if (fin) set('next', '');
   else if (nx) {
-    set('next', `<span class="lbl">Next</span><span class="chip" style="--zone:var(--zone-${nx.z})">${nx.z}</span><span>${ZONES[nx.z][0]}</span><span>${mmss(nx.b - nx.a)}</span><span>${nx.rpm} rpm</span><span>${nx.pos}</span>`);
+    set('next', `<span class="lbl">Next</span><span class="chip" style="--zone:var(--zone-${nx.z})">${nx.z}</span><span>${ZONES[nx.z][0]}</span><span>${mmss(nx.b - nx.a)}</span><span>${nx.rpm} rpm</span><span>${nx.pat ? patTxt(nx.pat) : nx.pos}</span>`);
   } else set('next', '<span class="lbl">Next</span><span>End of class</span>');
   const cue = fin ? 'Thank you, well ridden.' : bef ? 'Press Start, or start the first song in Spotify.' : iv.cue;
   set('cue', cue); $('cue').classList.toggle('long', cue.length > 60);
@@ -591,7 +672,12 @@ function frame(now) {
   if (st.state === 'finished') litN = 22;
   const depth = (locked && !rm) ? DEPTH[z] + extraDepth : 0;
   const lift = (locked && !rm) ? (1 - depth + depth * env) : 1;
-  const bright = (0.55 + 0.45 * e) * dip;
+  // A position pattern: the room is brighter on the up beats and every switch is an accent.
+  // Energy only: no angle or shape comes from it (rule 4).
+  const pt = locked && !rm ? patAt(iv, song, t) : null;
+  const patB = pt && !pt.pre ? (iv.pat.p[pt.i] === 'Standing' ? 1 : 0.72) : 1;
+  const patAcc = pt && !pt.pre && pt.first ? 0.25 * Math.exp(-pt.frac * 3) : 0;
+  const bright = (0.55 + 0.45 * e) * dip * patB * (1 + patAcc);
   const G = [0, 0.5, -20];
   FX.forEach((f, i) => {
     const on = i < litN ? 1 : 0;
@@ -663,6 +749,8 @@ function jump(kind) {
   else if (kind === 'drop') st.t = after(SONGS.flatMap((s) => s.m.filter((m) => m[1] === 'drop').map((m) => m[0]))) - 14;
   else if (kind === 'song') st.t = after(SONGS.slice(1).map((s) => s.a)) - 8;
   else if (kind === 'int') st.t = after(IV.slice(1).map((i) => i.a)) - 13;
+  else if (kind === 'climb') st.t = after(IV.filter((i) => /step 1 of 3/.test(i.cue)).map((i) => i.a)) - 6;
+  else if (kind === 'jumps') st.t = after(IV.filter((i) => i.pat).map((i) => i.a)) + 3;
   else if (/^z\d$/.test(kind)) { const z = +kind[1]; st.t = IV.find((i) => i.z === z).a + 2; }
   st.ivIdx = -1; st.lastBeat = -1;
   if (st.state === 'finished' || st.state === 'before') st.state = 'running';
@@ -697,6 +785,8 @@ addEventListener('keydown', (ev) => {
   else if (k === 'ArrowLeft') { st.t = Math.max(0, st.t - 15); }
   else if (/^[1-7]$/.test(k)) jump('z' + k);
   else if (k === 'd' || k === 'D') jump('drop');
+  else if (k === 'c' || k === 'C') jump('climb');
+  else if (k === 'j' || k === 'J') jump('jumps');
   else if (k === 's' || k === 'S') jump('song');
   else if (k === 'i' || k === 'I') jump('int');
   else if (k === 'm' || k === 'M') view('rm');
