@@ -2,7 +2,9 @@ export { createClock, jump, moveTo, nextInterval, pause, positionAt, previousInt
 export { JUMP_MS, PREVIOUS_RESTART_MS } from "./clock.ts";
 export type { ClockState, Status } from "./clock.ts";
 export { planFrom, spanIndexAt } from "./plan.ts";
-export type { ClockPlan, Span } from "./plan.ts";
+export { patternAt } from "./pattern.ts";
+export type { PatternView } from "./pattern.ts";
+export type { ClockPlan, IntervalPattern, SongBeat, Span } from "./plan.ts";
 export { viewAt } from "./view.ts";
 export type { ClockView } from "./view.ts";
 export { isFresh, manualLink, positionNow, STALE_AFTER_MS } from "./music-link.ts";

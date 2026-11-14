@@ -7,6 +7,21 @@ export interface Span {
   readonly endMs: number;
 }
 
+/** A format 1.1 beat pattern of one cycling interval (README, "Format 1.1"). */
+export interface IntervalPattern {
+  /** The interval's `position`: held until a `next_downbeat` pattern starts. */
+  readonly position: "seated" | "standing";
+  readonly positions: readonly ("seated" | "standing")[];
+  readonly beats: readonly number[];
+  readonly startOn: "interval_start" | "next_downbeat";
+}
+
+/** What a song gives the beat counter: its tempo and its anchors (song-relative, increasing). */
+export interface SongBeat {
+  readonly bpm: number;
+  readonly anchors: readonly { readonly atMs: number; readonly bpm: number }[];
+}
+
 export interface ClockPlan {
   readonly lengthMs: number;
   readonly intervals: readonly Span[];
@@ -16,6 +31,10 @@ export interface ClockPlan {
   readonly plannedCrossfadeMs: number;
   /** True when the class can only ever run on the manual clock (ADR 0003 section 5). */
   readonly manualOnly: boolean;
+  /** Per interval, parallel to `intervals`: its pattern or null. Absent means no patterns. */
+  readonly patterns?: readonly (IntervalPattern | null)[];
+  /** Per song, parallel to `songs`: its beat data, null without a `bpm`. Absent means none. */
+  readonly songBeats?: readonly (SongBeat | null)[];
 }
 
 export function planFrom(doc: Class): ClockPlan {
@@ -27,6 +46,23 @@ export function planFrom(doc: Class): ClockPlan {
     songs: manualOnly ? [] : doc.songs.map((s) => ({ startMs: s.start_ms, endMs: s.end_ms })),
     plannedCrossfadeMs: doc.music.design_crossfade_ms,
     manualOnly,
+    patterns: doc.intervals.map((iv) =>
+      iv.pattern && iv.position
+        ? {
+            position: iv.position,
+            positions: iv.pattern.positions,
+            beats: iv.pattern.beats,
+            startOn: iv.pattern.start_on ?? "interval_start",
+          }
+        : null,
+    ),
+    songBeats: manualOnly
+      ? []
+      : doc.songs.map((s) =>
+          s.bpm === undefined
+            ? null
+            : { bpm: s.bpm, anchors: (s.beat_anchors?.anchors ?? []).map((a) => ({ atMs: a.at_ms, bpm: a.bpm })) },
+        ),
   };
 }
 

@@ -2,6 +2,8 @@
 // Pure: derived from the clock state, the plan and a monotonic time.
 import { positionAt } from "./clock.ts";
 import type { ClockState, Status } from "./clock.ts";
+import { patternAt } from "./pattern.ts";
+import type { PatternView } from "./pattern.ts";
 import { spanIndexAt } from "./plan.ts";
 import type { ClockPlan } from "./plan.ts";
 
@@ -23,6 +25,8 @@ export interface ClockView {
   readonly plannedCrossfadeMs: number;
   /** Rule 7: shown beside the planned one once measured. The manual clock measures nothing. */
   readonly measuredCrossfadeMs: number | null;
+  /** Format 1.1: the beat-counted position now, or null when the interval has no pattern. */
+  readonly pattern?: PatternView | null;
 }
 
 export function viewAt(s: ClockState, plan: ClockPlan, now: number): ClockView {
@@ -44,5 +48,6 @@ export function viewAt(s: ClockState, plan: ClockPlan, now: number): ClockView {
     songIndex: songIndex < 0 ? null : songIndex,
     plannedCrossfadeMs: plan.plannedCrossfadeMs,
     measuredCrossfadeMs: null,
+    pattern: patternAt(plan, classMs),
   };
 }
