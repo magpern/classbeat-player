@@ -28,8 +28,7 @@ export function renderClock(c: ClockModel): HTMLElement {
 function renderLine(line: NonNullable<ClockModel["line"]>): HTMLElement {
   if (line.kind === "bars") return el("div", { class: "bars", tier: "minor" }, [el("span", { class: "n", text: String(line.count) }), ` ${line.tail}`]);
   if (line.kind === "song") return el("div", { class: "bars", tier: "minor" }, ["Next song in ", el("span", { class: "n", text: line.time })]);
-  // The pause line takes up to two lines in the narrow clock column of a phone on its side (play.md, "Small landscape").
-  return el("div", { class: "bars", tier: "minor", lines: 2, text: line.text });
+  return el("div", { class: "bars text", tier: "minor", text: line.text });
 }
 
 export function renderMetrics(metrics: readonly MetricModel[], beat: HTMLElement | null): HTMLElement {
@@ -63,4 +62,16 @@ export function renderNext(next: NextModel): HTMLElement {
     if (more.length) kids.push(el("span", { class: "more" }, more));
   }
   return el("div", { class: "next" }, kids);
+}
+
+/**
+ * The phone layouts of the web player page (play.md, "Small landscape") let a fact label and the
+ * pause line take up to two lines; the room's own layout never does, so its checks keep their one
+ * line. Set by the mount from the layout in use, and removed again when it is the room's.
+ */
+export function allowTwoLines(root: ParentNode, allowed: boolean): void {
+  for (const e of root.querySelectorAll<HTMLElement>(".facts .lbl, .bars.text")) {
+    if (allowed) e.dataset.lines = "2";
+    else delete e.dataset.lines;
+  }
 }

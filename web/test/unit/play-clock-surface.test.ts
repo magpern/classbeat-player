@@ -7,7 +7,7 @@
 // - `web/src/room/` still imports nothing from `player/`, and neither does the rest of `web/`.
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { describe, it } from "node:test";
 import { build } from "esbuild";
 import { WEB_DIR } from "../lib/browser.ts";
@@ -30,6 +30,10 @@ const underPlayer = (f: string): boolean => rel(f).startsWith("player/");
 export function outsideSurface(files: Iterable<string>): string[] {
   return [...files].filter((f) => underPlayer(f) && !SURFACE.includes(f)).map(rel).sort();
 }
+
+const PLAY_DIR = join(WEB_DIR, "src", "play");
+/** True for a file inside `src/play/` itself: the directory is matched with its trailing separator, so a sibling such as `src/playground/` is not mistaken for it. */
+export const inPlayDir = (f: string): boolean => f.startsWith(PLAY_DIR + sep);
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -72,7 +76,7 @@ describe("the shared clock surface", () => {
 
   it("web/src/room and the rest of web/src import nothing from player/ (the play bundle is the one place)", () => {
     const bad: string[] = [];
-    for (const f of sources(join(WEB_DIR, "src")).filter((x) => !x.startsWith(join(WEB_DIR, "src", "play")))) {
+    for (const f of sources(join(WEB_DIR, "src")).filter((x) => !inPlayDir(x))) {
       for (const spec of specifiersOf(f, readFileSync(f, "utf8"))) if (spec === null || /(^|\/)player(\/|$)/.test(spec)) bad.push(`${rel(f)} names ${spec}`);
     }
     assert.deepEqual(bad, []);
@@ -105,6 +109,13 @@ describe("the graph walk resolves as the bundler does and fails closed", () => {
 });
 
 describe("the surface guard catches what it must", () => {
+  it("only src/play/ is the play bundle's own: a sibling that starts with the same letters is checked too", () => {
+    assert.equal(inPlayDir(join(PLAY_DIR, "main.ts")), true);
+    assert.equal(inPlayDir(join(PLAY_DIR, "sub", "x.ts")), true);
+    assert.equal(inPlayDir(join(WEB_DIR, "src", "playground", "x.ts")), false);
+    assert.equal(inPlayDir(join(WEB_DIR, "src", "play.ts")), false);
+  });
+
   it("a player file outside the three is reported", () => {
     const apply = join(CLOCK_DIR, "apply.ts");
     assert.deepEqual(outsideSurface([...SURFACE, apply]), ["player/app/src/core/clock/apply.ts"]);

@@ -20,6 +20,8 @@ export interface State {
   readonly ready: string;
   /** A main state: also shot at 820 and checked at 320 (site.md, "Layout at each size"). */
   readonly main?: boolean;
+  /** The page's date is fixed (openSite's `clock: "day"`), so a date it shows does not move with the day the test runs. */
+  readonly clock?: "day";
 }
 
 const askLink = (email: string) => async (page: Page): Promise<void> => {

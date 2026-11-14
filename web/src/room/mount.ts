@@ -8,7 +8,7 @@ import type { RoomInput } from "./input.ts";
 import type { BeatModel } from "./model.ts";
 import { createGel } from "./render-gel.ts";
 import { clampTitle, fitTitle, renderIntro } from "./render-intro.ts";
-import { renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
+import { allowTwoLines, renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
 import { renderScore } from "./render-score.ts";
 import type { ScoreView } from "./render-score.ts";
 import { scoreShiftVw, VW_PER_S } from "./score.ts";
@@ -113,6 +113,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       fitTitle(h1);
       if (!roomLayout()) clampTitle(h1);
     }
+    allowTwoLines(dyn, !roomLayout());
     fitCue(dyn.querySelector<HTMLElement>(".cue"), roomLayout());
     gel.fit();
   };
