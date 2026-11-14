@@ -246,8 +246,12 @@ want_di="$(printf '%s\n' \
   '!docker/backend-entrypoint.sh' '!docker/purge-loop.sh' \
   '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' \
   '**/.venv' '**/__pycache__' '**/tests' '**/node_modules')"
-got_di="$(grep -Ev '^[[:space:]]*(#|$)' "$di")"
-if [ "$got_di" = "$want_di" ]; then
+# grep exits 1 for an empty file and 2 for a missing one; under pipefail that would end the script
+# before it prints its message, so it is tolerated here and the comparison below fails explicitly.
+got_di="$(grep -Ev '^[[:space:]]*(#|$)' "$di" 2>/dev/null || true)"
+if [ ! -f "$di" ]; then
+  bad "backend.Dockerfile.dockerignore is missing"
+elif [ "$got_di" = "$want_di" ]; then
   ok "backend.Dockerfile.dockerignore holds exactly the expected rules, in order"
 else
   bad "backend.Dockerfile.dockerignore differs from the expected rules (< expected, > actual): $(diff <(printf '%s\n' "$want_di") <(printf '%s\n' "$got_di") | grep '^[<>]' | tr '\n' ' ')"
