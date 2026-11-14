@@ -1,0 +1,189 @@
+/* The web player page /play (docs/design/play.md): the room screen of room.css and controls.css,
+   laid out again for phones and portrait screens. Reference mock-up only. Everything here is
+   scoped to body.play, so the room mock-ups are unchanged.
+
+   Three layouts, chosen by the viewport:
+   - room:            landscape, at least 720 lines (a tablet such as 1024 x 768): room.css as it
+                      is, with the band's gaps at least 12 px for fingers;
+   - small landscape: landscape under 720 lines (a phone on its side, 844 x 390);
+   - portrait:        taller than wide (a phone, 390 x 844, or a tablet, 768 x 1024).
+   Sizes stay shares of the screen; the touch targets are in CSS px (64 x 64, 12 px apart). */
+
+/* ---------- Every layout ---------- */
+/* The score's position in time: --t0 and --t1 are seconds from now, --sps the layout's vw per
+   second (6 minutes across in landscape, 0.28 vw per second as in room-2d.md). A block or clip
+   that began in the past keeps its label just right of "now"; one that runs past the right safe
+   edge keeps its labels inside it. */
+.play { --sps: calc(100vw / 360); --safe-r: 95vw; }
+.play .block, .play .clip {
+  left: calc(25vw + var(--t0) * var(--sps));
+  width: calc((var(--t1) - var(--t0)) * var(--sps));
+  padding-left: calc(max(0, -1 * var(--t0)) * var(--sps) + 0.8vw);
+  padding-right: max(0.8vw, calc(25vw + var(--t1) * var(--sps) - var(--safe-r)));
+}
+/* The score's strip runs on past both edges of the screen: the page itself never scrolls. */
+.play .score { overflow: clip; }
+.play .block.gone { padding: 0; }
+/* No glow round the gel: on a phone it would sit under the text beside it (7 : 1 for all text). */
+.play .gel:not(.down) { box-shadow: none; }
+.play .clip { --phrase: calc(var(--ph) * var(--sps)); }
+.play .moment, .play .end { left: calc(25vw + var(--t0) * var(--sps)); }
+/* Fingers: at least 12 px between two buttons at every size (play.md, P4). */
+.play .controls, .play .transport, .play .ask { gap: max(1vw, 12px); }
+.play .btn { min-width: max(11vw, 64px); }
+/* Close class alone in the band: at the right, where End was. */
+.play .controls > .btn.quit { margin-left: auto; }
+
+@media (max-aspect-ratio: 3/2) {
+  .play .controls, .play .transport, .play .ask { gap: max(0.8vw, 12px); }
+  .play .btn { min-width: 64px; }
+}
+
+/* ---------- Small landscape: a phone on its side ---------- */
+@media (min-aspect-ratio: 1/1) and (max-height: 719px) {
+  .play {
+    --l-label: 4.4vh; --l-minor: 5.5vh; --l-value: 8vh; --l-text: 6.9vh; --l-textmin: 6vh;
+    --l-gel: 26vh; --l-hero: 26vh;
+    /* The band's box, and so the score's: a 64 px button and its margin. */
+    --score-h: max(20vh, 76px);
+    --score-top: calc(97.5vh - var(--score-h));
+    --safe-r: 96vw;
+    font-size: var(--l-label);
+  }
+  .play .lbl, .play .link, .play .tag, .play .pill { font-size: var(--l-label); }
+  .play .gel { width: 27vw; height: 48vh; padding: 4vh 2vw 1.6vh 4vw; }
+  .play .gel-head { margin-top: 0; gap: 1.4vw; }
+  .play .gel-num { font-size: var(--l-gel); }
+  .play .gel-name { font-size: min(var(--l-value), 5.2vw); }
+  .play .gel-name.long { font-size: var(--l-minor); -webkit-line-clamp: 2; }
+  .play .gel.t3 .gel-name.two { --tier: minor; font-size: var(--l-minor); line-height: 1.05; }
+  .play .gel-targets { font-size: var(--l-minor); margin-top: 0.8vh; column-gap: 1.6vw; }
+  .play .rail { left: 30vw; right: 4vw; top: 2.4vh; }
+  .play .rail .seg { display: inline; }
+  .play .rail .val { font-size: var(--l-minor); }
+  .play .clock { left: 30vw; right: 34vw; top: 9vh; }
+  .play .count { font-size: min(var(--l-hero), calc(34vw / var(--count-w))); margin-top: 0.8vh; }
+  .play .bars { font-size: var(--l-minor); margin-top: 0.8vh; }
+  /* Right of the clock: the metrics, one under another, as in the room's wide layout. */
+  .play .metrics { left: 68vw; right: 4vw; width: auto; top: 9vh; gap: 1.6vh; }
+  .play .metric .v { font-size: var(--l-value); margin-top: 0.4vh; }
+  .play .metric .v small { font-size: var(--l-minor); }
+  .play .cue { left: 4vw; right: 4vw; top: 50.4vh; font-size: var(--l-text); line-height: 1.1; max-height: calc(var(--score-top) - 7vh - 50.4vh); }
+  .play .cue.long { font-size: var(--l-textmin); line-height: 1.04; }
+  .play .next { left: 4vw; right: 4vw; top: calc(var(--score-top) - 6.6vh); gap: 1.6vw; }
+  .play .next .chip, .play .next .v { font-size: var(--l-minor); }
+  .play .next .more { display: contents; }
+  .play .score { top: var(--score-top); height: var(--score-h); }
+  .play .track.iv { height: 36%; }
+  .play .track.songs { top: 40%; height: 60%; }
+  .play .block .n { font-size: var(--l-minor); }
+  .play .block .t { font-size: var(--l-label); }
+  .play .block { padding-top: 0.6vh; }
+  .play .clip { font-size: var(--l-label); padding-top: 0.8vh; row-gap: 12vh; background-size: 100% 1.4vh; }
+  .play .moment { top: 46%; }
+  .play .moment span, .play .end span { font-size: var(--l-label); }
+  .play .controls { top: var(--score-top); height: var(--score-h); padding: 0 4vw; }
+  .play .btn { height: max(16.4vh, 64px); padding: 0 1.6vw; gap: 0.4vh; }
+  .play .btn .w { --tier: minor; font-size: var(--l-minor); }
+  .play .cue.long { --tier: textmin; }
+  .play .btn .sub { font-size: var(--l-label); }
+  .play .ask .q { font-size: var(--l-text); }
+  /* Before the start and "Class Complete". */
+  .play .intro { left: 30vw; right: 4vw; top: 9vh; }
+  .play .intro h1, .play .intro h1.long { font-size: var(--l-value); line-height: 0.95; -webkit-line-clamp: 1; }
+  .play .facts { gap: 3vw; margin-top: 2vh; }
+  .play .facts .v { font-size: var(--l-value); }
+  .play .ztitle { margin-top: 2.2vh; }
+  .play .zones { column-gap: 2.4vw; row-gap: 0.8vh; margin-top: 0.8vh; }
+  .play .zones > div { grid-template-columns: 6.4vh 14vh 1fr; column-gap: 1vw; }
+  .play .zones .n, .play .zones .tm { font-size: var(--l-minor); }
+  .play .zones .t { font-size: var(--l-label); padding-top: 0.2vh; -webkit-line-clamp: 1; }
+}
+
+/* ---------- Portrait: a phone held upright, or a tablet ---------- */
+@media (max-aspect-ratio: 1/1) {
+  .play {
+    --p-label: 2.4vh; --p-minor: 3.1vh; --p-value: 4.6vh; --p-text: 4vh; --p-textmin: 3.3vh;
+    --p-gel: 12vh; --p-hero: 15vh;
+    /* 3 minutes across: 45 s behind "now", 2:15 ahead. */
+    --sps: calc(100vw / 180);
+    --safe-r: 96vw;
+    /* The band's box, and so the score's: a 64 px row of buttons, or the End question above it. */
+    --score-h: max(13.3vh, 112px);
+    display: grid;
+    grid-template-columns: 50vw 1fr;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto var(--score-h);
+    grid-template-areas: "rail rail" "gel side" "clock clock" "cue cue" "next next" "score score";
+    padding-bottom: 1.5vh;
+    font-size: var(--p-label);
+  }
+  .play > * { position: relative; left: auto; right: auto; top: auto; width: auto; height: auto; }
+  .play .lbl, .play .link, .play .tag, .play .pill { font-size: var(--p-label); }
+  .play .rail { grid-area: rail; padding: 1.6vh 4vw 1vh; gap: 2vw; }
+  .play .rail .val { font-size: var(--p-minor); }
+  .play .rail .val + .lbl { margin-right: 3vw; }
+  .play .rail .seg, .play .rail .done { display: none; }
+  .play .rail .link { margin-left: auto; }
+  /* The gel: the one lit thing, from the left edge to the middle. */
+  .play .gel { grid-area: gel; padding: 1.4vh 3vw 1.6vh 4vw; box-shadow: none; }
+  .play .gel.down { box-shadow: inset -0.5vh 0 0 var(--zone); }
+  .play .gel-head { margin-top: 0; gap: 2vw; }
+  .play .gel-num { font-size: var(--p-gel); }
+  .play .gel-name { font-size: min(var(--p-value), 10.5vw); margin-top: 1.2vh; }
+  .play .gel-name.two { font-size: min(var(--p-value), 10.5vw); }
+  /* A long name steps down to minor and ends in an ellipsis after two lines (three in the room):
+     the space goes to the cue. */
+  .play .gel-name.long { --tier: minor; font-size: var(--p-minor); line-height: 1.05; -webkit-line-clamp: 2; }
+  .play .gel.t3 .gel-name.two { --tier: minor; font-size: var(--p-minor); line-height: 1.05; }
+  .play .gel-targets { font-size: var(--p-minor); margin-top: 0.8vh; column-gap: 3vw; row-gap: 0.4vh; }
+  /* Beside the gel: the metrics, one under another. */
+  .play .metrics { grid-area: side; flex-direction: column; justify-content: flex-start; gap: 1.2vh; padding: 1.4vh 4vw 1vh 4vw; }
+  .play .metric .v { font-size: var(--p-value); margin-top: 0.3vh; }
+  .play .metric .v small { font-size: var(--p-minor); }
+  .play .clock { grid-area: clock; padding: 1.6vh 4vw 0; }
+  .play .count { font-size: min(var(--p-hero), calc(91vw / var(--count-w))); margin-top: 0.6vh; }
+  .play .bars { font-size: var(--p-minor); margin-top: 0.8vh; }
+  .play .cue { grid-area: cue; padding: 1.8vh 4vw 0; max-height: none; min-height: 0; font-size: var(--p-text); line-height: 1.12; }
+  .play .cue.long { --tier: textmin; font-size: var(--p-textmin); line-height: 1.04; }
+  /* The next row: the zone, its name and length on the first line; cadence and position under. */
+  .play .next { grid-area: next; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; column-gap: 2.4vw; row-gap: 0.6vh; padding: 0.8vh 4vw 0.9vh; white-space: nowrap; }
+  .play .next .chip, .play .next .v { font-size: var(--p-minor); }
+  .play .next .more { grid-column: 3 / -1; display: flex; gap: 3vw; }
+  .play .score { grid-area: score; }
+  .play .track.iv { height: 38%; }
+  .play .track.songs { top: 43%; height: 57%; }
+  .play .block .n { font-size: var(--p-minor); }
+  .play .block .t { font-size: var(--p-label); }
+  .play .block { padding-top: 0.5vh; row-gap: 8vh; }
+  .play .clip { font-size: var(--p-label); padding-top: 0.6vh; row-gap: 8vh; background-size: 100% 1vh; }
+  .play .moment { top: 45%; }
+  .play .moment span, .play .end span { font-size: var(--p-label); }
+  .play .end span { top: 1vh; }
+  .play .now::before { border-width: 0.9vh; }
+  /* Blocks, clips and moments that start right of the 3-minute window are not drawn (pfar). */
+  .play .pfar { display: none; }
+  /* The band: the score's box exactly, as on the room screen. */
+  .play .controls { grid-area: score; padding: 0 4vw; height: auto; }
+  .play .btn { height: max(7.6vh, 64px); padding: 0 1.8vw; gap: 0.3vh; min-width: 64px; }
+  .play .btn .w { --tier: minor; font-family: var(--face-number); font-weight: 800; font-size: var(--p-minor); }
+  .play .btn .sub { font-size: var(--p-label); }
+  .play .btn.main { min-width: max(18vw, 64px); }
+  .play .quit { min-width: 64px; }
+  .play .ask { flex: 1; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "q q q" "yes gap keep"; row-gap: 0.8vh; }
+  .play .ask .q { grid-area: q; font-size: var(--p-minor); margin: 0; }
+  .play .ask .btn:first-of-type { grid-area: yes; }
+  .play .ask .quit { grid-area: keep; }
+  /* Before the start and "Class Complete": the facts beside the gel, the title and the zones under. */
+  .play .intro { display: contents; }
+  /* The title on one line, then an ellipsis (the picker shows it whole). */
+  .play .intro h1, .play .intro h1.long { grid-area: clock; font-size: var(--p-value); line-height: 0.95; padding: 2vh 4vw 0; -webkit-line-clamp: 1; }
+  .play .facts { grid-area: side; flex-direction: column; gap: 1.2vh; margin: 0; padding: 1.4vh 4vw 1vh; }
+  .play .facts .v { font-size: var(--p-value); margin-top: 0.3vh; }
+  .play .zwrap { grid-area: cue; padding: 1.6vh 4vw 0; }
+  .play .ztitle { margin-top: 0; }
+  .play .zones { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; row-gap: 0.4vh; margin-top: 0.8vh; }
+  .play .zones > div { grid-template-columns: 5.4vh 11vh 1fr; column-gap: 2.4vw; }
+  .play .zones .n, .play .zones .tm { font-size: var(--p-minor); }
+  /* One line per zone: a longer name ends in an ellipsis (the gel shows it whole when it plays). */
+  .play .zones .t { font-size: var(--p-label); padding-top: 0.25vh; -webkit-line-clamp: 1; }
+}
