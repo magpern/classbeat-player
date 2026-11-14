@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import pytest
 
+from player_backend import response_header_policy
 from player_backend.control_page_policy import control_headers
 from player_backend.request_policy import NEVER_STORED, response_headers
 from player_backend.response_header_policy import headers_for
+from player_backend.route_path_policy import routed_path
 
 ORIGIN = "https://player.test"
 PAGE = response_headers("/healthz")
@@ -18,11 +20,41 @@ PAGE = response_headers("/healthz")
 def test_an_api_path_is_never_stored_whatever_the_prefix(prefix: str, root_path: str) -> None:
     path = prefix + "nothing"
     assert headers_for(path, root_path, ORIGIN) == {**PAGE, "Cache-Control": "no-store"}
-    assert headers_for("/player" + path, "/player", ORIGIN)["Cache-Control"] == "no-store"
 
 
-def test_the_routed_path_alone_still_decides_no_store() -> None:
+@pytest.mark.parametrize("prefix", NEVER_STORED)
+def test_an_api_path_under_a_page_prefix_is_never_stored(prefix: str) -> None:
+    path = "/player" + prefix + "nothing"
+    assert headers_for(path, "/player", ORIGIN) == {**PAGE, "Cache-Control": "no-store"}
+
+
+@pytest.mark.parametrize(
+    ("path", "root_path"),
+    [
+        ("/api/live/ws", "/api"),
+        ("/api/live/ws", "/api/live"),
+        ("/api/site/me", "/api"),
+        ("/api/site/me", "/api/site"),
+        ("/api/pairing/start", "/api"),
+        ("/api/player/classes", "/api/player"),
+        ("/api/source/x", "/api"),
+    ],
+)
+def test_a_prefix_that_starts_an_api_path_keeps_no_store(path: str, root_path: str) -> None:
+    """#285 N2: the router sees `/live/ws`, which is no never-stored path; the full path is."""
+    assert not routed_path(path, root_path).startswith(NEVER_STORED)
+    assert headers_for(path, root_path, ORIGIN)["Cache-Control"] == "no-store"
+
+
+def test_the_routed_path_alone_still_decides_no_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No-store on the routed path is the policy's own check, not only the page headers'."""
+
+    def page_only(_path: str) -> dict[str, str]:
+        return dict(PAGE)
+
+    monkeypatch.setattr(response_header_policy, "response_headers", page_only)
     assert headers_for("/player/api/live/ws", "/player", ORIGIN)["Cache-Control"] == "no-store"
+    assert headers_for("/player/healthz", "/player", ORIGIN) == PAGE
 
 
 @pytest.mark.parametrize(
