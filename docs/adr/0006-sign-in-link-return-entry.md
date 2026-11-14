@@ -1,6 +1,6 @@
 # 0006. The sign-in link carries its return entry
 
-Status: Proposed
+Status: Accepted (built in #332 and #333)
 
 ## Context
 

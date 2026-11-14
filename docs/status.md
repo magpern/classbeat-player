@@ -39,7 +39,8 @@ the live publisher and listener hardening (#222, #224), the contract tests (#228
 backend hardening (#227, #230), the body cap in the live contract (#234, #235; #237, #238; #236,
 #239; #240, #241) and the live audit writes at shutdown with their tests (#242, #243; #244,
 #245), the companion page (#174, #261; network calls in web code allowed by the owner, #252,
-#253), sign-in returning to the companion page (#263, #274), the `/me` answer in the contract
+#253), sign-in returning to the companion page (#263, #274), also by an email link opened
+in a new tab (ADR 0006, #330; backend #331, #332; site #329, #333), the `/me` answer in the contract
 (#264, #272) and its backend route (#265, #283) with its account-filter tests (#295, #299;
 #304, #305; #321, #322), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
 and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
@@ -159,9 +160,9 @@ Merged: #30 and its findings (#53).
   Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
 
-- PL8 notes: from #274, `RETURN_ENTRIES` could use `satisfies`, a sign-in by email link opened
-  in a new tab lands on `/classes` (needs a return entry in the mailed link), and `site.md`
-  wording; from #275, `companion-pages.js:117` still shows a sample signed-in address; from #273,
+- PL8 notes: from #274, `RETURN_ENTRIES` could use `satisfies`, and `site.md` wording; from
+  #333, with a `mailbox` the site fake answers the link request before the test's script, so such
+  a test cannot script a 429; from #275, `companion-pages.js:117` still shows a sample signed-in address; from #273,
   HEAD on `/control` answers 405; from #292, the private-import scan misses dynamic forms.
 
 ## Carried into PL8
