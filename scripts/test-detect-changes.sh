@@ -72,4 +72,16 @@ check "another backend source file runs backend only" "backend" "$(flags push "$
 commit backend/tests/test_other.py
 check "other backend test runs backend only" "backend" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 
+for f in clock plan view; do
+  before_clk="$(git rev-parse HEAD)"
+  commit "player/app/src/core/clock/$f.ts"
+  check "shared clock surface $f.ts runs player, web and desktop" "player web desktop" "$(flags push "$before_clk" HEAD)"
+done
+before_clk="$(git rev-parse HEAD)"
+commit player/app/src/core/clock/apply.ts
+check "another core/clock file runs player and desktop only" "player desktop" "$(flags push "$before_clk" HEAD)"
+before_clk="$(git rev-parse HEAD)"
+commit player/app/src/core/other.ts
+check "another player file runs player and desktop only" "player desktop" "$(flags push "$before_clk" HEAD)"
+
 exit "$fail"
