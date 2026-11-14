@@ -6,6 +6,7 @@ const { parseCommand } = require('../harness/commands');
 test('known commands pass, extra fields are dropped', () => {
   assert.deepEqual(parseCommand({ type: 'toggle', junk: 1 }), { type: 'toggle' });
   assert.deepEqual(parseCommand({ type: 'capture' }), { type: 'capture' });
+  assert.deepEqual(parseCommand({ type: 'quit', x: 1 }), { type: 'quit' });
   assert.deepEqual(parseCommand({ type: 'mode', mode: 'plain' }), { type: 'mode', mode: 'plain' });
   assert.deepEqual(parseCommand({ type: 'move-room', n: 2 }), { type: 'move-room', n: 2 });
   assert.deepEqual(parseCommand({ type: 'variant', variant: 'godot-web', x: 1 }), { type: 'variant', variant: 'godot-web' });

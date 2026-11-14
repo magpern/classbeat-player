@@ -25,6 +25,16 @@ const untilBand = async (app, hidden, ms = 10000) => {
   throw new Error(`band did not become ${hidden ? 'hidden' : 'visible'}`);
 };
 
+// Every window, the overlay window included, keeps the security defaults.
+async function expectSecureWindows(app, count) {
+  const prefs = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => {
+    const p = w.webContents.getLastWebPreferences();
+    return { ci: p.contextIsolation, ni: p.nodeIntegration, sb: p.sandbox };
+  }));
+  assert.equal(prefs.length, count);
+  for (const p of prefs) assert.deepEqual(p, { ci: true, ni: false, sb: true });
+}
+
 async function expectFullScreenRoom(app) {
   for (let i = 0; i < 30; i++) { // the window manager settles the full screen asynchronously
     const same = await app.evaluate(({ screen }) => { const b = process.spikeTest.getRoom().getBounds(); const d = screen.getPrimaryDisplay().bounds; return Math.abs(b.width - d.width) <= 2 && Math.abs(b.height - d.height) <= 2; });
@@ -60,7 +70,10 @@ test('one display, web variant: class view full screen, overlay on top, mouse an
     await expectFullScreenRoom(app);
     assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1, 'the room window only: no presenter, no panel');
     assert.equal(await app.evaluate(() => process.spikeTest.getOverlay()), null);
+    await expectSecureWindows(app, 1);
     await expectOverlayOnTop(room);
+    assert.ok(await room.evaluate(() => { const q = document.querySelector('#band button.quit'); return !!q && q.textContent.trim() === 'Quit'; }), 'a visible Quit');
+    assert.equal(await room.evaluate(() => getComputedStyle(document.getElementById('band')).backgroundColor), 'rgb(0, 0, 0)', 'opaque panel');
     // Paused: the overlay shows its controls.
     assert.equal(await bandHidden(app), false);
     assert.ok(await room.evaluate(() => document.querySelectorAll('#band button[data-cmd]').length) >= 6);
@@ -116,8 +129,13 @@ test('one display, godot-native (fake): transparent overlay window above Godot h
     await until(app, 'process.spikeTest.getNative() && process.spikeTest.getNative().link.connected()', 20000);
     const o = await app.evaluate(({ screen }) => { const w = process.spikeTest.getOverlay(); return { top: w.isAlwaysOnTop(), b: w.getBounds(), d: screen.getPrimaryDisplay().bounds }; });
     assert.equal(o.top, true);
+    await expectSecureWindows(app, 2); // the room (hidden) and the overlay window
     for (const k of ['x', 'y', 'width', 'height']) assert.ok(Math.abs(o.b[k] - o.d[k]) <= 2, `overlay ${k} ${o.b[k]} vs display ${o.d[k]}`); // covers the display; transparent, so the view is not resized
     assert.equal(await app.evaluate(() => process.spikeTest.getRoom().isVisible()), false);
+    // Shown again: the overlay window takes the keyboard back (a click through to Godot may have taken it).
+    await app.evaluate(() => { const w = process.spikeTest.getOverlay(); w.__focused = 0; w.focus = () => { w.__focused++; }; w.isFocused = () => false; });
+    await app.evaluate(() => process.spikeTest.getOverlay().webContents.executeJavaScript('window.spike.reportOverlay(true)'));
+    await until(app, 'process.spikeTest.getOverlay().__focused >= 1', 5000);
     await press(app, 'Space'); // pauses the autostarted class
     await until(app, 'process.spikeTest.clock.running() === false', 5000);
     const t0 = Date.now();
@@ -130,4 +148,13 @@ test('one display, godot-native (fake): transparent overlay window above Godot h
     assert.equal(await app.evaluate(() => process.spikeTest.getRoom().isVisible()), true);
     assert.equal(await app.evaluate(() => process.spikeTest.getOverlay()), null, 'the room page carries the overlay again');
   } finally { await app.close(); }
+});
+
+test('one display: the overlay Quit button quits the whole app, not only the overlay', { timeout: 60000 }, async () => {
+  const { app, roomPage } = await launch({ ...startOpts(), autostart: false });
+  const room = await roomPage();
+  await room.waitForFunction(() => window.__roomState && document.getElementById('band'), null, { timeout: 20000 });
+  const closed = new Promise((resolve) => app.process().once('exit', resolve));
+  await room.click('#band button.quit');
+  await Promise.race([closed, sleep(10000).then(() => { throw new Error('app still running after Quit'); })]);
 });

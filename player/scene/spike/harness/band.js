@@ -6,25 +6,33 @@
 (() => {
 const fmt = (ms) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const CSS = `
+/* The product's controls band (web/src/play/play-room.css, tokens.css): opaque panel, dark raised buttons, light text. */
 #band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; box-sizing: border-box; padding: 1.2vh 1.5vw;
-  display: flex; flex-direction: column; justify-content: center; gap: 1vh; background: rgba(5, 5, 10, .88); color: #fff;
-  font: clamp(16px, 1.5vw, 30px) system-ui, "Segoe UI", Arial, sans-serif; transition: opacity .2s; }
+  display: flex; flex-direction: column; justify-content: center; gap: 1vh; background: #000000; color: #f6f4ef;
+  border-top: .3vh solid #3a3a42; font: clamp(16px, 1.5vw, 30px) system-ui, "Segoe UI", Arial, sans-serif; transition: opacity .2s; }
 #band.hidden { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #band { transition: none; } }
 #band .line { font-variant-numeric: tabular-nums; }
-#band .rec { color: #ffb23f; }
-#band button { font: inherit; padding: .4em .8em; margin: 0 .4em .4em 0; }
-#band kbd { background: #333; padding: 0 .4em; border-radius: 3px; }`;
+#band .rec { color: #bdbab2; }
+#band .row { display: flex; flex-wrap: wrap; align-items: center; gap: .4em; }
+#band button { font: inherit; font-weight: 700; padding: .4em .8em; margin: 0; background: #17171c; color: #f6f4ef;
+  border: .3vh solid #3a3a42; border-radius: .8vh; cursor: default; }
+#band button:focus-visible { outline: .4vh solid #f6f4ef; outline-offset: .3vh; }
+#band button:disabled { color: #f6f4ef; border-color: #f6f4ef; opacity: 1; } /* the variant now running: readable, outlined */
+#band button.quit { margin-left: auto; }
+#band kbd { background: #3a3a42; color: #f6f4ef; padding: 0 .4em; border-radius: 3px; font: inherit; font-size: .85em; }`;
 const HTML = `<div class="line"></div>
-<div><button data-cmd="toggle">Start / pause <kbd>Space</kbd></button>
+<div class="row"><button data-cmd="toggle">Start / pause <kbd>Space</kbd></button>
 <button data-cmd="reset">Reset <kbd>R</kbd></button>
 <button data-cmd="kill-scene">Kill scene <kbd>K</kbd></button>
 <button data-cmd="mode-plain">Plain 2D <kbd>P</kbd></button>
 <button data-cmd="mode-scene">Scene <kbd>S</kbd></button>
-<button data-cmd="capture">Screenshot <kbd>C</kbd></button></div>
-<div>Variant <kbd>V</kbd>: <span class="variants"></span> <span class="rec"></span></div>`;
+<button data-cmd="capture">Screenshot <kbd>C</kbd></button>
+<button data-cmd="quit" class="quit">Quit</button></div>
+<div class="row">Variant <kbd>V</kbd>: <span class="variants"></span> <span class="rec"></span></div>`;
 const actions = {
   toggle: { type: 'toggle' }, reset: { type: 'reset' }, 'kill-scene': { type: 'kill-scene' }, capture: { type: 'capture' },
-  'mode-plain': { type: 'mode', mode: 'plain' }, 'mode-scene': { type: 'mode', mode: 'scene' },
+  'mode-plain': { type: 'mode', mode: 'plain' }, 'mode-scene': { type: 'mode', mode: 'scene' }, quit: { type: 'quit' },
 };
 
 function mount() {
@@ -46,7 +54,13 @@ function mount() {
     band.classList.toggle('hidden', !v);
     if (v !== shown) { shown = v; window.spike.reportOverlay(v); } // the overlay window is click-through while hidden
   };
-  const wake = () => { wakeAt = performance.now(); paint(); };
+  let reportedAt = -1e9;
+  const wake = () => {
+    wakeAt = performance.now();
+    paint();
+    // Tell the shell it is shown (throttled): the overlay window takes the keyboard back.
+    if (wakeAt - reportedAt > 500) { reportedAt = wakeAt; window.spike.reportOverlay(true); }
+  };
   const run = (c) => { wake(); return window.spike.command(c).then(render); };
   function render(s) {
     if (!s) return;

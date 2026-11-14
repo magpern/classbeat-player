@@ -243,6 +243,7 @@ function command(cmd) {
       break;
     case 'mode': setMode(cmd.mode); break;
     case 'variant': if (cmd.variant !== VARIANT) setVariant(cmd.variant); break;
+    case 'quit': app.quit(); break; // the whole app, not only the overlay window
     case 'capture': capture().catch((e) => log(`capture failed: ${e.message}`)); break;
     case 'move-room': placeRoom(listDisplays()[cmd.n - 1]?.id); restartNativeIfMoved(); break;
     default: break;
@@ -269,7 +270,10 @@ app.whenReady().then(() => {
     const c = isController(e) ? parseCommand(cmd) : null;
     return c ? command(c) : null;
   });
-  ipcMain.on('overlay-visible', (e, v) => { if (from(e, overlay)) overlay.setIgnoreMouseEvents(v !== true, { forward: true }); });
+  ipcMain.on('overlay-visible', (e, v) => { if (!from(e, overlay)) return;
+    overlay.setIgnoreMouseEvents(v !== true, { forward: true });
+    // Shown again: the keyboard comes back to the overlay, even after a click went through to Godot.
+    if (v === true && !overlay.isFocused()) { overlay.moveTop(); overlay.focus(); } });
   ipcMain.on('fps', (e, v) => { if (from(e, room) && Number.isFinite(v)) log(`fps mode=${roomMode} ${v.toFixed(1)}`); });
   createWindows();
   if (process.env.SPIKE_START_AT_S) clock.seek(Number(process.env.SPIKE_START_AT_S) * 1000); // test/screenshots only
