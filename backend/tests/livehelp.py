@@ -160,7 +160,8 @@ def frame(ws: WebSocketTestSession, seconds: float = 3.0) -> dict[str, Any]:
 
 
 def recv(ws: WebSocketTestSession, seconds: float = 3.0) -> dict[str, Any]:
-    """The next message, checked against the schema its type has from the server."""
+    """The next message the server sends, decoded; not checked against a schema (a test that
+    needs that checks it itself, with `validator`). A close raises `WebSocketDisconnect`."""
     sent = frame(ws, seconds)
     if sent["type"] == "websocket.close":
         raise WebSocketDisconnect(code=sent.get("code", 1000))

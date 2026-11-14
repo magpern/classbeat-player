@@ -40,6 +40,11 @@ def test_the_limits_are_the_adrs() -> None:
         ("S​am", "Sam"),  # Cf: a zero-width space
         ("Sam  ", "Sam"),  # Zl, Zp
         ("Sam\ud800", "Sam"),  # Cs: a lone surrogate (JSON can carry one)
+        ("Sa\ufffem", "Sam"),  # Cn: a noncharacter
+        ("Sam\ufdd0\U0010ffff", "Sam"),  # Cn: noncharacters, in the BMP and the last plane
+        ("Sam\U000e0080", "Sam"),  # Cn: an unassigned code point
+        ("\ue000Sam", "Sam"),  # Co: private use, in the BMP
+        ("Sam\U000f0000\U00100000", "Sam"),  # Co: the private use planes
         ("  Sam  ", "Sam"),
         ("Sam Lee", "Sam Lee"),
         ("a" * 24 + "\x00", "a" * 24),  # 25 sent, 24 left
@@ -51,7 +56,20 @@ def test_a_nickname_loses_its_control_characters(raw: str, kept: str) -> None:
 
 @pytest.mark.parametrize(
     "raw",
-    ["", "   ", "\x00\x01", "‮", "\n", "a" * 25, "🚴" * 25, None, 7, ["Sam"]],
+    [
+        "",
+        "   ",
+        "\x00\x01",
+        "‮",
+        "\n",
+        "\ufffe\ue000",
+        " \U000f0000 ",
+        "a" * 25,
+        "🚴" * 25,
+        None,
+        7,
+        ["Sam"],
+    ],
 )
 def test_no_nickname(raw: object) -> None:
     assert clean_nickname(raw) is None

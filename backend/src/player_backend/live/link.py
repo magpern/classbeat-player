@@ -36,6 +36,7 @@ class Link:
     slot: int | None = None  # a controller's place
     via: Via | None = None  # how a controller got its token
     rider: str | None = None  # a rider's id (never its token or nickname)
+    token_hash: bytes | None = field(default=None, repr=False)  # a controller's token's hash
     messages: Window = field(default_factory=messages_window)  # what it may send
     outstanding: Outstanding = field(default_factory=Outstanding)  # a controller's commands
     writer: asyncio.Task[None] | None = None  # set by the connection that runs `write`

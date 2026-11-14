@@ -4,9 +4,11 @@
 // one-character change to either side: every non-blank character of the backend's code, and every
 // character of every header the fake serves.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { POLICY_SOURCE } from "../lib/control-rule.ts";
 import { ORIGIN, riderCsp, riderHeaders } from "../lib/rider-fake.ts";
-import { ORIGINS, PATHS, RIDER_SOURCE, SKELETON, checkFake, codeOf, parseRiderRule, skeletonOf } from "../lib/rider-policy.ts";
+import { ORIGINS, PATHS, RIDER_SOURCE, SKELETON, checkFake, codeOf, parseRiderRule, sharedOf, skeletonOf } from "../lib/rider-policy.ts";
 import type { RiderRule } from "../lib/rider-policy.ts";
 
 const SOURCE = RIDER_SOURCE();
@@ -85,5 +87,13 @@ describe("the rider fake's /j headers", () => {
     assert.throws(() => parseRiderRule(SOURCE.replace("_LIVE_WS: Final", "_SOCKET: Final")), /changed shape/);
     assert.throws(() => parseRiderRule(SOURCE.replace('"X-Frame-Options": "DENY",\n', '"X-Frame-Options": "DENY",\n        "X-Extra": "1",\n')), /changed shape/);
     assert.throws(() => checkFake(SOURCE.replace("no-referrer", "same-origin"), FAKE), /headers of \/j/);
+  });
+
+  it("fails when a shared name is bound twice in control_page_policy.py", () => {
+    const control = readFileSync(POLICY_SOURCE, "utf8");
+    assert.doesNotThrow(() => sharedOf(control));
+    const rebound = "\n\n_inner = page_headers\n\n\ndef page_headers(path, site_origin, base, routes):\n    return {**_inner(path, site_origin, base, routes), \"X-Extra\": \"1\"}\n";
+    assert.throws(() => sharedOf(control + rebound), /page_headers is bound 2 times/);
+    assert.throws(() => sharedOf(control + '\n_LIVE_WS = "/other"\n'), /_LIVE_WS is bound 2 times/);
   });
 });

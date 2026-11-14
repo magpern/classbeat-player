@@ -151,7 +151,7 @@ class Controllers(Table):
                 return None
             ended = self._expired(session, now)
             if ended is None:
-                return Seat(found[0], found[1], _via(held))
+                return Seat(found[0], found[1], _via(held), hashed)
         self._expiry_told(ended)
         return None
 
@@ -195,7 +195,7 @@ class Controllers(Table):
                 return False
             del session.controllers[slot]
             self._by_controller.pop(held.token_hash, None)
-        self._tell([Dropped(session_id, slot, reason, _via(held))])
+        self._tell([Dropped(session_id, slot, reason, _via(held), held.token_hash)])
         return True
 
     def end_code(self, session_id: UUID) -> None:

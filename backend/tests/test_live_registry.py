@@ -199,7 +199,7 @@ def test_two_controllers_at_most_and_a_drop_frees_the_place() -> None:
     assert not registry.drop_controller(started.session_id, 2, ended, site_session_hash=bytes(32))
     assert registry.places(started.session_id) == {1: "sign_in", 2: "code"}
     assert registry.drop_controller(started.session_id, 1, ended, site_session_hash=site_session)
-    assert seen == [Dropped(started.session_id, 1, "session_ended", "sign_in")]
+    assert seen == [Dropped(started.session_id, 1, "session_ended", "sign_in", b"a" * 32)]
     assert registry.add_controller(started.session_id, b"d" * 32, None) == 1
     assert registry.add_controller(uuid.uuid4(), b"e" * 32, None) is None
 

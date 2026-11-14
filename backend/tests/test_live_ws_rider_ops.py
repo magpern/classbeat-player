@@ -125,6 +125,21 @@ def test_new_join_codes_past_ten_an_hour_are_dropped_and_counted(live: Any) -> N
         ]
 
 
+def test_a_new_join_code_for_a_session_past_its_lifetime_ends_it(live: Any) -> None:
+    started = live.session()
+    token = live.rider(started.join_code)
+    with live.joined(started.host_token, None) as host, live.riding(token) as rider:
+        assert recv(host)["type"] == "rider_joined"
+        live.clock.now += 12 * 3600.0
+        host.send_json(NEW_CODE)
+        # The session ends as the sweep would end it; no `join_code` is sent.
+        for ws in (host, rider):
+            assert recv(ws) == {"v": 1, "type": "ended", "reason": "expired"}
+            assert closed(ws) == 4403
+    assert live.registry.running() == []
+    assert live.ends == [(started.session_id, "lifetime")]
+
+
 def test_a_removed_rider_can_join_again_with_the_current_code(live: Any) -> None:
     started = live.session()
     with live.joined(started.host_token, None) as host:

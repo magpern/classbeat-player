@@ -8,7 +8,8 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
   controller is told `welcome` with its slot and whether the host is in. Controllers get
   `host_status` when the host comes and goes, and nothing else while it is away; the host gets
   `controller_joined`, and `controller_left` with its reason, as phones come and go, and for a
-  drop or a site session's end whether or not the phone was connected (ADR 0005 section 10).
+  drop or a site session's end whether or not the phone was connected (ADR 0005 section 10),
+  unless the drop reaches the hub after its place went to a newer token (then as the replay).
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
   its schema for its sender's role; anything else is dropped and counted in `dropped`. The
   handlers are keyed by the routed type (live/dispatch.py), one `_on_<type>` each. Every message the
@@ -37,8 +38,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 from player_backend.live.command_relay import CommandRelay
@@ -50,6 +50,7 @@ from player_backend.live.schemas import routes, valid
 from player_backend.live.sender import Sender
 from player_backend.live.sender import logged as _logged
 from player_backend.live.service import LiveService
+from player_backend.live.tasks import Tasks
 from player_backend.live.watchers import Event
 from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate
 from player_backend.live_place_policy import replay
@@ -101,7 +102,7 @@ class Hub:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._hosts: dict[UUID, Link] = {}
         self._controllers: dict[UUID, dict[int, Link]] = {}
-        self._tasks: set[asyncio.Task[object]] = set()
+        self._tasks = Tasks()
         service.registry.watch(self._watch)
 
     # -- the event loop and the registry's events --------------------------------------------
@@ -146,11 +147,21 @@ class Hub:
         self.riders.end(event.session_id, message)
 
     def _dropped(self, event: Dropped) -> None:
-        self.commands.forget(event.session_id, (event.slot,))
-        link = self._controllers.get(event.session_id, {}).pop(event.slot, None)
+        """Only the dropped token's own connection is closed. The host is told the drop while
+        the place is free; a late drop whose place a newer token holds tells it as the replay
+        would (`disconnected`, the holder's `via`), or nothing once that phone is connected."""
+        phones = self._controllers.get(event.session_id, {})
+        link = phones.get(event.slot)
         if link is not None:
+            if link.token_hash != event.token_hash:
+                return  # the newer token's phone: its `controller_joined` was sent
+            del phones[event.slot]
             self._send(link, ended("dropped"))
             link.close(ENDED)
+        via = self.service.registry.places(event.session_id).get(event.slot)
+        if via is not None:
+            return self._left(event.session_id, event.slot, via, "disconnected")
+        self.commands.forget(event.session_id, (event.slot,))
         self._left(event.session_id, event.slot, event.via, event.reason)
 
     def _cancelled(self, event: CodeCancelled) -> None:
@@ -179,6 +190,7 @@ class Hub:
 
     def attach_controller(self, socket: Socket, seat: Seat) -> Link:
         link = Link(socket, "controller", seat.session_id, seat.slot, seat.via)
+        link.token_hash = seat.token_hash
         phones = self._controllers.setdefault(seat.session_id, {})
         old = phones.get(seat.slot)
         phones[seat.slot] = link
@@ -246,7 +258,7 @@ class Hub:
         self.riders.relay(link.session_id, message)
 
     def _on_end(self, link: Link, _message: Message) -> None:
-        self._spawn(asyncio.to_thread(self.service.end, link.session_id, "host_ended"))
+        self._tasks.spawn(asyncio.to_thread(self.service.end, link.session_id, "host_ended"))
 
     def _on_drop(self, link: Link, message: Message) -> None:
         self.service.registry.host_drop(link.session_id, cast(int, message["slot"]))
@@ -278,17 +290,6 @@ class Hub:
         slot = message["slot"]  # 1 or 2: the schema holds it to those integers
         phones = self._controllers.get(link.session_id, {})
         self.commands.result(link, phones.get(slot) if isinstance(slot, int) else None, message)
-
-    def _spawn(self, work: Coroutine[Any, Any, object]) -> None:
-        task = asyncio.create_task(work)
-        self._tasks.add(task)
-        task.add_done_callback(self._done)
-
-    def _done(self, task: asyncio.Task[object]) -> None:
-        self._tasks.discard(task)
-        error = None if task.cancelled() else task.exception()
-        if error is not None:
-            _logged("live.end_failed", type(error).__name__, logging.ERROR)
 
     def connected(self, session_id: UUID) -> tuple[bool, tuple[int, ...]]:
         """Whether the host is connected, and the slots of the connected phones (for tests)."""

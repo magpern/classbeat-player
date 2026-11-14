@@ -100,7 +100,7 @@ class ControlCode:
         return Try("wrong", None)
 
     def end(self) -> None:
-        """The host's `drop`: the current code ends, and no one is told."""
+        """The host's `drop` or `cancel_code`: the current code ends, and no one is told."""
         self._current = None
 
 
