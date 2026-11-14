@@ -8,7 +8,7 @@ import { borderHues } from "./border-walk.ts";
 import ink, { INK } from "../spec/page/ink.js";
 import type { Item } from "../spec/page/collect.js";
 import { settle } from "./browser.ts";
-import { openSite } from "./site-fake.ts";
+import { openSite, traps } from "./site-fake.ts";
 import type { FakeSite } from "./site-fake.ts";
 import type { State } from "./site-states.ts";
 import { focusRing, layoutChecks, motionAndPictures, s3Visible } from "./site-page-checks.ts";
@@ -151,8 +151,7 @@ export async function checkSiteShot(browser: Browser, probe: Page, s: SiteShot):
   for (const [check, text, p] of await motionAndPictures(page)) add(check, text, p);
   if (s.zoom === 1) for (const [text, p] of await focusRing(page)) add("S8", text, p);
   for (const e of site.external) add("CSP", e.slice(0, 40), ["a request to another origin"]);
-  const traps = await page.evaluate(() => (globalThis as unknown as { __traps: { kind: string; detail: string }[] }).__traps);
-  for (const v of traps.filter((x) => x.kind === "csp")) add("CSP", v.detail.slice(0, 40), ["CSP violation"]);
+  for (const v of (await traps(page)).filter((x) => x.kind === "csp")) add("CSP", v.detail.slice(0, 40), ["CSP violation"]);
   for (const c of site.console.filter((x) => !x.includes("Failed to load resource"))) add("console", c.slice(0, 40), ["console output"]);
   await site.context.close();
   return { shot: s, rows, png };

@@ -9,6 +9,8 @@ import type { Browser, BrowserContext, Page, Request, Route } from "playwright-c
 import { chromePath, DIST } from "./browser.ts";
 import { instrument } from "./site-instrument.ts";
 import type { Passkey } from "./site-instrument.ts";
+import { passkeyStandIn } from "./site-passkey.ts";
+import { trapKit } from "./site-trap-kit.ts";
 
 export const ORIGIN = "https://site.test";
 /** The backend's own header (backend/src/player_backend/request_policy.py); a drift test compares the two. */
@@ -94,14 +96,22 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, reducedMotion: "no-preference" });
   await context.addInitScript("globalThis.__name = (f) => f;");
   if (o.before) await context.addInitScript(o.before);
-  await context.addInitScript(instrument, o.passkey ?? "ok");
+  // The trap, built from its kit, with the passkey stand-in; each is serialised as source text.
+  await context.addInitScript(`(${instrument.toString()})(${JSON.stringify(o.passkey ?? "ok")}, (${trapKit.toString()})(), ${passkeyStandIn.toString()});`);
   const realms: string[] = [];
   context.on("serviceworker", (w) => realms.push(`serviceworker ${w.url()}`));
   const page = await context.newPage();
-  if (o.fontSize && o.fontSize !== 16) {
-    const cdp = await context.newCDPSession(page);
-    await cdp.send("Page.setFontSizes", { fontSizes: { standard: o.fontSize, fixed: Math.round(o.fontSize * 0.8125) } });
-  }
+  const cdp = await context.newCDPSession(page);
+  if (o.fontSize && o.fontSize !== 16) await cdp.send("Page.setFontSizes", { fontSizes: { standard: o.fontSize, fixed: Math.round(o.fontSize * 0.8125) } });
+  // The page's own address cannot be wrapped in the page (location's members are unforgeable), so a
+  // `javascript:` address given to location.href, assign or replace is noted from the browser's
+  // side, as the browser's URL parser read it (#315). `traps` adds these notes to the page's own.
+  const fromBrowser: Trap[] = [];
+  browserNotes.set(page, fromBrowser);
+  cdp.on("Page.frameScheduledNavigation", (e) => {
+    if (isJavascriptUrl(e.url)) fromBrowser.push({ kind: "script", detail: "navigation javascript:" });
+  });
+  await cdp.send("Page.enable");
   const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
@@ -186,9 +196,31 @@ function serveFile(route: Route, pathname: string): Promise<void> {
   });
 }
 
-/** What the instrumentation recorded in the page. */
-export function traps(page: Page): Promise<{ kind: string; detail: string }[]> {
-  return page.evaluate(() => (globalThis as unknown as { __traps: { kind: string; detail: string }[] }).__traps.slice());
+export interface Trap {
+  readonly kind: string;
+  readonly detail: string;
+}
+
+/** The notes made from the browser's side, by page. */
+const browserNotes = new WeakMap<Page, Trap[]>();
+
+function isJavascriptUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "javascript:";
+  } catch {
+    return false;
+  }
+}
+
+/** The page's record as JSON text, from the trap's reader, reached through `window`: page code can replace `globalThis`, not `window`. */
+function recorded(): string {
+  return (window as unknown as { __traps: () => string }).__traps();
+}
+
+/** What the instrumentation recorded: in the page, then from the browser's side. */
+export async function traps(page: Page): Promise<Trap[]> {
+  const inPage = JSON.parse(await page.evaluate(recorded)) as Trap[];
+  return [...inPage, ...(browserNotes.get(page) ?? [])];
 }
 
 /**
@@ -198,9 +230,8 @@ export function traps(page: Page): Promise<{ kind: string; detail: string }[]> {
  */
 export async function settled(site: FakeSite, quietMs = 300, maxMs = 3000): Promise<void> {
   const mark = async (): Promise<string> => {
-    const n = await site.page.evaluate(
-      () => new Promise<number>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done((globalThis as unknown as { __traps: unknown[] }).__traps.length), 0)))),
-    );
+    await site.page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 0)))));
+    const n = (await traps(site.page)).length;
     return [n, site.realms.length, site.urls.length, site.api.length, site.console.length].join(",");
   };
   const end = Date.now() + maxMs;
