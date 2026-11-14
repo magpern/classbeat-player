@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 from starlette.background import BackgroundTask
 
 from player_backend.db import login
@@ -23,6 +23,7 @@ from player_backend.login_policy import (
     ADDRESS_MAX_REQUESTS,
     ADDRESS_WINDOW,
     address_limit_key,
+    bounded_return,
     is_return_entry,
     normalise_email,
     retry_after,
@@ -45,9 +46,10 @@ class LinkRequest(BaseModel):
     email: str = Field(max_length=1000)
     # Missing or null: none. Any string is accepted here and checked by `is_return_entry`, so
     # every string that is not a return entry gets the same `invalid_return`, in its order (after
-    # the 429 and `invalid_email`). Its bound is `RETURN_MAX` there, for the same reason: a
-    # `max_length` here would answer `invalid_request` before the requester's limit.
-    return_to: str | None = None
+    # the 429 and `invalid_email`). Its bound is `RETURN_MAX`, here too (#407): a longer string
+    # is held cut to `RETURN_MAX + 1` characters (`bounded_return`), which is still no entry. Not
+    # a `max_length`, which would answer `invalid_request` before the requester's limit.
+    return_to: Annotated[str | None, BeforeValidator(bounded_return)] = None
 
 
 class LinkUse(BaseModel):

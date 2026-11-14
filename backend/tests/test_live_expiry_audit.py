@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import pytest
 
 from player_backend.client_policy import ClientInfo
+from player_backend.live.events import MadeCode
 from player_backend.live.registry import Registry
 from player_backend.live.service import LiveService
 from player_backend.live_session_policy import UNCONFIRMED_LIMIT
@@ -61,7 +62,7 @@ def _held(site: Site) -> Held:
     controller = new_token("ctl")
     assert registry.add_controller(started.session_id, token_hash(controller), None) == 1
     made = registry.make_code(started.session_id, 0.0)
-    assert made is not None
+    assert isinstance(made, MadeCode)
     return Held(
         service,
         device_hash,

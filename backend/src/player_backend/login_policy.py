@@ -50,6 +50,16 @@ def is_return_entry(raw: str) -> bool:
     return len(raw) <= RETURN_MAX and RETURN_ENTRY.fullmatch(raw) is not None
 
 
+def bounded_return(raw: object) -> object:
+    """A request's return entry as the model holds it: a string over `RETURN_MAX` is cut to
+    `RETURN_MAX + 1` characters, so no longer string is held and it is still no return entry
+    (`invalid_return`, in its order); anything else is left as it is for the model to check.
+    A `max_length` would answer `invalid_request` before the requester's limit."""
+    if isinstance(raw, str) and len(raw) > RETURN_MAX:
+        return raw[: RETURN_MAX + 1]
+    return raw
+
+
 def address_limit_key(address_hash: bytes) -> bytes:
     """The counter of sign-in link requests from one address, whatever the email."""
     return hashlib.sha256(b"login.address:" + address_hash).digest()

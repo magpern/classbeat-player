@@ -27,6 +27,7 @@ from player_backend.live.events import (
     Exchange,
     Granted,
     MadeCode,
+    NoControlCode,
     Seat,
     SignedInController,
 )
@@ -87,18 +88,22 @@ class Controllers(Table):
             self._by_controller.pop(hashed, None)
             return True
 
-    def make_code(self, session_id: UUID, now: float) -> MadeCode | None:
-        """A new control code for the host, replacing the current one; None when the session is
-        gone or has made its 30 this hour (the current code then stays as it was)."""
+    def make_code(self, session_id: UUID, now: float) -> MadeCode | NoControlCode:
+        """A new control code for the host, replacing the current one. `NoControlCode`, with
+        nothing changed, when the session is gone (`session_gone`) or has made its 30 this hour
+        (`code_limit`: the current code stays as it was). A session past its lifetime ends, as
+        in `host_session`, and gets no code: `session_gone`."""
         with self._lock:
             session = self._sessions.get(session_id)
-            if session is None:
-                return None
-            code = new_code()
-            made, earlier = session.code.make(code_hash(code), now)
-            if not made:
-                return None
-            return MadeCode(show_code(code), session.code.expires_in_ms(now), earlier)
+            ended = None if session is None else self._expired(session, now)
+            if session is not None and ended is None:
+                code = new_code()
+                made, earlier = session.code.make(code_hash(code), now)
+                if not made:
+                    return NoControlCode("code_limit")
+                return MadeCode(show_code(code), session.code.expires_in_ms(now), earlier)
+        self._expiry_told(ended)
+        return NoControlCode("session_gone")
 
     def exchange(self, raw_session: object, raw_code: object, now: float) -> Exchange:
         """`POST /api/live/control`: the join code names the session; the code is compared with

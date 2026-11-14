@@ -25,6 +25,7 @@ from jsonschema import Draft202012Validator
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from player_backend.code_policy import ALPHABET
+from player_backend.live.events import MadeCode
 from player_backend.live.service import LiveService
 from tests import pairhelp
 from tests.pairhelp import bearer
@@ -188,7 +189,7 @@ def _code(site: Site, live: dict[str, str]) -> str:
     session_id = service.registry.session_of_code(live["joinCode"])
     assert session_id is not None
     made = service.registry.make_code(session_id, service.clock())
-    assert made is not None
+    assert isinstance(made, MadeCode)
     return made.code
 
 
