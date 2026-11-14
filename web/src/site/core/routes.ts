@@ -67,8 +67,9 @@ export function returnPathOf(path: string, search: string): string | null {
  * The other pages served beside the site that a sign-in may return to, by name (issue #263).
  * Only these: a sign-in address names an entry of this table, never an address.
  */
-export const RETURN_ENTRIES: Readonly<Record<string, string>> = { control: "/control" };
 export type ReturnEntry = "control";
+// `satisfies` makes a missing or an extra entry a type error.
+export const RETURN_ENTRIES = { control: "/control" } as const satisfies Record<ReturnEntry, string>;
 
 /** A class (join) code exactly as the companion shows it (ADR 0002's alphabet, `XXXX-XXXX`). */
 const JOIN_CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
@@ -92,7 +93,7 @@ export function signInAddressFor(entry: ReturnEntry, join: string | null): strin
 export function returnEntryOf(hash: string): string | null {
   const m = RETURN_FRAGMENT.exec(hash);
   if (!m || !Object.hasOwn(RETURN_ENTRIES, m[1])) return null;
-  const path = RETURN_ENTRIES[m[1]];
+  const path = RETURN_ENTRIES[m[1] as ReturnEntry];
   if (m[2] === undefined) return path;
   return JOIN_CODE.test(m[2]) ? `${path}#${m[2]}` : null;
 }

@@ -90,7 +90,11 @@ export interface OpenOptions {
   readonly fontSize?: number;
   /** A script run in the page ahead of the trap; only the trap's own checks use it. */
   readonly before?: string;
-  /** Given, `POST sign-in/link` is answered by the fake's mail (site-mail.ts), and each mailed link is added here. */
+  /**
+   * Given, `POST sign-in/link` is answered by the fake's mail (site-mail.ts), and each mailed link
+   * is added here, unless the script has an answer for that route: the script comes first, so a
+   * test can script the per-address 429 (nothing is mailed then).
+   */
   readonly mailbox?: string[];
 }
 
@@ -111,6 +115,9 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   // side, as the browser's URL parser read it (#315). `traps` adds these notes to the page's own.
   const fromBrowser: Trap[] = [];
   browserNotes.set(page, fromBrowser);
+  // `Page.frameScheduledNavigation` is deprecated in the protocol; if a Chromium update drops it the
+  // location tests (which expect this note) fail loudly rather than pass silently. Note also that
+  // `navigation.navigate('javascript:...')` does not run in the pinned Chromium, so it needs no trap.
   cdp.on("Page.frameScheduledNavigation", (e) => {
     if (isJavascriptUrl(e.url)) fromBrowser.push({ kind: "script", detail: "navigation javascript:" });
   });
@@ -149,7 +156,7 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
     site.crossSite.push(key);
     return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"cross_site_request"}', headers: { "Cache-Control": "no-store" } });
   }
-  if (mailbox && key === "POST sign-in/link") return mailed(route, request, mailbox);
+  if (mailbox && key === "POST sign-in/link" && !script[key]) return mailed(route, request, mailbox);
   const entry = script[key];
   if (!entry) {
     site.unscripted.push(key);
