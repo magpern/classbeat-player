@@ -85,5 +85,7 @@ with other work; nothing in the development loop waits for an answer.
     needs.
 - **Product call:** when Spotify is paused while a browser plays other music, the player shows
   "Off the list". Say if you want something else.
-- **Spike 2 (scene):** run the scene builds on a studio-class computer with a second display.
+- **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
+  mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
+  mode first (#447).
 - **Swedebeat:** whether to ask for an agreement and a source of the audio.

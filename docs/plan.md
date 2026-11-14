@@ -588,7 +588,9 @@ only for the trial and deleted after it. Its result is required before phase PL6
 and in Godot (as its own program and as a web export) and must show, for each:
 
 - the look, and the frame rate on a studio-class computer;
-- full screen on a second display while the presenter window keeps the keyboard and its controls;
+- full screen on the only display, which the studio mirrors to the projector, with the controls
+  and the keyboard on that same screen (owner, 2026-11-14: the studio has one screen, mirrored on
+  the projector); a second display stays an option, never needed;
 - large text placed and readable at room distance, and still right after a resize or a display
   being plugged in or removed;
 - **recovery:** when the scene is killed, the room's screen falls back to the plain 2D screen
