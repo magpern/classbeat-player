@@ -210,8 +210,8 @@ Changing the email address is not part of PL2. When it is added it gets its own 
 - A sign-in ends the session the browser held before it (the session in its cookie, if still
   live), once the new session is issued, as signing out with it would: the same
   `session.signed_out` event on that session's account and the same `live_revocations` notice,
-  so a live controller taken with that session (section 8) is dropped and is taken again with
-  the new one. A refused sign-in ends nothing. The ending runs after the new session is
+  so a live controller taken with that session (section 8) is dropped and must be taken again
+  with the new one. A refused sign-in ends nothing. The ending runs after the new session is
   committed, so if it fails the route answers `500`, sets no cookie and leaves a new session row
   that expires on its own. This holds for the email link and for passkeys alike (amended
   2026-11-14, #431).
@@ -228,10 +228,11 @@ Changing the email address is not part of PL2. When it is added it gets its own 
   enabled.
 - **Where the session cookie is accepted.** By the site's API (`/api/site/`), and by exactly one
   live route, `POST /api/live/controller` (section 8), which applies the same
-  `Origin` and `Sec-Fetch-Site` checks. The two routes that complete a sign-in
-  (`POST /api/site/sign-in/complete`, `POST /api/site/sign-in/passkey`) read it as well, only to
-  end that session; they never act with it (amended 2026-11-14, #431). Nowhere else: the player API, the source API, every other
-  live route and the WebSocket ignore cookies and take a token in `Authorization: Bearer`, in the
+  `Origin` and `Sec-Fetch-Site` checks. Inside the site's API, the two routes that complete a
+  sign-in (`POST /api/site/sign-in/complete`, `POST /api/site/sign-in/passkey`) also read it
+  through a separate dependency, `asking_session`, that only hashes the token, so they can end
+  that session; they never act with it (amended 2026-11-14, #431). Nowhere else: the player
+  API, the source API, every other live route and the WebSocket ignore cookies and take a token in `Authorization: Bearer`, in the
   request body, or in the first WebSocket message. A guard test lists the routes that read the
   cookie and compares them with this list.
 - Responses that carry a token have `Cache-Control: no-store`.

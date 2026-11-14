@@ -105,7 +105,9 @@ or at the end of a milestone.
    class; the audio cache and its encryption; the desktop shell's hardening and its bridge to
    native helpers; updating and signing; anything that handles a secret. Also for every
    **rule-sensitive** pull request (section 6) and for the first review of any new security
-   design. When in doubt, top tier.
+   design. When in doubt, top tier. A docs pull request that only records code already reviewed
+   at the right tier as built (an as-built ADR amendment, a spec as built) needs only a mid-tier
+   Reviewer (owner, 2026-11-14).
 4. A pull request that changes what a user sees also needs
    `Design review: PASS <head SHA>` from the Designer (section 7).
 5. Any push after a `PASS` cancels it. The new head is reviewed again: the difference since the
@@ -150,8 +152,12 @@ conflict with a rule stops and is written in `docs/owner.md`.
 - Measurable criteria stand in for taste: every number and cue readable at room distance (a
   minimum text height as a share of screen height), contrast, the zone always shown as a number
   and a name as well as a colour, reduced motion honoured, the design tokens used.
-- CI produces screenshots of every changed screen in each state. The Designer compares them with
-  the spec and records `Design review: PASS` or `FAIL` on the pull request.
+- CI produces screenshots of every changed screen in each state. The Designer compares the
+  screens the pull request changes or adds with the spec, plus a spot check of a few others,
+  not every screen (owner, 2026-11-14), and records `Design review: PASS` or `FAIL` on the
+  pull request.
+- A pull request that changes only documentation (`docs/` and root `*.md` files) runs no tests in
+  CI, only the title check and the never-commit check (owner, 2026-11-14, #437).
 - The owner sees results afterwards and may ask for changes as new issues. Nothing waits for it.
 
 ## 8. Safety
