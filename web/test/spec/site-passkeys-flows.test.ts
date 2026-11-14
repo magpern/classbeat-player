@@ -104,36 +104,43 @@ describe("adding a passkey", () => {
     await site.context.close();
   });
 
-  it("offline, 'Add passkey' is off until the browser is back online, and 'Try again' adds with the name now typed (#441)", async () => {
-    const offline = { status: 0, fail: true } as const;
-    const site = await open({ "POST passkeys/options": [offline, offline, { status: 200, body: REG_OPTIONS }], "POST passkeys": ADDED });
-    await addAs(site, "Tablet");
+  it("offline, the list's 'Add a passkey' is off under the plate and points at it, until the browser is back online (#441)", async () => {
+    const route = `DELETE passkeys/${FIRST.id}`;
+    const site = await open({ [route]: [{ status: 0, fail: true }, { status: 204 }] });
+    await press(site.page, "Remove");
+    await press(site.page, "Remove passkey");
     await site.page.waitForSelector(".plate");
-    const ok = site.page.locator("form[data-add] button[type=submit]");
-    assert.equal(await ok.isDisabled(), true, "Add passkey is off while offline");
-    assert.equal(await site.page.getByRole("button", { name: "Cancel", exact: true }).isDisabled(), false, "Cancel stays on");
-    await ok.click({ force: true });
-    await settled(site);
-    assert.equal(sent(site, "POST passkeys/options"), 1, "a press on the disabled button sends nothing");
-    // "Try again" on the plate asks again; still offline, the plate stays and the button stays off.
-    await press(site.page, "Try again");
-    await site.page.waitForSelector(".plate");
-    assert.equal(sent(site, "POST passkeys/options"), 2);
-    assert.equal(await ok.isDisabled(), true);
-    assert.equal(await ok.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
-    // Back online: the plate goes and the button is on again, with what was typed meanwhile; nothing is sent by itself.
-    await site.page.fill("input[name=name]", "Phone");
+    assert.match(await site.page.locator(".plate").innerText(), /You are offline/);
+    const add = site.page.locator("button[data-add]");
+    assert.equal(await add.isDisabled(), true, "Add a passkey is off while offline");
+    assert.equal(await add.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
+    await add.click({ force: true });
+    assert.equal(await site.page.locator("form[data-add]").count(), 0, "a press on the disabled button opens nothing");
+    // The remove row stays open, and its button is the way to ask again.
+    assert.equal(await site.page.getByRole("button", { name: "Remove passkey", exact: true }).isDisabled(), false);
+    // Back online: the plate goes and the button is on again in place; nothing is sent by itself.
     await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
     await site.page.waitForSelector(".plate", { state: "detached" });
     await settled(site);
-    assert.equal(sent(site, "POST passkeys/options"), 2, "nothing is sent by itself");
-    assert.equal(await ok.isDisabled(), false);
-    assert.equal(await ok.getAttribute("aria-describedby"), null);
-    assert.equal(await site.page.inputValue("input[name=name]"), "Phone");
-    assert.equal(await site.page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.name), "name");
-    await press(site.page, "Add passkey");
+    assert.equal(sent(site, route), 1, "nothing is sent by itself");
+    assert.equal(await add.isDisabled(), false);
+    assert.equal(await add.getAttribute("aria-describedby"), null);
+    await press(site.page, "Remove passkey");
     await site.page.waitForSelector(".note");
-    assert.equal(JSON.parse(site.api.find((a) => a.route === "POST passkeys")?.body ?? "{}").name, "Phone");
+    assert.equal(sent(site, route), 2);
+    await site.context.close();
+  });
+
+  it("offline, the add form keeps its button on, pointing at the plate, also once back online", async () => {
+    const site = await open({ "POST passkeys/options": { status: 0, fail: true } });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate");
+    await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await settled(site);
+    const ok = site.page.locator("form[data-add] button[type=submit]");
+    assert.equal(await ok.isDisabled(), false);
+    assert.equal(await ok.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
+    assert.equal(sent(site, "POST passkeys/options"), 1, "nothing is sent by itself");
     await site.context.close();
   });
 

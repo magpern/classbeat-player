@@ -43,6 +43,7 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       [messages, done] = [m, null];
       draw(null);
       focusMessage(main, box);
+      if (m.plate?.kind === "offline") enableWhenOnline();
     },
     readAgain: (m: Messages) => void readAgain(m),
   };
@@ -85,31 +86,6 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
     // Not added, or asked to confirm it is them: back to the list. A fault keeps the form under the plate.
     if (next.plate.kind === "not-added" || next.plate.kind === "confirm") mode = LIST;
     host.set(plateOnly(next.plate));
-    if (next.plate.kind === "offline") enableWhenOnline();
-  }
-
-  /** The name in the open add form as it is now: what was typed may have changed under the plate. */
-  const typedNow = (): string => box.querySelector<HTMLInputElement>("form[data-add] input[name=name]")?.value ?? (mode.kind === "add" ? mode.typed : "");
-  const addOffline = (): boolean => mode.kind === "add" && messages.plate?.kind === "offline";
-
-  /**
-   * Offline, "Add passkey" waits under "You are offline". When the browser says it is back online
-   * the plate goes and the button is on again; adding is not started by itself, because the
-   * browser's prompt follows a press.
-   */
-  function enableWhenOnline(): void {
-    if (waitingOnline) return;
-    waitingOnline = true;
-    window.addEventListener(
-      "online",
-      () => {
-        waitingOnline = false;
-        if (!box.isConnected || !env.current() || !addOffline() || busy()) return;
-        [mode, messages] = [{ kind: "add", typed: typedNow(), nameError: false, busy: false }, NO_MESSAGES];
-        draw("input[name=name]");
-      },
-      { once: true },
-    );
   }
 
   async function rename(k: Passkey, typed: string): Promise<void> {
@@ -157,6 +133,34 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
     draw(next ? `[data-row="${next.id}"][data-act="rename"]` : "[data-add], h1");
   }
 
+  /**
+   * Offline, "Add a passkey" is off under "You are offline". When the browser says it is back
+   * online the plate goes and the button is on again, in place: a rename being typed is left alone,
+   * and nothing is sent by itself (the browser's prompt follows a press).
+   */
+  function enableWhenOnline(): void {
+    if (waitingOnline) return;
+    waitingOnline = true;
+    window.addEventListener(
+      "online",
+      () => {
+        waitingOnline = false;
+        // The add form keeps its plate: its own button stays on and points at it.
+        if (!box.isConnected || !env.current() || messages.plate?.kind !== "offline" || mode.kind === "add") return;
+        messages = NO_MESSAGES;
+        const shownPlate = box.querySelector<HTMLElement>(".plate");
+        const hadFocus = shownPlate !== null && shownPlate.contains(document.activeElement);
+        shownPlate?.remove();
+        const b = box.querySelector<HTMLButtonElement>("button[data-add]");
+        if (b === null) return;
+        b.disabled = atLimit(list.length);
+        if (!b.disabled) b.removeAttribute("aria-describedby");
+        if (hadFocus) b.focus();
+      },
+      { once: true },
+    );
+  }
+
   const toList = (focus: string): void => {
     if (busy()) return;
     mode = LIST;
@@ -186,18 +190,15 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
   function content(): Node[] {
     const out: Node[] = [h2(PASSKEY_WORDS.heading)];
     const notAdded = messages.plate?.kind === "not-added";
-    // Offline, the form stays under the plate, whose "Try again" adds with the name now typed.
-    const offline = addOffline();
-    const retry = notAdded && canAdd ? openAdd : offline ? () => void add(typedNow()) : null;
-    const here = messageNodes(host, retry ? { text: PASSKEY_WORDS.tryAgain, onPress: retry } : undefined);
-    out.push(...here);
+    out.push(...messageNodes(host, notAdded && canAdd ? { text: PASSKEY_WORDS.tryAgain, onPress: openAdd } : undefined));
     if (done?.kind === "added") out.push(note(PASSKEY_WORDS.added, PASSKEY_WORDS.addedDetail));
     if (done?.kind === "removed") out.push(note(PASSKEY_WORDS.removed(done.name), PASSKEY_WORDS.removedDetail));
     if (mode.kind === "add") {
       const waiting = mode.busy ? working(PASSKEY_WORDS.waiting) : null;
-      // "You are offline" is the reason the add button is off, as the export's plate is for its button.
-      const why = offline ? idOfPlate(here, "add-offline") : null;
-      return [...out, p(PASSKEY_WORDS.intro), addPanel(mode, (typed) => void add(typed), () => toList("[data-add]"), waiting, why ?? undefined)];
+      // "You are offline" is described to the add button, as the export's plate is to its button.
+      const offline = messages.plate?.kind === "offline" ? out.find((n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains("plate")) : undefined;
+      if (offline) offline.id = uid("add-offline");
+      return [...out, p(PASSKEY_WORDS.intro), addPanel(mode, (typed) => void add(typed), () => toList("[data-add]"), waiting, offline?.id)];
     }
     const plain = !hasMessage(messages) && done === null && mode.kind === "list";
     if (plain || !list.length) out.push(p(PASSKEY_WORDS.intro));
@@ -209,9 +210,12 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       out.push(limit);
     }
     if (canAdd && !notAdded) {
-      const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full, onPress: openAdd });
+      // Offline, the plate "You are offline" is the reason the button is off (site.md, Errors, Offline).
+      const offline = messages.plate?.kind === "offline" ? idOfPlate(out, "list-offline") : null;
+      const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full || offline !== null, onPress: openAdd });
       b.dataset.add = "";
-      if (limit) b.setAttribute("aria-describedby", limit.id);
+      const why = limit?.id ?? offline;
+      if (why !== null) b.setAttribute("aria-describedby", why);
       out.push(buttons(b));
     }
     if (list.length) {
