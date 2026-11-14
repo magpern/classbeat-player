@@ -1,0 +1,80 @@
+/* The rider page (docs/design/rider.md): what it adds to companion.css, ported from the reference
+   mock-up (docs/design/mockups/rider.css). The class view is the companion's view without the cue,
+   the song and the steering keys, plus the effort block; the pages (join, joining, ending) are the
+   companion's pages with more fields. Colours: tokens.css only. Hue only on things that stand for
+   a zone: the gel and the next chips. */
+
+/* The rider's sizes: the companion's, a step larger, so every floored text keeps its 5 % margin
+   over R1's floors whatever whole pixel a Chrome build rounds a cap height to. */
+:root {
+  --c-hero: min(10.85dvh, 23.8vw);
+  --c-value: min(5.05dvh, 10.4vw);
+  --c-minor: min(3.4dvh, 7vw);
+  --c-label: min(2.7dvh, 5.3vw);
+}
+@media (orientation: landscape) {
+  :root {
+    --c-hero: min(18.9dvh, 10.6vw);
+    --c-value: min(8.2dvh, 4.6vw);
+    --c-minor: min(5.95dvh, 3.4vw);
+    --c-label: min(4.7dvh, 2.7vw);
+  }
+}
+
+/* The class view: top, gel, clock, effort, next, one key. */
+.run.rider {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "top" "gel" "clock" "effort" "coming" "keys";
+}
+@media (orientation: landscape) {
+  .run.rider {
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "top top" "gel effort" "clock effort" "clock coming" "clock keys";
+  }
+}
+.rider .keys { grid-template-columns: 1fr; }
+.rider .keys .key { grid-column: 1; }
+
+/* The nickname in the top line ends in an ellipsis (24 characters can be wide). */
+.rider .top { flex-wrap: wrap; row-gap: 0.4dvh; }
+.link { min-width: 0; }
+.who-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Where the browser cannot keep the screen on: one line under the top line. */
+.wake-l { flex-basis: 100%; color: var(--light-2); }
+
+/* The position beside the countdown (under it in landscape), in the song block's place. */
+.rider .song .when { white-space: nowrap; }
+
+/* The effort: label, then the value in the value tier and its unit. White, never a zone colour. */
+.effort { grid-area: effort; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 3vw; row-gap: 1.1dvh; align-content: start; align-items: baseline; min-width: 0; }
+@media (orientation: landscape) { .effort { column-gap: 1.6vw; row-gap: 1.4dvh; } }
+.effort > .lbl { grid-column: 1; white-space: nowrap; }
+.ev { grid-column: 2; display: flex; align-items: baseline; gap: 0.35em; white-space: nowrap; min-width: 0; }
+.ev .n { font-size: var(--c-value); line-height: 1; color: var(--light-1); }
+.ev .u { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); line-height: 1; color: var(--light-2); }
+.effort .hint { grid-column: 1 / -1; color: var(--light-2); font-size: var(--c-label); line-height: 1.2; white-space: normal; }
+
+/* Class complete: the thank-you line takes the effort's place. */
+.run.rider > .done { grid-area: effort; font-size: var(--c-minor); line-height: 1.2; }
+
+/* A switch that says its state in words. */
+.key.sw { flex-direction: row; justify-content: space-between; gap: 3vw; padding: 0 4vw; width: 100%; }
+.key.sw .st { font-family: var(--face-number); font-weight: 800; font-size: var(--c-minor); border: 2px solid var(--light-3); border-radius: 999px; padding: 0.1em 0.8em; min-width: 3.4em; text-align: center; }
+.key.sw.on { border-color: var(--light-1); }
+.key.sw.on .st { background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
+
+/* The join page: two numbers side by side, Forget and the main key in one row. A form may scroll
+   down, since the keyboard covers much of a phone. */
+.page.form { padding-left: var(--c-pad); padding-right: var(--c-pad); height: auto; min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+body:has(> .page.form) { overflow-y: auto; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: max(12px, 3vw); }
+.pair .field { min-width: 0; }
+.duo { display: grid; grid-template-columns: 1fr 2fr; gap: var(--c-key-gap); }
+.duo.solo { grid-template-columns: 1fr; }
+.field.dim, .page .key.dis { opacity: 1; }
+.field.dim .input { border-style: dashed; border-color: var(--stage-line); color: var(--light-2); }
+.code-line { font-size: var(--c-label); color: var(--light-2); }
+.code-line .v { font-family: var(--face-number); font-weight: 800; color: var(--light-1); letter-spacing: 0.06em; }
+/* The nickname and the numbers are typed as they are: only the class code is shown in capitals. */
+.input.plain { text-transform: none; letter-spacing: 0; }
+.input { min-width: 0; text-overflow: ellipsis; }
