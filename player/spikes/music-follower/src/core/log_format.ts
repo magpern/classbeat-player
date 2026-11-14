@@ -10,6 +10,11 @@ export function metaLine(stamp: Stamp, info: Record<string, unknown>): string {
   return JSON.stringify({ t: "meta", ...stamp, ...info });
 }
 
+/** A reader failure with the tool's own error text (never silent). */
+export function readerErrorLine(stamp: Stamp, text: string): string {
+  return JSON.stringify({ t: "reader_error", ...stamp, text });
+}
+
 export function readingLine(stamp: Stamp, reading: Reading | null, decision: Decision): string {
   return JSON.stringify({ t: "reading", ...stamp, reading, decision });
 }
@@ -21,6 +26,16 @@ export function markerLine(stamp: Stamp, key: string, classTimeMs: number | null
 /** A control key (undo, relink, pick) and the decision it produced. */
 export function controlLine(stamp: Stamp, key: string, decision: Decision): string {
   return JSON.stringify({ t: "control", ...stamp, key, decision });
+}
+
+/** The status text plus, when the music gives no usable reading, why. */
+export function statusLine(d: Decision, why: string | null): string {
+  return statusText(d) + (why ? `  [no music reading: ${why}]` : "");
+}
+
+/** Shown while a read has been pending for a while (Spotify or macOS not answering yet). */
+export function pendingNote(elapsedMs: number): string {
+  return elapsedMs < 1000 ? "" : `  [waiting for Spotify's answer, ${Math.floor(elapsedMs / 1000)} s]`;
 }
 
 /** One-line status for the terminal. */

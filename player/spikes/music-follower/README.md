@@ -20,8 +20,14 @@ account, token or API; send play, pause, skip or any other command to Spotify. I
    ```
 
 4. Per system:
-   - **macOS**: nothing else. The first run asks to let your terminal control Spotify (Automation
-     permission); allow it.
+   - **macOS**: nothing else to install. The first run prints "Waiting for macOS: allow Terminal to
+     control Spotify" and macOS asks "<your terminal> wants to control Spotify" (it may sit behind
+     the terminal window): click OK. The tool waits for your answer. If you clicked Don't Allow, or
+     the status line says "not permitted by macOS", switch it on in System Settings, Privacy &
+     Security, Automation, your terminal app, Spotify (error -1743). The tool keeps running and
+     picks it up. The status line says why there is no reading (Spotify not running, not playing,
+     not permitted) instead of only Manual. Start Spotify before the tool if you can: the prompt
+     only appears once Spotify is running.
    - **Windows**: nothing else (Windows PowerShell 5.1 ships with Windows). Spotify must be the
      desktop app, not a browser tab.
    - **Linux** (best effort): `playerctl` (`sudo apt install playerctl`).
