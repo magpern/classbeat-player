@@ -6,7 +6,7 @@
  */
 
 /**
- * Server to the connection: the session ended for it; the connection is then closed with 4403.
+ * Server to the host, a controller or a rider: the session ended for it; the connection is then closed with 4403. `dropped` when the host dropped that controller or removed that rider.
  */
 export interface Ended {
   /**

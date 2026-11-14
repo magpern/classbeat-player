@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/lock-state.schema.json",
+  "title": "LockState",
+  "description": "Server to the host only: whether the session is locked for new riders; also sent after the host's welcome when it reconnects.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "locked"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "lock_state"
+    },
+    "locked": {
+      "type": "boolean"
+    }
+  }
+}

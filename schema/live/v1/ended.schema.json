@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://classbeat.example/schema/live/v1/ended.schema.json",
   "title": "Ended",
-  "description": "Server to the connection: the session ended for it; the connection is then closed with 4403.",
+  "description": "Server to the host, a controller or a rider: the session ended for it; the connection is then closed with 4403. `dropped` when the host dropped that controller or removed that rider.",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://classbeat.example/schema/live/v1/host-status.schema.json",
   "title": "HostStatus",
-  "description": "Server to controllers: whether the host is connected. While it is not, a controller sees this and nothing else.",
+  "description": "Server to controllers and riders: whether the host is connected. While it is not, a controller sees this and nothing else, and a rider's phone waits for the instructor.",
   "type": "object",
   "additionalProperties": false,
   "required": [

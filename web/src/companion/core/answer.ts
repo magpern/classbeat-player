@@ -6,7 +6,7 @@ import { isControllerToken } from "./wire.ts";
 
 export type ErrorName = LiveErrorBody["error"];
 /** Every error name of the contract's closed enum, in its order. */
-export const ERROR_NAMES: readonly ErrorName[] = ["invalid_request", "body_too_large", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
+export const ERROR_NAMES: readonly ErrorName[] = ["invalid_request", "body_too_large", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "cannot_join", "too_many_requests", "internal_error"];
 
 /** How the request went, as far as the page needs to know. */
 export type Outcome =

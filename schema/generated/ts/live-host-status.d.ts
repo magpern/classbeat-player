@@ -6,7 +6,7 @@
  */
 
 /**
- * Server to controllers: whether the host is connected. While it is not, a controller sees this and nothing else.
+ * Server to controllers and riders: whether the host is connected. While it is not, a controller sees this and nothing else, and a rider's phone waits for the instructor.
  */
 export interface HostStatus {
   /**

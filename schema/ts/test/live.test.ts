@@ -13,6 +13,11 @@ import type { Command } from "../../generated/ts/live-command.d.ts";
 import type { ForwardedCommand } from "../../generated/ts/live-command-forwarded.d.ts";
 import type { CompanionState } from "../../generated/ts/live-companion-state.d.ts";
 import type { Hello } from "../../generated/ts/live-hello.d.ts";
+import type { JoinAnswer } from "../../generated/ts/live-join-answer.d.ts";
+import type { JoinRequest } from "../../generated/ts/live-join-request.d.ts";
+import type { RiderJoined } from "../../generated/ts/live-rider-joined.d.ts";
+import type { RiderState, RiderZone } from "../../generated/ts/live-rider-state.d.ts";
+import type { RiderWelcome } from "../../generated/ts/live-welcome-rider.d.ts";
 import { problems } from "./live-shape.ts";
 
 const V1 = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "live", "v1");
@@ -31,8 +36,8 @@ function validator(name: string) {
   return ajv.compile(load(join(V1, `${name}.schema.json`)));
 }
 
-test("the live contract has 21 schemas", () => {
-  assert.equal(NAMES.length, 21);
+test("the live contract has 32 schemas", () => {
+  assert.equal(NAMES.length, 32);
 });
 
 for (const name of NAMES) {
@@ -193,7 +198,7 @@ test("maxLength equals the length a fixed-length pattern gives", () => {
     }
   }
   // The Python suite pins the same count.
-  assert.equal(checked, 16);
+  assert.equal(checked, 23);
 });
 
 test("fixedWidth reads the live pattern forms", () => {
@@ -216,7 +221,29 @@ const ROUTE_ERRORS: Record<string, string[]> = {
   ],
   "POST /api/live/controller": ["invalid_request", "body_too_large", "cannot_control", "internal_error"],
   "POST /api/live/control": ["invalid_request", "body_too_large", "invalid_code", "controllers_full", "too_many_requests", "internal_error"],
+  "POST /api/live/join": ["invalid_request", "body_too_large", "cannot_join", "too_many_requests", "internal_error"],
 };
+
+// What reaches a rider and what a rider sends, pinned in full (ADR 0007 section 6; the Python
+// suite pins the same table and also checks the word lists).
+const TO_RIDER = [
+  "ended ended.schema.json server>host,controller,rider",
+  "host_status host-status.schema.json server>controller,rider",
+  "rider_state rider-state.schema.json host>rider",
+  "welcome welcome-rider.schema.json server>rider",
+];
+
+test("exactly four messages reach a rider, and a rider sends hello only, to the server", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const messages: any[] = load(join(V1, "routing.json")).messages;
+  const line = (m: { type: string; schema: string; from: string[]; to: string[] }) =>
+    `${m.type} ${m.schema} ${m.from.join(",")}>${m.to.join(",")}`;
+  assert.deepEqual(messages.filter((m) => m.to.includes("rider")).map(line).sort(), TO_RIDER);
+  assert.deepEqual(messages.filter((m) => m.from.includes("rider")).map(line), ["hello hello.schema.json host,controller,rider>server"]);
+  assert.deepEqual(load(join(V1, "welcome.schema.json")).properties.role.enum, ["host", "controller"]);
+  assert.deepEqual(load(join(V1, "join-request.schema.json")).required.sort(), ["nickname", "session"]);
+  assert.deepEqual(Object.keys(load(join(V1, "join-request.schema.json")).properties).sort(), ["nickname", "session"]);
+});
 
 test("each route's error set in routing.json is pinned, and is inside the error enum", () => {
   const routing = load(join(V1, "routing.json"));
@@ -276,4 +303,38 @@ test("literals of the generated types are valid messages", () => {
   assert.equal(validator("command")(withSlot), false);
   assert.equal(validator("command")(previous), false);
   assert.equal(validator("command")(far), false);
+});
+
+test("literals of the generated rider types are valid messages", () => {
+  const zone: RiderZone = { number: 4, name: "Threshold", effort: { ftpPct: [91, 105], hrmaxPct: null, rpe: [7, 8] } };
+  const welcome: RiderWelcome = { v: 1, type: "welcome", role: "rider", hostConnected: false };
+  const join: JoinRequest = { session: "BCDF-GHJK", nickname: "Sam" };
+  const answer: JoinAnswer = { riderToken: `cbp_rdr_${SECRET}` };
+  const state: RiderState = {
+    v: 1,
+    type: "rider_state",
+    run: "Q2xhc3NSdW4tMDAwMDAwMQ",
+    seq: 0,
+    status: "running",
+    classMs: 1000,
+    lengthMs: 60000,
+    classRemainingMs: 59000,
+    now: { index: 0, zone, position: null, test: { kind: "ftp", minutes: 20 }, remainingMs: 59000 },
+    next: [{ startMs: 60000, lengthMs: 1000, zone, position: "standing" }],
+  };
+  const joined: RiderJoined = { v: 1, type: "rider_joined", rider: "UmlkZXIwMDE", nickname: "Sam" };
+  // @ts-expect-error A rider's welcome is never a host's or a controller's.
+  const asHost: RiderWelcome = { ...welcome, role: "host" };
+  // @ts-expect-error The join body has no field for the rider's FTP.
+  const withFtp: JoinRequest = { ...join, ftp: 250 };
+  // @ts-expect-error rider_state carries no cue.
+  const withCue: RiderState = { ...state, now: { ...state.now, cue: "" } };
+  assert.equal(validator("welcome-rider")(welcome), true);
+  assert.equal(validator("join-request")(join), true);
+  assert.equal(validator("join-answer")(answer), true);
+  assert.equal(validator("rider-state")(state), true);
+  assert.equal(validator("rider-joined")(joined), true);
+  assert.equal(validator("welcome-rider")(asHost), false);
+  assert.equal(validator("join-request")(withFtp), false);
+  assert.equal(validator("rider-state")(withCue), false);
 });

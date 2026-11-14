@@ -117,11 +117,23 @@ def _answered(route: RouteContext) -> set[str]:
     )
 
 
+# The table's routes the backend does not serve yet, exactly (ADR 0007: the join route comes with
+# the backend's rider issue, which takes it out of here). Not a skip: a route in this set must be
+# in the table and must not be in the app, and every other table route must be in the app.
+NOT_BUILT_YET: frozenset[str] = frozenset({"POST /api/live/join"})
+
+
 def test_the_live_routes_are_the_tables_routes() -> None:
-    assert set(_live_routes(_app())) == set(TABLE)
+    assert set(_live_routes(_app())) == set(TABLE) - NOT_BUILT_YET
 
 
-@pytest.mark.parametrize("name", sorted(TABLE))
+def test_the_routes_not_built_yet_are_in_the_table_and_not_in_the_app() -> None:
+    assert NOT_BUILT_YET == {"POST /api/live/join"}
+    assert NOT_BUILT_YET <= set(TABLE)
+    assert not NOT_BUILT_YET & set(_live_routes(_app()))
+
+
+@pytest.mark.parametrize("name", sorted(set(TABLE) - NOT_BUILT_YET))
 def test_a_routes_error_codes_are_its_entry_in_routing_json(name: str) -> None:
     assert route_problems(name, TABLE[name], _answered(_live_routes(_app())[name])) == []
 

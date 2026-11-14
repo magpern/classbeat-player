@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/rider-state.schema.json",
+  "title": "RiderState",
+  "description": "Host to riders only (ADR 0007 section 2): what a rider's phone shows. The same message for every rider: the host sends it once and the server sends those bytes to every rider connection. Nothing derived from any rider, no token or code, no account, device or instructor name, no cue, no song and no link state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "run",
+    "seq",
+    "status",
+    "classMs",
+    "lengthMs",
+    "classRemainingMs",
+    "now",
+    "next"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "rider_state"
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$",
+      "maxLength": 22,
+      "description": "The class run's id: 16 random bytes, base64url without padding, new for each class run."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Increases by 1 per rider_state within the run (its own counter, not companion_state's)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "running",
+        "paused",
+        "holding",
+        "ended"
+      ]
+    },
+    "classMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000,
+      "description": "Class time now."
+    },
+    "lengthMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400000,
+      "description": "The class's length."
+    },
+    "classRemainingMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000,
+      "description": "Time left in the class."
+    },
+    "now": {
+      "title": "RiderNowInterval",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The current interval.",
+      "required": [
+        "index",
+        "zone",
+        "position",
+        "test",
+        "remainingMs"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86399999,
+          "description": "The interval's index in the class."
+        },
+        "zone": {
+          "$ref": "#/$defs/zone"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "seated",
+                "standing"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The interval's position; null where the class gives none."
+        },
+        "test": {
+          "anyOf": [
+            {
+              "title": "FtpTest",
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The interval is an FTP test (ADR 0003).",
+              "required": [
+                "kind",
+                "minutes"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "ftp"
+                },
+                "minutes": {
+                  "type": "integer",
+                  "enum": [
+                    3,
+                    5,
+                    20
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The interval's test; null where it has none."
+        },
+        "remainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000,
+          "description": "Time left in this interval."
+        }
+      }
+    },
+    "next": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "title": "RiderComingInterval",
+        "type": "object",
+        "additionalProperties": false,
+        "description": "A coming interval.",
+        "required": [
+          "startMs",
+          "lengthMs",
+          "zone",
+          "position"
+        ],
+        "properties": {
+          "startMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000,
+            "description": "Where it starts in class time."
+          },
+          "lengthMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400000,
+            "description": "Its length."
+          },
+          "zone": {
+            "$ref": "#/$defs/zone"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "seated",
+                  "standing"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The interval's position; null where the class gives none."
+          }
+        }
+      },
+      "description": "Up to 3 coming intervals."
+    }
+  },
+  "$defs": {
+    "zone": {
+      "title": "RiderZone",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The interval's zone, always as a number and a name, and its effort, from the class's zone scale.",
+      "required": [
+        "number",
+        "name",
+        "effort"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "effort": {
+          "$ref": "#/$defs/effort"
+        }
+      }
+    },
+    "effort": {
+      "title": "Effort",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The zone's ranges as the class gives them, null where it gives none. The phone works out the rider's own effort from the rider's own values, which never leave it.",
+      "required": [
+        "ftpPct",
+        "hrmaxPct",
+        "rpe"
+      ],
+      "properties": {
+        "ftpPct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/range"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Percent of FTP (the class's ftp_pct)."
+        },
+        "hrmaxPct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/range"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Percent of maximum heart rate (the class's hrmax_pct)."
+        },
+        "rpe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/range"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rate of perceived exertion (the class's rpe)."
+        }
+      }
+    },
+    "range": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000
+      },
+      "description": "[low, high]: the class's range (ADR 0003 zone_scale), rounded to whole numbers by the host."
+    }
+  }
+}

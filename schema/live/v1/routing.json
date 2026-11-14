@@ -1,10 +1,11 @@
 {
-  "description": "The live contract's routing allowlist for the handlebar companion (ADR 0005 section 4, ADR 0002 section 8). Each WebSocket message names its schema, the role that may send it and the roles it is delivered to; the server checks a message against the schema for its sender's role and drops (and counts) anything else. `server` is the live process itself. Each HTTP route names its body and answer schemas and its error codes.",
+  "description": "The live contract's routing allowlist for the handlebar companion and riders (ADR 0005 section 4, ADR 0007 section 2, ADR 0002 section 8). Each WebSocket message names its schema, the role that may send it and the roles it is delivered to; the server checks a message against the schema for its sender's role and drops (and counts) anything else. `server` is the live process itself. Each HTTP route names its body and answer schemas and its error codes.",
   "roles": ["host", "controller", "rider"],
   "messages": [
     { "type": "hello", "schema": "hello.schema.json", "from": ["host", "controller", "rider"], "to": ["server"] },
     { "type": "welcome", "schema": "welcome.schema.json", "from": ["server"], "to": ["host", "controller"] },
-    { "type": "host_status", "schema": "host-status.schema.json", "from": ["server"], "to": ["controller"] },
+    { "type": "welcome", "schema": "welcome-rider.schema.json", "from": ["server"], "to": ["rider"] },
+    { "type": "host_status", "schema": "host-status.schema.json", "from": ["server"], "to": ["controller", "rider"] },
     { "type": "controller_joined", "schema": "controller-joined.schema.json", "from": ["server"], "to": ["host"] },
     { "type": "controller_left", "schema": "controller-left.schema.json", "from": ["server"], "to": ["host"] },
     { "type": "make_code", "schema": "make-code.schema.json", "from": ["host"], "to": ["server"] },
@@ -17,12 +18,21 @@
     { "type": "command_result", "schema": "command-result.schema.json", "from": ["host"], "to": ["server"] },
     { "type": "ack", "schema": "ack.schema.json", "from": ["server"], "to": ["controller"] },
     { "type": "end", "schema": "end.schema.json", "from": ["host"], "to": ["server"] },
-    { "type": "ended", "schema": "ended.schema.json", "from": ["server"], "to": ["host", "controller"] }
+    { "type": "ended", "schema": "ended.schema.json", "from": ["server"], "to": ["host", "controller", "rider"] },
+    { "type": "rider_state", "schema": "rider-state.schema.json", "from": ["host"], "to": ["rider"] },
+    { "type": "rider_joined", "schema": "rider-joined.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "rider_left", "schema": "rider-left.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "drop_rider", "schema": "drop-rider.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "lock", "schema": "lock.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "lock_state", "schema": "lock-state.schema.json", "from": ["server"], "to": ["host"] },
+    { "type": "new_join_code", "schema": "new-join-code.schema.json", "from": ["host"], "to": ["server"] },
+    { "type": "join_code", "schema": "join-code.schema.json", "from": ["server"], "to": ["host"] }
   ],
   "http": [
     { "route": "POST /api/live/sessions", "credential": "device_token", "body": null, "answer": "session-answer.schema.json", "errors": ["body_too_large", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "too_many_requests", "internal_error"] },
     { "route": "POST /api/live/controller", "credential": "site_cookie", "body": "controller-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "body_too_large", "cannot_control", "internal_error"] },
-    { "route": "POST /api/live/control", "credential": "none", "body": "control-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "body_too_large", "invalid_code", "controllers_full", "too_many_requests", "internal_error"] }
+    { "route": "POST /api/live/control", "credential": "none", "body": "control-request.schema.json", "answer": "controller-answer.schema.json", "errors": ["invalid_request", "body_too_large", "invalid_code", "controllers_full", "too_many_requests", "internal_error"] },
+    { "route": "POST /api/live/join", "credential": "none", "body": "join-request.schema.json", "answer": "join-answer.schema.json", "errors": ["invalid_request", "body_too_large", "cannot_join", "too_many_requests", "internal_error"] }
   ],
   "errorSchema": "error.schema.json"
 }

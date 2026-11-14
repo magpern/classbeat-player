@@ -239,11 +239,15 @@ class Hub:
         elif route.type == "make_code":
             self._make_code(link)
         else:
-            # The host's `drop`: the one message left that the allowlist routes to the server
-            # (the host's set is held by tests/guards/test_guard_live_routing.py).
-            slot = message.get("slot")  # 1 or 2: the schema holds it to those integers
+            # The host's `drop`, whose schema requires `slot` (1 or 2), or one of the host's
+            # rider messages (ADR 0007: `rider_state`, `drop_rider`, `lock`, `new_join_code`),
+            # whose closed schemas have no `slot`: routed by the contract, not built here yet,
+            # so dropped and counted (tests/test_live_ws_router.py).
+            slot = message.get("slot")
             if isinstance(slot, int):
                 self.service.registry.host_drop(link.session_id, slot)
+            else:
+                self._drop(link, "not_built_yet")
 
     def _make_code(self, link: Link) -> None:
         made = self.service.registry.make_code(link.session_id, self.service.clock())

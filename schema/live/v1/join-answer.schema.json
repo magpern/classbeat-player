@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/join-answer.schema.json",
+  "title": "JoinAnswer",
+  "description": "The answer of POST /api/live/join: a rider token, kept on the phone in sessionStorage only, never in the address.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "riderToken"
+  ],
+  "properties": {
+    "riderToken": {
+      "type": "string",
+      "pattern": "^cbp_rdr_[A-Za-z0-9_-]{43}$",
+      "maxLength": 51
+    }
+  }
+}

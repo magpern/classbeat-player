@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "type": "rider_state",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "seq": 0,
+  "status": "paused",
+  "classMs": 1500000,
+  "lengthMs": 2700000,
+  "classRemainingMs": 1200000,
+  "now": {
+    "index": 9,
+    "zone": {
+      "number": 4,
+      "name": "Threshold",
+      "effort": {
+        "ftpPct": [
+          91,
+          105
+        ],
+        "hrmaxPct": [
+          85,
+          92
+        ],
+        "rpe": [
+          7,
+          8
+        ]
+      }
+    },
+    "position": null,
+    "test": {
+      "kind": "ftp",
+      "minutes": 20
+    },
+    "remainingMs": 1200000
+  },
+  "next": []
+}

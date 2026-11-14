@@ -1,0 +1,27 @@
+# Rider-bound words (rule 13, ADR 0007 section 6). No property name, enum or const value of a
+# message the server delivers to a rider (schema/live/v1/routing.json says which) contains one of
+# these as a whole word. It is every word of rider-words.txt except `rider` (the rider welcome's
+# role) and `ftp` (`ftpPct` and the FTP test's `kind`); a test checks it is exactly that, so the
+# two lists grow together. Same splitting and readers as equipment-words.txt. One lowercase word
+# per line; # starts a comment. The list only grows.
+nickname
+nicknames
+reading
+readings
+riders
+presence
+present
+count
+counts
+roster
+participant
+participants
+attendee
+attendees
+member
+members
+heart
+hr
+leaderboard
+rank
+ranking

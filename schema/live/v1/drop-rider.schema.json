@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/drop-rider.schema.json",
+  "title": "DropRider",
+  "description": "Host to server: remove this rider (ADR 0007 section 3). Its token is dropped, its connection gets ended `dropped` and is closed with 4403, and the host gets rider_left `dropped`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "rider"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "drop_rider"
+    },
+    "rider": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{11}$",
+      "maxLength": 11,
+      "description": "The rider's id: 8 random bytes, base64url without padding, given by the server at the join, never derived from the token or the nickname, the same for the token's whole life."
+    }
+  }
+}

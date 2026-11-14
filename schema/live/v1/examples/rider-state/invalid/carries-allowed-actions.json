@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "type": "rider_state",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "seq": 12,
+  "status": "running",
+  "classMs": 754000,
+  "lengthMs": 2700000,
+  "classRemainingMs": 1946000,
+  "now": {
+    "index": 4,
+    "zone": {
+      "number": 4,
+      "name": "Threshold",
+      "effort": {
+        "ftpPct": [
+          91,
+          105
+        ],
+        "hrmaxPct": [
+          85,
+          92
+        ],
+        "rpe": [
+          7,
+          8
+        ]
+      }
+    },
+    "position": "seated",
+    "test": null,
+    "remainingMs": 46000
+  },
+  "next": [
+    {
+      "startMs": 800000,
+      "lengthMs": 60000,
+      "zone": {
+        "number": 2,
+        "name": "Endurance",
+        "effort": {
+          "ftpPct": [
+            56,
+            75
+          ],
+          "hrmaxPct": null,
+          "rpe": [
+            3,
+            4
+          ]
+        }
+      },
+      "position": "standing"
+    },
+    {
+      "startMs": 860000,
+      "lengthMs": 120000,
+      "zone": {
+        "number": 1,
+        "name": "Recovery",
+        "effort": {
+          "ftpPct": null,
+          "hrmaxPct": null,
+          "rpe": [
+            1,
+            2
+          ]
+        }
+      },
+      "position": null
+    },
+    {
+      "startMs": 980000,
+      "lengthMs": 60000,
+      "zone": {
+        "number": 4,
+        "name": "Threshold",
+        "effort": {
+          "ftpPct": [
+            91,
+            105
+          ],
+          "hrmaxPct": [
+            85,
+            92
+          ],
+          "rpe": [
+            7,
+            8
+          ]
+        }
+      },
+      "position": "seated"
+    }
+  ],
+  "allowed": [
+    "pause"
+  ]
+}
