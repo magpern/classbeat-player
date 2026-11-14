@@ -14,7 +14,8 @@ an account with us: each task runs on its own with Node.
    cd classbeat-player
    ```
 
-   Later, to get the newest version: `git pull` in that folder.
+   Every block below starts from this `classbeat-player` folder. Later, to get the newest
+   version: `git pull` in it.
 
 ## Spike 1: following the music
 
@@ -46,9 +47,11 @@ npm start -- --variant=godot-native        # needs the Godot builds; agents can 
 
 ## The player app
 
-To try the desktop app itself. Details: [build-on-a-mac.md](build-on-a-mac.md).
+To try the desktop app itself. It starts without the backend, but cannot pair or sync classes
+until a backend is running somewhere. Details: [build-on-a-mac.md](build-on-a-mac.md).
 
 ```bash
+cd ~/classbeat-player        # or wherever you cloned it: the repository's top folder
 scripts/build-mac.sh --out ~/Desktop/cb
 ```
 
