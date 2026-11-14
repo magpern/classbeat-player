@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { monoMs, wallMs } from "./clock.js";
 import { buildPlan } from "./core/class_plan.js";
 import { ClassFollower, DEFAULT_CONFIG } from "./core/follower.js";
-import { controlLine, markerLine, metaLine, pendingNote, readingLine, statusLine } from "./core/log_format.js";
+import { controlLine, markerLine, metaLine, pendingNote, readerErrorLine, readingLine, statusLine } from "./core/log_format.js";
 import type { Decision } from "./core/types.js";
 import { makeShutdown } from "./shutdown.js";
 import { createReader } from "./readers/select.js";
@@ -51,6 +51,7 @@ async function main(): Promise<void> {
   write(metaLine(stamp(), { event: "start", platform: process.platform, source: reader.source, rate, limitations: reader.limitations ?? [], plan: plan.name, crossfadeMs: plan.crossfadeMs, config: cfg }));
 
   let last: Decision | null = null;
+  let lastError: string | null = null;
   let pendingSince: number | null = null;
   let statusBase = "";
   const finish = makeShutdown(() => {
@@ -91,6 +92,12 @@ async function main(): Promise<void> {
     pendingSince = started;
     const reading = await reader.readNow();
     pendingSince = null;
+    const err = reader.error?.() ?? null;
+    if (err && err !== lastError) {
+      write(readerErrorLine(stamp(), err));
+      console.error(`\nreader error: ${err}`);
+    }
+    lastError = err;
     const decision = follower.step(monoMs(), reading);
     last = decision;
     write(readingLine(stamp(), reading, decision));

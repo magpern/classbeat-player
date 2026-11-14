@@ -17,10 +17,10 @@ export const NOT_PERMITTED_NOTE =
 export const MAC_SCRIPT_LINES = [
   'if application "Spotify" is not running then return "notrunning"',
   'tell application "Spotify"',
-  "set st to player state as string",
-  'if st is "stopped" then return "stopped"',
-  "set tr to current track",
-  "return st & tab & (id of tr) & tab & (name of tr) & tab & (artist of tr) & tab & (player position as string) & tab & (duration of tr as string)",
+  "set playerStateText to player state as string",
+  'if playerStateText is "stopped" then return "stopped"',
+  "set currentTrackRef to current track",
+  "return playerStateText & tab & (id of currentTrackRef) & tab & (name of currentTrackRef) & tab & (artist of currentTrackRef) & tab & (player position as string) & tab & (duration of currentTrackRef as string)",
   "end tell",
 ];
 
@@ -58,6 +58,7 @@ export class MacReader implements Reader {
   private permitted = false; // Spotify has answered once, so the short timeout is safe
   private notedDenied = false;
   private why: string | null = null;
+  private err: string | null = null;
 
   constructor(
     private readonly run: Runner = runCommandDetailed,
@@ -68,6 +69,11 @@ export class MacReader implements Reader {
   /** Why the last read gave nothing or the music is not playing, for the status line. */
   reason(): string | null {
     return this.why;
+  }
+
+  /** The last osascript error text (stderr), or null when the last read did not fail. */
+  error(): string | null {
+    return this.err;
   }
 
   /** One read with no short timeout, so a pending Automation prompt can be answered. */
@@ -87,6 +93,7 @@ export class MacReader implements Reader {
     });
     const r = await Promise.race([this.run(file, args, limit), deadline]).finally(() => clearTimeout(timer));
     const after = monoMs();
+    this.err = r.ok ? null : r.stderr.trim() || (r.timedOut ? "osascript timed out" : "osascript failed");
     if (!r.ok) {
       if (/-1743|not authori[sz]ed/i.test(r.stderr)) {
         this.permitted = false;

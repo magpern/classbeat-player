@@ -11,5 +11,7 @@ export interface Reader {
   prepare?(): Promise<void>;
   /** Why the last read gave nothing, or the music is not playing; shown on the status line. */
   reason?(): string | null;
+  /** The last read's error text (for example osascript stderr), or null. Logged once per distinct text. */
+  error?(): string | null;
   close?(): void;
 }

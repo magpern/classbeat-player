@@ -10,6 +10,11 @@ export function metaLine(stamp: Stamp, info: Record<string, unknown>): string {
   return JSON.stringify({ t: "meta", ...stamp, ...info });
 }
 
+/** A reader failure with the tool's own error text (never silent). */
+export function readerErrorLine(stamp: Stamp, text: string): string {
+  return JSON.stringify({ t: "reader_error", ...stamp, text });
+}
+
 export function readingLine(stamp: Stamp, reading: Reading | null, decision: Decision): string {
   return JSON.stringify({ t: "reading", ...stamp, reading, decision });
 }

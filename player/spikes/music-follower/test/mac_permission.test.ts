@@ -131,6 +131,41 @@ describe("quit", () => {
   });
 });
 
+describe("AppleScript variable names", () => {
+  // On a real Mac "set st to ..." inside tell application "Spotify" failed to compile (-2741).
+  const RISKY = new Set(["st", "tr", "it", "me", "id", "name", "pos", "dur", "s", "t", "x", "a", "n", "ar", "art", "ti"]);
+
+  it("uses only long, unambiguous variable names", () => {
+    const names = MAC_SCRIPT_LINES.flatMap((l) => [...l.matchAll(/\bset\s+([A-Za-z_]\w*)\s+to\b/g)].map((m) => m[1]!));
+    assert.ok(names.length >= 2);
+    for (const n of names) {
+      assert.ok(n.length >= 8, `${n} is too short`);
+      assert.ok(!RISKY.has(n.toLowerCase()), `${n} may clash with an AppleScript term`);
+    }
+    const script = MAC_SCRIPT_LINES.join("\n");
+    assert.doesNotMatch(script, /\b(?:st|tr)\b/);
+  });
+});
+
+describe("osascript errors are not silent", () => {
+  it("keeps the stderr text of a failed read, and clears it after a good one", async () => {
+    const syntax: ExecResult = { ok: false, stdout: "", stderr: '96:98: syntax error: Expected expression but found "st". (-2741)\n', timedOut: false };
+    const r = new MacReader(fake(syntax, ok(PLAYING)).run);
+    await r.readNow();
+    assert.match(r.error()!, /syntax error.*-2741/);
+    assert.equal(r.reason(), "osascript failed");
+    await r.readNow();
+    assert.equal(r.error(), null);
+  });
+
+  it("formats a reader_error log line", async () => {
+    const { readerErrorLine } = await import("../src/core/log_format.js");
+    const line = JSON.parse(readerErrorLine({ monoMs: 1, wallMs: 2 }, "boom")) as Record<string, unknown>;
+    assert.equal(line["t"], "reader_error");
+    assert.equal(line["text"], "boom");
+  });
+});
+
 describe("read-only guard", () => {
   it("the script sends no control command", () => {
     const script = MAC_SCRIPT_LINES.join("\n");
