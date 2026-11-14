@@ -58,5 +58,10 @@ check "live schema example change runs backend, schema, web and desktop" "backen
 before_pol="$(git rev-parse HEAD)"
 commit backend/src/player_backend/request_policy.py
 check "request policy change runs backend and web" "backend web" "$(flags push "$before_pol" HEAD)"
+before_ctl="$(git rev-parse HEAD)"
+commit backend/tests/test_control_page.py
+check "control page test change runs backend and web" "backend web" "$(flags push "$before_ctl" HEAD)"
+commit backend/tests/test_other.py
+check "other backend test runs backend only" "backend" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 
 exit "$fail"

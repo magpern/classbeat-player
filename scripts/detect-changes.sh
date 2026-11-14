@@ -43,10 +43,12 @@ flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
 # (docs/design/mockups/tokens.css is compared with web/src/design/tokens.css, the checks are ported
 # from docs/design/mockups/*.js), the live-session schema and examples under schema/live/, and
 # backend/src/player_backend/request_policy.py (the fake's CSP is checked against it).
+# web/test/unit/companion-fake-headers.test.ts reads backend/tests/test_control_page.py (the
+# control page's header table), so a backend PR that changes only that file must run the web job (#347).
 # A change there must run the whole web job, or main can go red unseen (issue #268).
 # player/app/src/core/** and schema/generated/ts are already covered by the drift-only step,
 # through the player and schema flags.
-flag web '^(web/|docs/design/|schema/live/|backend/src/player_backend/request_policy\.py$)'
+flag web '^(web/|docs/design/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/tests/test_control_page\.py$)'
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.
 flag desktop '^(player/|web/|schema/|scripts/(build|package|release)[^/]*|\.github/workflows/|(.*/)?(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml|Cargo\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt))'
