@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-14 (after #380).
+Updated 2026-11-14 (after #410).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -74,10 +74,18 @@ app cancels a control code it no longer shows. Built: the contract's `controller
 `cancel_code` (#368), the backend's reasons, place replay and `cancel_code` (#372), the presenter
 freeing the place (#379) and the cancel when one display is left (#380).
 
-**The player as a web app (ADR 0008, in progress):** ADR 0008 (#389, Proposed), the web job on a
-change of the shared clock surface (#391, #394), the backend accepting the `play` return entry
-(#392, #395; its bound in #400) and the `/play` spec (#390, #401). Open: the `/play` page (#393),
-then the site's return entries and the "Play on this device" link (#396).
+**The player as a web app (ADR 0008, done on fakes; Verifier clean on 2221754):** ADR 0008 (#389),
+the web job on a change of the shared clock surface (#391, #394), the backend accepting the `play`
+return entry (#392, #395; its bound in #400), the `/play` spec (#390, #401), the backend image's web
+stage with the shared clock surface (#404, #405), the `/play` page on the manual clock (#393, #403),
+and the site's return entries and the "Play on this device" link (#396, #410). Hardening: the
+live-session and sign-in notes from the reviews (#407, #409) and the specs as built (#408). The
+Verifier ran sign-in and the way back (also from a new tab), the picker and a direct open, a whole
+class on the manual clock with its keys, keep-awake and End, no request and no storage during a
+class, the page headers, the class details link, the phone, small-landscape, tablet and room
+layouts, and rules 1 to 4, 6 and 7, with no gaps. Not served yet: nothing in the repository serves
+`dist/site/`, which ADR 0008 leaves to the deploy work; whoever serves it sends the site's page
+headers and its path fallback (`/play` to `play/index.html`).
 
 ## PL2: backend and sign-in
 
@@ -189,6 +197,12 @@ Merged: #30 and its findings (#53).
 
 - PL8 notes: from #273, HEAD on `/control` answers 405 (by design); from #340, the
   private-import guard does not follow names reached through a container or `self`.
+
+- ADR 0008 notes: a replaced phone's one in-flight command frame gets its own rate window (#409
+  N1: ignore commands from a closing connection); the canonical class id pattern is defined twice
+  in `web/` and the backend drift test reads the Python source as text (#410); the backend image's
+  web stage would need `schema/generated` if `tsc` ever ran there (#405); the class details spec
+  should place "Play on this device" beside "Delete class" (#410 design review).
 
 ## Carried into PL8
 

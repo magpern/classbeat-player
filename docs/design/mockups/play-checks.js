@@ -19,7 +19,7 @@ function tiersFor(s, roomTiers) {
 // Runs inside the page (page.evaluate). Returns [check, result] rows.
 function pageChecks() {
   const KEY_MIN = 64, KEY_GAP = 12;
-  // Every control the page has (ADR 0008 section 3): the band and the End question. Nothing
+  // Every control the page has (ADR 0008 section 5): the band and the End question. Nothing
   // that follows the music, hands the clock over or undoes: the page has only the manual clock.
   const ACTIONS = ['start', 'pause', 'resume', 'previous', 'next', 'end', 'end-class', 'keep-going', 'close'];
   const BANNED = /undo|follow|manual|music|sync/i;

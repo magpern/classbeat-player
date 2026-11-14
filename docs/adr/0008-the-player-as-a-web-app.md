@@ -1,6 +1,6 @@
 # 0008. The player as a web app on a phone or tablet
 
-Status: Proposed
+Status: Accepted (built in #401, #394, #395, #400, #405, #403 and #410; verified on fakes on main at 2221754)
 
 ## Context
 
