@@ -238,7 +238,7 @@ describe("companion live: the end, the wake lock and the page's policy", () => {
       const s = document.createElement("script");
       s.textContent = "globalThis.__inline = 1";
       document.head.append(s);
-      const metas = [...document.querySelectorAll("meta[http-equiv]")].filter((m) => m.getAttribute("http-equiv")?.toLowerCase() === "content-security-policy").length;
+      const metas = [...document.querySelectorAll("meta[http-equiv]")].filter((m) => (m.getAttribute("http-equiv") ?? "").trim().toLowerCase().startsWith("content-security-policy")).length;
       const referrer = document.querySelector("meta[name=referrer]")?.getAttribute("content") ?? "";
       return { inline: (globalThis as { __inline?: number }).__inline ?? 0, referrer: document.referrer, metas, referrerMeta: referrer };
     });

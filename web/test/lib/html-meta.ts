@@ -42,9 +42,15 @@ export function decode(raw: string): { text: string; unclear: boolean } {
 
 const RAW_TEXT = /^(script|style|textarea|title)$/i;
 
-/** Every start tag with its attributes, in order. */
-function startTags(html: string): { name: string; meta: Meta }[] {
+/**
+ * Every start tag with its attributes, in order, and whether the page held anything this reader
+ * cannot read with certainty (`uncertain`): a browser reads an unclosed quote, tag, comment or
+ * raw-text element to the end of the page and drops it, which a reader cannot be trusted to
+ * mirror, so the checks below treat such a page as one that may hold a policy.
+ */
+function startTags(html: string): { tags: { name: string; meta: Meta }[]; uncertain: boolean } {
   const out: { name: string; meta: Meta }[] = [];
+  let uncertain = false;
   let i = 0;
   while (i < html.length) {
     const lt = html.indexOf("<", i);
@@ -54,6 +60,7 @@ function startTags(html: string): { name: string; meta: Meta }[] {
       // abrupt endings), otherwise at `-->` or `--!>` (the incorrectly closed ending).
       const end = html.startsWith(">", lt + 4) ? lt + 5 : html.startsWith("->", lt + 4) ? lt + 6 : (() => {
         const m = /--!?>/.exec(html.slice(lt + 4));
+        if (!m) uncertain = true;
         return m ? lt + 4 + m.index + m[0].length : html.length;
       })();
       i = end;
@@ -62,7 +69,9 @@ function startTags(html: string): { name: string; meta: Meta }[] {
     const nameMatch = /^<([a-zA-Z][^\s/>]*)/.exec(html.slice(lt, lt + 200));
     if (!nameMatch) {
       // `</x>`, `<!doctype>`, `<?x>`, a stray `<`: skip to the next `>` (or past the `<`).
-      const gt = /^<[/!?]/.test(html.slice(lt, lt + 2)) ? html.indexOf(">", lt) : -1;
+      const special = /^<[/!?]/.test(html.slice(lt, lt + 2));
+      const gt = special ? html.indexOf(">", lt) : -1;
+      if (special && gt < 0) uncertain = true;
       i = gt < 0 ? lt + 1 : gt + 1;
       continue;
     }
@@ -72,7 +81,11 @@ function startTags(html: string): { name: string; meta: Meta }[] {
     let unclear = false;
     for (;;) {
       while (p < html.length && /[\s/]/.test(html[p])) p++;
-      if (p >= html.length || html[p] === ">") break;
+      if (p >= html.length) {
+        uncertain = true;
+        break;
+      }
+      if (html[p] === ">") break;
       const an = /^[^\s/>=]+/.exec(html.slice(p));
       if (!an) {
         p++;
@@ -91,10 +104,11 @@ function startTags(html: string): { name: string; meta: Meta }[] {
             raw = html.slice(p + 1, end);
             p = end + 1;
           } else {
-            // An unterminated value: the tag ends at the next `>`, so what follows is still read.
-            const gt = html.indexOf(">", p + 1);
-            raw = html.slice(p + 1, gt < 0 ? html.length : gt);
-            p = gt < 0 ? html.length : gt;
+            // An unclosed quote: a browser reads on to the end of the page and drops the tag and
+            // everything after it. Not mirrored here: the page is uncertain.
+            uncertain = true;
+            raw = html.slice(p + 1);
+            p = html.length;
           }
         } else {
           const um = /^[^\s>]*/.exec(html.slice(p));
@@ -111,14 +125,22 @@ function startTags(html: string): { name: string; meta: Meta }[] {
     i = p + 1;
     if (RAW_TEXT.test(name)) {
       const close = new RegExp(`</${name}[\\s/>]`, "i").exec(html.slice(i));
+      if (!close) uncertain = true;
       i = close ? i + close.index : html.length;
     }
   }
-  return out;
+  // A character reference this reader cannot resolve, in any <meta>, is not guessed at either.
+  return { tags: out, uncertain: uncertain || out.some((t) => t.name === "meta" && t.meta.unclear) };
 }
 
 /** The <meta> tags of the page. */
-export const metas = (html: string): Meta[] => startTags(html).filter((t) => t.name === "meta").map((t) => t.meta);
+export const metas = (html: string): Meta[] =>
+  startTags(html)
+    .tags.filter((t) => t.name === "meta")
+    .map((t) => t.meta);
+
+/** The page holds something this reader cannot read with certainty: it may hold a policy. */
+export const uncertain = (html: string): boolean => startTags(html).uncertain;
 
 const equiv = (m: Meta): string => m.attrs.get("http-equiv")?.trim().toLowerCase() ?? "";
 /** Sets the policy: exactly `Content-Security-Policy`. Where a policy must be present, only this counts. */
@@ -148,10 +170,10 @@ function hiddenPolicies(html: string): number {
 export const policyMetas = (html: string): string[] => metas(html).filter(isPolicy).map((m) => m.attrs.get("content") ?? "");
 
 /** A <meta> that sets, or may set (an http-equiv this reader cannot fully read, or one in text it skips), a policy. */
-export const hasPolicyMeta = (html: string): boolean => metas(html).some(maybePolicy) || hiddenPolicies(html) > 0;
+export const hasPolicyMeta = (html: string): boolean => metas(html).some(maybePolicy) || hiddenPolicies(html) > 0 || uncertain(html);
 
-/** How many <meta> tags set, or may set, a policy: a page that sets one has exactly one. */
-export const policyMetaCount = (html: string): number => metas(html).filter(maybePolicy).length + hiddenPolicies(html);
+/** How many <meta> tags set, or may set, a policy (an uncertain page counts one more): a page that sets one has exactly one. */
+export const policyMetaCount = (html: string): number => metas(html).filter(maybePolicy).length + hiddenPolicies(html) + (uncertain(html) ? 1 : 0);
 
 /**
  * The content of the page's one policy meta, where a page must have exactly one: null when there is
@@ -159,6 +181,7 @@ export const policyMetaCount = (html: string): number => metas(html).filter(mayb
  * (a `-Report-Only` meta enforces nothing).
  */
 export function onlyPolicy(html: string): string | null {
+  if (uncertain(html)) return null;
   const found = policyMetas(html);
   return found.length === 1 && policyMetaCount(html) === 1 ? found[0] : null;
 }

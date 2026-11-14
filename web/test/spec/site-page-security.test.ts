@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
 import { CSP, ORIGIN, crossSite, launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
+import { domMetas, domOnlyPolicy, domPolicies } from "../lib/dom-policy.ts";
 import { onlyPolicy, referrerMetas } from "../lib/html-meta.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
@@ -41,6 +42,23 @@ describe("the page's CSP", () => {
     assert.doesNotMatch(html, /<script\b[^>]*>[^<]+<\/script>/);
     assert.doesNotMatch(html, /<style\b|\sstyle=|\son\w+=/i);
     assert.deepEqual(referrerMetas(html), ["no-referrer"]);
+  });
+
+  it("is in the page as the browser reads it: exactly one enforcing policy meta, the one in the file", async () => {
+    // The browser's own DOM is the authority; the static reader above is a supplement.
+    const site = await reach(browser, { state: STATES[0], width: 390, zoom: 1, ink: false });
+    try {
+      await settled(site);
+      const metas = await domMetas(site.page);
+      const html = readFileSync(join(DIST, "site", "index.html"), "utf8");
+      assert.equal(domPolicies(metas).length, 1, JSON.stringify(metas));
+      const policy = domOnlyPolicy(metas);
+      assert.ok(policy !== null, "not exactly one enforcing CSP meta in the page's DOM");
+      assert.equal(policy, onlyPolicy(html), "the DOM and the file disagree");
+      assert.match(policy, /^default-src 'self';/);
+    } finally {
+      await site.context.close();
+    }
   });
 
   it("is met by the bundle: no eval and no other origin", () => {

@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { Browser } from "playwright-core";
+import { domMetas, domPolicies } from "../lib/dom-policy.ts";
 import { SECRET43 } from "../lib/live-examples.ts";
 import { CTRL, FRAGMENTS } from "../lib/rider-fragments.ts";
 import { ORIGIN, launchOffline, openRider } from "../lib/rider-fake.ts";
@@ -68,6 +69,17 @@ describe("rider page: the address keeps only the join code", () => {
       }
     });
   }
+
+  it("the page as the browser reads it has no policy meta of its own, Report-Only included", async () => {
+    // The browser's own DOM is the authority (test/lib/dom-policy.ts); rider-purity.test.ts reads the file.
+    const f = await open({ ...JOIN, hash: "" });
+    try {
+      assert.deepEqual(domPolicies(await domMetas(f.page)), []);
+      assert.equal(await f.page.evaluate(`document.querySelector("meta[name=referrer]")?.getAttribute("content") ?? ""`), "no-referrer");
+    } finally {
+      await f.context.close();
+    }
+  });
 
   it("a class restored from the tab's token, with no code in the address, keeps none: a bare code typed later is dropped", async () => {
     // The intent (app.ts, onHash): in a class the address holds the class's code and nothing else, so

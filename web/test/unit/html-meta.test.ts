@@ -4,7 +4,7 @@
 // a comment or a script.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hasPolicyMeta, onlyPolicy,policyMetaCount, policyMetas, referrerMetas } from "../lib/html-meta.ts";
+import { hasPolicyMeta, onlyPolicy, policyMetaCount, policyMetas, referrerMetas, uncertain } from "../lib/html-meta.ts";
 
 const page = (head: string): string => `<!doctype html><html><head>${head}</head><body></body></html>`;
 
@@ -24,7 +24,6 @@ const NEW: readonly (readonly [string, string])[] = [
   ["hex reference", '<meta http-equiv="&#x43;ontent-Security-Policy" content="default-src \'self\'">'],
   ["named reference", '<meta http-equiv="Content&hyphen;Security&hyphen;Policy" content="default-src \'self\'">'],
   ["reference without semicolon", '<meta http-equiv="Content&#45Security-Policy" content="default-src \'self\'">'],
-  ["a reference this reader does not know", '<meta http-equiv="Content&nosuchthing;Security-Policy" content="x">'],
   ["padded value", '<meta http-equiv=" Content-Security-Policy " content="x">'],
   ["after a comment", `<!-- <meta http-equiv="x"> -->${OLD}`],
   ["a first attribute that repeats", '<meta http-equiv="Content-Security-Policy" http-equiv="refresh" content="x">'],
@@ -59,7 +58,7 @@ describe("the meta reader", () => {
   });
 
   it("counts policy text the tokenizer skips, as the old pattern did: a comment, a script, a title, a style", () => {
-    for (const hidden of [`<!-- ${OLD} -->`, `<title>${OLD}</title>`, `<script>var a = '${OLD}';</script>`, `<style>/* ${OLD} */</style>`, "<p>http-equiv=Content-Security-Policy</p>", `<!-- unterminated ${OLD}`]) {
+    for (const hidden of [`<!-- ${OLD} -->`, `<title>${OLD}</title>`, `<script>var a = '${OLD}';</script>`, `<style>/* ${OLD} */</style>`, "<p>http-equiv=Content-Security-Policy</p>"]) {
       assert.ok(hasPolicyMeta(page(hidden)), hidden);
       assert.equal(policyMetaCount(page(hidden)), 1, hidden);
     }
@@ -93,10 +92,41 @@ describe("the meta reader", () => {
     }
   });
 
-  it("an unterminated quoted value ends its tag at the next `>`: a tag after it is still read", () => {
-    const html = page("<meta name=x content='open><meta http-equiv=Content-Security-Policy content=default-src>");
-    assert.equal(policyMetaCount(html), 1);
-    assert.deepEqual(policyMetas(html), ["default-src"]);
+  // A browser reads an unclosed quote, tag, comment or raw-text element to the end of the page and
+  // drops it, which this reader does not mirror: such a page is uncertain, so it fails closed.
+  const UNCERTAIN: readonly (readonly [string, string])[] = [
+    ["an unclosed quote, then a policy tag (B3)", "<meta name=x content='open><meta http-equiv=Content-Security-Policy content=default-src>"],
+    ["an unclosed double quote, then the policy tag", '<meta name="x" content="open><meta http-equiv=Content-Security-Policy content=y>'],
+    ["an unclosed quote with no policy after it", '<meta name="x" content="open>'],
+    ["a tag with no `>` before the end of the page", '<meta name="x" content="y"'],
+    ["a tag with attributes and no `>`", "<meta name=x"],
+    ["an unterminated comment", `<!-- unterminated ${OLD}`],
+    ["an unterminated comment with no policy", "<!-- unterminated"],
+    ["an unclosed script", "<script>var a = 1;"],
+    ["an unclosed title", "<title>x"],
+    ["an unclosed textarea", "<textarea>x"],
+    ["an unclosed style", "<style>a{}"],
+    ["an end tag with no `>`", "</x"],
+    ["a declaration with no `>`", "<!x"],
+    ["a reference this reader does not know", '<meta http-equiv="Content&nosuchthing;Security-Policy" content="x">'],
+    ["a reference it does not know in any meta", '<meta name="description" content="a &nosuchthing; b">'],
+  ];
+
+  it("a page with anything it cannot read with certainty is one that may hold a policy, and has no one policy", () => {
+    for (const [label, tail] of UNCERTAIN) {
+      const html = `<!doctype html><html><head>${OLD}${tail}`;
+      assert.ok(uncertain(html), label);
+      assert.equal(onlyPolicy(html), null, label);
+      assert.ok(hasPolicyMeta(`<!doctype html>${tail}`), label);
+      assert.ok(policyMetaCount(`<!doctype html><html><head>${OLD}${tail}`) >= 2, label);
+    }
+    // The page with a policy only in what a browser would drop: the old pattern saw it, so it fails.
+    assert.equal(onlyPolicy(page("<meta name=x content='open><meta http-equiv=Content-Security-Policy content=default-src>")), null);
+  });
+
+  it("a page that is fully readable is not uncertain", () => {
+    assert.ok(!uncertain(page(OLD + "<!-- c --><script>var a = 1;</script><title>t</title><style>a{}</style><textarea>x</textarea>")));
+    assert.ok(!uncertain(page('<meta name="description" content="a &amp; b &#33;">')));
   });
 
   it("counts every policy: two are two", () => {
