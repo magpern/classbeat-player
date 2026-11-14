@@ -58,24 +58,44 @@ fields.
 
 WebSocket, added to the routing allowlist:
 
-| Type | From → to | Holds |
-|---|---|---|
-| `welcome` (amended) | server → rider | `role` `rider`, `hostConnected` |
-| `host_status` (amended) | server → riders | `connected` |
-| `rider_state` | host → riders | Below |
-| `rider_joined` | server → host | `rider`, `nickname` |
-| `rider_left` | server → host | `rider`, `reason`: `left`, `idle`, `dropped`, `replaced` |
-| `drop_rider` | host → server | `rider` |
-| `lock` | host → server | `locked`: true or false |
-| `lock_state` | server → host | `locked` |
-| `new_join_code` | host → server | nothing |
-| `join_code` | server → host | `code` |
-| `ended` (amended) | server → rider | `reason`, as today (`dropped` when the host removed the rider) |
+| Type | Schema | From → to | Holds |
+|---|---|---|---|
+| `welcome` | `welcome-rider.schema.json` (new) | server → rider | `role`: const `rider`; `hostConnected` |
+| `host_status` | as today (routing widened) | server → controllers, riders | `connected` |
+| `rider_state` | new | host → riders | Below |
+| `rider_joined` | new | server → host | `rider`, `nickname` |
+| `rider_left` | new | server → host | `rider`, `reason`: `left` or `dropped` |
+| `drop_rider` | new | host → server | `rider` |
+| `lock` | new | host → server | `locked`: true or false |
+| `lock_state` | new | server → host | `locked` |
+| `new_join_code` | new | host → server | nothing |
+| `join_code` | new | server → host | `code` |
+| `ended` | as today (routing widened) | server → host, controllers, riders | `reason`, as today (`dropped` when the host removed the rider) |
 
-`rider` is an id the server gives each rider token: 8 random bytes, base64url, never derived
-from the token or the nickname. `rider_left` with `left` is a closed connection whose token may
-still come back within 5 minutes; `idle` is the 5-minute drop; `replaced` is a second connection
-with the same token.
+**A rider's welcome is its own schema**, as `command` already has two: the existing
+`welcome.schema.json` (host and controller) is unchanged and still never says `rider`, and
+`welcome-rider.schema.json` is routed server → rider only.
+
+**Exactly four types reach a rider:** `welcome` (the rider schema), `host_status`, `rider_state`
+and `ended`. A rider sends `hello` only.
+
+**When the host hears of a rider.** `rider` is an id the server gives each rider token at the
+join: 8 random bytes, base64url, never derived from the token or the nickname, and the same for
+the token's whole life. The host is told about connections, not tokens:
+
+- `rider_joined` when the token's connection completes `hello`, whether for the first time or
+  again after a `left`, always with the same `rider` and `nickname`. A token that never connects
+  is never announced and is dropped silently after 5 minutes.
+- `rider_left` `left` when the token's last connection closes; the token may come back within 5
+  minutes and is announced again. The 5-minute drop of a token that has left sends nothing more.
+- `rider_left` `dropped` when the host removed the rider.
+- A new connection with the same token replacing the old one (ADR 0002) sends nothing: the rider
+  stays in.
+- When the host reconnects, the server sends it, after its `welcome`, a `rider_joined` for every
+  rider connected now and a `lock_state`, so the app rebuilds its list and lock from them.
+
+So the app's list is the riders connected now, and its count matches ADR 0002's cap of 60 open
+rider connections.
 
 **`rider_state`** holds only:
 
@@ -92,13 +112,23 @@ it once and the server sends those bytes to every rider connection.
 
 ### 3. Lock, new code and removing a rider
 
-- **Lock** (`lock` with `true`): every join is answered `cannot_join`; riders already in stay.
-  Unlocking lets joins in again. The host is told the state in `lock_state`. A session starts
-  unlocked.
+- **Lock** (`lock` with `true`): every join is answered `cannot_join`; riders already in stay,
+  and so does a rider token that has left and comes back within its 5 minutes. Unlocking lets
+  joins in again. The host is told the state in `lock_state`, also after it reconnects. A session
+  starts unlocked. The lock is for riders only: it does not touch the controller routes. It
+  survives a new join code.
 - **New join code** (`new_join_code`): the server makes a new code, answers `join_code` to the
   host only, and from then on the old code finds nothing, for joins and for the controller routes
-  of ADR 0005. Riders and controllers already in stay. The app shows the new code and its QR code
-  on the room screen at once.
+  of ADR 0005. Riders and controllers already in stay. **It also ends the current control code**,
+  whose QR code carries the old join code: as with `drop` (ADR 0005 section 3), the host is sent
+  nothing for it, the app clears the shown control code and its QR code when it sends
+  `new_join_code`, and `code_cancelled` keeps its four reasons. The app shows the new join code
+  and its QR codes on the room screen at once.
+- At most 10 new join codes per session per hour; beyond that the server ignores the request and
+  counts it. A join with a session's earlier code is a join with an unknown code: it counts
+  against the caller's address (ADR 0002 section 10), so a rider who keeps scanning an old code
+  can briefly delay other joins from the studio's address. That is accepted; the room screen
+  shows only the current code.
 - **Remove** (`drop_rider`): the rider's token is dropped, its connection is closed with 4403
   after `ended` `dropped`, and the host gets `rider_left` `dropped`. The phone says "The
   instructor removed you from this class" and offers no rejoin button; scanning again works
@@ -108,7 +138,8 @@ it once and the server sends those bytes to every rider connection.
 
 - **The presenter window only.** It shows the number of riders in and their nicknames, in the
   order they joined, with Remove, Lock and New code. Never the room window, never the companion
-  (ADR 0002), never a ranked or sorted-by-anything-else list.
+  (ADR 0002), never a ranked or sorted-by-anything-else list, and never a grid of rider circles
+  or a bar per rider (rule 6): a plain list of names.
 - The list lives in the app's memory for the session and is cleared when the session ends. It is
   never written to disk, the class history or a log, and nicknames are rendered as text only.
 
@@ -116,6 +147,12 @@ it once and the server sends those bytes to every rider connection.
 
 - Served by the backend at `/j` like `/control`: the same headers (content security policy,
   `no-store`, `Referrer-Policy: no-referrer`), the join code read from the fragment only.
+- Unlike the companion page, the rider page keeps the join code in the address's fragment, so a
+  rider whose token lapsed can join again from the same tab. The rider token never enters the
+  address: it is kept in `sessionStorage` only (ADR 0002).
+- Rules 6, 7 and 15 hold on the page: none of MOWL's look (no ring trio), colour from the
+  planned zone only, never a measured heart-rate zone (the effort in beats per minute is text),
+  and nothing like a team game.
 - States: enter nickname (and optionally FTP and maximum heart rate); joining; in the class;
   waiting for the instructor (`hostConnected` false); not joined (`cannot_join`, one text for
   every cause: "Could not join. Check the code with your instructor."); removed; ended.
@@ -130,13 +167,19 @@ it once and the server sends those bytes to every rider connection.
 
 ### 6. Guards (tests in CI)
 
-- **Contract:** every new schema is closed; `rider_state` and every other message the routing
-  table delivers to a rider have no whole word from a new file
-  `schema/live/guard/rider-bound-words.txt` (the words of `rider-words.txt` that name another
-  rider's data: nickname, reading, presence, count, roster, rank and the like; not `rider`,
-  `ftp` or `hr`, which `welcome` and `effort` need) and none from `credential-words.txt`; the
-  join body has exactly `session` and `nickname`; the routing table lets a rider send `hello`
-  only; nothing is routed from a rider to a rider or a controller.
+- **Contract:** every new schema is closed. `test_no_message_reaches_a_rider_and_a_rider_sends_only_hello`
+  becomes, in the contract pull request, an exact pin: the set of types routed to `rider` equals
+  `{welcome, host_status, rider_state, ended}`, the rider `welcome` uses
+  `welcome-rider.schema.json`, and a rider sends `hello` only. Every message delivered to a rider
+  has no whole word from a new file `schema/live/guard/rider-bound-words.txt` in a property name,
+  enum or const value; that file holds every word of `rider-words.txt` except `rider` (the rider
+  welcome's role) and `ftp` (`ftpPct` and `test.kind`), and the test checks it is exactly that,
+  so both lists grow together. None of them has a word from `credential-words.txt`. The
+  controller guards stay as they are: `welcome.schema.json` never says `rider`. The credential
+  exemption of `test_the_control_code_goes_to_the_host_only` is widened from `control_code` and
+  `hello` to those and `join_code`, with a pin that `join_code` goes server → host only. The join
+  body has exactly `session` and `nickname`. Nothing is routed from a rider to a rider or a
+  controller.
 - **Backend:** the sender to riders accepts only the rider-bound types and sends one `rider_state`
   unchanged to every rider; a rider message other than `hello` is dropped and counted; a rider
   token is refused by every controller route and by every host operation; `cannot_join` for an
@@ -153,29 +196,33 @@ it once and the server sends those bytes to every rider connection.
 
 Security-critical (top-tier Developer and Reviewer): the join route, rider tokens, places, the
 5-minute drop and the join limits; the WebSocket rider role and the sender to riders; lock, new
-code and remove; the rider page's token handling and headers. Rule-sensitive (top-tier
-Reviewer): the contract and its guards, the `rider_state` builder, the presenter's rider list.
-The rider page's and presenter panel's layouts get a design review.
+code and remove; the rider page's token handling and headers. Every pull request of this ADR
+touches live sessions and is rule-sensitive (AGENTS.md section 6, rules 2, 6, 7, 13, 14 and
+15): a top-tier Reviewer checks each rule. The rider page's, room screen's and presenter
+panel's layouts get a design review.
 
 ### 8. Issue outline (contract first)
 
 1. **contract**: the join route, the messages of section 2, the routing table, generated types,
    `rider-bound-words.txt` and the contract guards of section 6. S, R.
 2. **backend**: `POST /api/live/join`, rider tokens and ids, places, the 5-minute drop, lock and
-   new code as session operations, the join limits. Depends on 1. S.
-3. **backend**: serve the rider page at `/j` with the companion page's headers. Depends on 1. S.
-4. **docs**: the Designer's spec of the rider page and the presenter's riders panel. Depends on
-   this ADR. Design review.
+   new code as session operations (the control code ended with the old join code, the 10 an
+   hour), the join limits. Depends on 1. S, R.
+3. **backend**: serve the rider page at `/j` with the companion page's headers. Depends on 1. S, R.
+4. **docs**: the Designer's spec of the rider page, the presenter's riders panel, and the room
+   screen with both QR codes (riders' `/j#<code>` and the instructor's `/control#<code>`) and the
+   new code. Depends on this ADR. Design review.
 5. **player**: the pure `rider_state` builder and its publish policy (on every change of status or
    interval, otherwise every 2 s, at most 2 a second). Depends on 1. R.
 6. **screens**: the rider page in `web/`: join, the states of section 5, `effort_calc`, the
-   remembered values, interpolation, wake lock; against recorded messages. Depends on 1 and 4. S.
-7. **backend**: the WebSocket rider role: `hello`, `welcome`, `host_status`, the sender to
-   riders, `rider_joined`, `rider_left`, `drop_rider`, `lock`, `lock_state`, `new_join_code`,
-   `join_code`, `ended`. Depends on 1 and 2. S.
+   remembered values, interpolation, wake lock; against recorded messages. Depends on 1 and 4. S, R.
+7. **backend**: the WebSocket rider role: `hello`, the rider `welcome`, `host_status`, the sender
+   to riders, `rider_joined` and `rider_left` as section 2 times them (the replay to a reconnected
+   host included), `drop_rider`, `lock`, `lock_state`, `new_join_code`, `join_code`, `ended`.
+   Depends on 1 and 2. S, R.
 8. **player**: the live client's rider side: publish `rider_state`, the presenter's riders panel
-   (count, nicknames, Remove, Lock, New code), the new code on the room screen. Depends on 1, 4,
-   5 and 7's contract. S, R.
+   (count, nicknames, Remove, Lock, New code), the new code on the room screen and the cleared
+   control code. Depends on 1, 4 and 5. S, R.
 
 Then the Verifier runs the riders' "done when" on fakes: the app, the backend and two headless
 rider pages and a companion page, with a fake music link: both riders see the same interval and
@@ -188,8 +235,9 @@ Without changing its rules: ADR 0002's routing row "Session ended, removed, lock
 connection concerned" becomes `ended` to the rider removed and `lock_state` to the host only; a
 rider trying to join a locked session learns only `cannot_join`. ADR 0002's roles table names
 "lock and end the session; drop riders" for the host; this ADR adds "make a new join code",
-which its token table already lists ("the host can lock the session or make a new code"). ADR
-0002's lines are marked "amended, ADR 0007" in the same pull request.
+which its token table already lists ("the host can lock the session or make a new code"). The
+token table's control-code row adds one way it ends: a new join code. ADR 0002's lines are
+marked "amended, ADR 0007" in the same pull request.
 
 ## Alternatives
 
