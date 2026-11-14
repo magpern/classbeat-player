@@ -50,6 +50,9 @@ with other work; nothing in the development loop waits for an answer.
   - The controls stay shown before the start and on Class Complete with one display.
   - "Pairing code for app" is read as the riders' join code, shown with a QR that opens the phone
     remote's sign-in page.
+- **Riders with one display (Designer, #358).** With one display the room screen has no riders
+  control: Remove, Lock joining and New code are in the presenter window only. Say if you want
+  them on the room screen.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); no phone app of our own, with Bluefy on iPhone for sensors; no external
   hardware such as lighting.
