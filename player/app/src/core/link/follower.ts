@@ -11,7 +11,7 @@ import { choose } from "./choose.ts";
 import { measureCrossfade } from "./crossfade.ts";
 import { classify, resyncText } from "./events.ts";
 import { matchCandidates } from "./match.ts";
-import { isTornReading } from "./torn.ts";
+import { tornDecision, NO_TORN } from "./torn.ts";
 import { holdRemainingMs } from "./totals.ts";
 import { DEFAULT_LINK_CONFIG, FOLLOWING } from "./types.ts";
 import type { LinkConfig, LinkEvent, LinkModel, LinkPlan, LinkStateName, Observation } from "./types.ts";
@@ -37,7 +37,8 @@ export function step(link: LinkModel, clock: ClockState, plan: LinkPlan, obs: Ob
   if (l.mode === "manual" || plan.manualOnly) return { link: { ...l, state: "Manual" }, clock, event: null };
   if (obs === null || !isCurrent(obs, now, cfg.staleMs)) return coast(l, clock, now);
   // A torn reading at a song change is held for one poll; the next reading decides (torn.ts).
-  if (!l.tornHeld && !l.force && isTornReading(l.applied, obs, now, cfg)) return { link: { ...l, tornHeld: true }, clock: tick(clock, now), event: "torn_hold" };
+  const torn = l.force ? "apply" : tornDecision(l.applied, l.tornHeld, obs, now, cfg);
+  if (torn !== "apply") return { link: { ...l, tornHeld: l.tornHeld ?? { obs, since: now } }, clock: tick(clock, now), event: torn === "hold" ? "torn_hold" : null };
   const cands = matchCandidates(plan, obs, cfg);
   return cands.length === 0 ? offList(l, clock, now) : follow(l, clock, plan, obs, cands, now, cfg);
 }
@@ -46,13 +47,13 @@ function coast(l: LinkModel, clock: ClockState, now: number): StepResult {
   if (!l.everLocked) return { link: { ...l, state: "Manual" }, clock, event: null };
   if (l.state === "Coasting") return { link: l, clock, event: null };
   const c = FOLLOWING.includes(l.state) ? runOn(clock, now) : clock;
-  return { link: { ...l, state: "Coasting", held: false, playing: false, holdUntil: null, applied: null, tornHeld: false }, clock: c, event: "coasting" };
+  return { link: { ...l, state: "Coasting", held: false, playing: false, holdUntil: null, ...NO_TORN }, clock: c, event: "coasting" };
 }
 
 function offList(l: LinkModel, clock: ClockState, now: number): StepResult {
   if (l.state === "Off the list") return { link: l, clock, event: null };
   const c = l.everLocked && FOLLOWING.includes(l.state) ? runOn(clock, now) : clock;
-  return { link: { ...l, state: "Off the list", songIndex: null, held: false, playing: false, holdUntil: null, applied: null, tornHeld: false }, clock: c, event: "off_list" };
+  return { link: { ...l, state: "Off the list", songIndex: null, held: false, playing: false, holdUntil: null, ...NO_TORN }, clock: c, event: "off_list" };
 }
 
 function follow(l: LinkModel, clock: ClockState, plan: LinkPlan, obs: Observation, cands: number[], now: number, cfg: LinkConfig): StepResult {
@@ -98,7 +99,7 @@ function follow(l: LinkModel, clock: ClockState, plan: LinkPlan, obs: Observatio
     lastPlayed: choice.ambiguous ? l.lastPlayed : { songIndex: choice.index, obs },
     measuredCrossfadeMs: measured,
     applied: obs,
-    tornHeld: false,
+    tornHeld: null,
   };
   const out = smoothed ? setRunning(clock, running, now) : setClock(clock, target, running, now);
   return { link, clock: out, event };

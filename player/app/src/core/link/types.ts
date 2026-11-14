@@ -86,8 +86,8 @@ export interface LinkModel {
   readonly measuredCrossfadeMs: number | null;
   /** The last reading that was applied; a held torn reading never is (torn.ts). */
   readonly applied: Observation | null;
-  /** The previous poll's reading was held as torn; the next one decides (no endless hold). */
-  readonly tornHeld: boolean;
+  /** The torn reading being held, and since when; a different reading decides (torn.ts). */
+  readonly tornHeld: { readonly obs: Observation; readonly since: number } | null;
 }
 
 export type LinkEvent =
@@ -127,6 +127,6 @@ export function initialLink(following: boolean): LinkModel {
     lastPlayed: null,
     measuredCrossfadeMs: null,
     applied: null,
-    tornHeld: false,
+    tornHeld: null,
   };
 }
