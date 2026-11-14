@@ -15,6 +15,7 @@ export const KIND = {
   btn: ["minor", 12],
   flab: ["minor", 10],
   len: ["minor", 17],
+  code: ["minor", 26],
 } as const;
 export type Kind = keyof typeof KIND;
 
