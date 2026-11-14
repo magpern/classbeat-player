@@ -406,7 +406,7 @@ events.
 
 | Role | Who | Proves it with | May |
 |---|---|---|---|
-| Host | The app that started the session | The session's host token | Lock and end the session; publish the clock and class state; make codes; drop controllers and riders; receive riders' data |
+| Host | The app that started the session | The session's host token | Lock and end the session; publish the clock and class state; make codes; make a new join code (amended, ADR 0007); drop controllers and riders; receive riders' data |
 | Controller | The instructor's phone (handlebar companion) | A controller token | Receive the clock, the cue and what is next; send start, pause, resume, skip, nudge and the undo of a resync to the host (amended 2026-11-13, ADR 0005) |
 | Rider | A rider's phone | A rider token | Receive the clock and class state; send their own nickname and readings to the host |
 
@@ -534,7 +534,7 @@ Either way the phone gets a controller token. At most 2 controllers per session.
 | Coaching cue | Host | Controllers |
 | Control command (start, pause, resume, skip, nudge, undo of a resync; amended 2026-11-13, ADR 0005) | Controller | Host |
 | Rider nickname, presence and readings | Rider | Host |
-| Session ended, removed, locked | Server | The connection concerned |
+| Session ended, removed, locked (amended, ADR 0007: `ended` to the rider removed, `lock_state` to the host only; a join to a locked session gets only `cannot_join`) | Server | The connection concerned |
 | The companion's messages (amended 2026-11-13, ADR 0005 section 4) | As that table says | As that table says |
 
 - Anything not in the table is dropped and counted.
