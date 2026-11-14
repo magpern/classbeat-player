@@ -1,12 +1,12 @@
 """`wss://<site>/api/live/ws`: the live WebSocket (ADR 0002, sections 8 and 10; ADR 0005,
-sections 1, 3 and 6).
+sections 1, 3 and 6; ADR 0007, section 2).
 
 - The handshake is refused (before it is accepted) for an address over its connection limits.
 - No token in the address and no cookie: the first message must be `hello` with the token,
-  within 5 seconds, at most 1 KiB, valid by its schema. The token's prefix gives the role; a
-  rider token gets none in the companion part of PL8. A controller's handshake `Origin` must be
-  the site's origin, checked before its token is looked up. Any failure closes with 4401, the
-  same for every cause.
+  within 5 seconds, at most 1 KiB, valid by its schema. The token's prefix gives the role (host,
+  controller or rider), and the token is looked up as that role's only. A controller's and a
+  rider's handshake `Origin` must be the site's origin, checked before the token is looked up.
+  Any failure closes with 4401, the same for every cause.
 - After `hello`: a message is at most 16 KiB (else 1009) and a connection sends at most 10 a
   second, the host's included (else 1008). Every message within the limits goes to the hub's
   router, which drops anything the allowlist does not route.
@@ -96,10 +96,15 @@ async def _hello(hub: Hub, websocket: WebSocket, origin: str | None, site: str) 
         session_id = registry.host_session(token, hub.service.clock())
         if session_id is not None:
             return hub.attach_host(websocket, session_id)
-    else:
+    elif role == "controller":
         seat = registry.controller_seat(token, hub.service.clock())
         if seat is not None:
             return hub.attach_controller(websocket, seat)
+    else:
+        # Counted here and attached in the same loop step, so `detach` uncounts it.
+        rider = registry.rider_connected(token, hub.service.clock())
+        if rider is not None:
+            return hub.attach_rider(websocket, rider)
     await _refuse(websocket, HELLO_REFUSED)
     return None
 

@@ -11,8 +11,8 @@
   get nothing else; `controller_joined` and `controller_left` tell the host of the phones;
 - one connection per token: a newer one replaces the older (4409);
 - every message the table does not route from its sender's role is dropped and counted;
-- the host's rider messages (ADR 0007), routed by the contract but not built yet, are dropped
-  and counted as `not_built_yet` and reach no one.
+- the host's rider messages (ADR 0007) reach no controller, and a controller's are dropped;
+  the riders' side is test_live_ws_riders.py's.
 """
 
 from __future__ import annotations
@@ -24,6 +24,10 @@ from typing import Any
 
 import pytest
 
+from player_backend.live import dispatch
+from player_backend.live import hub as hub_module
+from player_backend.live.schemas import routes
+from player_backend.live_route_policy import acted_on
 from tests.livehelp import SCHEMA as LIVE_SCHEMA
 from tests.livehelp import (
     closed,
@@ -41,6 +45,24 @@ from tests.livehelp import (
 def live(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     with live_app(monkeypatch) as running:
         yield running
+
+
+def test_the_handlers_are_keyed_by_the_routed_types_exactly(
+    live: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on = live.hub._on  # pyright: ignore[reportPrivateUsage]
+    assert set(on) == set(acted_on(routes()))
+    for kind, handler in on.items():
+        assert handler.__name__ == "_on_" + kind
+    # A routed type with no handler, or a handler for a type the table does not route: no hub.
+    for changed in (acted_on(routes()) + ("rider_reading",), acted_on(routes())[1:]):
+
+        def table(_routes: object, kinds: tuple[str, ...] = changed) -> tuple[str, ...]:
+            return kinds
+
+        monkeypatch.setattr(dispatch, "acted_on", table)
+        with pytest.raises(RuntimeError):
+            hub_module.Hub(live.hub.service)
 
 
 def _all_in(live: Any, stack: ExitStack, signed_in: bool = False) -> tuple[Any, Any, Any]:
@@ -197,10 +219,10 @@ def test_unknown_types_and_non_messages_are_dropped_and_counted(live: Any) -> No
         assert live.hub.dropped["unknown_type"] == 4
 
 
-# The host's messages the hub does not act on yet, one valid example of each
-# (schema/live/v1/examples): `cancel_code` (ADR 0005 section 10, amended 2026-11-14) and the
-# host's messages about riders (ADR 0007).
-NOT_BUILT_YET_EXAMPLES = (
+# The host's messages a controller has no route for, one valid example of each
+# (schema/live/v1/examples): `cancel_code`, which the hub does not act on yet (ADR 0005 section
+# 10, amended 2026-11-14; #357), and the host's messages about riders (ADR 0007).
+HOST_EXAMPLES = (
     "cancel-code/valid/cancel-code.json",
     "rider-state/valid/running-three-coming.json",
     "drop-rider/valid/one-rider.json",
@@ -213,8 +235,8 @@ def _example(name: str) -> dict[str, Any]:
     return json.loads((LIVE_SCHEMA / "examples" / name).read_text(encoding="utf-8"))
 
 
-def test_the_hosts_unbuilt_messages_are_dropped_and_reach_no_one(live: Any) -> None:
-    examples = [_example(name) for name in NOT_BUILT_YET_EXAMPLES]
+def test_the_hosts_cancel_code_and_rider_messages_reach_no_controller(live: Any) -> None:
+    examples = [_example(name) for name in HOST_EXAMPLES]
     assert [m["type"] for m in examples] == [
         "cancel_code",
         "rider_state",
@@ -230,9 +252,11 @@ def test_the_hosts_unbuilt_messages_are_dropped_and_reach_no_one(live: Any) -> N
         host.send_json(companion_state())  # the probe: the next thing the phones get
         assert recv(one)["type"] == "companion_state"
         assert recv(two)["type"] == "companion_state"
-        one.send_json(command(1))  # the probe for the host
+        one.send_json(command(1))  # the probe for the host: its answers came first
+        assert [recv(host)["type"] for _ in range(2)] == ["lock_state", "join_code"]
         assert recv(host)["id"] == command_id(1)
-        assert live.hub.dropped["not_built_yet"] == 5
+        assert live.hub.dropped["not_built_yet"] == 1  # `cancel_code`, built in #357
+        assert live.hub.dropped["unknown_rider"] == 1  # the example's rider is no rider here
         assert live.hub.dropped["not_from_role"] == 5
         assert live.hub.dropped["invalid"] == 0
         assert sum(live.hub.refused.values()) == 0
@@ -299,6 +323,7 @@ def test_a_newer_host_connection_replaces_the_older(live: Any) -> None:
             assert recv(phone)["connected"] is True
             with live.joined(started.host_token, None) as new:
                 assert recv(new)["type"] == "controller_joined"
+                assert recv(new) == {"v": 1, "type": "lock_state", "locked": False}  # a return
                 assert closed(old) == 4409
                 nothing(phone)  # the host never left
                 phone.send_json(command(1))

@@ -4,9 +4,10 @@
 - the first message is `hello` with the token, within 5 s and 1 KiB, valid by its schema; any
   other first message, a late one or none closes with 4401;
 - the prefix gives the role: a host token makes the host, a controller token the controller in
-  its slot; a rider token gets nothing in the companion part of PL8, and is not looked up;
-- a controller's handshake `Origin` must be the site's, checked before its token is looked up;
-  the host's is not checked;
+  its slot, a rider token the rider (test_live_ws_riders.py), each looked up as its own role's
+  only: an unknown rider token is refused, and never looked up as a host's or a controller's;
+- a controller's and a rider's handshake `Origin` must be the site's, checked before the token
+  is looked up; the host's is not checked;
 - no token in the address and no cookie counts;
 - an address over its connection limits is refused at the handshake;
 - after `hello`, another `hello` is dropped and counted.
@@ -81,13 +82,32 @@ def test_a_controller_from_another_origin_is_refused_before_any_lookup(
         assert closed(ws) == 4401
 
 
-def test_a_rider_token_gets_no_role_and_is_not_looked_up(
+def test_an_unknown_rider_token_is_refused_and_not_looked_up_as_another_role(
     live: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     live.session()
     _no_lookup(live, monkeypatch)
     with live.connect() as ws:
         ws.send_json(hello(new_token("rdr")))
+        assert closed(ws) == 4401
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [None, "", "null", "https://other.example", SITE + ":444", "http://player.example.test"],
+)
+def test_a_rider_from_another_origin_is_refused_before_any_lookup(
+    live: Any, monkeypatch: pytest.MonkeyPatch, origin: str | None
+) -> None:
+    started = live.session()
+    token = live.rider(started.join_code)
+
+    def refuse(*_args: object) -> None:
+        raise AssertionError("looked up")
+
+    monkeypatch.setattr(live.registry, "rider_connected", refuse)
+    with live.connect(origin) as ws:
+        ws.send_json(hello(token))
         assert closed(ws) == 4401
 
 

@@ -7,8 +7,11 @@ at the edge and passed in (`parse_routes`); a guard test holds it to the contrac
   Anything else is dropped and counted.
 - `hello` is only ever the first message; after it, one is dropped like any other stray.
 - The server sends only what the table lets it send to a role, checked against that schema.
-- No message is delivered to a rider: no route names one as a receiver, and in the companion
-  part of PL8 no rider connection exists (`hello` refuses a rider token).
+- A rider is delivered only the four types the table routes to it, and sends nothing after its
+  `hello`: no route names a rider as the sender of anything else.
+- The server acts on every type a connection may send after `hello` (`acted_on`): the hub keys
+  its handlers by those types, so a type the table routes and the hub has no handler for fails
+  when the hub is made, not when the message comes.
 
 No I/O here.
 """
@@ -18,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Literal, cast
 
-type Role = Literal["host", "controller"]
+type Role = Literal["host", "controller", "rider"]
 type Party = Literal["host", "controller", "rider", "server"]
 
 HELLO: Final = "hello"
@@ -98,3 +101,10 @@ def relayed_to(route: Route) -> tuple[Party, ...]:
     """Whom the server passes an accepted message on to, as it is: none when it is for the
     server itself (it answers or acts on it instead)."""
     return tuple(r for r in route.to if r != "server")
+
+
+def acted_on(routes: tuple[Route, ...]) -> tuple[str, ...]:
+    """The types a connection may send after `hello`, each once, in the table's order: those
+    the server handles (and passes on, for a relayed one)."""
+    kinds = (r.type for r in routes if r.type != HELLO and any(p != "server" for p in r.sender))
+    return tuple(dict.fromkeys(kinds))

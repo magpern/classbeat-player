@@ -1,5 +1,5 @@
 """The live connections of every session, and the router between them (ADR 0002, section 8;
-ADR 0005, sections 1 and 3 to 6).
+ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
 
 - One connection per token: a new host connection, or a controller's with the same token,
   replaces the old one, which is closed with 4409.
@@ -9,15 +9,13 @@ ADR 0005, sections 1 and 3 to 6).
   `controller_joined`, and `controller_left` with its reason (ADR 0005 section 10, amended
   2026-11-14; no replay and no `free` yet), as phones come and go.
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
-  its schema for its sender's role; anything else is dropped and counted in `dropped`. Every
-  message the hub sends is checked against the allowlist and its schema for the receiver's
-  role first; one that fails is not sent (counted in `refused`).
-- Commands and their answers follow live_relay_policy.py. A command for a host that is away is
-  answered `host_away` at once and kept nowhere. Each command id a controller's connection
-  sent is answered once: the same id sent twice gets one `ack` (the host's answer to the second,
-  `duplicate`, is dropped as `unmatched_result`); a phone never resends by itself (ADR 0005,
-  section 5). A host that leaves takes its unanswered commands with it: their answers from a
-  returning host reach no one.
+  its schema for its sender's role; anything else is dropped and counted in `dropped`. The
+  handlers are keyed by the routed type (live/dispatch.py), one `_on_<type>` each. Every message the
+  hub sends goes through live/sender.py's allowlist; one that fails is not sent (`refused`).
+- Riders (ADR 0007) are live/rider_role.py's: a rider sends nothing after `hello` (no route
+  names it a sender); the host's rider operations, comings and goings and the end go there.
+- Commands and their answers are live/command_relay.py's (live_relay_policy.py). A host that
+  leaves takes its unanswered commands with it: their answers from a returning host reach no one.
 - A session that ends, or a controller that is dropped (the registry's watchers, called on any
   thread: the re-check's, a route's, the event loop's), gets `ended` and is closed with 4403.
 - The host's `make_code` gets `control_code`, to the host's connection only, after
@@ -37,19 +35,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import Counter
 from collections.abc import Coroutine
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from player_backend.live.events import CodeCancelled, Dropped, Ended, Seat
+from player_backend.live.command_relay import CommandRelay
+from player_backend.live.dispatch import by_type
+from player_backend.live.events import CodeCancelled, Dropped, Ended, RiderSeat, Seat
 from player_backend.live.link import Link, Socket
+from player_backend.live.rider_role import RiderRole
 from player_backend.live.schemas import routes, valid
+from player_backend.live.sender import Sender
+from player_backend.live.sender import logged as _logged
 from player_backend.live.service import LiveService
 from player_backend.live.watchers import Event
-from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate, Window, commands_window
-from player_backend.live_relay_policy import Answer, Outstanding, ack_of, on_command
-from player_backend.live_route_policy import inbound, outbound
+from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate
+from player_backend.live_relay_policy import Outstanding
+from player_backend.live_route_policy import inbound
 from player_backend.live_session_policy import wire_reason
 from player_backend.live_wire_policy import (
     ENDED,
@@ -61,19 +63,11 @@ from player_backend.live_wire_policy import (
     controller_joined,
     controller_left,
     decode,
-    encode,
     ended,
     host_status,
     welcome_controller,
     welcome_host,
 )
-
-_log = logging.getLogger("player_backend.live")
-
-
-def _logged(event: str, detail: str, level: int = logging.INFO) -> None:
-    """`detail` is a fixed word: a role, a drop reason, a message type or an error's type."""
-    _log.log(level, "live: %s", detail, extra={"fields": {"event": event}})
 
 
 class Hub:
@@ -81,12 +75,28 @@ class Hub:
         self.service = service
         self.hello_within = hello_within  # how long a connection has for its `hello`
         self.gate = AddressGate()  # the per-address connection limits
-        self.dropped: Counter[str] = Counter()  # messages dropped, by reason
-        self.refused: Counter[str] = Counter()  # messages the hub would not send, by type
+        self.sender = Sender()
+        self.dropped = self.sender.dropped  # messages dropped, by reason
+        self.refused = self.sender.refused  # messages the hub would not send, by type
+        self._send, self._drop = self.sender.send_one, self.sender.drop
+        self.riders = RiderRole(service.registry, self.sender, service.clock)
+        self.commands = CommandRelay(self.sender, service.clock)
+        self._on = by_type(
+            self._on_make_code,
+            self._on_drop,
+            self._on_companion_state,
+            self._on_command,
+            self._on_command_result,
+            self._on_end,
+            self._on_rider_state,
+            self._on_drop_rider,
+            self._on_lock,
+            self._on_new_join_code,
+            self._on_cancel_code,
+        )
         self._loop: asyncio.AbstractEventLoop | None = None
         self._hosts: dict[UUID, Link] = {}
         self._controllers: dict[UUID, dict[int, Link]] = {}
-        self._commands: dict[tuple[UUID, int], Window] = {}
         self._tasks: set[asyncio.Task[object]] = set()
         service.registry.watch(self._watch)
 
@@ -124,14 +134,15 @@ class Hub:
         links = list(self._controllers.pop(event.session_id, {}).values())
         host = self._hosts.pop(event.session_id, None)
         links += [host] if host is not None else []
-        for slot in (1, 2):
-            self._commands.pop((event.session_id, slot), None)
+        self.commands.forget(event.session_id, (1, 2))
+        message = ended(wire_reason(event.reason))
         for link in links:
-            self._send(link, ended(wire_reason(event.reason)))
+            self._send(link, message)
             link.close(ENDED)
+        self.riders.end(event.session_id, message)
 
     def _dropped(self, event: Dropped) -> None:
-        self._commands.pop((event.session_id, event.slot), None)
+        self.commands.forget(event.session_id, (event.slot,))
         link = self._controllers.get(event.session_id, {}).pop(event.slot, None)
         if link is None:
             return
@@ -156,9 +167,10 @@ class Hub:
         self._send(link, welcome_host())
         for slot, phone in sorted(self._controllers.get(session_id, {}).items()):
             self._send(link, controller_joined(slot, phone.via or "code"))
+        self.riders.host_in(link)
         if old is None:
-            for phone in self._phones(session_id):
-                self._send(phone, host_status(True))
+            self.sender.send_all(self._phones(session_id), host_status(True))
+            self.riders.host_status(session_id, True)
         return link
 
     def attach_controller(self, socket: Socket, seat: Seat) -> Link:
@@ -174,9 +186,14 @@ class Hub:
             self._send(host, controller_joined(seat.slot, seat.via))
         return link
 
+    def attach_rider(self, socket: Socket, seat: RiderSeat) -> Link:
+        return self.riders.attach(socket, seat, self._hosts.get(seat.session_id))
+
     def detach(self, link: Link) -> None:
         """The connection is gone. Nothing changes if a newer one already took its place."""
         session_id = link.session_id
+        if link.role == "rider":
+            return self.riders.detach(link, self._hosts.get(session_id))
         if link.role == "host":
             if self._hosts.get(session_id) is not link:
                 return
@@ -185,7 +202,7 @@ class Hub:
             for phone in self._phones(session_id):
                 phone.outstanding = Outstanding()  # their commands will have no answer
                 self._send(phone, host_status(False))
-            return
+            return self.riders.host_status(session_id, False)
         phones = self._controllers.get(session_id, {})
         if link.slot is None or phones.get(link.slot) is not link:
             return
@@ -204,21 +221,6 @@ class Hub:
 
     # -- the router -----------------------------------------------------------------------
 
-    def _drop(self, link: Link, reason: str) -> None:
-        self.dropped[reason] += 1
-        _logged("live.message_dropped", f"{link.role} {reason}", logging.DEBUG)
-
-    def _send(self, link: Link, message: Message) -> None:
-        """The one way the hub sends: only what the allowlist lets reach this role."""
-        kind = message.get("type")
-        route = outbound(routes(), kind, link.role) if isinstance(kind, str) else None
-        if route is None or not valid(route.schema, message):
-            label = kind if route is not None and isinstance(kind, str) else "unrouted"
-            self.refused[label] += 1
-            _logged("live.send_refused", f"{link.role} {label}", logging.ERROR)
-            return
-        link.put(encode(message))
-
     def handle(self, link: Link, text: str | None) -> None:
         """One frame from a connection after its `hello`, within its limits (None: binary)."""
         message = None if text is None else decode(text)
@@ -229,29 +231,35 @@ class Hub:
             return self._drop(link, route)
         if not valid(route.schema, message):
             return self._drop(link, "invalid")
-        if route.type == "companion_state":
-            for phone in self._phones(link.session_id):
-                self._send(phone, message)
-        elif route.type == "command":
-            self._command(link, message)
-        elif route.type == "command_result":
-            self._result(link, message)
-        elif route.type == "end":
-            self._spawn(asyncio.to_thread(self.service.end, link.session_id, "host_ended"))
-        elif route.type == "make_code":
-            self._make_code(link)
-        else:
-            # The host's `drop`, whose schema requires `slot` (1 or 2), or `cancel_code` or one
-            # of the host's rider messages (ADR 0007: `rider_state`, `drop_rider`, `lock`,
-            # `new_join_code`), whose closed schemas have no `slot`: routed by the contract, not
-            # built here yet, so dropped and counted (tests/test_live_ws_router.py).
-            slot = message.get("slot")
-            if isinstance(slot, int):
-                self.service.registry.host_drop(link.session_id, slot)
-            else:
-                self._drop(link, "not_built_yet")
+        self._on[route.type](link, message)
 
-    def _make_code(self, link: Link) -> None:
+    # Each handler gets a message its route took from the sender's role, valid by its schema.
+
+    def _on_companion_state(self, link: Link, message: Message) -> None:
+        self.sender.send_all(self._phones(link.session_id), message)
+
+    def _on_rider_state(self, link: Link, message: Message) -> None:
+        self.riders.relay(link.session_id, message)
+
+    def _on_end(self, link: Link, _message: Message) -> None:
+        self._spawn(asyncio.to_thread(self.service.end, link.session_id, "host_ended"))
+
+    def _on_drop(self, link: Link, message: Message) -> None:
+        self.service.registry.host_drop(link.session_id, cast(int, message["slot"]))
+
+    def _on_drop_rider(self, link: Link, message: Message) -> None:
+        self.riders.drop(link, str(message["rider"]))
+
+    def _on_lock(self, link: Link, message: Message) -> None:
+        self.riders.lock(link, message["locked"] is True)
+
+    def _on_new_join_code(self, link: Link, _message: Message) -> None:
+        self.riders.new_join_code(link)
+
+    def _on_cancel_code(self, link: Link, _message: Message) -> None:
+        self._drop(link, "not_built_yet")  # #357 builds it (ADR 0005 section 10)
+
+    def _on_make_code(self, link: Link, _message: Message) -> None:
         made = self.service.registry.make_code(link.session_id, self.service.clock())
         if made is None:
             return self._drop(link, "code_limit")
@@ -259,28 +267,13 @@ class Hub:
             self._send(link, code_cancelled(made.earlier))
         self._send(link, control_code(made.code, made.expires_in_ms))
 
-    def _command(self, link: Link, message: Message) -> None:
-        if link.slot is None:  # not reached: only a controller's command has a route
-            return self._drop(link, "not_from_role")
-        window = self._commands.setdefault((link.session_id, link.slot), commands_window())
-        host = self._hosts.get(link.session_id)
-        outcome = on_command(
-            message, link.slot, window.take(self.service.clock()), host is not None
-        )
-        if isinstance(outcome, Answer) or host is None:
-            self._send(link, outcome.message)
-            return
-        link.outstanding.add(str(message["id"]))
-        self._send(host, outcome.message)
+    def _on_command(self, link: Link, message: Message) -> None:
+        self.commands.command(link, self._hosts.get(link.session_id), message)
 
-    def _result(self, link: Link, message: Message) -> None:
+    def _on_command_result(self, link: Link, message: Message) -> None:
         slot = message["slot"]  # 1 or 2: the schema holds it to those integers
-        phone = (
-            self._controllers.get(link.session_id, {}).get(slot) if isinstance(slot, int) else None
-        )
-        if phone is None or not phone.outstanding.answer(str(message["id"])):
-            return self._drop(link, "unmatched_result")
-        self._send(phone, ack_of(message))
+        phones = self._controllers.get(link.session_id, {})
+        self.commands.result(link, phones.get(slot) if isinstance(slot, int) else None, message)
 
     def _spawn(self, work: Coroutine[Any, Any, object]) -> None:
         task = asyncio.create_task(work)
