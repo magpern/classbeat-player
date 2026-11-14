@@ -6,6 +6,7 @@
 // `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else; the riders' list
 // (`riders()`) is in this memory and the presenter's view only (ADR 0007 section 4).
 // Ending while live keeps the host's connection until the session is ended (end-live.ts, farewell.ts, #211).
+// With only one display left a held control code is cancelled (core/live/code-cancel.ts, #353).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
@@ -59,6 +60,8 @@ export interface LiveService {
   start(): LivePanelView;
   end(): LivePanelView;
   makeCode(): LivePanelView;
+  /** The displays changed: with only one left, the control code held is cancelled. */
+  displaysChanged(): void;
   drop(slot: Slot): LivePanelView;
   /** The riders panel (riders-view.ts): presenter only, never the room window. */
   riders(): RidersView;
@@ -133,6 +136,11 @@ export function createLiveService(d: LiveDeps): LiveService {
           log(listenerLine(err));
         }
       }
+    oneDisplayCheck();
+  };
+  /** Checked after every event, on each view and snapshot, and when the displays change. */
+  const oneDisplayCheck = (): void => {
+    if (model.code !== null && !d.secondDisplay()) dispatch({ type: "one_display" });
   };
 
   const run = (x: LiveEffect, at: string | null): void => {
@@ -188,7 +196,7 @@ export function createLiveService(d: LiveDeps): LiveService {
         return;
       case "welcomed": {
         const s = socket;
-        if (s !== null) publisher?.connected((text) => s.send(text));
+        if (s !== null) publisher?.connected((text) => s.send(text), x.first);
         return;
       }
       case "joined":
@@ -229,7 +237,8 @@ export function createLiveService(d: LiveDeps): LiveService {
     const c = d.credential();
     return c === null ? "none" : c.expired ? "expired" : "ok";
   };
-  const view = (): LivePanelView => livePanelView(model, { now: d.now(), classOpen: d.classOpen(), secondDisplay: d.secondDisplay(), origin });
+  const view = (): LivePanelView => (oneDisplayCheck(), panel());
+  const panel = (): LivePanelView => livePanelView(model, { now: d.now(), classOpen: d.classOpen(), secondDisplay: d.secondDisplay(), origin });
   const riders = (): RidersView => ridersView(model, { now: d.now(), classOpen: d.classOpen() });
 
   return {
@@ -250,6 +259,7 @@ export function createLiveService(d: LiveDeps): LiveService {
       dispatch({ type: "make_code", secondDisplay: d.secondDisplay() });
       return view();
     },
+    displaysChanged: oneDisplayCheck,
     drop(slot) {
       dispatch({ type: "drop", slot });
       return view();
@@ -271,6 +281,7 @@ export function createLiveService(d: LiveDeps): LiveService {
       dispatch({ type: "class_changed" });
     },
     tick() {
+      oneDisplayCheck();
       if (model.phase === "live") publisher?.tick();
     },
     stop() {

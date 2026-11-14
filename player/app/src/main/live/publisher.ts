@@ -35,8 +35,8 @@ export interface PublisherDeps {
 }
 
 export interface Publisher {
-  /** A connection is in (`welcome`): a fresh budget, the state at once. */
-  connected(send: (text: string) => void): void;
+  /** A connection is in (`welcome`): a fresh budget, `first` ahead of everything, then the state at once. */
+  connected(send: (text: string) => void, first?: readonly HostMessage[]): void;
   /** The connection is gone: its queue goes with it. */
   disconnected(): void;
   joined(): void;
@@ -125,9 +125,9 @@ export function createPublisher(d: PublisherDeps): Publisher {
   };
 
   return {
-    connected(s) {
+    connected(s, first = []) {
       send = s;
-      budget = newBudget();
+      budget = first.reduce(enqueue, newBudget());
       riders = riderReconnected(riders);
       pump();
     },

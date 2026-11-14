@@ -1,5 +1,6 @@
 // The shapes of the host's live session (session-model.ts): its phases, the model, the events it
 // takes and the effects it asks for. Pure: types and the state at each start of the app.
+import type { CancelCode } from "../../../../../schema/generated/ts/live-cancel-code.d.ts";
 import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
 import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
 import type { DropRider } from "../../../../../schema/generated/ts/live-drop-rider.d.ts";
@@ -12,7 +13,7 @@ import { NO_RIDERS } from "./riders-model.ts";
 import type { Riders } from "./riders-model.ts";
 
 /** What the host sends the server of its own accord (the session's operations). */
-export type HostOperation = MakeCode | Drop | DropRider | Lock | NewJoinCode;
+export type HostOperation = MakeCode | Drop | DropRider | Lock | NewJoinCode | CancelCode;
 
 export type Phase = "idle" | "starting" | "connecting" | "live" | "reconnecting" | "ended" | "refused";
 export type Refusal = StartRefusal | "not_paired" | "no_class";
@@ -46,6 +47,8 @@ export interface LiveModel {
   readonly places: readonly [Place, Place];
   readonly code: { readonly code: string; readonly expiresAt: number } | null;
   readonly codeNote: Exclude<CodeCancelled["reason"], "replaced"> | null;
+  /** A control code stopped being shown while the host was away: `cancel_code` goes first after the next `welcome` (code-cancel.ts). */
+  readonly cancelPending: boolean;
   readonly line: Applied | null;
   /** The riders in (riders-model.ts): memory only, gone with the session. */
   readonly riders: Riders;
@@ -61,6 +64,8 @@ export type LiveEvent =
   | { readonly type: "closed"; readonly socket: number; readonly code: number }
   | { readonly type: "retry" }
   | { readonly type: "make_code"; readonly secondDisplay: boolean }
+  /** Only one display is left: no control code is offered, so the one held ends (code-cancel.ts). */
+  | { readonly type: "one_display" }
   | { readonly type: "drop"; readonly slot: Slot }
   | { readonly type: "end" }
   | { readonly type: "class_changed" }
@@ -74,8 +79,8 @@ export type LiveEffect =
   | { readonly kind: "post_session"; readonly request: number }
   | { readonly kind: "connect"; readonly socket: number }
   | { readonly kind: "hello"; readonly socket: number; readonly token: string }
-  /** The host is in: a fresh send budget, the state at once. */
-  | { readonly kind: "welcomed"; readonly socket: number }
+  /** The host is in: a fresh send budget, `first` ahead of everything (code-cancel.ts), then the state at once. */
+  | { readonly kind: "welcomed"; readonly socket: number; readonly first: readonly HostOperation[] }
   | { readonly kind: "joined" }
   | { readonly kind: "send"; readonly message: HostOperation }
   /**
@@ -108,6 +113,7 @@ export const OFF: LiveModel = {
   places: ["none", "none"],
   code: null,
   codeNote: null,
+  cancelPending: false,
   line: null,
   riders: NO_RIDERS,
 };
