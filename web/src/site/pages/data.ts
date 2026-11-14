@@ -8,7 +8,7 @@ import { call } from "../net/api.ts";
 import { exportAccount } from "../net/export.ts";
 import { el, t, uid } from "../ui/dom.ts";
 import { button, buttons, field, h2, note, p, plate, small, working } from "../ui/kit.ts";
-import { focusMessage, hasMessage, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
+import { focusMessage, hasMessage, idOfPlate, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
 import type { Messages } from "./account-messages.ts";
 import { clearDeleted } from "./deleted-note.ts";
 import type { SignedInEnv } from "./signed-in.ts";
@@ -28,6 +28,7 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
   let exp: ExportView = IDLE;
   let panel: Panel | null = null;
   let messages: Messages = NO_MESSAGES;
+  let waitingOnline = false;
 
   const host = {
     env,
@@ -59,7 +60,25 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
     }
     exp = IDLE;
     host.set(plateOnly(o.plate));
+    if (o.plate.kind === "offline") retryWhenOnline();
   }
+
+  /** Offline, the export waits: it is asked for again once, when the browser says it is back online. */
+  function retryWhenOnline(): void {
+    if (waitingOnline) return;
+    waitingOnline = true;
+    window.addEventListener(
+      "online",
+      () => {
+        waitingOnline = false;
+        if (box.isConnected && env.current() && exportOffline()) void startExport();
+      },
+      { once: true },
+    );
+  }
+
+  /** "You are offline" heads the page for the export (not for the open deletion panel). */
+  const exportOffline = (): boolean => panel === null && messages.plate?.kind === "offline";
 
   async function remove(typed: string): Promise<void> {
     if (panel === null || panel.busy || !canDelete(typed)) return;
@@ -124,7 +143,7 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
     return form;
   }
 
-  function exportNodes(): Node[] {
+  function exportNodes(offline: string | null): Node[] {
     const out: Node[] = [h2(DATA_WORDS.exportHeading), p(DATA_WORDS.exportIntro)];
     let limit: HTMLElement | null = null;
     if (exp.kind === "limit") {
@@ -138,10 +157,11 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
       w.tabIndex = -1;
       out.push(w);
     }
-    const b = button(DATA_WORDS.download, { primary: true, disabled: exp.kind === "working" || exp.kind === "limit", onPress: () => void startExport() });
+    const b = button(DATA_WORDS.download, { primary: true, disabled: exp.kind === "working" || exp.kind === "limit" || offline !== null, onPress: () => void startExport() });
     b.dataset.export = "";
-    // The disabled button says why in words: the plate (site.md, "Your data").
-    if (limit) b.setAttribute("aria-describedby", limit.id);
+    // The disabled button says why in words: the plate (site.md, "Your data" and "Errors").
+    const why = limit?.id ?? offline;
+    if (why !== null) b.setAttribute("aria-describedby", why);
     out.push(buttons(b));
     if (exp.kind === "idle" && !hasMessage(messages)) out.push(small(DATA_WORDS.limitLine));
     return out;
@@ -149,12 +169,15 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
 
   function content(): Node[] {
     // A plate or "Confirm it is you" heads the page, so it is in view whichever section asked (S3).
-    const here = messageNodes(host);
+    // Offline, the export waits under "You are offline", whose "Try again" asks for it again.
+    const offline = exportOffline();
+    const here = messageNodes(host, offline ? { text: DATA_WORDS.tryAgain, onPress: () => void startExport() } : undefined);
     // The panel replaces the page (site.md, "What every page has"); a plate stays above it.
     if (panel !== null) return [...here, panelOf(panel)];
     const open = button(DATA_WORDS.deleteOpen, { onPress: openPanel });
     open.dataset.deleteOpen = "";
-    return [...here, ...exportNodes(), h2(DATA_WORDS.deleteHeading), p(DATA_WORDS.deleteIntro), buttons(open)];
+    const plateId = offline ? idOfPlate(here, "export-offline") : null;
+    return [...here, ...exportNodes(plateId), h2(DATA_WORDS.deleteHeading), p(DATA_WORDS.deleteIntro), buttons(open)];
   }
 
   function draw(focus: string | null): void {

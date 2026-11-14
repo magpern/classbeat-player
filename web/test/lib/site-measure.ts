@@ -11,18 +11,7 @@ import { settle } from "./browser.ts";
 import { openSite, traps } from "./site-fake.ts";
 import type { FakeSite } from "./site-fake.ts";
 import { focusRing, layoutChecks, motionAndPictures, s3Visible } from "./site-page-checks.ts";
-import type { State } from "./site-states.ts";
-
-export interface SiteShot {
-  readonly state: State;
-  readonly width: number;
-  /** The browser's text size: 1 is 100 %, 2 is 200 % (S9). */
-  readonly zoom: 1 | 2;
-  /** Measure the ink of every text (S1, S2 and overlaps); reflow-only shots skip it. */
-  readonly ink: boolean;
-}
-
-export const siteShotName = (s: SiteShot): string => `site-${s.state.name}-${s.width}${s.zoom === 2 ? "-text200" : ""}`;
+import type { SiteShot } from "./site-shots.ts";
 
 export interface Row {
   readonly check: string;

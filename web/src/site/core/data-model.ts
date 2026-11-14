@@ -48,6 +48,7 @@ export const DATA_WORDS = {
   exporting: "Making your export. Your browser saves it when it is ready.",
   started: "Your export has started",
   startedDetail: `Your browser is saving ${EXPORT_FILE}. If the file looks cut off, ask for the export again.`,
+  tryAgain: "Try again",
   limitHead: "No more exports today",
   limitDetail: (retryAfter: number | null): string => `You can export 3 times a day. Try again ${hoursWords(retryAfter)}.`,
   deleteHeading: "Delete your account",

@@ -11,19 +11,17 @@ import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { WEB_DIR, newPage } from "../lib/browser.ts";
 import { launchOffline } from "../lib/site-fake.ts";
-import { checkSiteShot, siteShotName } from "../lib/site-measure.ts";
-import type { SiteResult, SiteShot } from "../lib/site-measure.ts";
+import { checkSiteShot } from "../lib/site-measure.ts";
+import type { SiteResult } from "../lib/site-measure.ts";
+import { siteShotName, siteShots } from "../lib/site-shots.ts";
+import type { SiteShot } from "../lib/site-shots.ts";
 import { STATES } from "../lib/site-states.ts";
 
 const ONLY = process.env.SPEC_ONLY ? new RegExp(process.env.SPEC_ONLY) : null;
 const JOBS = Number(process.env.SPEC_JOBS ?? 4);
 const SHOT_DIR = join(WEB_DIR, "screenshots", "site");
 
-const SHOTS: SiteShot[] = STATES.flatMap((state) => [
-  ...[390, 1280, ...(state.main ? [820, 320] : [])].map((width) => ({ state, width, zoom: 1 as const, ink: true })),
-  // 200 % text: reflow, sizes, layout and cut text at the phone and the desktop size.
-  ...[390, 1280].map((width) => ({ state, width, zoom: 2 as const, ink: false })),
-]).filter((s) => !ONLY || ONLY.test(siteShotName(s)));
+const SHOTS: SiteShot[] = siteShots(STATES).filter((s) => !ONLY || ONLY.test(siteShotName(s)));
 
 async function pool<T, R>(items: readonly T[], n: number, work: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);

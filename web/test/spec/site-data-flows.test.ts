@@ -77,6 +77,48 @@ describe("export", () => {
     }
   });
 
+  it("offline, 'Download export' is off under the plate, and the export is asked for again by 'Try again' and once back online (#441)", async () => {
+    const offline = { status: 0, fail: true } as const;
+    const site = await open({ [EXPORT]: [offline, offline, EXPORTED] });
+    await press(site.page, "Download export");
+    await site.page.waitForSelector(".plate");
+    assert.match(await site.page.locator(".plate").innerText(), /You are offline/);
+    const b = site.page.locator("[data-export]");
+    assert.equal(await b.isDisabled(), true, "Download export is off while offline");
+    assert.equal(await b.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
+    assert.equal(await site.page.getByRole("button", { name: "Delete my account…", exact: true }).isDisabled(), false, "the rest of the page stays on");
+    await b.click({ force: true });
+    assert.equal(routes(site, EXPORT), 1, "a press on the disabled button sends nothing");
+    // "Try again" on the plate asks again; still offline, the plate and the disabled button stay.
+    await press(site.page, "Try again");
+    await site.page.waitForSelector(".plate");
+    assert.equal(routes(site, EXPORT), 2);
+    assert.equal(await b.isDisabled(), true);
+    assert.equal(await b.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
+    // Back online, the page asks once by itself, and the file is saved.
+    const [download] = await Promise.all([site.page.waitForEvent("download"), site.page.evaluate(() => window.dispatchEvent(new Event("online")))]);
+    assert.equal(download.suggestedFilename(), EXPORT_FILE);
+    await site.page.waitForSelector(".note");
+    assert.equal(routes(site, EXPORT), 3);
+    assert.equal(await b.isDisabled(), false);
+    assert.equal(await b.getAttribute("aria-describedby"), null);
+    await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    assert.equal(routes(site, EXPORT), 3, "asked once only");
+    await site.context.close();
+  });
+
+  it("offline, a deletion's plate does not turn the export off once the panel is closed", async () => {
+    const site = await open({ [DELETE]: { status: 0, fail: true } });
+    await openPanel(site.page);
+    await site.page.locator("input[name=confirm]").fill(TYPED);
+    await press(site.page, "Delete everything");
+    await site.page.waitForSelector(".plate");
+    await press(site.page, "Keep my account");
+    assert.equal(await site.page.locator("[data-export]").isDisabled(), false);
+    assert.equal(await site.page.locator("[data-export]").getAttribute("aria-describedby"), null);
+    await site.context.close();
+  });
+
   it("asks to confirm it is you on 403 recent_sign_in_required, and sends nothing again", async () => {
     const site = await open({ [EXPORT]: RECENT });
     await press(site.page, "Download export");

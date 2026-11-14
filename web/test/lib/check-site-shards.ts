@@ -2,8 +2,8 @@
 // (`*` for the remainder). It stands in for that file's "covers every state in the table" test,
 // which returns early under SPEC_ONLY and so never runs in a shard (issue #438): it fails when a
 // state of the table has no 1x shot in any part, or a shot is taken by two parts (it would run twice).
-// The shot names repeat how site-checks.test.ts builds SHOTS and site-measure.ts names them
-// (`site-<state>-<width>[-text200]`); change all three together.
+// The shots and their names come from site-shots.ts, which site-checks.test.ts takes them from too.
+import { siteShotName, siteShots } from "./site-shots.ts";
 import { STATES } from "./site-states.ts";
 
 const parts = process.argv.slice(2);
@@ -14,10 +14,7 @@ if (parts.length < 2 || !hasRest) {
   process.exit(1);
 }
 
-const names: { name: string; state: string; zoom: 1 | 2 }[] = STATES.flatMap((s) => [
-  ...[390, 1280, ...(s.main ? [820, 320] : [])].map((w) => ({ name: `site-${s.name}-${w}`, state: s.name, zoom: 1 as const })),
-  ...[390, 1280].map((w) => ({ name: `site-${s.name}-${w}-text200`, state: s.name, zoom: 2 as const })),
-]);
+const names = siteShots(STATES).map((s) => ({ name: siteShotName(s), state: s.state.name, zoom: s.zoom }));
 
 let bad = 0;
 const taken = new Set<string>();

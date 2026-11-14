@@ -124,6 +124,31 @@ describe("handing the file to the browser", () => {
     assert.equal(await exportAccount(() => false), "dropped");
     assert.deepEqual(log, []);
   });
+
+  it("drops a file when the page is left while its body is read, saving nothing (#441)", async () => {
+    alive();
+    const { log } = stand();
+    let shown = true;
+    const res = new Response('{"a":1}', { status: 200 });
+    const read = res.blob.bind(res);
+    // The page is still shown when the answer's head arrives, and is left while the file is read.
+    res.blob = async (): Promise<Blob> => {
+      const b = await read();
+      shown = false;
+      return b;
+    };
+    g.fetch = (() => Promise.resolve(res)) as typeof fetch;
+    let asked = 0;
+    assert.equal(
+      await exportAccount(() => {
+        asked += 1;
+        return shown;
+      }),
+      "dropped",
+    );
+    assert.equal(asked, 2, "asked once at the head and once after the body");
+    assert.deepEqual(log, []);
+  });
 });
 
 describe("purity", () => {

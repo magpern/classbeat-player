@@ -1,7 +1,7 @@
 // The website follow-ups of issue #426 on the fake backend: the export when the browser refuses the
 // file, when its link is revoked and when the page is left meanwhile; the class note after an account
 // deletion; the pairing page's offline retry and the name it shows; a refused first request on
-// Devices and /pair; the account page's heading keeping focus on first load. Fakes only: no network.
+// Devices, /pair, Your data and Connect an app (#441); the account page's heading keeping focus on first load. Fakes only: no network.
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
@@ -10,6 +10,7 @@ import { launchOffline, openSite, settled } from "../lib/site-fake.ts";
 import type { FakeSite, Script } from "../lib/site-fake.ts";
 import { EXPORTED, SIGNED_IN, TYPED } from "../lib/site-data-states.ts";
 import { FOUND, LISTED, PAIR_CODE } from "../lib/site-device-states.ts";
+import { CONNECT_PATH } from "../lib/site-link-states.ts";
 
 const EXPORT = "POST account/export";
 let browser: Browser;
@@ -116,9 +117,16 @@ describe("account deletion (#423 N5)", () => {
     await site.page.locator("input[name=confirm]").fill(TYPED);
     await press(site.page, "Delete everything");
     await site.page.waitForURL(/\/sign-in$/);
-    // Back through Your data and Sessions to the class list, as the same browser would.
-    for (let n = 0; n < 3; n += 1) await site.page.goBack();
+    // The class list again in the same page (the note is kept in its memory), by a link of the site
+    // opened in place, however many entries the history holds (#441).
+    await site.page.evaluate(() => {
+      const a = document.createElement("a");
+      a.href = "/classes";
+      document.body.append(a);
+      a.click();
+    });
     await site.page.waitForSelector(".rows .row");
+    assert.equal(new URL(site.page.url()).pathname, "/classes");
     assert.equal(await site.page.locator(".note").count(), 0, "the note of the earlier account's class is gone");
     await site.context.close();
   });
@@ -170,12 +178,12 @@ describe("devices and pairing (#420)", () => {
 });
 
 describe("a refused first request (#419 r2, r3)", () => {
-  for (const [path, route] of [["/devices", "GET devices"], ["/pair", "GET sessions"], ["/account/data", "GET sessions"]] as const) {
+  for (const [path, route] of [["/devices", "GET devices"], ["/pair", "GET sessions"], ["/account/data", "GET sessions"], [CONNECT_PATH, "GET sessions"]] as const) {
     for (const status of [403, 404]) {
-      it(`${path} answers ${status} with the server fault, and nothing else is asked`, async () => {
+      it(`${path.split("?")[0]} answers ${status} with the server fault, and nothing else is asked`, async () => {
         const site = await open(path, { [route]: { status, body: { error: status === 403 ? "forbidden" : "not_found" } } }, ".plate");
         assert.equal(await site.page.locator("h1").innerText(), "Something went wrong");
-        assert.equal(await site.page.locator("input, [data-export], .dev-item").count(), 0, "no form or list of the page itself");
+        assert.equal(await site.page.locator("input, [data-export], .dev-item, [data-connect]").count(), 0, "no form, list or button of the page itself");
         assert.deepEqual(site.api.map((a) => a.route), [route]);
         await site.context.close();
       });

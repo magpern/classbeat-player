@@ -104,6 +104,39 @@ describe("adding a passkey", () => {
     await site.context.close();
   });
 
+  it("offline, 'Add passkey' is off until the browser is back online, and 'Try again' adds with the name now typed (#441)", async () => {
+    const offline = { status: 0, fail: true } as const;
+    const site = await open({ "POST passkeys/options": [offline, offline, { status: 200, body: REG_OPTIONS }], "POST passkeys": ADDED });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate");
+    const ok = site.page.locator("form[data-add] button[type=submit]");
+    assert.equal(await ok.isDisabled(), true, "Add passkey is off while offline");
+    assert.equal(await site.page.getByRole("button", { name: "Cancel", exact: true }).isDisabled(), false, "Cancel stays on");
+    await ok.click({ force: true });
+    await settled(site);
+    assert.equal(sent(site, "POST passkeys/options"), 1, "a press on the disabled button sends nothing");
+    // "Try again" on the plate asks again; still offline, the plate stays and the button stays off.
+    await press(site.page, "Try again");
+    await site.page.waitForSelector(".plate");
+    assert.equal(sent(site, "POST passkeys/options"), 2);
+    assert.equal(await ok.isDisabled(), true);
+    assert.equal(await ok.getAttribute("aria-describedby"), await site.page.locator(".plate").getAttribute("id"));
+    // Back online: the plate goes and the button is on again, with what was typed meanwhile; nothing is sent by itself.
+    await site.page.fill("input[name=name]", "Phone");
+    await site.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await site.page.waitForSelector(".plate", { state: "detached" });
+    await settled(site);
+    assert.equal(sent(site, "POST passkeys/options"), 2, "nothing is sent by itself");
+    assert.equal(await ok.isDisabled(), false);
+    assert.equal(await ok.getAttribute("aria-describedby"), null);
+    assert.equal(await site.page.inputValue("input[name=name]"), "Phone");
+    assert.equal(await site.page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.name), "name");
+    await press(site.page, "Add passkey");
+    await site.page.waitForSelector(".note");
+    assert.equal(JSON.parse(site.api.find((a) => a.route === "POST passkeys")?.body ?? "{}").name, "Phone");
+    await site.context.close();
+  });
+
   it("checks the name first and sends nothing for an empty one", async () => {
     const site = await open();
     await addAs(site, "   ");

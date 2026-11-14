@@ -13,7 +13,8 @@ import { WEB_DIR, newPage } from "../lib/browser.ts";
 import { PICKER_STATES } from "../lib/play-picker-states.ts";
 import { launchOffline } from "../lib/site-fake.ts";
 import { checkSiteShot } from "../lib/site-measure.ts";
-import type { SiteResult, SiteShot } from "../lib/site-measure.ts";
+import type { SiteResult } from "../lib/site-measure.ts";
+import type { SiteShot } from "../lib/site-shots.ts";
 
 const ONLY = process.env.SPEC_ONLY ? new RegExp(process.env.SPEC_ONLY) : null;
 const JOBS = Number(process.env.SPEC_JOBS ?? 4);
