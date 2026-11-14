@@ -7,6 +7,7 @@ import type { SignedInPage } from "../core/routes.ts";
 import { el, t } from "../ui/dom.ts";
 import { h1 } from "../ui/kit.ts";
 import { connectPage } from "./connect.ts";
+import { dataPage } from "./data.ts";
 import { linksPage } from "./links.ts";
 import { passkeysPage } from "./passkeys.ts";
 import { sessionsPage } from "./sessions.ts";
@@ -25,11 +26,12 @@ export function accountFrame(main: HTMLElement, current: AccountSub): HTMLDivEle
   return body;
 }
 
-/** The sub-pages built so far, by address. */
+/** The sub-pages, by address. */
 const SUBS = new Map<string, AccountSub>([
   ["/account/sessions", "sessions"],
   ["/account/passkeys", "passkeys"],
   ["/account/links", "links"],
+  ["/account/data", "data"],
 ]);
 
 /** Shows an account sub-page for the body of its first request; false for any other page. */
@@ -45,7 +47,9 @@ export function shownByAccountPage(main: HTMLElement, page: SignedInPage, body: 
   const box = accountFrame(main, sub);
   if (sub === "sessions") sessionsPage(main, box, body, env, reload);
   else if (sub === "passkeys") passkeysPage(main, box, body, env, reload);
-  else linksPage(main, box, body, env, reload);
+  else if (sub === "links") linksPage(main, box, body, env, reload);
+  // Your data reads `sessions` first only to know the person is signed in; its body is not used.
+  else dataPage(main, box, env);
   if (focus && main.contains(box)) main.querySelector<HTMLElement>("h1")?.focus();
   return true;
 }

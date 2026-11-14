@@ -6,10 +6,10 @@ import type { Answer } from "../core/answer.ts";
 
 export type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
-export async function call(method: Method, route: string, body?: unknown): Promise<Answer> {
-  let res: Response;
+/** Sends one request with the site's options; null when there is no answer at all. */
+export async function send(method: Method, route: string, body?: unknown): Promise<Response | null> {
   try {
-    res = await fetch(`/api/site/${route}`, {
+    return await fetch(`/api/site/${route}`, {
       method,
       // Kept explicit: in `cors` mode the browser sends the real Origin even under
       // `Referrer-Policy: no-referrer`; another mode may send `Origin: null`, which the backend
@@ -25,16 +25,25 @@ export async function call(method: Method, route: string, body?: unknown): Promi
     });
   } catch {
     // No answer at all.
-    return { kind: "offline" };
+    return null;
   }
+}
+
+/** The meaning of an answer that is not a success, read from its JSON body. */
+export async function answerOfResponse(res: Response): Promise<Answer> {
+  if (res.type === "opaqueredirect") return { kind: "server" };
   let parsed: unknown = null;
-  if (res.status !== 204 && res.type !== "opaqueredirect") {
+  if (res.status !== 204) {
     try {
       parsed = await res.json();
     } catch {
       return { kind: "server" };
     }
   }
-  if (res.type === "opaqueredirect") return { kind: "server" };
   return answerOf(res.status, res.headers.get("Retry-After"), parsed);
+}
+
+export async function call(method: Method, route: string, body?: unknown): Promise<Answer> {
+  const res = await send(method, route, body);
+  return res === null ? { kind: "offline" } : answerOfResponse(res);
 }
