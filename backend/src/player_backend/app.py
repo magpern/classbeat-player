@@ -13,7 +13,13 @@ from fastapi import FastAPI, Request, Response
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
-from player_backend.control_page import CONTROL_DIR, control_router, load_files
+from player_backend.control_page import (
+    CONTROL_DIR,
+    RIDER_DIR,
+    control_router,
+    load_files,
+    rider_router,
+)
 from player_backend.db.executor import open_pool
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
@@ -45,10 +51,12 @@ def create_app(
     mailer: Mailer | None = None,
     live_recheck: RecheckTiming | None = RecheckTiming(),  # noqa: B008 (frozen)
     control_dir: Path = CONTROL_DIR,
+    rider_dir: Path = RIDER_DIR,
 ) -> FastAPI:
     """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand.
 
-    `control_dir` is the built companion page (control_page.py), read once, here.
+    `control_dir` is the built companion page and `rider_dir` the built rider page
+    (control_page.py), each read once, here.
     """
     configure_logging(settings.log_level)
 
@@ -93,6 +101,7 @@ def create_app(
     app.include_router(source_router)
     app.include_router(live_router)
     app.include_router(control_router(load_files(control_dir)))
+    app.include_router(rider_router(load_files(rider_dir, "rider")))
     # Before the access log: a middleware added later runs outside it.
     install_body_cap(app)
 
@@ -110,6 +119,7 @@ def create_app(
             response = error_response(500, "internal_error")
         # ADR 0002, section 5: the page headers on every response, no-store on the APIs.
         # ADR 0005, section 8: the companion page's own, under /control.
+        # ADR 0007, section 5: the rider page's, under /j.
         # Chosen by the routed path, and no-store by the full path too (response_header_policy).
         root_path = request.scope.get("root_path", "")
         response.headers.update(headers_for(request.scope["path"], root_path, settings.site_origin))

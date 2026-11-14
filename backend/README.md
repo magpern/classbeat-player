@@ -338,6 +338,18 @@ default: no source can be linked.
   `Referrer-Policy: no-referrer`; `X-Content-Type-Options: nosniff`; `Cache-Control: no-store`
   on the page and `no-cache` on its assets.
 
+## The rider page at `/j` (ADR 0007, section 5)
+
+- Served exactly as `/control` is, by the same code (`control_page.page_router`), from the web
+  lane's `web/dist/j/` (`index.html` at `/j` and `/j/` only; its scripts, style sheets and fonts
+  under `/j/`, by the same file rule). `create_app(..., rider_dir=...)` points it elsewhere;
+  without a build, `/j` is a 404 and `rider page not built` is logged. GET only: any other
+  method, HEAD included, is a 405.
+- Every answer under `/j` carries `rider_page_policy.rider_headers`: the companion's headers,
+  each one equal, but for `connect-src`, which names only `POST /api/live/join` and the live
+  WebSocket. The join code is in the address's fragment (`/j#<code>`), which no request
+  carries.
+
 ## No SQL built from strings (ADR 0002, section 9, item 1)
 
 Two layers.
