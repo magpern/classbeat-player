@@ -26,7 +26,7 @@ _WEB_DIST: Final = Path(__file__).resolve().parents[3] / "web" / "dist"
 CONTROL_DIR: Final = _WEB_DIST / "control"
 RIDER_DIR: Final = _WEB_DIST / "j"
 
-_log = logging.getLogger("player_backend.control_page")
+_log = logging.getLogger("player_backend.pages")
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class Served:
 
 
 @dataclass(frozen=True)
-class ControlFiles:
+class PageFiles:
     page: Served | None
     assets: dict[str, Served]
 
@@ -52,14 +52,14 @@ def under_real_folders(folder: Path, relative: Path) -> bool:
     return all(not (folder / p).is_symlink() for p in relative.parents)
 
 
-def load_files(folder: Path, page_name: str = "control") -> ControlFiles:
+def load_files(folder: Path, page_name: str = "control") -> PageFiles:
     """The built page and its assets. A folder that is missing gives an empty table.
 
     `page_name` (`control` or `rider`) names the page in the warning when it is not built.
     """
     if not folder.is_dir() or folder.is_symlink():
         _log.warning("%s page not built", page_name)
-        return ControlFiles(page=None, assets={})
+        return PageFiles(page=None, assets={})
     page_file = folder / PAGE_FILE
     page = Served(page_file.read_bytes(), PAGE_TYPE) if _regular(page_file) else None
     assets: dict[str, Served] = {}
@@ -68,7 +68,7 @@ def load_files(folder: Path, page_name: str = "control") -> ControlFiles:
         media_type = asset_type(relative.as_posix())
         if media_type is not None and under_real_folders(folder, relative) and _regular(path):
             assets[relative.as_posix()] = Served(path.read_bytes(), media_type)
-    return ControlFiles(page=page, assets=assets)
+    return PageFiles(page=page, assets=assets)
 
 
 def _answer(served: Served | None) -> Response:
@@ -77,7 +77,7 @@ def _answer(served: Served | None) -> Response:
     return Response(served.body, media_type=served.media_type)
 
 
-def page_router(base: str, files: ControlFiles) -> APIRouter:
+def page_router(base: str, files: PageFiles) -> APIRouter:
     """The page at `base` and its files under `base/`, GET only: any other method is a 405."""
     router = APIRouter()
 
@@ -93,9 +93,9 @@ def page_router(base: str, files: ControlFiles) -> APIRouter:
     return router
 
 
-def control_router(files: ControlFiles) -> APIRouter:
+def control_router(files: PageFiles) -> APIRouter:
     return page_router(CONTROL_PATH, files)
 
 
-def rider_router(files: ControlFiles) -> APIRouter:
+def rider_router(files: PageFiles) -> APIRouter:
     return page_router(RIDER_PATH, files)

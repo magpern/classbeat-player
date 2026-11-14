@@ -3,8 +3,9 @@
 
 - A nickname is 1 to 24 characters (code points) once control characters are removed: every
   character of the Unicode categories Cc (controls), Cf (format characters, the bidirectional
-  overrides among them), Cs (lone surrogates), Zl and Zp (line and paragraph separators), and
-  the white space at either end. Nothing left, or more than 24, is no nickname.
+  overrides among them), Cs (lone surrogates), Zl and Zp (line and paragraph separators), Cn
+  (unassigned code points and noncharacters, U+FFFE among them) and Co (private use), and the
+  white space at either end. Nothing left, or more than 24, is no nickname.
 - A rider's id is 8 random bytes, written as base64url without padding (11 characters). It is
   drawn at the join (live/riders.py), never derived from the token or the nickname.
 - Places: at most 60 rider connections open in a session at a time. The cap counts tokens with
@@ -34,7 +35,7 @@ RIDER_ID_BYTES: Final = 8
 NICKNAME_MAX: Final = 24
 
 # The categories a nickname loses (see above).
-_REMOVED: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+_REMOVED: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp", "Cn", "Co"})
 
 
 def clean_nickname(raw: object) -> str | None:

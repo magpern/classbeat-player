@@ -164,6 +164,20 @@ def test_ten_new_join_codes_an_hour_then_ignored_and_counted(live: Any) -> None:
     assert live.registry.new_join_code(started.session_id, live.clock()) is not None
 
 
+def test_a_new_join_code_for_a_session_past_its_lifetime_ends_it(live: Any) -> None:
+    # As the sweep would end it, and as a join does (test_live_join.py): no code is made.
+    started = live.session()
+    live.clock.now += 12 * 3600.0
+    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert live.registry.running() == []
+    assert live.registry.session_of_code(started.join_code) is None
+    assert live.ends == [(started.session_id, "lifetime")]
+    assert live.registry.ignored["join_code_limit"] == 0
+    # It ended once: a second ask finds no session and records nothing more.
+    assert live.registry.new_join_code(started.session_id, live.clock()) is None
+    assert live.ends == [(started.session_id, "lifetime")]
+
+
 def test_one_sessions_new_join_code_leaves_the_others(live: Any) -> None:
     one, other = live.session(), live.session()
     live.registry.new_join_code(one.session_id, live.clock())

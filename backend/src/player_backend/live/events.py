@@ -34,12 +34,14 @@ class Ended:
 class Dropped:
     """A controller dropped from a session that goes on. Its connection, if any, is closed with
     4403, and the host is told `controller_left` with `reason` and `via`, connected or not.
-    `reason`: `dropped` by the host, `session_ended` with its site session (the re-check)."""
+    `reason`: `dropped` by the host, `session_ended` with its site session (the re-check).
+    `token_hash`: the dropped token's, so a later holder of the place is never taken for it."""
 
     session_id: UUID
     slot: int
     reason: DropReason
     via: Via
+    token_hash: bytes = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -70,11 +72,13 @@ class SignedInController:
 
 @dataclass(frozen=True)
 class Seat:
-    """The place a controller token holds: its session, its slot and how it was got."""
+    """The place a controller token holds: its session, its slot, how it was got, and the
+    token's hash (its connection is matched by it when a drop reaches the hub)."""
 
     session_id: UUID
     slot: int
     via: Via
+    token_hash: bytes = field(repr=False)
 
 
 @dataclass(frozen=True)

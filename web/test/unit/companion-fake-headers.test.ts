@@ -21,7 +21,8 @@ describe("the companion fake's /control headers", () => {
     const fetched = /_FETCHED: Final = \(([^)]*)\)/.exec(SOURCE);
     const ws = /_LIVE_WS: Final = "([^"]+)"/.exec(SOURCE);
     assert.ok(fetched && ws, "the backend's connect paths were not found");
-    const ret = /return \(([^]*?)\n {4}\)/.exec(body("content_security_policy"));
+    // The policy both phone pages share (page_policy); the companion passes it the three routes in _FETCHED.
+    const ret = /return \(([^]*?)\n {4}\)/.exec(body("page_policy"));
     assert.ok(ret, "the backend's policy was not found");
     const origin = "https://site.example";
     const connect = [...strings(fetched[1]).map((p) => origin + p), "wss://site.example" + ws[1]].join(" ");
@@ -34,7 +35,8 @@ describe("the companion fake's /control headers", () => {
   });
 
   it("has the backend's other headers, with no-store on the page and no-cache on built files", () => {
-    const ret = /return \{([^]*?)\n {4}\}/.exec(body("control_headers"));
+    // The headers both phone pages share (page_headers), which control_headers gives for /control.
+    const ret = /return \{([^]*?)\n {4}\}/.exec(body("page_headers"));
     assert.ok(ret, "the backend's headers were not found");
     const pairs = [...(ret[1] + "\n").matchAll(/"([\w-]+)": ([^\n]+?),?\n/g)].map((m) => [m[1], m[2]] as const);
     const fixed = Object.fromEntries(pairs.filter(([, v]) => /^"[^"]*"$/.test(v)).map(([k, v]) => [k, v.slice(1, -1)]));

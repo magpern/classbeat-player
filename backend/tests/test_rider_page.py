@@ -15,11 +15,11 @@ from player_backend import control_page
 from player_backend.app import create_app
 from player_backend.control_page import RIDER_DIR, load_files
 from player_backend.control_page_policy import content_security_policy as control_csp
-from player_backend.control_page_policy import control_headers
+from player_backend.control_page_policy import control_headers, is_asset_path
 from player_backend.response_header_policy import headers_for
 from player_backend.rider_page_policy import (
+    RIDER_PATH,
     content_security_policy,
-    is_asset_path,
     is_rider_path,
     rider_headers,
 )
@@ -111,7 +111,7 @@ def test_the_headers_equal_the_companions_but_for_what_the_page_connects_to(
     ours = rider_headers(rider, ORIGIN)
     theirs = control_headers(control, ORIGIN)
     assert ours == {**theirs, "Content-Security-Policy": CSP}, rider
-    assert is_asset_path(rider) == (theirs["Cache-Control"] == "no-cache"), rider
+    assert is_asset_path(rider, RIDER_PATH) == (theirs["Cache-Control"] == "no-cache"), rider
     # Every directive is the companion's but connect-src, which names fewer places.
     mine, other = _directives(CSP), _directives(control_csp(ORIGIN))
     assert mine.keys() == other.keys()

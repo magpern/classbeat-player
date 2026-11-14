@@ -158,17 +158,24 @@ class Riders(Table):
     def new_join_code(self, session_id: UUID, now: float) -> str | None:
         """A new join code for the session, as shown; the earlier one finds nothing from now on,
         and the current control code ends, telling no one. None when the session is gone, or
-        past its 10 an hour: then nothing changes, and the request is counted."""
+        past its 10 an hour: then nothing changes, and the request is counted. A session past
+        its lifetime ends, as in `host_session`, and gets no code."""
         with self._lock:
             session = self._sessions.get(session_id)
-            if session is None:
-                return None
-            if not session.join_codes.take(now):
-                self.ignored["join_code_limit"] += 1
-                return None
-            code = self._new_code()
-            del self._by_code[session.join_code]
-            session.join_code = code
-            self._by_code[code] = session.id
-            session.code.end()
-            return show_code(code)
+            ended = None if session is None else self._expired(session, now)
+            if session is not None and ended is None:
+                return self._new_join_code(session, now)
+        self._expiry_told(ended)
+        return None
+
+    def _new_join_code(self, session: HeldSession, now: float) -> str | None:
+        """`new_join_code` for a running session. Hold `_lock`."""
+        if not session.join_codes.take(now):
+            self.ignored["join_code_limit"] += 1
+            return None
+        code = self._new_code()
+        del self._by_code[session.join_code]
+        session.join_code = code
+        self._by_code[code] = session.id
+        session.code.end()
+        return show_code(code)

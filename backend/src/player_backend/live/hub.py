@@ -8,7 +8,8 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
   controller is told `welcome` with its slot and whether the host is in. Controllers get
   `host_status` when the host comes and goes, and nothing else while it is away; the host gets
   `controller_joined`, and `controller_left` with its reason, as phones come and go, and for a
-  drop or a site session's end whether or not the phone was connected (ADR 0005 section 10).
+  drop or a site session's end whether or not the phone was connected (ADR 0005 section 10),
+  unless the drop reaches the hub after its place went to a newer token (#382).
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
   its schema for its sender's role; anything else is dropped and counted in `dropped`. The
   handlers are keyed by the routed type (live/dispatch.py), one `_on_<type>` each. Every message the
@@ -146,12 +147,19 @@ class Hub:
         self.riders.end(event.session_id, message)
 
     def _dropped(self, event: Dropped) -> None:
-        self.commands.forget(event.session_id, (event.slot,))
-        link = self._controllers.get(event.session_id, {}).pop(event.slot, None)
+        """Only the dropped token's own connection is closed, and the host is told only while no
+        newer token holds the place: a late drop says nothing about the new holder's place."""
+        phones = self._controllers.get(event.session_id, {})
+        link = phones.get(event.slot)
         if link is not None:
+            if link.token_hash != event.token_hash:
+                return  # a newer token's: its own joins, leaves and drop follow
+            del phones[event.slot]
             self._send(link, ended("dropped"))
             link.close(ENDED)
-        self._left(event.session_id, event.slot, event.via, event.reason)
+        if event.slot not in self.service.registry.places(event.session_id):
+            self.commands.forget(event.session_id, (event.slot,))
+            self._left(event.session_id, event.slot, event.via, event.reason)
 
     def _cancelled(self, event: CodeCancelled) -> None:
         host = self._hosts.get(event.session_id)
@@ -179,6 +187,7 @@ class Hub:
 
     def attach_controller(self, socket: Socket, seat: Seat) -> Link:
         link = Link(socket, "controller", seat.session_id, seat.slot, seat.via)
+        link.token_hash = seat.token_hash
         phones = self._controllers.setdefault(seat.session_id, {})
         old = phones.get(seat.slot)
         phones[seat.slot] = link
