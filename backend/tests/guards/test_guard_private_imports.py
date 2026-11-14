@@ -100,6 +100,10 @@ def test_every_dynamic_importer_is_a_source_file() -> None:
         # The old text backstop over the code's tokens: a chain on a name no import bound.
         "obj.starlette._utils",
         "obj.starlette . _utils",
+        # The same chain split over a line break, on a name no import bound (#343 N1).
+        "x = (obj.starlette\n    ._utils)",
+        "x = (obj.starlette.\n    _utils)",
+        "x = (obj\n    .starlette\n    .\n    _utils)",
     ],
 )
 def test_the_scan_refuses_each_form(snippet: str) -> None:
@@ -120,6 +124,8 @@ def test_the_scan_refuses_each_form(snippet: str) -> None:
         "from starlette import __version__",
         "import starlette.routing as r\nr.Router.__init__",
         "getattr(loaded, '__file__', None)",
+        # A private-looking chain is not one when `starlette` is not the name before it.
+        "x = (obj.starlette\n    .routing)",
         # Comments and strings are not imports (#292 N2).
         "# from starlette._utils import get_route_path",
         '"""Not starlette._utils: the routed path is ours."""',
@@ -186,6 +192,19 @@ def test_a_dynamic_importer_may_use_its_listed_form_only(rel: str, snippet: str)
             "import importlib.util\nf = importlib.util.spec_from_file_location",
         ),
         ("player_backend/site/answers.py", "import importlib.util\ngetattr(importlib, 'util')"),
+        # A loader name passed as an argument is not a call of it (#343 N2).
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\nlist(map(_m, NAMES))",
+        ),
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module\nlist(map(import_module, names))",
+        ),
+        (
+            "player_backend/site/answers.py",
+            "import importlib.util\nrun(importlib.util.spec_from_file_location, path)",
+        ),
     ],
 )
 def test_a_dynamic_importer_is_refused_anything_else(rel: str, snippet: str) -> None:
@@ -205,7 +224,30 @@ def test_a_dynamic_importer_is_refused_anything_else(rel: str, snippet: str) -> 
             "spec = importlib.util.spec_from_file_location(key, path)\n"
             "module = importlib.util.module_from_spec(spec)",
         ),
+        # An aliased `importlib.util` is the same listed form and the same calls (#343 N5).
+        (
+            "player_backend/site/answers.py",
+            "import importlib.util as iu\n"
+            "spec = iu.spec_from_file_location(key, path)\n"
+            "module = iu.module_from_spec(spec)",
+        ),
     ],
 )
 def test_a_dynamic_importer_may_make_its_listed_calls(rel: str, snippet: str) -> None:
     assert _violations(snippet, rel) == []
+
+
+def test_an_aliased_loader_still_refuses_other_calls() -> None:
+    rel = "player_backend/site/answers.py"
+    assert _violations("import importlib.util as iu\niu.find_spec(name)", rel) != []
+    assert _violations("import importlib.util as iu\nf = iu.module_from_spec", rel) != []
+
+
+def test_a_backstop_match_is_reported_at_its_own_line() -> None:
+    source = "import os\n\nx = 1\ny = obj.starlette._utils\nz = 2\nw = obj.starlette._b\n"
+    assert [(v.line, v.rule) for v in check_source(source, OUTSIDE)] == [
+        (4, "private name in code: starlette._utils"),
+        (6, "private name in code: starlette._b"),
+    ]
+    split = "x = 1\ny = (obj.starlette\n    ._utils)\n"
+    assert [v.line for v in check_source(split, OUTSIDE)] == [2]
