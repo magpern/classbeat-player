@@ -27,7 +27,8 @@ This ADR **amends ADR 0002, section 4 (email link), steps 1, 2, 4 and 5**. Inlin
 by ADR 0006" notes mark each place there. Every other part of ADR 0002 stands.
 
 1. **The request (amends steps 1 and 2).** `POST /api/site/sign-in/link` takes an optional
-   `return_to` beside `email`.
+   `return_to` beside `email`. (Amended by ADR 0008, section 3: the pattern also accepts
+   `play` and `play.<class id>`.)
    - It is accepted only if it matches `^control(\.[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4})?$`
      exactly. The alphabet is `code_policy.ALPHABET`, and the code is upper case with its
      hyphen. The lenient `normalise_code` is not used, so no case folding, no missing hyphen
