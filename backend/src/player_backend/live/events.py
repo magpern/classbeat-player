@@ -1,7 +1,7 @@
-"""What the live registry tells and answers (ADR 0002, section 8; ADR 0005, sections 2 and 3):
-the ends, the drops, a start's answer, the control codes and controllers given out, and what
-the re-check and the WebSocket see. Plain
-values; hashes are kept out of their `repr`.
+"""What the live registry tells and answers (ADR 0002, section 8; ADR 0005, sections 2 and 3;
+ADR 0007, sections 2 and 3): the ends, the drops, a start's answer, the control codes and
+controllers given out, the riders' joins and connections, and what the re-check and the
+WebSocket see. Plain values; hashes and nicknames are kept out of their `repr`.
 """
 
 from __future__ import annotations
@@ -107,3 +107,28 @@ class Exchange:
     refusal: Refusal | None
     cancelled: CodeCancelled | None
     device_hash: bytes = field(repr=False)  # the session's, for the audit event (or empty)
+
+
+# Why a join got no rider token: no session has the code (an earlier code included), or the
+# session refused it (locked, full, or over its joins a minute). Both are `cannot_join`.
+type JoinRefusal = Literal["unknown", "refused"]
+
+
+@dataclass(frozen=True)
+class RiderSeat:
+    """A rider token's connection, counted (ADR 0007, section 2): its session, its rider id
+    and nickname (for the host's `rider_joined`), and whether it is the token's only open
+    connection, so the host is told (a new connection replacing the old one tells nothing)."""
+
+    session_id: UUID
+    rider: str
+    nickname: str = field(repr=False)
+    announced: bool
+
+
+@dataclass(frozen=True)
+class RiderIn:
+    """A rider connected now, for the host's list (`rider_joined`), in the order they joined."""
+
+    rider: str
+    nickname: str = field(repr=False)

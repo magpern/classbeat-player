@@ -117,23 +117,12 @@ def _answered(route: RouteContext) -> set[str]:
     )
 
 
-# The table's routes the backend does not serve yet, exactly (ADR 0007: the join route comes with
-# the backend's rider issue, which takes it out of here). Not a skip: a route in this set must be
-# in the table and must not be in the app, and every other table route must be in the app.
-NOT_BUILT_YET: frozenset[str] = frozenset({"POST /api/live/join"})
-
-
 def test_the_live_routes_are_the_tables_routes() -> None:
-    assert set(_live_routes(_app())) == set(TABLE) - NOT_BUILT_YET
+    # Every route of the table is served, the riders' join included (ADR 0007, #359).
+    assert set(_live_routes(_app())) == set(TABLE)
 
 
-def test_the_routes_not_built_yet_are_in_the_table_and_not_in_the_app() -> None:
-    assert NOT_BUILT_YET == {"POST /api/live/join"}
-    assert NOT_BUILT_YET <= set(TABLE)
-    assert not NOT_BUILT_YET & set(_live_routes(_app()))
-
-
-@pytest.mark.parametrize("name", sorted(set(TABLE) - NOT_BUILT_YET))
+@pytest.mark.parametrize("name", sorted(TABLE))
 def test_a_routes_error_codes_are_its_entry_in_routing_json(name: str) -> None:
     assert route_problems(name, TABLE[name], _answered(_live_routes(_app())[name])) == []
 
@@ -151,7 +140,7 @@ def test_no_live_or_database_module_but_the_routes_names_an_error_form() -> None
         for path in (SOURCE / folder).rglob("*.py")
         if FORM_WORDS.search(path.read_text(encoding="utf-8"))
     }
-    assert named == {"live/routes.py", "live/control_routes.py"}
+    assert named == {"live/routes.py", "live/control_routes.py", "live/join_route.py"}
 
 
 def test_every_definition_naming_an_error_form_in_a_read_module_is_read_or_listed() -> None:
@@ -219,6 +208,8 @@ def _control_body() -> dict[str, str]:
         ("/api/live/controller", JSON | {"origin": "https://x.test"}, None, 403, "cannot_control"),
         ("/api/live/control", JSON, {"session": 1}, 422, "invalid_request"),
         ("/api/live/control", JSON, "control", 403, "invalid_code"),
+        ("/api/live/join", JSON, {"session": "BCDF-GHJK"}, 422, "invalid_request"),
+        ("/api/live/join", JSON, {"session": "BCDF-GHJK", "nickname": "Sam"}, 403, "cannot_join"),
     ],
 )
 def test_a_sample_of_the_codes_as_answered(
