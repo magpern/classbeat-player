@@ -2,7 +2,7 @@
 // check C9, the zone names, and the lane's independence from the player.
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
@@ -60,11 +60,19 @@ describe("design tokens", () => {
 describe("the web lane stands alone", () => {
   const sources = walk(join(WEB, "src")).filter((p) => /\.(ts|css|html)$/.test(p));
 
-  it("nothing in src imports from player/", () => {
+  // ADR 0008, section 4: web/src/play/ may import exactly three files from player/, the shared clock
+  // surface (clock.ts, plan.ts, view.ts). Nothing else in web/src may import from player/; the
+  // syntax-tree guard in play-clock-surface.test.ts follows the play bundle's whole graph.
+  const SURFACE = /^(\.\.\/)+player\/app\/src\/core\/clock\/(clock|plan|view)\.ts$/;
+
+  it("nothing in src imports from player/, but the play page's three clock files", () => {
     for (const p of sources) {
       const text = readFileSync(p, "utf8");
       const name = relative(WEB, p);
-      assert.doesNotMatch(text, /from\s+["'][^"']*\/player\//, `${name} imports from player/`);
+      const inPlay = name.split(sep).join("/").startsWith("src/play/");
+      for (const m of text.matchAll(/from\s+["']([^"']*\/player\/[^"']*)["']/g)) {
+        assert.ok(inPlay && SURFACE.test(m[1]), `${name} imports ${m[1]} from player/`);
+      }
     }
   });
 

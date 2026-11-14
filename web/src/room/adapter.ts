@@ -3,11 +3,13 @@
 // is a function of its input and is tested as one.
 import { beatPeriodMs, canShowBeat, cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
-import type { Class, LinkInput, RoomInput } from "./input.ts";
+import type { Class, LinkInput, PlayNotice, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
 import { countLabel, linkPlate, pauseLine } from "./link-text.ts";
 import type { BeatModel, ClockLine, ClockModel, GelModel, MetricModel, NextModel, RoomModel } from "./model.ts";
 import { layoutScore, songBpm } from "./score.ts";
+import { LANDSCAPE_SCALE } from "./score-scale.ts";
+import type { ScoreScale } from "./score-scale.ts";
 
 type View = NonNullable<RoomInput["view"]>;
 type Song = Class["songs"][number];
@@ -28,17 +30,18 @@ const EMPTY: RoomModel = {
   moving: false,
 };
 
-export function toRoomModel(input: RoomInput): RoomModel {
+export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCALE): RoomModel {
+  const notice = input.notice ?? null;
   const { doc, view, link } = input;
   if (!doc || !view || doc.intervals.length === 0) return EMPTY;
   const finished = view.status === "ended" || view.classMs >= view.lengthMs;
-  const before = !finished && view.status === "ready" && view.classMs <= 0;
-  if (finished) return outside("finished", doc, view, link);
-  if (before) return outside("before-start", doc, view, link);
-  return running(doc, view, link);
+  const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
+  if (finished) return outside("finished", doc, view, link, notice, scale);
+  if (before) return outside("before-start", doc, view, link, notice, scale);
+  return running(doc, view, link, notice, scale);
 }
 
-function scoreFor(doc: Class, view: View, link: LinkInput | null) {
+function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreScale) {
   const ambiguity = link?.state === "Ambiguous" && link.candidates.length > 1 ? link.candidates : null;
   return layoutScore({
     classMs: view.classMs,
@@ -48,24 +51,25 @@ function scoreFor(doc: Class, view: View, link: LinkInput | null) {
     zoneName: (z) => zoneDef(doc, z)?.name ?? "",
     ambiguity,
     unsure: link?.guessing ?? false,
+    scale,
   });
 }
 
-function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null): RoomModel {
+function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale): RoomModel {
   const finished = kind === "finished";
   return {
     ...EMPTY,
     kind,
-    gel: finished ? completeGel(doc) : firstZoneGel(doc),
-    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished) },
+    gel: finished ? completeGel(doc) : firstZoneGel(doc, view.intervalIndex),
+    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished, notice) },
     intro: finished ? finishedIntro(doc) : beforeStartIntro(doc),
-    score: scoreFor(doc, view, link),
+    score: scoreFor(doc, view, link, scale),
     intervalKey: kind,
     classMs: view.classMs,
   };
 }
 
-function running(doc: Class, view: View, link: LinkInput | null): RoomModel {
+function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale): RoomModel {
   const iv = doc.intervals[Math.min(view.intervalIndex, doc.intervals.length - 1)];
   const paused = link?.state === "Paused" || view.status === "paused";
   const song = songOf(doc, view, link);
@@ -78,14 +82,14 @@ function running(doc: Class, view: View, link: LinkInput | null): RoomModel {
   return {
     kind: "running",
     gel,
-    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true) },
+    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice) },
     clock: clockFor(doc, view, link, paused, song),
     metrics: metricsFor(iv, song, link),
     beat: beatFor(view, link, song),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
     intro: null,
-    score: scoreFor(doc, view, link),
+    score: scoreFor(doc, view, link, scale),
     intervalKey: `running:${view.intervalIndex}`,
     classMs: view.classMs,
     moving: view.status === "running" && !paused && !(link?.held ?? false),

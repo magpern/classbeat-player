@@ -35,12 +35,12 @@ export function finishedIntro(doc: Class): IntroModel {
   return { title: doc.class.title, facts, zonesTitle: ZONES_TITLE, zones: zoneRows(doc) };
 }
 
-/** Lights down on the first zone: the stage is dark and the colour moves into the numeral. */
-export function firstZoneGel(doc: Class): GelModel {
-  const zone = doc.intervals[0].zone;
+/** Lights down on the first zone (on the web page, where the starting point was moved to): the stage is dark and the colour moves into the numeral. */
+export function firstZoneGel(doc: Class, index = 0): GelModel {
+  const zone = doc.intervals[Math.min(Math.max(index, 0), doc.intervals.length - 1)].zone;
   const def = zoneDef(doc, zone);
   const name = def?.name ?? "";
-  return { look: "down", zone, label: "First zone", numeral: String(zone), name, targets: targetTexts(def) };
+  return { look: "down", zone, label: index <= 0 ? "First zone" : "Starts here", numeral: String(zone), name, targets: targetTexts(def) };
 }
 
 /** The house lights up: a white gel, no zone, "Class Complete" and the length. */

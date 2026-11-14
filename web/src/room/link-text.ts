@@ -1,12 +1,13 @@
 // The words for the music link and the clock's label (docs/design/room-2d.md, "States"). Pure.
 // Link states are white, grey and black only, never a hue (rule 7): the look says how, never a zone.
-import type { Class, LinkInput, RoomInput } from "./input.ts";
+import type { Class, LinkInput, PlayNotice, RoomInput } from "./input.ts";
 import type { LinkPlate } from "./model.ts";
 
 type View = NonNullable<RoomInput["view"]>;
 
 /** Link plates are at most about 20 characters so they fit beside the class time at 4:3. */
-export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean): LinkPlate {
+export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean, notice: PlayNotice | null = null): LinkPlate {
+  if (notice !== null) return NOTICES[notice];
   if (!started) {
     return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "manual" };
   }
@@ -24,6 +25,15 @@ export function linkPlate(doc: Class, link: LinkInput | null, view: View, starte
       return { text: followingText(doc), look: "quiet" };
   }
 }
+
+/**
+ * The web player page's two notices (play.md, "Wording"): white, the square marker, the style of the
+ * manual clock's hand-over notice. Fixed words: nothing from a class or a request reaches the rail.
+ */
+const NOTICES: Readonly<Record<PlayNotice, LinkPlate>> = {
+  "screen-may-turn-off": { text: "Screen may turn off", look: "manual", news: true },
+  reloaded: { text: "Reloaded: back to the start", look: "manual", news: true },
+};
 
 /**
  * The manual clock's words (room-2d.md, "Back to following the music"): "Following stopped" in white

@@ -96,11 +96,15 @@ export interface OpenOptions {
    * test can script the per-address 429 (nothing is mailed then).
    */
   readonly mailbox?: string[];
+  /** Install Playwright's clock, paused, before the page loads: time moves only when the test runs it on (page.clock.runFor). */
+  readonly clock?: boolean;
+  /** The system asks for reduced motion (prefers-reduced-motion: reduce). */
+  readonly reducedMotion?: boolean;
 }
 
 /** Opens `path` on the fake site. */
 export async function openSite(browser: Browser, path: string, o: OpenOptions): Promise<FakeSite> {
-  const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, reducedMotion: "no-preference" });
+  const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, reducedMotion: o.reducedMotion ? "reduce" : "no-preference" });
   await context.addInitScript("globalThis.__name = (f) => f;");
   if (o.before) await context.addInitScript(o.before);
   // The trap, built from its kit, with the passkey stand-in; each is serialised as source text.
@@ -143,6 +147,10 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
     if (url.pathname.startsWith("/api/site/")) return answer(site, o.script ?? {}, turns, held, route, request, url, o.mailbox);
     return serveFile(route, url.pathname);
   });
+  if (o.clock) {
+    await page.clock.install({ time: new Date("2026-11-13T10:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-11-13T10:00:01Z"));
+  }
   await page.goto(ORIGIN + path);
   await page.evaluate(() => document.fonts.ready);
   return site;
@@ -204,12 +212,29 @@ function serveFile(route: Route, pathname: string): Promise<void> {
   const rel = normalize(pathname).replace(/^[/\\]+/, "");
   // The companion page (served beside the site at /control) stands in as a plain page.
   if (rel === "control") return route.fulfill({ status: 200, headers: { "Content-Type": TYPES[".html"], "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" }, body: "<!doctype html><title>Companion</title>" });
+  // The web player page (ADR 0008) is built beside the site and served at /play: its page, and its own files.
+  if (rel === "play" || rel.startsWith("play/")) return servePlay(route, rel);
   // Every address of the site is the one page; its scripts, styles and fonts are files.
   const file = /^(site\.(js|css)|fonts\/[\w.-]+\.woff2)$/.test(rel) ? rel : "index.html";
   return route.fulfill({
     status: 200,
     headers: { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" },
     body: readFileSync(join(SITE_DIR, file)),
+  });
+}
+
+/** The files of the play page that are served beside it: its script, its three stylesheets and its fonts. */
+export const PLAY_FILE = /^play\/(play\.js|(?:base|page|room)\.css|fonts\/[\w.-]+\.woff2)$/;
+
+/** `/play` (and `/play/`) is the page; each of its own files is served with the site's headers; anything else under /play is not found. */
+function servePlay(route: Route, rel: string): Promise<void> {
+  const headers = { "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" };
+  const file = rel === "play" || rel === "play/" ? "index.html" : PLAY_FILE.test(rel) ? rel.slice("play/".length) : null;
+  if (file === null) return route.fulfill({ status: 404, headers, body: "" });
+  return route.fulfill({
+    status: 200,
+    headers: { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", ...headers },
+    body: readFileSync(join(SITE_DIR, "play", file)),
   });
 }
 

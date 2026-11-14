@@ -10,7 +10,7 @@ export function renderIntro(intro: IntroModel): HTMLElement {
   const facts = el(
     "div",
     { class: "facts" },
-    intro.facts.map((f) => el("div", {}, [el("span", { class: "lbl", tier: "label", text: f.label }), el("span", { class: "v n", tier: "value", text: f.value })])),
+    intro.facts.map((f) => el("div", {}, [el("span", { class: "lbl", tier: "label", lines: 2, text: f.label }), el("span", { class: "v n", tier: "value", text: f.value })])),
   );
   const zones = el(
     "div",
@@ -24,7 +24,18 @@ export function renderIntro(intro: IntroModel): HTMLElement {
       ]),
     ),
   );
-  return el("section", { class: "intro" }, [h1, facts, el("span", { class: "lbl ztitle", tier: "label", text: intro.zonesTitle }), zones]);
+  // The zones and their title share a wrapper that takes no part in the room's layout (display: contents).
+  return el("section", { class: "intro" }, [h1, facts, el("div", { class: "zwrap" }, [el("span", { class: "lbl ztitle", tier: "label", text: intro.zonesTitle }), zones])]);
+}
+
+/**
+ * The title on one line, then an ellipsis, by design: the phone layouts of the web player page
+ * (docs/design/play.md, "Fitting text") set it so whatever its length, and the markup says so for the checks.
+ */
+export function clampTitle(h1: HTMLElement): void {
+  h1.classList.add("long");
+  h1.dataset.lines = "1";
+  h1.dataset.clamp = "1";
 }
 
 /**

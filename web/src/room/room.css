@@ -1,5 +1,9 @@
 /* The plain 2D room screen (docs/design/room-2d.md). Ported from the reference mock-up
-   (docs/design/mockups/room.css); the additions at the end are the product's own. */
+   (docs/design/mockups/room.css); the additions at the end are the product's own. The screens before
+   the start and after the end are in room-intro.css, imported first: its selectors (.intro, .facts,
+   .ztitle, .zones) are shared with no other rule, so where it stands in the cascade changes nothing,
+   and the narrow-screen overrides below still come after its base rules. */
+@import "./room-intro.css";
 
 *,
 *::before,
@@ -198,33 +202,6 @@ body {
 .end { position: absolute; top: 0; bottom: 0; width: 0.5vh; background: var(--light-1); }
 .end span { position: absolute; left: 1vw; top: 2.2vh; font-size: var(--t-label); font-weight: 700; color: var(--light-1); }
 
-/* ---------- Before the start and after the end ---------- */
-.intro { position: absolute; left: 31vw; right: var(--safe-x); top: 11vh; }
-.intro h1 { font-family: var(--face-number); font-weight: 800; font-size: 11vh; line-height: 0.9; }
-/* A title that does not fit one line at 11 vh: --t-value on one line (two at 3:2 and narrower),
-   then an ellipsis (titles are up to 80 characters; the presenter shows it whole). */
-.intro h1.long {
-  font-size: var(--t-value); line-height: 0.95;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
-}
-.facts { display: flex; gap: 3.4vw; margin-top: 2.6vh; }
-.facts .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
-.ztitle { display: block; margin-top: 3.4vh; }
-/* One row per zone the class uses (1 to 7), in two columns of up to four rows, filled top to
-   bottom. A row: the zone chip, its planned time, its name. A name wraps to two lines; a longer
-   one ends in an ellipsis after the second line (the full name is on the gel when it plays). */
-.zones {
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, auto); grid-auto-flow: column;
-  column-gap: 3vw; row-gap: 1.2vh; margin-top: 1.4vh;
-}
-.zones > div { display: grid; grid-template-columns: 5vh 10.5vh 1fr; /* spec: 9vh; "1:27:38" (a zone over an hour) needs 10.5vh */ column-gap: 1vw; align-items: start; min-width: 0; }
-.zones .n { background: var(--zone); color: var(--ink); font-size: var(--t-minor); line-height: 1; text-align: center; padding: 0.4vh 0 0.2vh; }
-.zones .tm { white-space: nowrap; font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; color: var(--light-2); padding-top: 0.4vh; }
-.zones .t {
-  font-size: var(--t-label); font-weight: 700; line-height: 1.1; padding-top: 0.6vh; overflow-wrap: anywhere; /* a word wider than the column breaks, never cut */
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-}
-
 /* Manual clock: chosen, not a fault. A square instead of a dot, no plate. */
 .link.manual { color: var(--light-2); }
 .link.manual::before { border-radius: 0; background: var(--light-2); }
@@ -270,7 +247,7 @@ body {
   body:has(.cue.four) .bars { margin-top: 0.6vh; }
   body:has(.cue.four) .metrics { top: 44.4vh; }
   body:has(.cue.four) .next { left: 34vw; top: 56.5vh; }
-  body:has(.cue.four) .next .v.dim { display: none; }
+  body:has(.cue.four) .next .more { display: none; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
   .block .n { font-size: 4vh; }
@@ -322,3 +299,8 @@ body {
 /* The harness's "freeze" (screenshots and checks): nothing transitions, so a screenshot is never
    taken half way through a colour change. The product never sets it. */
 :root[data-freeze] *, :root[data-freeze] *::before, :root[data-freeze] *::after { transition: none !important; animation: none !important; }
+
+/* A wrapper that takes no part in the room's own layout: cadence and position in the next row. The web
+   player page's phone layouts (play/play-room.css) give it a box; the zones' wrapper is in room-intro.css. */
+.next .more { display: contents; }
+.next .more > * { flex: none; }

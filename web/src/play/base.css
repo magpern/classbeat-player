@@ -1,0 +1,5 @@
+/* The web player page's sheets (ADR 0008): this one is always on (the design tokens and the four
+   faces); page.css applies to the picker and its states, room.css to a class on the room screen.
+   They are separate because the room's rules (a black stage, its own buttons) and the website's
+   (text, plates, buttons) share names. index.html links all three; page-mode.ts switches them. */
+@import "../design/tokens.css";

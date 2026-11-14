@@ -1,0 +1,32 @@
+/* The room screen before the start and after the end: the class title, its facts and the time in each zone
+   (docs/design/room-2d.md). Part of room.css, which imports it. */
+
+/* ---------- Before the start and after the end ---------- */
+.intro { position: absolute; left: 31vw; right: var(--safe-x); top: 11vh; }
+.intro h1 { font-family: var(--face-number); font-weight: 800; font-size: 11vh; line-height: 0.9; }
+/* A title that does not fit one line at 11 vh: --t-value on one line (two at 3:2 and narrower),
+   then an ellipsis (titles are up to 80 characters; the presenter shows it whole). */
+.intro h1.long {
+  font-size: var(--t-value); line-height: 0.95;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+}
+.facts { display: flex; gap: 3.4vw; margin-top: 2.6vh; }
+.facts .v { display: block; font-size: var(--t-value); line-height: 0.92; margin-top: 0.6vh; }
+.ztitle { display: block; margin-top: 3.4vh; }
+/* One row per zone the class uses (1 to 7), in two columns of up to four rows, filled top to
+   bottom. A row: the zone chip, its planned time, its name. A name wraps to two lines; a longer
+   one ends in an ellipsis after the second line (the full name is on the gel when it plays). */
+.zones {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, auto); grid-auto-flow: column;
+  column-gap: 3vw; row-gap: 1.2vh; margin-top: 1.4vh;
+}
+.zones > div { display: grid; grid-template-columns: 5vh 10.5vh 1fr; /* spec: 9vh; "1:27:38" (a zone over an hour) needs 10.5vh */ column-gap: 1vw; align-items: start; min-width: 0; }
+.zones .n { background: var(--zone); color: var(--ink); font-size: var(--t-minor); line-height: 1; text-align: center; padding: 0.4vh 0 0.2vh; }
+.zones .tm { white-space: nowrap; font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1; color: var(--light-2); padding-top: 0.4vh; }
+.zones .t {
+  font-size: var(--t-label); font-weight: 700; line-height: 1.1; padding-top: 0.6vh; overflow-wrap: anywhere; /* a word wider than the column breaks, never cut */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+
+/* Wrapper for the zones and their title: no part in the room's own layout; the web player page's phone layouts give it a box. */
+.intro .zwrap { display: contents; }

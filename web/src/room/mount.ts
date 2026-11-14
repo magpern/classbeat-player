@@ -7,11 +7,13 @@ import type { BeatSchedule } from "./beat-schedule.ts";
 import type { RoomInput } from "./input.ts";
 import type { BeatModel } from "./model.ts";
 import { createGel } from "./render-gel.ts";
-import { fitTitle, renderIntro } from "./render-intro.ts";
+import { clampTitle, fitTitle, renderIntro } from "./render-intro.ts";
 import { renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
 import { renderScore } from "./render-score.ts";
 import type { ScoreView } from "./render-score.ts";
-import { scoreShiftVw } from "./score.ts";
+import { scoreShiftVw, VW_PER_S } from "./score.ts";
+import { LANDSCAPE_SCALE, layoutOf } from "./score-scale.ts";
+import type { ScoreScale } from "./score-scale.ts";
 
 /** The faces the screen measures with (system.md, Type); loaded explicitly so the first fit is not made with a fallback. */
 const FONT_FACES = ['600 1em "Big Shoulders Display"', '800 1em "Big Shoulders Display"', '400 1em "Atkinson Hyperlegible"', '700 1em "Atkinson Hyperlegible"'];
@@ -21,6 +23,8 @@ export interface RoomOptions {
   readonly reducedMotion?: boolean;
   /** False freezes the score and the beat dot (screenshots and checks). */
   readonly animate?: boolean;
+  /** The score's scale for the layout now on screen (the web player page changes it with the viewport); the room's own when absent. */
+  readonly scale?: () => ScoreScale;
 }
 
 export interface RoomScreen {
@@ -62,9 +66,16 @@ function createBeatDots(reduced: boolean, animate: boolean): (beat: BeatModel | 
  * A cue that needs a fourth line at 3:2 and narrower takes the next row's place for that interval
  * (room-2d.md); the product measures it: the cue box clips at three lines until `.four` is set.
  */
-function fitCue(cue: HTMLElement | null): void {
+function fitCue(cue: HTMLElement | null, allowed: boolean): void {
   if (!cue) return;
   cue.classList.remove("four");
+  // The web player page's phone layouts give the cue all the height left, up to 120 characters with
+  // long words (play.md, "Fitting text"): never cut, at most eight lines.
+  if (!allowed) {
+    cue.dataset.lines = "8";
+    return;
+  }
+  cue.dataset.lines = "4";
   const narrow = typeof matchMedia === "function" && matchMedia("(max-aspect-ratio: 3/2)").matches;
   const lineHeight = parseFloat(getComputedStyle(cue).lineHeight);
   if (narrow && cue.scrollHeight > lineHeight * 3.5) cue.classList.add("four");
@@ -84,19 +95,25 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
   let lastKey: string | null = null;
   let score: ScoreView | null = null;
   let moving = false;
+  let vwPerS = VW_PER_S;
   let startedAt = 0;
   let raf = 0;
 
   const tick = (): void => {
-    if (score && moving) score.shift(scoreShiftVw(performance.now() - startedAt, reduced));
+    if (score && moving) score.shift(scoreShiftVw(performance.now() - startedAt, reduced, vwPerS));
     raf = requestAnimationFrame(tick);
   };
   if (animate) raf = requestAnimationFrame(tick);
 
+  // The player's window never passes a scale and is always the room's layout; the web page chooses by its viewport.
+  const roomLayout = (): boolean => opts.scale === undefined || layoutOf(window.innerWidth, window.innerHeight) === "room";
   const fit = (): void => {
     const h1 = dyn.querySelector<HTMLElement>(".intro h1");
-    if (h1) fitTitle(h1);
-    fitCue(dyn.querySelector<HTMLElement>(".cue"));
+    if (h1) {
+      fitTitle(h1);
+      if (!roomLayout()) clampTitle(h1);
+    }
+    fitCue(dyn.querySelector<HTMLElement>(".cue"), roomLayout());
     gel.fit();
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
@@ -111,7 +128,9 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
 
   return {
     update(input) {
-      const m = toRoomModel(input);
+      const sc = opts.scale?.() ?? LANDSCAPE_SCALE;
+      vwPerS = sc.vwPerS;
+      const m = toRoomModel(input, sc);
       // The first draw is not an interval change: no start-up animation (recovery from the 3D scene).
       const changed = lastKey !== null && lastKey !== m.intervalKey;
       lastKey = m.intervalKey;
