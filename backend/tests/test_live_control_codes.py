@@ -192,11 +192,30 @@ def test_drop_drops_the_phone_and_ends_the_code_telling_the_host_nothing(live: A
         host.send_json({"v": 1, "type": "drop", "slot": 1})
         assert recv(phone) == {"v": 1, "type": "ended", "reason": "dropped"}
         assert closed(phone) == 4403
-        assert recv(host) == {"v": 1, "type": "controller_left", "slot": 1, "via": "code"}
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 1,
+            "via": "code",
+            "reason": "dropped",
+        }
         nothing(host)  # no `code_cancelled`: the app clears the code when it sends `drop`
         _refused(_try(live, started.join_code, code), 403, "invalid_code")
         # The freed place needs a new code.
         _granted(_try(live, started.join_code, _code(host)))
+
+
+def test_cancel_code_is_not_built_yet_and_ends_nothing(live: Any) -> None:
+    # Pinned exactly until the backend builds it (ADR 0005 section 10, amended 2026-11-14): the
+    # host's `cancel_code` is routed, dropped and counted, and the host is sent nothing.
+    started = live.session()
+    with live.joined(started.host_token, None) as host:
+        code = _code(host)
+        host.send_json({"v": 1, "type": "cancel_code"})
+        nothing(host)
+        assert live.hub.dropped["not_built_yet"] == 1
+        _granted(_try(live, started.join_code, code))
+        assert recv(host) == {"v": 1, "type": "code_cancelled", "reason": "used"}
 
 
 def test_a_drop_of_an_empty_place_ends_the_code_too(live: Any) -> None:

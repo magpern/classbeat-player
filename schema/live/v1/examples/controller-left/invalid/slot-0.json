@@ -2,5 +2,6 @@
   "v": 1,
   "type": "controller_left",
   "slot": 0,
-  "via": "code"
+  "via": "code",
+  "reason": "disconnected"
 }

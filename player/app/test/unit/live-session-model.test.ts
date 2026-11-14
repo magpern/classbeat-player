@@ -138,9 +138,9 @@ test("phones' places: joined, left (away), joined again; the joined phone gets t
   let r = step(live(), msg({ type: "controller_joined", slot: 2, via: "code" }), 0);
   assert.deepEqual(r.model.places, ["none", "connected"]);
   assert.deepEqual(r.effects, [{ kind: "joined" }]);
-  r = step(r.model, msg({ type: "controller_left", slot: 2, via: "code" }), 0);
+  r = step(r.model, msg({ type: "controller_left", slot: 2, via: "code", reason: "disconnected" }), 0);
   assert.deepEqual(r.model.places, ["none", "away"]);
-  r = step(r.model, msg({ type: "controller_left", slot: 1, via: "sign_in" }), 0);
+  r = step(r.model, msg({ type: "controller_left", slot: 1, via: "sign_in", reason: "disconnected" }), 0);
   assert.deepEqual(r.model.places, ["none", "away"]);
 });
 
@@ -251,7 +251,8 @@ test("the session (and its join code) is set only by the start answer, never by 
     { type: "control_code", code: "MNPQ-RSTV", expiresInMs: 120_000 },
     { type: "code_cancelled", reason: "used" },
     { type: "controller_joined", slot: 1, via: "code" },
-    { type: "controller_left", slot: 1, via: "code" },
+    { type: "controller_left", slot: 1, via: "code", reason: "dropped" },
+    { type: "controller_left", slot: 2, reason: "free" },
     { type: "welcome" },
   ];
   let m = before;

@@ -5,9 +5,9 @@ sections 2 and 6).
   end is recorded;
 - the re-check, on its own thread, finding the device revoked: `ended` `revoked` and 4403 for
   all; finding a signed-in controller's site session gone: that phone gets `ended` `dropped` and
-  4403, the host `controller_left`, and the session goes on;
-- a controller dropped (on any thread) is closed the same way, and its token says `hello` no
-  more;
+  4403, the host `controller_left` `session_ended`, and the session goes on;
+- a controller dropped (on any thread) is closed the same way, the host told `controller_left`
+  `dropped`, and its token says `hello` no more;
 - the sweep ending a session by its lifetimes: `ended` `expired`;
 - a hub event that fails is logged by its type and costs no other event.
 """
@@ -100,7 +100,13 @@ def test_a_signed_out_controller_is_dropped_and_the_session_goes_on(
         _on_a_thread(live.hub.service.recheck)
         assert recv(two) == {"v": 1, "type": "ended", "reason": "dropped"}
         assert closed(two) == 4403
-        assert recv(host) == {"v": 1, "type": "controller_left", "slot": 2, "via": "sign_in"}
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 2,
+            "via": "sign_in",
+            "reason": "session_ended",
+        }
         nothing(one)
         one.send_json(command(1))
         assert recv(host)["slot"] == 1
@@ -116,7 +122,13 @@ def test_a_dropped_controller_is_closed_and_its_token_is_refused(live: Any) -> N
         _on_a_thread(lambda: live.registry.drop_controller(started.session_id, 1))
         assert recv(phone) == {"v": 1, "type": "ended", "reason": "dropped"}
         assert closed(phone) == 4403
-        assert recv(host) == {"v": 1, "type": "controller_left", "slot": 1, "via": "code"}
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 1,
+            "via": "code",
+            "reason": "dropped",
+        }
     with live.connect() as again:
         again.send_json(hello(token))
         assert closed(again) == 4401

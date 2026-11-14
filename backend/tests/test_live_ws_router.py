@@ -172,6 +172,7 @@ def test_a_controller_cannot_publish_state_or_act_as_the_host(live: Any) -> None
             result(1, 1),
             {"v": 1, "type": "end"},
             {"v": 1, "type": "make_code"},
+            {"v": 1, "type": "cancel_code"},
             {"v": 1, "type": "drop", "slot": 2},
             {"v": 1, "type": "host_status", "connected": False},
         ):
@@ -179,7 +180,7 @@ def test_a_controller_cannot_publish_state_or_act_as_the_host(live: Any) -> None
         one.send_json(command(1))  # the probe
         assert recv(host)["id"] == command_id(1)
         nothing(two)
-        assert live.hub.dropped["not_from_role"] == 6
+        assert live.hub.dropped["not_from_role"] == 7
         assert live.hub.connected(live.registry.running()[0].session_id) == (True, (1, 2))
 
 
@@ -196,8 +197,11 @@ def test_unknown_types_and_non_messages_are_dropped_and_counted(live: Any) -> No
         assert live.hub.dropped["unknown_type"] == 4
 
 
-# The host's messages about riders, one valid example of each (schema/live/v1/examples).
-RIDER_EXAMPLES = (
+# The host's messages the hub does not act on yet, one valid example of each
+# (schema/live/v1/examples): `cancel_code` (ADR 0005 section 10, amended 2026-11-14) and the
+# host's messages about riders (ADR 0007).
+NOT_BUILT_YET_EXAMPLES = (
+    "cancel-code/valid/cancel-code.json",
     "rider-state/valid/running-three-coming.json",
     "drop-rider/valid/one-rider.json",
     "lock/valid/lock.json",
@@ -209,9 +213,15 @@ def _example(name: str) -> dict[str, Any]:
     return json.loads((LIVE_SCHEMA / "examples" / name).read_text(encoding="utf-8"))
 
 
-def test_the_hosts_rider_messages_are_not_built_yet_dropped_and_reach_no_one(live: Any) -> None:
-    examples = [_example(name) for name in RIDER_EXAMPLES]
-    assert [m["type"] for m in examples] == ["rider_state", "drop_rider", "lock", "new_join_code"]
+def test_the_hosts_unbuilt_messages_are_dropped_and_reach_no_one(live: Any) -> None:
+    examples = [_example(name) for name in NOT_BUILT_YET_EXAMPLES]
+    assert [m["type"] for m in examples] == [
+        "cancel_code",
+        "rider_state",
+        "drop_rider",
+        "lock",
+        "new_join_code",
+    ]
     with ExitStack() as stack:
         host, one, two = _all_in(live, stack)
         for message in examples:
@@ -222,8 +232,8 @@ def test_the_hosts_rider_messages_are_not_built_yet_dropped_and_reach_no_one(liv
         assert recv(two)["type"] == "companion_state"
         one.send_json(command(1))  # the probe for the host
         assert recv(host)["id"] == command_id(1)
-        assert live.hub.dropped["not_built_yet"] == 4
-        assert live.hub.dropped["not_from_role"] == 4
+        assert live.hub.dropped["not_built_yet"] == 5
+        assert live.hub.dropped["not_from_role"] == 5
         assert live.hub.dropped["invalid"] == 0
         assert sum(live.hub.refused.values()) == 0
         assert live.hub.connected(live.registry.running()[0].session_id) == (True, (1, 2))
@@ -254,8 +264,20 @@ def test_the_host_hears_of_phones_coming_and_going_with_how_they_got_in(live: An
                     "slot": 2,
                     "via": "sign_in",
                 }
-            assert recv(host) == {"v": 1, "type": "controller_left", "slot": 2, "via": "sign_in"}
-        assert recv(host) == {"v": 1, "type": "controller_left", "slot": 1, "via": "code"}
+            assert recv(host) == {
+                "v": 1,
+                "type": "controller_left",
+                "slot": 2,
+                "via": "sign_in",
+                "reason": "disconnected",
+            }
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 1,
+            "via": "code",
+            "reason": "disconnected",
+        }
 
 
 def test_a_returning_host_is_told_of_the_phones_already_in(live: Any) -> None:
@@ -329,7 +351,13 @@ def test_make_code_and_drop_from_the_host_are_taken(live: Any) -> None:
         host.send_json({"v": 1, "type": "drop", "slot": 1})
         assert recv(one) == {"v": 1, "type": "ended", "reason": "dropped"}
         assert closed(one) == 4403
-        assert recv(host)["type"] == "controller_left"
+        assert recv(host) == {
+            "v": 1,
+            "type": "controller_left",
+            "slot": 1,
+            "via": "code",
+            "reason": "dropped",
+        }
         assert sum(live.hub.dropped.values()) == 0
 
 

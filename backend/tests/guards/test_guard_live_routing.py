@@ -47,6 +47,7 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("host_status", "host-status.schema.json", ("server",), ("controller", "rider")),
     ("controller_joined", "controller-joined.schema.json", ("server",), ("host",)),
     ("controller_left", "controller-left.schema.json", ("server",), ("host",)),
+    ("cancel_code", "cancel-code.schema.json", ("host",), ("server",)),
     ("make_code", "make-code.schema.json", ("host",), ("server",)),
     ("control_code", "control-code.schema.json", ("server",), ("host",)),
     ("code_cancelled", "code-cancelled.schema.json", ("server",), ("host",)),
@@ -67,10 +68,11 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("new_join_code", "new-join-code.schema.json", ("host",), ("server",)),
     ("join_code", "join-code.schema.json", ("server",), ("host",)),
 )
-# What may reach a rider at all (ADR 0007 section 2), and the host's messages about riders that
-# the hub does not act on yet (dropped and counted as `not_built_yet`).
+# What may reach a rider at all (ADR 0007 section 2), and the host's messages that the hub does
+# not act on yet (dropped and counted as `not_built_yet`): its messages about riders, and
+# `cancel_code` (ADR 0005 section 10, amended 2026-11-14).
 TO_RIDER = {"welcome", "host_status", "rider_state", "ended"}
-HOST_NOT_BUILT_YET = {"rider_state", "drop_rider", "lock", "new_join_code"}
+HOST_NOT_BUILT_YET = {"cancel_code", "rider_state", "drop_rider", "lock", "new_join_code"}
 ROUTES = schemas.routes()
 
 
@@ -192,6 +194,7 @@ def test_no_rider_connection_exists_yet() -> None:
         ("drop_rider", set[str]()),
         ("lock", set[str]()),
         ("new_join_code", set[str]()),
+        ("cancel_code", set[str]()),
     ],
 )
 def test_who_receives_each_message(kind: str, receivers: set[str]) -> None:

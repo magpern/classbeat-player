@@ -32,7 +32,7 @@ Tests: `python/tests/test_live.py` (examples, generated models), `python/tests/t
 | `controller-answer` | Answer of both controller routes |
 | `join-request`, `join-answer` | Body and answer of `POST /api/live/join` (a rider, no credential) |
 | `error` | Every error answer of the live routes |
-| `hello`, `welcome`, `host-status`, `controller-joined`, `controller-left`, `make-code`, `control-code`, `code-cancelled`, `drop`, `companion-state`, `command` (from a phone), `command-forwarded` (to the host, with `slot`), `command-result`, `ack`, `end`, `ended` | WebSocket messages, as `routing.json` routes them |
+| `hello`, `welcome`, `host-status`, `controller-joined`, `controller-left`, `cancel-code`, `make-code`, `control-code`, `code-cancelled`, `drop`, `companion-state`, `command` (from a phone), `command-forwarded` (to the host, with `slot`), `command-result`, `ack`, `end`, `ended` | WebSocket messages, as `routing.json` routes them |
 | `welcome-rider` (a rider's `welcome`), `rider-state`, `rider-joined`, `rider-left`, `drop-rider`, `lock`, `lock-state`, `new-join-code`, `join-code` | Riders' WebSocket messages (ADR 0007 section 2); `host-status` and `ended` reach riders too |
 
 ## Choices the ADR left open
@@ -74,6 +74,10 @@ Tests: `python/tests/test_live.py` (examples, generated models), `python/tests/t
     the host rounds each bound to a whole number (the phone shows whole numbers anyway).
     `position` and `test` are null where the interval has none (a running class has no
     position). Every `cannot_join` is one answer, 403, with no detail.
+13. **The places, and cancelling a code** (ADR 0005 section 10, amended 2026-11-14).
+    `controller_left` always has `reason`: `disconnected`, `session_ended`, `dropped`, or `free`
+    (only in the replay after a host `welcome`); `via` is required with every reason but `free`
+    and refused with `free`. `cancel_code` goes from the host to the server and holds nothing.
 
 ## Validate with the schemas, not with the generated models
 
@@ -107,6 +111,9 @@ value that passed.
   field (`hello` has `token`, those two `code`, and nothing else does). `cannot_join` is the join
   route's only failure answer. The phone's `command` has no `slot`; the forwarded one requires
   it; `ack` has none.
+- What the host sends is pinned (`hello`, `cancel_code`, `make_code`, `drop`, `companion_state`,
+  `command_result`, `end` and the four rider messages); `cancel_code` goes to the server only and
+  holds only `v` and `type`. `controller_left` has `via` with every reason but `free`.
 - Every live schema is closed, checked as an allowlist (`python/tests/live_shape.py`,
   `ts/test/live-shape.ts`): every subschema is a JSON object using only known keywords (no
   boolean schemas, `patternProperties`, `unevaluated*`, `dependent*`, `prefixItems`, `allOf`,

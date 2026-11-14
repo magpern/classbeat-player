@@ -135,7 +135,7 @@ def test_a_signed_in_controller_is_dropped_when_its_site_session_ends(site: Site
     assert browser.post("/api/site/sign-out").status_code == 204
     assert _service(site).recheck() is True
     # That controller is dropped; the session and the controller by a code go on.
-    assert seen == [Dropped(session_id, 1)]
+    assert seen == [Dropped(session_id, 1, "session_ended")]
     assert _running(site) == {str(session_id)}
     assert registry.signed_in_controllers() == []
 

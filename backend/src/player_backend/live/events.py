@@ -28,10 +28,12 @@ class Ended:
 
 @dataclass(frozen=True)
 class Dropped:
-    """A controller dropped from a session that goes on. Its connection is closed with 4403."""
+    """A controller dropped from a session that goes on. Its connection is closed with 4403.
+    `reason`: `dropped` by the host, `session_ended` with its site session (the re-check)."""
 
     session_id: UUID
     slot: int
+    reason: Literal["dropped", "session_ended"]
 
 
 @dataclass(frozen=True)

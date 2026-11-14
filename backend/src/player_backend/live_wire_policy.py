@@ -32,6 +32,10 @@ TOO_MANY: Final = 1008
 
 type Message = dict[str, object]
 type Result = Literal["applied", "duplicate", "refused"]
+# Why a place holds no connected controller, as this process tells it today (ADR 0005 section 10,
+# amended 2026-11-14). The contract's fourth reason, `free` (without `via`, in the replay after a
+# host `welcome`), is not sent yet.
+type LeftReason = Literal["disconnected", "session_ended", "dropped"]
 
 
 class _NotJson(ValueError):
@@ -96,8 +100,8 @@ def controller_joined(slot: int, via: Via) -> Message:
     return {"v": 1, "type": "controller_joined", "slot": slot, "via": via}
 
 
-def controller_left(slot: int, via: Via) -> Message:
-    return {"v": 1, "type": "controller_left", "slot": slot, "via": via}
+def controller_left(slot: int, via: Via, reason: LeftReason) -> Message:
+    return {"v": 1, "type": "controller_left", "slot": slot, "via": via, "reason": reason}
 
 
 def ended(reason: WireReason) -> Message:
