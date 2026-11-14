@@ -76,6 +76,27 @@ class Live:
         assert slot is not None
         return token
 
+    def rider(self, code: str, nickname: str = "Sam") -> str:
+        # Starlette's test client is typed loosely, as in `connect`.
+        client = cast(Any, self.client)  # pyright: ignore[reportUnknownMemberType]
+        answer = client.post("/api/live/join", json={"session": code, "nickname": nickname})
+        assert answer.status_code == 200, answer.text
+        return str(answer.json()["riderToken"])
+
+    @contextmanager
+    def riding(self, token: str, host_in: bool = True) -> Generator[WebSocketTestSession]:
+        """A rider connected: its `welcome` and `host_status` are read and checked."""
+        with self.connect() as ws:
+            ws.send_json(hello(token))
+            assert recv(ws) == {
+                "v": 1,
+                "type": "welcome",
+                "role": "rider",
+                "hostConnected": host_in,
+            }
+            assert recv(ws) == {"v": 1, "type": "host_status", "connected": host_in}
+            yield ws
+
     @contextmanager
     def connect(self, origin: str | None = SITE) -> Generator[WebSocketTestSession]:
         headers = {} if origin is None else {"origin": origin}

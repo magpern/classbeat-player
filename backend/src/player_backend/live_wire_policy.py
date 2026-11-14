@@ -6,11 +6,11 @@
 - The server never passes a frame on as it came: what it sends is built here, or is the value
   that passed its schema, encoded again. So what reaches a connection is exactly what was
   checked.
-- Close codes: 4401 no good `hello` in time (a missing, late, malformed or refused one, a rider
-  token, a controller from another origin); 4403 the session ended or the token was dropped,
-  after an `ended`; 4409 a newer connection with the same token took its place; 1009 a message
-  over its size; 1008 more messages than the limit, or a connection that does not read what it
-  is sent.
+- Close codes: 4401 no good `hello` in time (a missing, late, malformed or refused one, a
+  controller or rider from another origin); 4403 the session ended or the token was dropped (a
+  controller's, or a rider's the host removed), after an `ended`; 4409 a newer connection with
+  the same token took its place; 1009 a message over its size; 1008 more messages than the
+  limit, or a connection that does not read what it is sent.
 
 No I/O here.
 """
@@ -88,6 +88,11 @@ def welcome_controller(slot: int, host_connected: bool) -> Message:
     }
 
 
+def welcome_rider(host_connected: bool) -> Message:
+    """A rider's welcome (welcome-rider.schema.json): its role and whether the host is in."""
+    return {"v": 1, "type": "welcome", "role": "rider", "hostConnected": host_connected}
+
+
 def host_status(connected: bool) -> Message:
     return {"v": 1, "type": "host_status", "connected": connected}
 
@@ -111,3 +116,21 @@ def control_code(code: str, expires_in_ms: int) -> Message:
 
 def code_cancelled(reason: CancelReason) -> Message:
     return {"v": 1, "type": "code_cancelled", "reason": reason}
+
+
+def rider_joined(rider: str, nickname: str) -> Message:
+    """To the host only: the one message that holds a nickname (ADR 0007, section 2)."""
+    return {"v": 1, "type": "rider_joined", "rider": rider, "nickname": nickname}
+
+
+def rider_left(rider: str, reason: Literal["left", "dropped"]) -> Message:
+    return {"v": 1, "type": "rider_left", "rider": rider, "reason": reason}
+
+
+def lock_state(locked: bool) -> Message:
+    return {"v": 1, "type": "lock_state", "locked": locked}
+
+
+def join_code(code: str) -> Message:
+    """The new join code, for the host only (the routing allowlist holds it to the host)."""
+    return {"v": 1, "type": "join_code", "code": code}

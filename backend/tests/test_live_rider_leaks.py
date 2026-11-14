@@ -11,6 +11,7 @@ rider: the only events are the session's own end (with its id and reason).
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator
 from typing import Any
@@ -18,7 +19,7 @@ from typing import Any
 import pytest
 
 from player_backend.code_policy import ALPHABET
-from tests.livehelp import live_app
+from tests.livehelp import SCHEMA, live_app, recv, until
 
 JOIN = "/api/live/join"
 NICK = "Zqxjvbn"  # a nickname no fixed word of a log line could hold
@@ -98,3 +99,56 @@ def test_a_held_riders_repr_holds_no_nickname_or_token_hash(live: Any) -> None:
     held = live.registry._sessions[started.session_id]  # pyright: ignore[reportPrivateUsage]
     for shown in (repr(held), repr(seat), repr(live.registry.riders_in(started.session_id))):
         assert NICK not in shown and token not in shown
+
+
+def _rider_state() -> dict[str, Any]:
+    path = SCHEMA / "examples" / "rider-state" / "valid" / "running-three-coming.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_no_rider_value_in_any_log_record_or_label_on_the_websocket(
+    live: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A join, connections, a state, a stray from a rider, a replaced connection, a refused send,
+    # a removal, the lock, a new code and the end, all logged at DEBUG.
+    caplog.set_level(logging.DEBUG)
+    started = live.session()
+    tokens = [live.rider(started.join_code, name) for name in (NICK, ODD)]
+    secret: list[str] = [NICK, "Wkpfrtz", started.join_code, *tokens]
+    with live.joined(started.host_token, None) as host:
+        with live.riding(tokens[0]) as one, live.riding(tokens[1]) as two:
+            riders = [str(recv(host)["rider"]) for _ in range(2)]
+            secret += riders
+            state = _rider_state()
+            host.send_json(state)
+            assert recv(one) == state and recv(two) == state
+            one.send_json({"v": 1, "type": "rider_hello", "nickname": NICK})  # unknown
+            one.send_json({"v": 1, "type": "lock", "locked": True})  # not from a rider
+            with live.riding(tokens[1]):  # replaces `two`
+                pass
+            assert recv(host)["type"] == "rider_left"
+            # A message the sender refuses for a rider is logged by its type only.
+            link = live.hub.riders.links(started.session_id)[0]
+            refused = {"v": 1, "type": "rider_joined", "rider": riders[0], "nickname": NICK}
+            live.hub._send(link, refused)  # pyright: ignore[reportPrivateUsage]
+            host.send_json({"v": 1, "type": "drop_rider", "rider": riders[0]})
+            assert recv(host)["reason"] == "dropped"
+            host.send_json({"v": 1, "type": "lock", "locked": True})
+            assert recv(host)["type"] == "lock_state"
+            host.send_json({"v": 1, "type": "new_join_code"})
+            secret.append(str(recv(host)["code"]))
+            host.send_json({"v": 1, "type": "end"})
+            assert recv(host)["type"] == "ended"
+    assert until(lambda: live.ends == [(started.session_id, "host_ended")])
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert "live: rider not_from_role" in messages and "live: rider unrouted" in messages
+    for record in caplog.records:
+        text = _record_text(record)
+        for value in secret:
+            assert value not in text, record.getMessage()
+    # The counters (the metrics) are keyed by fixed words only.
+    labels = " ".join([*live.hub.dropped, *live.hub.refused, *live.registry.ignored])
+    for value in secret:
+        assert value not in labels
+    assert live.events == []
