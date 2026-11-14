@@ -9,7 +9,7 @@ import { el, t } from "../ui/dom.ts";
 import { button, buttons, h1, p, small } from "../ui/kit.ts";
 import { deletePanel } from "./class-delete.ts";
 import { sections } from "./class-sections.ts";
-import { linkButton } from "./errors.ts";
+import { linkButton, serverFault } from "./errors.ts";
 import { playLink } from "./play-link.ts";
 import type { SignedInEnv } from "./signed-in.ts";
 
@@ -26,10 +26,11 @@ export function classNotFound(main: HTMLElement): void {
 }
 
 /** Draws the class `load` named, from the answer's body, into `main`. */
-export function showClass(main: HTMLElement, load: string, body: unknown, env: SignedInEnv): void {
+export function showClass(main: HTMLElement, load: string, body: unknown, env: SignedInEnv, retry: () => void): void {
   const parsed = detailOf(body, new Date());
   const found = classIdOfPage(load);
-  if (parsed === null || found === null) return classNotFound(main);
+  // An answer that is not a class at all is the server fault; only a 404 is "not here".
+  if (parsed === null || found === null) return serverFault(main, retry);
   const id: string = found;
   const detail: Detail = parsed;
   const actions = el("div", { class: "actions" });

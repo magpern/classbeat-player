@@ -11,14 +11,14 @@ import type { View } from "./view.ts";
 /** The view of a class page, or undefined for a page that has none yet. */
 export function viewOf(page: SignedInPage, env: SignedInEnv): View | undefined {
   if (page.load === "classes") {
-    return { loading: "Loading your classes…", read: readAllClasses, show: showClasses, refused: () => false };
+    return { loading: "Loading your classes…", read: readAllClasses, show: (main, body) => showClasses(main, body), refused: () => false };
   }
   const id = classIdOfPage(page.load);
   if (id === null) return undefined;
   return {
     loading: "Loading the class…",
     read: () => readClass(id),
-    show: (main, body) => showClass(main, page.load, body, env),
+    show: (main, body, retry) => showClass(main, page.load, body, env, retry),
     // A class that is not there, whatever the reason, is one page (the route gives one answer for all).
     refused: (main, answer) => {
       if (answer.status !== 404) return false;

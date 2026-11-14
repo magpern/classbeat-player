@@ -53,16 +53,24 @@ describe("the sort", () => {
 describe("a page of the route", () => {
   const entry = (n: number, over: Record<string, unknown> = {}) => ({ class_id: id(n), source: "classbeat", title: `Class ${n}`, length_ms: 1000, changed_at: "2026-11-01T00:00:00Z", removed: false, ...over });
 
-  it("reads the entries and the cursor of the next page", () => {
-    const p = pageOf({ classes: [entry(1), entry(2)], cursor: "c1", more: true });
+  it("reads the entries and the integer cursor of the next page, as the backend sends it, as decimal text", () => {
+    const p = pageOf({ classes: [entry(1), entry(2)], cursor: 4242, more: true });
     assert.deepEqual(p?.rows.map((r) => r.id), [id(1), id(2)]);
-    assert.equal(p?.next, "c1");
+    assert.equal(p?.next, "4242");
+    assert.equal(pageOf({ classes: [], cursor: 0, more: true })?.next, "0");
+    assert.equal(pageOf({ classes: [], cursor: Number.MAX_SAFE_INTEGER, more: true })?.next, String(Number.MAX_SAFE_INTEGER));
   });
 
-  it("has no next page without `more`, or with an empty or missing cursor", () => {
-    assert.equal(pageOf({ classes: [], cursor: "c1", more: false })?.next, null);
-    assert.equal(pageOf({ classes: [], cursor: "", more: true })?.next, null);
-    assert.equal(pageOf({ classes: [], more: true })?.next, null);
+  it("has no next page without `more`, whatever the cursor says", () => {
+    assert.equal(pageOf({ classes: [], cursor: 7, more: false })?.next, null);
+    assert.equal(pageOf({ classes: [], cursor: null, more: false })?.next, null);
+    assert.equal(pageOf({ classes: [] })?.next, null);
+  });
+
+  it("refuses a page that says there is more but has no usable cursor, so the list never stops short without a word", () => {
+    for (const bad of ["c1", "42", "", null, undefined, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2, {}, [1], true]) {
+      assert.equal(pageOf({ classes: [], cursor: bad, more: true }), null, JSON.stringify(bad));
+    }
   });
 
   it("leaves out the markers of removed classes, which carry no title", () => {

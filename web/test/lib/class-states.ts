@@ -35,7 +35,7 @@ export const entry = (id: string, title: string, lengthMs: number, changed: stri
 export const library = (n: number = LIST.length) => LIST.slice(0, n).map(([title, ms, at], i) => entry(idOf(i + 1), title, ms, at));
 
 /** `GET classes`: a page of the library. */
-export const listReply = (entries: readonly ReturnType<typeof entry>[], cursor: string | null = null): Reply => ({ status: 200, body: { classes: entries, cursor, more: cursor !== null } });
+export const listReply = (entries: readonly ReturnType<typeof entry>[], cursor: number | null = null): Reply => ({ status: 200, body: { classes: entries, cursor, more: cursor !== null } });
 
 const ZONE_SCALE = [
   { zone: 1, name: "Recovery" },
@@ -126,6 +126,8 @@ export const CLASS_STATES: readonly State[] = [
     steps: confirmDelete,
     ready: ".note",
   },
+  // Deleting the last class: the empty list with the note.
+  { name: "classes-deleted-last", path: detail, script: { ...deleting({ status: 204 }), "GET classes": listReply([]) }, steps: confirmDelete, ready: ".note" },
   { name: "class-details", path: detail, script: read(), ready: ".zrow", main: true },
   { name: "class-details-running", path: detail, script: read(classReply(runningDocument())), ready: ".zrow" },
   { name: "class-delete", path: detail, script: read(), steps: askDelete, ready: ".panel" },

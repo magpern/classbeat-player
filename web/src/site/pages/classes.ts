@@ -22,9 +22,10 @@ function rowEl(r: Row, now: Date): HTMLElement {
 }
 
 /** No classes yet: how classes arrive, and a button to Linked apps. */
-function empty(main: HTMLElement): void {
+function empty(main: HTMLElement, flash: HTMLElement | null): void {
   main.replaceChildren(
     h1(HEADING),
+    ...(flash ? [flash] : []),
     h2("No classes yet"),
     p("Classes you send from classbeat appear here. In classbeat, choose Connect player and approve it on this site."),
     buttons(linkButton("Linked apps", "/account/links", true)),
@@ -47,12 +48,13 @@ function focusOnSlash(input: HTMLInputElement): void {
 /** Draws the list from an ok answer's body (the rows, every page read). */
 export function showClasses(main: HTMLElement, body: unknown): void {
   const all = sorted(Array.isArray(body) ? (body as Row[]) : []);
-  if (all.length === 0) return empty(main);
+  // The note is taken on every branch, so it shows once and never reaches a later list.
+  const deleted = takeDeleted();
+  const flash = deleted === null ? null : note(deleted === "" ? "Deleted the class" : `Deleted “${deleted}”`, "Your devices remove it the next time they sync");
+  if (all.length === 0) return empty(main, flash);
   const now = new Date();
   const heading = h1(HEADING);
   heading.append(el("span", { class: "count" }, [t("small", countText(all.length), 2)]));
-  const deleted = takeDeleted();
-  const flash = deleted === null ? null : note(deleted === "" ? "Deleted the class" : `Deleted “${deleted}”`, "Your devices remove it the next time they sync");
   const cols = el("div", { class: "cols" }, ["Class", "Length", "From", "Changed"].map((c) => el("span", {}, [t("label", c, 3)])));
   const list = el("div", { class: "rows has-cols" });
   const more = el("div", { class: "more" });

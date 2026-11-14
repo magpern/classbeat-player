@@ -7,7 +7,7 @@ export interface View {
   readonly loading: string;
   read(): Promise<Answer>;
   /** Draws an ok answer's body into `main`, h1 first. */
-  show(main: HTMLElement, body: unknown): void;
+  show(main: HTMLElement, body: unknown, retry: () => void): void;
   /** A 4xx the page answers itself (a class that is not there); true when it drew it. */
   refused(main: HTMLElement, answer: Extract<Answer, { kind: "refused" }>): boolean;
 }

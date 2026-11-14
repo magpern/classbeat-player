@@ -49,7 +49,7 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
         }
         break;
       default:
-        if (view) view.show(main, answer.body);
+        if (view) view.show(main, answer.body, () => void load());
         else main.replaceChildren(h1(page.title));
     }
     const plate = main.querySelector<HTMLElement>(".plate");

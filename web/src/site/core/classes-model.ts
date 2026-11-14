@@ -11,7 +11,7 @@ export interface Row {
   readonly changedAt: string;
 }
 
-/** A page of the route: the entries, and the cursor of the next page when there is one. */
+/** A page of the route: the entries, and the cursor of the next page (decimal text of the integer the route sent) when there is one. */
 export interface Page {
   readonly rows: readonly Row[];
   readonly next: string | null;
@@ -31,8 +31,12 @@ export function pageOf(body: unknown): Page | null {
     if (!CLASS_ID.test(e.class_id)) continue;
     rows.push({ id: e.class_id, title: e.title, lengthMs: e.length_ms, source: typeof e.source === "string" ? e.source : "", changedAt: e.changed_at });
   }
-  const next = body.more === true && typeof body.cursor === "string" && body.cursor !== "" ? body.cursor : null;
-  return { rows, next };
+  if (body.more !== true) return { rows, next: null };
+  // The backend's cursor is the place of the page's last row: a JSON integer. A page that says there
+  // is more without one is not the route's shape (the list would stop short), so it is refused.
+  const c = body.cursor;
+  if (typeof c !== "number" || !Number.isSafeInteger(c) || c < 0) return null;
+  return { rows, next: String(c) };
 }
 
 /** A title as sorted and searched: accents and case ignored. */

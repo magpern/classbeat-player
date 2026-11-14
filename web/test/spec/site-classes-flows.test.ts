@@ -29,7 +29,7 @@ describe("the class list", () => {
     const e = (n: number, title: string, at: string, removed = false) => entry(idOf(n), title, 60_000, at, removed);
     const script: Script = {
       "GET classes": [
-        listReply([e(1, "banana", "2026-11-13T00:00:00Z"), e(4, "Same", "2026-01-01T00:00:00Z"), e(2, "éclair", "2026-05-01T00:00:00Z")], "cursor one"),
+        listReply([e(1, "banana", "2026-11-13T00:00:00Z"), e(4, "Same", "2026-01-01T00:00:00Z"), e(2, "éclair", "2026-05-01T00:00:00Z")], 12345),
         listReply([e(3, "Apple", "2020-01-01T00:00:00Z"), e(5, "same", "2026-11-14T00:00:00Z"), e(6, "Gone", "2026-11-14T00:00:00Z", true)]),
       ],
     };
@@ -37,10 +37,29 @@ describe("the class list", () => {
     await site.page.waitForSelector(".rows .row");
     assert.deepEqual(await rowTitles(site), ["Apple", "banana", "éclair", "Same", "same"], "title order; ties by id (4 before 5); the removal marker is not shown");
     assert.deepEqual(site.api.map((a) => a.route), ["GET classes", "GET classes"]);
-    assert.deepEqual(site.api.map((a) => new URL(a.url).search), ["", "?before=cursor%20one&limit=200"]);
+    assert.deepEqual(site.api.map((a) => new URL(a.url).search), ["", "?before=12345&limit=200"]);
     assert.equal(await site.page.locator(".count").textContent(), "5 classes");
     const link = site.page.locator(".rows .row a").first();
     assert.equal(await link.getAttribute("href"), `/classes/${idOf(3)}`);
+    await site.context.close();
+  });
+
+  it("follows the backend's integer cursor to the last page, past the first 50 classes", async () => {
+    const first = Array.from({ length: 50 }, (_, i) => entry(idOf(i + 1), `Class ${String(i + 1).padStart(3, "0")}`, 60_000, "2026-11-01T00:00:00Z"));
+    const second = Array.from({ length: 5 }, (_, i) => entry(idOf(i + 51), `Class ${String(i + 51).padStart(3, "0")}`, 60_000, "2026-10-01T00:00:00Z"));
+    const site = await open("/classes", { "GET classes": [listReply(first, 9007199254740991), listReply(second)] });
+    await site.page.waitForSelector(".rows .row");
+    assert.equal((await rowTitles(site)).length, 55);
+    assert.deepEqual(site.api.map((a) => new URL(a.url).search), ["", "?before=9007199254740991&limit=200"]);
+    await site.context.close();
+  });
+
+  it("shows the server fault for a page that says there is more with a cursor that is not an integer", async () => {
+    const odd: Reply = { status: 200, body: { classes: library(2), cursor: "next", more: true } };
+    const site = await open("/classes", { "GET classes": odd });
+    await site.page.waitForSelector(".plate");
+    assert.match(await site.page.locator(".plate").innerText(), /That did not work, and it was not your doing/);
+    assert.equal(await site.page.locator(".rows").count(), 0);
     await site.context.close();
   });
 
@@ -188,6 +207,16 @@ describe("the class details page", () => {
     await site.context.close();
   });
 
+  it("shows the server fault, not not-found, for a 200 answer that is not a class", async () => {
+    for (const body of [null, "x", [1]]) {
+      const site = await open(detail, { [`GET classes/${CLASS_ID}`]: { status: 200, body } });
+      await site.page.waitForSelector(".plate");
+      assert.match(await site.page.locator(".plate").innerText(), /That did not work, and it was not your doing/);
+      assert.equal(await site.page.getByText("That class is not here").count(), 0);
+      await site.context.close();
+    }
+  });
+
   for (const [name, reply, plate] of [
     ["too many requests", { status: 429, body: { error: "too_many_requests" }, headers: { "Retry-After": "300" } }, "Please wait a little"],
     ["offline", { status: 0, fail: true }, "You are offline"],
@@ -257,6 +286,22 @@ describe("deleting a class", () => {
     assert.equal(await site.page.evaluate(() => document.activeElement?.tagName), "H1");
     assert.equal(await site.page.locator(".rows .row").count(), 11, "the list is the account's, read again");
     // The note is shown once: the page again has none.
+    await site.page.reload();
+    await site.page.waitForSelector(".rows .row");
+    assert.equal(await site.page.locator(".note").count(), 0);
+    await site.context.close();
+  });
+
+  it("shows the Deleted note on the empty list after the last class was deleted, once", async () => {
+    const site = await open(detail, { ...withDelete({ status: 204 }), "GET classes": [listReply([]), listReply(library(2))] });
+    await site.page.waitForSelector(".zrow");
+    await press(site, "Delete class");
+    await press(site, "Delete class");
+    await site.page.waitForSelector(".note");
+    assert.equal(await site.page.locator("h2").textContent(), "No classes yet");
+    assert.match(await site.page.locator(".note").innerText(), /Deleted “Monday morning endurance”/);
+    assert.equal(await site.page.evaluate(() => document.activeElement?.tagName), "H1");
+    // The note did not stay behind: the next list drawn has none.
     await site.page.reload();
     await site.page.waitForSelector(".rows .row");
     assert.equal(await site.page.locator(".note").count(), 0);
