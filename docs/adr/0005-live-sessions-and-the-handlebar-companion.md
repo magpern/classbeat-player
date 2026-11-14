@@ -155,6 +155,8 @@ each message against the schema for its sender's role and drops (and counts) any
 | `welcome` | server → the connection | `role`; a controller's `slot`; whether the host is in |
 | `host_status` | server → controllers | `connected`: true or false |
 | `controller_joined`, `controller_left` | server → host | `slot`; `via`: `sign_in` or `code` |
+| `controller_left` (amended 2026-11-14) | server → host | also `reason`: `disconnected`, `session_ended`, `dropped` or `free`; no `via` with `free`; a replay of both places after each host `welcome` (section 10) |
+| `cancel_code` (amended 2026-11-14) | host → server | nothing (section 10) |
 | `make_code` | host → server | nothing |
 | `control_code` | server → host | `code`, `expiresInMs` |
 | `code_cancelled` | server → host | `reason`: `wrong_tries`, `expired`, `used`, `replaced` |
@@ -366,7 +368,7 @@ while both places are held is `controllers_full` and not a wrong try (section 3)
 the phone, gives the `slot` (section 3); each controller may send at most 2 commands a second,
 answered `rate` beyond that (section 5); and the host asks for, and is told about, control codes
 by WebSocket messages (`make_code`, `control_code`, `code_cancelled`, section 4). It adds one
-way a control code ends, the host's `drop` (section 3), marked in ADR 0002's token table.
+way a control code ends, the host's `drop` (section 3), and later `cancel_code` (amended 2026-11-14), both marked in ADR 0002's token table.
 
 **Amended 2026-11-13: the sign-in route is not locked out per address.** ADR 0002 counts a
 `POST /api/live/controller` with an unknown join code against the caller's address, and its
@@ -381,6 +383,49 @@ session is answered `cannot_control` before any join-code lookup; such calls are
 the caller's address, and that limit refuses only calls without a valid site session, so a
 signed-in instructor is never refused by it. `POST /api/live/control` and rider
 joins keep the per-address limit. ADR 0002's lines on this, in sections 8, 10 and 13, are marked amended.
+
+**Amended 2026-11-14: the host hears what each place holds, and can cancel a control code**
+(Verifier run of the companion, #352 and #353; #354 review).
+
+- *`controller_left` gets a required `reason`:*
+  - `disconnected`: the controller's connection closed and its token is still valid (the phone
+    may come back). The presenter shows "not connected" with Drop.
+  - `session_ended`: the token ended without the host asking, because its site session ended
+    (sign-out, "sign out everywhere", expiry, found by the re-check or the hint). Sent whether or
+    not the token had a connection at that moment. The presenter shows the place as free.
+  - `dropped`: the host dropped it. Today's backend already sends `controller_left` after a
+    `drop`; that stays, now with this reason, sent whether or not the phone was connected. The
+    presenter shows the place as free. (ADR 0007's `rider_left` `dropped` is the same idea for a
+    rider.)
+  - `free`: only in the replay below, for a place that holds no token. It has no `via`; every
+    other reason has one.
+- *The replay after each host `welcome`:* the server never buffers for a host that is away, so
+  right after every host `welcome` it names both places once, in slot order: `controller_joined`
+  for a place whose token is connected, `controller_left` `disconnected` for one whose token is
+  held but not connected, `controller_left` `free` for an empty place. The app sets both places
+  from the replay alone and forgets what it showed before. So a phone that signed out, or signed
+  in, while the host was reconnecting is shown rightly. `welcome.schema.json` is unchanged.
+- *`cancel_code`, host → server, holding nothing:* ends the session's current control code, if
+  any, as `drop` does: the host is sent nothing for it and `code_cancelled` keeps its four
+  reasons. The app sends it whenever it stops showing a live control code for a reason of its
+  own: the presenter closed, the app left with one display ("an app with one display offers no
+  control code"). If that happens while the host connection is down, the app sends it right after
+  the next host `welcome`, before anything else. Before this the code stayed valid on the server
+  for up to 2 minutes after the screen no longer showed it (#353).
+- Both are contract changes in `schema/live/v1` and its routing table, `cancel_code` from the
+  host to the server only. `reason` is required inside v1: nothing is deployed yet, so the
+  contract, backend and player changes land in the same release and the player accepts only the
+  new shape. Every guard of section 7 holds unchanged; the credential guard needs no exemption,
+  because `cancel_code` has no property. Added backend guard tests: `cancel_code` from a
+  controller or a rider is dropped and counted; a cancelled code is refused on the control route
+  as `invalid_code`; `session_ended` is sent with and without the phone's connection and never
+  for a token got by a control code; the replay names both places after every host `welcome`;
+  the pinned set of host-sent types in `test_guard_live_routing.py` grows by `cancel_code` only.
+  Added player tests: the panel shows each reason as above and is rebuilt from the replay;
+  `cancel_code` is sent on each of its triggers, and after the next `welcome` when the trigger
+  came while disconnected.
+- This also marks a further way a control code ends, `cancel_code`, in ADR 0002's token table
+  and roles table.
 
 ## Alternatives
 
