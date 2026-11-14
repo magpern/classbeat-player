@@ -119,7 +119,7 @@ def test_a_dropped_controller_is_closed_and_its_token_is_refused(live: Any) -> N
     token = live.controller(started)
     with live.joined(started.host_token, None) as host, live.joined(token) as phone:
         recv(host)
-        _on_a_thread(lambda: live.registry.drop_controller(started.session_id, 1))
+        _on_a_thread(lambda: live.registry.drop_controller(started.session_id, 1, "dropped"))
         assert recv(phone) == {"v": 1, "type": "ended", "reason": "dropped"}
         assert closed(phone) == 4403
         assert recv(host) == {

@@ -32,9 +32,9 @@ TOO_MANY: Final = 1008
 
 type Message = dict[str, object]
 type Result = Literal["applied", "duplicate", "refused"]
-# Why a place holds no connected controller, as this process tells it today (ADR 0005 section 10,
-# amended 2026-11-14). The contract's fourth reason, `free` (without `via`, in the replay after a
-# host `welcome`), is not sent yet.
+# Why a place holds no connected controller while a token is or was in it (ADR 0005 section 10,
+# amended 2026-11-14). The contract's fourth reason, `free`, has no `via` and is built by
+# `controller_free` alone (the replay after a host `welcome`, live_place_policy.py).
 type LeftReason = Literal["disconnected", "session_ended", "dropped"]
 
 
@@ -107,6 +107,11 @@ def controller_joined(slot: int, via: Via) -> Message:
 
 def controller_left(slot: int, via: Via, reason: LeftReason) -> Message:
     return {"v": 1, "type": "controller_left", "slot": slot, "via": via, "reason": reason}
+
+
+def controller_free(slot: int) -> Message:
+    """A place that holds no token, in the replay only: no `via`."""
+    return {"v": 1, "type": "controller_left", "slot": slot, "reason": "free"}
 
 
 def ended(reason: WireReason) -> Message:

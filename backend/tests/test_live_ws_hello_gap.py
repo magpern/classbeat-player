@@ -19,7 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from player_backend.db import live as db_live
 from player_backend.live_session_policy import HOST_AWAY_LIMIT
-from tests.livehelp import closed, command, hello, live_app, recv, until
+from tests.livehelp import FREE, closed, command, hello, live_app, places, recv, until
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def test_a_controller_dropped_right_after_its_lookup_is_told_and_commands_nothin
     def then_dropped(raw: object, now: float) -> Any:
         seat = real(raw, now)
         if seat is not None:  # a re-check or the host's drop, on another thread, right now
-            registry.drop_controller(seat.session_id, seat.slot)
+            registry.drop_controller(seat.session_id, seat.slot, "dropped")
         return seat
 
     monkeypatch.setattr(registry, "controller_seat", then_dropped)
@@ -82,6 +82,7 @@ def test_a_session_ended_right_after_the_hosts_lookup_ends_the_host_link(
     with live.connect(None) as host:
         host.send_json(hello(started.host_token))
         assert recv(host)["type"] == "welcome"
+        assert places(host) == FREE  # the session is gone: it holds no token
         assert recv(host) == {"v": 1, "type": "ended", "reason": "revoked"}
         assert closed(host) == 4403
 

@@ -7,7 +7,10 @@
   rules are live_code_policy.py's.
 - A controller token is given out once, in `Granted`, and held as its hash only.
 - The host's `drop` ends the current control code without telling anyone, and drops the slot's
-  controller.
+  controller; the host's `cancel_code` ends the code alone, the same way (ADR 0005 section 10,
+  amended 2026-11-14).
+- A dropped controller is told to the watchers with its reason, given by the caller: `dropped`
+  for the host's, `session_ended` for one whose site session ended (sign-in tokens only).
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from player_backend.code_policy import code_hash, normalise_code, show_code
 from player_backend.live.events import (
     CodeCancelled,
     Dropped,
+    DropReason,
     Exchange,
     Granted,
     MadeCode,
@@ -27,6 +31,7 @@ from player_backend.live.events import (
     SignedInController,
 )
 from player_backend.live.table import HeldController, HeldSession, Table
+from player_backend.live_token_policy import Via
 from player_backend.token_issue import new_token
 from player_backend.token_policy import is_token, token_hash
 
@@ -146,9 +151,7 @@ class Controllers(Table):
                 return None
             ended = self._expired(session, now)
             if ended is None:
-                return Seat(
-                    found[0], found[1], "code" if held.site_session_hash is None else "sign_in"
-                )
+                return Seat(found[0], found[1], _via(held))
         self._expiry_told(ended)
         return None
 
@@ -162,29 +165,53 @@ class Controllers(Table):
                 if c.site_session_hash is not None
             ]
 
+    def places(self, session_id: UUID) -> dict[int, Via]:
+        """The places the session's controller tokens hold, by slot, with how each was got
+        (for the replay after a host `welcome`); empty when the session is gone."""
+        with self._lock:
+            session = self._sessions.get(session_id)
+            held = {} if session is None else session.controllers
+            return {slot: _via(c) for slot, c in held.items()}
+
     def drop_controller(
-        self, session_id: UUID, slot: int, site_session_hash: bytes | None = None
+        self,
+        session_id: UUID,
+        slot: int,
+        reason: DropReason,
+        *,
+        site_session_hash: bytes | None = None,
     ) -> bool:
-        """Drop the controller in `slot`; with `site_session_hash`, only the one it holds."""
+        """Drop the controller in `slot` and tell the watchers why. `dropped` (the host's) drops
+        whoever holds it; `session_ended` drops it only while it holds the token got with the
+        site session `site_session_hash`, so never a token got by a control code."""
+        if (reason == "session_ended") != (site_session_hash is not None):
+            raise ValueError("a site session hash goes with `session_ended` only")
         with self._lock:
             session = self._sessions.get(session_id)
             held = None if session is None else session.controllers.get(slot)
-            dropped = held is not None and (
-                site_session_hash is None or held.site_session_hash == site_session_hash
-            )
-            if dropped and session is not None and held is not None:
-                del session.controllers[slot]
-                self._by_controller.pop(held.token_hash, None)
-        if dropped:
-            reason = "dropped" if site_session_hash is None else "session_ended"
-            self._tell([Dropped(session_id, slot, reason)])
-        return dropped
+            if session is None or held is None:
+                return False
+            if site_session_hash is not None and held.site_session_hash != site_session_hash:
+                return False
+            del session.controllers[slot]
+            self._by_controller.pop(held.token_hash, None)
+        self._tell([Dropped(session_id, slot, reason, _via(held))])
+        return True
 
-    def host_drop(self, session_id: UUID, slot: int) -> bool:
-        """The host's `drop`: the current control code ends, and no one is told of that (the
-        app clears the code it shows), and the controller in `slot` is dropped."""
+    def end_code(self, session_id: UUID) -> None:
+        """End the session's current control code, if any, telling no one: the host's `drop`
+        and `cancel_code` (the app clears the code it shows itself)."""
         with self._lock:
             session = self._sessions.get(session_id)
             if session is not None:
                 session.code.end()
-        return self.drop_controller(session_id, slot)
+
+    def host_drop(self, session_id: UUID, slot: int) -> bool:
+        """The host's `drop`: the current control code ends, and no one is told of that (the
+        app clears the code it shows), and the controller in `slot` is dropped."""
+        self.end_code(session_id)
+        return self.drop_controller(session_id, slot, "dropped")
+
+
+def _via(held: HeldController) -> Via:
+    return "code" if held.site_session_hash is None else "sign_in"

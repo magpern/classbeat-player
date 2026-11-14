@@ -16,13 +16,14 @@ The expected lists below are the contract's; changing one is a rule-sensitive pu
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from player_backend.live import schemas
+from player_backend.live import hub, schemas
 from player_backend.live_route_policy import (
     Party,
     Role,
@@ -71,10 +72,10 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 )
 # What may reach a rider at all (ADR 0007 section 2), the host's messages about riders, and the
 # host's messages that the hub does not act on yet (dropped and counted as `not_built_yet`):
-# `cancel_code` (ADR 0005 section 10, amended 2026-11-14).
+# none since `cancel_code` was built (ADR 0005 section 10, amended 2026-11-14), pinned empty.
 TO_RIDER = {"welcome", "host_status", "rider_state", "ended"}
 HOST_ABOUT_RIDERS = {"rider_state", "drop_rider", "lock", "new_join_code"}
-HOST_NOT_BUILT_YET = {"cancel_code"}
+HOST_NOT_BUILT_YET = set[str]()
 ROUTES = schemas.routes()
 
 
@@ -118,7 +119,7 @@ def test_a_malformed_table_is_refused(raw: object) -> None:
 
 def test_each_role_may_send_exactly_what_the_contract_lets_it() -> None:
     expected: dict[Role, set[str]] = {
-        "host": {"make_code", "drop", "companion_state", "command_result", "end"}
+        "host": {"make_code", "drop", "companion_state", "command_result", "end", "cancel_code"}
         | HOST_ABOUT_RIDERS
         | HOST_NOT_BUILT_YET,
         "controller": {"command"},
@@ -135,6 +136,12 @@ def test_each_role_may_send_exactly_what_the_contract_lets_it() -> None:
     assert inbound("host", "ack") == "not_from_role"  # the server is the one sender of ack
     for kind in ("nope", "", None, 1, "Command", "command "):
         assert inbound("host", kind) == "unknown_type"
+
+
+def test_the_hub_acts_on_every_host_message_it_takes() -> None:
+    # Pinned empty: no routed host message is dropped as `not_built_yet` any more.
+    assert HOST_NOT_BUILT_YET == set()
+    assert "not_built_yet" not in inspect.getsource(hub)
 
 
 def test_a_hosts_command_is_not_a_controllers() -> None:

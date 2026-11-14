@@ -28,8 +28,8 @@ from player_backend.live import dispatch
 from player_backend.live import hub as hub_module
 from player_backend.live.schemas import routes
 from player_backend.live_route_policy import acted_on
-from tests.livehelp import SCHEMA as LIVE_SCHEMA
 from tests.livehelp import (
+    FREE,
     closed,
     command,
     command_id,
@@ -39,6 +39,7 @@ from tests.livehelp import (
     recv,
     result,
 )
+from tests.livehelp import SCHEMA as LIVE_SCHEMA
 
 
 @pytest.fixture
@@ -142,7 +143,10 @@ def test_with_the_host_away_a_command_is_answered_host_away_and_kept_nowhere(liv
             "reason": "host_away",
         }
         with live.joined(started.host_token, None) as host:
-            assert recv(host) == {"v": 1, "type": "controller_joined", "slot": 1, "via": "code"}
+            assert live.replays[-1] == [
+                {"v": 1, "type": "controller_joined", "slot": 1, "via": "code"},
+                FREE[1],
+            ]
             assert recv(phone) == {"v": 1, "type": "host_status", "connected": True}
             nothing(host)  # the earlier command was not kept for it
 
@@ -220,8 +224,8 @@ def test_unknown_types_and_non_messages_are_dropped_and_counted(live: Any) -> No
 
 
 # The host's messages a controller has no route for, one valid example of each
-# (schema/live/v1/examples): `cancel_code`, which the hub does not act on yet (ADR 0005 section
-# 10, amended 2026-11-14; #357), and the host's messages about riders (ADR 0007).
+# (schema/live/v1/examples): `cancel_code`, which ends the control code and sends nothing (ADR
+# 0005 section 10, amended 2026-11-14), and the host's messages about riders (ADR 0007).
 HOST_EXAMPLES = (
     "cancel-code/valid/cancel-code.json",
     "rider-state/valid/running-three-coming.json",
@@ -255,7 +259,7 @@ def test_the_hosts_cancel_code_and_rider_messages_reach_no_controller(live: Any)
         one.send_json(command(1))  # the probe for the host: its answers came first
         assert [recv(host)["type"] for _ in range(2)] == ["lock_state", "join_code"]
         assert recv(host)["id"] == command_id(1)
-        assert live.hub.dropped["not_built_yet"] == 1  # `cancel_code`, built in #357
+        assert "not_built_yet" not in live.hub.dropped  # the host's `cancel_code` is acted on
         assert live.hub.dropped["unknown_rider"] == 1  # the example's rider is no rider here
         assert live.hub.dropped["not_from_role"] == 5
         assert live.hub.dropped["invalid"] == 0
@@ -309,20 +313,24 @@ def test_a_returning_host_is_told_of_the_phones_already_in(live: Any) -> None:
     tokens = live.controller(started), live.controller(started, signed_in=True)
     with live.joined(tokens[0]), live.joined(tokens[1]):
         with live.joined(started.host_token, None) as host:
-            assert [recv(host) for _ in range(2)] == [
+            assert live.replays[-1] == [
                 {"v": 1, "type": "controller_joined", "slot": 1, "via": "code"},
                 {"v": 1, "type": "controller_joined", "slot": 2, "via": "sign_in"},
             ]
+            nothing(host)
 
 
 def test_a_newer_host_connection_replaces_the_older(live: Any) -> None:
     started = live.session()
     with live.joined(live.controller(started)) as phone:
         with live.joined(started.host_token, None) as old:
-            assert recv(old)["type"] == "controller_joined"
+            assert live.replays[-1][0]["type"] == "controller_joined"
             assert recv(phone)["connected"] is True
             with live.joined(started.host_token, None) as new:
-                assert recv(new)["type"] == "controller_joined"
+                assert live.replays[-1] == [
+                    {"v": 1, "type": "controller_joined", "slot": 1, "via": "code"},
+                    FREE[1],
+                ]
                 assert recv(new) == {"v": 1, "type": "lock_state", "locked": False}  # a return
                 assert closed(old) == 4409
                 nothing(phone)  # the host never left

@@ -59,6 +59,8 @@ def test_the_close_codes() -> None:
         ("controller-left.schema.json", wire.controller_left(2, "code", "disconnected")),
         ("controller-left.schema.json", wire.controller_left(1, "sign_in", "session_ended")),
         ("controller-left.schema.json", wire.controller_left(2, "sign_in", "dropped")),
+        ("controller-left.schema.json", wire.controller_free(1)),
+        ("controller-left.schema.json", wire.controller_free(2)),
         ("ended.schema.json", wire.ended("host_ended")),
         ("ended.schema.json", wire.ended("revoked")),
         ("ended.schema.json", wire.ended("expired")),

@@ -3,11 +3,12 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
 
 - One connection per token: a new host connection, or a controller's with the same token,
   replaces the old one, which is closed with 4409.
-- The host is told `welcome`, then `controller_joined` for each phone connected; a controller
-  is told `welcome` with its slot and whether the host is in. Controllers get `host_status`
-  when the host comes and goes, and nothing else while it is away; the host gets
-  `controller_joined`, and `controller_left` with its reason (ADR 0005 section 10, amended
-  2026-11-14; no replay and no `free` yet), as phones come and go.
+- The host is told `welcome`, then, in the same step, both places in slot order
+  (live_place_policy.py: `controller_joined`, `controller_left` `disconnected` or `free`); a
+  controller is told `welcome` with its slot and whether the host is in. Controllers get
+  `host_status` when the host comes and goes, and nothing else while it is away; the host gets
+  `controller_joined`, and `controller_left` with its reason, as phones come and go, and for a
+  drop or a site session's end whether or not the phone was connected (ADR 0005 section 10).
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
   its schema for its sender's role; anything else is dropped and counted in `dropped`. The
   handlers are keyed by the routed type (live/dispatch.py), one `_on_<type>` each. Every message the
@@ -22,7 +23,8 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
   `code_cancelled` `replaced` (or `expired`) for the code it replaces; over 30 an hour it is
   dropped and counted (`code_limit`), and the current code stays. A code used, run out or
   cancelled by wrong tries is told to the host as `code_cancelled` (a watcher's event). The
-  host's `drop` ends the current code, telling no one, and drops the slot's controller.
+  host's `drop` ends the current code, telling no one, and drops the slot's controller; its
+  `cancel_code` ends the current code alone, telling no one.
 
 Threads: the hub's state is touched on the event loop only. The watcher hands each event over
 with `call_soon_threadsafe` and logs a failure by its type. The loop is bound by `bind`, which
@@ -50,9 +52,11 @@ from player_backend.live.sender import logged as _logged
 from player_backend.live.service import LiveService
 from player_backend.live.watchers import Event
 from player_backend.live_limit_policy import HELLO_WITHIN, AddressGate
+from player_backend.live_place_policy import replay
 from player_backend.live_relay_policy import Outstanding
 from player_backend.live_route_policy import inbound
 from player_backend.live_session_policy import wire_reason
+from player_backend.live_token_policy import Via
 from player_backend.live_wire_policy import (
     ENDED,
     REPLACED,
@@ -144,11 +148,10 @@ class Hub:
     def _dropped(self, event: Dropped) -> None:
         self.commands.forget(event.session_id, (event.slot,))
         link = self._controllers.get(event.session_id, {}).pop(event.slot, None)
-        if link is None:
-            return
-        self._send(link, ended("dropped"))
-        link.close(ENDED)
-        self._left(link, event.reason)
+        if link is not None:
+            self._send(link, ended("dropped"))
+            link.close(ENDED)
+        self._left(event.session_id, event.slot, event.via, event.reason)
 
     def _cancelled(self, event: CodeCancelled) -> None:
         host = self._hosts.get(event.session_id)
@@ -165,8 +168,9 @@ class Hub:
             old.close(REPLACED)
         self.service.registry.host_connected(session_id)
         self._send(link, welcome_host())
-        for slot, phone in sorted(self._controllers.get(session_id, {}).items()):
-            self._send(link, controller_joined(slot, phone.via or "code"))
+        held = self.service.registry.places(session_id)
+        for message in replay(held, self._controllers.get(session_id, {})):
+            self._send(link, message)
         self.riders.host_in(link)
         if old is None:
             self.sender.send_all(self._phones(session_id), host_status(True))
@@ -209,12 +213,12 @@ class Hub:
         del phones[link.slot]
         if not phones:
             self._controllers.pop(session_id, None)
-        self._left(link, "disconnected")
+        self._left(session_id, link.slot, link.via or "code", "disconnected")
 
-    def _left(self, link: Link, reason: LeftReason) -> None:
-        host = self._hosts.get(link.session_id)
-        if host is not None and link.slot is not None:
-            self._send(host, controller_left(link.slot, link.via or "code", reason))
+    def _left(self, session_id: UUID, slot: int, via: Via, reason: LeftReason) -> None:
+        host = self._hosts.get(session_id)
+        if host is not None:
+            self._send(host, controller_left(slot, via, reason))
 
     def _phones(self, session_id: UUID) -> list[Link]:
         return list(self._controllers.get(session_id, {}).values())
@@ -257,7 +261,7 @@ class Hub:
         self.riders.new_join_code(link)
 
     def _on_cancel_code(self, link: Link, _message: Message) -> None:
-        self._drop(link, "not_built_yet")  # #357 builds it (ADR 0005 section 10)
+        self.service.registry.end_code(link.session_id)  # the host is sent nothing for it
 
     def _on_make_code(self, link: Link, _message: Message) -> None:
         made = self.service.registry.make_code(link.session_id, self.service.clock())

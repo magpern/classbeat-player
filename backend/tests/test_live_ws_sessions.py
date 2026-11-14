@@ -50,7 +50,12 @@ def test_nothing_crosses_from_one_session_to_another(live: Any) -> None:
         b_stack = stack.enter_context(ExitStack())
         phone_b = b_stack.enter_context(live.joined(live.controller(second)))
         host_b = b_stack.enter_context(live.joined(second.host_token, None))
-        assert recv(host_b)["type"] == "controller_joined"
+        assert live.replays[-1][0] == {
+            "v": 1,
+            "type": "controller_joined",
+            "slot": 1,
+            "via": "code",
+        }
         assert recv(phone_b) == {"v": 1, "type": "host_status", "connected": True}
         nothing(host_a)  # the other session's phone joined: not a word here
         nothing(phone_a)  # the other session's host came in: not a word here
@@ -90,7 +95,7 @@ def test_a_dropped_token_stays_refused_once_its_slot_is_given_again(live: Any) -
     with live.joined(started.host_token, None) as host:
         with live.joined(old) as gone:
             recv(host)
-            assert live.registry.drop_controller(started.session_id, 1)
+            assert live.registry.drop_controller(started.session_id, 1, "dropped")
             assert recv(gone)["reason"] == "dropped"
             assert closed(gone) == 4403
         recv(host)  # controller_left
@@ -114,7 +119,7 @@ def test_a_stale_index_entry_hands_over_no_slot(live: Any) -> None:
     old = live.controller(started)
     registry = live.registry
     stale = dict(registry._by_controller)  # pyright: ignore[reportPrivateUsage]
-    assert registry.drop_controller(started.session_id, 1)
+    assert registry.drop_controller(started.session_id, 1, "dropped")
     new = live.controller(started)
     registry._by_controller.update(stale)  # pyright: ignore[reportPrivateUsage]
     assert registry.controller_seat(old, live.clock()) is None
@@ -152,13 +157,13 @@ def test_answers_to_commands_sent_before_the_host_left_reach_no_one(live: Any) -
     started = live.session()
     with live.joined(live.controller(started)) as phone:
         with live.joined(started.host_token, None) as host:
-            recv(host)
+            assert live.replays[-1][0]["type"] == "controller_joined"
             recv(phone)  # host_status connected
             phone.send_json(command(1))
             recv(host)
         assert recv(phone) == {"v": 1, "type": "host_status", "connected": False}
         with live.joined(started.host_token, None) as back:
-            recv(back)
+            assert live.replays[-1][0]["type"] == "controller_joined"
             recv(phone)
             back.send_json(result(1, 1))
             nothing(phone)
