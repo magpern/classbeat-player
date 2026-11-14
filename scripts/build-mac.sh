@@ -3,9 +3,9 @@
 # installs and builds, then packages with scripts/package-desktop.sh (no packaging logic here).
 # The result is UNSIGNED and unnotarized. This script does not touch quarantine or Gatekeeper
 # and uses no signing material or secrets.
-# Usage: build-mac.sh [--out DIR] [--help]      (default DIR: dist-local, under the repo root)
+# Usage: build-mac.sh [--out DIR] [--open] [--help]      (default DIR: dist-local, under the repo root)
 # Test hooks (environment): BUILD_MAC_UNAME, BUILD_MAC_NODE, BUILD_MAC_NPM,
-# BUILD_MAC_XCODE_SELECT, BUILD_MAC_PACKAGE name the commands used instead of the real ones;
+# BUILD_MAC_XCODE_SELECT, BUILD_MAC_PACKAGE, BUILD_MAC_TAR, BUILD_MAC_OPEN name the commands used instead of the real ones;
 # BUILD_MAC_ELECTRON_FETCH is the command (run in the app folder) that fetches the Electron
 # runtime when npm skipped its install script; BUILD_MAC_APP_DIR replaces player/app.
 set -euo pipefail
@@ -19,16 +19,21 @@ xcode_cmd="${BUILD_MAC_XCODE_SELECT:-xcode-select}"
 package_cmd="${BUILD_MAC_PACKAGE:-$here/package-desktop.sh}"
 app="${BUILD_MAC_APP_DIR:-$root/player/app}"
 electron_fetch="${BUILD_MAC_ELECTRON_FETCH:-}"
+tar_cmd="${BUILD_MAC_TAR:-tar}"
+open_cmd="${BUILD_MAC_OPEN:-open}"
+open_app=0
 out="$root/dist-local"
 
 usage() {
   cat <<'U'
-Usage: scripts/build-mac.sh [--out DIR] [--help]
+Usage: scripts/build-mac.sh [--out DIR] [--open] [--help]
 
 Builds the class player desktop app on a Mac (unsigned) and packages it as a .tar.gz.
 Needs: macOS, Node 24, and the Xcode command line tools (xcode-select --install).
 
   --out DIR   where the archive is written (default: dist-local/ in the repository)
+  --open      after building, unpack the archive into DIR (replacing an earlier unpack)
+              and start the app
   --help      show this text
 U
 }
@@ -41,6 +46,7 @@ while [ $# -gt 0 ]; do
     --out)
       [ $# -ge 2 ] && [ -n "$2" ] || die "--out needs a directory"
       out="$2"; shift 2 ;;
+    --open) open_app=1; shift ;;
     *) usage >&2; die "unknown argument: $1" ;;
   esac
 done
@@ -83,11 +89,28 @@ fi
 "$package_cmd" "$app" "$out" "$label"
 
 archive="$out/classbeat-player-$label-unsigned.tar.gz"
+unpacked="$out/classbeat-player-$label"
+
+if [ "$open_app" = 1 ]; then
+  rm -rf "$unpacked"
+  "$tar_cmd" -xzf "$archive" -C "$out" || die "unpacking $archive failed"
+  echo "Built: $archive"
+  echo "Unpacked: $unpacked"
+  if ! "$open_cmd" "$unpacked/Electron.app"; then
+    cat >&2 <<MSG
+build-mac: macOS did not open the app (it is unsigned). In Finder, open
+  $unpacked
+then right-click Electron.app, choose Open, and confirm Open in the dialog.
+MSG
+    exit 1
+  fi
+  exit 0
+fi
 cat <<MSG
 
 Built: $archive
 Unpack it with:
   tar -xzf "$archive" -C "$out"
 The folder classbeat-player-$label/ then holds Electron.app, the app.
-The build is unsigned; this script does not change quarantine or Gatekeeper settings.
+The build is unsigned; this script does not change Gatekeeper settings.
 MSG

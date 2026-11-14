@@ -8,13 +8,16 @@ Needs: macOS, Node 24, and the Xcode command line tools (`xcode-select --install
 ```bash
 scripts/build-mac.sh              # archive in dist-local/
 scripts/build-mac.sh --out ~/Desktop/cb
+scripts/build-mac.sh --out ~/Desktop/cb --open   # also unpack there and start the app
 ```
 
 The script checks the prerequisites and stops with a message if one is missing, runs `npm ci` in
 `schema/ts` and `player/app`, runs `npm run build` in `player/app`, then calls
 `scripts/package-desktop.sh` with the label `macos-arm64` or `macos-x64`. It prints the archive
 path, `classbeat-player-<label>-unsigned.tar.gz`. Unpack it with `tar -xzf <archive> -C <dir>`;
-the folder `classbeat-player-<label>/` contains `Electron.app`.
+the folder `classbeat-player-<label>/` contains `Electron.app`. With `--open` the script does that
+itself (replacing an earlier unpack in `<dir>`) and starts the app with `open`; if macOS refuses the
+unsigned app it prints the right-click, Open step. It changes no macOS security settings.
 
 A newer npm skips install scripts that `allowScripts` does not cover, and then Electron's own
 script never downloads its runtime. After the build the script checks for
