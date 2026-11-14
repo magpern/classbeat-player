@@ -22,6 +22,7 @@ from player_backend.client_policy import ClientInfo
 from player_backend.db import account
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import Handle, connect
+from player_backend.db.queries import operator as operator_q
 from tests.dbhelp import Conn
 
 A = "a@example.test"
@@ -52,18 +53,27 @@ def unheld(db_url: str) -> Iterator[tuple[Handle, Conn]]:
 
 
 def _assert_unheld(db: Handle, su: Conn) -> None:
-    """Fail loudly unless both the tests' connection and the handle bypass row-level security."""
-    role = su.execute(
-        "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
-    ).fetchone()
-    assert role == (True,), "the tests' connection must bypass row-level security (superuser)"
-    seen = [_account(su, email) for email in (A, B)]
-    assert su.execute("SELECT count(*) FROM player.accounts").fetchone() == (2,)
-    # No account is set on the handle: only a role that bypasses the policy reads these rows.
-    for account_id, email in zip(seen, (A, B), strict=True):
-        assert account.own_email(_context(db, account_id)) == email, (
-            "the handle must bypass row-level security, but it did not see an account's row"
-        )
+    """Fail loudly unless both the tests' connection and the handle bypass row-level security.
+
+    Neither check goes through the functions under test: the handle's own role is read on the
+    handle, and the fixture rows are read directly on the tests' connection.
+    """
+    bypass = "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = %s"
+    mine = su.execute("SELECT current_user::text").fetchone()
+    assert mine is not None
+    assert su.execute(bypass, mine).fetchone() == (True,), (
+        "the tests' connection must bypass row-level security (superuser)"
+    )
+    # The role the code under test acts as, read on its own handle: row-level security applies
+    # by `current_user`, so this role bypassing it means the handle is not held by the policy.
+    theirs = db.rows(operator_q.CURRENT_ROLE)
+    assert len(theirs) == 1
+    assert su.execute(bypass, theirs[0]).fetchone() == (True,), (
+        "the handle must bypass row-level security (superuser), but its role does not"
+    )
+    ids = {email: _account(su, email) for email in (A, B)}
+    rows = su.execute("SELECT id, email FROM player.accounts ORDER BY email").fetchall()
+    assert rows == [(ids[A], A), (ids[B], B)], "the fixture rows are not the two accounts made"
     su.execute(_CLEAN)
 
 
