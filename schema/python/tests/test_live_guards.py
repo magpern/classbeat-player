@@ -6,6 +6,11 @@
 - Rule 13 and ADR 0005 sections 3 and 4: what the server delivers to a controller holds no word
   of `schema/live/guard/rider-words.txt` or `schema/live/guard/credential-words.txt`; the control
   code goes to the host only; the phone's `command` has no `slot`.
+- Rules 13 and 14, ADR 0007 section 6: exactly `welcome` (its own rider schema), `host_status`,
+  `rider_state` and `ended` reach a rider, and none holds a word of
+  `schema/live/guard/rider-bound-words.txt` or `credential-words.txt`; a rider sends `hello`
+  only, to the server; `rider_state` holds exactly ADR 0007's fields; the join body is exactly
+  `session` and `nickname`; the new join code goes to the host only.
 - Every object in every live schema is closed.
 
 Changing an expected list here is a rule-sensitive pull request.
@@ -26,6 +31,14 @@ ACTIONS = ["start", "pause", "resume", "skip", "nudge", "undo_resync"]
 JUMP_MS = 5000
 TO_CONTROLLER = {"welcome", "host_status", "companion_state", "ack", "ended"}
 FROM_CONTROLLER = {"hello", "command"}
+# Every entry routed to a rider, in full (ADR 0007 section 2): type, schema, from, to.
+TO_RIDER = {
+    ("welcome", "welcome-rider.schema.json", ("server",), ("rider",)),
+    ("host_status", "host-status.schema.json", ("server",), ("controller", "rider")),
+    ("rider_state", "rider-state.schema.json", ("host",), ("rider",)),
+    ("ended", "ended.schema.json", ("server",), ("host", "controller", "rider")),
+}
+TO_RIDER_TYPES = {"welcome", "host_status", "rider_state", "ended"}
 
 _SEPARATORS = re.compile(r"[\s_\-./:]+")
 _CASE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
@@ -110,7 +123,12 @@ def test_guard_word_files_hold_the_words_adr_0005_names() -> None:
         assert word in equipment
     assert {"nickname", "reading", "rider", "presence", "count"} <= words("rider-words.txt")
     assert {"token", "code", "account", "device"} <= words("credential-words.txt")
-    for file in ("equipment-words.txt", "rider-words.txt", "credential-words.txt"):
+    for file in (
+        "equipment-words.txt",
+        "rider-words.txt",
+        "rider-bound-words.txt",
+        "credential-words.txt",
+    ):
         for word in words(file):
             assert split_words(word) == [word], (file, word)
 
@@ -310,8 +328,8 @@ def test_max_length_equals_the_length_a_fixed_length_pattern_gives() -> None:
             if width is not None:
                 assert node.get("maxLength") == width, (name, where)
                 checked += 1
-    # Every pattern in schema/live/v1 is fixed-length today (ts/test/live.test.ts pins the same 16).
-    assert checked == 16
+    # Every pattern in schema/live/v1 is fixed-length today (ts/test/live.test.ts pins the same 23).
+    assert checked == 23
 
 
 # ---- rule 13, ADR 0005 sections 3 and 4: what reaches a controller ---------------------------
@@ -340,10 +358,158 @@ def test_what_a_controller_receives_and_sends_is_pinned() -> None:
 
 
 def test_no_message_reaches_a_rider_and_a_rider_sends_only_hello() -> None:
+    # The exact pin of ADR 0007 section 6 (it replaces "nothing reaches a rider"): the entries
+    # routed to a rider are these four, in full, and a rider sends `hello` only, to the server.
+    to_rider = [e for e in ws_entries() if "rider" in e["to"]]
+    assert {
+        (e["type"], e["schema"], tuple(e["from"]), tuple(e["to"])) for e in to_rider
+    } == TO_RIDER
+    assert len(to_rider) == len(TO_RIDER)
+    assert {e["type"] for e in to_rider} == TO_RIDER_TYPES
+    from_rider = [e for e in ws_entries() if "rider" in e["from"]]
+    assert [(e["type"], e["schema"], e["to"]) for e in from_rider] == [
+        ("hello", "hello.schema.json", ["server"])
+    ]
+    # Nothing from a rider reaches a rider or a controller (ADR 0007 section 6; it must hold
+    # unchanged when PL9 adds readings to the host).
     for entry in ws_entries():
-        assert "rider" not in entry["to"], entry
         if "rider" in entry["from"]:
-            assert entry["type"] == "hello", entry
+            assert not {"rider", "controller"} & set(entry["to"]), entry
+
+
+def test_a_riders_welcome_is_its_own_schema_and_the_other_never_says_rider() -> None:
+    welcomes = {e["schema"]: e["to"] for e in ws_entries() if e["type"] == "welcome"}
+    assert welcomes == {
+        "welcome.schema.json": ["host", "controller"],
+        "welcome-rider.schema.json": ["rider"],
+    }
+    assert hits(schema("welcome"), {"rider"}) == []
+    assert schema("welcome")["properties"]["role"]["enum"] == ["host", "controller"]
+    rider = schema("welcome-rider")
+    assert rider["properties"]["role"] == {"type": "string", "const": "rider"}
+    assert set(rider["properties"]) == {"v", "type", "role", "hostConnected"}
+    assert set(rider["required"]) == set(rider["properties"])
+
+
+def _rider_bound(message: str) -> list[dict[str, Any]]:
+    """Every entry of `message` delivered to a rider; never empty (no skip, no single unpack)."""
+    entries = [e for e in ws_entries() if e["type"] == message and "rider" in e["to"]]
+    assert entries, message
+    return entries
+
+
+def test_rider_bound_words_are_the_rider_words_but_rider_and_ftp() -> None:
+    assert words("rider-bound-words.txt") == words("rider-words.txt") - {"rider", "ftp"}
+    assert {"rider", "ftp"} <= words("rider-words.txt")
+
+
+@pytest.mark.parametrize("message", sorted(TO_RIDER_TYPES))
+def test_what_reaches_a_rider_has_no_rider_bound_word(message: str) -> None:
+    for entry in _rider_bound(message):
+        assert hits(schema_of(entry), words("rider-bound-words.txt")) == [], entry["schema"]
+
+
+@pytest.mark.parametrize("message", sorted(TO_RIDER_TYPES))
+def test_what_reaches_a_rider_has_no_token_code_account_or_device(message: str) -> None:
+    for entry in _rider_bound(message):
+        assert hits(schema_of(entry), words("credential-words.txt")) == [], entry["schema"]
+
+
+def test_the_two_exempt_words_appear_only_where_adr_0007_uses_them() -> None:
+    # Against the full rider-words.txt: `rider` only as the rider welcome's role and the
+    # message's own type, `ftp` only as the FTP test's kind and in `ftpPct`.
+    found = {
+        entry["schema"]: hits(schema_of(entry), words("rider-words.txt"))
+        for entry in ws_entries()
+        if "rider" in entry["to"]
+    }
+    assert {s: h for s, h in found.items() if h} == {
+        "welcome-rider.schema.json": ["rider"],
+        "rider-state.schema.json": ["ftp", "ftpPct", "rider_state"],
+    }
+
+
+def _shape(node: dict[str, Any]) -> dict[str, Any]:
+    """The property names at each level of `rider_state`, as a nested dict (`$ref`s followed)."""
+    defs = schema("rider-state")["$defs"]
+
+    def resolve(n: dict[str, Any]) -> dict[str, Any]:
+        if "$ref" in n:
+            return resolve(defs[n["$ref"].removeprefix("#/$defs/")])
+        if "anyOf" in n:
+            (obj,) = [b for b in n["anyOf"] if "properties" in b or "$ref" in b]
+            return resolve(obj)
+        if n.get("type") == "array":
+            return resolve(n["items"])
+        return n
+
+    out: dict[str, Any] = {}
+    for name, sub in node["properties"].items():
+        if "anyOf" in sub and all("properties" not in b and "$ref" not in b for b in sub["anyOf"]):
+            out[name] = None
+            continue
+        target = resolve(sub)
+        out[name] = _shape(target) if "properties" in target else None
+    return out
+
+
+def test_rider_state_holds_exactly_adr_0007s_fields() -> None:
+    effort = {"ftpPct": None, "hrmaxPct": None, "rpe": None}
+    zone = {"number": None, "name": None, "effort": effort}
+    assert _shape(schema("rider-state")) == {
+        "v": None,
+        "type": None,
+        "run": None,
+        "seq": None,
+        "status": None,
+        "classMs": None,
+        "lengthMs": None,
+        "classRemainingMs": None,
+        "now": {
+            "index": None,
+            "zone": zone,
+            "position": None,
+            "test": {"kind": None, "minutes": None},
+            "remainingMs": None,
+        },
+        "next": {"startMs": None, "lengthMs": None, "zone": zone, "position": None},
+    }
+    doc = schema("rider-state")
+    assert set(doc["required"]) == set(doc["properties"])
+    assert doc["properties"]["next"]["maxItems"] == 3
+    # No cue, no song, no link state, no allowed actions anywhere in it.
+    names_in = set(property_names(doc))
+    assert not names_in & {"cue", "nextSong", "song", "link", "allowed", "announcement"}
+
+
+def test_rider_state_comes_from_the_host_and_goes_to_riders_only() -> None:
+    (entry,) = [e for e in ws_entries() if e["type"] == "rider_state"]
+    assert entry["from"] == ["host"]
+    assert entry["to"] == ["rider"]
+
+
+def test_the_join_body_is_exactly_the_code_and_a_nickname() -> None:
+    (route,) = [r for r in routing()["http"] if r["route"] == "POST /api/live/join"]
+    assert route["credential"] == "none"
+    assert route["body"] == "join-request.schema.json"
+    assert route["answer"] == "join-answer.schema.json"
+    body = schema("join-request")
+    assert set(body["properties"]) == {"session", "nickname"}
+    assert set(body["required"]) == {"session", "nickname"}
+    assert body["additionalProperties"] is False
+    assert set(property_names(body)) == {"session", "nickname"}
+    answer = schema("join-answer")
+    assert set(property_names(answer)) == {"riderToken"}
+    assert answer["properties"]["riderToken"]["pattern"].startswith("^cbp_rdr_")
+
+
+def test_what_a_host_hears_of_riders_goes_to_the_host_only() -> None:
+    for kind in ("rider_joined", "rider_left", "lock_state", "join_code"):
+        (entry,) = [e for e in ws_entries() if e["type"] == kind]
+        assert (entry["from"], entry["to"]) == (["server"], ["host"]), kind
+    for kind in ("drop_rider", "lock", "new_join_code"):
+        (entry,) = [e for e in ws_entries() if e["type"] == kind]
+        assert (entry["from"], entry["to"]) == (["host"], ["server"]), kind
 
 
 def test_companion_state_goes_to_controllers_only() -> None:
@@ -356,13 +522,19 @@ def test_the_control_code_goes_to_the_host_only() -> None:
     (entry,) = [e for e in ws_entries() if e["type"] == "control_code"]
     assert entry["from"] == ["server"]
     assert entry["to"] == ["host"]
-    # No other WebSocket message carries a code or a token, except the hello that signs in.
+    # The new join code (ADR 0007 section 3) goes to the host only, too.
+    (entry,) = [e for e in ws_entries() if e["type"] == "join_code"]
+    assert entry["from"] == ["server"]
+    assert entry["to"] == ["host"]
+    # No other WebSocket message carries a code or a token, except the hello that signs in. The
+    # three exempt messages carry exactly one such field each, and only that one.
     credential = words("credential-words.txt")
+    exempt = {"control_code": ["code"], "join_code": ["code"], "hello": ["token"]}
     for other in ws_entries():
-        if other["type"] in ("control_code", "hello"):
-            continue
         props = set(property_names(schema_of(other)))
-        assert not [p for p in props if set(split_words(p)) & credential], other["type"]
+        found = sorted(p for p in props if set(split_words(p)) & credential)
+        assert found == exempt.get(other["type"], []), other["type"]
+    assert {e["type"] for e in ws_entries()} >= set(exempt)
 
 
 def test_phone_command_has_no_slot_and_the_forwarded_one_has_it() -> None:
@@ -378,16 +550,31 @@ def test_ack_carries_no_slot() -> None:
     assert "slot" not in set(property_names(schema("ack")))
 
 
+def _controller_bound(message: str) -> list[dict[str, Any]]:
+    """Every entry of `message` delivered to a controller; never empty (no skip, no single unpack:
+    `welcome` has two entries, and only the one routed to a controller is checked here, while
+    every entry routed to a controller is)."""
+    entries = [e for e in ws_entries() if e["type"] == message and "controller" in e["to"]]
+    assert entries, message
+    return entries
+
+
+def test_every_entry_routed_to_a_controller_is_checked() -> None:
+    checked = [e for m in sorted(TO_CONTROLLER) for e in _controller_bound(m)]
+    every = [e for e in ws_entries() if "controller" in e["to"]]
+    assert sorted(map(str, checked)) == sorted(map(str, every))
+
+
 @pytest.mark.parametrize("message", sorted(TO_CONTROLLER))
 def test_what_reaches_a_controller_has_no_rider_word(message: str) -> None:
-    (entry,) = [e for e in ws_entries() if e["type"] == message]
-    assert hits(schema_of(entry), words("rider-words.txt")) == []
+    for entry in _controller_bound(message):
+        assert hits(schema_of(entry), words("rider-words.txt")) == [], entry["schema"]
 
 
 @pytest.mark.parametrize("message", sorted(TO_CONTROLLER))
 def test_what_reaches_a_controller_has_no_token_code_account_or_device(message: str) -> None:
-    (entry,) = [e for e in ws_entries() if e["type"] == message]
-    assert hits(schema_of(entry), words("credential-words.txt")) == []
+    for entry in _controller_bound(message):
+        assert hits(schema_of(entry), words("credential-words.txt")) == [], entry["schema"]
 
 
 def test_http_errors_are_the_closed_enum() -> None:
@@ -405,6 +592,19 @@ def test_http_errors_are_the_closed_enum() -> None:
         "cannot_control",
         "internal_error",
     }
+    # Every failure of a join is one answer (ADR 0002 section 8): it tells nothing about who is
+    # there, and `cannot_join` is the join route's answer only.
+    assert (
+        by_route["POST /api/live/join"]
+        & {
+            "invalid_code",
+            "controllers_full",
+            "sessions_full",
+            "cannot_control",
+        }
+        == set()
+    )
+    assert [r for r, codes in by_route.items() if "cannot_join" in codes] == ["POST /api/live/join"]
     assert by_route == ROUTE_ERRORS
 
 
@@ -431,6 +631,13 @@ ROUTE_ERRORS: dict[str, set[str]] = {
         "body_too_large",
         "invalid_code",
         "controllers_full",
+        "too_many_requests",
+        "internal_error",
+    },
+    "POST /api/live/join": {
+        "invalid_request",
+        "body_too_large",
+        "cannot_join",
         "too_many_requests",
         "internal_error",
     },

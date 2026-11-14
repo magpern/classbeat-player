@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/rider-left.schema.json",
+  "title": "RiderLeft",
+  "description": "Server to the host only (ADR 0007 section 2): `left` when the rider token's last connection closed (it may come back within 5 minutes and is then announced again), `dropped` when the host removed the rider.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "rider",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "rider_left"
+    },
+    "rider": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{11}$",
+      "maxLength": 11,
+      "description": "The rider's id: 8 random bytes, base64url without padding, given by the server at the join, never derived from the token or the nickname, the same for the token's whole life."
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "left",
+        "dropped"
+      ]
+    }
+  }
+}

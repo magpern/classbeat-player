@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/join-request.schema.json",
+  "title": "JoinRequest",
+  "description": "The body of POST /api/live/join (ADR 0007 section 2, ADR 0002 section 8), sent with no credential: exactly the join code and a nickname. The rider's FTP and maximum heart rate stay on the phone and have no field here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "nickname"
+  ],
+  "properties": {
+    "session": {
+      "type": "string",
+      "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "maxLength": 9,
+      "description": "The join code as XXXX-XXXX; the page normalises what was typed (case, spaces, hyphens) before sending. It only names the session."
+    },
+    "nickname": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 24,
+      "description": "The rider's nickname, 1 to 24 characters with control characters removed by the server; always rendered as text, held in memory only, for the session."
+    }
+  }
+}

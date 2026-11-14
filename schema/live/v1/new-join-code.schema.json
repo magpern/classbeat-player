@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/new-join-code.schema.json",
+  "title": "NewJoinCode",
+  "description": "Host to server: make a new join code (ADR 0007 section 3). The old code then finds nothing, and the current control code ends with it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "new_join_code"
+    }
+  }
+}

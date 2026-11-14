@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "type": "rider_state",
+  "run": "Q2xhc3NSdW4tMDAwMDAwMQ",
+  "seq": 0,
+  "status": "not_started",
+  "classMs": 0,
+  "lengthMs": 2700000,
+  "classRemainingMs": 2700000,
+  "now": {
+    "index": 0,
+    "zone": {
+      "number": 1,
+      "name": "Easy",
+      "effort": {
+        "ftpPct": null,
+        "hrmaxPct": null,
+        "rpe": null
+      }
+    },
+    "position": "seated",
+    "test": null,
+    "remainingMs": 300000
+  },
+  "next": []
+}

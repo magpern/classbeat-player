@@ -55,6 +55,18 @@ def test_the_live_contract_has_every_schema_of_adr_0005() -> None:
             "ack",
             "end",
             "ended",
+            # Riders (ADR 0007 section 2): the join route and the WebSocket messages
+            "join-request",
+            "join-answer",
+            "welcome-rider",
+            "rider-state",
+            "rider-joined",
+            "rider-left",
+            "drop-rider",
+            "lock",
+            "lock-state",
+            "new-join-code",
+            "join-code",
         ]
     )
 

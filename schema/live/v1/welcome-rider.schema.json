@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/welcome-rider.schema.json",
+  "title": "RiderWelcome",
+  "description": "Server to a rider only, after a good hello (ADR 0007 section 2): its role and whether the host is connected. The host's and a controller's welcome is welcome.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "role",
+    "hostConnected"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "welcome"
+    },
+    "role": {
+      "type": "string",
+      "const": "rider"
+    },
+    "hostConnected": {
+      "type": "boolean"
+    }
+  }
+}

@@ -20,6 +20,7 @@ class Error(StrEnum):
     cannot_control = 'cannot_control'
     invalid_code = 'invalid_code'
     controllers_full = 'controllers_full'
+    cannot_join = 'cannot_join'
     too_many_requests = 'too_many_requests'
     internal_error = 'internal_error'
 
@@ -31,6 +32,6 @@ class LiveErrorBody(BaseModel):
     error: Annotated[
         Error,
         Field(
-            description='POST /api/live/sessions: 401 invalid_token, token_unknown, token_expired or token_revoked (the device token), 409 sessions_full (3 per account). POST /api/live/controller: 403 cannot_control, for every failure. POST /api/live/control: 403 invalid_code (unknown session or wrong code), 409 controllers_full. Any route: 413 body_too_large (the body cap runs before routing), 422 invalid_request (not on POST /api/live/sessions, which takes no body), 429 too_many_requests, 500 internal_error.'
+            description='POST /api/live/sessions: 401 invalid_token, token_unknown, token_expired or token_revoked (the device token), 409 sessions_full (3 per account). POST /api/live/controller: 403 cannot_control, for every failure. POST /api/live/control: 403 invalid_code (unknown session or wrong code), 409 controllers_full. POST /api/live/join: 403 cannot_join, for every failure (unknown or earlier code, locked, full). Any route: 413 body_too_large (the body cap runs before routing), 422 invalid_request (not on POST /api/live/sessions, which takes no body), 429 too_many_requests, 500 internal_error.'
         ),
     ]

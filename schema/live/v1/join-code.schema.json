@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classbeat.example/schema/live/v1/join-code.schema.json",
+  "title": "JoinCode",
+  "description": "Server to the host only: the session's new join code, for the room screen and its QR codes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "code"
+  ],
+  "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "The live contract's version."
+    },
+    "type": {
+      "type": "string",
+      "const": "join_code"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+      "maxLength": 9,
+      "description": "The join code as XXXX-XXXX."
+    }
+  }
+}
