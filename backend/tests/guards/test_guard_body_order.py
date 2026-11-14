@@ -43,6 +43,8 @@ READS_BODY = frozenset(
         # ADR 0002, section 8: becoming a controller, by sign-in and by control code.
         ("POST", "/api/live/controller"),
         ("POST", "/api/live/control"),
+        # ADR 0007, section 2: joining as a rider.
+        ("POST", "/api/live/join"),
     }
 )
 

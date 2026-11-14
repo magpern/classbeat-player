@@ -88,6 +88,9 @@ LINK_CODE_ROUTES = frozenset({("POST", "/api/source/token")})
 # Section 8, "Becoming a controller": the join code and the control code in the body, from the
 # phone's page. No cookie and no other credential.
 CONTROL_CODE_ROUTES = frozenset({("POST", "/api/live/control")})
+# Section 8, "Joining as a rider" (ADR 0007): the join code and a nickname in the body, from the
+# rider's page. No cookie and no other credential.
+JOIN_ROUTES = frozenset({("POST", "/api/live/join")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -95,12 +98,15 @@ NO_CREDENTIAL_ROUTES = frozenset(
         ("POST", "/api/pairing/token"),
     }
 )
-# The companion page's built files (control_page.py, #266): no credential, no dependency, no
-# body; the path parameter is a file name looked up in a fixed table, never a credential.
+# The phone pages' built files (control_page.py): the companion's (#266) and the rider's (#360).
+# No credential, no dependency, no body; the path parameter is a file name looked up in a fixed
+# table, never a credential. The rider page's join code is in the fragment, never the path.
 PAGE_ROUTES = frozenset(
     {
         ("GET", "/control"),
         ("GET", "/control/{name:path}"),
+        ("GET", "/j"),
+        ("GET", "/j/{name:path}"),
     }
 )
 # The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
@@ -177,6 +183,13 @@ def test_the_control_code_route_takes_no_cookie_and_no_bearer_token() -> None:
     assert all(path.startswith("/api/live/") for _, path in CONTROL_CODE_ROUTES)
 
 
+def test_the_join_route_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token) | _using(app_only)
+    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    assert not JOIN_ROUTES & (bearer | cookie)
+    assert all(path.startswith("/api/live/") for _, path in JOIN_ROUTES)
+
+
 def test_every_route_is_on_one_of_the_lists() -> None:
     # A new route fails here until someone has said which credential it takes.
     listed = (
@@ -186,6 +199,7 @@ def test_every_route_is_on_one_of_the_lists() -> None:
         | SOURCE_TOKEN_ROUTES
         | LINK_CODE_ROUTES
         | CONTROL_CODE_ROUTES
+        | JOIN_ROUTES
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES | PAGE_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES
@@ -196,7 +210,7 @@ def test_the_page_routes_take_no_dependency_and_only_read() -> None:
     pages = [r for r in _routes() if (r.method, r.path) in PAGE_ROUTES]
     assert {(r.method, r.path) for r in pages} == PAGE_ROUTES
     assert all(not r.dependencies for r in pages)
-    assert all(r.method == "GET" and r.path.startswith("/control") for r in pages)
+    assert all(r.method == "GET" and r.path.startswith(("/control", "/j")) for r in pages)
 
 
 def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_alone() -> None:
@@ -220,7 +234,7 @@ def test_every_cookie_route_applies_the_origin_check() -> None:
 def test_no_route_takes_a_token_in_its_path() -> None:
     # Principle 3. The path parameters are a session's, a device's and a link's id, a
     # source's own class id, a class row's id and a passkey row's id, and a file name of the
-    # companion page: not credentials.
+    # companion page or the rider page: not credentials.
     parameters = {r.path for r in _routes() if "{" in r.path}
     assert parameters == {
         "/api/site/sessions/{session_id}",
@@ -231,6 +245,7 @@ def test_no_route_takes_a_token_in_its_path() -> None:
         "/api/site/classes/{class_id}",
         "/api/site/passkeys/{passkey_id}",
         "/control/{name:path}",
+        "/j/{name:path}",
     }
 
 

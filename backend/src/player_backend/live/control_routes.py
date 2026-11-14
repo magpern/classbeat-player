@@ -71,7 +71,7 @@ router = APIRouter()
 sign_in_router = APIRouter(route_class=_OneRefusal)
 
 
-def _body(raw: Body, schema: str) -> Message:
+def request_body(raw: Body, schema: str) -> Message:
     """The body as the contract's `schema` holds it, or 422 `invalid_request`."""
     try:
         message = decode(raw.raw.decode("utf-8")) if is_json(raw.content_type) else None
@@ -82,7 +82,7 @@ def _body(raw: Body, schema: str) -> Message:
     return message
 
 
-def _not_limited(request: Request, address_hash: bytes) -> None:
+def address_not_limited(request: Request, address_hash: bytes) -> None:
     wait = live_service(request).refused_for(address_hash)
     if wait is not None:
         raise ApiError(429, "too_many_requests", {"Retry-After": str(wait)})
@@ -141,7 +141,7 @@ def by_sign_in(
     who: TheCaller,
     request: Request,
 ) -> JSONResponse:
-    body = _body(raw, "controller-request.schema.json")
+    body = request_body(raw, "controller-request.schema.json")
     if cookie is None:  # not reached: the session dependency refused it already
         raise ApiError(403, "cannot_control")
     # The hash of the site session that asked: the re-check drops the controller with it.
@@ -156,8 +156,8 @@ def by_sign_in(
 
 @router.post("/control")
 def by_code(raw: RawBody, who: TheCaller, request: Request) -> JSONResponse:
-    body = _body(raw, "control-request.schema.json")
-    _not_limited(request, who.address_hash)
+    body = request_body(raw, "control-request.schema.json")
+    address_not_limited(request, who.address_hash)
     exchanged = live_service(request).by_code(
         body["session"], body["code"], who.address_hash, who.info
     )
