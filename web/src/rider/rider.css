@@ -4,6 +4,23 @@
    companion's pages with more fields. Colours: tokens.css only. Hue only on things that stand for
    a zone: the gel and the next chips. */
 
+/* The rider's sizes: the companion's, a step larger, so every floored text keeps its 5 % margin
+   over R1's floors whatever whole pixel a Chrome build rounds a cap height to. */
+:root {
+  --c-hero: min(10.85dvh, 23.8vw);
+  --c-value: min(5.05dvh, 10.4vw);
+  --c-minor: min(3.4dvh, 7vw);
+  --c-label: min(2.7dvh, 5.3vw);
+}
+@media (orientation: landscape) {
+  :root {
+    --c-hero: min(18.9dvh, 10.6vw);
+    --c-value: min(8.2dvh, 4.6vw);
+    --c-minor: min(5.6dvh, 3.3vw);
+    --c-label: min(4.7dvh, 2.7vw);
+  }
+}
+
 /* The class view: top, gel, clock, effort, next, one key. */
 .run.rider {
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
@@ -48,7 +65,7 @@
 
 /* The join page: two numbers side by side, Forget and the main key in one row. A form may scroll
    down, since the keyboard covers much of a phone. */
-.page.form { height: auto; min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.page.form { padding-left: var(--c-pad); padding-right: var(--c-pad); height: auto; min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 body:has(> .page.form) { overflow-y: auto; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: max(12px, 3vw); }
 .pair .field { min-width: 0; }
