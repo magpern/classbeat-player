@@ -61,6 +61,14 @@ check "request policy change runs backend and web" "backend web" "$(flags push "
 before_ctl="$(git rev-parse HEAD)"
 commit backend/tests/test_control_page.py
 check "control page test change runs backend and web" "backend web" "$(flags push "$before_ctl" HEAD)"
+before_rp="$(git rev-parse HEAD)"
+commit backend/src/player_backend/rider_page_policy.py
+check "rider page policy change runs backend and web" "backend web" "$(flags push "$before_rp" HEAD)"
+before_cp="$(git rev-parse HEAD)"
+commit backend/src/player_backend/control_page_policy.py
+check "control page policy change runs backend and web" "backend web" "$(flags push "$before_cp" HEAD)"
+commit backend/src/player_backend/other_page_policy.py
+check "another backend source file runs backend only" "backend" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 commit backend/tests/test_other.py
 check "other backend test runs backend only" "backend" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 
