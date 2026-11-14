@@ -22,8 +22,9 @@ else
   # not what main gained since. Pushes compare the two tips.
   range="$base $head"
   [ "${EVENT-}" = pull_request ] && range="$base...$head"
+  # --no-renames lists both paths of a rename, so moving web/a.ts to docs/a.ts is not docs-only (#438).
   # shellcheck disable=SC2086
-  files="$(git diff --name-only $range 2>/dev/null)" || all=1
+  files="$(git diff --no-renames --name-only $range 2>/dev/null)" || all=1
 fi
 
 # A change that touches only documentation runs no tests (issue #435, owner 2026-11-14): every
@@ -71,7 +72,9 @@ flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
 # through the player and schema flags.
 flag web '^(web/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$)'
 # Something other than documentation changed (a docs-only change sets every flag false, above).
-flag code '.'
+# An empty diff with a known base (an empty or rebased-away change) fails safe: code is true, so the
+# script tests and shellcheck run as before (#438).
+if [ -z "$files" ]; then echo "code=true" >>"$out"; else flag code '.'; fi
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.
 flag desktop '^(player/|web/|schema/|scripts/(build|package|release)[^/]*|\.github/workflows/|(.*/)?(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml|Cargo\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt))'

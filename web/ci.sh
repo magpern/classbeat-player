@@ -60,6 +60,12 @@ check_shards() {
   done <<<"$listed"
   [ "$bad" -eq 0 ] || return 1
   echo "spec-shards: $(wc -l <<<"$on_disk" | tr -d ' ') spec files, each in exactly one shard"
+  # site-checks' own "covers every state" test returns early under SPEC_ONLY, so it is checked here.
+  local site_parts=()
+  while read -r part; do site_parts+=("$part"); done < <(manifest_lines | awk -F';' '$2=="site-checks.test.ts" && $3!=""{print $3}')
+  if [ "${#site_parts[@]}" -gt 0 ]; then
+    node --import tsx test/lib/check-site-shards.ts "${site_parts[@]}"
+  fi
 }
 
 # The SPEC_ONLY regex of the part "*": every shot none of the file's other parts takes.
