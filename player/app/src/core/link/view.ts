@@ -1,6 +1,7 @@
 // What the screens show of the music link (ADR 0001 link states, rules 5 to 7). Pure.
 import { positionAt } from "../clock/clock.ts";
 import type { ClockState } from "../clock/clock.ts";
+import type { NoReadingReason } from "./reader.ts";
 import { timeLeftMs } from "./totals.ts";
 import type { LinkModel, LinkPlan, LinkStateName } from "./types.ts";
 
@@ -10,6 +11,8 @@ export interface LinkView {
   readonly available: boolean;
   /** A reader exists but cannot work on this computer: the reason following is not offered. */
   readonly unavailable: boolean;
+  /** Why the reader has no reading right now (shown in the status), or null. */
+  readonly noReading: NoReadingReason | null;
   readonly state: LinkStateName;
   /** The clock is marked on screen while it only guesses (Coasting, Off the list). */
   readonly guessing: boolean;
@@ -36,7 +39,7 @@ export interface LinkView {
 /** A measured crossfade this close to the planned one is not worth a remark. */
 export const CROSSFADE_DIFF_MS = 1000;
 
-export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean, unavailable = false): LinkView {
+export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean, unavailable = false, noReading: NoReadingReason | null = null): LinkView {
   const live = l.announce !== null && now <= l.announce.until;
   const holdRemaining = l.held && l.holdUntil !== null ? Math.max(0, l.holdUntil - now) : null;
   const measured = l.measuredCrossfadeMs;
@@ -44,6 +47,7 @@ export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, leng
     mode: l.mode,
     available,
     unavailable,
+    noReading,
     state: l.state,
     guessing: l.state === "Coasting" || l.state === "Off the list",
     songIndex: l.songIndex,

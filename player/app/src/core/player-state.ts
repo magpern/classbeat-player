@@ -15,6 +15,7 @@ import { step } from "./link/follower.ts";
 import { linkPlanFrom } from "./link/plan.ts";
 import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
+import type { NoReadingReason } from "./link/reader.ts";
 import { linkViewAt } from "./link/view.ts";
 import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
 import { bandRoutes } from "./room/band-routes.ts";
@@ -144,14 +145,14 @@ export function isFollowing(s: PlayerState): boolean {
   return l !== null && canFollow(l) && l.link.mode === "following";
 }
 
-export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapshot {
+export function snapshotOf(s: PlayerState, now: number, canSend = false, noReading: NoReadingReason | null = null): Snapshot {
   const l = s.loaded;
   return {
     loadId: s.loadId,
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view: l ? viewAt(l.clock, l.plan, now) : null,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, noReading) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
     error: s.error,

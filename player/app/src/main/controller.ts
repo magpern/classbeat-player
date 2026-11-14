@@ -55,7 +55,7 @@ export function createController(now: () => number = () => performance.now(), re
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
     if (reader.unavailable?.() === true) state = withoutReader(state);
     state = advance(state, t, reader.latest(t));
-    const snap = snapshotOf(state, t, transport !== null);
+    const snap = snapshotOf(state, t, transport !== null, reader.reason?.() ?? null);
     if (snap.view?.status === "ended" && endedLoad !== snap.loadId) {
       endedLoad = snap.loadId;
       for (const l of enders) l();

@@ -8,11 +8,11 @@
 import { execFile } from "node:child_process";
 import { parseMacOutput } from "../core/link/macos-parse.ts";
 import { reasonForFailure } from "../core/link/macos-reason.ts";
-import { MAC_FIRST_READ_MS, MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../core/link/macos-scripts.ts";
+import { MAC_FIRST_READ_MS, MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_PROMPT_WAIT_MS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../core/link/macos-scripts.ts";
 import type { MusicReader, NoReadingReason } from "../core/link/reader.ts";
 import type { MusicTransport } from "../core/link/transport.ts";
 import { callWith, createPolledReader, systemEvery, systemNow } from "./polled-reader.ts";
-import type { ExecFileFn, ExecOptions, PollDeps } from "./polled-reader.ts";
+import type { ExecFileFn, ExecOptions, Killable, PollDeps } from "./polled-reader.ts";
 
 export type { ExecFileFn, ExecOptions } from "./polled-reader.ts";
 
@@ -34,7 +34,7 @@ export const FIRST_READ_OPTIONS: ExecOptions = Object.freeze({ ...EXEC_OPTIONS, 
 export const FIRST_GIVE_UP_MS = MAC_FIRST_READ_MS + 1000;
 
 const systemExec: ExecFileFn = (file, args, options, done) => {
-  execFile(file, [...args], options, (error, stdout) => done(error, stdout));
+  return execFile(file, [...args], options, (error, stdout) => done(error, stdout));
 };
 
 export type MacDeps = PollDeps;
@@ -58,6 +58,9 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
   let why: NoReadingReason | null = null;
   /** Only the newest read may say why: a given-up call that answers late must not. */
   let newest = 0;
+  /** The read in flight: when it began and its child, so stopping Follow can end it. */
+  let began: number | null = null;
+  let child: Killable | null = null;
 
   /**
    * The read call. Before the first answer it waits for the Automation prompt; after that a read
@@ -65,14 +68,42 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
    */
   const readRun: ExecFileFn = (file, args, _options, done) => {
     const mine = ++newest;
-    const began = now();
+    const start = now();
+    began = start;
     const limit = permitted ? MAC_TIMEOUT_MS : MAC_FIRST_READ_MS;
-    run(file, args, permitted ? EXEC_OPTIONS : FIRST_READ_OPTIONS, (error, stdout) => {
-      const late = error === null && now() - began > limit;
+    const started = run(file, args, permitted ? EXEC_OPTIONS : FIRST_READ_OPTIONS, (error, stdout) => {
+      const late = error === null && now() - start > limit;
       const failure = late ? Object.assign(new Error("read took too long"), { killed: true }) : error;
-      if (mine === newest) why = failure === null ? null : reasonForFailure(failure);
+      if (mine === newest) {
+        why = failure === null ? null : reasonForFailure(failure);
+        began = null;
+        child = null;
+        // Automation was taken away while we ran: the next prompt gets the long first-read wait again.
+        if (why === "not-permitted") permitted = false;
+      }
       done(failure, failure === null ? stdout : "");
     });
+    child = started ?? null;
+  };
+
+  /** Ends the read in flight (Follow stopped, or the app is quitting); never throws. */
+  const endRead = (): void => {
+    const c = child;
+    child = null;
+    began = null;
+    try {
+      c?.kill();
+    } catch {
+      // already gone
+    }
+  };
+
+  /** Why there is no reading: the last failure, or that the read in flight is taking long. */
+  const reasonNow = (): NoReadingReason | null => {
+    if (why !== null || began === null) return why;
+    const waited = now() - began;
+    if (waited <= MAC_TIMEOUT_MS) return null;
+    return !permitted && waited <= MAC_PROMPT_WAIT_MS ? "waiting-for-permission" : "not-answering";
   };
   const read = callWith(readRun, OSASCRIPT, EXEC_OPTIONS, now);
 
@@ -94,6 +125,7 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
       },
       command: (action, done) => call(osascriptArgs(action), () => done()),
       stopped() {
+        endRead();
         why = null;
         newest++;
       },
@@ -102,5 +134,5 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
     deps.every ?? systemEvery,
   );
 
-  return { kind: "macos", latest: life.latest, setActive: life.setActive, send: life.send, unavailable: life.unavailable, reason: () => why };
+  return { kind: "macos", latest: life.latest, setActive: life.setActive, send: life.send, unavailable: life.unavailable, reason: reasonNow };
 }

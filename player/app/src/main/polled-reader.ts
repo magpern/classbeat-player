@@ -18,7 +18,12 @@ export interface ExecOptions {
   readonly encoding: "utf8";
 }
 
-export type ExecFileFn = (file: string, args: readonly string[], options: ExecOptions, done: (error: Error | null, stdout: string) => void) => void;
+/** The child a call started, when the runner hands it back: only `kill` is used, to end it early. */
+export interface Killable {
+  kill(): unknown;
+}
+
+export type ExecFileFn = (file: string, args: readonly string[], options: ExecOptions, done: (error: Error | null, stdout: string) => void) => void | Killable;
 
 export interface PollDeps {
   readonly exec?: ExecFileFn;

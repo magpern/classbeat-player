@@ -4,6 +4,8 @@
 // not compile is -2741) is a script failure. A call that was killed at its limit is "not answering".
 import type { NoReadingReason } from "./reader.ts";
 
+/** AppleScript's own "event timed out": Spotify did not answer, which is not a broken script. */
+const TIMED_OUT = /\(-1712\)|apple event timed out/i;
 const REFUSED = /\(-1743\)|not authori[sz]ed to send apple events/i;
 const NOT_RUNNING = /\(-600\)|application isn.t running/i;
 
@@ -19,6 +21,7 @@ export function reasonForFailure(error: unknown): NoReadingReason {
   const text = failureText(error);
   if (REFUSED.test(text)) return "not-permitted";
   if (NOT_RUNNING.test(text)) return "not-running";
+  if (TIMED_OUT.test(text)) return "not-answering";
   const e = (typeof error === "object" && error !== null ? error : {}) as { killed?: unknown; signal?: unknown };
   if (e.killed === true || (typeof e.signal === "string" && e.signal !== "")) return "not-answering";
   return "script-failed";
@@ -31,6 +34,8 @@ export function describeReason(reason: NoReadingReason): string {
       return "Spotify is not running.";
     case "not-permitted":
       return "macOS has not allowed this app to control Spotify. Switch it on in System Settings, Privacy & Security, Automation, this app, Spotify.";
+    case "waiting-for-permission":
+      return "Waiting for macOS to let this app control Spotify. Choose OK if it asks.";
     case "not-answering":
       return "Spotify is not answering.";
     case "script-failed":

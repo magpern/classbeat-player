@@ -16,6 +16,8 @@ export const MAC_TIMEOUT_MS = 700;
  * take a while to click it: the first reads wait this long (then it is the normal limit above).
  */
 export const MAC_FIRST_READ_MS = 10 * 60 * 1000;
+/** A first read this long without an answer is no longer a person at the prompt: Spotify is not answering. */
+export const MAC_PROMPT_WAIT_MS = 30 * 1000;
 /** One line of text is expected; more than this is refused. */
 export const MAC_MAX_OUTPUT_BYTES = 8192;
 
