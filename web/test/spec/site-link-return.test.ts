@@ -2,9 +2,12 @@
 // decisions 4 and 5): the link request carries the entry read from the sign-in fragment, the
 // fake backend mails it after the token, and a new page that opens the mail's link signs in and
 // loads the companion. Nothing is kept in storage on the way.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
+import { WEB_DIR } from "../lib/browser.ts";
 import { ORIGIN, launchOffline, openSite, traps, waitForApi } from "../lib/site-fake.ts";
 import type { FakeSite, OpenOptions, Script } from "../lib/site-fake.ts";
 import { EMAIL, LINK_TOKEN, PASSKEY_OPTIONS } from "../lib/site-states.ts";
@@ -163,6 +166,14 @@ describe("a sign-in by email link in a new tab (ADR 0006, decisions 4 and 5)", (
     await site.page.fill("input[name=email]", EMAIL);
     await press(site.page, "Email me a sign-in link");
     await site.page.waitForSelector(".plate");
+    // The words are the site spec's row for this 429 (docs/design/site.md), read from it: the quoted
+    // phrases of the "Too many requests" row, with N the minutes of Retry-After (3000 s).
+    const row = readFileSync(join(WEB_DIR, "..", "docs", "design", "site.md"), "utf8").split("\n").find((l) => l.startsWith("| Too many requests | Plate "));
+    assert.ok(row, "the site spec's limit row was not found");
+    const words = [...(row.split("|")[2] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1].replace("about N minutes", "about 50 minutes"));
+    assert.equal(words.length, 3, `the limit row's phrases: ${words.join(" / ")}`);
+    const plate = (await site.page.innerText(".plate")).replace(/\s+/g, " ");
+    for (const w of words) assert.ok(plate.includes(w), `the plate lacks "${w}": ${plate}`);
     assert.equal(site.api.filter((a) => a.route === "POST sign-in/link").length, 1);
     assert.deepEqual(mailbox, [], "no link is mailed for a refused request");
     await site.context.close();
