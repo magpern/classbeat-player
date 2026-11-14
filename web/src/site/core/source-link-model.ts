@@ -101,7 +101,9 @@ const printable = (s: string): boolean => [...s].every((c) => c.charCodeAt(0) >=
  * this computer as the backend allows for development.
  */
 export function backAddressOf(ask: LinkAsk, redirect: unknown): string | null {
-  if (typeof redirect !== "string" || redirect.length > 4000 || !printable(redirect)) return null;
+  // A backslash is read as a slash by the browser's URL parser but not by the backend's, so the two
+  // could disagree on the host (#422 N2): an address holding one is never left for.
+  if (typeof redirect !== "string" || redirect.length > 4000 || !printable(redirect) || redirect.includes("\\")) return null;
   if (!redirect.startsWith(`${ask.redirectUri}?`) || ask.redirectUri.includes("?") || ask.redirectUri.includes("#")) return null;
   let url: URL;
   try {

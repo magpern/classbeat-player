@@ -55,7 +55,7 @@ describe("a sign-in that returns to the web player page", () => {
       await tab.page.waitForSelector(".btn.primary:focus");
       assert.equal(tab.page.url(), `${ORIGIN}/sign-in`);
       const history = (await traps(tab.page)).filter((x) => x.kind === "history");
-      assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in"]);
+      assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in state null"]);
       await press(tab.page, "Sign in");
       await tab.page.waitForURL(`${ORIGIN}${landing}`);
       assert.equal(await tab.page.title().then((x) => x.startsWith("Play")), true, "the play page is loaded in full, not drawn by the site");

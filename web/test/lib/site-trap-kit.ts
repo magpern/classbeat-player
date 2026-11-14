@@ -40,6 +40,10 @@ export interface Kit {
   readonly onGet: (proto: object, prop: string, label: string, before: (self: unknown) => void) => void;
   readonly onSetWith: (proto: object, prop: string, label: string, check: (self: unknown, v: unknown) => unknown) => void;
   readonly onSet: (proto: object, prop: string, label: string, before: (self: unknown, v: unknown) => void) => void;
+  /** The captured `structuredClone`: a value copied the way `history` copies a state. */
+  readonly clone: (v: unknown) => unknown;
+  /** A cloned value written out in full, every string in it quoted, with no method of the page's. */
+  readonly shown: (v: unknown) => string;
 }
 
 export function trapKit(): Kit {
@@ -97,6 +101,46 @@ export function trapKit(): Kit {
     }
     return matches(JS, t);
   };
+  // A clone (a history state) written out: its own keys and values, a Map's or a Set's entries, a
+  // wrapped string's text and a date's time, through captured built-ins and brand checks only (no
+  // toJSON, toString, iterator or instanceof of the page's), each object once.
+  const clone = structuredClone;
+  const { ownKeys } = Reflect;
+  const isArray = Array.isArray;
+  const [mapEach, setEach, strOf, timeOf] = [Map.prototype.forEach, Set.prototype.forEach, String.prototype.valueOf, Date.prototype.getTime] as Fn[];
+  /** Whether `f` takes `v` as its receiver: a built-in's brand check, which page code cannot change. */
+  const branded = (f: Fn, v: unknown, a: unknown[]): boolean => {
+    try {
+      apply(f, v, a);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const shown = (v: unknown): string => {
+    const seen = create(null) as Record<number, unknown>;
+    let n = 0;
+    const out = (x: unknown): string => {
+      if (typeof x === "string") return quote(x);
+      if (typeof x === "bigint") return `${S(x)}n`;
+      if (typeof x !== "object" || x === null) return S(x);
+      for (let i = 0; i < n; i += 1) if (seen[i] === x) return "[seen]";
+      seen[n] = x;
+      n += 1;
+      let body = "";
+      const add = (part: string): void => {
+        body += (body === "" ? "" : ",") + part;
+      };
+      if (branded(strOf, x, [])) add(`String ${quote(apply(strOf, x, []) as string)}`);
+      if (branded(timeOf, x, [])) add(`Date ${S(apply(timeOf, x, []))}`);
+      branded(mapEach, x, [(val: unknown, key: unknown) => add(`${out(key)}=>${out(val)}`)]);
+      branded(setEach, x, [(val: unknown) => add(out(val))]);
+      const keys = ownKeys(x);
+      for (let i = 0; i < keys.length; i += 1) add(`${typeof keys[i] === "string" ? quote(keys[i]) : S(keys[i])}:${out(own(x, keys[i])?.value)}`);
+      return isArray(x) ? `[${body}]` : `{${body}}`;
+    };
+    return out(v);
+  };
   /** Calls `check` ahead of every call of `owner[name]`, then the original with the arguments `check` returns. */
   const wrapWith: Kit["wrapWith"] = (owner, name, label, check) => {
     const o = owner as Record<string, unknown>;
@@ -143,5 +187,5 @@ export function trapKit(): Kit {
       before(self, v);
       return v;
     });
-  return { apply, construct, own, define, S, note, str, strAt, lower, bare, starts, words, jsUrl, wrapWith, wrap, onGet, onSetWith, onSet };
+  return { apply, construct, own, define, S, note, str, strAt, lower, bare, starts, words, jsUrl, wrapWith, wrap, onGet, onSetWith, onSet, clone, shown };
 }

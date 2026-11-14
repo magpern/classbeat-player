@@ -119,6 +119,49 @@ describe("the trap's built-ins", () => {
       await site.context.close();
     });
   }
+
+  // A history entry's state is noted in full, also with the page's toJSON, toString, valueOf and
+  // collection methods replaced (#420 N2, #423 N1): every string in it is in the note.
+  for (const call of ["pushState", "replaceState"]) {
+    it(`still notes every string in the state given to ${call} with every method replaced`, async () => {
+      const site = await open();
+      // The state is made first: the replaced array iterator would empty the Map and the Set.
+      await site.page.evaluate(`(() => {
+        const state = { a: ['s-one'], o: { deep: { er: 's-two' } }, m: new Map([['s-three', 's-four']]), s: new Set(['s-five']), w: new String('s-six') };
+        ${tamper}
+        Object.defineProperty(Object.prototype, 'toJSON', { value: () => ({}), writable: true, configurable: true }); put(Object.prototype, 'toString', () => 'title'); put(String.prototype, 'valueOf', () => 'title');
+        put(Map.prototype, 'forEach', () => undefined); put(Set.prototype, 'forEach', () => undefined); put(Array, 'isArray', () => false);
+        put(Reflect, 'ownKeys', () => []); put(globalThis, 'structuredClone', () => null);
+        put(Object, 'getOwnPropertyDescriptor', () => undefined);
+        try { history.${call}(state, '', '/sign-in'); } finally { restore(); delete Object.prototype.toJSON; }
+      })()`);
+      const entries = (await traps(site.page)).filter((t) => t.kind === "history" && t.detail.startsWith(`${call} /sign-in state `));
+      assert.equal(entries.length, 1, JSON.stringify(entries));
+      for (const s of ["s-one", "s-two", "s-three", "s-four", "s-five", "s-six"]) assert.ok(entries[0].detail.includes(`"${s}"`), `${s} not noted: ${entries[0].detail}`);
+      await site.context.close();
+    });
+  }
+});
+
+describe("a history entry's state (#420 N2, #423 N1)", () => {
+  it("is kept as it was noted, even from a getter that answers differently on a second read (#312)", async () => {
+    const site = await open();
+    const kept = await site.page.evaluate(() => {
+      let reads = 0;
+      history.pushState({ get v() { reads += 1; return reads === 1 ? "first" : "second"; } }, "", "/sign-in");
+      return (history.state as { v: string }).v;
+    });
+    assert.equal(kept, "first");
+    assert.ok(has(await traps(site.page), "history", 'pushState /sign-in state {"v":"first"}'), JSON.stringify(await traps(site.page)));
+    await site.context.close();
+  });
+
+  it("is noted as null when none is given, and the address as given", async () => {
+    const site = await open();
+    await site.page.evaluate(() => history.replaceState(null, "", "/sign-in"));
+    assert.ok(has(await traps(site.page), "history", "replaceState /sign-in state null"));
+    await site.context.close();
+  });
 });
 
 describe("an Attr written with undefined (native parity)", () => {

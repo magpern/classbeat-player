@@ -5,7 +5,7 @@
 import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, Request, Route } from "playwright-core";
 import { chromePath } from "./browser.ts";
-import { serveFile } from "./site-files.ts";
+import { serveFile, withCsp } from "./site-files.ts";
 import { instrument } from "./site-instrument.ts";
 import { linkRequest } from "./site-mail.ts";
 import type { Passkey } from "./site-instrument.ts";
@@ -189,7 +189,7 @@ async function answer(site: FakeSite, script: Script, turns: Map<string, number>
   }
   return route.fulfill({
     status: reply.status,
-    headers: { "Cache-Control": "no-store", "Content-Security-Policy": CSP, ...(reply.body === undefined ? {} : { "Content-Type": "application/json" }), ...reply.headers },
+    headers: withCsp(CSP, { "Cache-Control": "no-store", ...(reply.body === undefined ? {} : { "Content-Type": "application/json" }), ...reply.headers }),
     body: reply.body === undefined ? "" : JSON.stringify(reply.body),
   });
 }

@@ -49,7 +49,7 @@ async function signInByLink(link: string, script: Script): Promise<FakeSite> {
   await tab.page.waitForSelector(".btn.primary:focus");
   assert.equal(tab.page.url(), `${ORIGIN}/sign-in`, "the whole fragment leaves the address bar at once");
   const history = (await traps(tab.page)).filter((x) => x.kind === "history");
-  assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in"]);
+  assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in state null"]);
   assert.deepEqual((await traps(tab.page)).filter((x) => x.kind !== "history"), []);
   return tab;
 }
@@ -74,6 +74,7 @@ describe("a sign-in by email link in a new tab (ADR 0006, decisions 4 and 5)", (
     assert.deepEqual(JSON.parse(tab.api[0].body ?? ""), { token: LINK_TOKEN }, "only the token goes to complete the sign-in");
     for (const u of tab.urls) assert.ok(!u.includes(LINK_TOKEN.slice(7)) && !u.includes(JOIN) && !u.includes("return=") && !u.includes("?"), `the fragment reached a server: ${u}`);
     assert.deepEqual(tab.external, []);
+    assert.deepEqual(tab.left, [], "a navigation to the linked app's site");
     assert.equal(await tab.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
     await tab.context.close();
   });

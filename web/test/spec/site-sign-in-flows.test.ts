@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { DIST } from "../lib/browser.ts";
-import { ORIGIN, launchOffline, openSite, traps, waitForApi } from "../lib/site-fake.ts";
+import { ORIGIN, launchOffline, openSite, settled, traps, waitForApi } from "../lib/site-fake.ts";
 import { heapHolds } from "../lib/site-heap.ts";
 import type { FakeSite, OpenOptions } from "../lib/site-fake.ts";
 import { LINK_TOKEN, PASSKEY_OPTIONS } from "../lib/site-states.ts";
@@ -75,7 +75,7 @@ describe("the link token (ADR 0002, section 4, steps 5 and 6)", () => {
     assert.equal(site.page.url(), `${ORIGIN}/sign-in`);
     assert.equal(site.api.length, 0, "opening the link signs in only when the person presses Sign in");
     const history = (await traps(site.page)).filter((x) => x.kind === "history");
-    assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in"]);
+    assert.deepEqual(history.map((x) => x.detail), ["replaceState /sign-in state null"]);
     assert.ok(!(await site.page.content()).includes(LINK_TOKEN), "the token is not in the page");
     await press(site.page, "Sign in");
     await site.page.waitForSelector("nav .a.cur");
@@ -270,6 +270,7 @@ describe("the way back and signing out", () => {
     }
     for (const u of site.urls) assert.ok(!u.includes(JOIN) && !u.includes("return=") && !u.includes("?"), `the entry reached a server: ${u}`);
     assert.deepEqual(site.external, []);
+    assert.deepEqual(site.left, [], "a navigation to the linked app's site");
     // A fresh browser: nothing was kept in either storage on the way.
     assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
     await site.context.close();
@@ -290,7 +291,10 @@ describe("the way back and signing out", () => {
       await press(site.page, "Sign in with a passkey");
       await site.page.waitForSelector("nav .a.cur");
       assert.equal(path(site.page), "/classes");
+      // Once settled, so a request or a navigation that comes late is not missed.
+      await settled(site);
       assert.deepEqual(site.external, []);
+      assert.deepEqual(site.left, [], "a navigation to the linked app's site");
       await site.context.close();
     });
   }

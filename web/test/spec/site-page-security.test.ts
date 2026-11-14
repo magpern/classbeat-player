@@ -13,6 +13,10 @@ import { onlyPolicy, referrerMetas } from "../lib/html-meta.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
+import { NOTICES } from "../../src/site/core/sign-in-model.ts";
+
+/** A history entry as the trap notes it: the call, an address, and a state that is nothing or a notice. */
+const HISTORY_ENTRY = new RegExp(`^(pushState|replaceState) \\S* state (null|\\{"notice":"(${NOTICES.join("|")})"\\})$`);
 
 let browser: Browser;
 before(async () => {
@@ -134,6 +138,8 @@ describe("nothing secret leaves the page, in any state", () => {
       const secret = [LINK_TOKEN.slice(7), CHALLENGE_B64];
       for (const u of [site.page.url(), ...site.urls.slice(1)]) for (const s of secret) assert.ok(!u.includes(s), `secret in ${u}`);
       for (const t of seen) for (const s of secret) assert.ok(!t.detail.includes(s), `secret in ${t.kind}`);
+      // A history entry keeps no state but a notice of the site's own (#420 N2, #423 N1).
+      for (const t of seen.filter((x) => x.kind === "history")) assert.match(t.detail, HISTORY_ENTRY, "a history entry keeps more than a notice");
       assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
       await site.context.close();
     });

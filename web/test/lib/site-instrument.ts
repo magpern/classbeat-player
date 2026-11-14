@@ -15,7 +15,7 @@ import type { Kit } from "./site-trap-kit.ts";
 export type { Passkey };
 
 export function instrument(mode: Passkey, kit: Kit, standIn: (mode: Passkey, note: Note) => void): void {
-  const { apply, construct, own, define, S, note, str, strAt, lower, bare, starts, words, jsUrl, wrapWith, wrap, onGet, onSetWith, onSet } = kit;
+  const { apply, construct, own, define, S, note, str, strAt, lower, bare, starts, words, jsUrl, wrapWith, wrap, onGet, onSetWith, onSet, clone, shown } = kit;
   // Array.prototype.join's reading of a value: null and undefined are empty.
   const joined = (x: unknown): string => (x === null || x === undefined ? "" : S(x));
   for (const name of ["setItem", "getItem", "removeItem", "clear", "key"] as const) wrap(Storage.prototype, name, `Storage.${name}`, (_s, a) => note("storage", `${name} ${words(a, joined)}`));
@@ -35,7 +35,18 @@ export function instrument(mode: Passkey, kit: Kit, standIn: (mode: Passkey, not
   for (const k of ["log", "info", "warn", "error", "debug", "trace", "dir", "table"] as const) {
     console[k] = ((...a: unknown[]) => note("console", `${k} ${words(a, S)}`)) as never;
   }
-  for (const k of ["pushState", "replaceState"] as const) wrap(History.prototype, k, `History.${k}`, (_s, a) => note("history", `${k} ${S(a[2] ?? "")}`));
+  // A history entry: its address and the state object it keeps (#420 N2, #423 N1). The state is
+  // cloned here, as the browser clones it, and that clone is passed on, so what the entry keeps is
+  // what was noted, even from a getter that answers differently on a second read (#312). An absent
+  // address (undefined or null) is passed on absent, as it keeps the current one.
+  for (const k of ["pushState", "replaceState"] as const) {
+    wrapWith(History.prototype, k, `History.${k}`, (_s, a) => {
+      if (a.length > 0) a[0] = clone(a[0]);
+      if (a.length > 2 && a[2] !== undefined && a[2] !== null) strAt(a, 2);
+      note("history", `${k} ${S(a[2] ?? "")} state ${shown(a[0])}`);
+      return a;
+    });
+  }
   // Turning a string into markup, however the name was written (#260; ui/dom.ts sets text only).
   for (const [proto, prop] of [[Element.prototype, "innerHTML"], [Element.prototype, "outerHTML"], [ShadowRoot.prototype, "innerHTML"], [HTMLIFrameElement.prototype, "srcdoc"]] as const) {
     onSet(proto, prop, prop, () => note("markup", prop));
