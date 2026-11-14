@@ -58,6 +58,7 @@ const NEW: readonly (readonly [string, string])[] = [
   ["history.state write", "history.scrollRestoration = 'manual';"],
   ["Navigation API", "navigation.navigate('/x');"],
   ["Navigation API on window", "window.navigation.navigate('/x', { history: 'replace' });"],
+  ["Navigation API with a local of the same name", "const navigation = 1; window.navigation.navigate('/x');"],
   ["Navigation API by bracket", "window['navigation'].navigate('/x');"],
   ["pushState on an unknown object", "foo.pushState(1, '', '/');"],
   ["History prototype", "History.prototype.pushState.call(history, 1, '', '/');"],

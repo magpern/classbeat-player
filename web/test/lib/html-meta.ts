@@ -87,8 +87,15 @@ function startTags(html: string): { name: string; meta: Meta }[] {
         const q = html[p];
         if (q === '"' || q === "'") {
           const end = html.indexOf(q, p + 1);
-          raw = html.slice(p + 1, end < 0 ? html.length : end);
-          p = end < 0 ? html.length : end + 1;
+          if (end >= 0) {
+            raw = html.slice(p + 1, end);
+            p = end + 1;
+          } else {
+            // An unterminated value: the tag ends at the next `>`, so what follows is still read.
+            const gt = html.indexOf(">", p + 1);
+            raw = html.slice(p + 1, gt < 0 ? html.length : gt);
+            p = gt < 0 ? html.length : gt;
+          }
         } else {
           const um = /^[^\s>]*/.exec(html.slice(p));
           raw = um ? um[0] : "";
@@ -113,9 +120,15 @@ function startTags(html: string): { name: string; meta: Meta }[] {
 /** The <meta> tags of the page. */
 export const metas = (html: string): Meta[] => startTags(html).filter((t) => t.name === "meta").map((t) => t.meta);
 
-/** `Content-Security-Policy` and, as the old pattern's prefix match had it, `...-Report-Only`. */
-const isPolicy = (m: Meta): boolean => (m.attrs.get("http-equiv")?.trim().toLowerCase() ?? "").startsWith("content-security-policy");
-const maybePolicy = (m: Meta): boolean => isPolicy(m) || (m.unclear && m.attrs.has("http-equiv"));
+const equiv = (m: Meta): string => m.attrs.get("http-equiv")?.trim().toLowerCase() ?? "";
+/** Sets the policy: exactly `Content-Security-Policy`. Where a policy must be present, only this counts. */
+const isPolicy = (m: Meta): boolean => equiv(m) === "content-security-policy";
+/**
+ * Sets, or may set, a policy: a name that starts with `Content-Security-Policy` (so `-Report-Only` too,
+ * as the old pattern's prefix match had it), or one this reader cannot fully read. Where a page must
+ * have none, this is what counts.
+ */
+const maybePolicy = (m: Meta): boolean => equiv(m).startsWith("content-security-policy") || (m.unclear && m.attrs.has("http-equiv"));
 
 /**
  * Text anywhere in the page, a comment, a script or a title included, that the old pattern took for
@@ -139,6 +152,16 @@ export const hasPolicyMeta = (html: string): boolean => metas(html).some(maybePo
 
 /** How many <meta> tags set, or may set, a policy: a page that sets one has exactly one. */
 export const policyMetaCount = (html: string): number => metas(html).filter(maybePolicy).length + hiddenPolicies(html);
+
+/**
+ * The content of the page's one policy meta, where a page must have exactly one: null when there is
+ * none, more than one, or one that is not exactly `Content-Security-Policy` or not plainly readable
+ * (a `-Report-Only` meta enforces nothing).
+ */
+export function onlyPolicy(html: string): string | null {
+  const found = policyMetas(html);
+  return found.length === 1 && policyMetaCount(html) === 1 ? found[0] : null;
+}
 
 /** The `content` of the <meta name="referrer"> tags. */
 export const referrerMetas = (html: string): string[] => metas(html).filter((m) => m.attrs.get("name")?.trim().toLowerCase() === "referrer").map((m) => m.attrs.get("content") ?? "");

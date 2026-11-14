@@ -4,7 +4,7 @@
 // a comment or a script.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hasPolicyMeta, policyMetaCount, policyMetas, referrerMetas } from "../lib/html-meta.ts";
+import { hasPolicyMeta, onlyPolicy,policyMetaCount, policyMetas, referrerMetas } from "../lib/html-meta.ts";
 
 const page = (head: string): string => `<!doctype html><html><head>${head}</head><body></body></html>`;
 
@@ -80,8 +80,23 @@ describe("the meta reader", () => {
   it("finds a Report-Only policy, as the old prefix match did", () => {
     const tag = '<meta http-equiv="Content&#45;Security-Policy-Report-Only" content="default-src \'self\'">';
     assert.ok(hasPolicyMeta(page(tag)));
-    assert.deepEqual(policyMetas(page(tag)), ["default-src 'self'"]);
-    assert.equal(policyMetaCount(page(tag)), 1);
+    assert.deepEqual(policyMetas(page(tag)), [], "it is not the enforcing policy");
+    assert.equal(policyMetaCount(page(tag)), 1, "but a page that must have none still has one");
+  });
+
+  it("the site's check (onlyPolicy) needs exactly one enforcing policy: a Report-Only one, none, two or an unreadable one fail it", () => {
+    assert.equal(onlyPolicy(page(OLD)), "default-src 'self'");
+    assert.equal(onlyPolicy(page('<!-->' + OLD)), "default-src 'self'");
+    const reportOnly = '<meta http-equiv="Content-Security-Policy-Report-Only" content="default-src \'self\'">';
+    for (const html of [reportOnly, '<meta http-equiv="content-security-policy-report-only" content="x">', "", OLD + OLD, OLD + reportOnly, `${OLD}<!-- ${OLD} -->`, OLD + '<meta http-equiv="Content&nosuch;Security-Policy" content="x">']) {
+      assert.equal(onlyPolicy(page(html)), null, html);
+    }
+  });
+
+  it("an unterminated quoted value ends its tag at the next `>`: a tag after it is still read", () => {
+    const html = page("<meta name=x content='open><meta http-equiv=Content-Security-Policy content=default-src>");
+    assert.equal(policyMetaCount(html), 1);
+    assert.deepEqual(policyMetas(html), ["default-src"]);
   });
 
   it("counts every policy: two are two", () => {

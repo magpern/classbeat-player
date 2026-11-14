@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { DIST, WEB_DIR } from "../lib/browser.ts";
 import { CSP, ORIGIN, crossSite, launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
-import { policyMetaCount, policyMetas, referrerMetas } from "../lib/html-meta.ts";
+import { onlyPolicy, referrerMetas } from "../lib/html-meta.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
@@ -33,9 +33,8 @@ describe("the page's CSP", () => {
   it("is in the page too, and the page has no inline script, style or handler", () => {
     const html = readFileSync(join(DIST, "site", "index.html"), "utf8");
     // Read by tokenizing the page (test/lib/html-meta.ts): exactly one policy meta, however it is written.
-    assert.equal(policyMetaCount(html), 1, "not exactly one CSP meta");
-    const [policy] = policyMetas(html);
-    assert.ok(policy !== undefined, "the CSP meta could not be read");
+    const policy = onlyPolicy(html);
+    assert.ok(policy !== null, "not exactly one enforcing CSP meta");
     assert.match(policy, /^default-src 'self';/);
     assert.ok(!/unsafe-|https?:|\*/.test(policy));
     for (const tag of html.match(/<script\b[^>]*>/g) ?? []) assert.match(tag, /\ssrc="\/[\w.]+"/, `inline script: ${tag}`);
