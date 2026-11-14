@@ -3,6 +3,7 @@
 // for request_policy.py, so the fake cannot drift from the backend.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { ORIGIN, controlCsp, controlHeaders } from "../lib/companion-fake.ts";
 import { POLICY_SOURCE, isAssetPathBy, parseAssetRule } from "../lib/control-rule.ts";
@@ -72,9 +73,31 @@ describe("the companion fake's /control headers", () => {
     for (const [path, expected] of table) assert.equal(isAssetPathBy(rule, path), expected, path);
   });
 
+  it("agrees with every case of the backend's own table of built files", () => {
+    // The backend's test table (test_which_built_files_are_served) is read as text, like the policy
+    // file, so the hand-written values above cannot drift from what the backend asserts.
+    const text = readFileSync(join(dirname(POLICY_SOURCE), "..", "..", "tests", "test_control_page.py"), "utf8");
+    const start = text.indexOf("def test_which_built_files_are_served");
+    const decorator = text.lastIndexOf("@pytest.mark.parametrize", start);
+    const block = text.slice(text.indexOf("\n    [\n", decorator), start);
+    const cases = [...block.matchAll(/^\s*\("((?:[^"\\]|\\.)*)", (None|"[^"]*")\),$/gm)].map((m) => [JSON.parse(`"${m[1]}"`) as string, m[2] !== "None"] as const);
+    assert.ok(cases.length >= 15, `the backend's table was not found (${cases.length} cases)`);
+    assert.ok(cases.some(([, served]) => served) && cases.some(([, served]) => !served));
+    const rule = parseAssetRule(SOURCE);
+    for (const [relative, served] of cases) assert.equal(isAssetPathBy(rule, `/control/${relative}`), served, JSON.stringify(relative));
+  });
+
   it("reads a single-quoted asset type key and fails loudly on one it cannot read", () => {
     assert.deepEqual([...parseAssetRule(SOURCE.replace('".css":', "'.css':")).extensions].sort(), [".css", ".js", ".woff2"]);
     assert.throws(() => parseAssetRule(SOURCE.replace('".css":', "(1):")), /not found/);
+  });
+
+  it("counts every key of a one-line ASSET_TYPES and names the cause when one cannot be read", () => {
+    const oneLine = SOURCE.replace(/ASSET_TYPES: Final = \{[^}]*\}/, 'ASSET_TYPES: Final = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2"}');
+    assert.notEqual(oneLine, SOURCE);
+    assert.deepEqual([...parseAssetRule(oneLine).extensions].sort(), [".css", ".js", ".woff2"]);
+    const bad = oneLine.replace('".css":', "(1):");
+    assert.throws(() => parseAssetRule(bad), /asset types were not found: 3 keys in ASSET_TYPES, 2 read/);
   });
 
   it("reads the asset rule from the backend file", () => {
