@@ -8,8 +8,8 @@ import { after, before, describe, it } from "node:test";
 import type { Browser } from "playwright-core";
 import { ACTIONS } from "../../src/companion/core/state-check.ts";
 import { NO_ANSWER, REFUSAL_WORDS } from "../../src/companion/core/words.ts";
-import { DIST } from "../lib/browser.ts";
-import { launchOffline, openCompanion } from "../lib/companion-fake.ts";
+import { DIST, WEB_DIR } from "../lib/browser.ts";
+import { ORIGIN, controlCsp, launchOffline, openCompanion } from "../lib/companion-fake.ts";
 import type { Fake, OpenOptions } from "../lib/companion-fake.ts";
 import { SECRET43, examples } from "../lib/live-examples.ts";
 
@@ -231,20 +231,38 @@ describe("companion live: the end, the wake lock and the page's policy", () => {
     await f.context.close();
   });
 
-  it("runs under the backend's CSP and its own: no inline script, no eval, no referrer", async () => {
+  it("runs under the backend's CSP alone: no inline script, no eval, no referrer", async () => {
     const f = await connected(FOLLOWING);
     const r = await f.page.evaluate(() => {
       const s = document.createElement("script");
       s.textContent = "globalThis.__inline = 1";
       document.head.append(s);
-      const meta = document.querySelector("meta[http-equiv=Content-Security-Policy]")?.getAttribute("content") ?? "";
-      return { inline: (globalThis as { __inline?: number }).__inline ?? 0, referrer: document.referrer, meta };
+      const metas = [...document.querySelectorAll("meta[http-equiv]")].filter((m) => m.getAttribute("http-equiv")?.toLowerCase() === "content-security-policy").length;
+      const referrer = document.querySelector("meta[name=referrer]")?.getAttribute("content") ?? "";
+      return { inline: (globalThis as { __inline?: number }).__inline ?? 0, referrer: document.referrer, metas, referrerMeta: referrer };
     });
-    assert.deepEqual(r, { inline: 0, referrer: "", meta: "default-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'" });
+    assert.deepEqual(r, { inline: 0, referrer: "", metas: 0, referrerMeta: "no-referrer" });
     // The CSP has no unsafe-eval, and the bundle needs none.
     const bundle = readFileSync(join(DIST, "control", "companion.js"), "utf8");
     assert.doesNotMatch(bundle, /\beval\(|new Function\(|\bFunction\(/);
     assert.ok((await f.traps()).some((t) => t.kind === "csp"), "the attempts were refused by the CSP");
+    await f.context.close();
+  });
+
+  it("has no content security policy of its own: the backend's header policy is the only one", async () => {
+    // A <meta> policy cannot name the site's origin for connect-src, so it could only be looser than
+    // the header (control_page_policy.py); the two would apply together and the meta would add nothing.
+    for (const p of [join(WEB_DIR, "src", "companion", "index.html"), join(DIST, "control", "index.html")]) {
+      const html = readFileSync(p, "utf8");
+      assert.doesNotMatch(html, /http-equiv\s*=\s*["']?content-security-policy/i, p);
+      assert.match(html, /<meta name="referrer" content="no-referrer">/, p);
+    }
+    // The page itself is served with the fake's header policy, which companion-fake-headers.test.ts
+    // ties to the backend's text.
+    const f = await openCompanion(browser, { width: 390, height: 844 });
+    const [page] = await Promise.all([f.page.waitForResponse((res) => new URL(res.url()).pathname === "/control"), f.page.reload()]);
+    assert.equal(page.headers()["content-security-policy"], controlCsp(ORIGIN));
+    assert.equal(page.headers()["referrer-policy"], "no-referrer");
     await f.context.close();
   });
 });
