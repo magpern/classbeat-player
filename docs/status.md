@@ -62,7 +62,9 @@ policy (#363), the join route, rider tokens, lock, new code and remove (#367), t
 role (#370), the rider page (#369) and its address and header hardening (#374), the live client's
 rider side with the riders panel and room join codes (#371), and the web job on a change of a page
 policy the web tests read (#377). The companion page's CSP is the header policy only (#378).
-Open: hardening from the reviews (#381 player, #382 backend). The Verifier ran join, remove, lock,
+Hardening from the reviews: the player's one drop per place and held-over drops (#381, #384), the
+backend's late drops, close codes and counts (#382, #385; #397, #400), and the rider page's address
+guard and the page-policy checks read from the browser (#398, #399). The Verifier ran join, remove, lock,
 new code, rider isolation, the QR codes, the page address, the place states and `cancel_code` on
 fakes at 70e101f, and the music link (follow, pause, Coasting, "Music not heard", relink) at
 d5e45c4, Linux reader only, with no gaps.
@@ -71,6 +73,11 @@ d5e45c4, Linux reader only, with no gaps.
 app cancels a control code it no longer shows. Built: the contract's `controller_left` reason and
 `cancel_code` (#368), the backend's reasons, place replay and `cancel_code` (#372), the presenter
 freeing the place (#379) and the cancel when one display is left (#380).
+
+**The player as a web app (ADR 0008, in progress):** ADR 0008 (#389, Proposed), the web job on a
+change of the shared clock surface (#391, #394), the backend accepting the `play` return entry
+(#392, #395; its bound in #400) and the `/play` spec (#390, #401). Open: the `/play` page (#393),
+then the site's return entries and the "Play on this device" link (#396).
 
 ## PL2: backend and sign-in
 
@@ -112,7 +119,8 @@ Merged: the desktop app built and tested on Linux, macOS and Windows, with unsig
 screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` job also runs for
 the shared design tokens and the request policy (#268, #271); the backend image ships
 `web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
-check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326).
+check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326); the
+backend image ships `web/dist/j` too, with its contents checked (#387, #388).
 
 ## Scene spike
 
