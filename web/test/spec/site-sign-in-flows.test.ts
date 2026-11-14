@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { DIST } from "../lib/browser.ts";
-import { ORIGIN, launchOffline, openSite, traps, waitForApi } from "../lib/site-fake.ts";
+import { ORIGIN, launchOffline, openSite, settled, traps, waitForApi } from "../lib/site-fake.ts";
 import { heapHolds } from "../lib/site-heap.ts";
 import type { FakeSite, OpenOptions } from "../lib/site-fake.ts";
 import { LINK_TOKEN, PASSKEY_OPTIONS } from "../lib/site-states.ts";
@@ -291,6 +291,8 @@ describe("the way back and signing out", () => {
       await press(site.page, "Sign in with a passkey");
       await site.page.waitForSelector("nav .a.cur");
       assert.equal(path(site.page), "/classes");
+      // Once settled, so a request or a navigation that comes late is not missed.
+      await settled(site);
       assert.deepEqual(site.external, []);
       assert.deepEqual(site.left, [], "a navigation to the linked app's site");
       await site.context.close();

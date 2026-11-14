@@ -38,13 +38,15 @@ describe("the secrets map and the account states", () => {
 
   // A state whose credential or assertion is taken (200 or 201) has every part of it to look for,
   // in that route's body only (#421 N1): "at least one secret" would let a part go unchecked.
-  for (const [route, parts] of [["POST passkeys", NEW_CREDENTIAL], ["POST sign-in/passkey", ASSERTION]] as const) {
+  // Each part is found by its name and its value: two parts can have the same value (a credential's
+  // id and rawId), so the value alone would let one stand in for the other.
+  for (const [route, what, parts] of [["POST passkeys", "credential", NEW_CREDENTIAL], ["POST sign-in/passkey", "assertion", ASSERTION]] as const) {
     it(`give every part of what goes to ${route} to every state whose ${route} is taken`, () => {
       const taken = ACCOUNT_STATES.filter((s) => answers(s.script?.[route]).some((a) => a.status === 200 || a.status === 201));
       assert.ok(taken.length >= 1, `no state takes ${route}`);
       for (const s of taken) {
         for (const [part, value] of Object.entries(parts)) {
-          const secret = ACCOUNT_SECRETS[s.name].find((x) => x.value === value);
+          const secret = ACCOUNT_SECRETS[s.name].find((x) => x.label === `${what} ${part}` && x.value === value);
           assert.ok(secret, `${s.name} does not look for ${part}`);
           assert.deepEqual(secret.routes, [route], `${s.name}: ${part} may go to other routes`);
           assert.deepEqual(secret.seen, { body: route }, `${s.name}: ${part} is not looked for in ${route}`);
