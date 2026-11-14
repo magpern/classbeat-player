@@ -4,8 +4,8 @@
 // The rider's FTP and maximum heart rate stay in this tab's memory, and in localStorage only while
 // "Remember on this phone" is on; they are never sent. A tick four times a second runs the
 // countdown between state messages. Nothing here logs.
-import { parseFragment } from "../companion/core/codes.ts";
 import { ScreenWake } from "../companion/wake.ts";
+import { riderAddress } from "./core/address.ts";
 import { NO_NUMBERS } from "./core/effort-calc.ts";
 import type { MyNumbers } from "./core/effort-calc.ts";
 import { checkFtp, checkHrmax } from "./core/fields.ts";
@@ -25,11 +25,16 @@ import { forgetNumbers, forgetToken, loadNumbers, loadToken, rememberNumbers, sa
 const TICK_MS = 250;
 const now = (): number => performance.now();
 
-/** The class code in the address: `/j#<code>`, kept there so a lapsed rider can join again from this tab. */
-function codeInAddress(): string | null {
-  // A query string has no use here and could end up in a later request: it goes, the fragment stays.
-  if (location.search !== "") history.replaceState(null, "", location.pathname + location.hash);
-  return parseFragment(location.hash).join;
+/**
+ * The class code in the address, with the address made to hold at most `/j#<code>` (core/address.ts):
+ * a query string, a control code or any other fragment is replaced in place, so it stays in neither
+ * the address nor the history. `keep`, in a class or while joining, is the code the address keeps.
+ */
+function codeInAddress(keep: string | null = null): string | null {
+  const a = riderAddress(location.pathname, location.hash);
+  const target = keep !== null ? `${location.pathname}#${keep}` : a.target;
+  if (location.href !== location.origin + target) history.replaceState(null, "", target);
+  return a.join;
 }
 
 export class RiderApp {
@@ -44,17 +49,21 @@ export class RiderApp {
   private run: RiderRun | null = null;
   private lastHeard = 0;
   private shown = "";
+  /** The class code in the address now (from the fragment, or typed and written there). */
+  private address: string | null;
   private readonly host: HTMLElement;
   private readonly wake: ScreenWake;
   private readonly handlers: FormHandlers;
 
   constructor(host: HTMLElement) {
+    // Before anything else: the address keeps the bare class code only.
+    this.address = codeInAddress();
     this.host = host;
     this.wake = new ScreenWake(() => this.draw(true));
     const storage = storageWorks();
     const remembered = storage ? loadNumbers() : null;
     this.mine = remembered ?? NO_NUMBERS;
-    this.form = initialForm(codeInAddress(), storage, remembered);
+    this.form = initialForm(this.address, storage, remembered);
     this.handlers = {
       typed: (f, t) => this.onTyped(f, t),
       join: () => void this.join(),
@@ -71,8 +80,12 @@ export class RiderApp {
   }
 
   private onHash(): void {
-    if (this.live || this.form.busy) return;
-    this.form = { ...this.form, code: codeInAddress() };
+    // The address is cleaned on every change; in a class or while joining, the code stays the same.
+    const settled = this.live !== null || this.form.busy;
+    const code = codeInAddress(settled ? this.address : null);
+    if (settled) return;
+    this.address = code;
+    this.form = { ...this.form, code };
     this.refused = null;
     this.draw();
   }
@@ -108,6 +121,7 @@ export class RiderApp {
     if (!("send" in r)) return this.draw();
     // A typed code goes into the fragment, so a lapsed rider can join again from this tab.
     if (!hadCode) history.replaceState(null, "", `${location.pathname}#${r.send.session}`);
+    this.address = r.send.session;
     this.mine = r.numbers;
     this.nickname = r.send.nickname;
     this.keep(r.numbers);
