@@ -1,6 +1,7 @@
 // Prototype of the class clock and link states of plan section 4. Pure: no I/O.
 import type { Plan } from "./class_plan.js";
 import { matchDetail } from "./match.js";
+import { isTornReading } from "./torn.js";
 import type { Decision, LinkState, Reading } from "./types.js";
 
 export interface FollowerConfig {
@@ -35,6 +36,9 @@ export class ClassFollower {
   private songIndex: number | null = null;
   private lastNow: number | null = null;
   private last: Reading | null = null;
+  /** The last reading that was applied (a held torn reading is not). */
+  private applied: Reading | null = null;
+  private tornHeld = false;
   private manual = false;
   private picked: number | null = null;
   private force = false;
@@ -114,6 +118,16 @@ export class ClassFollower {
     const pos = r.state === "playing" ? r.positionMs + Math.max(0, nowMs - r.readAtMs) : r.positionMs;
     const { indexes: cands, matchedBy } = matchDetail(this.plan, r);
     if (cands.length === 0) return this.offList(nowMs, dt);
+
+    // A torn reading at a song change is held for one poll; a second one in a row is applied.
+    if (this.started && !this.tornHeld && !this.force && isTornReading(this.applied, r, nowMs, this.cfg.seekMs)) {
+      this.tornHeld = true;
+      this.last = this.applied; // the next null poll must not reuse the torn reading
+      if (this.running) this.clockMs += dt;
+      return this.decide(nowMs, { event: "torn_hold", held: true, candidates: cands, matchedBy });
+    }
+    this.tornHeld = false;
+    this.applied = r;
 
     const prevState = this.state;
     const prevIndex = this.songIndex;
