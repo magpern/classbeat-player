@@ -96,3 +96,19 @@ export function returnEntryOf(hash: string): string | null {
   if (m[2] === undefined) return path;
   return JOIN_CODE.test(m[2]) ? `${path}#${m[2]}` : null;
 }
+
+/** A way back named by a sign-in fragment: the address to load, and the entry as the site sends it. */
+export interface EntryBack {
+  readonly path: string;
+  /** `control` or `control.XXXX-XXXX` (ADR 0006, decision 5): never a path. */
+  readonly field: string;
+}
+
+/**
+ * The way back a fragment `return=<entry>` names, or null. Only what `returnEntryOf` accepts, so
+ * the entry is then exactly a name of the table, with a class code for the companion.
+ */
+export function entryBackOf(hash: string): EntryBack | null {
+  const path = returnEntryOf(hash);
+  return path === null ? null : { path, field: hash.replace(/^#?return=/, "") };
+}
