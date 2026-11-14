@@ -12,6 +12,9 @@ A class runs on one screen from the room screen's own controls ([room-2d.md](roo
 display it keeps everything below. With one display the room screen fills the display and this
 window lies behind it (class-list.md, "Where the room window goes").
 
+**Riders** (ADR 0007): the riders row at the foot of the right column and its drawer (count, nicknames,
+Remove, Lock joining, New code) are specified in [riders-panel.md](riders-panel.md).
+
 ## One convention
 
 - **Sentence case** for every status line, link line and control: a capital first letter, then
