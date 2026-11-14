@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-14 (after #410).
+Updated 2026-11-14 (after #423).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -102,8 +102,11 @@ body cap keyed on the route and the class paging index (#115, #127), passkeys (#
 their hardening (#136, #145; #146, #147: the sign-in lock never waits, one lock registry; #158,
 #160: the account-sessions and passkey-additions locks wait at most 2 s), the
 website pages spec (#131, #137), the website shell, sign-in and error pages (#144, #256), sign-in hardening from its review
-(#257, #259) and the passkey busy retry (#260, #262). Next: the other website pages, purge counts (needs a
-migration).
+(#257, #259) and the passkey busy retry (#260, #262), and the other website pages on fakes: the
+classes list, class details with "Play on this device" and delete (#418, #419), devices and
+pairing (#420), account sessions, passkeys and "Confirm it is you" (#421), linked apps and
+connecting an app (#422), and the data page with export and account deletion (#423). Next: the
+site spec and mock-ups as built, their hardening, purge counts (needs a migration).
 
 ## PL4: screens
 
@@ -194,6 +197,13 @@ Merged: #30 and its findings (#53).
 - Player: from the #165 review, the hardening and wiring checks are source regexes; the #165
   Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
+
+- Website, from the #419 to #423 reviews: the history trap in the site checks records only the
+  address, not the state object (#420, #423); the passkey and link secrecy tie covers only some
+  states (#421); a thrown file save leaves export stuck and the export link is revoked at once
+  (#423); a passkey confirm leaves the old session alive and a backslash in a redirect address
+  is not refused (#421, #422, backend). Issues #425 (guards), #426 (web), #427 (backend) and
+  #428 (spec and mock-ups) hold them.
 
 - PL8 notes: from #273, HEAD on `/control` answers 405 (by design); from #340, the
   private-import guard does not follow names reached through a container or `self`.
