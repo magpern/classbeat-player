@@ -5,6 +5,7 @@ import type { Page } from "playwright-core";
 import type { Passkey, Script } from "./site-fake.ts";
 import { DEVICE_STATES } from "./site-device-states.ts";
 import { ACCOUNT_STATES } from "./site-account-states.ts";
+import { LINK_STATES } from "./site-link-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -24,6 +25,8 @@ export interface State {
   readonly main?: boolean;
   /** The page's date is fixed (openSite's `clock: "day"`), so a date it shows does not move with the day the test runs. */
   readonly clock?: "day";
+  /** The one address of the linked app's site the page goes to in this state (site-fake.ts, `left`); none when absent. */
+  readonly leaves?: string;
 }
 
 export const CLASS_DETAILS_ID = "3f6d2c1a-8b4e-4f7a-9c2d-1e5a7b9c0d3f";
@@ -96,4 +99,5 @@ export const STATES: readonly State[] = [
   { name: "error-not-found", path: "/no-such-page", ready: "h1" },
   ...DEVICE_STATES,
   ...ACCOUNT_STATES,
+  ...LINK_STATES,
 ];

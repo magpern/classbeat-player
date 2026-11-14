@@ -6,6 +6,8 @@ import type { AccountSub } from "../core/account-model.ts";
 import type { SignedInPage } from "../core/routes.ts";
 import { el, t } from "../ui/dom.ts";
 import { h1 } from "../ui/kit.ts";
+import { connectPage } from "./connect.ts";
+import { linksPage } from "./links.ts";
 import { passkeysPage } from "./passkeys.ts";
 import { sessionsPage } from "./sessions.ts";
 import type { SignedInEnv } from "./signed-in.ts";
@@ -23,14 +25,27 @@ export function accountFrame(main: HTMLElement, current: AccountSub): HTMLDivEle
   return body;
 }
 
+/** The sub-pages built so far, by address. */
+const SUBS = new Map<string, AccountSub>([
+  ["/account/sessions", "sessions"],
+  ["/account/passkeys", "passkeys"],
+  ["/account/links", "links"],
+]);
+
 /** Shows an account sub-page for the body of its first request; false for any other page. */
 export function shownByAccountPage(main: HTMLElement, page: SignedInPage, body: unknown, env: SignedInEnv, focus: boolean, reload: () => void): boolean {
   if (page.nav !== "account") return false;
-  const sub = location.pathname === "/account/sessions" ? "sessions" : location.pathname === "/account/passkeys" ? "passkeys" : null;
-  if (sub === null) return false;
+  // Connect an app reads `sessions` first only to know the person is signed in; its body is not used.
+  if (location.pathname === "/link/source") {
+    connectPage(main, env);
+    return true;
+  }
+  const sub = SUBS.get(location.pathname);
+  if (sub === undefined) return false;
   const box = accountFrame(main, sub);
   if (sub === "sessions") sessionsPage(main, box, body, env, reload);
-  else passkeysPage(main, box, body, env, reload);
+  else if (sub === "passkeys") passkeysPage(main, box, body, env, reload);
+  else linksPage(main, box, body, env, reload);
   if (focus && main.contains(box)) main.querySelector<HTMLElement>("h1")?.focus();
   return true;
 }
