@@ -187,9 +187,11 @@ export default function collect() {
     if (el.closest('.z1, .z2, .z3, .z4, .z5, .z6, .z7')) continue;
     const c = getComputedStyle(el);
     const hasText = [...el.childNodes].some((t) => t.nodeType === 3 && t.textContent.trim());
-    const props = [['background', c.backgroundColor], ['border', c.borderRightColor]];
+    // Borders and outlines, on every side and pseudo-element, are read by lib/border-walk.ts.
+    const props = [['background', c.backgroundColor]];
     if (hasText) props.push(['text', c.color]);
-    for (const [p, v] of props) if (chroma(v) > 24 && !(p === 'border' && c.borderRightWidth === '0px')) hues.push(`${el.className || el.tagName} ${p} ${v}`);
+    if (c.textDecorationLine !== 'none') props.push(['text-decoration', c.textDecorationColor]);
+    for (const [p, v] of props) if (chroma(v) > 24) hues.push(`${el.className || el.tagName} ${p} ${v}`);
   }
 
   // Coverage: text outside any data-tier element escapes checks 1 to 4.

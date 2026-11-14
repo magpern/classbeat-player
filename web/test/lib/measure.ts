@@ -11,6 +11,7 @@
 // box-shadows and gradients), C7 reduced motion, C8 coverage.
 import type { Browser, Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
+import { borderHues } from "./border-walk.ts";
 import type { Item } from "../spec/page/collect.js";
 import ink, { INK } from "../spec/page/ink.js";
 import { harnessUrl, newPage, settle } from "./browser.ts";
@@ -199,7 +200,7 @@ export async function checkShot(browser: Browser, probe: Page, s: Shot): Promise
     rows.push({ tier: "text", text: "next row above the score", result: gap < s.height * MIN_NEXT_GAP - 0.5 ? `FAIL next row ends ${(gap / s.height * 100).toFixed(2)} vh above the score, at least ${(MIN_NEXT_GAP * 100).toFixed(1)} vh` : "ok" });
   }
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (C8)" });
-  for (const h of [...hues, ...(await shadowHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (C6)" });
+  for (const h of [...hues, ...(await shadowHues(page)), ...(await borderHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (C6)" });
   const moving = await movingWithReducedMotion(browser, s);
   rows.push({ tier: "motion", text: "reduced motion", result: moving.length ? `FAIL still moves: ${moving.join(", ")}` : "ok" });
   for (const e of external) rows.push({ tier: "network", text: e.slice(0, 40), result: "FAIL external request" });

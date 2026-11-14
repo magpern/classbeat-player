@@ -4,6 +4,7 @@
 // with the page without text. The page is measured at its full height (the mock-ups' fit.js).
 import type { Browser, Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
+import { borderHues } from "./border-walk.ts";
 import ink, { INK } from "../spec/page/ink.js";
 import type { Item } from "../spec/page/collect.js";
 import { settle } from "./browser.ts";
@@ -143,7 +144,7 @@ export async function checkSiteShot(browser: Browser, probe: Page, s: SiteShot):
     add(it.tier === "label" ? "S1 S2 S6 label" : "S1 S2 S6", it.text, problems);
   }
   // S4: no hue at all, and no zone on these pages.
-  for (const h of hues) add("S4", h.slice(0, 40), ["hue"]);
+  for (const h of [...hues, ...(await borderHues(page))]) add("S4", h.slice(0, 40), ["hue"]);
   for (const z of zones) add("S4", `zone ${z.z}`, ["a zone element on a site page"]);
   for (const t of loose) add("S11", t, ["text outside any measured element"]);
   for (const [check, text, p] of await layoutChecks(page, s.zoom)) add(check, text, p);

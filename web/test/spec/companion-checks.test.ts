@@ -62,7 +62,7 @@ interface Words {
   readonly keys?: readonly string[];
   /** The text of the `.pill` in the clock's label, when the state has one. */
   readonly pill?: string;
-  /** Keys (by data-action) that must be live: present and greyed in no form (not aria-disabled, not .dis on it or an ancestor, not :disabled, not aria-busy). */
+  /** Keys (by data-action) that must be live: present and greyed in no form (not :disabled, and no aria-disabled, aria-busy or .dis on it or on an ancestor). */
   readonly live?: readonly string[];
 }
 const showing = (state: State, w: Words): Stage =>
@@ -78,7 +78,8 @@ const showing = (state: State, w: Words): Stage =>
     for (const key of w.live ?? []) {
       const keys = f.page.locator(`[data-action=${key}]`);
       assert.ok((await keys.count()) > 0, `no ${key} key`);
-      const greyed = `[data-action=${key}][aria-disabled=true], [data-action=${key}].dis, .dis [data-action=${key}], [data-action=${key}]:disabled, [data-action=${key}][aria-busy=true]`;
+      const k = `[data-action=${key}]`;
+      const greyed = [`${k}:disabled`, ...["[aria-disabled=true]", "[aria-busy=true]", ".dis"].flatMap((g) => [`${k}${g}`, `${g} ${k}`])].join(", ");
       assert.equal(await f.page.locator(greyed).count(), 0, `a ${key} key is greyed`);
     }
   });
