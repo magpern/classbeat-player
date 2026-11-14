@@ -122,6 +122,8 @@ describe("nothing secret leaves the page, in any state", () => {
       assert.deepEqual(site.realms, [], "another realm: a frame, a page or a worker");
       assert.deepEqual(site.console.filter((c) => !c.includes("Failed to load resource")), []);
       assert.deepEqual(site.external, [], "a request to another origin");
+      // The linked app's site only by the one navigation the state names, after an approval.
+      assert.deepEqual(site.left, state.leaves === undefined ? [] : [state.leaves], "a navigation to the linked app's site");
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
       assert.deepEqual(site.crossSite, [], "an API request the backend refuses as cross-site");
       for (const a of site.api) {

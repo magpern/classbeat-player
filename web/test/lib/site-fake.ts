@@ -2,22 +2,20 @@
 // request of the page goes through Playwright's router: the site's own files are served from
 // dist/site/ with the backend's page headers (the CSP of ADR 0002, section 5), /api/site/ routes
 // answer from the test's script, and any other origin is aborted and recorded.
-import { readFileSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, Request, Route } from "playwright-core";
-import { chromePath, DIST } from "./browser.ts";
+import { chromePath } from "./browser.ts";
+import { serveFile } from "./site-files.ts";
 import { instrument } from "./site-instrument.ts";
 import { linkRequest } from "./site-mail.ts";
 import type { Passkey } from "./site-instrument.ts";
 import { passkeyStandIn } from "./site-passkey.ts";
+import { SOURCE_ORIGIN } from "./site-source-origin.ts";
 import { trapKit } from "./site-trap-kit.ts";
 
 export const ORIGIN = "https://site.test";
 /** The backend's own header (backend/src/player_backend/request_policy.py); a drift test compares the two. */
 export const CSP = "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
-const SITE_DIR = join(DIST, "site");
-const TYPES: Readonly<Record<string, string>> = { ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".html": "text/html; charset=utf-8" };
 
 /**
  * Chrome for the website checks, cut off from every network: no proxy, every host name
@@ -63,6 +61,8 @@ export interface FakeSite {
   readonly urls: string[];
   /** Requests to anywhere but the site (aborted). */
   readonly external: string[];
+  /** Top-level navigations to the linked app's site (SOURCE_ORIGIN), in order: each cancelled, so the page stays. */
+  readonly left: string[];
   /** API requests with no answer in the script (answered 500). */
   readonly unscripted: string[];
   /** API requests the backend would refuse as cross-site (answered 403 `cross_site_request`). */
@@ -130,7 +130,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
     if (isJavascriptUrl(e.url)) fromBrowser.push({ kind: "script", detail: "navigation javascript:" });
   });
   await cdp.send("Page.enable");
-  const site: FakeSite = { page, context, api: [], urls: [], external: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
+  const site: FakeSite = { page, context, api: [], urls: [], external: [], left: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
   page.on("console", (m) => site.console.push(`${m.type()} ${m.text()}`));
@@ -144,12 +144,16 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
   await page.route("**/*", async (route: Route, request: Request) => {
     const url = new URL(request.url());
     site.urls.push(request.url());
+    if (url.origin === SOURCE_ORIGIN && request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      site.left.push(request.url());
+      return route.abort("aborted");
+    }
     if (url.origin !== ORIGIN) {
       site.external.push(request.url());
       return route.abort();
     }
     if (url.pathname.startsWith("/api/site/")) return answer(site, o.script ?? {}, turns, held, route, request, url, o.mailbox);
-    return serveFile(route, url.pathname);
+    return serveFile(route, url.pathname, CSP);
   });
   if (o.clock) {
     await page.clock.install({ time: new Date("2026-11-13T10:00:00Z") });
@@ -210,36 +214,6 @@ export function crossSite(method: string, headers: Readonly<Record<string, strin
   if (headers["origin"] !== ORIGIN) return true;
   const fetchSite = headers["sec-fetch-site"];
   return fetchSite !== undefined && fetchSite !== "same-origin";
-}
-
-function serveFile(route: Route, pathname: string): Promise<void> {
-  const rel = normalize(pathname).replace(/^[/\\]+/, "");
-  // The companion page (served beside the site at /control) stands in as a plain page.
-  if (rel === "control") return route.fulfill({ status: 200, headers: { "Content-Type": TYPES[".html"], "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" }, body: "<!doctype html><title>Companion</title>" });
-  // The web player page (ADR 0008) is built beside the site and served at /play: its page, and its own files.
-  if (rel === "play" || rel.startsWith("play/")) return servePlay(route, rel);
-  // Every address of the site is the one page; its scripts, styles and fonts are files.
-  const file = /^(site\.(js|css)|fonts\/[\w.-]+\.woff2)$/.test(rel) ? rel : "index.html";
-  return route.fulfill({
-    status: 200,
-    headers: { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" },
-    body: readFileSync(join(SITE_DIR, file)),
-  });
-}
-
-/** The files of the play page that are served beside it: its script, its three stylesheets and its fonts. */
-export const PLAY_FILE = /^play\/(play\.js|(?:base|page|room)\.css|fonts\/[\w.-]+\.woff2)$/;
-
-/** `/play` (and `/play/`) is the page; each of its own files is served with the site's headers; anything else under /play is not found. */
-function servePlay(route: Route, rel: string): Promise<void> {
-  const headers = { "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer" };
-  const file = rel === "play" || rel === "play/" ? "index.html" : PLAY_FILE.test(rel) ? rel.slice("play/".length) : null;
-  if (file === null) return route.fulfill({ status: 404, headers, body: "" });
-  return route.fulfill({
-    status: 200,
-    headers: { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", ...headers },
-    body: readFileSync(join(SITE_DIR, "play", file)),
-  });
 }
 
 export interface Trap {

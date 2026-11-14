@@ -151,6 +151,7 @@ export async function checkSiteShot(browser: Browser, probe: Page, s: SiteShot):
   for (const [check, text, p] of await motionAndPictures(page)) add(check, text, p);
   if (s.zoom === 1) for (const [text, p] of await focusRing(page)) add("S8", text, p);
   for (const e of site.external) add("CSP", e.slice(0, 40), ["a request to another origin"]);
+  for (const e of site.left.filter((u) => u !== s.state.leaves)) add("CSP", e.slice(0, 40), ["a navigation the state does not name"]);
   for (const v of (await traps(page)).filter((x) => x.kind === "csp")) add("CSP", v.detail.slice(0, 40), ["CSP violation"]);
   for (const c of site.console.filter((x) => !x.includes("Failed to load resource"))) add("console", c.slice(0, 40), ["console output"]);
   await site.context.close();
