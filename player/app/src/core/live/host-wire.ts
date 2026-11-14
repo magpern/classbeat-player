@@ -78,7 +78,7 @@ const isNickname = (v: unknown): v is string => {
 };
 const RIDER_LEFT_REASONS = ["left", "dropped"] as const;
 
-const ERRORS:readonly LiveErrorBody["error"][] = ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
+const ERRORS: readonly LiveErrorBody["error"][] = ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
 
 /** The answer of `POST /api/live/sessions`: the session, or why there is none. */
 export function parseStartAnswer(a: HttpAnswer): StartAnswer {

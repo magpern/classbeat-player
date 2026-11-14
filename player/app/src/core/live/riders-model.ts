@@ -26,6 +26,8 @@ export interface Riders {
   readonly asked: readonly number[];
   /** The new code, shown in the presenter's state line until `until`. */
   readonly made: { readonly code: string; readonly until: number } | null;
+  /** Whether this session has had a welcome: only then does a reconnect's welcome start a replay. */
+  readonly welcomed: boolean;
 }
 
 /** ADR 0002's cap of open rider connections: the most the list holds. */
@@ -36,7 +38,7 @@ export const HOUR_MS = 3_600_000;
 /** How long the presenter shows a new code as text. */
 export const MADE_MS = 10_000;
 
-export const NO_RIDERS: Riders = { list: [], locked: false, replay: null, asked: [], made: null };
+export const NO_RIDERS: Riders = { list: [], locked: false, replay: null, asked: [], made: null, welcomed: false };
 
 const without = (list: readonly Rider[], id: string): Rider[] => list.filter((r) => r.id !== id);
 /** The rider at the end of the list; beyond the cap the server would not have let it in. */
@@ -45,8 +47,12 @@ const append = (list: readonly Rider[], r: Rider): readonly Rider[] => {
   return rest.length >= MAX_RIDERS ? list : [...rest, { id: r.id, nickname: r.nickname }];
 };
 
-/** The host's `welcome`: on a reconnect the server's replay begins and the list waits for it. */
-export const ridersWelcomed = (r: Riders, reconnect: boolean): Riders => (reconnect ? { ...r, replay: [] } : r);
+/**
+ * The host's `welcome`: on a reconnect after an earlier welcome the server's replay begins and the
+ * list waits for it. A first welcome, even after a socket lost before it, has no replay (the server
+ * sends `lock_state` only to a host it had attached before), so the list acts at once.
+ */
+export const ridersWelcomed = (r: Riders, reconnect: boolean): Riders => ({ ...r, replay: reconnect && r.welcomed ? [] : r.replay, welcomed: true });
 
 export function riderJoined(r: Riders, rider: Rider): Riders {
   return r.replay !== null ? { ...r, replay: append(r.replay, rider) } : { ...r, list: append(r.list, rider) };

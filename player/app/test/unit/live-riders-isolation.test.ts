@@ -15,7 +15,7 @@ import { liveRoomRemote } from "../../src/main/live/room-remote.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
 import type { RidersView } from "../../src/core/live/riders-view.ts";
-import { JOIN_CODE, started } from "./live-relay.ts";
+import { JOIN_CODE, rig, started } from "./live-relay.ts";
 import { REPO } from "./fixtures.ts";
 
 const APP_DIR = join(REPO, "player", "app");
@@ -95,6 +95,27 @@ test("no nickname is logged or written to the console, and the rider_state sent 
   } finally {
     Object.assign(console, orig);
   }
+});
+
+test("a host socket lost before its first welcome: after the retry's welcome (no lock_state) riders are listed and the panel acts", async () => {
+  const r = rig();
+  r.live.start();
+  await r.advance(0);
+  const first = r.socket();
+  first.open();
+  first.drop(1006);
+  await r.advance(30_000);
+  const second = r.socket();
+  assert.notEqual(second, first);
+  second.open();
+  second.server({ v: 1, type: "welcome", role: "host" });
+  second.server({ v: 1, type: "rider_joined", rider: RIDER, nickname: NICK });
+  const v = r.live.riders();
+  assert.deepEqual(v.rows.map((x) => x.nickname), [NICK]);
+  assert.deepEqual([v.active, v.dim, v.word], [true, false, null]);
+  r.live.lock(true);
+  await r.advance(1000);
+  assert.deepEqual(sentOf(r, "lock"), [{ v: 1, type: "lock", locked: true }]);
 });
 
 test("the list is gone when the session ends", async () => {

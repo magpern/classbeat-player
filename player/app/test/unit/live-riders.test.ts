@@ -122,6 +122,27 @@ test("a reconnect greys the list and turns every button off until the replay end
   assert.deepEqual(sends(step(settled, { type: "lock", locked: false }, 0).effects), [{ v: 1, type: "lock", locked: false }]);
 });
 
+test("a socket lost before the first welcome: the next welcome is a first one, with no replay to wait for", () => {
+  const before = run([
+    { type: "start", run: RUN, credential: "ok", classOpen: true },
+    { type: "answer", request: 1, answer: { ok: true, session: SESSION } },
+    { type: "open", socket: 1 },
+    { type: "closed", socket: 1, code: 1006 },
+  ]).model;
+  assert.equal(before.phase, "reconnecting");
+  // No lock_state follows this welcome (the server had not attached the host before).
+  const m = run([{ type: "retry" }, { type: "open", socket: 2 }, msg({ type: "welcome" }, 2), joined(1, "Anna", 2)], before).model;
+  assert.equal(m.riders.replay, null);
+  assert.deepEqual(names(m), ["Anna"]);
+  const v = view(m);
+  assert.deepEqual([v.active, v.dim, v.word, v.count], [true, false, null, "1"]);
+  assert.deepEqual(sends(step(m, { type: "lock", locked: true }, 0).effects), [{ v: 1, type: "lock", locked: true }]);
+  // A later reconnect, after this welcome, does wait for the replay.
+  const again = run([{ type: "closed", socket: 2, code: 1006 }, { type: "retry" }, { type: "open", socket: 3 }, msg({ type: "welcome" }, 3)], m).model;
+  assert.deepEqual(again.riders.replay, []);
+  assert.equal(view(again).active, false);
+});
+
 test("the first welcome starts open with the list empty, and the panel acts at once", () => {
   const v = view(live());
   assert.deepEqual([v.on, v.active, v.count, v.locked, v.rows.length], [true, true, "0", false, 0]);
