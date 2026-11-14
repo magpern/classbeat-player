@@ -44,8 +44,9 @@ export const WORDS = {
 /**
  * The words for every error name of the contract, on the route the page used. `invalid_code` and
  * `cannot_control` read alike whatever the cause and say nothing about whether the class exists.
- * The names only the app's own route gives (`invalid_token`, `token_*`, `sessions_full`) cannot
- * come here; should one come, it reads as something went wrong.
+ * The names only the app's own route (`invalid_token`, `token_*`, `sessions_full`) or the riders'
+ * join route (`cannot_join`) gives cannot come here; should one come, it reads as something went
+ * wrong.
  */
 export const ERROR_WORDS: Readonly<Record<ErrorName, string>> = {
   invalid_request: WORDS.wentWrong,
@@ -58,6 +59,7 @@ export const ERROR_WORDS: Readonly<Record<ErrorName, string>> = {
   cannot_control: WORDS.signInWrong,
   invalid_code: WORDS.codeWrong,
   controllers_full: "Two phones already steer this class",
+  cannot_join: WORDS.wentWrong,
   too_many_requests: WORDS.tooMany,
   internal_error: WORDS.wentWrong,
 };

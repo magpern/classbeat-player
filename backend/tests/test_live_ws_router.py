@@ -10,17 +10,21 @@
 - `host_status` tells the controllers when the host comes and goes, and while it is away they
   get nothing else; `controller_joined` and `controller_left` tell the host of the phones;
 - one connection per token: a newer one replaces the older (4409);
-- every message the table does not route from its sender's role is dropped and counted.
+- every message the table does not route from its sender's role is dropped and counted;
+- the host's rider messages (ADR 0007), routed by the contract but not built yet, are dropped
+  and counted as `not_built_yet` and reach no one.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import ExitStack
 from typing import Any
 
 import pytest
 
+from tests.livehelp import SCHEMA as LIVE_SCHEMA
 from tests.livehelp import (
     closed,
     command,
@@ -182,7 +186,7 @@ def test_a_controller_cannot_publish_state_or_act_as_the_host(live: Any) -> None
 def test_unknown_types_and_non_messages_are_dropped_and_counted(live: Any) -> None:
     with ExitStack() as stack:
         host, one, _ = _all_in(live, stack)
-        for text in ("nope", "[]", '{"v":1}', '{"v":1,"type":"rider_state"}', '{"v":1.0}'):
+        for text in ("nope", "[]", '{"v":1}', '{"v":1,"type":"rider_hello"}', '{"v":1.0}'):
             one.send_text(text)
             host.send_text(text)
         one.send_bytes(b'{"v":1,"type":"end"}')
@@ -190,6 +194,39 @@ def test_unknown_types_and_non_messages_are_dropped_and_counted(live: Any) -> No
         nothing(one)
         assert live.hub.dropped["not_a_message"] == 7
         assert live.hub.dropped["unknown_type"] == 4
+
+
+# The host's messages about riders, one valid example of each (schema/live/v1/examples).
+RIDER_EXAMPLES = (
+    "rider-state/valid/running-three-coming.json",
+    "drop-rider/valid/one-rider.json",
+    "lock/valid/lock.json",
+    "new-join-code/valid/new-join-code.json",
+)
+
+
+def _example(name: str) -> dict[str, Any]:
+    return json.loads((LIVE_SCHEMA / "examples" / name).read_text(encoding="utf-8"))
+
+
+def test_the_hosts_rider_messages_are_not_built_yet_dropped_and_reach_no_one(live: Any) -> None:
+    examples = [_example(name) for name in RIDER_EXAMPLES]
+    assert [m["type"] for m in examples] == ["rider_state", "drop_rider", "lock", "new_join_code"]
+    with ExitStack() as stack:
+        host, one, two = _all_in(live, stack)
+        for message in examples:
+            host.send_json(message)
+            one.send_json(message)  # from a controller: no route from its role
+        host.send_json(companion_state())  # the probe: the next thing the phones get
+        assert recv(one)["type"] == "companion_state"
+        assert recv(two)["type"] == "companion_state"
+        one.send_json(command(1))  # the probe for the host
+        assert recv(host)["id"] == command_id(1)
+        assert live.hub.dropped["not_built_yet"] == 4
+        assert live.hub.dropped["not_from_role"] == 4
+        assert live.hub.dropped["invalid"] == 0
+        assert sum(live.hub.refused.values()) == 0
+        assert live.hub.connected(live.registry.running()[0].session_id) == (True, (1, 2))
 
 
 def test_host_status_follows_the_host_and_nothing_else_comes_while_it_is_away(live: Any) -> None:
