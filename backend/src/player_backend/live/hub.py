@@ -21,12 +21,9 @@ ADR 0005, sections 1 and 3 to 6; ADR 0007, sections 2 and 3).
   leaves takes its unanswered commands with it: their answers from a returning host reach no one.
 - A session that ends, or a controller that is dropped (the registry's watchers, called on any
   thread: the re-check's, a route's, the event loop's), gets `ended` and is closed with 4403.
-- The host's `make_code` gets `control_code`, to the host's connection only, after
-  `code_cancelled` `replaced` (or `expired`) for the code it replaces; over 30 an hour it is
-  dropped and counted (`code_limit`), and the current code stays. A code used, run out or
-  cancelled by wrong tries is told to the host as `code_cancelled` (a watcher's event). The
-  host's `drop` ends the current code, telling no one, and drops the slot's controller; its
-  `cancel_code` ends the current code alone, telling no one.
+- The host's control code (`make_code`, `cancel_code`, and `code_cancelled` for a watcher's
+  event) is live/code_role.py's. The host's `drop` ends the current code, telling no one, and
+  drops the slot's controller.
 
 Threads: the hub's state is touched on the event loop only. The watcher hands each event over
 with `call_soon_threadsafe` and logs a failure by its type. The loop is bound by `bind`, which
@@ -42,9 +39,10 @@ import logging
 from typing import cast
 from uuid import UUID
 
+from player_backend.live.code_role import CodeRole
 from player_backend.live.command_relay import CommandRelay
 from player_backend.live.dispatch import by_type
-from player_backend.live.events import CodeCancelled, Dropped, Ended, RiderSeat, Seat
+from player_backend.live.events import Dropped, Ended, RiderSeat, Seat
 from player_backend.live.link import Link, Socket
 from player_backend.live.rider_role import RiderRole
 from player_backend.live.schemas import routes, valid
@@ -63,8 +61,6 @@ from player_backend.live_wire_policy import (
     REPLACED,
     LeftReason,
     Message,
-    code_cancelled,
-    control_code,
     controller_joined,
     controller_left,
     decode,
@@ -86,6 +82,7 @@ class Hub:
         self._send, self._drop = self.sender.send_one, self.sender.drop
         self.riders = RiderRole(service.registry, self.sender, service.clock)
         self.commands = CommandRelay(self.sender, service.clock)
+        self.codes = CodeRole(service.registry, self.sender, service.clock)
         self._on = by_type(
             self._on_make_code,
             self._on_drop,
@@ -131,7 +128,7 @@ class Hub:
             elif isinstance(event, Dropped):
                 self._dropped(event)
             else:
-                self._cancelled(event)
+                self.codes.cancelled(self._hosts.get(event.session_id), event)
         except Exception as error:  # one event must not cost the loop or the next event
             _logged("live.event_failed", type(error).__name__, logging.ERROR)
 
@@ -161,11 +158,6 @@ class Hub:
             return self._left(event.session_id, event.slot, via, "disconnected")
         self.commands.forget(event.session_id, (event.slot,))
         self._left(event.session_id, event.slot, event.via, event.reason)
-
-    def _cancelled(self, event: CodeCancelled) -> None:
-        host = self._hosts.get(event.session_id)
-        if host is not None:
-            self._send(host, code_cancelled(event.reason))
 
     # -- connections ----------------------------------------------------------------------
 
@@ -273,15 +265,10 @@ class Hub:
         self.riders.new_join_code(link)
 
     def _on_cancel_code(self, link: Link, _message: Message) -> None:
-        self.service.registry.end_code(link.session_id)  # the host is sent nothing for it
+        self.codes.cancel(link)
 
     def _on_make_code(self, link: Link, _message: Message) -> None:
-        made = self.service.registry.make_code(link.session_id, self.service.clock())
-        if made is None:
-            return self._drop(link, "code_limit")
-        if made.earlier is not None:
-            self._send(link, code_cancelled(made.earlier))
-        self._send(link, control_code(made.code, made.expires_in_ms))
+        self.codes.make(link)
 
     def _on_command(self, link: Link, message: Message) -> None:
         self.commands.command(link, self._hosts.get(link.session_id), message)

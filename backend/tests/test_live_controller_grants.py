@@ -21,6 +21,7 @@ from player_backend.client_policy import ClientInfo
 from player_backend.db import live
 from player_backend.db.context import AccountContext
 from player_backend.db.executor import DatabaseError, Pool
+from player_backend.live.events import MadeCode
 from player_backend.live.registry import Ended, Registry, Started
 from player_backend.live.service import LiveService
 from player_backend.live.watchers import Event
@@ -175,7 +176,7 @@ def test_a_session_past_its_lifetime_gives_no_controller_by_code(
     ends = _recorded(monkeypatch)
     registry = service.registry
     made = registry.make_code(started.session_id, clock())
-    assert made is not None
+    assert isinstance(made, MadeCode)
     clock.now = UNCONFIRMED_LIMIT
     exchanged = registry.exchange(started.join_code, made.code, clock())
     assert (exchanged.granted, exchanged.refusal, exchanged.cancelled) == (None, "unknown", None)
@@ -190,7 +191,7 @@ def test_a_session_just_inside_its_lifetime_gives_a_controller_by_code() -> None
     clock = Clock()
     service, started, seen = _service(clock)
     made = service.registry.make_code(started.session_id, clock())
-    assert made is not None
+    assert isinstance(made, MadeCode)
     clock.now = UNCONFIRMED_LIMIT - 0.001
     exchanged = service.registry.exchange(started.join_code, made.code, clock())
     assert exchanged.granted is not None and exchanged.refusal is None

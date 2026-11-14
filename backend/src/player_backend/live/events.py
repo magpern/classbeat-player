@@ -97,6 +97,19 @@ class MadeCode:
     earlier: CancelReason | None  # how the earlier code ended, if one was current
 
 
+# Why the host's `make_code` got no control code: its session is gone (or has just ended, past
+# its lifetime), or it has made its 30 this hour (ADR 0005, section 3). Each is the hub's drop
+# label, so `code_limit` counts only the codes the limit refused (#407).
+type ControlCodeRefusal = Literal["session_gone", "code_limit"]
+
+
+@dataclass(frozen=True)
+class NoControlCode:
+    """The host's `make_code` made no code: `reason` says why."""
+
+    reason: ControlCodeRefusal
+
+
 @dataclass(frozen=True)
 class Granted:
     """A controller token given out, once, here. `device_hash` is for the audit event."""
