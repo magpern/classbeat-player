@@ -20,11 +20,17 @@
 // - The control code is offered only with a second display, and is only ever in this state and the
 //   presenter's view. A `drop` frees a phone's place and ends the shown code (ADR 0005 section 3).
 //   With one display left the held code is cancelled on the server too (code-cancel.ts, #353).
+//   A place takes one drop until the server answers it (drop-policy.ts), and a `cancel_code` or
+//   `drop` still queued when the connection is lost goes first after the next `welcome`
+//   (held-over.ts, #381).
 import type { HostInbound, Slot } from "./host-wire.ts";
 import { placeOf } from "./place-policy.ts";
 import { OFF } from "./session-types.ts";
 import type { EndReason, LiveEffect, LiveEvent, LiveModel, Place, Refusal, Step } from "./session-types.ts";
-import { oneDisplay, welcomedFirst } from "./code-cancel.ts";
+import { oneDisplay } from "./code-cancel.ts";
+import { dropSent, mayDrop, placeTold } from "./drop-policy.ts";
+import { keptOnLoss, welcomedFirst } from "./held-over.ts";
+import type { HeldOver } from "./held-over.ts";
 import { ridersWelcomed } from "./riders-model.ts";
 import { onRiderEvent, onRiderMessage } from "./riders-step.ts";
 
@@ -76,7 +82,7 @@ function connect(m: LiveModel): Step {
   return { model: { ...m, socket, sockets: socket }, effects: [{ kind: "connect", socket }] };
 }
 
-function lost(m: LiveModel, code: number, now: number): Step {
+function lost(m: LiveModel, code: number, now: number, unsent: readonly HeldOver[]): Step {
   if (code === CLOSE_HELLO_REFUSED) return finish({ ...m, socket: 0 }, "gone");
   if (code === CLOSE_ENDED) return finish({ ...m, socket: 0 }, "expired");
   if (code === CLOSE_REPLACED) return finish({ ...m, socket: 0 }, "replaced");
@@ -85,11 +91,17 @@ function lost(m: LiveModel, code: number, now: number): Step {
   if (now + ms - lostAt > KEEP_MS) return finish({ ...m, socket: 0 }, "lost");
   // While the host is away no phone is connected through it; the places stay held.
   const places = m.places.map((p) => (p === "connected" ? "away" : p)) as [Place, Place];
-  return { model: { ...m, phase: "reconnecting", socket: 0, lostAt, attempt: m.attempt + 1, places }, effects: [{ kind: "retry_in", ms }] };
+  const model = keptOnLoss({ ...m, phase: "reconnecting", socket: 0, lostAt, attempt: m.attempt + 1, places }, unsent);
+  return { model, effects: [{ kind: "retry_in", ms }] };
 }
 
 function setPlace(m: LiveModel, slot: Slot, p: Place): readonly [Place, Place] {
   return slot === 1 ? [p, m.places[1]] : [m.places[0], p];
+}
+
+/** The server's word on a place: it sets the place outright and, when free, answers its drop. */
+function told(m: LiveModel, slot: Slot, p: Place): LiveModel {
+  return { ...m, places: setPlace(m, slot, p), drops: placeTold(m.drops, slot, p) };
 }
 
 function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
@@ -102,10 +114,10 @@ function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
       return { model, effects: [{ kind: "welcomed", socket: m.socket, first }] };
     }
     case "controller_joined":
-      return { model: { ...m, places: setPlace(m, msg.slot, placeOf(msg)) }, effects: [{ kind: "joined" }] };
+      return { model: told(m, msg.slot, placeOf(msg)), effects: [{ kind: "joined" }] };
     case "controller_left":
       // Free once its token ended (its site session, a drop) or the replay says so (place-policy.ts).
-      return same({ ...m, places: setPlace(m, msg.slot, placeOf(msg)) });
+      return same(told(m, msg.slot, placeOf(msg)));
     case "control_code":
       return same({ ...m, code: { code: msg.code, expiresAt: now + msg.expiresInMs }, codeNote: null });
     case "code_cancelled":
@@ -144,7 +156,7 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
     case "message":
       return e.socket === m.socket && isRunning(m) ? onMessage(m, e.message, now) : same(m);
     case "closed":
-      return e.socket === m.socket && isRunning(m) ? lost(m, e.code, now) : same(m);
+      return e.socket === m.socket && isRunning(m) ? lost(m, e.code, now, e.unsent ?? []) : same(m);
     case "retry":
       return m.phase === "reconnecting" && m.socket === 0 ? connect(m) : same(m);
     case "make_code":
@@ -152,10 +164,13 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
       return { model: { ...m, codeNote: null }, effects: [{ kind: "send", message: { v: 1, type: "make_code" } }] };
     case "one_display":
       return oneDisplay(m);
-    case "drop":
-      if (m.phase !== "live" || m.places[e.slot - 1] === "none") return same(m);
+    case "drop": {
+      // One drop per press: none while this place's last drop waits for its answer (drop-policy.ts).
+      if (m.phase !== "live" || m.places[e.slot - 1] === "none" || !mayDrop(m.drops, e.slot)) return same(m);
       // A drop ends the current control code too: the shown code goes at once (ADR 0005 section 3).
-      return { model: { ...m, places: setPlace(m, e.slot, "none"), code: null, codeNote: null }, effects: [{ kind: "send", message: { v: 1, type: "drop", slot: e.slot } }] };
+      const model: LiveModel = { ...m, places: setPlace(m, e.slot, "none"), drops: dropSent(m.drops, e.slot), code: null, codeNote: null };
+      return { model, effects: [{ kind: "send", message: { v: 1, type: "drop", slot: e.slot } }] };
+    }
     case "end":
       return endHere(m, "host_ended");
     case "class_changed":
