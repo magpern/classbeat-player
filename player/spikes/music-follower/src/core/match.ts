@@ -2,7 +2,7 @@
 import type { Plan } from "./class_plan.js";
 import type { Reading } from "./types.js";
 
-const DURATION_TOLERANCE_MS = 2500;
+export const DURATION_TOLERANCE_MS = 2500;
 
 /** `spotify:track:ID` and `/com/spotify/track/ID` both become `ID`. */
 export function normalizeId(id: string): string {
