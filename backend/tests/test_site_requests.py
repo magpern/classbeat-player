@@ -10,6 +10,7 @@ from httpx import Response
 
 from player_backend.control_page_policy import control_headers, is_control_path
 from player_backend.db import login
+from player_backend.rider_page_policy import is_rider_path, rider_headers
 from tests.routehelp import routes_of
 from tests.sitehelp import FIREFOX, ORIGIN, Site
 
@@ -37,6 +38,11 @@ def _assert_headers(response: Response, path: str) -> None:
     if is_control_path(path):
         # The companion page's own (ADR 0005, section 8), each one: tests/test_control_page.py.
         for name, value in control_headers(path, ORIGIN).items():
+            assert response.headers[name] == value, (path, name)
+        return
+    if is_rider_path(path):
+        # The rider page's (ADR 0007, section 5), each one: tests/test_rider_page.py.
+        for name, value in rider_headers(path, ORIGIN).items():
             assert response.headers[name] == value, (path, name)
         return
     assert response.headers["content-security-policy"] == CSP

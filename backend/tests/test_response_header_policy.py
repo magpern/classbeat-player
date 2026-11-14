@@ -9,6 +9,7 @@ from player_backend import response_header_policy
 from player_backend.control_page_policy import control_headers
 from player_backend.request_policy import NEVER_STORED, response_headers
 from player_backend.response_header_policy import headers_for
+from player_backend.rider_page_policy import rider_headers
 from player_backend.route_path_policy import routed_path
 
 ORIGIN = "https://player.test"
@@ -77,6 +78,17 @@ def test_the_companion_page_keeps_its_own_headers() -> None:
     asset = headers_for("/player/control/companion.js", "/player", ORIGIN)
     assert asset == control_headers("/control/companion.js", ORIGIN)
     assert asset["Cache-Control"] == "no-cache"
+
+
+def test_the_rider_page_keeps_its_own_headers() -> None:
+    page = headers_for("/player/j", "/player", ORIGIN)
+    assert page == rider_headers("/j", ORIGIN)
+    asset = headers_for("/player/j/rider.js", "/player", ORIGIN)
+    assert asset == rider_headers("/j/rider.js", ORIGIN)
+    assert asset["Cache-Control"] == "no-cache"
+    # `/join` and `/jx` are not the page: the site's headers.
+    assert headers_for("/join", "", ORIGIN) == PAGE
+    assert headers_for("/player/jx", "/player", ORIGIN) == PAGE
 
 
 def test_a_companion_asset_under_an_api_prefix_is_never_stored() -> None:
