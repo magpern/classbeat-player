@@ -16,7 +16,7 @@
   :root {
     --c-hero: min(18.9dvh, 10.6vw);
     --c-value: min(8.2dvh, 4.6vw);
-    --c-minor: min(5.6dvh, 3.3vw);
+    --c-minor: min(5.95dvh, 3.4vw);
     --c-label: min(4.7dvh, 2.7vw);
   }
 }
@@ -47,7 +47,7 @@
 
 /* The effort: label, then the value in the value tier and its unit. White, never a zone colour. */
 .effort { grid-area: effort; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 3vw; row-gap: 1.1dvh; align-content: start; align-items: baseline; min-width: 0; }
-@media (orientation: landscape) { .effort { column-gap: 1.6vw; row-gap: 2dvh; } }
+@media (orientation: landscape) { .effort { column-gap: 1.6vw; row-gap: 1.4dvh; } }
 .effort > .lbl { grid-column: 1; white-space: nowrap; }
 .ev { grid-column: 2; display: flex; align-items: baseline; gap: 0.35em; white-space: nowrap; min-width: 0; }
 .ev .n { font-size: var(--c-value); line-height: 1; color: var(--light-1); }
