@@ -27,6 +27,7 @@ jobs:
       player: ${{ steps.detect.outputs.player }}
       web: ${{ steps.detect.outputs.web }}
       desktop: ${{ steps.detect.outputs.desktop }}
+      code: ${{ steps.detect.outputs.code }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -40,6 +41,7 @@ jobs:
         run: bash scripts/detect-changes.sh
 
   repo-checks:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -47,7 +49,10 @@ jobs:
         run: bash scripts/check-repo.sh
       - name: Provider guard (ADR 0004)
         run: bash scripts/check-providers.sh
+      # A change to documentation only (docs/ or a root *.md) runs no tests: the never-commit guard
+      # and the provider guard above stay, the script tests, deploy-file tests and shellcheck do not.
       - name: Script tests
+        if: needs.changes.outputs.code == 'true'
         run: |
           bash scripts/test-check-repo.sh
           bash scripts/test-check-providers.sh
@@ -59,8 +64,10 @@ jobs:
       # Backend deploy files (issue #95): `docker compose config` with placeholder secret files,
       # the roles, the secrets and the purge scheduler. Reads files only; starts nothing.
       - name: Backend deploy files
+        if: needs.changes.outputs.code == 'true'
         run: bash scripts/test-backend-deploy.sh
       - name: shellcheck
+        if: needs.changes.outputs.code == 'true'
         run: shellcheck scripts/*.sh docker/*.sh docker/postgres/*.sh
 
   # Runs `npm ci && npm test` in every package under player/ that has a package.json and a
@@ -88,7 +95,7 @@ jobs:
         run: bash scripts/run-node-packages.sh .
       # Conditioned on the committed screenshot sources (hashFiles is empty when they do not exist
       # yet), so main stays green before #138 lands and the upload then fails CI if no screenshots
-      # were produced. always() uploads on red runs too, like room-screenshots.
+      # were produced. always() uploads on red runs too, like room-screenshots-shard-<n>.
       - name: Keep the class list screenshots
         if: always() && hashFiles('player/app/test/shots/**') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -152,12 +159,18 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-  # The web lane (screens): web/ci.sh runs lint, types, build, unit tests and the spec's measurable
-  # checks (docs/design/room-2d.md C1 to C9) on the real screen in the runner's Chrome at every state
-  # and size. The screenshots are kept as an artefact for the Designer.
-  # It also runs when player/ or schema/ change, but then only the drift test (web/test/unit/
+  # The web lane (screens), in two parts so the long browser checks run side by side (issue #435):
+  #  - `web`: web/ci.sh static = lint, types, build, unit tests and the shard check (every spec file
+  #    is in exactly one shard of web/spec-shards.txt, so none can be dropped silently).
+  #  - `web-specs`: the specs' measurable checks (docs/design/room-2d.md C1 to C9, site.md S1 to S12,
+  #    play.md P1 to P10, ...) in the runner's Chrome at every state and size, split over five
+  #    runners by web/spec-shards.txt. Concurrency between spec files stays 1 on each runner.
+  #    Each shard keeps its screenshots as the artefact room-screenshots-shard-<n> for the Designer.
+  # `web` also runs when player/ or schema/ change, but then only the drift test (web/test/unit/
   # snapshot-compat.test.ts, which reads the player's clock and link views and the class types as
   # text), so a change there that the room screen does not follow fails in that pull request.
+  # `web-specs` runs only when web/ (or what its checks read) changed; `ci` below fails when it
+  # is skipped, failed or cancelled in that case.
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true' || needs.changes.outputs.player == 'true' || needs.changes.outputs.schema == 'true'
@@ -172,21 +185,44 @@ jobs:
       - name: Install
         working-directory: web
         run: npm ci
-      - name: Web checks
+      - name: Web checks (lint, types, build, unit tests, shard check)
         if: needs.changes.outputs.web == 'true'
         working-directory: web
-        run: bash ci.sh
+        run: bash ci.sh static
       - name: Drift test only (player/ or schema/ changed, web/ did not)
         if: needs.changes.outputs.web != 'true'
         working-directory: web
         run: node --import tsx --test test/unit/snapshot-compat.test.ts
+
+  web-specs:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    name: web-specs (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Spec checks, shard ${{ matrix.shard }} of 5
+        working-directory: web
+        run: bash ci.sh shard ${{ matrix.shard }}
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: room-screenshots
+          name: room-screenshots-shard-${{ matrix.shard }}
           path: web/screenshots/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
   # Runs schema/ci.sh: install from lockfiles, generated types current, Python and TypeScript
@@ -255,7 +291,7 @@ jobs:
 
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, desktop-app, web, schema, backend]
+    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -266,6 +302,17 @@ jobs:
           echo "$RESULTS"
           if echo "$RESULTS" | grep -Eq '"result": "(failure|cancelled)"'; then
             echo "a needed job did not succeed" >&2
+            exit 1
+          fi
+      # A job skipped by its filter is fine, but not the web shards while web changed (issue #435):
+      # that would be a web change merged without its spec checks.
+      - name: Fail if the web shards did not run when web changed
+        env:
+          WEB_CHANGED: ${{ needs.changes.outputs.web }}
+          WEB_SPECS: ${{ needs.web-specs.result }}
+        run: |
+          if [ "$WEB_CHANGED" = "true" ] && [ "$WEB_SPECS" != "success" ]; then
+            echo "web changed but web-specs is '$WEB_SPECS'" >&2
             exit 1
           fi
 

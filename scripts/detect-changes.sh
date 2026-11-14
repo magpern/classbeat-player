@@ -26,8 +26,20 @@ else
   files="$(git diff --name-only $range 2>/dev/null)" || all=1
 fi
 
+# A change that touches only documentation runs no tests (issue #435, owner 2026-11-14): every
+# changed path is under docs/ (including docs/design/ and its mock-ups) or is a root *.md file.
+# Then every flag below is false. `code` says that something other than documentation changed; it
+# gates the script tests, deploy-file tests and shellcheck in repo-checks. scripts/check-repo.sh
+# (the never-commit guard) and the pr-title check do not depend on it and always run.
+docs_only=0
+if [ "$all" -eq 0 ] && [ -n "$files" ] && ! printf '%s\n' "$files" | grep -Evq '^(docs/|[^/]+\.md$)'; then
+  docs_only=1
+fi
+
 flag() { # flag <name> <extended regex>
-  if [ "$all" -eq 1 ] || printf '%s\n' "$files" | grep -Eq "$2"; then
+  if [ "$docs_only" -eq 1 ]; then
+    echo "$1=false" >>"$out"
+  elif [ "$all" -eq 1 ] || printf '%s\n' "$files" | grep -Eq "$2"; then
     echo "$1=true" >>"$out"
   else
     echo "$1=false" >>"$out"
@@ -50,9 +62,16 @@ flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
 # The browser page imports player/app/src/core/clock/{clock,plan,view}.ts, the shared clock surface, so a
 # change to any of those three files runs the web job (ADR 0008 section 4, #391). The rest of core/clock/ is not shared.
 # A change there must run the whole web job, or main can go red unseen (issue #268).
+# docs/design/ is NOT in the list any more (issue #435, owner 2026-11-14): documentation alone runs no
+# tests. A mismatch between a mock-up or spec in docs/design/ (for example mockups/tokens.css) and the
+# product, which #268 would have caught in the pull request that changed it, now shows on the next
+# change that touches web/ (or another file below). A pull request that changes docs/design/ together
+# with other code still runs whatever that code needs, but not web only because of docs/design/.
 # player/app/src/core/** and schema/generated/ts are already covered by the drift-only step,
 # through the player and schema flags.
-flag web '^(web/|docs/design/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$)'
+flag web '^(web/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$)'
+# Something other than documentation changed (a docs-only change sets every flag false, above).
+flag code '.'
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.
 flag desktop '^(player/|web/|schema/|scripts/(build|package|release)[^/]*|\.github/workflows/|(.*/)?(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml|Cargo\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt))'
