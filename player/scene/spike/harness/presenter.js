@@ -31,15 +31,10 @@ const actions = {
 };
 document.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => run(actions[b.dataset.cmd])));
 window.addEventListener('keydown', (e) => {
-  const k = e.key.toLowerCase();
-  if (e.key === ' ') { e.preventDefault(); run(actions.toggle); }
-  else if (k === 'r') run(actions.reset);
-  else if (k === 'k') run(actions['kill-scene']);
-  else if (k === 'p') run(actions['mode-plain']);
-  else if (k === 's') run(actions['mode-scene']);
-  else if (k === 'c') run(actions.capture);
-  else if (k === 'v') { const i = current.variants.indexOf(current.variant); run({ type: 'variant', variant: current.variants[(i + 1) % current.variants.length] }); }
-  else if (/^[1-9]$/.test(k)) run({ type: 'move-room', n: Number(k) });
+  const c = window.SpikeKeymap.routeKey(e.key, current);
+  if (!c) return;
+  if (e.key === ' ') e.preventDefault();
+  run(c);
 });
 window.spike.onState(render);
 window.spike.getState().then(render);
