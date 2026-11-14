@@ -122,8 +122,10 @@ export function livePanelView(m: LiveModel, f: PanelFacts): LivePanelView {
   const slots: SlotView[] = running
     ? ([1, 2] as const).map((slot) => {
         const p = m.places[slot - 1];
-        // No Drop while this place's last drop waits for the server's answer (drop-policy.ts, #381).
-        return { slot, text: `Phone ${slot}: ${PLACE_TEXT[p]}`, canDrop: live && p !== "none" && mayDrop(m.drops, slot) };
+        // While this place's last drop waits for the server's answer (drop-policy.ts, #381) a phone
+        // shown in it reads "dropping", with no Drop; the line reads "free" once the server frees it.
+        const waiting = p !== "none" && !mayDrop(m.drops, slot);
+        return { slot, text: `Phone ${slot}: ${waiting ? "dropping" : PLACE_TEXT[p]}`, canDrop: live && p !== "none" && !waiting };
       })
     : [];
   return {

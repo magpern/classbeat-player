@@ -7,6 +7,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { dropSent, dropsLost, dropsWelcomed, mayDrop, NO_DROPS, placeTold } from "../../src/core/live/drop-policy.ts";
 import type { Drops } from "../../src/core/live/drop-policy.ts";
+import { livePanelView } from "../../src/core/live/panel-view.ts";
+import { OFF } from "../../src/core/live/session-types.ts";
+import type { LiveModel } from "../../src/core/live/session-types.ts";
 import { started } from "./live-relay.ts";
 import type { Rig } from "./live-relay.ts";
 
@@ -35,6 +38,17 @@ test("the rule: sent until the server says the place is free; a lost one is queu
   assert.deepEqual(dropsWelcomed(sent), { drops: NO_DROPS, resend: [] });
 });
 
+test("the presenter says a place with a drop waiting is dropping, with no Drop; free once freed", () => {
+  const base = { ...OFF, phase: "live" as const, socket: 1, sockets: 1 };
+  const facts = { now: 0, classOpen: true, secondDisplay: true, origin: null };
+  const view = (m: LiveModel) => livePanelView(m, facts).slots.map((s) => [s.text, s.canDrop]);
+  for (const p of ["connected", "away"] as const) {
+    assert.deepEqual(view({ ...base, places: [p, "connected"], drops: ["sent", "none"] }), [["Phone 1: dropping", false], ["Phone 2: steering", true]], p);
+    assert.deepEqual(view({ ...base, places: ["connected", p], drops: ["none", "queued"] }), [["Phone 1: steering", true], ["Phone 2: dropping", false]], p);
+  }
+  assert.deepEqual(view({ ...base, places: ["none", "none"], drops: ["sent", "none"] }), [["Phone 1: free", false], ["Phone 2: free", false]]);
+});
+
 test("Drop pressed twice before dropped sends one drop, even when the phone shows again in between", async () => {
   const r = await started();
   r.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
@@ -44,10 +58,10 @@ test("Drop pressed twice before dropped sends one drop, even when the phone show
   r.live.drop(1);
   // The phone's connection closes, and it comes back, before the server has the drop.
   r.socket().server({ v: 1, type: "controller_left", slot: 1, via: "code", reason: "disconnected" });
-  assert.deepEqual(place(r, 1), ["Phone 1: not connected", false]);
+  assert.deepEqual(place(r, 1), ["Phone 1: dropping", false]);
   r.live.drop(1);
   r.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
-  assert.deepEqual(place(r, 1), ["Phone 1: steering", false]);
+  assert.deepEqual(place(r, 1), ["Phone 1: dropping", false]);
   r.live.drop(1);
   await r.advance(2000);
   assert.deepEqual(drops(r), [{ v: 1, type: "drop", slot: 1 }]);

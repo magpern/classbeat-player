@@ -68,7 +68,7 @@ async function states(): Promise<Shot[]> {
   places.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in", reason: "session_ended" });
   out.push(shot("phone-session-ended", places));
   // One drop per press (#381): phone 1 was dropped and shows again before the server's answer, so
-  // its Drop is not offered until the place is free; phone 2 keeps its Drop.
+  // it reads "dropping", with no Drop, until the place is free; phone 2 keeps its Drop.
   const waiting = await started();
   waiting.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
   waiting.socket().server({ v: 1, type: "controller_joined", slot: 2, via: "sign_in" });
@@ -228,7 +228,7 @@ test("the phone-remote panel in each state: rendered, the control code only wher
   );
   assert.deepEqual(
     by.get("phone-drop-waiting")!.slots.map((x) => [x.text, x.canDrop]),
-    [["Phone 1: steering", false], ["Phone 2: steering", true]],
+    [["Phone 1: dropping", false], ["Phone 2: steering", true]],
   );
 });
 

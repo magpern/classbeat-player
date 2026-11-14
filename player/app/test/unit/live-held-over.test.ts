@@ -10,7 +10,7 @@ import { CANCEL_CODE } from "../../src/core/live/code-cancel.ts";
 import { heldOver, keptOnLoss, welcomedFirst } from "../../src/core/live/held-over.ts";
 import type { HostInbound } from "../../src/core/live/host-wire.ts";
 import { MAX_PER_WINDOW } from "../../src/core/live/send-budget.ts";
-import { step } from "../../src/core/live/session-model.ts";
+import { KEEP_MS, step } from "../../src/core/live/session-model.ts";
 import { OFF } from "../../src/core/live/session-types.ts";
 import type { LiveEvent, LiveModel } from "../../src/core/live/session-types.ts";
 import { CONTROL_CODE, HOST_TOKEN, started } from "./live-relay.ts";
@@ -91,6 +91,14 @@ test("a lost connection that ends the session keeps nothing: the server ended th
     assert.equal(gone.cancelPending, false);
     assert.deepEqual(gone.drops, ["none", "none"]);
   }
+  // Away for longer than the live process keeps the session: it ends here with nothing kept.
+  const retrying = run([{ type: "closed", socket: 1, code: 1006, unsent: [] }, { type: "retry" }], pressed);
+  assert.equal(retrying.socket, 2);
+  const late = step(retrying, { type: "closed", socket: 2, code: 1006, unsent: [CANCEL_CODE, DROP_1] }, KEEP_MS);
+  assert.equal(late.model.phase, "ended");
+  assert.equal(late.model.ended, "lost");
+  assert.equal(late.model.cancelPending, false);
+  assert.deepEqual(late.model.drops, ["none", "none"]);
 });
 
 test("keptOnLoss and welcomedFirst leave the model they are given unchanged", () => {
@@ -150,7 +158,7 @@ test("budget spent, drop queued, connection lost: on the next welcome the drop g
   assert.ok(validDrop(next.sent[1]), JSON.stringify(validDrop.errors));
   // Until the server answers it, the place takes no other drop, even when the replay shows it held.
   next.server({ v: 1, type: "controller_joined", slot: 1, via: "code" });
-  assert.equal(r.live.view().slots[0].canDrop, false);
+  assert.deepEqual(r.live.view().slots[0], { slot: 1, text: "Phone 1: dropping", canDrop: false });
   r.live.drop(1);
   assert.equal(types(next.sent).filter((t) => t === "drop").length, 1);
   next.server({ v: 1, type: "controller_left", slot: 1, via: "code", reason: "dropped" });
