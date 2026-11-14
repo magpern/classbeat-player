@@ -23,6 +23,9 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json web/tsconfig.json web/build.mjs ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY web/src src
+# The play page imports the shared class clock (ADR 0008 section 4), which resolves from
+# /web/src/play/ as /player/app/src/core/clock/. Exactly these three files, and nothing else of player/.
+COPY player/app/src/core/clock/clock.ts player/app/src/core/clock/plan.ts player/app/src/core/clock/view.ts /player/app/src/core/clock/
 RUN npm run build
 
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df

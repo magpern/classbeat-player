@@ -15,6 +15,9 @@
 !web/tsconfig.json
 !web/build.mjs
 !web/src
+!player/app/src/core/clock/clock.ts
+!player/app/src/core/clock/plan.ts
+!player/app/src/core/clock/view.ts
 **/.venv
 **/__pycache__
 **/tests
