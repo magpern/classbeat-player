@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { monoMs, wallMs } from "./clock.js";
 import { buildPlan } from "./core/class_plan.js";
 import { ClassFollower, DEFAULT_CONFIG } from "./core/follower.js";
-import { controlLine, markerLine, metaLine, readingLine, statusText } from "./core/log_format.js";
+import { controlLine, markerLine, metaLine, readingLine, statusLine } from "./core/log_format.js";
 import type { Decision } from "./core/types.js";
 import { createReader } from "./readers/select.js";
 
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   const pollMs = 1000 / rate;
   const plan = buildPlan(JSON.parse(readFileSync(values.class, "utf8")));
   const cfg = { ...DEFAULT_CONFIG, ...(staleArg !== undefined ? { staleMs: Number(staleArg) } : {}) };
-  const reader = createReader(values.reader ?? "auto", pollMs);
+  const reader = createReader(values.reader ?? "auto", pollMs, (text) => console.error(`\n${text}`));
   const follower = new ClassFollower(plan, cfg);
   const out = values.out;
   const stamp = () => ({ monoMs: monoMs(), wallMs: wallMs() });
@@ -75,13 +75,14 @@ async function main(): Promise<void> {
   process.stdin.resume();
 
   console.error(`following Spotify, ${rate} Hz, log ${out}. b = beat tap, m = mark, u = undo, r = relink, 1-9 = pick song, q = quit`);
+  await reader.prepare?.();
   while (!quit) {
     const started = monoMs();
     const reading = await reader.readNow();
     const decision = follower.step(monoMs(), reading);
     last = decision;
     write(readingLine(stamp(), reading, decision));
-    process.stderr.write(`\r${statusText(decision)}                    `);
+    process.stderr.write(`\r${statusLine(decision, reader.reason?.() ?? null)}`.padEnd(110));
     await new Promise((r) => setTimeout(r, Math.max(0, pollMs - (monoMs() - started))));
   }
   write(metaLine(stamp(), { event: "end" }));

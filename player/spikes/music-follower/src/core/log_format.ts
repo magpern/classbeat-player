@@ -23,6 +23,11 @@ export function controlLine(stamp: Stamp, key: string, decision: Decision): stri
   return JSON.stringify({ t: "control", ...stamp, key, decision });
 }
 
+/** The status text plus, when the music gives no usable reading, why. */
+export function statusLine(d: Decision, why: string | null): string {
+  return statusText(d) + (why ? `  [no music reading: ${why}]` : "");
+}
+
 /** One-line status for the terminal. */
 export function statusText(d: Decision): string {
   const s = Math.floor(d.classTimeMs / 1000);

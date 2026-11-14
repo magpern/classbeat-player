@@ -7,5 +7,9 @@ export interface Reader {
   readonly limitations?: string[];
   /** The latest reading, or null when the music app is not running or says nothing. */
   readNow(): Promise<Reading | null>;
+  /** Before the poll loop: a one-time check that may wait on the person (macOS Automation prompt). */
+  prepare?(): Promise<void>;
+  /** Why the last read gave nothing, or the music is not playing; shown on the status line. */
+  reason?(): string | null;
   close?(): void;
 }
