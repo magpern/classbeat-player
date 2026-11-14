@@ -109,6 +109,19 @@ def end_session(ctx: AccountContext, session_id: UUID, client: ClientInfo) -> bo
     return True
 
 
+def end_asking_session(pool: Pool, token_hash: bytes, client: ClientInfo) -> bool:
+    """After a sign-in: end the session the browser held before it, as signing out with it does.
+
+    The session is found as for any signed-in request (`auth_enter_session`), in a transaction
+    of its own, and ended with the same event and `live_revocations` notice. False when the
+    token is no live session: nothing to end.
+    """
+    with entered(pool, token_hash) as ctx:
+        if ctx is None:
+            return False
+        return end_session(ctx, ctx.credential_id, client)
+
+
 def end_all_sessions(ctx: AccountContext, client: ClientInfo) -> int:
     """End every session of the account, this one included. Returns how many.
 

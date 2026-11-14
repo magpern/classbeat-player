@@ -7,10 +7,12 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from player_backend.site import source_links
+from player_backend.source_policy import KnownSource
 from player_backend.token_issue import new_token
 from tests import sourcehelp as sh
 from tests.pairhelp import settle
-from tests.sitehelp import Browser, Site
+from tests.sitehelp import SOURCE, Browser, Site
 
 EMAIL = "teacher@example.test"
 
@@ -36,6 +38,9 @@ def test_the_check_names_a_known_source_and_refuses_anything_else(
         ("classbeat", sh.REDIRECT + "/more"),
         ("classbeat", "https://evil.test/player/linked"),
         ("classbeat", sh.REDIRECT + "?x=1"),
+        # #427: a backslash, which a browser reads as `/`.
+        ("classbeat", sh.REDIRECT + "\\"),
+        ("classbeat", sh.REDIRECT.replace("://", ":\\\\")),
     ):
         answer = signed_in.post(sh.CHECK, json={"source": source, "redirect_uri": redirect})
         assert answer.status_code == 400 and answer.json() == {"error": "unknown_source"}
@@ -49,6 +54,31 @@ def test_the_check_names_a_known_source_and_refuses_anything_else(
         }
         refused = signed_in.post(sh.APPROVE, json=body)
         assert refused.status_code == 400 and "redirect" not in refused.text
+
+
+@pytest.mark.parametrize("path", [sh.CHECK, sh.APPROVE])
+def test_a_backslash_is_refused_by_the_route_and_counts_as_the_sessions_use(
+    site: Site, signed_in: Browser, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    # #427. As if a setting had let a backslash address through: the route refuses it on its
+    # own, with the one answer, and redirects nowhere.
+    bad = "https://classbeat.test\\.evil.test/player/linked"
+    smuggled = KnownSource(SOURCE.id, SOURCE.name, frozenset({bad}))
+
+    def finds_it(*_: object) -> KnownSource:
+        return smuggled
+
+    monkeypatch.setattr(source_links, "find_source", finds_it)
+    site.su.execute("UPDATE player.sessions SET last_used_at = now() - interval '6 minutes'")
+    _, challenge = sh.pkce()
+    body = {"source": SOURCE.id, "redirect_uri": bad, "state": "s", "code_challenge": challenge}
+    refused = signed_in.post(path, json=body)
+    assert refused.status_code == 400 and refused.json() == {"error": "unknown_source"}
+    assert "location" not in refused.headers
+    # A refusal inside the session's transaction: it counts as the session's use (section 10).
+    fresh = "SELECT last_used_at > now() - interval '1 minute' FROM player.sessions"
+    assert site.su.execute(fresh).fetchone() == (True,)
+    assert site.su.execute("SELECT count(*) FROM player.source_link_codes").fetchone() == (0,)
 
 
 def test_the_approval_needs_a_sign_in_and_the_sites_origin(site: Site, signed_in: Browser) -> None:

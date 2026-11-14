@@ -53,10 +53,13 @@ class KnownSource:
 
 def valid_redirect(uri: object) -> bool:
     """An address a source may be sent back to: HTTPS (or HTTP on loopback, for development),
-    with no query, fragment or user part, so that the code and state can be appended."""
+    with no query, fragment or user part, so that the code and state can be appended.
+
+    No backslash anywhere: a browser's URL parser reads it as `/`, Python's `urlsplit` does not,
+    so the two would see different hosts (#427)."""
     if not isinstance(uri, str) or not 1 <= len(uri) <= REDIRECT_MAX:
         return False
-    if any(c.isspace() or ord(c) < 0x21 or ord(c) > 0x7E for c in uri):
+    if any(c.isspace() or ord(c) < 0x21 or ord(c) > 0x7E or c == "\\" for c in uri):
         return False
     parts = urlsplit(uri)
     if parts.query or parts.fragment or "?" in uri or "#" in uri or "@" in parts.netloc:

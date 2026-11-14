@@ -32,6 +32,7 @@ from player_backend.source_policy import (
     find_source,
     linked_mail,
     valid_challenge,
+    valid_redirect,
     valid_state,
 )
 from player_backend.token_issue import new_token
@@ -53,8 +54,11 @@ class LinkApproval(LinkRequest):
 
 def _known(request: Request, body: LinkRequest) -> KnownSource:
     found = find_source(site_state(request).settings.sources, body.source, body.redirect_uri)
-    if found is None:
+    if found is None or not valid_redirect(body.redirect_uri):
         # One answer for an unknown source and an address it may not use: never a redirect.
+        # The address is checked here as well as in the setting, so one holding a backslash is
+        # refused even if a setting let it through (#427). Raised inside the session's
+        # transaction: the refusal counts as the session's use, as every route refusal does.
         raise ApiError(400, "unknown_source")
     return found
 
