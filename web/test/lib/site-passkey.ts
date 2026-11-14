@@ -29,4 +29,27 @@ export function passkeyStandIn(mode: Passkey, note: Note): void {
     } as unknown as Credential);
   };
   Object.defineProperty(navigator.credentials, "get", { value: get });
+  // Adding a passkey (the Passkeys page): the same modes. The new credential's parts are fixed
+  // strings, so a check can look for each of them (site-account-states.ts, NEW_CREDENTIAL).
+  const create = (options?: CredentialCreationOptions): Promise<Credential | null> => {
+    const pk = options?.publicKey;
+    const listed = (b: BufferSource | undefined): string => {
+      const v = b ? new Uint8Array(b as ArrayBuffer) : new Uint8Array();
+      let out = "";
+      for (let i = 0; i < v.length; i += 1) out += (i ? "," : "") + v[i];
+      return out;
+    };
+    const sel = pk?.authenticatorSelection;
+    note("passkey", `create challenge=${listed(pk?.challenge)} user=${listed(pk?.user.id)} exclude=${pk?.excludeCredentials?.length ?? "none"} rk=${sel?.residentKey ?? ""} uv=${sel?.userVerification ?? ""} rp=${pk?.rp.id ?? ""}`);
+    if (mode === "hold") return new Promise(() => undefined);
+    if (mode === "cancel") return Promise.reject(new DOMException("The operation either timed out or was not allowed.", "NotAllowedError"));
+    return Promise.resolve({
+      id: "bmV3LWNyZWQtN2Y",
+      type: "public-key",
+      rawId: bytes("new-cred-7f"),
+      authenticatorAttachment: "platform",
+      response: { clientDataJSON: bytes('{"type":"webauthn.create","n":"cdj-5e"}'), attestationObject: bytes("attestation-object-3c"), getTransports: () => ["internal", "hybrid"] },
+    } as unknown as Credential);
+  };
+  Object.defineProperty(navigator.credentials, "create", { value: create });
 }
