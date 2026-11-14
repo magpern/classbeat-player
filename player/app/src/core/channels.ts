@@ -37,3 +37,10 @@ export const CH_LIVE_START = "live:start";
 export const CH_LIVE_END = "live:end";
 export const CH_LIVE_CODE = "live:code";
 export const CH_LIVE_DROP = "live:drop";
+// The presenter's riders panel (ADR 0007 sections 3 and 4): `live:riders` and `live:new-code` take
+// no argument, `live:drop-rider` a rider's id, `live:lock` true or false. Each answers with a
+// RidersView, the only place the riders' nicknames leave the main process. Presenter page only.
+export const CH_LIVE_RIDERS = "live:riders";
+export const CH_LIVE_DROP_RIDER = "live:drop-rider";
+export const CH_LIVE_LOCK = "live:lock";
+export const CH_LIVE_NEW_CODE = "live:new-code";

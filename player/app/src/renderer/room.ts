@@ -4,10 +4,14 @@
 // through its preload (room-preload.ts).
 import "../../../../web/src/main.ts";
 import "./room-band.css";
+import "./room-join.css";
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
+import { REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
+import type { ClockStatus } from "../core/room/band-view.ts";
 import { mountBand } from "./room-band.ts";
+import { mountSheet } from "./room-join.ts";
 
 type Answer<T> = Promise<T | null>;
 
@@ -39,10 +43,23 @@ const screen = window.classbeatRoom.mount(document.body, { reducedMotion });
 const alone = (): boolean => (window.screen as Screen & { isExtended?: boolean }).isExtended !== true;
 
 let pushed = false;
+// The join sheet (room-join.ts) reads the clock's state and the slot; the band, whether it is open.
+let status: ClockStatus | null = null;
+let slot: RemoteView = REMOTE_ABSENT;
+const sheet = mountSheet(document.body, () => band.redraw());
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;
   screen.update(frame);
+  status = (frame.view?.status as ClockStatus | undefined) ?? null;
+  sheet.facts(status, slot);
   band.frame(frame);
+};
+/** A new slot (a new code too) redraws the sheet and the band in the same frame. */
+const remote = (v: RemoteView | null): void => {
+  if (!v) return;
+  slot = v;
+  sheet.facts(status, slot);
+  band.remote(v);
 };
 
 /** Each command goes to its one fixed call; the answer is the frame as it is now. */
@@ -63,8 +80,8 @@ function send(c: RoomCommand): void {
 const band = mountBand(document.body, {
   command: send,
   endClass: () => void api.endClass(),
-  startRemote: () => void api.startRemote().then((v) => v && band.remote(v)),
-}, { alone, reducedMotion });
+  startRemote: () => void api.startRemote().then(remote),
+}, { alone, reducedMotion, sheet });
 
 // A push can arrive before the first answer; the older answer then does not draw over it.
 api.onUpdate((frame) => {
@@ -74,5 +91,5 @@ api.onUpdate((frame) => {
 void api.state().then((frame) => {
   if (!pushed) draw(frame);
 });
-api.onRemote((v) => band.remote(v));
-void api.remoteState().then((v) => v && band.remote(v));
+api.onRemote(remote);
+void api.remoteState().then(remote);

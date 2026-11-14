@@ -8,10 +8,11 @@
 // Results always go before the state, so the 1 s heartbeat holds only while the other messages
 // stay at 6 or fewer a second. They do: the server lets at most 4 commands a second reach the host
 // (2 per controller), and make_code, drop and end are rare. Results are never dropped to make room.
+// rider_state (ADR 0007) takes what room is left after all of those (`hasRoom`, `spent`), at most
+// 2 a second by its own policy (rider-policy.ts); drop_rider, lock and new_join_code are presses.
 import type { CommandResult } from "../../../../../schema/generated/ts/live-command-result.d.ts";
-import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
 import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";
-import type { MakeCode } from "../../../../../schema/generated/ts/live-make-code.d.ts";
+import type { HostOperation } from "./session-types.ts";
 
 export const WINDOW_MS = 1000;
 /** At most this many messages in any window, all kinds together: under 8 a second. */
@@ -23,7 +24,7 @@ export const STATE_GAP_MS = 250;
 /** A state is sent at least this often, changed or not. */
 export const HEARTBEAT_MS = 1000;
 
-export type HostMessage = CommandResult | MakeCode | Drop | End;
+export type HostMessage = CommandResult | HostOperation | End;
 export type Send = { readonly kind: "message"; readonly message: HostMessage } | { readonly kind: "state" };
 
 export interface SendBudget {
@@ -94,3 +95,12 @@ export function wakeAt(b: SendBudget, now: number): number {
   );
   return Math.max(stateDueAt(b, now), total, states);
 }
+
+/** Whether one more message fits in the window now, after everything `take` sent. */
+export const hasRoom = (b: SendBudget, now: number): boolean => b.queue.length === 0 && inWindow(b, now).length < MAX_PER_WINDOW;
+
+/** When one more message will fit (`now` or later). */
+export const roomAt = (b: SendBudget, now: number): number => freeAt(inWindow(b, now), MAX_PER_WINDOW, now);
+
+/** The budget after one message sent outside `take` (a rider_state) at `now`. */
+export const spent = (b: SendBudget, now: number): SendBudget => ({ ...b, sent: [...inWindow(b, now), { at: now, state: false }] });

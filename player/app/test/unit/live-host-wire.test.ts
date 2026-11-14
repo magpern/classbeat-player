@@ -15,7 +15,7 @@ const examples = (name: string, kind: "valid" | "invalid"): [string, unknown][] 
   return readdirSync(dir).map((f) => [f, JSON.parse(readFileSync(join(dir, f), "utf8").replaceAll("<secret43>", SECRET))]);
 };
 
-const TO_HOST = ["controller-joined", "controller-left", "control-code", "code-cancelled", "ended"];
+const TO_HOST = ["controller-joined", "controller-left", "control-code", "code-cancelled", "ended", "rider-joined", "rider-left", "lock-state", "join-code"];
 
 test("every valid example of a message to the host is taken, as its own type", () => {
   for (const name of TO_HOST) {
@@ -57,7 +57,7 @@ test("welcome: only the host's own, with nothing but its role", () => {
 });
 
 test("messages the host is never sent are dropped: companion_state, ack, host_status, hello", () => {
-  for (const name of ["companion-state", "ack", "host-status", "hello", "make-code", "cancel-code", "drop", "end"]) {
+  for (const name of ["companion-state", "ack", "host-status", "hello", "make-code", "cancel-code", "drop", "end", "rider-state", "drop-rider", "lock", "new-join-code", "join-request", "welcome-rider"]) {
     for (const [file, ex] of examples(name, "valid")) assert.equal(parseHostMessage(ex), null, `${name}/${file}`);
   }
 });

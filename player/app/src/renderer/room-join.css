@@ -1,0 +1,50 @@
+/* The room screen's join sheet (docs/design/room-join.md; from the mock-up's join.css). It lies over
+   everything between the rail and the band's top, 2 vh clear of the band, on the same stage: black,
+   white light, no hue (rule 7). Both QR codes are black on white with a 4-module quiet zone; the
+   sheet never draws a rider, a count or a list (rule 13). Sizes are shares of the screen height. */
+
+.join {
+  position: fixed; left: var(--safe-x); right: var(--safe-x); top: 11vh; bottom: 24vh; z-index: 9;
+  box-sizing: border-box; overflow: hidden;
+  background: var(--stage); color: var(--light-1); font-family: var(--face-text);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 4vw; align-items: start;
+  animation: join-in var(--m-state);
+}
+.join[hidden] { display: none; }
+@keyframes join-in { from { opacity: 0; } to { opacity: 1; } }
+:root[data-reduced-motion] .join { animation: none; }
+@media (prefers-reduced-motion: reduce) { .join { animation: none; } }
+
+.join .card { display: flex; gap: 3vw; min-width: 0; }
+.join .card .body { display: flex; flex-direction: column; min-width: 0; gap: 1.4vh; }
+.join .head { display: flex; flex-direction: column; gap: 1.4vh; min-width: 0; }
+.join h1 { margin: 0; font-family: var(--face-number); font-weight: 800; font-size: var(--t-value); line-height: 0.95; }
+.join .how { margin: 0; font-size: var(--t-minor); font-weight: 700; line-height: 1.12; }
+.join .lbl { display: block; font-size: var(--t-label); line-height: 1.15; color: var(--light-2); }
+.join .code-big { display: block; font-family: var(--face-number); font-weight: 800; font-size: var(--t-value); line-height: 0.95; letter-spacing: 0.04em; margin-top: 0.4vh; color: var(--light-1); }
+.join .addr { display: block; font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); line-height: 1.05; color: var(--light-2); overflow-wrap: anywhere; }
+
+/* The riders' QR code is the larger: 48 vh, 29 modules and a 4-module quiet zone. */
+.join .qr-riders { width: 48vh; height: 48vh; flex: none; display: block; }
+.join .qr-instr { width: 24vh; height: 24vh; flex: none; display: block; }
+.join .card.instr { flex-direction: column; gap: 1.6vh; width: 26vw; max-width: 26vw; box-sizing: border-box; border-left: 0.3vh solid var(--stage-line); padding-left: 3vw; }
+.join .card.instr .itext { display: flex; flex-direction: column; gap: 1.4vh; min-width: 0; }
+.join .card.instr h2 { margin: 0; font-family: var(--face-text); font-size: var(--t-minor); font-weight: 700; line-height: 1.1; }
+
+/* New code: a white plate, the one white fill on the sheet besides the codes. It is not animated:
+   the codes change in one frame. */
+.join .plate-new { align-self: flex-start; background: var(--light-1); color: var(--ink); font-size: var(--t-label); font-weight: 700; padding: 0.7vh 1.2vw; border-radius: 0.6vh; line-height: 1.1; }
+
+/* Under 1.7 : 1 the two codes stack, the riders' on top, so the code and the address keep their width. */
+@media (max-aspect-ratio: 17/10) {
+  .join { grid-template-columns: minmax(0, 1fr); row-gap: 2vh; }
+  /* The plate beside the heading: the riders' card stays as high as its QR code, so the instructor's fits above the band. */
+  .join .head { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 2vw; }
+  .join .qr-riders { width: 36vh; height: 36vh; }
+  .join .qr-instr { width: 20vh; height: 20vh; }
+  .join .card.instr { flex-direction: row; align-items: flex-start; width: auto; max-width: none; border-left: 0; padding-left: 0; border-top: 0.3vh solid var(--stage-line); padding-top: 2vh; gap: 3vw; }
+  .join .card.instr .itext { gap: 1vh; }
+}
+
+/* 3:2 and narrower: the band is 12 vh high (83 vh down), so the sheet ends 20 vh up. */
+@media (max-aspect-ratio: 3/2) { .join { bottom: 20vh; } }

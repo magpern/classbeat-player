@@ -91,6 +91,10 @@ const STUB = `
     endLive: () => Promise.resolve(window.__live),
     makeControlCode: () => Promise.resolve(window.__live),
     dropPhone: () => Promise.resolve(window.__live),
+    riders: () => Promise.resolve(window.__riders ?? null),
+    dropRider: () => Promise.resolve(window.__riders ?? null),
+    lockJoining: () => Promise.resolve(window.__riders ?? null),
+    newJoinCode: () => Promise.resolve(window.__riders ?? null),
   };
 `;
 

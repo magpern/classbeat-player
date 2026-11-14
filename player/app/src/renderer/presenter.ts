@@ -7,8 +7,10 @@ import { statusText } from "../core/status-text.ts";
 import { mountLive } from "./live-panel.ts";
 import type { LiveApi } from "./live-panel.ts";
 import { mountPairing } from "./pairing-panel.ts";
+import { mountRiders } from "./riders-panel.ts";
+import type { RidersApi } from "./riders-panel.ts";
 
-interface PlayerApi extends LiveApi {
+interface PlayerApi extends LiveApi, RidersApi {
   getState(): Promise<Snapshot | null>;
   command(cmd: unknown): Promise<Snapshot | null>;
   openDropped(name: string, text: string): Promise<Snapshot | null>;
@@ -157,4 +159,5 @@ window.addEventListener("drop", (e) => {
 api.onUpdate(render);
 mountPairing(api);
 mountLive(api);
+mountRiders(api);
 void api.getState().then(render);

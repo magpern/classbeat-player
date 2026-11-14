@@ -2,7 +2,7 @@
 // so the address can carry the join code in its fragment and nothing else (ADR 0005 section 2).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { controlAddress, remoteViewOf, siteOf } from "../../src/core/room/remote.ts";
+import { controlAddress, joinAddress, joinPageText, remoteViewOf, siteOf } from "../../src/core/room/remote.ts";
 import type { RemoteView } from "../../src/core/room/remote.ts";
 
 test("only a plain https origin is a site", () => {
@@ -32,6 +32,10 @@ test("only a plain https origin is a site", () => {
 
 test("the address is the site, /control and the join code in the fragment", () => {
   assert.equal(controlAddress("https://classbeat.app", "KXPD-RMTB"), "https://classbeat.app/control#KXPD-RMTB");
+  // The riders' address (room-join.md): the rider page, the join code in the fragment, nothing else.
+  assert.equal(joinAddress("https://classbeat.app", "KXPD-RMTB"), "https://classbeat.app/j#KXPD-RMTB");
+  assert.equal(joinPageText("https://classbeat.app"), "classbeat.app/j");
+  assert.ok(new TextEncoder().encode(joinAddress("https://classbeat.example", "KXPD-RMTB")).length <= 42);
 });
 
 test("the room window gets the site only when it is valid", () => {

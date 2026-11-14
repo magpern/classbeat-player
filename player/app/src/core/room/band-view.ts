@@ -2,7 +2,7 @@
 // "The class code"). Pure: from the clock's state, the band's routes and the phone remote's slot.
 // Words are always words; the main button's word is the clock's state, never the press.
 import type { BandRoute, BandRoutes } from "./band-routes.ts";
-import { controlAddress } from "./remote.ts";
+import { joinAddress } from "./remote.ts";
 import type { RemoteView } from "./remote.ts";
 
 export type ButtonId = "previous" | "main" | "next" | "remote" | "end" | "close" | "end-class" | "keep-going";
@@ -15,7 +15,7 @@ export interface ButtonView {
   readonly disabled: boolean;
 }
 
-/** The class code: the riders' join code only, its QR address (when the site is known) and one state line. */
+/** The class code: the riders' join code only, its QR address (the rider page, when the site is known) and one state line. */
 export interface CodeView {
   readonly code: string;
   readonly line: string;
@@ -56,9 +56,13 @@ function codeLine(v: Extract<RemoteView, { slot: "on" }>): string {
   return v.phones === 0 ? "Phone remote on" : v.phones === 1 ? "Phone connected" : "2 phones connected";
 }
 
+/** The slot's state line while the join sheet is open: 17 characters, inside the 18. */
+export const SHEET_LINE = "J hides the codes";
+
 const REMOTE_SUB = { none: "Show the class code", in_use: "In use elsewhere", unreachable: "Can't reach site", ended: "Phone remote ended" } as const;
 
-export function bandView(status: ClockStatus, routes: BandRoutes | null, remote: RemoteView, asking: boolean): BandView {
+/** `sheetOpen`: the join sheet shows both codes, so the slot draws no QR code and says how to hide them (room-join.md). */
+export function bandView(status: ClockStatus, routes: BandRoutes | null, remote: RemoteView, asking: boolean, sheetOpen = false): BandView {
   if (status === "ended") return { mode: "finished", close: button("close", "Close class", "Back to the class list") };
   if (asking) return { mode: "ask", question: "End the class?", endClass: button("end-class", "End class", "Back to the class list"), keepGoing: button("keep-going", "Keep going") };
   const r = routes ?? ALL_CLOCK;
@@ -68,6 +72,7 @@ export function bandView(status: ClockStatus, routes: BandRoutes | null, remote:
   let code: CodeView | null = null;
   if (remote.slot === "available") remoteButton = button("remote", "Phone remote", REMOTE_SUB[remote.note]);
   else if (remote.slot === "starting") remoteButton = button("remote", "Phone remote", "Getting a code", true);
-  else if (remote.slot === "on") code = { code: remote.joinCode, line: codeLine(remote), address: remote.site ? controlAddress(remote.site, remote.joinCode) : null };
+  else if (remote.slot === "on" && sheetOpen) code = { code: remote.joinCode, line: SHEET_LINE, address: null };
+  else if (remote.slot === "on") code = { code: remote.joinCode, line: codeLine(remote), address: remote.site ? joinAddress(remote.site, remote.joinCode) : null };
   return { mode: "buttons", transport, remote: remoteButton, code, end: button("end", "End") };
 }

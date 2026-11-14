@@ -26,6 +26,8 @@ export type KeyAction =
   /** F5 and Shift+F5: Start, only before the start. */
   | { readonly kind: "start-only" }
   | { readonly kind: "end" }
+  /** J: the join sheet (room-join.md, "Keyboard"). It does not show the band. */
+  | { readonly kind: "join" }
   | { readonly kind: "escape" }
   | { readonly kind: "tab"; readonly back: boolean }
   /** Taken and dropped: the clicker's black-screen keys, and a held key's repeats. */
@@ -44,11 +46,11 @@ export function keyAction(k: KeyPress): KeyAction | null {
 }
 
 /**
- * Space, the arrows and the clicker's Page keys and F5 do nothing while the End question is open:
+ * Space, the arrows, the clicker's Page keys, F5 and J do nothing while the End question is open:
  * the question is answered first, with Enter, Esc or a press.
  */
 export const waitsForQuestion = (a: KeyAction): boolean =>
-  a.kind === "main" || a.kind === "next" || a.kind === "previous" || a.kind === "jump" || a.kind === "start-only";
+  a.kind === "main" || a.kind === "next" || a.kind === "previous" || a.kind === "jump" || a.kind === "start-only" || a.kind === "join";
 
 function plain(k: KeyPress): KeyAction | null {
   switch (k.key) {
@@ -69,6 +71,9 @@ function plain(k: KeyPress): KeyAction | null {
       return { kind: "start-only" };
     case "End":
       return { kind: "end" };
+    case "j":
+    case "J":
+      return { kind: "join" };
     case "b":
     case "B":
     case ".":

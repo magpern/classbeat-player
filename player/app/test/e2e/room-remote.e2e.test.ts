@@ -81,6 +81,13 @@ test("Phone remote on the room screen starts the live session; the room shows th
   await showBand(room);
   await room.waitForFunction((c) => document.querySelector(".band .code .v")?.textContent === c, LIVE_JOIN_CODE, { timeout: 10_000 });
   assert.match(await bandText(room), /Class code/);
+  // Before the start the join sheet opens by itself (room-join.md): the band's slot says J hides it.
+  await room.waitForSelector("section.join", { state: "visible", timeout: 10_000 });
+  assert.match(await bandText(room), /J hides the codes/);
+  await room.screenshot({ path: join(SHOTS, "room-remote-join-sheet.png") });
+  await room.keyboard.press("j");
+  await room.waitForSelector("section.join", { state: "hidden", timeout: 10_000 });
+  await showBand(room);
   assert.match(await bandText(room), /Phone remote on/);
   await room.screenshot({ path: join(SHOTS, "room-remote-on.png") });
 

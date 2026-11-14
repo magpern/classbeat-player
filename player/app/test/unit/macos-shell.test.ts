@@ -205,20 +205,23 @@ test("the reader is built in the main process only, by platform", () => {
   assert.match(src("main/main.ts"), /selectMusic\(process\.platform\)/);
 });
 
-test("the preload bridge: the same four functions, those of pairing (#74), of the class list and of the phone remote (#173); only startClass and dropPhone take arguments", () => {
+test("the preload bridge: the same four functions, those of pairing (#74), of the class list, of the phone remote (#173) and of the riders panel (#366); only startClass, dropPhone, dropRider and lockJoining take arguments", () => {
   const preload = src("preload/preload.ts");
   const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
-  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass", "liveView", "startLive", "endLive", "makeControlCode", "dropPhone"]);
+  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass", "liveView", "startLive", "endLive", "makeControlCode", "dropPhone", "riders", "dropRider", "lockJoining", "newJoinCode"]);
   // The class list's only argument is a class's id and hash (startClass); the shell parses it (core/list/commands.ts).
   assert.match(preload, /^ {2}startClass: \(id: unknown, hash: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIST_START, \{ id, hash \}\),$/m);
   // The phone remote's only argument is the slot to drop, passed on as it is; the shell takes only 1 or 2 (main/live/live-handlers.ts).
   assert.match(preload, /^ {2}dropPhone: \(slot: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIVE_DROP, slot\),$/m);
-  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"], ["liveView", "CH_LIVE_VIEW"], ["startLive", "CH_LIVE_START"], ["endLive", "CH_LIVE_END"], ["makeControlCode", "CH_LIVE_CODE"]]) {
+  // The riders panel's: the rider's id and the lock's value, passed on as they are; the shell takes only a rider id and a boolean.
+  assert.match(preload, /^ {2}dropRider: \(rider: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIVE_DROP_RIDER, rider\),$/m);
+  assert.match(preload, /^ {2}lockJoining: \(locked: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIVE_LOCK, locked\),$/m);
+  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"], ["liveView", "CH_LIVE_VIEW"], ["startLive", "CH_LIVE_START"], ["endLive", "CH_LIVE_END"], ["makeControlCode", "CH_LIVE_CODE"], ["riders", "CH_LIVE_RIDERS"], ["newJoinCode", "CH_LIVE_NEW_CODE"]]) {
     assert.match(preload, new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${channel}\\),$`, "m"), name);
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "live:view", "live:start", "live:end", "live:code", "live:drop"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code"],
   );
   // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
 });

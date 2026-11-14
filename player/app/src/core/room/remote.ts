@@ -36,8 +36,14 @@ export function siteOf(v: unknown): string | null {
   return url.protocol === "https:" && url.username === "" && url.password === "" && url.origin === v ? v : null;
 }
 
-/** The QR code's address (ADR 0005 section 2): the join code in the fragment and nothing else. */
+/** The instructor's QR code's address (ADR 0005 section 2): the join code in the fragment and nothing else. */
 export const controlAddress = (site: string, joinCode: string): string => `${site}/control#${joinCode}`;
+
+/** The riders' QR code's address (ADR 0007 section 1; room-join.md): the rider page, the join code in the fragment. */
+export const joinAddress = (site: string, joinCode: string): string => `${site}/j#${joinCode}`;
+
+/** The site as the sheet writes it for typing: its host, with the rider page's path ("classbeat.example/j"). */
+export const joinPageText = (site: string): string => `${new URL(site).host}/j`;
 
 /**
  * What the room window is sent: the view rebuilt field by field, so whatever else the object holds
