@@ -84,6 +84,8 @@ export interface PolledSpec {
   readonly pollMs: number;
   /** A call that has not answered after this long is given up (the system kills it earlier). */
   readonly giveUpMs: number;
+  /** Only when the limit for a read changes over time (the macOS Automation prompt): asked each time. */
+  readGiveUpMs?(): number;
   /** Starts the one read call. */
   read(done: (called: Called) => void): void;
   /** The read call's output as an answer; null when it is not one. */
@@ -97,7 +99,7 @@ export interface PolledSpec {
 }
 
 export function createPolledReader(spec: PolledSpec, now: () => number, every: (fn: () => void, ms: number) => () => void): ReaderLifecycle {
-  const reads = createCallSlot(now, spec.giveUpMs);
+  const reads = createCallSlot(now, spec.readGiveUpMs ?? spec.giveUpMs);
   let stopTimer: (() => void) | null = null;
 
   const life = createReaderLifecycle(

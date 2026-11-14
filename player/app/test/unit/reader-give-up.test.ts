@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GIVE_UP_MS as LINUX_GIVE_UP_MS } from "../../src/main/linux-reader.ts";
-import { GIVE_UP_MS as MAC_GIVE_UP_MS } from "../../src/main/macos-reader.ts";
+import { FIRST_GIVE_UP_MS as MAC_FIRST_GIVE_UP_MS, GIVE_UP_MS as MAC_GIVE_UP_MS } from "../../src/main/macos-reader.ts";
 import { RIGS } from "./reader-rigs.ts";
 
 test("a call is given up after twice its timeout", () => {
@@ -15,21 +15,23 @@ test("a call is given up after twice its timeout", () => {
 });
 
 for (const [system, make] of RIGS) {
+  // macOS: the first reads wait for the Automation prompt (issue #458), a long time.
+  const FIRST = system === "macOS" ? MAC_FIRST_GIVE_UP_MS : 1400;
   test(`${system}: a read that never answers is given up, and the command that waited for it with it`, () => {
     const r = make();
     r.reader.setActive(true);
     r.clock.t = 100;
     r.reader.send("next");
     // The polls go on; the first read is still in flight, so none joins it.
-    for (r.clock.t = 250; r.clock.t < 1400; r.clock.t += 250) r.tick();
+    for (r.clock.t = 250; r.clock.t < FIRST; r.clock.t += 250) r.tick();
     assert.equal(r.count("read"), 1);
     assert.equal(r.count("next"), 0);
 
-    r.clock.t = 1500;
+    r.clock.t = FIRST + 100;
     r.tick();
     assert.equal(r.count("read"), 2, "the first read was given up and a new one asked");
     r.last("read").ok(r.out.playing);
-    assert.equal(r.reader.latest(1500)?.seenAt, 1500);
+    assert.equal(r.reader.latest(FIRST + 100)?.seenAt, FIRST + 100);
     assert.equal(r.count("next"), 0, "the command that waited for the lost read is not sent 1.4 s late");
 
     r.reader.send("pause");
@@ -39,13 +41,13 @@ for (const [system, make] of RIGS) {
   test(`${system}: a command sent after the read was given up waits for the new read, and goes on its good answer`, () => {
     const r = make();
     r.reader.setActive(true);
-    r.clock.t = 1400;
+    r.clock.t = FIRST;
     r.tick();
     r.reader.send("next");
     assert.equal(r.count("next"), 0);
     r.calls[0].ok(r.out.playing);
     assert.equal(r.count("next"), 0, "the given-up read's late answer opens nothing");
-    assert.equal(r.reader.latest(1400), null);
+    assert.equal(r.reader.latest(FIRST), null);
     r.last("read").ok(r.out.paused);
     assert.equal(r.count("next"), 1);
   });
