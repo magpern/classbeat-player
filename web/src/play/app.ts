@@ -52,8 +52,19 @@ function toPicker(): void {
   route();
 }
 
-/** What a failed answer shows; `retry` is what "Try again" does. */
-function failure(main: HTMLElement, why: Failure, retry: () => void): void {
+/** At most one wait for the connection: "Try again" while offline adds no other, and leaving the page ends it. */
+let onlineWait: (() => void) | null = null;
+function stopOnlineWait(): void {
+  if (onlineWait) window.removeEventListener("online", onlineWait);
+  onlineWait = null;
+}
+
+/** What a failed answer shows; `retry` is what "Try again" does, and what the page does by itself when the browser is back online. */
+function failure(main: HTMLElement, why: Failure, retryNow: () => void): void {
+  const retry = (): void => {
+    stopOnlineWait();
+    retryNow();
+  };
   switch (why.kind) {
     case "not_signed_in":
       return signedOutPage(hadSession);
@@ -64,6 +75,7 @@ function failure(main: HTMLElement, why: Failure, retry: () => void): void {
       return tooMany(main, why.retryAfter, retry);
     case "offline":
       offline(main, retry);
+      onlineWait = retry;
       window.addEventListener("online", retry, { once: true });
       return;
     default:
@@ -78,7 +90,7 @@ function signedOutPage(ended: boolean): void {
 async function showPicker(ticket: number): Promise<void> {
   const main = page(true);
   loading(main);
-  const loaded = await loadClasses();
+  const loaded = await loadClasses(() => (hadSession = true));
   if (ticket !== shown) return;
   if (loaded.kind === "failed") return failure(main, loaded.why, () => ticket === shown && void showPicker(ticket));
   hadSession = true;
@@ -107,6 +119,7 @@ export function route(): void {
   const ticket = (shown += 1);
   player?.destroy();
   player = null;
+  stopOnlineWait();
   setMode("page");
   const id = classIdOf(location.hash);
   // A fragment that is no class id is ignored: the picker shows (ADR 0008, section 2).

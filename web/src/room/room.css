@@ -270,7 +270,7 @@ body {
   body:has(.cue.four) .bars { margin-top: 0.6vh; }
   body:has(.cue.four) .metrics { top: 44.4vh; }
   body:has(.cue.four) .next { left: 34vw; top: 56.5vh; }
-  body:has(.cue.four) .next .v.dim { display: none; }
+  body:has(.cue.four) .next .more { display: none; }
   .score { top: 83vh; height: 12vh; }
   .track.iv { height: 4.4vh; }
   .block .n { font-size: 4vh; }

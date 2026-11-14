@@ -16,7 +16,7 @@ import { WEB_DIR } from "./browser.ts";
 import { HIDE, inkOf, shadowHues } from "./measure.ts";
 import type { Row } from "./measure.ts";
 
-const flush = (page: Page): Promise<void> => page.evaluate(() => void document.body.getBoundingClientRect());
+export const flush = (page: Page): Promise<void> => page.evaluate(() => void document.body.getBoundingClientRect());
 
 export interface CompanionResult {
   readonly rows: Row[];
@@ -61,7 +61,7 @@ export function tokenColours(css = readFileSync(join(WEB_DIR, "src", "design", "
  * K10: every border that is drawn, on any side of an element or of its ::before or ::after, and every
  * drawn outline is a token colour. A drawn transparent border passes only if a token is transparent.
  */
-async function borderTokens(page: Page): Promise<Row[]> {
+export async function borderTokens(page: Page): Promise<Row[]> {
   const tokens = tokenColours().map((t) => t.join(","));
   return (await drawnBorders(page))
     .filter((d) => {
@@ -72,7 +72,7 @@ async function borderTokens(page: Page): Promise<Row[]> {
 }
 
 /** K9: with reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second. */
-async function motion(page: Page): Promise<Row[]> {
+export async function motion(page: Page): Promise<Row[]> {
   const fast = await page.evaluate(() =>
     [...document.querySelectorAll("*")]
       .filter((el) => {

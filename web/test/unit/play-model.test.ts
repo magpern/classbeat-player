@@ -15,6 +15,7 @@ import { LANDSCAPE_SCALE, layoutOf, scaleFor } from "../../src/room/score-scale.
 import type { Class } from "../../src/room/input.ts";
 
 const ID = "3f6d2c1a-8b4e-4f7a-9c2d-1e5a7b9c0d3f";
+const OTHER = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
 
 describe("the class the address names", () => {
   it("is a canonical lowercase UUID in the fragment, and nothing else", () => {
@@ -57,8 +58,8 @@ describe("the picker's rows", () => {
 
   it("reads a page of GET classes: markers are not shown, a malformed page is refused, a cursor means more", () => {
     const entry = (over: object = {}) => ({ class_id: ID, source: "classbeat", title: "A", length_ms: 1000, changed_at: "2026-11-02T09:00:00Z", removed: false, ...over });
-    const page = pageOf({ classes: [entry(), entry({ removed: true, title: "" }), entry({ class_id: "x", title: "B" })], cursor: "c1", more: true });
-    assert.deepEqual(page?.rows.map((r) => r.title), ["A", "B"]);
+    const page = pageOf({ classes: [entry(), entry({ removed: true, title: "" }), entry({ class_id: "x", title: "B" }), entry({ class_id: OTHER, title: "C" })], cursor: "c1", more: true });
+    assert.deepEqual(page?.rows.map((r) => r.title), ["A", "C"], "a marker is not shown, and nor is an id the page could not open");
     assert.equal(page?.next, "c1");
     assert.equal(pageOf({ classes: [], cursor: null, more: false })?.next, null);
     assert.equal(pageOf({ classes: [{ title: 3 }] }), null);

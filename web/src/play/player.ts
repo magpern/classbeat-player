@@ -9,7 +9,7 @@ import { scaleFor } from "../room/score-scale.ts";
 import { mountBand } from "./band.ts";
 import { attachKeys } from "./keyboard.ts";
 import { roomInput } from "./room-input.ts";
-import { advance, apply, openClass, statusOf, viewOf } from "./session.ts";
+import { advance, apply, msToNextSecond, openClass, statusOf, viewOf } from "./session.ts";
 import type { Command, Session } from "./session.ts";
 import { createWake, enterFullscreen } from "./wake.ts";
 import { noticeOf, wakeAction } from "./wake-policy.ts";
@@ -26,9 +26,6 @@ export interface Player {
   destroy(): void;
 }
 
-/** How often a running clock redraws (the countdown moves in whole seconds). */
-const REDRAW_MS = 200;
-
 export function openPlayer(doc: Class, o: PlayerOptions): Player {
   const now = (): number => performance.now();
   const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -38,7 +35,7 @@ export function openPlayer(doc: Class, o: PlayerOptions): Player {
   let session: Session = openClass(doc, now());
   let reloaded = o.reloaded;
   let wakeRefused = false;
-  let timer: ReturnType<typeof setInterval> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let destroyed = false;
 
   const wake = createWake((refused) => {
@@ -58,16 +55,17 @@ export function openPlayer(doc: Class, o: PlayerOptions): Player {
     band.status(view.status);
   }
 
-  /** A running clock redraws every REDRAW_MS and holds at the class end; any other state needs no timer. */
+  /** A running clock redraws when a whole second changes on screen and holds at the class end; any other state needs no timer. */
   function pace(): void {
-    clearInterval(timer);
+    clearTimeout(timer);
     if (statusOf(session) !== "running") return;
-    timer = setInterval(() => {
+    timer = setTimeout(() => {
       const before = statusOf(session);
       session = advance(session, now());
       if (before !== "ended" && statusOf(session) === "ended") settle(before);
       draw();
-    }, REDRAW_MS);
+      pace();
+    }, msToNextSecond(viewOf(session, now())));
   }
 
   /** The clock changed state: the lock and the timer follow. */
@@ -109,7 +107,7 @@ export function openPlayer(doc: Class, o: PlayerOptions): Player {
   return {
     destroy() {
       destroyed = true;
-      clearInterval(timer);
+      clearTimeout(timer);
       wake.release();
       stopKeys();
       document.removeEventListener("visibilitychange", onVisibility);

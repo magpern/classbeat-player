@@ -2,6 +2,7 @@
 // of `GET /api/site/classes` in, rows out. Title A to Z, case and accents ignored, equal titles by
 // id: never by date or use (rules 10 and 13). Removal markers carry no title and are not shown.
 import { clockText } from "../room/format.ts";
+import { classIdOf } from "./route.ts";
 
 export interface Row {
   readonly id: string;
@@ -26,6 +27,8 @@ export function pageOf(body: unknown): Page | null {
   for (const e of body.classes) {
     if (!isRecord(e) || e.removed === true) continue;
     if (typeof e.class_id !== "string" || typeof e.title !== "string" || typeof e.length_ms !== "number" || typeof e.changed_at !== "string") return null;
+    // A class the page could not open from its address (an id that is not a canonical UUID) is not offered.
+    if (classIdOf(`#${e.class_id}`) === null) continue;
     rows.push({ id: e.class_id, title: e.title, lengthMs: e.length_ms, source: typeof e.source === "string" ? e.source : "", changedAt: e.changed_at });
   }
   const next = body.more === true && typeof body.cursor === "string" && body.cursor !== "" ? body.cursor : null;

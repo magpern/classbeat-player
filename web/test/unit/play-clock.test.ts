@@ -8,7 +8,7 @@ import { STATE_FIXTURES } from "../../src/fixtures/states.ts";
 import { toRoomModel } from "../../src/room/adapter.ts";
 import type { Class } from "../../src/room/input.ts";
 import { roomInput } from "../../src/play/room-input.ts";
-import { advance, apply, mainCommand, mainWord, openClass, statusOf, viewOf } from "../../src/play/session.ts";
+import { advance, apply, mainCommand, mainWord, msToNextSecond, openClass, statusOf, viewOf } from "../../src/play/session.ts";
 import type { Command, Session } from "../../src/play/session.ts";
 
 const doc = STATE_FIXTURES.running.doc as Class;
@@ -109,6 +109,34 @@ describe("the manual clock on the web page", () => {
     s = apply(s, "previous", START + 3000 * S);
     assert.equal(statusOf(s), "paused");
     assert.equal(viewOf(s, START + 3000 * S).nextIntervalIndex, null);
+  });
+});
+
+describe("when a running clock redraws", () => {
+  it("at the next whole second of the countdown, the time left or the time done, a few ms past it", () => {
+    const s = apply(openClass(doc, START), "start", START);
+    // 3 s into a 180 s interval (2:57 left): the next change is in 1 s.
+    assert.equal(msToNextSecond(viewOf(s, START + 3000)), 1004);
+    // 250 ms past a second: 750 ms to the next one.
+    assert.equal(msToNextSecond(viewOf(s, START + 3250)), 754);
+    // 999 ms past: 1 ms away.
+    assert.equal(msToNextSecond(viewOf(s, START + 3999)), 5);
+    // Never zero or negative, and never longer than a second and a few ms.
+    for (let t = 0; t < 5000; t += 137) {
+      const d = msToNextSecond(viewOf(s, START + t));
+      assert.ok(d > 0 && d <= 1004, `${t}: ${d}`);
+    }
+  });
+
+  it("a whole second change is on screen when the redraw comes", () => {
+    const s = apply(openClass(doc, START), "start", START);
+    let at = START + 3250;
+    for (let i = 0; i < 20; i += 1) {
+      const before = viewOf(s, at);
+      at += msToNextSecond(before);
+      const after = viewOf(s, at);
+      assert.notEqual(Math.floor(after.intervalRemainingMs / 1000), Math.floor(before.intervalRemainingMs / 1000), "the countdown moved");
+    }
   });
 });
 

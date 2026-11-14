@@ -64,3 +64,13 @@ export function mainCommand(status: Status): "start" | "pause" | "resume" | null
 export function mainWord(status: Status): "Start" | "Pause" | "Resume" {
   return status === "ready" ? "Start" : status === "paused" ? "Resume" : "Pause";
 }
+
+/**
+ * How long until the screen next has something new to show: the countdown, the class time left and
+ * the class time done move in whole seconds, so a running clock needs a redraw only when one of them
+ * crosses a second. A few ms past the boundary, so the new second is the one read.
+ */
+export function msToNextSecond(view: ClockView): number {
+  const away = (ms: number): number => ms % 1000 || 1000;
+  return Math.min(away(1000 - (view.classMs % 1000)), away(view.intervalRemainingMs), away(view.classRemainingMs)) + 4;
+}

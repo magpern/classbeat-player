@@ -28,7 +28,8 @@ export function renderClock(c: ClockModel): HTMLElement {
 function renderLine(line: NonNullable<ClockModel["line"]>): HTMLElement {
   if (line.kind === "bars") return el("div", { class: "bars", tier: "minor" }, [el("span", { class: "n", text: String(line.count) }), ` ${line.tail}`]);
   if (line.kind === "song") return el("div", { class: "bars", tier: "minor" }, ["Next song in ", el("span", { class: "n", text: line.time })]);
-  return el("div", { class: "bars", tier: "minor", text: line.text });
+  // The pause line takes up to two lines in the narrow clock column of a phone on its side (play.md, "Small landscape").
+  return el("div", { class: "bars", tier: "minor", lines: 2, text: line.text });
 }
 
 export function renderMetrics(metrics: readonly MetricModel[], beat: HTMLElement | null): HTMLElement {

@@ -21,14 +21,16 @@ export type Loaded<T> = { readonly kind: "ok"; readonly value: T } | { readonly 
 
 const failed = (why: Failure): Loaded<never> => ({ kind: "failed", why });
 
-/** Every class of the account, read a page at a time (the page sorts them itself). */
-export async function loadClasses(): Promise<Loaded<Row[]>> {
+/** Every class of the account, read a page at a time (the page sorts them itself); `sawSession` is called for each page that answers. */
+export async function loadClasses(sawSession: () => void): Promise<Loaded<Row[]>> {
   const rows: Row[] = [];
   let cursor: string | null = null;
   for (let n = 0; n < MAX_PAGES; n += 1) {
     const route: string = cursor === null ? `classes?limit=${LIMIT}` : `classes?before=${encodeURIComponent(cursor)}&limit=${LIMIT}`;
     const answer = await call("GET", route);
     if (answer.kind !== "ok") return failed(answer);
+    // An answer is a session: a 401 on a later page is "Your session ended", not "signed out".
+    sawSession();
     const page = pageOf(answer.body);
     if (page === null) return failed({ kind: "server" });
     rows.push(...page.rows);

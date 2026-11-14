@@ -7,7 +7,7 @@ import type { BeatSchedule } from "./beat-schedule.ts";
 import type { RoomInput } from "./input.ts";
 import type { BeatModel } from "./model.ts";
 import { createGel } from "./render-gel.ts";
-import { fitTitle, renderIntro } from "./render-intro.ts";
+import { clampTitle, fitTitle, renderIntro } from "./render-intro.ts";
 import { renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
 import { renderScore } from "./render-score.ts";
 import type { ScoreView } from "./render-score.ts";
@@ -69,8 +69,13 @@ function createBeatDots(reduced: boolean, animate: boolean): (beat: BeatModel | 
 function fitCue(cue: HTMLElement | null, allowed: boolean): void {
   if (!cue) return;
   cue.classList.remove("four");
-  // The web player page's phone layouts give the cue the height it needs themselves.
-  if (!allowed) return;
+  // The web player page's phone layouts give the cue all the height left, up to 120 characters with
+  // long words (play.md, "Fitting text"): never cut, at most eight lines.
+  if (!allowed) {
+    cue.dataset.lines = "8";
+    return;
+  }
+  cue.dataset.lines = "4";
   const narrow = typeof matchMedia === "function" && matchMedia("(max-aspect-ratio: 3/2)").matches;
   const lineHeight = parseFloat(getComputedStyle(cue).lineHeight);
   if (narrow && cue.scrollHeight > lineHeight * 3.5) cue.classList.add("four");
@@ -100,10 +105,15 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
   };
   if (animate) raf = requestAnimationFrame(tick);
 
+  // The player's window never passes a scale and is always the room's layout; the web page chooses by its viewport.
+  const roomLayout = (): boolean => opts.scale === undefined || layoutOf(window.innerWidth, window.innerHeight) === "room";
   const fit = (): void => {
     const h1 = dyn.querySelector<HTMLElement>(".intro h1");
-    if (h1) fitTitle(h1);
-    fitCue(dyn.querySelector<HTMLElement>(".cue"), opts.scale === undefined || layoutOf(window.innerWidth, window.innerHeight) === "room");
+    if (h1) {
+      fitTitle(h1);
+      if (!roomLayout()) clampTitle(h1);
+    }
+    fitCue(dyn.querySelector<HTMLElement>(".cue"), roomLayout());
     gel.fit();
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
