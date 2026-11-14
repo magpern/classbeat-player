@@ -58,6 +58,15 @@ async function states(): Promise<Shot[]> {
   const state = on.socket().sent.filter((m) => (m as { type?: string }).type === "companion_state").at(-1) as { run: string; seq: number };
   on.socket().server({ v: 1, type: "command", slot: 1, id: "AAAAAAAAAAAAAAAAAAAAAQ", run: state.run, basis: state.seq, action: "pause" });
   out.push(shot("two-phones-line", on));
+  // The places' states (#352): phone 2's connection closed and its token holds (not connected,
+  // Drop), then its site session ended (free, no Drop).
+  const places = await started();
+  places.socket().server({ v: 1, type: "controller_joined", slot: 1, via: "sign_in" });
+  places.socket().server({ v: 1, type: "controller_joined", slot: 2, via: "sign_in" });
+  places.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in", reason: "disconnected" });
+  out.push(shot("phone-not-connected", places));
+  places.socket().server({ v: 1, type: "controller_left", slot: 2, via: "sign_in", reason: "session_ended" });
+  out.push(shot("phone-session-ended", places));
   const one = rig();
   one.secondDisplay = false;
   await started(one);
@@ -147,7 +156,7 @@ after(async () => {
 test("the phone-remote panel in each state: rendered, the control code only where it is offered", { timeout: 180_000 }, async () => {
   assert.deepEqual(
     shots.map((s) => s.name),
-    ["off", "starting", "on", "control-code", "code-used", "code-expired", "two-phones-line", "one-display", "reconnecting", "ended", "refused"],
+    ["off", "starting", "on", "control-code", "code-used", "code-expired", "two-phones-line", "phone-not-connected", "phone-session-ended", "one-display", "reconnecting", "ended", "refused"],
   );
   for (const s of shots) {
     for (const size of SIZES) {
@@ -200,6 +209,14 @@ test("the phone-remote panel in each state: rendered, the control code only wher
   assert.deepEqual(
     by.get("two-phones-line")!.slots.map((x) => x.text),
     ["Phone 1: steering", "Phone 2: steering"],
+  );
+  assert.deepEqual(
+    by.get("phone-not-connected")!.slots.map((x) => [x.text, x.canDrop]),
+    [["Phone 1: steering", true], ["Phone 2: not connected", true]],
+  );
+  assert.deepEqual(
+    by.get("phone-session-ended")!.slots.map((x) => [x.text, x.canDrop]),
+    [["Phone 1: steering", true], ["Phone 2: free", false]],
   );
 });
 
