@@ -155,6 +155,8 @@ each message against the schema for its sender's role and drops (and counts) any
 | `welcome` | server → the connection | `role`; a controller's `slot`; whether the host is in |
 | `host_status` | server → controllers | `connected`: true or false |
 | `controller_joined`, `controller_left` | server → host | `slot`; `via`: `sign_in` or `code` |
+| `controller_left` (amended 2026-11-14) | server → host | also `reason`: `disconnected` or `ended` (section 10) |
+| `cancel_code` (amended 2026-11-14) | host → server | nothing (section 10) |
 | `make_code` | host → server | nothing |
 | `control_code` | server → host | `code`, `expiresInMs` |
 | `code_cancelled` | server → host | `reason`: `wrong_tries`, `expired`, `used`, `replaced` |
@@ -381,6 +383,27 @@ session is answered `cannot_control` before any join-code lookup; such calls are
 the caller's address, and that limit refuses only calls without a valid site session, so a
 signed-in instructor is never refused by it. `POST /api/live/control` and rider
 joins keep the per-address limit. ADR 0002's lines on this, in sections 8, 10 and 13, are marked amended.
+
+**Amended 2026-11-14: the host hears when a controller token ends, and can cancel a control
+code** (Verifier run of the companion, #352 and #353).
+
+- *`controller_left` gets a required `reason`:* `disconnected` when the controller's connection
+  closed and its token is still valid (the phone may come back), `ended` when the token itself
+  ended without the host asking: its site session ended (sign-out, "sign out everywhere",
+  expiry, found by the re-check or the hint). The server sends `ended` whether or not the token
+  had a connection at that moment. A token the host dropped is not announced: the host already
+  freed the place. The presenter shows a place as free on `ended` and as "not connected" with
+  Drop on `disconnected`. Before this the host could not tell a phone that is reconnecting from a
+  place that is gone (#352).
+- *`cancel_code`, host → server, holding nothing:* ends the session's current control code, if
+  any, as `drop` does: the host is sent nothing for it and `code_cancelled` keeps its four
+  reasons. The app sends it whenever it stops showing a live control code for a reason of its own,
+  first of all when the presenter is closed or the app is left with one display ("an app with one
+  display offers no control code"). Before this the code stayed valid on the server for up to 2
+  minutes after the screen no longer showed it (#353).
+- Both are contract changes in `schema/live/v1` and its routing table: `cancel_code` from the
+  host to the server only. Every guard of section 7 holds unchanged; the credential guard needs no
+  exemption, because `cancel_code` has no property.
 
 ## Alternatives
 
