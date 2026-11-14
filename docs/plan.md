@@ -597,7 +597,8 @@ and in Godot (as its own program and as a web export) and must show, for each:
   within two seconds and the class clock is unaffected;
 - how well agents could build it and check its pictures automatically.
 
-Godot is the leading candidate; the spike confirms it or shows why not, before phase PL6 starts.
+Godot was the leading candidate. **Decided after spike 2 (owner, 2026-11-14): web 3D**, see
+[ADR 0009](adr/0009-the-room-scene-is-web-3d.md).
 
 No choice here changes the music question: no engine can play Spotify itself, and all can follow it.
 
@@ -695,9 +696,8 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
 2. **Music:** follow the Spotify desktop app locally (A) with the manual clock (D) as fallback.
    Recommended. The alternative is the Web API (B) for the beta circle only.
 3. **Client technology:** a web-technology shell on computers (Electron), with the phone page
-   and the website in web technology too. Recommended. **The room's 3D scene:** Godot 4 is the
-   leading candidate (the owner's leaning), web 3D the alternative; decided after spike 2 and
-   before phase PL6.
+   and the website in web technology too. Recommended. **The room's 3D scene:** web 3D
+   (three.js), decided after spike 2 (owner, 2026-11-14; ADR 0009).
 4. **Backend stack: decided (2026-11-12).** Python, FastAPI and PostgreSQL, maintained by AI
    agents.
 5. **Accounts:** the product's own accounts, with email link and passkey sign-in and no
