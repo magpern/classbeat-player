@@ -1,6 +1,6 @@
 // Prototype of the class clock and link states of plan section 4. Pure: no I/O.
 import type { Plan } from "./class_plan.js";
-import { matchCandidates } from "./match.js";
+import { matchDetail } from "./match.js";
 import type { Decision, LinkState, Reading } from "./types.js";
 
 export interface FollowerConfig {
@@ -112,7 +112,7 @@ export class ClassFollower {
 
   private follow(nowMs: number, dt: number, r: Reading): Decision {
     const pos = r.state === "playing" ? r.positionMs + Math.max(0, nowMs - r.readAtMs) : r.positionMs;
-    const cands = matchCandidates(this.plan, r);
+    const { indexes: cands, matchedBy } = matchDetail(this.plan, r);
     if (cands.length === 0) return this.offList(nowMs, dt);
 
     const prevState = this.state;
@@ -156,7 +156,7 @@ export class ClassFollower {
     else if (this.state === "Ambiguous" && prevState !== "Ambiguous") event = "ambiguous";
     else if (clock < prevClock) event = "backward";
 
-    return this.decide(nowMs, { event, deltaMs: delta, held: raw > song.endMs, announce, candidates: cands });
+    return this.decide(nowMs, { event, deltaMs: delta, held: raw > song.endMs, announce, candidates: cands, matchedBy });
   }
 
   private choose(cands: number[], pos: number, expected: number | null, prevAmbiguous: number[] | null): { index: number; ambiguous: boolean } {
@@ -183,6 +183,7 @@ export class ClassFollower {
       running: this.running,
       songIndex: this.songIndex,
       candidates: [],
+      matchedBy: null,
       event: null,
       deltaMs: null,
       held: false,

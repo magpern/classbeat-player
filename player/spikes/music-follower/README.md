@@ -27,7 +27,9 @@ account, token or API; send play, pause, skip or any other command to Spotify. I
      Security, Automation, your terminal app, Spotify (error -1743). The tool keeps running and
      picks it up. The status line says why there is no reading (Spotify not running, not playing,
      not permitted) instead of only Manual. Start Spotify before the tool if you can: the prompt
-     only appears once Spotify is running.
+     only appears once Spotify is running. Spotify on macOS reports each song's length minus the
+       crossfade setting; a song matched by title is accepted at the real length or at the real length
+       minus the class file's `crossfadeMs`, and the log's `matchedBy` says which.
    - **Windows**: nothing else (Windows PowerShell 5.1 ships with Windows). Spotify must be the
      desktop app, not a browser tab.
    - **Linux** (best effort): `playerctl` (`sudo apt install playerctl`).
