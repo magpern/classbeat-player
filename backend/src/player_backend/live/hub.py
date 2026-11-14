@@ -6,7 +6,8 @@ ADR 0005, sections 1 and 3 to 6).
 - The host is told `welcome`, then `controller_joined` for each phone connected; a controller
   is told `welcome` with its slot and whether the host is in. Controllers get `host_status`
   when the host comes and goes, and nothing else while it is away; the host gets
-  `controller_joined` and `controller_left` as phones come and go.
+  `controller_joined`, and `controller_left` with its reason (ADR 0005 section 10, amended
+  2026-11-14; no replay and no `free` yet), as phones come and go.
 - Every message after `hello` is routed by the allowlist (live_route_policy.py), checked with
   its schema for its sender's role; anything else is dropped and counted in `dropped`. Every
   message the hub sends is checked against the allowlist and its schema for the receiver's
@@ -53,6 +54,7 @@ from player_backend.live_session_policy import wire_reason
 from player_backend.live_wire_policy import (
     ENDED,
     REPLACED,
+    LeftReason,
     Message,
     code_cancelled,
     control_code,
@@ -135,7 +137,7 @@ class Hub:
             return
         self._send(link, ended("dropped"))
         link.close(ENDED)
-        self._left(link)
+        self._left(link, event.reason)
 
     def _cancelled(self, event: CodeCancelled) -> None:
         host = self._hosts.get(event.session_id)
@@ -190,12 +192,12 @@ class Hub:
         del phones[link.slot]
         if not phones:
             self._controllers.pop(session_id, None)
-        self._left(link)
+        self._left(link, "disconnected")
 
-    def _left(self, link: Link) -> None:
+    def _left(self, link: Link, reason: LeftReason) -> None:
         host = self._hosts.get(link.session_id)
         if host is not None and link.slot is not None:
-            self._send(host, controller_left(link.slot, link.via or "code"))
+            self._send(host, controller_left(link.slot, link.via or "code", reason))
 
     def _phones(self, session_id: UUID) -> list[Link]:
         return list(self._controllers.get(session_id, {}).values())
@@ -239,10 +241,10 @@ class Hub:
         elif route.type == "make_code":
             self._make_code(link)
         else:
-            # The host's `drop`, whose schema requires `slot` (1 or 2), or one of the host's
-            # rider messages (ADR 0007: `rider_state`, `drop_rider`, `lock`, `new_join_code`),
-            # whose closed schemas have no `slot`: routed by the contract, not built here yet,
-            # so dropped and counted (tests/test_live_ws_router.py).
+            # The host's `drop`, whose schema requires `slot` (1 or 2), or `cancel_code` or one
+            # of the host's rider messages (ADR 0007: `rider_state`, `drop_rider`, `lock`,
+            # `new_join_code`), whose closed schemas have no `slot`: routed by the contract, not
+            # built here yet, so dropped and counted (tests/test_live_ws_router.py).
             slot = message.get("slot")
             if isinstance(slot, int):
                 self.service.registry.host_drop(link.session_id, slot)
