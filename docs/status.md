@@ -42,9 +42,9 @@ backend hardening (#227, #230), the body cap in the live contract (#234, #235; #
 #253), sign-in returning to the companion page (#263, #274), also by an email link opened
 in a new tab (ADR 0006, #330; backend #331, #332; site #329, #333), the `/me` answer in the contract
 (#264, #272) and its backend route (#265, #283) with its account-filter tests (#295, #299;
-#304, #305; #321, #322), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
-and site specs as built (#269, #275), response headers under a root prefix (#284, #285; #290,
-#292), the companion fake on the `/control` headers (#278, #286; #324, #327) and wider markup and stylesheet
+#304, #305; #321, #322; #336, #338), the backend serving `/control` (#266, #273) and its hardening (#279, #281), the companion
+and site specs as built (#269, #275; site sign-in wording and the signed-in mock-up, #341), response headers under a root prefix (#284, #285; #290,
+#292; #339, #340, with a stricter private-import guard), the companion fake on the `/control` headers (#278, #286; #324, #327; #335, #337) and wider markup and stylesheet
 guards (#267, #276), the companion CI states for paused-following, music not heard and song twice
 (#282, #297), the companion spec asserting each state's words, the paused pill, live nudges and
 token and zone colours on every border (#303, #306; #310, #311), zone outlines and every drawn side,
@@ -160,10 +160,8 @@ Merged: #30 and its findings (#53).
   Developer notes one outer `try` in `refuse-loose.ts` that no test reaches. A one-off macOS hang in `room-window-lifecycle`
   test 2 is unexplained; its steps now fail within 10 s naming the step.
 
-- PL8 notes: from #274, `RETURN_ENTRIES` could use `satisfies`, and `site.md` wording; from
-  #333, with a `mailbox` the site fake answers the link request before the test's script, so such
-  a test cannot script a 429; from #275, `companion-pages.js:117` still shows a sample signed-in address; from #273,
-  HEAD on `/control` answers 405; from #292, the private-import scan misses dynamic forms.
+- PL8 notes: from #273, HEAD on `/control` answers 405 (by design); from #340, the
+  private-import guard does not follow names reached through a container or `self`.
 
 ## Carried into PL8
 
