@@ -50,7 +50,8 @@ test("the phone remote slot: a button when off, a disabled one while starting, t
   assert.equal(on(1)?.line, "Phone connected");
   assert.equal(on(2)?.line, "2 phones connected");
   assert.equal(on(2, true)?.line, "Reconnecting");
-  assert.equal(on(1, false, "https://classbeat.app")?.address, "https://classbeat.app/control#KXPD-RMTB");
+  // The band's QR code is the riders' (room-join.md): the rider page with the join code.
+  assert.equal(on(1, false, "https://classbeat.app")?.address, "https://classbeat.app/j#KXPD-RMTB");
 });
 
 test("the class code's state line fits 18 characters", () => {

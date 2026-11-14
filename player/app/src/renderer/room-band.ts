@@ -23,11 +23,15 @@ export interface BandOptions {
   /** One display: the band stays in sight before the start and on "Class Complete". */
   readonly alone: () => boolean;
   readonly reducedMotion: boolean;
+  /** The join sheet (room-join.ts): J goes to it, Esc closes it first, and the slot knows it is open. */
+  readonly sheet?: { isOpen(): boolean; join(): boolean; escape(): boolean };
 }
 
 export interface Band {
   frame(f: RoomFrame): void;
   remote(v: RemoteView): void;
+  /** The join sheet opened or closed. */
+  redraw(): void;
 }
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string, tier?: string): HTMLElementTagNameMap[K] {
@@ -106,7 +110,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       drawn = "";
       return;
     }
-    const v = bandView(st, frame?.band ?? null, shownSlot(note), state.asking);
+    const v = bandView(st, frame?.band ?? null, shownSlot(note), state.asking, opts.sheet?.isOpen() ?? false);
     const key = JSON.stringify(v);
     if (key === drawn) return;
     const focused = (document.activeElement as HTMLElement | null)?.dataset?.id;
@@ -231,6 +235,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
         return moveFocus(a.back);
       case "escape":
         if (state.asking) return closeAsk();
+        if (opts.sheet?.escape() === true) return set(M.keyPress(state, t));
         (document.activeElement as HTMLElement | null)?.blur?.();
         return set(M.escape(state, t, ctx()));
       case "end":
@@ -255,6 +260,10 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
         // Only where the music could be followed; otherwise F does nothing.
         if (frame?.link?.available === true) h.command({ type: "follow" });
         break;
+      case "join":
+        // The sheet, never the band: J shows nothing else and moves nothing.
+        opts.sheet?.join();
+        break;
       case "ignore":
         break;
     }
@@ -271,5 +280,6 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       note = slotArrived(note, v);
       update();
     },
+    redraw: update,
   };
 }

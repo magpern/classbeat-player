@@ -72,7 +72,8 @@ function bench(): Bench {
 
 test("after last, queue, command, joined and tick do nothing, and only end goes out", () => {
   const b = bench();
-  assert.deepEqual(b.sent.map((m) => m.type), ["companion_state"]);
+  // On connect: the state, then the riders' state (rider-send.ts), both due at once.
+  assert.deepEqual(b.sent.map((m) => m.type), ["companion_state", "rider_state"]);
   // A command before the end is taken: the same command after it would be too, but for the end.
   b.p.command(forwarded("pause", { id: id(1) }));
   assert.equal(b.count.applied, 1);
@@ -114,7 +115,7 @@ test("last on a publisher with no connection queues nothing, tells nobody and se
   assert.equal(b.p.last(END, () => void (told += 1)), false);
   b.p.connected((text) => void b.sent.push(JSON.parse(text) as { type: string }));
   // Exactly what the reconnect sent on its own: one more state, and no end.
-  assert.deepEqual(b.sent.map((m) => m.type), ["companion_state", "companion_state"]);
+  assert.deepEqual(b.sent.map((m) => m.type), ["companion_state", "rider_state", "companion_state", "rider_state"]);
   b.advance(10 * WINDOW_MS);
   assert.equal(b.sent.filter((m) => m.type === "end").length, 0);
   assert.equal(told, 0);
@@ -179,7 +180,7 @@ test("a sender replaced from within its own send sends nothing more: its late se
   // The old sender got the one message it was sending when it was replaced, and nothing after it.
   assert.equal(old.length, MAX_PER_WINDOW + 1);
   // The new connection starts fresh: the state, and none of the old queue.
-  assert.deepEqual(fresh, ["companion_state"]);
+  assert.deepEqual(fresh, ["companion_state", "rider_state"]);
   b.advance(10 * WINDOW_MS);
   assert.equal(old.length, MAX_PER_WINDOW + 1);
 });

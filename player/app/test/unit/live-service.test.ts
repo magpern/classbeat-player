@@ -198,7 +198,7 @@ test("the host sends only its own messages, within its budget: under 8 a second,
     r.live.tick();
     for (; seen < watched.length; seen++) at.push({ t: r.now(), type: (watched[seen] as { type: string }).type });
   }
-  const HOST_TYPES = ["hello", "companion_state", "command_result", "make_code", "drop", "end"];
+  const HOST_TYPES = ["hello", "companion_state", "command_result", "make_code", "drop", "end", "rider_state", "drop_rider", "lock", "new_join_code"];
   assert.ok(watched.every((m) => HOST_TYPES.includes((m as { type: string }).type)));
   for (const a of at) {
     const inSecond = at.filter((b) => b.t > a.t - 1000 && b.t <= a.t);

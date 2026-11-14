@@ -21,6 +21,8 @@ test("each key's command", () => {
     [k("f"), { kind: "follow" }],
     [k("F", { shift: true }), { kind: "follow" }],
     [k("End"), { kind: "end" }],
+    [k("j"), { kind: "join" }],
+    [k("J", { shift: true }), { kind: "join" }],
     [k("Escape"), { kind: "escape" }],
     [k("Tab"), { kind: "tab", back: false }],
     [k("Tab", { shift: true }), { kind: "tab", back: true }],
@@ -35,7 +37,7 @@ test("a clicker's start-the-show key is Start only; its black-screen keys do not
 });
 
 test("a held key repeats nothing", () => {
-  for (const key of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "f", "F5", "End"]) assert.deepEqual(keyAction(k(key, { repeat: true })), { kind: "ignore" }, key);
+  for (const key of [" ", "ArrowRight", "ArrowLeft", "PageDown", "PageUp", "f", "F5", "End", "j"]) assert.deepEqual(keyAction(k(key, { repeat: true })), { kind: "ignore" }, key);
   assert.deepEqual(keyAction(k("z", { mod: true, repeat: true })), { kind: "ignore" });
 });
 
@@ -45,8 +47,8 @@ test("other keys and chords are left alone", () => {
   }
 });
 
-test("Space, the arrows, the Page keys, F5 and Shift+F5 wait while the End question is open; the rest do not", () => {
-  const waits = [k(" "), k("ArrowRight"), k("ArrowLeft"), k("PageDown"), k("PageUp"), k("ArrowRight", { shift: true }), k("ArrowLeft", { shift: true }), k("F5"), k("F5", { shift: true })];
+test("Space, the arrows, the Page keys, F5, Shift+F5 and J wait while the End question is open; the rest do not", () => {
+  const waits = [k(" "), k("ArrowRight"), k("ArrowLeft"), k("PageDown"), k("PageUp"), k("ArrowRight", { shift: true }), k("ArrowLeft", { shift: true }), k("F5"), k("F5", { shift: true }), k("j"), k("J", { shift: true })];
   const acts = [k("z", { mod: true }), k("f"), k("End"), k("Escape"), k("Tab"), k("b")];
   for (const p of waits) assert.equal(waitsForQuestion(keyAction(p)!), true, p.key);
   for (const p of acts) assert.equal(waitsForQuestion(keyAction(p)!), false, p.key);

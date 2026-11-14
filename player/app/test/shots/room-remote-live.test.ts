@@ -1,14 +1,14 @@
 // The room screen's phone-remote slot as the live client gives it (issue #202): each state of a
 // session on the fake live process, taken from the live service's room view, drawn on the real
 // room page in headless Chrome. Screenshots to screenshots/room-remote-live-*.png for the design
-// review; the QR code drawn is the one of `<site>/control#<join code>` and nothing else; the page never
+// review; the QR code drawn is the riders' one, `<site>/j#<join code>` (room-join.md), and nothing else; the page never
 // holds the host token, the session id or a control code. Needs `npm run build` first. No network.
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Browser, Page } from "playwright-core";
-import { controlAddress, lastsUntilHidden, remoteViewOf } from "../../src/core/room/remote.ts";
+import { joinAddress, lastsUntilHidden, remoteViewOf } from "../../src/core/room/remote.ts";
 import type { RemoteView } from "../../src/core/room/remote.ts";
 import { CONTROL_CODE, DEVICE_TOKEN, HOST_TOKEN, JOIN_CODE, ORIGIN, rig, SESSION_ID } from "../unit/live-relay.ts";
 import type { Rig } from "../unit/live-relay.ts";
@@ -119,9 +119,9 @@ for (const s of STATES) {
         if (view.slot === "on") {
           assert.ok(drawn !== null, `${name}: the QR code is shown`);
           const rows = drawn.dark.slice(QR_QUIET, drawn.side - QR_QUIET).map((row) => row.slice(QR_QUIET, drawn.side - QR_QUIET));
-          // The drawn modules are exactly the code of `<site>/control#<join code>` (the encoder,
+          // The drawn modules are exactly the code of `<site>/j#<join code>` (the encoder,
           // with its own reader checks, is room-qr.test.ts; this address needs level L there).
-          assert.deepEqual(rows, qrCode(controlAddress(ORIGIN, JOIN_CODE))!.modules, `${name}: the QR code is the join code's address`);
+          assert.deepEqual(rows, qrCode(joinAddress(ORIGIN, JOIN_CODE))!.modules, `${name}: the QR code is the riders' address`);
           assert.equal(await o.page.textContent(".band .code .v"), JOIN_CODE);
         } else {
           assert.equal(drawn, null, `${name}: no QR code`);

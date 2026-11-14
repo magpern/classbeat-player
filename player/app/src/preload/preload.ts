@@ -11,7 +11,11 @@ import {
   CH_LIST_VIEW,
   CH_LIVE_CODE,
   CH_LIVE_DROP,
+  CH_LIVE_DROP_RIDER,
   CH_LIVE_END,
+  CH_LIVE_LOCK,
+  CH_LIVE_NEW_CODE,
+  CH_LIVE_RIDERS,
   CH_LIVE_START,
   CH_LIVE_VIEW,
   CH_OPEN_DROPPED,
@@ -50,4 +54,9 @@ contextBridge.exposeInMainWorld("player", {
   endLive: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_END),
   makeControlCode: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_CODE),
   dropPhone: (slot: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_DROP, slot),
+  // The riders panel (presenter only): the list, Remove a rider by id, Lock joining, New code.
+  riders: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_RIDERS),
+  dropRider: (rider: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_DROP_RIDER, rider),
+  lockJoining: (locked: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_LOCK, locked),
+  newJoinCode: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_NEW_CODE),
 });

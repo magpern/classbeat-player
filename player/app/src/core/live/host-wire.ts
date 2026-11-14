@@ -1,7 +1,8 @@
 // What the host reads from the live process (schema/live/v1, ADR 0005 section 4). Pure. Every
 // answer and message is checked here again, field by field, before the app acts on it: a closed
 // shape, the contract's patterns and ranges. Anything else is dropped. A forwarded `command` is
-// passed on untouched to the command intake (intake.ts), which checks it itself.
+// passed on untouched to the command intake (intake.ts), which checks it itself. The riders'
+// messages (ADR 0007 section 2) bring a rider's id and nickname to the host and nowhere else.
 import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
 import type { Ended } from "../../../../../schema/generated/ts/live-ended.d.ts";
 import type { LiveErrorBody } from "../../../../../schema/generated/ts/live-error.d.ts";
@@ -36,7 +37,11 @@ export type HostInbound =
   | { readonly type: "control_code"; readonly code: string; readonly expiresInMs: number }
   | { readonly type: "code_cancelled"; readonly reason: CodeCancelled["reason"] }
   | { readonly type: "ended"; readonly reason: Ended["reason"] }
-  | { readonly type: "command"; readonly raw: Record<string, unknown> };
+  | { readonly type: "command"; readonly raw: Record<string, unknown> }
+  | { readonly type: "rider_joined"; readonly rider: string; readonly nickname: string }
+  | { readonly type: "rider_left"; readonly rider: string; readonly reason: "left" | "dropped" }
+  | { readonly type: "lock_state"; readonly locked: boolean }
+  | { readonly type: "join_code"; readonly code: string };
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
@@ -53,7 +58,22 @@ const oneOf = <T extends string>(v: unknown, values: readonly T[]): v is T => ty
 
 const CANCEL_REASONS: readonly CodeCancelled["reason"][] = ["wrong_tries", "expired", "used", "replaced"];
 const ENDED_REASONS: readonly Ended["reason"][] = ["host_ended", "revoked", "expired", "dropped"];
-const ERRORS: readonly LiveErrorBody["error"][] = ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
+/** A rider's id (schema/live/v1/rider-joined.schema.json): 8 bytes, base64url. */
+export const RIDER_ID = /^[A-Za-z0-9_-]{11}$/;
+/** The longest nickname, in characters (code points, as the schema counts them). */
+export const MAX_NICKNAME = 24;
+// The server removes control characters (C0, DEL, C1), so a nickname holding one is not taken.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR = /[\u0000-\u001f\u007f-\u009f]/;
+export const isRiderId = (v: unknown): v is string => typeof v === "string" && RIDER_ID.test(v);
+const isNickname = (v: unknown): v is string => {
+  if (typeof v !== "string" || CONTROL_CHAR.test(v)) return false;
+  const n = Array.from(v).length;
+  return n >= 1 && n <= MAX_NICKNAME;
+};
+const LEFT_REASONS = ["left", "dropped"] as const;
+
+const ERRORS:readonly LiveErrorBody["error"][] = ["invalid_request", "invalid_token", "token_unknown", "token_expired", "token_revoked", "sessions_full", "cannot_control", "invalid_code", "controllers_full", "too_many_requests", "internal_error"];
 
 /** The answer of `POST /api/live/sessions`: the session, or why there is none. */
 export function parseStartAnswer(a: HttpAnswer): StartAnswer {
@@ -106,6 +126,14 @@ export function parseHostMessage(v: unknown): HostInbound | null {
       return hasKeys(v, ["v", "type", "reason"]) && oneOf(v.reason, ENDED_REASONS) ? { type: "ended", reason: v.reason } : null;
     case "command":
       return { type: "command", raw: v };
+    case "rider_joined":
+      return hasKeys(v, ["v", "type", "rider", "nickname"]) && isRiderId(v.rider) && isNickname(v.nickname) ? { type: "rider_joined", rider: v.rider, nickname: v.nickname } : null;
+    case "rider_left":
+      return hasKeys(v, ["v", "type", "rider", "reason"]) && isRiderId(v.rider) && oneOf(v.reason, LEFT_REASONS) ? { type: "rider_left", rider: v.rider, reason: v.reason } : null;
+    case "lock_state":
+      return hasKeys(v, ["v", "type", "locked"]) && typeof v.locked === "boolean" ? { type: "lock_state", locked: v.locked } : null;
+    case "join_code":
+      return hasKeys(v, ["v", "type", "code"]) && typeof v.code === "string" && SHORT_CODE.test(v.code) ? { type: "join_code", code: v.code } : null;
     default:
       return null;
   }

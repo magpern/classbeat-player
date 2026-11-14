@@ -20,6 +20,8 @@
 import type { HostInbound, Slot } from "./host-wire.ts";
 import { OFF } from "./session-types.ts";
 import type { EndReason, LiveEffect, LiveEvent, LiveModel, Place, Refusal, Step } from "./session-types.ts";
+import { ridersWelcomed } from "./riders-model.ts";
+import { onRiderEvent, onRiderMessage } from "./riders-step.ts";
 
 export const BACKOFF_MS: readonly number[] = [1000, 2000, 4000, 8000, 15_000];
 /** How long the live process keeps a session after the host's connection is lost. */
@@ -89,7 +91,9 @@ function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
   switch (msg.type) {
     case "welcome": {
       const places = m.places.map((p) => (p === "connected" ? "away" : p)) as [Place, Place];
-      return { model: { ...m, phase: "live", attempt: 0, lostAt: null, places }, effects: [{ kind: "welcomed", socket: m.socket }] };
+      // A reconnect: the server replays the riders and the lock (ADR 0007 section 2).
+      const riders = ridersWelcomed(m.riders, m.phase === "reconnecting");
+      return { model: { ...m, phase: "live", attempt: 0, lostAt: null, places, riders }, effects: [{ kind: "welcomed", socket: m.socket }] };
     }
     case "controller_joined":
       return { model: { ...m, places: setPlace(m, msg.slot, "connected") }, effects: [{ kind: "joined" }] };
@@ -104,6 +108,11 @@ function onMessage(m: LiveModel, msg: HostInbound, now: number): Step {
     case "command":
       // Commands go to the command intake (intake.ts), never through here.
       return same(m);
+    case "rider_joined":
+    case "rider_left":
+    case "lock_state":
+    case "join_code":
+      return same(onRiderMessage(m, msg, now));
   }
 }
 
@@ -145,5 +154,9 @@ export function step(m: LiveModel, e: LiveEvent, now: number): Step {
     case "applied":
       if (m.phase !== "live") return same(m);
       return same({ ...m, line: { slot: e.slot, action: e.action, deltaMs: e.deltaMs, until: now + LINE_MS } });
+    case "drop_rider":
+    case "lock":
+    case "new_join_code":
+      return onRiderEvent(m, e, now);
   }
 }

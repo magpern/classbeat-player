@@ -43,6 +43,25 @@
     <button type="button" id="live-end" hidden>End phone remote</button>
   </p>
 </section>
+<section id="riders" aria-label="Riders" hidden>
+  <p id="riders-row"><output id="riders-count">–</output> Riders <output id="riders-word" hidden></output> <button type="button" id="riders-toggle" aria-controls="riders-drawer" aria-expanded="false" hidden>Show list</button> <button type="button" id="riders-on" hidden>Turn on join codes</button></p>
+  <p id="riders-off" hidden></p>
+  <p id="riders-line" role="status" hidden></p>
+  <div id="riders-drawer" hidden>
+    <p id="riders-actions">
+      <button type="button" id="riders-lock"><span id="riders-lock-text">Lock joining</span> <span id="riders-lock-sub">Joining is open</span></button>
+      <button type="button" id="riders-new">New code <span id="riders-new-sub">Old code stops working</span></button>
+    </p>
+    <div id="riders-ask-code" role="group" aria-labelledby="riders-ask-code-head" hidden>
+      <p id="riders-ask-code-head"><strong>Make a new code?</strong></p>
+      <p>The old code and its QR code stop working. Riders already in stay. A control code shown here ends.</p>
+      <p><button type="button" id="riders-new-yes">Make new code</button> <button type="button" id="riders-new-no">Cancel</button></p>
+    </div>
+    <p id="riders-note"></p>
+    <p id="riders-empty" hidden></p>
+    <ul id="riders-list"></ul>
+  </div>
+</section>
 <section id="clock" hidden>
   <p>Status: <output id="status"></output></p>
   <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>

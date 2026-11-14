@@ -4,6 +4,7 @@
 // (companion-state.ts, intake.ts, send-budget.ts); this only carries them out, with one timer.
 // Nothing is buffered for a connection that is not there: a lost connection drops its queue.
 // The run's `end` is its last message (`last`): once it is sent, nothing more is.
+// It also publishes the riders' rider_state (ADR 0007) in the room the budget leaves (rider-send.ts).
 import type { ClockCommand } from "../../core/commands.ts";
 import type { PlayerState } from "../../core/player-state.ts";
 import type { CompanionAction } from "../../core/live/actions.ts";
@@ -11,6 +12,8 @@ import { companionStateOf } from "../../core/live/companion-state.ts";
 import { parseForwardedCommand } from "../../core/live/forwarded.ts";
 import { intake, newIntake, recordPublished } from "../../core/live/intake.ts";
 import type { IntakeMemory } from "../../core/live/intake.ts";
+import { newRiderSender, riderInputOf, riderReconnected, riderTake } from "../../core/live/rider-send.ts";
+import type { RiderSender } from "../../core/live/rider-send.ts";
 import { controllerJoined, enqueue, newBudget, stateChanged, take, wakeAt } from "../../core/live/send-budget.ts";
 import type { HostMessage, SendBudget } from "../../core/live/send-budget.ts";
 import type { End } from "../../../../../schema/generated/ts/live-end.d.ts";
@@ -58,6 +61,7 @@ export function createPublisher(d: PublisherDeps): Publisher {
   let lastShown = "";
   let timer: unknown = null;
   let lastSent: (() => void) | null = null;
+  let riders: RiderSender = newRiderSender();
 
   const cancel = (): void => {
     if (timer !== null) d.clearTimer(timer);
@@ -94,8 +98,19 @@ export function createPublisher(d: PublisherDeps): Publisher {
       // `send`, #216, #217): then nothing more goes through this sender, not even to a new one.
       if (send !== out) return;
     }
-    const wait = Math.max(0, wakeAt(budget, r.now) - r.now);
-    timer = d.setTimer(pump, wait);
+    let next = wakeAt(budget, r.now);
+    // The riders' state takes the room left, never once the run's last message is queued.
+    if (lastSent === null) {
+      const rt = riderTake(riders, budget, riderInputOf(r.state, r.now, r.canSend), d.run, r.now);
+      riders = rt.sender;
+      budget = rt.budget;
+      if (rt.message !== null) {
+        out(JSON.stringify(rt.message));
+        if (send !== out) return;
+      }
+      if (rt.wakeAt !== null) next = Math.min(next, rt.wakeAt);
+    }
+    timer = d.setTimer(pump, Math.max(0, next - r.now));
   };
 
   const stop = (): void => {
@@ -113,6 +128,7 @@ export function createPublisher(d: PublisherDeps): Publisher {
     connected(s) {
       send = s;
       budget = newBudget();
+      riders = riderReconnected(riders);
       pump();
     },
     disconnected() {

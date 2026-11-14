@@ -2,9 +2,17 @@
 // takes and the effects it asks for. Pure: types and the state at each start of the app.
 import type { CodeCancelled } from "../../../../../schema/generated/ts/live-code-cancelled.d.ts";
 import type { Drop } from "../../../../../schema/generated/ts/live-drop.d.ts";
+import type { DropRider } from "../../../../../schema/generated/ts/live-drop-rider.d.ts";
+import type { Lock } from "../../../../../schema/generated/ts/live-lock.d.ts";
 import type { MakeCode } from "../../../../../schema/generated/ts/live-make-code.d.ts";
+import type { NewJoinCode } from "../../../../../schema/generated/ts/live-new-join-code.d.ts";
 import type { CompanionAction } from "./actions.ts";
 import type { HostInbound, Slot, StartAnswer, StartRefusal, StartedSession } from "./host-wire.ts";
+import { NO_RIDERS } from "./riders-model.ts";
+import type { Riders } from "./riders-model.ts";
+
+/** What the host sends the server of its own accord (the session's operations). */
+export type HostOperation = MakeCode | Drop | DropRider | Lock | NewJoinCode;
 
 export type Phase = "idle" | "starting" | "connecting" | "live" | "reconnecting" | "ended" | "refused";
 export type Refusal = StartRefusal | "not_paired" | "no_class";
@@ -39,6 +47,8 @@ export interface LiveModel {
   readonly code: { readonly code: string; readonly expiresAt: number } | null;
   readonly codeNote: Exclude<CodeCancelled["reason"], "replaced"> | null;
   readonly line: Applied | null;
+  /** The riders in (riders-model.ts): memory only, gone with the session. */
+  readonly riders: Riders;
 }
 
 export type Credential = "ok" | "none" | "expired";
@@ -54,7 +64,11 @@ export type LiveEvent =
   | { readonly type: "drop"; readonly slot: Slot }
   | { readonly type: "end" }
   | { readonly type: "class_changed" }
-  | { readonly type: "applied"; readonly slot: Slot; readonly action: CompanionAction; readonly deltaMs: number | null };
+  | { readonly type: "applied"; readonly slot: Slot; readonly action: CompanionAction; readonly deltaMs: number | null }
+  /** The presenter's riders panel (ADR 0007 section 3): Remove, Lock joining, New code. */
+  | { readonly type: "drop_rider"; readonly rider: string }
+  | { readonly type: "lock"; readonly locked: boolean }
+  | { readonly type: "new_join_code" };
 
 export type LiveEffect =
   | { readonly kind: "post_session"; readonly request: number }
@@ -63,7 +77,7 @@ export type LiveEffect =
   /** The host is in: a fresh send budget, the state at once. */
   | { readonly kind: "welcomed"; readonly socket: number }
   | { readonly kind: "joined" }
-  | { readonly kind: "send"; readonly message: MakeCode | Drop }
+  | { readonly kind: "send"; readonly message: HostOperation }
   /**
    * The host is in and ends the session: `end` goes out on its own connection, within its send
    * budget, and that connection is kept until the session is ended (main/live/farewell.ts). If it
@@ -95,6 +109,7 @@ export const OFF: LiveModel = {
   code: null,
   codeNote: null,
   line: null,
+  riders: NO_RIDERS,
 };
 
 export interface Step {

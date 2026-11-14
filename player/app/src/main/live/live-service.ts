@@ -3,12 +3,15 @@
 // The host token stays in this process's memory, in the model, and leaves it only in `hello` (on
 // the host's connection, or on the ender's when a session the host is not in is ended: ender.ts);
 // it is never stored, logged or sent to a window. The presenter gets `view()`; the room window gets
-// `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else.
+// `roomView()`, the phone remote's slot (core/live/room-slot.ts), and nothing else; the riders' list
+// (`riders()`) is in this memory and the presenter's view only (ADR 0007 section 4).
 // Ending while live keeps the host's connection until the session is ended (end-live.ts, farewell.ts, #211).
 import { parseHostFrame, parseStartAnswer, liveSocketUrl } from "../../core/live/host-wire.ts";
 import type { Slot } from "../../core/live/host-wire.ts";
 import { livePanelView } from "../../core/live/panel-view.ts";
 import type { LivePanelView } from "../../core/live/panel-view.ts";
+import { ridersView } from "../../core/live/riders-view.ts";
+import type { RidersView } from "../../core/live/riders-view.ts";
 import { roomSlotOf } from "../../core/live/room-slot.ts";
 import type { RemoteView } from "../../core/room/remote.ts";
 import { step } from "../../core/live/session-model.ts";
@@ -57,6 +60,11 @@ export interface LiveService {
   end(): LivePanelView;
   makeCode(): LivePanelView;
   drop(slot: Slot): LivePanelView;
+  /** The riders panel (riders-view.ts): presenter only, never the room window. */
+  riders(): RidersView;
+  dropRider(rider: string): RidersView;
+  lock(locked: boolean): RidersView;
+  newJoinCode(): RidersView;
   /** Another class opened, or the class closed: the run's session ends. */
   classChanged(): void;
   /** The class may have changed: called with every snapshot. */
@@ -222,6 +230,7 @@ export function createLiveService(d: LiveDeps): LiveService {
     return c === null ? "none" : c.expired ? "expired" : "ok";
   };
   const view = (): LivePanelView => livePanelView(model, { now: d.now(), classOpen: d.classOpen(), secondDisplay: d.secondDisplay(), origin });
+  const riders = (): RidersView => ridersView(model, { now: d.now(), classOpen: d.classOpen() });
 
   return {
     view,
@@ -244,6 +253,19 @@ export function createLiveService(d: LiveDeps): LiveService {
     drop(slot) {
       dispatch({ type: "drop", slot });
       return view();
+    },
+    riders,
+    dropRider(rider) {
+      dispatch({ type: "drop_rider", rider });
+      return riders();
+    },
+    lock(locked) {
+      dispatch({ type: "lock", locked });
+      return riders();
+    },
+    newJoinCode() {
+      dispatch({ type: "new_join_code" });
+      return riders();
     },
     classChanged() {
       dispatch({ type: "class_changed" });
