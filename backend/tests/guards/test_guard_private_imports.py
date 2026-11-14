@@ -82,6 +82,24 @@ def test_every_dynamic_importer_is_a_source_file() -> None:
         # A private module named in a key or an argument.
         "import sys\nsys.modules['starlette._utils']",
         "load(name='starlette._utils')",
+        # A private Starlette name in any string, and the start of one (#340 B1).
+        "M = 'starlette._utils'\nsys.modules[M]",
+        "for m in ['starlette._utils']:\n    sys.modules[m]",
+        "load(f'starlette._{x}')",
+        "load('starlette._' + 'utils')",
+        "load('starlette.' + name)",
+        "load('starlette' + '._utils')",
+        "load(f'starlette.{x}')",
+        "load('starlette.%s' % x)",
+        "load('starlette.{}'.format(x))",
+        "NAMES = ('starlette.routing', 'starlette.__x')",
+        "NAME: str = 'starlette.routing._compile_path'",
+        "load(b'starlette._utils')",
+        "NAME = '  starlette._utils\\n'",
+        "load('pkg.starlette._utils')",
+        # The old text backstop over the code's tokens: a chain on a name no import bound.
+        "obj.starlette._utils",
+        "obj.starlette . _utils",
     ],
 )
 def test_the_scan_refuses_each_form(snippet: str) -> None:
@@ -112,6 +130,9 @@ def test_the_scan_refuses_each_form(snippet: str) -> None:
         "getattr(route, 'path', None)",
         "import re\nre.compile('x')",
         "sys.modules.get(key)",
+        "NAMES = ('starlette.routing', 'player_backend._generated')",
+        "load(f'see starlette.{x} for why')",
+        "raise ImportError('not starlette._utils: ' + name)",
     ],
 )
 def test_the_scan_permits_each_public_form(snippet: str) -> None:
@@ -131,3 +152,60 @@ def test_a_dynamic_importer_may_use_its_listed_form_only(rel: str, snippet: str)
     assert _violations("import importlib", rel) != []
     assert _violations("__import__('x')", rel) != []
     assert _violations("x = import_module('starlette._utils')", rel) != []
+
+
+@pytest.mark.parametrize(
+    ("rel", "snippet"),
+    [
+        # The executor's real loader and its fixed list (#340 B1).
+        (
+            "player_backend/db/executor/_sources.py",
+            "QUERY_MODULES = ('player_backend.db.q', 'starlette._utils')",
+        ),
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\nNAME = 'starlette._utils'\n_m(NAME)",
+        ),
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\n_m(f'starlette._{x}')",
+        ),
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\n_m('starlette._' + 'utils')",
+        ),
+        # A listed file may only make its listed calls with the names it imports (#340 N1).
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\nf = _m",
+        ),
+        ("player_backend/site/answers.py", "import importlib.util\nimportlib.import_module(name)"),
+        ("player_backend/site/answers.py", "import importlib.util\nimportlib.util.find_spec(name)"),
+        (
+            "player_backend/site/answers.py",
+            "import importlib.util\nf = importlib.util.spec_from_file_location",
+        ),
+        ("player_backend/site/answers.py", "import importlib.util\ngetattr(importlib, 'util')"),
+    ],
+)
+def test_a_dynamic_importer_is_refused_anything_else(rel: str, snippet: str) -> None:
+    assert _violations(snippet, rel) != []
+
+
+@pytest.mark.parametrize(
+    ("rel", "snippet"),
+    [
+        (
+            "player_backend/db/executor/__init__.py",
+            "from importlib import import_module as _m\nfor n in NAMES:\n    _m(n)",
+        ),
+        (
+            "player_backend/site/answers.py",
+            "import importlib.util\n"
+            "spec = importlib.util.spec_from_file_location(key, path)\n"
+            "module = importlib.util.module_from_spec(spec)",
+        ),
+    ],
+)
+def test_a_dynamic_importer_may_make_its_listed_calls(rel: str, snippet: str) -> None:
+    assert _violations(snippet, rel) == []

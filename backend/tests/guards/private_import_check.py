@@ -13,9 +13,11 @@ allowlist of the forms that may reach Starlette or load a module:
    never one of the refused builtins below;
 4. no dynamic import: `__import__`, `eval`, `exec` and `compile` are refused everywhere, and so
    is an import of `importlib`, `pkgutil`, `runpy`, `zipimport` or `builtins`, except in the
-   files of DYNAMIC_IMPORTS in exactly the form listed there;
-5. a string literal passed as a call argument or a key that names a private Starlette module
-   (`"starlette._utils"`) is refused anywhere.
+   files of DYNAMIC_IMPORTS in exactly the form listed there, and there each name it binds is
+   used only as a call of a function listed with it;
+5. the text rules of starlette_name_check.py: no string constant anywhere, nor a constant part
+   of an f-string or a `+`, that spells a private Starlette name or the start of one, and the old
+   `starlette . _x` scan over the code's tokens (comments, strings and dunders left out).
 
 What source written to get round these rules can still do is not this guard's to stop; it is
 here against mistakes, like sql_source_check.py.
@@ -24,31 +26,46 @@ here against mistakes, like sql_source_check.py.
 from __future__ import annotations
 
 import ast
-import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from tests.guards.query_module_check import Violation
 from tests.guards.sql_source_check import source_files
+from tests.guards.starlette_name_check import (
+    backstop_violations,
+    is_private,
+    string_violations,
+)
 
-# The only files that may load a module by name, and the one import form each may use.
+Form = tuple[str, str | None]
+
+
+@dataclass(frozen=True)
+class Loader:
+    """The import forms a file may load modules with, and the calls it may make with them."""
+
+    forms: frozenset[Form]
+    calls: frozenset[str]
+
+
+# The only files that may load a module by name: each one's import form and its calls.
 DYNAMIC_IMPORTS: Final = {
     # The executor loads its fixed list of query modules (ADR 0002, section 9, item 1).
-    "player_backend/db/executor/__init__.py": frozenset({("importlib", "import_module")}),
+    "player_backend/db/executor/__init__.py": Loader(
+        frozenset({("importlib", "import_module")}), frozenset({"importlib.import_module"})
+    ),
     # The site API's generated answer models, from their files (site/answers.py).
-    "player_backend/site/answers.py": frozenset({("importlib.util", None)}),
+    "player_backend/site/answers.py": Loader(
+        frozenset({("importlib.util", None)}),
+        frozenset({"importlib.util.spec_from_file_location", "importlib.util.module_from_spec"}),
+    ),
 }
+_NO_LOADER: Final = Loader(frozenset(), frozenset())
 LOADERS: Final = frozenset({"importlib", "pkgutil", "runpy", "zipimport", "builtins"})
 REFUSED_BUILTINS: Final = frozenset({"__import__", "eval", "exec", "compile"})
 REFLECTION: Final = frozenset({"getattr", "hasattr", "setattr", "delattr"})
-_DOTTED: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
-
-
-def is_private(name: str) -> bool:
-    """`_x` and `__x` are private; a dunder such as `__init__` is not."""
-    dunder = len(name) > 4 and name.startswith("__") and name.endswith("__")
-    return name.startswith("_") and not dunder
 
 
 def _is_starlette(module: str) -> bool:
@@ -57,11 +74,6 @@ def _is_starlette(module: str) -> bool:
 
 def _private_dotted(name: str) -> bool:
     return any(is_private(part) for part in name.split("."))
-
-
-def names_private_starlette(text: str) -> bool:
-    """The string is exactly a dotted name inside Starlette with a private part."""
-    return bool(_DOTTED.fullmatch(text)) and _is_starlette(text) and _private_dotted(text)
 
 
 def _root(node: ast.expr) -> str | None:
@@ -111,17 +123,51 @@ def _assignments(tree: ast.Module) -> Iterator[tuple[str, ast.expr]]:
                 yield node.target.id, node.value
 
 
+def _loader_names(tree: ast.Module) -> dict[str, str]:
+    """Each name a loader import binds, mapped to the dotted name it stands for."""
+    names: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                top = a.name.split(".")[0]
+                if top in LOADERS:
+                    names[a.asname or top] = a.name if a.asname else top
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            if node.module.split(".")[0] in LOADERS:
+                names.update({a.asname or a.name: f"{node.module}.{a.name}" for a in node.names})
+    return names
+
+
+def _loader_call_violations(tree: ast.Module, loader: Loader) -> list[tuple[int, str]]:
+    """A name a loader import binds, used other than as a call of a listed function."""
+    names = _loader_names(tree)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Name) and node.id in names):
+            continue
+        top: ast.expr = node
+        dotted = names[node.id]
+        while isinstance(up := parents.get(top), ast.Attribute) and up.value is top:
+            top, dotted = up, f"{dotted}.{up.attr}"
+        call = parents.get(top)
+        if not (isinstance(call, ast.Call) and call.func is top and dotted in loader.calls):
+            found.append((node.lineno, f"dynamic import: {dotted} is not a listed call"))
+    return found
+
+
 class _Checker(ast.NodeVisitor):
     def __init__(self, rel: str, tree: ast.Module) -> None:
         self.rel = rel
         self.bound = _starlette_bindings(tree)
+        self.loader = DYNAMIC_IMPORTS.get(rel, _NO_LOADER)
         self.found: list[Violation] = []
 
     def _add(self, node: ast.AST, rule: str) -> None:
         self.found.append(Violation(self.rel, getattr(node, "lineno", 0), rule))
 
-    def _loader(self, node: ast.AST, form: tuple[str, str | None]) -> None:
-        if form[0].split(".")[0] in LOADERS and form not in DYNAMIC_IMPORTS.get(self.rel, ()):
+    def _loader(self, node: ast.AST, form: Form) -> None:
+        if form[0].split(".")[0] in LOADERS and form not in self.loader.forms:
             self._add(node, f"dynamic import: {form[0]} outside DYNAMIC_IMPORTS")
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -172,9 +218,7 @@ class _Checker(ast.NodeVisitor):
         text = _literal(key)
         if text is None:
             return
-        if names_private_starlette(text):
-            self._add(node, f"private module named: {text}")
-        elif root in self.bound and is_private(text.rsplit(".", 1)[-1]):
+        if root in self.bound and is_private(text.rsplit(".", 1)[-1]):
             self._add(node, f"private name looked up: {text}")
 
 
@@ -182,7 +226,12 @@ def check_source(source: str, rel: str) -> list[Violation]:
     tree = ast.parse(source, filename=rel)
     checker = _Checker(rel, tree)
     checker.visit(tree)
-    return checker.found
+    text_rules = [
+        *string_violations(tree),
+        *backstop_violations(source),
+        *_loader_call_violations(tree, checker.loader),
+    ]
+    return checker.found + [Violation(rel, line, rule) for line, rule in text_rules]
 
 
 def check_tree(src: Path) -> list[Violation]:
