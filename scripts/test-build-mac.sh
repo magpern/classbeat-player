@@ -137,7 +137,8 @@ mkdir -p "$tmp/out2/classbeat-player-macos-arm64"
 touch "$tmp/out2/classbeat-player-macos-arm64/stale-file"
 run --open --out "$tmp/out2"
 check "--open twice exits 0" 0 "$rc"
-check "--open twice: second unpack replaced the first" "" "$(ls "$tmp/out2/classbeat-player-macos-arm64" | grep stale || true)"
+stale=gone; [ ! -e "$tmp/out2/classbeat-player-macos-arm64/stale-file" ] || stale=present
+check "--open twice: second unpack replaced the first" gone "$stale"
 has "--open twice starts the app again" "open $tmp/out2/classbeat-player-macos-arm64/Electron.app" "$(cat "$LOG")"
 
 FAKE_OPEN_FAIL=1 run --open --out "$tmp/out2"
