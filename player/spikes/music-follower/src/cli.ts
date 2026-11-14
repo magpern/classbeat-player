@@ -7,8 +7,9 @@ import { parseArgs } from "node:util";
 import { monoMs, wallMs } from "./clock.js";
 import { buildPlan } from "./core/class_plan.js";
 import { ClassFollower, DEFAULT_CONFIG } from "./core/follower.js";
-import { controlLine, markerLine, metaLine, readingLine, statusLine } from "./core/log_format.js";
+import { controlLine, markerLine, metaLine, pendingNote, readingLine, statusLine } from "./core/log_format.js";
 import type { Decision } from "./core/types.js";
+import { makeShutdown } from "./shutdown.js";
 import { createReader } from "./readers/select.js";
 
 const USAGE = "usage: music-follower --class <class.json> --out <log.jsonl> [--rate 4] [--reader auto|macos|windows|linux]";
@@ -50,10 +51,15 @@ async function main(): Promise<void> {
   write(metaLine(stamp(), { event: "start", platform: process.platform, source: reader.source, rate, limitations: reader.limitations ?? [], plan: plan.name, crossfadeMs: plan.crossfadeMs, config: cfg }));
 
   let last: Decision | null = null;
-  let quit = false;
-  const finish = () => {
-    quit = true;
-  };
+  let pendingSince: number | null = null;
+  let statusBase = "";
+  const finish = makeShutdown(() => {
+    write(metaLine(stamp(), { event: "end" }));
+    reader.close?.();
+    console.error(`\nlog written: ${out}`);
+  }, (code) => process.exit(code));
+  process.on("SIGINT", finish);
+  process.on("SIGTERM", finish);
 
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.setEncoding("utf8");
@@ -76,19 +82,22 @@ async function main(): Promise<void> {
 
   console.error(`following Spotify, ${rate} Hz, log ${out}. b = beat tap, m = mark, u = undo, r = relink, 1-9 = pick song, q = quit`);
   await reader.prepare?.();
-  while (!quit) {
+  // Keep the status line alive while a read is pending, so it never looks hung.
+  setInterval(() => {
+    if (pendingSince !== null) process.stderr.write(`\r${statusBase}${pendingNote(monoMs() - pendingSince)}`.padEnd(110));
+  }, 250).unref();
+  for (;;) {
     const started = monoMs();
+    pendingSince = started;
     const reading = await reader.readNow();
+    pendingSince = null;
     const decision = follower.step(monoMs(), reading);
     last = decision;
     write(readingLine(stamp(), reading, decision));
-    process.stderr.write(`\r${statusLine(decision, reader.reason?.() ?? null)}`.padEnd(110));
+    statusBase = statusLine(decision, reader.reason?.() ?? null);
+    process.stderr.write(`\r${statusBase}`.padEnd(110));
     await new Promise((r) => setTimeout(r, Math.max(0, pollMs - (monoMs() - started))));
   }
-  write(metaLine(stamp(), { event: "end" }));
-  reader.close?.();
-  process.stdin.pause();
-  console.error(`\nlog written: ${out}`);
 }
 
 main().catch((e: unknown) => {

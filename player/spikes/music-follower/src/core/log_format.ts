@@ -28,6 +28,11 @@ export function statusLine(d: Decision, why: string | null): string {
   return statusText(d) + (why ? `  [no music reading: ${why}]` : "");
 }
 
+/** Shown while a read has been pending for a while (Spotify or macOS not answering yet). */
+export function pendingNote(elapsedMs: number): string {
+  return elapsedMs < 1000 ? "" : `  [waiting for Spotify's answer, ${Math.floor(elapsedMs / 1000)} s]`;
+}
+
 /** One-line status for the terminal. */
 export function statusText(d: Decision): string {
   const s = Math.floor(d.classTimeMs / 1000);

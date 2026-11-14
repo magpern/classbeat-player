@@ -1,7 +1,7 @@
 // macOS: Spotify's AppleScript interface through osascript. Read-only: no play, pause or launch.
 import { monoMs } from "../clock.js";
 import type { PlayState, Reading } from "../core/types.js";
-import { runCommandDetailed, type Runner } from "./exec.js";
+import { runCommandDetailed, type ExecResult, type Runner } from "./exec.js";
 import type { Reader } from "./reader.js";
 
 /** A hung Spotify must not delay coasting past 3 s at 4 Hz (once macOS has let us ask). */
@@ -62,6 +62,7 @@ export class MacReader implements Reader {
   constructor(
     private readonly run: Runner = runCommandDetailed,
     private readonly note: (text: string) => void = () => {},
+    private readonly timeouts = { short: OSASCRIPT_TIMEOUT_MS, long: PERMISSION_WAIT_MS },
   ) {}
 
   /** Why the last read gave nothing or the music is not playing, for the status line. */
@@ -78,7 +79,13 @@ export class MacReader implements Reader {
   async readNow(): Promise<Reading | null> {
     const { file, args } = macCommand();
     const before = monoMs();
-    const r = await this.run(file, args, this.permitted ? OSASCRIPT_TIMEOUT_MS : PERMISSION_WAIT_MS);
+    const limit = this.permitted ? this.timeouts.short : this.timeouts.long;
+    // Own deadline too, so a runner that never settles cannot hold the poll loop.
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<ExecResult>((res) => {
+      timer = setTimeout(() => res({ ok: false, stdout: "", stderr: "", timedOut: true }), limit + 250);
+    });
+    const r = await Promise.race([this.run(file, args, limit), deadline]).finally(() => clearTimeout(timer));
     const after = monoMs();
     if (!r.ok) {
       if (/-1743|not authori[sz]ed/i.test(r.stderr)) {

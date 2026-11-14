@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { statusLine } from "../src/core/log_format.js";
+import { pendingNote, statusLine } from "../src/core/log_format.js";
 import type { Decision } from "../src/core/types.js";
 import type { ExecResult, Runner } from "../src/readers/exec.js";
+import { makeShutdown } from "../src/shutdown.js";
 import { MAC_SCRIPT_LINES, MacReader, NOT_PERMITTED_NOTE, OSASCRIPT_TIMEOUT_MS, PERMISSION_WAIT_MS, WAITING_NOTE } from "../src/readers/macos.js";
 
 const PLAYING = "playing\tspotify:track:abc\tSong\tArtist\t12.5\t200000\n";
@@ -81,6 +82,52 @@ describe("why there is no reading", () => {
     const d = { classTimeMs: 0, state: "Manual", held: false, songIndex: null, announce: null, candidates: [] } as unknown as Decision;
     assert.match(statusLine(d, "Spotify is not running"), /^00:00 {2}Manual.*\[no music reading: Spotify is not running\]$/);
     assert.doesNotMatch(statusLine(d, null), /no music reading/);
+  });
+});
+
+describe("a read that never settles", () => {
+  const never: Runner = () => new Promise<ExecResult>(() => {});
+
+  it("is abandoned after its timeout and says Spotify is not answering", async () => {
+    const r = new MacReader(never, () => {}, { short: 20, long: 20 });
+    const started = Date.now();
+    assert.equal(await r.readNow(), null);
+    assert.ok(Date.now() - started < 2000);
+    assert.equal(r.reason(), "Spotify is not answering");
+  });
+
+  it("prepare does not hang on a runner that never answers", async () => {
+    const r = new MacReader(never, () => {}, { short: 20, long: 20 });
+    await r.prepare();
+    assert.equal(r.reason(), "Spotify is not answering");
+  });
+
+  it("the status line says it is waiting once a read is pending", () => {
+    assert.equal(pendingNote(500), "");
+    assert.match(pendingNote(3200), /waiting for Spotify's answer, 3 s/);
+  });
+});
+
+describe("quit", () => {
+  it("writes the end line and exits at once, without waiting for any read", () => {
+    const calls: string[] = [];
+    const quit = makeShutdown(() => calls.push("end"), (c) => calls.push("exit" + c));
+    quit();
+    assert.deepEqual(calls, ["end", "exit0"]);
+  });
+
+  it("exits even if writing the end line fails, and a second press exits straight away", () => {
+    const calls: string[] = [];
+    const quit = makeShutdown(
+      () => {
+        calls.push("end");
+        throw new Error("disk");
+      },
+      (c) => calls.push("exit" + c),
+    );
+    quit();
+    quit();
+    assert.deepEqual(calls, ["end", "exit0", "exit0"]);
   });
 });
 
