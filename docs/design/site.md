@@ -3,7 +3,7 @@
 Status: proposed in the pull request for issue #131. Design system: [system.md](system.md).
 Neighbouring specs: [class-list.md](class-list.md) (the same class list, in the computer's own
 window) and [presenter.md](presenter.md) (wording convention). Reference mock-ups and screenshots:
-[mockups/](mockups/), files `site-*.html` (57 mock-ups) and `site-*-<width>.png`. **Where a mock-up and this text
+[mockups/](mockups/), files `site-*.html` (61 mock-ups) and `site-*-<width>.png`. **Where a mock-up and this text
 differ, the text wins**; the mock-ups are layout references, and the rows below say where one
 shows something older. The product's CI shoots 23 states of the first website issue (sign-in,
 the shell and the errors). Seven have no mock-up of their own and are held to the row that
@@ -47,7 +47,11 @@ address is ever put in the sign-in address, and it never holds a token. The one 
 - **Header:** the product name, then Classes, Devices, Account and "Sign out" (a button that sends
   `POST /api/site/sign-out`). The current page carries `aria-current` and a 3 px bar under it, so
   it is never colour alone. The signed-out pages have the name only. Nothing hides in a menu: at
-  phone width the links wrap onto their own row.
+  phone width the links wrap onto their own row. **Height as built:** the links are 8 px apart
+  in both directions, so at 390 px the header is three rows (the name, the three links, "Sign
+  out") with 8 px between rows, and about 8 px taller than the first mock-ups drew it; the mock-ups
+  now match. The account sub-page links use the same 8 px, and at 390 px wrap onto a second row
+  ("Your data" alone).
 - **One `h1`** per page, in `main`; a "Skip to content" link is the first control (visible on
   focus; not in the mock-ups, which show a resting page).
 - **Account area:** the four sub-pages sit beside the content at desktop width and above it as a
@@ -58,7 +62,19 @@ address is ever put in the sign-in address, and it never holds a token. The one 
   never carry meaning alone.
 - **Destructive actions confirm in the page**, not in a pop-up: the row or the page is replaced by
   a panel (`role="alertdialog"`) with the consequence in a sentence, the safe button first and
-  focused, and the destructive one second. Focus moves to the panel; Esc cancels.
+  focused, and the destructive one second. Esc cancels. **One focus rule for panels:** a panel
+  that asks for a decision opens with focus on its safe button ("Keep it", "Keep the class",
+  "Cancel", "Keep my account"), and that button is the filled primary; the destructive button
+  is second and outlined. This holds when the panel also holds a field: the delete-account panel
+  asks for the typed address, and still opens on "Keep my account", with "Delete everything"
+  off until the field has text; the person tabs back to the field. A panel that is a form (add
+  a passkey, rename) opens with focus in its first field, and its main button is the filled
+  primary. Nothing is sent when a panel opens.
+- **Messages head the page.** A plate, a note or "Confirm it is you" that answers an action sits
+  at the top of the page's content: under the page's own heading on Sessions, Passkeys and
+  Linked apps, and first on Your data, above both of its sections, because either section may
+  have caused it (S3: it is in view at 390 × 844). The exception is a message that belongs to one
+  control and stays beside it: the export limit plate sits above "Download export".
 - **Forms:** a visible label above the field (never a placeholder alone), the hint below, the
   error below that with a hollow square and words, and a 4 px border on the field in error.
 
@@ -135,7 +151,7 @@ busy plate only appears after the resend was refused too, so the person has wait
 A softer "One moment" was weighed and not taken.
 
 **The "or" and "Try again".** The "or" between the email form and the passkey button is a label:
-14 px, `--light-3`, held to 4.5 : 1 (S1, S2). "Try again" on a plate, "Passkey failed" included,
+14 px, `--light-3`, held to 4.5 : 1 (S1, S2), between two 1 px lines in `--stage-line` that run to the edges of the 28 em form, with 20 px above and below it. The line "A passkey uses this device's fingerprint, face or screen lock." sits 12 px under the passkey button (the first mock-ups drew it touching the button). "Try again" on a plate, "Passkey failed" included,
 is a quiet, outlined button. Where a mock-up shows a larger "or" or a filled "Try again", this
 text and S1 and S2 hold.
 
@@ -152,8 +168,11 @@ text and S1 and S2 hold.
 | Not found | "That class is not here": a deleted class, an unknown id, another account's id and a removal marker all give this | 404 `not_found` | [not found](mockups/site-class-not-found.html) |
 
 **The actions row on class details** sits under the title and the facts line and before "Time in
-zone". "Play on this device" comes first and "Delete class" second, at least 8 px apart (12 px in
-the mock-up) and wrapping onto a second line on a narrow screen (S7). Both are the quiet, outlined
+zone". "Play on this device" comes first and "Delete class" second, 12 px apart, each at its own
+width, never stretched. **On a narrow screen they stack, they do not wrap mid-label:** when the
+two do not fit side by side they sit one under the other, 12 px apart, left-aligned, each as wide
+as its own label (so at 390 px they are different widths, which is fine under S7), and at 200 %
+text a long label takes two lines inside its own button (S7). Both are the quiet, outlined
 button: "Delete class" keeps its style, and neither is the filled primary. "Play on this device" is
 a real link to `/play#<class id>`, loaded in full (an ordinary page load, not opened in place by
 the site's router), so the play page starts clean. It carries words only, no icon, and meets S7
@@ -187,12 +206,20 @@ is left out until its name is chosen (rule 9).
 ### Account
 
 **Sessions** ([mockups/site-account-sessions.html](mockups/site-account-sessions.html)): the
-browsers signed in, each with browser name, started and last used; this browser carries the tag
+browsers signed in, each with the browser's name, started and last used. **The name is the
+browser family alone** ("Firefox", "Safari", "Chrome", "Other"), as the backend sends it: never "Firefox
+on Windows", because the backend reads no operating system and the page invents none. **Dates** read
+"today", "3 Nov", and with the year when the date is in another calendar year ("9 Dec 2025"), here
+and on the lists of devices, passkeys and linked apps; the
+older mock-ups drew "just now", which this text overrides. This browser carries the tag
 "This browser" (a word and an outline, never colour) and its button reads "Sign out"; the others
 read "End session". "Sign out everywhere" is below. Routes: `GET sessions`, `DELETE sessions/{id}`,
 `POST sign-out`, `POST sessions/end-all`. "Sign out everywhere" opens the panel "Sign out
 everywhere?", "Every browser is signed out, this one too. Devices running the player stay paired."
-([mockup](mockups/site-account-sessions-end-all.html)); it needs a recent sign-in (below).
+([mockup](mockups/site-account-sessions-end-all.html)); it needs a recent sign-in (below). Ending
+one other session removes its row at once and shows the note "Ended the session in *browser*", with
+the line "That browser is signed out." ([mockup](mockups/site-account-sessions-ended.html)); focus goes
+to the next row, or the one before when the last went, or to "Sign out everywhere" when none is left.
 
 **Passkeys.** The explanation says the email link always works too.
 
@@ -200,7 +227,7 @@ everywhere?", "Every browser is signed out, this one too. Devices running the pl
 |---|---|---|---|
 | List | "3 of 10 passkeys", "Add a passkey", rows with name, added date, last used or "Not used yet", "Rename", "Remove" | `GET passkeys` | [passkeys](mockups/site-account-passkeys.html) |
 | None | An explanation and "Add a passkey" | the same | [empty](mockups/site-account-passkeys-empty.html) |
-| Add | A panel with a name field (1 to 40 characters) and "Add passkey", "Cancel"; the browser's prompt follows | `POST passkeys/options`, then `POST passkeys` | [add](mockups/site-passkey-add.html) |
+| Add | A panel with a name field (1 to 40 characters) and "Add passkey", "Cancel"; focus is in the name field (a form panel, see the focus rule); at 390 px both buttons are full width and stacked; the browser's prompt follows | `POST passkeys/options`, then `POST passkeys` | [add](mockups/site-passkey-add.html) |
 | Added | Note "Passkey added", "We emailed you to say a passkey was added" (ADR 0002 section 6) | 200 | [added](mockups/site-passkey-added.html) |
 | Not added | Plate "The passkey was not added", "Nothing was saved", "Try again" | cancelled, or 422 | [failed](mockups/site-passkey-add-failed.html) |
 | Rename | The row turns into a field with "Save" and "Cancel"; focus in the field | `PATCH passkeys/{id}` | [rename](mockups/site-passkey-rename.html) |
@@ -229,10 +256,12 @@ no detail about why), [5 apps already](mockups/site-link-source-limit.html) (409
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
 | Page | "Export your data" (what the file holds), "Download export", "You can export 3 times a day. The file is made when you ask and is not kept." Then "Delete your account", the consequence, "Delete my account…" | | [data](mockups/site-account-data.html) |
+| Export working | A hollow circle and "Making your export. Your browser saves it when it is ready." under the explanation; "Download export" disabled so only one export is under way | `POST account/export`, pending | [working](mockups/site-account-export-working.html) |
 | Export started | Note "Your export has started", the file name `class-player-export.json`, "If the file looks cut off, ask for the export again" (the stream stops without an error page) | `POST account/export` | [started](mockups/site-account-export-started.html) |
 | Export limit | Plate "No more exports today", "try again in about N hours" from `Retry-After`; the button disabled | 429 | [limit](mockups/site-account-export-limit.html) |
-| Delete, confirming | Panel "Delete your account?", what goes, "Type your email address to confirm", the field, "Delete everything", "Keep my account" (the safe one is the way out with Esc) | `POST account/delete` | [delete](mockups/site-account-delete.html) |
-| Not the address | Field error "That is not the email address of this account." Nothing was deleted | 422 `confirmation_mismatch` | [mismatch](mockups/site-account-delete-mismatch.html) |
+| Delete, confirming | Panel "Delete your account?", what goes, "Type your email address to confirm", the field, then **"Keep my account" first, filled and focused**, and "Delete everything" second, outlined and off until the field has text. Esc keeps the account. See the focus rule in "What every page has" | `POST account/delete` | [delete](mockups/site-account-delete.html), [typed](mockups/site-account-delete-typed.html) |
+| Not the address | Field error "That is not the email address of this account. Nothing was deleted."; focus returns to the field | 422 `confirmation_mismatch` | [mismatch](mockups/site-account-delete-mismatch.html) |
+| Confirm it is you | The plate heads the whole page, above "Export your data", whichever action asked (see "Messages head the page"); the page below it is unchanged and nothing is repeated | 403 `recent_sign_in_required` | [confirm](mockups/site-account-data-confirm.html) |
 | Deleted | The signed-out page with the note "Your account was deleted" | 204 | [deleted](mockups/site-account-deleted.html) |
 
 The page cannot compare the typed address itself (no route returns it), so "Delete everything"
@@ -243,14 +272,16 @@ is enabled once the field is not empty and the server decides.
 section 4). When one of them answers 403 `recent_sign_in_required`, the page shows the plate "Confirm
 it is you", "For this change you need to have signed in within the last 10 minutes. After that you
 come back here.", with "Use a passkey" and "Email me a link". The action is not repeated for the
-person: they press it again.
+person: they press it again. After signing in again with a passkey the page stays where it is and
+shows the note "You signed in again", "Nothing was changed for you. Make the change again." (the
+change itself was not made; the note says so in words).
 
 ### Errors
 
 | State | What the person sees | When | Mock-up |
 |---|---|---|---|
 | Too many requests | Plate "Please wait a little", the wait from `Retry-After` in minutes, "Nothing was changed", "Try again" | 429 with `Retry-After` | [429](mockups/site-error-too-many.html) |
-| Offline | Plate "You are offline": what is shown may be out of date, changes wait; the page tries again by itself when the browser says it is online, and "Try again". Content already shown stays; a button that needs the server is disabled and says so. Until the classes page lands (the second website issue) there is no content to keep, so the plate sits under the page title alone; this state is checked again with the class list shown when it does | A request fails with no answer | [offline](mockups/site-error-offline.html) |
+| Offline | Plate "You are offline": what is shown may be out of date, changes wait; the page tries again by itself when the browser says it is online, and "Try again". Content already shown stays; a button that needs the server is disabled, and **the plate is its reason**: it carries no words of its own. The plate sits in the same panel, directly above the buttons, so on class details the offline "Delete class" is disabled under the plate "You are offline" and the button says nothing more (words on both would repeat each other, and the label must stay what the press does). The same holds for the export and add-passkey buttons, whose limit note or plate is the reason. The disabled button points at that plate with `aria-describedby`, so a screen reader hears the reason with the button; "Keep the class" stays on, so the person can leave. Until the classes page lands (the second website issue) there is no content to keep, so the plate sits under the page title alone; this state is checked again with the class list shown when it does | A request fails with no answer | [offline](mockups/site-error-offline.html) |
 | Server fault | Plate "That did not work, and it was not your doing", "Try again in a moment. If you were changing something, check that it happened before you repeat it." No code, no technical word | 5xx, or an answer the page does not understand | [server](mockups/site-error-server.html) |
 | Not found | "That page is not here", a button to Classes. No section of the header is marked: no 3 px bar and no `aria-current`, because the page is none of them. The mock-up shows the header with no section marked, as this row says | An address the site does not have | [404](mockups/site-error-not-found.html) |
 
@@ -265,7 +296,7 @@ All of it works with the keyboard alone, in reading order. Links and buttons are
 |---|---|---|
 | Tab, Shift+Tab | everywhere | Skip link, header, content, in reading order; the account sub-links are one group of links |
 | Enter, Space | a button | Does it; a link takes Enter |
-| Esc | a confirmation panel, the rename field, the add-passkey panel | Cancels and returns focus to the control that opened it |
+| Esc | a confirmation panel, the rename field, the add-passkey panel | Cancels and returns focus to the control that opened it. While a request is under way it does nothing |
 | `/` | the class list, from 8 classes | Focuses the filter (not while typing in a field) |
 | Enter | the pairing code field | Continue |
 
@@ -287,6 +318,20 @@ Plain words; no code names (`409`, `too_many_devices`) are ever shown. "Sign in"
 Buttons say what the press does ("Revoke device", not "OK"). The consequence of a destructive
 action is in the confirmation, in the person's terms (what is lost, when the devices find out).
 No legal text, no marketing text, no "we value your privacy".
+
+Notes and working lines added as the pages were built (exact words; the product holds them in
+its word tables, and a change of words is a change of this table):
+
+| Where | Kind | Words |
+|---|---|---|
+| Sessions, after ending another browser | Note | "Ended the session in *browser*", then "That browser is signed out." |
+| Any account page, after signing in again to confirm | Note | "You signed in again", then "Nothing was changed for you. Make the change again." |
+| Your data, while the export is made | Working | "Making your export. Your browser saves it when it is ready." (two sentences, so it keeps its full stop) |
+| Your data, a wrong address | Field error | "That is not the email address of this account. Nothing was deleted." |
+| Class details, deleting | Working | "Deleting the class…" |
+| Class list, after deleting | Note | "Deleted “*title*”" ("Deleted the class" when the title was not known), then "Your devices remove it the next time they sync" |
+| Devices, after revoking | Note | "Revoked “*name*”", then "The classes saved on it are removed the next time it connects." |
+| Passkeys, after removing | Note | "Removed “*name*”", then "You can no longer sign in with it. Email links still work." |
 
 ## Measurable criteria
 
@@ -325,7 +370,11 @@ web issue or a backend issue.
 5. **No "this device" mark** exists for devices (a browser is not a device), so none is shown.
 6. **Pairing wording.** The name field is prefilled from the platform ("macOS computer"); the
    mock-up shows a typed name.
-7. **The "download the application" link** of plan section 5 is not in issue #131 and not
+7. **The sessions list sends the browser family only** ("Firefox", "Safari", "Chrome",
+   "Other"), as `GET sessions` gives it. The rows read "Firefox", never "Firefox on Windows". If
+   the operating system is wanted, the backend would have to read and send it; until then the page
+   shows the family as it is and adds nothing (#421).
+8. **The "download the application" link** of plan section 5 is not in issue #131 and not
    designed here.
 
 ## What the site never shows (plan section 3)

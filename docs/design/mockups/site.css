@@ -16,7 +16,7 @@ a, .a { color: var(--light-1); text-decoration: none; }
 .head { border-bottom: 1px solid var(--stage-line); }
 .bar { max-width: 960px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
 .brand { font-family: var(--face-number); font-weight: 800; font-size: 26px; line-height: 1.1; padding: 6px 0; }
-.nav { display: flex; flex-wrap: wrap; gap: 0 4px; flex: 1 1 100%; }
+.nav { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
 .nav .a, .nav .navbtn {
   min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px; font-size: 18px; font-weight: 700;
   text-decoration: none; border-bottom: 3px solid transparent; background: none; border-top: 0; border-left: 0; border-right: 0;
@@ -125,7 +125,7 @@ ul.plain li { padding: 4px 0 4px 22px; position: relative; max-width: 36em; }
 ul.plain li::before { content: ""; position: absolute; left: 4px; top: 15px; width: 8px; height: 8px; background: var(--light-1); border-radius: 50%; }
 
 /* ---------- Account: sub-navigation ---------- */
-.subnav { display: flex; flex-wrap: wrap; gap: 0 4px; border-bottom: 1px solid var(--stage-line); margin: 12px 0 8px; }
+.subnav { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--stage-line); margin: 12px 0 8px; }
 .subnav .a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px; font-weight: 700; text-decoration: none; border-bottom: 3px solid transparent; }
 .subnav .a.cur { border-bottom-color: var(--light-1); }
 
@@ -161,3 +161,4 @@ ul.plain li::before { content: ""; position: absolute; left: 4px; top: 15px; wid
 @media (max-width: 999px) { .acct { display: block; } }
 
 .btns + p, .btns + .small, .btns + h2 { margin-top: 24px; }
+.or + .btn + .small { margin-top: 12px; }
