@@ -84,6 +84,10 @@ def request_link(
         raise ApiError(429, "too_many_requests", {"Retry-After": str(retry_after(time.time()))})
     if email is None:
         raise ApiError(422, "invalid_email")
+    # Here the two halves are one condition: `invalid` comes back only for `email=None`, and the
+    # email check above has passed, so `invalid` means `not return_ok`. Both stay on purpose:
+    # `not return_ok` does not rest on the data access, and an `invalid` from it is refused
+    # whatever its cause (fail closed), never answered with `accepted`.
     if outcome == "invalid" or not return_ok:
         raise ApiError(422, "invalid_return")
     response = JSONResponse({"status": "accepted"})
