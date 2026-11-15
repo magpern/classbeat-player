@@ -22,6 +22,7 @@
 4 site-checks.test.ts -390$
 4 site-page-security.test.ts
 4 site-sign-in-flows.test.ts
+4 site-classbeat-sign-in.test.ts
 4 site-data-flows.test.ts
 4 site-data-secrecy.test.ts
 4 site-data-no-email.test.ts

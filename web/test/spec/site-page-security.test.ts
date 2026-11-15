@@ -142,7 +142,7 @@ describe("the navigation check (#508 B1)", () => {
     await site.context.close();
   });
 
-  it("every state that declares a classbeat navigation is an account state that answers the classbeat start", () => {
+  it("every state that declares a classbeat navigation answers the classbeat start", () => {
     const declared = STATES.filter((s) => s.toClassbeat !== undefined);
     assert.ok(declared.length >= 1);
     for (const s of declared) {
@@ -399,6 +399,9 @@ describe("the keyboard (site.md, S8)", () => {
     await site.page.keyboard.press("Enter");
     assert.equal(await site.page.evaluate(() => document.activeElement?.id), "main");
     assert.equal(site.page.url(), `${ORIGIN}/sign-in`);
+    // "Sign in with classbeat" comes first (#511), then the follower group's address field.
+    await site.page.keyboard.press("Tab");
+    assert.equal(await site.page.evaluate(() => document.activeElement?.textContent), "Sign in with classbeat");
     await site.page.keyboard.press("Tab");
     assert.equal(await site.page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.name), "email");
     await site.context.close();

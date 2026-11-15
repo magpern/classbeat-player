@@ -1,5 +1,5 @@
 // The sign-in page's states (docs/design/site.md, "Sign in") and how an answer moves between
-// them. Pure: no I/O. Whether an address may sign in plays no part: every 200 from asking for a
+// them: sign in with classbeat first, then the follower group (an email link, a passkey). Pure: no I/O. Whether an address may sign in plays no part: every 200 from asking for a
 // link is the same "Check your mail" (ADR 0002, section 4), and nothing here reads the body.
 import type { Answer } from "./answer.ts";
 import { waitWords } from "./answer.ts";
@@ -12,13 +12,15 @@ export type Plate =
   | { readonly kind: "passkey-limited"; readonly retryAfter: number | null }
   | { readonly kind: "passkey-wait"; readonly retryAfter: number | null }
   | { readonly kind: "too-many"; readonly retryAfter: number | null }
+  | { readonly kind: "classbeat-limited"; readonly retryAfter: number | null }
+  | { readonly kind: "classbeat-unfinished" }
   | { readonly kind: "passkey-failed" }
   | { readonly kind: "link-refused" }
   | { readonly kind: "offline" }
   | { readonly kind: "server" };
 
 export type SignInView =
-  | { readonly screen: "form"; readonly email: string; readonly notice?: Notice; readonly plate?: Plate; readonly emailError?: boolean; readonly busy?: "passkey" }
+  | { readonly screen: "form"; readonly email: string; readonly notice?: Notice; readonly plate?: Plate; readonly emailError?: boolean; readonly busy?: "passkey" | "classbeat" }
   | { readonly screen: "sent"; readonly email: string }
   | { readonly screen: "link"; readonly busy: boolean; readonly plate?: Plate };
 
@@ -99,8 +101,15 @@ export function plateWords(p: Plate): Words {
       return { head: "Too many sign-in requests", detail: `Please try again ${p.retryAfter !== null && p.retryAfter <= BUSY_RETRY_SECONDS ? "in a moment" : waitWords(p.retryAfter)}.` };
     case "too-many":
       return { head: "Please wait a little", detail: `You have asked for too much in a short time. Try again ${waitWords(p.retryAfter)}. Nothing was changed.` };
+    case "classbeat-limited":
+      return { head: "Too many sign-in requests", detail: `Please try again ${waitWords(p.retryAfter)}. One network connection can start 20 sign-ins with classbeat in 10 minutes.` };
+    case "classbeat-unfinished":
+      return {
+        head: "The sign-in with classbeat did not finish",
+        detail: "It may have run out of time (a sign-in works for 10 minutes), been used already, been started in a different browser, or your classbeat account may not be let in yet. Nothing was changed.",
+      };
     case "passkey-failed":
-      return { head: "That passkey could not be used", detail: "The request may have been cancelled, or the passkey may have been removed. Try again, or get a link by email." };
+      return { head: "That passkey could not be used", detail: "The request may have been cancelled, or the passkey may have been removed. Try again, or ask for an email link below." };
     case "link-refused":
       return { head: "This link cannot be used", detail: "It may have run out (a link works for 15 minutes), been used already, or been asked for in a different browser." };
     case "offline":
@@ -111,7 +120,25 @@ export function plateWords(p: Plate): Words {
 }
 
 export const NOTICE_WORDS: Readonly<Record<Notice, Words>> = {
-  ended: { head: "Your session ended", detail: "Sign in again to carry on where you were." },
+  ended: { head: "Your session ended", detail: "Sign in again. You come back to your classes, so open the page you were on again." },
   "signed-out": { head: "You are signed out", detail: "" },
   deleted: { head: "Your account was deleted", detail: "Everything in it is gone. Devices remove their saved classes the next time they connect." },
 };
+
+/**
+ * The line under "Sign in with classbeat". A classbeat sign-in keeps no way back (ADR 0010,
+ * section 6): it lands on the classes, so the line says so, and what to open again by hand.
+ */
+export function classbeatLine(notice: Notice | undefined, fromCompanion: boolean): string {
+  const base = "You sign in at classbeat, then come back to your classes.";
+  if (notice === "ended") return `${base} Open the page you were on again.`;
+  return fromCompanion ? `${base} Then open the companion again.` : base;
+}
+
+export const FOLLOWER_WORDS = {
+  heading: "Follower accounts",
+  sentence: "Instructors sign in with classbeat, above. Follower accounts sign in with an email link or a passkey.",
+  /** Where the browser has no passkeys, nothing on the page names one (no passkey button and no explanation). */
+  sentenceNoPasskey: "Instructors sign in with classbeat, above. Follower accounts sign in with an email link.",
+  sentLine: "If you run classes, an email link does not work for you. Go back and sign in with classbeat.",
+} as const;

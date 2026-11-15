@@ -9,6 +9,7 @@ import { ACCOUNT_STATES, SESSIONS_LISTED } from "./site-account-states.ts";
 import { LINK_STATES } from "./site-link-states.ts";
 import { DATA_STATES } from "./site-data-states.ts";
 import { NO_EMAIL_STATES } from "./site-no-email-states.ts";
+import { CLASSBEAT_STATES } from "./site-classbeat-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -83,6 +84,7 @@ export const STATES: readonly State[] = [
     steps: pressText("Sign in with a passkey"),
     ready: ".plate",
   },
+  ...CLASSBEAT_STATES,
   { name: "sign-in-session-ended", path: "/classes", script: { "GET classes": { status: 401, body: { error: "not_signed_in" } } }, ready: ".note" },
   { name: "signed-out", path: "/classes", script: { ...signedInClasses, "POST sign-out": { status: 204 } }, steps: pressText("Sign out"), ready: ".note" },
   { name: "shell-signed-in", path: "/classes", script: signedInClasses, ready: "nav .a.cur", main: true },
