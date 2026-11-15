@@ -15,6 +15,7 @@ SELECT id, name, created_at, last_used_at
 FROM player.passkeys
 WHERE account_id = %s
 ORDER BY created_at, id
+LIMIT %s
 """
 )
 

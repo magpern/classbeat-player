@@ -20,7 +20,12 @@ from player_backend.db.context import AccountContext
 from player_backend.db.executor import DatabaseError, Row
 from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import passkeys as q
-from player_backend.own_sign_in_policy import own_sign_in_open
+from player_backend.passkey_list_policy import (
+    LIST_READ_MAX,
+    PasskeysOverCap,
+    passkeys_open,
+    within_cap,
+)
 from player_backend.passkey_policy import (
     ADDITIONS_LOCK_WAIT,
     PASSKEYS_MAX,
@@ -44,6 +49,14 @@ class PasskeyInfo:
     name: str
     created_at: datetime
     last_used_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PasskeyList:
+    """The account's passkeys, the oldest first, and whether its kind may add one."""
+
+    passkeys: list[PasskeyInfo]
+    can_add: bool
 
 
 @dataclass(frozen=True)
@@ -92,13 +105,17 @@ def lock_additions(ctx: AccountContext) -> bool:
 
 def registration_open(ctx: AccountContext) -> bool:
     """Whether the account's kind may register a passkey (ADR 0010, section 7)."""
-    found = ctx.db.rows(q.ACCOUNT_KIND, (ctx.account_id,))
-    return len(found) == 1 and own_sign_in_open(found[0][0])
+    return passkeys_open(ctx.db.rows(q.ACCOUNT_KIND, (ctx.account_id,)))
 
 
-def list_passkeys(ctx: AccountContext) -> list[PasskeyInfo]:
-    """The account's passkeys, the oldest first."""
-    return [_info(row) for row in ctx.db.rows(q.LIST_PASSKEYS, (ctx.account_id,))]
+def list_passkeys(ctx: AccountContext) -> PasskeyList:
+    """The account's passkeys, the oldest first, and `can_add`: the very rule registration
+    refuses with (`registration_open`). Raises `PasskeysOverCap` when the account holds more
+    than the cap, a data fault (passkey_list_policy.py): never a partial list."""
+    rows = ctx.db.rows(q.LIST_PASSKEYS, (ctx.account_id, LIST_READ_MAX))
+    if not within_cap(len(rows)):
+        raise PasskeysOverCap
+    return PasskeyList([_info(row) for row in rows], registration_open(ctx))
 
 
 def start_registration(

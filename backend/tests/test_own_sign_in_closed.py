@@ -268,7 +268,7 @@ def test_no_closed_kind_may_start_or_finish_a_registration(site: Site, kind: str
     assert _starts_counted(site, account) == 0
     assert _events(site, account) == [] and site.mailer.sent == []
     # What an account holds already stays listable (and removable: tests/test_passkeys.py).
-    assert browser.get(PASSKEYS).json() == {"passkeys": []}
+    assert browser.get(PASSKEYS).json() == {"passkeys": [], "can_add": False}
 
 
 # --- Passkey sign-in -------------------------------------------------------------------------
