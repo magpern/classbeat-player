@@ -353,6 +353,10 @@ direction is enough, and the plan describes this one.
 5. The source's server calls `POST /api/source/token` with the code, the `redirect_uri` and the
    `code_verifier` in the body. All four bindings are checked. It gets the source token once.
 
+(Amended by ADR 0010, section 10, for source `classbeat`: step 2 needs a `login_hint`; step 3
+approves only for the instructor it names, else `403 wrong_account`; the answer of step 5 also
+holds `account_subject`, which classbeat checks.)
+
 At most 5 links per account; a link idle for 365 days is neither listed nor counted, and its row
 stays until it is revoked. The site lists them (source, linked date, last used) and can revoke
 each. The source can end its own link with `DELETE /api/source/link`. Revoking a link keeps the
@@ -680,9 +684,9 @@ Adding one is a security-critical change.
 | `auth_start_pairing(device_code_hash, user_code_hash, platform, version)` | Writes a pending pairing | Nothing |
 | `auth_find_pairing(user_code_hash)` | For the account already set only: looks up a pending pairing that has not expired. Changes nothing about it. A code that matches none counts as a wrong code for the account; while the form is closed it finds nothing | The pairing's platform and version, or nothing |
 | `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices (approved and not yet collected count) | True when decided, false for a wrong code, nothing (`NULL`) when refused at the cap |
-| `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email |
-| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused` | Nothing |
-| `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false |
+| `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email, or null when it has none (amended by ADR 0010, section 8) |
+| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused`. (Amended by ADR 0010, section 10: it also stores the set account's `(issuer, subject)`.) | Nothing |
+| `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false. (Amended by ADR 0010, section 10: `NULL` on a refusal, else the link's `(issuer, subject)`.) |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
 | `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
 
