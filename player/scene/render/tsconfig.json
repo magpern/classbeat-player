@@ -14,5 +14,5 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "demo", "layer", "tools", "build.mjs", "eslint.config.js", "../model/src"]
+  "include": ["src", "guard", "test", "demo", "layer", "tools", "build.mjs", "eslint.config.js", "../model/src"]
 }

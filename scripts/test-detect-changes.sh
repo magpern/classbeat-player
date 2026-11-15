@@ -53,15 +53,15 @@ main_tip="$(git rev-parse HEAD)"
 check "PR uses the merge base (main's own web change is ignored)" "player desktop" "$(flags pull_request "$main_tip" "$feature")"
 check "push compares the two tips" "player desktop" "$(flags push "$fork" "$feature")"
 check "push of web only" "web desktop" "$(flags push "$fork" "$main_tip")"
-check "all-zero before means everything" "backend schema player web desktop" "$(flags push 0000000000000000000000000000000000000000 "$feature")"
-check "unknown base means everything" "backend schema player web desktop" "$(flags pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$feature")"
+check "all-zero before means everything" "backend schema player android web desktop" "$(flags push 0000000000000000000000000000000000000000 "$feature")"
+check "unknown base means everything" "backend schema player android web desktop" "$(flags pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$feature")"
 commit scripts/other.sh
 check "unrelated file sets no flag" "" "$(flags push "$main_tip" HEAD)"
 commit schema/class-format/v1/x.json
 check "schema change runs backend, schema and desktop" "backend schema desktop" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 before_wf="$(git rev-parse HEAD)"
 commit .github/workflows/ci.yml
-check "workflow change runs backend, schema, player and desktop" "backend schema player desktop" "$(flags push "$before_wf" HEAD)"
+check "workflow change runs backend, schema, player and desktop" "backend schema player android desktop" "$(flags push "$before_wf" HEAD)"
 before_tok="$(git rev-parse HEAD)"
 commit docs/design/mockups/tokens.css
 check "design token mock-up change alone runs nothing (documentation only, #435)" "" "$(flags push "$before_tok" HEAD)"
@@ -123,6 +123,13 @@ check "another core/clock file runs player and desktop only" "player desktop" "$
 before_clk="$(git rev-parse HEAD)"
 commit player/app/src/core/other.ts
 check "another player file runs player and desktop only" "player desktop" "$(flags push "$before_clk" HEAD)"
+
+before_android="$(git rev-parse HEAD)"
+commit player/spikes/android-follower/app/x.kt
+check "an Android spike change runs player, android and desktop (#558)" "player android desktop" "$(flags push "$before_android" HEAD)"
+before_android="$(git rev-parse HEAD)"
+commit player/scene/render/src/z.ts
+check "a scene render change also runs android (the APK bundles it)" "player android desktop" "$(flags push "$before_android" HEAD)"
 
 before_scene="$(git rev-parse HEAD)"
 commit docs/design/scene.md

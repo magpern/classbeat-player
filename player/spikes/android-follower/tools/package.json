@@ -1,0 +1,18 @@
+{
+  "name": "android-follower-tools-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spike 3 (throwaway): replay an Android follower log through spike 1's class clock and print spike 1's pass table; guard checks for the Android sources.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "replay": "node --import tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
