@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Group, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, Scene, ShaderMaterial } from "three";
-import { assertNoRenderCallbacks, DEFAULTS } from "../guard/render-callbacks.ts";
+import * as guardModule from "../guard/render-callbacks.ts";
+import { assertNoRenderCallbacks } from "../guard/render-callbacks.ts";
 import { SceneRig } from "../src/rig.ts";
 import { RENDER_DIR, tokensFromFile } from "../tools/tokens-file.ts";
 
@@ -34,9 +35,25 @@ test("a clean rig, and three's own default callbacks, pass; the defaults are thr
   assert.doesNotThrow(() => assertNoRenderCallbacks(sceneWith(new MeshBasicMaterial({ transparent: true }))));
   assert.doesNotThrow(() => assertNoRenderCallbacks(sceneWith(new ShaderMaterial())));
   assert.doesNotThrow(() => assertNoRenderCallbacks(new Scene().add(new Group().add(new Object3D()))));
-  assert.equal(typeof DEFAULTS.object.onBeforeRender, "function");
-  assert.equal(typeof DEFAULTS.material.onBeforeCompile, "function");
-  assert.ok(Object.isFrozen(DEFAULTS) && Object.isFrozen(DEFAULTS.object) && Object.isFrozen(DEFAULTS.material));
+  for (const name of ["onBeforeRender", "onAfterRender", "onBeforeShadow", "onAfterShadow"]) assert.equal(typeof (Object3D.prototype as unknown as Record<string, unknown>)[name], "function", name);
+  for (const name of ["onBeforeRender", "onBeforeCompile"]) assert.equal(typeof (MeshBasicMaterial.prototype as unknown as Record<string, unknown>)[name], "function", name); // each class has only its own callbacks, the rest read undefined
+});
+
+test("prototype allowlist: a swapped prototype that is a clean three.js instance changes no callback, so only the prototype check refuses it", () => {
+  const read = (o: object, name: string) => (o as unknown as Record<string, unknown>)[name];
+  const material = new MeshBasicMaterial();
+  Object.setPrototypeOf(material, new MeshBasicMaterial());
+  for (const name of CALLBACKS) assert.equal(read(material, name), read(MeshBasicMaterial.prototype, name), name); // each callback still reads as three's own
+  assert.throws(() => assertNoRenderCallbacks(sceneWith(material)), /prototype/);
+  const mesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial());
+  Object.setPrototypeOf(mesh, new Mesh());
+  assert.throws(() => assertNoRenderCallbacks(new Scene().add(mesh)), /prototype/);
+  const viaKey = viaOptions(fromEntries(runtimeKey(["__pro", "to__"]), new MeshBasicMaterial())); // the same swap, through an options object
+  assert.throws(() => assertNoRenderCallbacks(sceneWith(viaKey)), /prototype/);
+});
+
+test("DEFAULTS is not exported: the module's only export is assertNoRenderCallbacks", () => {
+  assert.deepEqual(Object.keys(guardModule), ["assertNoRenderCallbacks"]);
 });
 
 // three's setValues keeps only keys the material already has (onBeforeRender and onBeforeCompile) and drops the rest.
