@@ -9,6 +9,7 @@ headers on every route in tests/test_site_requests.py.
 
 from __future__ import annotations
 
+import json
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,12 +17,13 @@ from types import ModuleType
 
 import pydantic
 import pytest
+from jsonschema import Draft202012Validator
 
 from player_backend.db import account
 from player_backend.db.context import AccountContext
 from player_backend.site.answers import GENERATED_DIR, NAMESPACE, me_answer
 from player_backend.token_issue import new_token
-from tests.sitehelp import ORIGIN, SESSION_COOKIE, Browser, Site, link_token
+from tests.sitehelp import ISSUER, ORIGIN, SESSION_COOKIE, Browser, Site, link_token, subject_of
 
 EMAIL = "rider@example.test"
 OTHER = "other@example.test"
@@ -31,6 +33,8 @@ NOT_SIGNED_IN = {"error": "not_signed_in"}
 KEY = f"{NAMESPACE}.site_api_me"
 USED = "SELECT last_used_at FROM player.sessions"
 FRESH = "SELECT last_used_at > now() - interval '1 minute' FROM player.sessions"
+SCHEMA = Path(__file__).resolve().parents[2] / "schema" / "site-api" / "v1" / "me.schema.json"
+CONTRACT = Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8")))
 
 
 def _signed_in(site: Site, email: str = EMAIL, address: str = "198.51.100.1") -> Browser:
@@ -53,6 +57,41 @@ def test_signed_in_the_answer_is_the_accounts_email_alone_and_not_stored(site: S
     assert answer.headers["cache-control"] == "no-store"
     # Read only: no cookie is set, nothing is written but the session's "last used".
     assert "set-cookie" not in answer.headers
+
+
+def _valid(answer: object) -> None:
+    assert CONTRACT.is_valid(answer)  # pyright: ignore[reportUnknownMemberType, reportArgumentType]
+
+
+def _without_email(site: Site, browser: Browser, email: str = EMAIL) -> None:
+    """The signed-in instructor's email is one classbeat no longer gives (ADR 0010, section 8)."""
+    done = site.su.execute(
+        "UPDATE player.accounts SET email = NULL "
+        "WHERE kind = 'instructor' AND classbeat_issuer = %s AND classbeat_subject = %s",
+        (ISSUER, subject_of(email)),
+    )
+    assert done.rowcount == 1
+
+
+def test_an_instructor_with_no_email_is_answered_a_null_email_in_the_same_shape(
+    site: Site,
+) -> None:
+    with_email = _signed_in(site, OTHER, "198.51.100.2")
+    browser = _signed_in(site)
+    _without_email(site, browser)
+    answer = browser.get(ME)
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"email": None}
+    assert answer.headers["content-type"] == "application/json"
+    assert answer.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in answer.headers
+    other = with_email.get(ME)
+    assert other.status_code == 200 and other.json() == {"email": OTHER}
+    # The same shape: one field, `email`, required in both; both pass the contract.
+    assert answer.json().keys() == other.json().keys() == {"email"}
+    _valid(answer.json())
+    _valid(other.json())
+    assert EMAIL not in answer.text and OTHER not in answer.text
 
 
 def test_the_email_is_answered_as_stored(site: Site) -> None:
@@ -170,7 +209,7 @@ def test_a_request_the_route_refuses_keeps_last_used(
     browser = _signed_in(site)
     site.su.execute("UPDATE player.sessions SET last_used_at = now() - interval '6 minutes'")
 
-    def gone(ctx: AccountContext) -> str | None:
+    def gone(ctx: AccountContext) -> account.OwnEmail | None:
         return None
 
     monkeypatch.setattr(account, "own_email", gone)
@@ -214,8 +253,11 @@ def test_the_model_is_the_contracts_generated_one() -> None:
     assert model.__name__ == "MeAnswer" and model.__module__ == KEY
     assert sys.modules[KEY].__file__ == str(GENERATED_DIR / "site_api_me.py")
     assert model(email=EMAIL).model_dump(mode="json") == {"email": EMAIL}
+    assert model(email=None).model_dump(mode="json") == {"email": None}
     with pytest.raises(pydantic.ValidationError):
         model.model_validate({"email": EMAIL, "id": "x"})
+    with pytest.raises(pydantic.ValidationError):
+        model.model_validate({})  # null is allowed, a missing email is not
     for refused in ("Rider@example.test", "a b@example.test", "ab", "a@b@C.test"):
         with pytest.raises(pydantic.ValidationError):
             model(email=refused)
