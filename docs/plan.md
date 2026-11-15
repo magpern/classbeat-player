@@ -28,6 +28,8 @@ Requirements as given by the owner (2026-11-12):
   (section 3).
 - Bluetooth is not needed now. Later, optionally, read a bike (and perhaps a treadmill) over the
   standard protocol.
+- Installed apps on phones and tablets (owner, 2026-11-15): an Android app and an iOS app of our
+  own, for a studio with no computer, only a tablet or phone and an audio cable (phase PL12).
 
 Sources: the classbeat code and ADRs (read 2026-11-12), and desk research of public pages on the
 same day. What could not be opened or confirmed is listed in section 14. Nothing here is legal advice.
@@ -83,7 +85,7 @@ direct reading), so treat the latter as indicative.
 | Running classes | RUN Player | No | Phase PL10 |
 | Riders' phones join the class | Yes, with a code | No | Yes, by scanning a code, nothing to install (section 7) |
 | Group displays (a circle or a bar per rider), games | Yes (commercial licence) | **No, by rule** (section 3) | No |
-| Platforms | iOS, Android, Mac, a desktop app | macOS, Windows | Linux; phones and tablets as a web app |
+| Platforms | iOS, Android, Mac, a desktop app | macOS, Windows | Linux; phones and tablets as a web app; installed Android and iOS apps (phase PL12) |
 
 The first version is the instructor's display. Phones joining a live class follow it. Team play,
 the 24-rider performance display, games and a virtual world are ruled out by the product rules in
@@ -478,7 +480,10 @@ design, and each item decides something that must be right from the start.
 **A phone or tablet as the player itself.** The same screen runs as a web app on a phone or
 tablet for an instructor without a computer. It cannot follow Spotify there, because a browser
 cannot read another app's playback, so it uses the manual clock, or joins a live session run from
-a computer.
+a computer. The installed apps of phase PL12 (owner, 2026-11-15) add following where the phone's
+system allows it: on Android through the system's media sessions, as on Windows; on iOS no app
+can read another app's playback, so following there is possible only through Spotify's own iOS
+SDK, if the owner clears it (section 13, decision 15), and otherwise stays the manual clock.
 
 **Sensors (Bluetooth), from the web page only**
 
@@ -548,6 +553,10 @@ strong at the scene and weak at the application; web technology is the reverse.
   for a much smaller download.
 - On phones it is a web page. No phone app of our own is planned (owner, 2026-11-12); iPhone
   users who want their sensor use the Bluefy browser.
+  **Amended (owner, 2026-11-15):** the instructor's player also ships as an installed Android
+  app and an installed iOS app (phase PL12): the same screens in a thin native shell, with a
+  native music follower and native Bluetooth. Riders still join from a web page with nothing to
+  install.
 - Unreal is excluded: it is probably MOWL's engine (not confirmed) and the heaviest to build.
 
 **The room's 3D scene is a separate, replaceable part.** The shell owns everything that is not
@@ -664,6 +673,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
+| **PL12** | Installed phone and tablet apps (owner, 2026-11-15). First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. Then an ADR for the native shell, an Android app (the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected), then an iOS app (the same, with the manual clock unless decision 15 clears a follower), store builds in CI | About 8 to 10, 1 spike | A Google Play developer account; the Apple Developer membership (decision 9); an Android phone and an iPhone with Spotify for spike 3 and one live check each; decision 15 |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
 
 **Spike 1 pass criteria** (proposed; fixed in the timing ADR before the spike runs). A throwaway
@@ -725,6 +735,9 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
 13. **Repository and openness:** public or private, and the licence. Recommended: the class
     format under a permissive open licence, and the player as open source.
 14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
+15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Open: whether to
+    publish through Google Play and the App Store or hand out the files directly, and whether a
+    follower on iOS may use Spotify's own iOS SDK. Until then the iOS app uses the manual clock.
 
 ## 14. Not verified
 
@@ -739,5 +752,7 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
 - Bluefy on iPhone with bike and heart-rate sensors: not tested. It is a third party's app; if it
   stops working, iPhone sensors stop with it.
 - Which Bluetooth services each studio bike and treadmill model really exposes.
+- How accurately Android's media sessions report Spotify's position, with crossfade on, and on
+  how many phone makers (spike 3 measures it). How the 3D scene runs on a mid-range phone.
 - Bluetooth field layouts, engine licence terms and the legal notes in section 3 are from general
   knowledge, not from documents opened for this plan.
