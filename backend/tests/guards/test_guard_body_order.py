@@ -45,6 +45,8 @@ READS_BODY = frozenset(
         ("POST", "/api/live/control"),
         # ADR 0007, section 2: joining as a rider.
         ("POST", "/api/live/join"),
+        # ADR 0010, section 8: classbeat's events, a form with one signed token (#496).
+        ("POST", "/api/classbeat/events"),
     }
 )
 

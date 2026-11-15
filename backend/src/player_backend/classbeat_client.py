@@ -1,5 +1,6 @@
-"""classbeat as the site's sign-in provider (ADR 0010, sections 2 and 3): the authorize address,
-the code exchange and the ID token's check, over a transport handed in.
+"""classbeat as the site's sign-in provider (ADR 0010, sections 2, 3 and 8): the authorize
+address, the code exchange, the ID token's check and the check of an event token, over a
+transport handed in.
 
 The transport is `classbeat_http.UrllibTransport` in production and a fake in the tests. Of the
 token endpoint's answer only `id_token` is read; the access token and any refresh token are
@@ -14,12 +15,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol, cast
 
+from player_backend.classbeat_event_policy import Event
 from player_backend.classbeat_flow_policy import Purpose, authorize_address, code_challenge
 from player_backend.classbeat_http import ClassbeatUnreachable, UrllibTransport
 from player_backend.classbeat_keys import KeySet
 from player_backend.classbeat_policy import Identity
 from player_backend.classbeat_settings import ClassbeatSettings
-from player_backend.classbeat_token_check import TokenRefused, check_id_token
+from player_backend.classbeat_token_check import TokenRefused, check_event_token, check_id_token
 
 
 class Transport(Protocol):
@@ -63,6 +65,16 @@ class ClassbeatClient:
             issuer=self.settings.issuer,
             client_id=self.settings.client_id,
             expected_nonce_hash=nonce_hash,
+            now=int(self.clock()),
+        )
+
+    def event(self, token: str) -> Event:
+        """Check an event token classbeat posted (section 8). `TokenRefused` when it fails."""
+        return check_event_token(
+            token,
+            self.keys.keys_for,
+            issuer=self.settings.issuer,
+            client_id=self.settings.client_id,
             now=int(self.clock()),
         )
 

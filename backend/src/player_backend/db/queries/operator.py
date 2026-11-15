@@ -36,3 +36,7 @@ ACCOUNT_LINKED_EVENT: Final[Query] = Query(
     "INSERT INTO player.audit_events (account_id, event, detail) "
     "VALUES (%s, 'account.linked', jsonb_build_object('by', 'operator', 'passkeys_deleted', %s))"
 )
+# ADR 0010, section 8: `account delete`, as ADR 0002, section 12 deletes an account, with the
+# account's `live_revocations` notice in the same transaction.
+DELETE_ACCOUNT: Final[Query] = Query("DELETE FROM player.accounts WHERE id = %s RETURNING id")
+NOTIFY_REVOKED: Final[Query] = Query("SELECT pg_notify('live_revocations', %s::uuid::text)")

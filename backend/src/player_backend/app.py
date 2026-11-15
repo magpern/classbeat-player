@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request, Response
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
+from player_backend.classbeat_api import router as classbeat_router
 from player_backend.classbeat_client import ClassbeatClient, client_from
 from player_backend.classbeat_settings import ClassbeatSettings
 from player_backend.control_page import (
@@ -109,6 +110,7 @@ def create_app(
     app.include_router(player_router)
     app.include_router(source_router)
     app.include_router(live_router)
+    app.include_router(classbeat_router)
     app.include_router(control_router(load_files(control_dir)))
     app.include_router(rider_router(load_files(rider_dir, "rider")))
     # Before the access log: a middleware added later runs outside it.

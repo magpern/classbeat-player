@@ -1,5 +1,6 @@
-"""The full check of a classbeat ID token (ADR 0010, section 3): its form, the header, the key,
-the ES256 signature, then the claims. No I/O: the key set is handed in.
+"""The full check of a classbeat ID token (ADR 0010, section 3) and of an event token (section
+8): its form, the header, the key, the ES256 signature, then the claims. No I/O: the key set is
+handed in.
 
 The order is fixed: the header is checked before any key is looked at, and the signature before
 any claim is read. A refusal is a `TokenRefused` with a fixed reason, never a value of the token.
@@ -19,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from cryptography.hazmat.primitives.hashes import SHA256
 
+from player_backend.classbeat_event_policy import LOGOUT_TYPE, Event, event_of, event_refusal
 from player_backend.classbeat_policy import (
     Identity,
     Json,
@@ -98,6 +100,29 @@ def _verify(key: Json, signing_input: bytes, signature: bytes) -> None:
         raise TokenRefused("signature") from None
 
 
+def verified_claims(token: str, keys: KeyLookup, required_type: str | None = None) -> Json:
+    """The claims of a token whose form, header, key and signature pass, or `TokenRefused`.
+
+    `required_type` is the header's `typ` an event token must have (section 8); None for an ID
+    token. No claim is read before the signature has been checked.
+    """
+    if len(token) > TOKEN_MAX or not token.isascii():
+        raise TokenRefused("form")
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise TokenRefused("form")
+    header = _object(parts[0])
+    refusal = header_refusal(header, required_type)
+    if refusal is not None:
+        raise TokenRefused(refusal)
+    kid = cast(str, header["kid"])
+    key = select_key(keys(kid), kid)
+    if key is None:
+        raise TokenRefused("kid")
+    _verify(key, (parts[0] + "." + parts[1]).encode("ascii"), _decode(parts[2]))
+    return _object(parts[1])
+
+
 def check_id_token(
     token: str,
     keys: KeyLookup,
@@ -108,24 +133,21 @@ def check_id_token(
     now: int,
 ) -> Identity:
     """The identity of a token that passes every check, or `TokenRefused`."""
-    if len(token) > TOKEN_MAX or not token.isascii():
-        raise TokenRefused("form")
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise TokenRefused("form")
-    header = _object(parts[0])
-    refusal = header_refusal(header)
-    if refusal is not None:
-        raise TokenRefused(refusal)
-    kid = cast(str, header["kid"])
-    key = select_key(keys(kid), kid)
-    if key is None:
-        raise TokenRefused("kid")
-    _verify(key, (parts[0] + "." + parts[1]).encode("ascii"), _decode(parts[2]))
-    claims = _object(parts[1])
+    claims = verified_claims(token, keys)
     refusal = claims_refusal(
         claims, issuer=issuer, client_id=client_id, expected_nonce_hash=expected_nonce_hash, now=now
     )
     if refusal is not None:
         raise TokenRefused(refusal)
     return identity_of(claims)
+
+
+def check_event_token(
+    token: str, keys: KeyLookup, *, issuer: str, client_id: str, now: int
+) -> Event:
+    """The event of a `logout+jwt` token that passes every check, or `TokenRefused`."""
+    claims = verified_claims(token, keys, LOGOUT_TYPE)
+    refusal = event_refusal(claims, issuer=issuer, client_id=client_id, now=now)
+    if refusal is not None:
+        raise TokenRefused(refusal)
+    return event_of(claims)

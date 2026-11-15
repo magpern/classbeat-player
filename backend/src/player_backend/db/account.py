@@ -53,10 +53,11 @@ def over_export_limit(ctx: AccountContext) -> bool:
     return hit[0][0] is not False
 
 
-def _email_and_created_at(ctx: AccountContext) -> tuple[str, object] | None:
-    """(email, created_at) of the account, or None when the account is gone."""
+def _email_and_created_at(ctx: AccountContext) -> tuple[str | None, object] | None:
+    """(email, created_at) of the account, or None when the account is gone. The email is None
+    for an instructor classbeat gave none (ADR 0010, section 8)."""
     found = ctx.db.rows(q.EMAIL_AND_CREATED_AT, (ctx.account_id,))
-    if len(found) != 1 or not isinstance(found[0][0], str):
+    if len(found) != 1 or not (found[0][0] is None or isinstance(found[0][0], str)):
         return None
     return found[0][0], found[0][1]
 
@@ -169,7 +170,8 @@ type Deletion = Literal["deleted", "not_confirmed", "gone"]
 
 
 def delete(ctx: AccountContext, typed: str) -> Deletion:
-    """Delete the account when `typed` is its email. Writes no event: its events go with it."""
+    """Delete the account when `typed` is its confirmation (its email, or the words shown for an
+    instructor with none). Writes no event: its events go with it."""
     found = _email_and_created_at(ctx)
     if found is None:
         return "gone"

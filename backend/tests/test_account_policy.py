@@ -14,8 +14,10 @@ from player_backend.account_policy import (
     EXPORT_MAX,
     EXPORT_PAGE,
     EXPORT_WINDOW,
+    NO_EMAIL,
     ExportStopped,
     class_entry,
+    confirmation_of,
     confirmed,
     export_chunks,
     export_limit_key,
@@ -54,6 +56,19 @@ def test_the_accounts_email_is_a_confirmation(typed: str) -> None:
 )
 def test_anything_else_is_not(typed: str) -> None:
     assert not confirmed(typed, EMAIL)
+
+
+def test_with_no_email_the_confirmation_is_the_words_shown_in_its_place() -> None:
+    assert (NO_EMAIL, confirmation_of(None), confirmation_of(EMAIL)) == (
+        "your classbeat account",
+        "your classbeat account",
+        EMAIL,
+    )
+    assert confirmed(" Your Classbeat Account ", None)
+    for typed in ("", "none", "null", EMAIL, "your classbeat account."):
+        assert not confirmed(typed, None)
+    # The words never confirm an account that has an email.
+    assert not confirmed(NO_EMAIL, EMAIL)
 
 
 HEAD: dict[str, object] = {

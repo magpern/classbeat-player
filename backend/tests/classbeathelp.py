@@ -154,3 +154,43 @@ class FakeClassbeat:
 
 def client(fake: FakeClassbeat, clock: Callable[[], float] = time.time) -> ClassbeatClient:
     return ClassbeatClient(settings(), fake, KeySet(fake.get_keys), clock)
+
+
+# Events (ADR 0010, section 8): back-channel logout tokens, as classbeat's server signs them.
+BACKCHANNEL = "http://schemas.openid.net/event/backchannel-logout"
+ACCOUNT_DELETED = "urn:classbeat:player:account-deleted"
+SESSIONS_REVOKED = "urn:classbeat:player:sessions-revoked"
+EVENTS = "/api/classbeat/events"
+FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+
+
+def event_header(kid: str = KID, **extra: object) -> dict[str, object]:
+    return {"alg": "ES256", "typ": "logout+jwt", "kid": kid, **extra}
+
+
+def event_claims(
+    event: str, now: int, subject: str = "pairwise-subject-1", jti: str | None = None
+) -> Claims:
+    return {
+        "iss": ISSUER,
+        "aud": CLIENT_ID,
+        "sub": subject,
+        "iat": now,
+        "exp": now + 120,
+        "jti": jti or secrets.token_urlsafe(16),
+        "events": {BACKCHANNEL: {}, event: {}},
+    }
+
+
+def event_token(
+    key: SigningKey,
+    event: str,
+    now: int,
+    subject: str = "pairwise-subject-1",
+    jti: str | None = None,
+) -> str:
+    return key.sign(event_header(key.kid), event_claims(event, now, subject, jti))
+
+
+def event_body(token: str) -> str:
+    return urlencode({"logout_token": token})
