@@ -11,7 +11,7 @@
 
 /* ---------- Every layout ---------- */
 /* The score's position in time: --t0 and --t1 are seconds from now, --sps the layout's vw per
-   second (6 minutes across in landscape, 0.28 vw per second as in room-2d.md). A block or clip
+   second (landscape: 7.6 minutes across at 0.22 vw per second, play.md "Score"; the mock-ups below still show 6 minutes at 0.28 until the build follows). A block or clip
    that began in the past keeps its label just right of "now"; one that runs past the right safe
    edge keeps its labels inside it. */
 .play { --sps: calc(100vw / 360); --safe-r: 95vw; }

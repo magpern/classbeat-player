@@ -65,8 +65,8 @@ Three layouts, chosen from the viewport alone:
 
 | Layout | When | Reference sizes | Smallest checked | Floors (P1) | Score window |
 |---|---|---|---|---|---|
-| **Room** | wider than tall, at least 720 lines | 1024×768 (a tablet on its side) | 1024×768 | the room's, C1 | 6 minutes |
-| **Small landscape** | wider than tall, under 720 lines | 844×390 (a phone on its side) | 640×360 | the companion's landscape, K1 | 6 minutes |
+| **Room** | wider than tall, at least 720 lines | 1024×768 (a tablet on its side) | 1024×768 | the room's, C1 | 7.6 minutes |
+| **Small landscape** | wider than tall, under 720 lines | 844×390 (a phone on its side) | 640×360 | the companion's landscape, K1 | 7.6 minutes |
 | **Portrait** | as tall as wide or taller | 390×844 (a phone), 768×1024 (a tablet) | 360×640 | the companion's portrait, K1 | 3 minutes |
 
 - **Room** is the room screen's own layout for its size (room-2d.md, "Layout"): at 1024×768 its
@@ -205,6 +205,7 @@ artist and BPM if they fit; moments and the end mark. What changes is the time i
 - **Landscape** (room and small landscape): 7.6 minutes across, 0.22 vw a second, as on the room
   screen (room-2d.md, "The follow-up to the scene", #483): 1:54 behind "now", 5:41 ahead. The
   code (`web/src/room/score.ts`) still uses 0.28 vw a second, 6 minutes, until the build follows.
+  The play mock-ups still show 6 minutes at 0.28 vw a second until the build follows; this note governs.
 - **Portrait**: **3 minutes** across, 0.56 vw a second: 45 s behind, 2:15 ahead. At 390 px a
   minute is 130 px wide, where 6 minutes would leave a 30-second interval 16 px wide.
 - A block, clip or moment that begins right of the window is not drawn; one that runs past the
