@@ -1,6 +1,6 @@
 """The site's answers (schema/site-api/v1): every example gets its verdict from the JSON Schema,
 every valid one round-trips through the generated Pydantic model, and the /me answer carries
-the signed-in account's email and nothing else."""
+the signed-in account's email, or null for an account with none (ADR 0010), and nothing else."""
 
 from __future__ import annotations
 
@@ -73,6 +73,29 @@ def test_me_answer_is_the_email_only() -> None:
     assert schema["required"] == ["email"]
     assert set(schema["properties"]) == {"email"}
     assert set(site_api_me.MeAnswer.model_fields) == {"email"}
+    assert site_api_me.MeAnswer.model_fields["email"].is_required()
+
+
+@pytest.mark.parametrize("email", [None, "rider@example.com"])
+def test_me_answer_email_is_a_string_or_null(email: str | None) -> None:
+    doc = {"email": email}
+    assert list(validator("me").iter_errors(doc)) == []
+    assert site_api_me.MeAnswer.model_validate(doc).model_dump(mode="json") == doc
+    assert site_api_me.MeAnswer(email=email).email == email
+
+
+def test_me_answer_email_may_be_null_but_not_left_out() -> None:
+    assert list(validator("me").iter_errors({})) != []
+    with pytest.raises(ValidationError):
+        site_api_me.MeAnswer.model_validate({})
+
+
+@pytest.mark.parametrize("email", ["", "null", "Rider@example.com", 42, False, [], {}])
+def test_me_answer_refuses_anything_else_as_the_email(email: Any) -> None:
+    doc = {"email": email}
+    assert list(validator("me").iter_errors(doc)) != []
+    with pytest.raises(ValidationError):
+        site_api_me.MeAnswer.model_validate(doc)
 
 
 @pytest.mark.parametrize(

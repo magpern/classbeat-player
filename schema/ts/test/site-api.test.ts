@@ -1,6 +1,6 @@
 // The site's answers (schema/site-api/v1): every example gets its verdict from the JSON Schema,
-// the /me answer allows the email and nothing else, and a typed literal checks the generated
-// TypeScript type (npm run typecheck).
+// the /me answer allows the email (a string, or null for an account with none, ADR 0010) and
+// nothing else, and a typed literal checks the generated TypeScript type (npm run typecheck).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -62,8 +62,23 @@ test("the me answer is the email only", () => {
 
 test("a literal of the generated type is a valid answer", () => {
   const me: MeAnswer = { email: "rider@example.com" };
+  const none: MeAnswer = { email: null };
+  // @ts-expect-error The generated type requires the email, even when it is null.
+  const missing: MeAnswer = {};
   // @ts-expect-error The generated type allows no field besides the email.
   const extra: MeAnswer = { email: "rider@example.com", account_id: "x" };
   assert.equal(validator("me")(me), true);
+  assert.equal(validator("me")(none), true);
+  assert.equal(validator("me")(missing), false);
   assert.equal(validator("me")(extra), false);
+});
+
+test("the me email is a string or null, and nothing else", () => {
+  const validate = validator("me");
+  assert.equal(validate({ email: null }), true);
+  assert.equal(validate({ email: "rider@example.com" }), true);
+  assert.equal(validate({}), false);
+  for (const email of ["", "null", "Rider@example.com", 42, false, [], {}]) {
+    assert.equal(validate({ email }), false, JSON.stringify(email));
+  }
 });
