@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+# Never commit signing material: the spike is debug-signed with Gradle's default key only.
+*.jks
+*.keystore
+*.p12
+.env
+node_modules/
