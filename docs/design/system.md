@@ -154,7 +154,7 @@ the 2 % tier is kept for labels, link states and the score's song titles.
 | `--m-change` | 700 ms, ease out | The gel's colour at an interval change | 0: the new colour is there at once |
 | `--m-flash` | 160 ms | A white line, 1 vh wide, down the gel's right edge at an interval change | 0: no flash |
 | `--m-state` | 300 ms, ease out | A link-state plate appearing or leaving; lights down and up | 0 |
-| (score) | continuous, 0.28 vw per second | The score moving under "now" | Moves in whole-second steps |
+| (score) | continuous, 0.22 vw per second (changed from 0.28 by room-2d.md, "The follow-up to the scene", #483; `web/src/room/score.ts` still uses 0.28 until the build follows) | The score moving under "now" | Moves in whole-second steps |
 | (beat) | 120 ms | A dot after the BPM on the beats from the song's beat anchors (not its listed BPM), two lights at least 1/3 s apart (in steady time, every beat up to 180 BPM and every second beat above), only when the link is locked and the song has beat anchors | Off (not shown) |
 
 The single orchestrated moment is the interval change, and its white edge line is the one large

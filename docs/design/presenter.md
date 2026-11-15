@@ -54,6 +54,14 @@ The same words as the room screen's plates (room-2d.md, "Link plates"):
 | Ambiguous | Song is in twice | Plate, with "Which one is playing?" and the choices on the presenter |
 | Manual | Manual clock | Same, grey with a square marker |
 | Manual, before the start | Press Start | Same; the Start it names is the room screen's own Start (shown before the start with one display), Space, or this window's Start |
+| Playlist not loaded (the 30 s after the first Start of the class, when it asked the music app to play and the class playlist was not loaded: ADR 0001, #486) | Playlist not loaded, with the grey detail "Start played what Spotify had loaded" | Plate, in the link state's place ([room-2d.md](room-2d.md), "Playlist not loaded") |
+
+"Playlist not loaded" takes the place of the quiet lines ("Following Spotify", "Waiting for the
+first song") and never of a fault line ("Music not heard", "Not a class song", "Song is in
+twice", "Music paused"). It shows for the same 30 s as the room's plate and under the same
+conditions (Start asked the music app; not with the manual clock), so the two never disagree.
+The words are the same in every case ADR 0001 names (no playlist in the class, loading failed,
+loading not supported on this computer); the reason is not shown.
 
 The presenter's lines carry no marker. The round dot (following) and the square marker (manual)
 belong to the room screen, where they tell the link states apart from across the room; on the
