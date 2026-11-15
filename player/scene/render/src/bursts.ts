@@ -2,12 +2,12 @@
 // only and never steers: it carries no direction. Two kinds, never within 10 s of each other: the drop's, and the
 // light-only burst on an interval change inside a song with no marked moments. Where the model's link gate allows no
 // moments (off the list, paused, held) there is no burst of either kind, and the still rig has none. A burst or a dim
-// the scheduler has no room for is left out (the rig's `RunBudget`), and a skipped burst does not start the 10 s
+// the scheduler has no room for is left out (the rig's `RunBudget`: a drop on an interval change at the Beat level, beside its ramp), a drop's burst goes up in its fixed frame (the interval change's when one is under 1 s away), and a skipped burst does not start the 10 s
 // spacing. The lens flash marks an interval change and is the burst's, never both. Pure: time comes in as the frame time.
 
 import type { BeatLevel, LinkInput, SceneClass } from "../../model/src/index.ts";
 import { BURST_GAP_MS, gatedBurst, intervalIndexAt, lensShape, momentsAllowed, rigFrozen } from "../../model/src/index.ts";
-import { BURST_MS, DIM_EDGE_MS, RunBudget } from "./budget-calc.ts";
+import { BURST_MS, DIM_EDGE_MS, RunBudget, dropFrame } from "./budget-calc.ts";
 import type { Where } from "./budget-calc.ts";
 import { burstEnvelope } from "./light-calc.ts";
 import { nth } from "./lookup.ts";
@@ -80,10 +80,12 @@ export class BurstTracker {
     // Decided ahead, from the song position, so the hold before the burst starts 250 ms ahead of it; the answer is kept.
     const decay = (frame: number) => [{ fromMs: frame + FRAME_MS, toMs: frame + BURST_MS }];
     const nextChange = nth(a.cls.intervals, interval + 1)?.startMs;
-    if (canBurst) for (const m of drops) if (m.at_ms > a.songPosMs && m.at_ms - a.songPosMs <= AHEAD_MS && (this.sinceBurst === null || this.sinceBurst + m.at_ms - a.songPosMs >= BURST_GAP_MS)) this.budget.admit(`drop@${m.at_ms}`, "dropBurst", decay(a.classMs + m.at_ms - a.songPosMs), where);
+    // A drop's burst goes up in its fixed frame (P1): the drop's own, or the nearest interval change's when that is under 1 s away.
+    const frames = drops.map((m) => ({ m, at: dropFrame(where, m.at_ms + a.classMs - a.songPosMs) }));
+    if (canBurst) for (const { m, at } of frames) if (at > a.classMs && at - a.classMs <= AHEAD_MS && (this.sinceBurst === null || this.sinceBurst + at - a.classMs >= BURST_GAP_MS)) this.budget.admit(`drop@${m.at_ms}`, "dropBurst", decay(at), where);
     if (!a.still && momentsAllowed(a.link) && drops.length === 0 && (song?.moments ?? []).length === 0 && nextChange !== undefined && nextChange - a.classMs <= AHEAD_MS && nextChange > a.classMs &&
       (this.sinceBurst === null || this.sinceBurst + nextChange - a.classMs >= BURST_GAP_MS)) this.budget.admit(`light@${nextChange}`, "lightBurst", decay(nextChange), where);
-    const passed = continuous && canBurst ? drops.find((m) => this.pos < m.at_ms && m.at_ms <= a.songPosMs) : undefined;
+    const passed = continuous && canBurst ? frames.find(({ at }) => this.clock < at && at <= a.classMs)?.m : undefined;
     const light = gatedBurst(a.link, (song?.moments ?? []).length > 0, intervalChanged, this.sinceBurst);
     let burstNow = false;
     if (!a.still && spaced && (passed !== undefined || light !== null)) {

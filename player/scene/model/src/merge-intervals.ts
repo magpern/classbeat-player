@@ -13,7 +13,7 @@ export function mergeIntervals(cls: SceneClass): SceneClass {
   const frames = fixedFrames(rest.map((iv) => iv.startMs), [], 1e-3).filter((f) => f.change);
   if (frames.length === rest.length) return cls;
   const merged = frames.map((f): SceneInterval => {
-    const latest = rest.find((iv) => iv.startMs === f.changes.at(-1)) ?? rest[0]!;
+    const latest = rest.findLast((iv) => iv.startMs === f.changes.at(-1)) ?? rest[0]!;
     return { ...latest, startMs: f.changes[0]! };
   });
   return { ...cls, intervals: [first, ...merged] };

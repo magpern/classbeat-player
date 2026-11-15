@@ -43,10 +43,10 @@ linear light, on every moment of the demo class (beats in every zone, every inte
 interval change, the light-only burst, the breakdown, the pattern, the end), locked with the beat and coasting, in 40 regions (the whole screen,
 the four quadrants, every 1/3 x 1/3 window at a 1/6 stride, the 1/3 strips). A change is a monotone run of more than 10 % of its larger end, each
 direction, placed at the frame where it first passes 10 %, with no duration gate; the run fails above 3 in any sliding second. The table is in
-`artifacts/flash-steps.json`. The scheduler that decides which runs the rig makes is the model's (`../model/src/flash-marks.ts`,
+`artifacts/flash-steps.json`; the gate also asserts at least one white burst, with the budget on, where the scheduler has room (the drops at 40 s (None level) and 58 s, the light-only burst at 80 s (None level)). The scheduler that decides which runs the rig makes is the model's (`../model/src/flash-marks.ts`,
 `flash-runs.ts`, with a property test). Screenshots wait for the gel's CSS transition to end (`tools/settle.ts`), so each one is final.
 
-`artifacts/frame-log.csv` (Node) and `artifacts/frame-log-browser.csv` hold the highest beam speed of
+`artifacts/frame-log.csv` (Node), `artifacts/frame-log-browser.csv` (with `budget=off`, every run fits) and `artifacts/frame-log-browser-budget-on.csv` (the product's own) hold the highest beam speed of
 each second; the runs fail above 30 degrees a second plus 2 percent.
 
 The browser run checks S5 on the rendered pixels of every frame of the S6 runs (`tools/s5-fit.ts`: every pixel is `a x token + w x white` in linear light within 1 code value, 0 failing pixels). The S6 runs play in a 480 x 270 window and the frame log in 640 x 360: software GL draws the fullscreen shader slowly, and neither the beams' speed nor the luminance counts depend on the size.

@@ -13,6 +13,10 @@ test("changes under 1 s apart merge into the first one's frame and show the late
   assert.deepEqual(shape(mergeIntervals(cls([20_000, 2], [21_000, 3]))), [[0, 1], [20_000, 2], [21_000, 3]]);
 });
 
+test("two intervals at the same start: the later one in the list is the latest and shows", () => {
+  assert.deepEqual(shape(mergeIntervals(cls([20_000, 2], [20_000, 5], [40_000, 4]))), [[0, 1], [20_000, 5], [40_000, 4]]);
+});
+
 test("nothing to merge returns the class itself; the first interval is never a change", () => {
   const a = cls([20_000, 2], [40_000, 3]);
   assert.equal(mergeIntervals(a), a);

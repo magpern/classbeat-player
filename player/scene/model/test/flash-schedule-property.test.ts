@@ -126,10 +126,12 @@ function oneTimeline(seed: number): void {
   assert.equal(plan.runs.length + plan.steps.length + plan.skipped.length, wishes.length, `seed ${seed}: every wish is placed, a step or skipped`);
 
   const pieces = plan.runs.flatMap((run) => run.pieces);
-  // 4. Nothing steps inside a run, no run overlaps another, and there are no runs without the beat or with a count running.
+  // 4. Nothing steps inside a run, no run overlaps another, and there is no ramp or dim without the beat and no run with a count running.
+  for (const run of plan.runs) for (const p of run.pieces) {
+    if (run.wish.kind === "ramp" || run.wish.kind === "dim") assert.ok(beat.some((b) => b.fromMs <= p.fromMs && b.toMs >= p.toMs), `seed ${seed}: a ramp or a dim without the beat`);
+  }
   for (const p of pieces) {
     assert.deepEqual(marks.filter((m) => m > p.fromMs + TOL && m <= p.toMs + TOL), [], `seed ${seed}: a mark inside the run ${p.fromMs} to ${p.toMs}`);
-    assert.ok(beat.some((b) => b.fromMs <= p.fromMs && b.toMs >= p.toMs), `seed ${seed}: a run without the beat`);
     assert.ok(!count.some((c) => p.fromMs < c.toMs && c.fromMs < p.toMs), `seed ${seed}: a run with a count running`);
     for (const q of pieces) if (q !== p) assert.ok(!(p.fromMs < q.toMs - TOL && q.fromMs < p.toMs - TOL), `seed ${seed}: runs overlap`);
   }

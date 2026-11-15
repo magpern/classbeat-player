@@ -26,6 +26,8 @@ interface Moment {
   /** A variant of the demo class (`class=`), for collisions. */
   readonly cls?: string;
   readonly events?: readonly Event[];
+  /** The states in which the budget (on) must place a white burst in this moment: a gate that the scene bursts, not only that it stays under the count. */
+  readonly bursts?: readonly string[];
   /** Frames the run must have (a jump skips time). */
   readonly frames?: number;
 }
@@ -38,10 +40,10 @@ export const MOMENTS: readonly Moment[] = [
   { name: "steady beats in zone 5", fromS: 64, toS: 67.5 },
   { name: "steady beats in zone 6", fromS: 88, toS: 91.5 },
   { name: "interval change (20 s)", fromS: 18.5, toS: 22.5 },
-  { name: "build, drop and fan on an interval change (40 s): the ramp has the room, the fan comes on in the drop's frame", fromS: 36, toS: 44 },
-  { name: "build, drop and fan away from a change (58 s): no burst, the sweep has the room", fromS: 54, toS: 59 },
+  { name: "build, drop and fan on an interval change (40 s): locked the ramp has the room (no burst, the fan is the drop frame); coasting the drop bursts", fromS: 36, toS: 44, bursts: ["coasting"] },
+  { name: "build, drop and fan away from a change (58 s): the drop bursts", fromS: 54, toS: 59, bursts: ["locked", "coasting"] },
   { name: "song change that is also an interval change into a song with no moments (60 s)", fromS: 58.5, toS: 63.5 },
-  { name: "interval change in a song with no moments (80 s): the ramp has the room, so no light-only burst", fromS: 78.5, toS: 83 },
+  { name: "interval change in a song with no moments (80 s): locked the ramp has the room (no burst); coasting the light-only burst", fromS: 78.5, toS: 83, bursts: ["coasting"] },
   { name: "song change and interval change into a song with moments (100 s)", fromS: 98.5, toS: 103.5 },
   { name: "zone 7 beats", fromS: 103.5, toS: 106.5 },
   { name: "breakdown and the interval change at 120 s", fromS: 118.5, toS: 131 },
@@ -54,7 +56,7 @@ export const MOMENTS: readonly Moment[] = [
   { name: "quality steps: High to Medium at 70 s, Medium to Low at 72 s", fromS: 68.5, toS: 74, events: [{ atMs: 70_000, quality: "Medium" }, { atMs: 72_000, quality: "Low" }] },
   { name: "song change away from an interval change (70 s: the song-change dim)", fromS: 68.5, toS: 72.5, cls: "dim" },
   { name: "collision: intervals 0.4 s apart (20.0 s and 20.4 s)", fromS: 18.5, toS: 23, cls: "collide" },
-  { name: "collision: a drop 0.4 s after a change (40.0 s and 40.4 s)", fromS: 38.5, toS: 44, cls: "collide" },
+  { name: "collision: a drop 0.4 s after a change (40.0 s and 40.4 s)", fromS: 38.5, toS: 44, cls: "collide", bursts: ["coasting"] },
   { name: "collision: intervals 0.3 s apart in a song with no moments (80.0 s and 80.3 s)", fromS: 78.5, toS: 83, cls: "collide" },
   { name: "collision: song change and intervals 0.6 s apart (100.0 s and 100.6 s)", fromS: 98.5, toS: 103.5, cls: "collide" },
 ];
@@ -162,6 +164,7 @@ export async function reportS6(open: Open, artifacts: string): Promise<Counted[]
   const counted: Counted[] = [];
   const s5Faults: string[] = [];
   const s6Faults: string[] = [];
+  const burstFaults: string[] = [];
   for (const m of MOMENTS) {
     const line: string[] = [];
     for (const [state, query] of STATES) {
@@ -169,8 +172,9 @@ export async function reportS6(open: Open, artifacts: string): Promise<Counted[]
       assert.ok(run.frames >= (m.frames ?? m.toS - m.fromS) * 55, `${m.name}, ${state}: only ${run.frames} frames measured`);
       if (run.s5.bad > 0) s5Faults.push(`${m.name}, ${state}: ${run.s5.bad} of ${run.s5.pixels} pixels are not a x token + w x white, for example ${run.s5.worst}`);
       if (run.most > MAX_CHANGES_PER_SECOND) s6Faults.push(`${m.name}, ${state}: ${run.most} changes in a second in ${run.worstRegion} (limit ${MAX_CHANGES_PER_SECOND})`);
+      if ((m.bursts ?? []).includes(state) && run.burstFrames === 0) burstFaults.push(`${m.name}, ${state}: no white burst with the budget on`);
       counted.push({ moment: m.name, state, run });
-      line.push(`${state} ${run.most} (${run.worstRegion}), S5 ${run.s5.bad} of ${run.s5.pixels} px`);
+      line.push(`${state} ${run.most} (${run.worstRegion}), bursts ${run.burstFrames} fr, S5 ${run.s5.bad} of ${run.s5.pixels} px`);
     }
     console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND})`);
   }
@@ -178,5 +182,6 @@ export async function reportS6(open: Open, artifacts: string): Promise<Counted[]
   writeFileSync(join(artifacts, "flash-steps.json"), JSON.stringify({ limitPerSecond: MAX_CHANGES_PER_SECOND, moments: counted }, null, 2));
   assert.deepEqual(s5Faults, [], "S5: a rendered pixel is not a x token + w x white");
   assert.deepEqual(s6Faults, [], "S6: more than 3 changes in a sliding second");
+  assert.deepEqual(burstFaults, [], "the scene bursts where the scheduler has room");
   return counted;
 }

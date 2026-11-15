@@ -48,6 +48,12 @@ function countSpans(w: Where): Span[] {
   return out;
 }
 
+/** The frame a drop's burst goes up in (P1): the nearest interval change's frame when it is under 1 s away, else the drop's own, on the class clock. */
+export function dropFrame(w: Where, dropClassMs: number): number {
+  const { changes } = nearby(w, dropClassMs);
+  return fixedFrames(changes, [dropClassMs], FRAME_MS).find((f) => f.drops.includes(dropClassMs))?.atMs ?? dropClassMs;
+}
+
 export class RunBudget {
   private readonly decided = new Map<string, boolean>();
   private placed: PlacedRun[] = [];
@@ -78,15 +84,20 @@ export class RunBudget {
     const offset = w.classMs - w.songPosMs;
     const bpm = song?.bpm;
     // Where the beams start a sweep: a phrase flip (Beat level), a build's gather, a drop's fan. Moments are gated off the list and while frozen.
+    const gather = GATHER_BEATS * (bpm !== undefined && bpm > 0 ? 60_000 / bpm : 0);
     const sweeps = [
       ...(w.level === "Beat" ? phraseFlipsMs(song?.anchors, w.songPosMs - REACH_MS, w.songPosMs + REACH_MS) : []),
-      ...(song?.moments ?? []).flatMap((m) => (m.kind === "drop" ? [m.at_ms - GATHER_BEATS * (bpm !== undefined && bpm > 0 ? 60_000 / bpm : 0), m.at_ms] : m.kind === "build" ? [m.at_ms] : [])),
+      ...(song?.moments ?? []).flatMap((m) => (m.kind === "drop" ? [m.at_ms - gather, m.at_ms] : m.kind === "build" ? [m.at_ms] : [])),
     ].filter((t) => Math.abs(t - w.songPosMs) <= REACH_MS).map((t) => t + offset);
     // A sweep outlives its song: one the budget saw before a song change still counts after it.
     const allSweeps = [...new Set([...this.sweepsSeen, ...sweeps])];
     this.sweepsSeen = allSweeps.filter((t) => t > w.classMs - REACH_MS);
+    // A drop's own gather and fan are not in the way of its burst: the fan's fixtures come on in the drop's frame, under it.
+    const own = id.startsWith("drop@") ? Number(id.slice(5)) : Number.NaN;
+    const ownAt = new Set(Number.isNaN(own) ? [] : [own - gather + offset, own + offset]);
+    const heard = allSweeps.filter((t) => !ownAt.has(t));
     const beatMs = bpm !== undefined && bpm > 0 ? 60_000 / bpm : 500;
-    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweeps: allSweeps });
+    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweeps: heard });
     const run = plan.runs.find((r) => r.wish.id === id);
     if (run) this.placed.push(run);
     this.decided.set(id, run !== undefined);

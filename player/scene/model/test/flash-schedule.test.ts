@@ -99,6 +99,15 @@ test("runs: with the beat and no count a ramp fits; with no beat or a count runn
   assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ count: [{ fromMs: 9000, toMs: 11_000 }] }))), [[], ["a"], []]);
 });
 
+test("runs: without the beat a burst still fits where the count has room, a dim does not; a count running takes it too", () => {
+  const burst = (from: number): RunWish => ({ id: "b", kind: "dropBurst", pieces: [{ fromMs: from + F, toMs: from + 250 }] });
+  const dim: RunWish = { id: "d", kind: "dim", pieces: [{ fromMs: 10_000, toMs: 10_120 }, { fromMs: 10_500, toMs: 10_620 }] };
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000] }))), [["b"], [], []], "the change frame, the decay and steady light: 3");
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500] }))), [[], [], ["b"]], "a tick beside the change frame makes a fourth");
+  assert.deepEqual(ids(fitRuns([dim], room({ beat: [] }))), [[], [], ["d"]]);
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000], count: [{ fromMs: 9000, toMs: 11_000 }] }))), [[], [], ["b"]]);
+});
+
 test("runs: no mark falls inside a run (it may start on one, and end the frame before one); no run overlaps another", () => {
   assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ marks: [10_300] }))), [[], ["a"], []]);
   assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ marks: [10_000] }))), [["a"], [], []], "a mark on its first frame is not inside it");

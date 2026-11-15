@@ -25,18 +25,20 @@ const SHOTS = join(RENDER_DIR, "screenshots");
 const ARTIFACTS = join(RENDER_DIR, "artifacts");
 const CANDIDATES = ["/usr/bin/google-chrome", "/opt/google/chrome/chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"];
 // The song change at 60 s is also an interval change into a song with no moments, so it bursts too.
-const BURST_SHOTS = ["drop-burst"];
+const BURST_SHOTS = ["drop-burst", "light-burst"];
 const SIZES = [[1920, 1080], [1366, 768]] as const;
 
-interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number; /** The lit share the shot must still have (default 1 %): the house look before the start is two beams at 6 %. */ readonly minLit?: number }
+interface Shot { /** Seconds played undrawn before `fromS`: a page that jumps from its first frame to a later moment bursts on the jump, and the next burst keeps 10 s from it. */ readonly warmS?: number; readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number; /** The lit share the shot must still have (default 1 %): the house look before the start is two beams at 6 %. */ readonly minLit?: number }
 // Each plays from `fromS` to `toS` on a synthetic 60 fps clock, so a screenshot is the same every time.
 const SHOTS_LIST: readonly Shot[] = [
   { name: "warm-up-zone-1", query: "", fromS: 0, toS: 5 },
   { name: "zone-2-beat", query: "", fromS: 23, toS: 29.5 },
   { name: "anticipation", query: "", fromS: 32, toS: 35.6 },
   { name: "build-gather", query: "", fromS: 33, toS: 39.6 },
-  // The scheduler skips every drop burst at the Beat level (steady light and the fan's sweep would make a fourth change), so the burst is looked at with the budget off.
-  { name: "drop-burst", query: "&budget=off", fromS: 38, toS: 40.05 },
+  // The drop at 58 s, away from an interval change, locked with the beat and the budget on: the burst the product places (the 40 s drop is on a change, where the ramp has the room).
+  { name: "drop-burst", query: "", fromS: 56, toS: 58.05 },
+  // A light-only burst on the interval change at 80 s in a song with no moments, where nothing competes (coasting, no ramp), the budget on.
+  { name: "light-burst", query: "&state=coasting", fromS: 78, toS: 80.05, warmS: 12 },
   { name: "drop-fan", query: "", fromS: 38, toS: 45 },
   // A song change away from an interval change (the demo's `class=dim`, at 70 s), where the scheduler has room for the dim: held at the dim's bottom, a quarter.
   { name: "song-change-dim", query: "&class=dim", fromS: 68, toS: 70.3 },
@@ -58,7 +60,7 @@ function launch(): Promise<Browser> {
   return chromium.launch({ executablePath: found, args: ["--no-sandbox", "--force-color-profile=srgb", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 }
 
-interface Api { __scene: { advance(a: number, b: number, fps: number): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean; burst: number; master: number } }
+interface Api { __scene: { advance(a: number, b: number, fps: number, options?: { draws: () => boolean; after: () => void }): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean; burst: number; master: number } }
 
 async function open(browser: Browser, w: number, h: number, query: string): Promise<{ page: Page; problems: string[] }> {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
@@ -96,7 +98,13 @@ async function screenshots(browser: Browser): Promise<void> {
   const means = new Map<string, number>();
   for (const [w, h] of SIZES) for (const shot of SHOTS_LIST) {
     const { page, problems } = await open(browser, w, h, shot.query);
-    await page.evaluate(([a, b]) => (window as unknown as Api).__scene.advance(a! * 1000, b! * 1000, 60), [shot.fromS, shot.toS]);
+    // A string, not a function: the bundler's helpers do not exist in the page.
+    const warm = shot.warmS ?? 0;
+    await page.evaluate(`(() => {
+      const scene = window.__scene;
+      if (${warm} > 0) scene.advance(${Math.max(0, shot.fromS - warm) * 1000}, ${shot.fromS * 1000}, 60, { draws: () => false, after() {} });
+      scene.advance(${shot.fromS * 1000}, ${shot.toS * 1000}, 60);
+    })()`);
     const b = await brightness(page);
     const burst = await page.evaluate(() => (window as unknown as Api).__scene.burst);
     assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
@@ -115,15 +123,15 @@ async function screenshots(browser: Browser): Promise<void> {
   assert.ok(m("quality-low") > 0, "low quality still draws");
 }
 
-async function browserFrameLog(browser: Browser): Promise<void> {
+async function browserFrameLog(browser: Browser, query: string, name: string): Promise<void> {
   mkdirSync(ARTIFACTS, { recursive: true });
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } }); // the beams' speed does not depend on the size; software GL draws the fullscreen shader slowly
   await install(page);
-  await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=6&budget=off`); // the beams' speed through every transition, bursts included
+  await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=6${query}`); // the beams' speed through every transition, bursts included
   await page.waitForFunction(() => (window as unknown as Api).__scene?.ended === true, undefined, { timeout: 120_000, polling: 250 });
   const out = await page.evaluate(() => { const l = (window as unknown as Api).__scene.log; return { rows: l.rows, seen: l.seen, failures: l.failures, csv: l.csv(), peak: l.peakOverall }; });
-  writeFileSync(join(ARTIFACTS, "frame-log-browser.csv"), out.csv);
-  writeFileSync(join(ARTIFACTS, "frame-log-browser.json"), JSON.stringify({ limitDegPerSecond: LIMIT_DEG_PER_SECOND, seen: out.seen, rows: out.rows }, null, 2));
+  writeFileSync(join(ARTIFACTS, `${name}.csv`), out.csv);
+  writeFileSync(join(ARTIFACTS, `${name}.json`), JSON.stringify({ limitDegPerSecond: LIMIT_DEG_PER_SECOND, seen: out.seen, rows: out.rows }, null, 2));
   assert.ok(out.rows.length >= 8, `the run logged ${out.rows.length} seconds`);
   assert.ok(out.seen.phraseFlips >= 1 && out.seen.songChangesFromMirrored >= 1 && out.seen.gathers >= 1 && out.seen.drops >= 1 && out.seen.bursts >= 1, `without the transitions the check measures nothing: ${JSON.stringify(out.seen)}`);
   assert.deepEqual(out.rows.filter((r) => r.peakDegPerSecond > LIMIT_DEG_PER_SECOND), [], `a beam went over 30 degrees a second (peak ${out.peak})`);
@@ -160,7 +168,8 @@ try {
   await reportS6(opener, ARTIFACTS);
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
-  await browserFrameLog(browser);
+  await browserFrameLog(browser, "&budget=off", "frame-log-browser"); // every run fits: the beams' speed through every burst the scheduler might skip
+  await browserFrameLog(browser, "", "frame-log-browser-budget-on"); // the product's own: the ramps and bursts the scheduler places
   console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 34 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
 } finally {
   await browser.close();

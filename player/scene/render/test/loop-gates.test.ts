@@ -34,22 +34,21 @@ function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60, budgetOff =
 // and 100 s) and song 2's breakdown (120 s) across the interval changes.
 const through = (link: Feed["link"], reducedMotion = false): Make => (ms) => feedAt(ms, { link, reducedMotion });
 
-test("locked: the build gathers, the drop fans (no burst: the scheduler skips it, a sweep takes its room), the breakdown runs", () => {
-  // The fan's sweep (and the gather's, and a phrase flip's) is steady light that moves a region over 10 % in the gated runs, so a burst beside it
-  // would be a fourth change: the drops at 40 s and 58 s are the fan's frame. With the budget off (the demo's `budget=off`) the 58 s drop bursts.
+test("locked: the build gathers, the drop fans, the 58 s drop (away from a change) bursts, the 40 s drop (on a change, beside the ramp) does not, the breakdown runs", () => {
+  // At the Beat level the 40 s drop's frame is the interval change's: the ramp (step c) takes the room, so its burst is skipped (step f) and the fan is the drop's frame.
   const a = play(through({ state: "Locked" }), 30_000, 59_500);
   assert.ok(a.gather > 0 && a.fan > 0);
-  assert.equal(a.bursts, 0);
+  assert.equal(a.bursts, 1, "the 58 s drop");
   assert.equal(play(through({ state: "Locked" }), 30_000, 59_500, 1 / 60, true).bursts, 2, "budget off: both drops burst, 18 s apart");
   const b = play(through({ state: "Locked" }), 110_000, 128_000);
   assert.ok(b.breakdown > 0);
 });
 
-test("the drop's gather and fan also run at the None level (coasting) and when ambiguous, with no burst and no lift: steady light takes one of the 3 (S6)", () => {
+test("the drop's gather, fan and burst also run at the None level (coasting) and when ambiguous, with no lift: both drops burst (no ramp competes at 40 s)", () => {
   for (const state of ["Coasting", "Ambiguous", "Manual"] as const) {
     const a = play(through({ state }), 30_000, 62_000);
     assert.ok(a.gather > 0 && a.fan > 0, state);
-    assert.equal(a.bursts, 0, `${state}: the drop is the fan's frame, with no burst`);
+    assert.equal(a.bursts, 2, `${state}: the drops at 40 s and 58 s burst`);
     assert.equal(a.maxLift, 0, `${state}: no lift without the beat`);
   }
 });
@@ -76,14 +75,15 @@ test("reduced motion: the still rig has no burst, no lift, no moments", () => {
   assert.deepEqual([r.gather, r.fan, r.breakdown, r.burstFrames, r.maxLift], [0, 0, 0, 0, 0]);
 });
 
-test("no song bursts on an interval change at the Beat level: the energy ramp has the room, and a burst beside it, its change frame and steady light would make a fourth change (the scheduler skips it)", () => {
-  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0, "song 0 has moments");
-  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000).bursts, 0, "song 1 has none: the changes at 80 s have no light-only burst");
+test("a song with no moments: a light-only burst on its interval change where nothing competes (coasting, 80 s); locked, the ramp has the room and the burst is skipped", () => {
+  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0, "song 0 has moments: no light-only burst on its change at 20 s");
+  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000).bursts, 0, "locked: the ramp, the change frame, the decay and steady light would be four");
+  assert.equal(play(through({ state: "Coasting" }), 70_000, 98_000).bursts, 1, "coasting: the change frame, the decay and steady light are three");
 });
 
 test("drops closer than 10 s share one burst; drops 10 s or more apart each burst (S6)", () => {
   const drops = (...at: number[]): Feed["cls"] => ({ ...DEMO_CLASS, songs: [{ bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: at.map((at_ms) => ({ at_ms, kind: "drop" as const })) }] });
-  const count = (cls: Feed["cls"], budgetOff = true) => {
+  const count = (cls: Feed["cls"], budgetOff = false) => {
     const loop = new RigLoop(tokens, budgetOff);
     let [n, was] = [0, 0];
     for (let ms = 30_000, i = 0; ms < 75_000; i++) {
@@ -94,8 +94,8 @@ test("drops closer than 10 s share one burst; drops 10 s or more apart each burs
     }
     return n;
   };
-  // The spacing is the burst's own, so it is shown with the budget off (the scheduler skips every drop burst at the Beat level).
-  assert.equal(count(drops(44_000, 47_000), false), 0, "with the budget on no drop bursts");
+  // The spacing is the burst's own, with the budget on (drops away from a change) and off.
+  assert.equal(count(drops(44_000, 47_000), true), 1, "budget off: the same spacing");
   assert.equal(count(drops(44_000, 47_000)), 1, "3 s apart: the second drop does not burst");
   assert.equal(count(drops(44_000, 53_900)), 1, "just under 10 s");
   assert.equal(count(drops(44_000, 55_000)), 2, "11 s apart: both burst (on the countdown's second)");

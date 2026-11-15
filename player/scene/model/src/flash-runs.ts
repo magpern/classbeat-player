@@ -3,7 +3,7 @@
 // so that no mark falls inside it, no run overlaps another, and no 1 s window counts more than 3 changes, steady
 // light's possible change included. Steady light is counted as one change in every 1 s window, beat or no beat: the gated
 // runs show it moving a region over 10 % with the beat running (a phrase flip's sweep, a drifting haze), so it is never
-// counted as 0. A sweep (the beams' turn after a phrase flip, a build's gather, a drop's fan) takes the runs away. Without the beat, or with a count running, there are no runs at all. A run
+// counted as 0. A sweep (the beams' turn after a phrase flip, a build's gather, a drop's fan) takes the runs away. Without the beat there is no ramp and no dim (a burst fits where the count has room); with a count running there are no runs at all. A run
 // that does not fit is a step in a mark (a ramp) or is skipped (a burst, a dim). Times are milliseconds. Pure.
 
 /** The most counted changes in any 1 s window (S6). */
@@ -24,6 +24,8 @@ export const SWEEP_MS = 2500;
 export interface Span { readonly fromMs: number; readonly toMs: number }
 /** The scheduler's steps: ramps (c, d), the light-only burst (e), the drop burst (f), the dim (g). */
 export type RunKind = "ramp" | "lightBurst" | "dropBurst" | "dim";
+/** A ramp and a dim need the beat (without it the energy is in the change frame and a song change is its re-aim); a burst only needs room in the count. */
+const needsBeat = (kind: RunKind): boolean => kind === "ramp" || kind === "dim";
 const ORDER: Record<RunKind, number> = { ramp: 0, lightBurst: 1, dropBurst: 2, dim: 3 };
 
 export interface RunWish {
@@ -37,7 +39,7 @@ export interface RunWish {
 export interface Room {
   /** The frame marks, fixed frames included (every mark counts as one change, in one frame). */
   readonly marks: readonly number[];
-  /** Where the beat is locked (Beat level or Tempo only); outside it there are no runs. */
+  /** Where the beat is locked (Beat level or Tempo only); outside it there is no ramp and no dim. */
   readonly beat: readonly Span[];
   /** Where a count runs; inside it there are no runs. */
   readonly count: readonly Span[];
@@ -82,9 +84,9 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
-  const fits = (pieces: readonly Span[]): boolean => {
+  const fits = (pieces: readonly Span[], beatNeeded: boolean): boolean => {
     const whole = (p: Span) => room.beat.some((b) => b.fromMs <= p.fromMs + EPS && b.toMs >= p.toMs - EPS);
-    if (!pieces.every(whole) || pieces.some((p) => room.count.some((c) => overlaps(p, c)))) return false;
+    if ((beatNeeded && !pieces.every(whole)) || pieces.some((p) => room.count.some((c) => overlaps(p, c)))) return false;
     if (pieces.some((p) => marks.some((m) => m > p.fromMs + EPS && m <= p.toMs + EPS))) return false;
     if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))) || sweeps.some((w) => overlaps(p, w)))) return false;
     return maxInASecond([...items, ...runs.flatMap((r) => r.pieces), ...pieces]) + STEADY_PER_WINDOW <= CAP;
@@ -93,7 +95,7 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   for (const w of [...wishes].sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.pieces[0]?.fromMs ?? 0) - (b.pieces[0]?.fromMs ?? 0))) {
     const start = w.pieces[0]?.fromMs ?? 0;
     const tries = [0, ...(w.waits ? marks.filter((m) => m > start).slice(0, MAX_WAITS).map((m) => m + room.frameMs - start) : [])];
-    const by = tries.find((d) => fits(shifted(w, d)));
+    const by = tries.find((d) => fits(shifted(w, d), needsBeat(w.kind)));
     if (by !== undefined) runs.push({ wish: w, pieces: shifted(w, by) });
     else (w.kind === "ramp" ? steps : skipped).push(w);
   }

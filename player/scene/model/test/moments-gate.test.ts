@@ -38,6 +38,14 @@ test("off the list has no gather, no fan and no breakdown, and the beams are not
   assert.notDeepEqual(held.directions, gathered.directions, "no gather: the beams are aimed as without one");
 });
 
+test("the beams' turn follows the moments by 650 ms: the gather's aim is held through the drop's burst, the fan's aim comes after, and the fixtures light at the drop", () => {
+  const link = { state: "Locked" } as const;
+  const pan = (pos: number) => frameAt(link, 0, pos).directions.map((d) => d.pan);
+  assert.deepEqual(pan(40_300), pan(39_900), "300 ms after the drop the beams still hold the gather's aim");
+  assert.notDeepEqual(pan(40_700), pan(39_900), "650 ms after the drop the fan's aim is the target");
+  assert.equal(frameAt(link, 0, 40_050).moments.fan, true, "the fixtures light in the drop's frame");
+});
+
 test("paused and held have none either", () => {
   for (const link of [{ state: "Paused" }, { state: "Locked", held: true }, { state: "Coasting", held: true }] as LinkInput[]) {
     assert.deepEqual(frameAt(link, 0, GATHERING).moments, NO_MOMENTS);

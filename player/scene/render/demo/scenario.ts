@@ -1,6 +1,6 @@
 // A fake class for the demo page, the screenshots and the frame log: three songs and eight
 // intervals on a simulated clock. Song 0 (120 bpm, 16 s a phrase) flips its phrase at 16 s, 32 s and
-// 48 s, has a drop at 40 s (on an interval change: the build is 36 to 40 s, the fan 40 to 48 s) and one at 58 s (away from any change, so its burst fits)
+// 48 s, has a drop at 40 s (on an interval change: the build is 36 to 40 s, the fan 40 to 48 s; it bursts at the None level, and at the Beat level the ramp takes the room) and one at 58 s (away from any change: it bursts at both levels)
 // and ends at 60 s in a
 // mirrored phrase, so the song change at 60 s turns from a mirrored phrase. Song 1 has no marked
 // moments (light-only bursts on its interval changes); song 2 has a breakdown, and its interval at 120 s
