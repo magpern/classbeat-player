@@ -22,6 +22,13 @@
       "then": { "properties": { "intervals": { "items": { "not": { "required": ["pattern"] } } } } }
     },
     {
+      "if": {
+        "properties": { "format_version": { "enum": ["1.0", "1.1"] } },
+        "required": ["format_version"]
+      },
+      "then": { "properties": { "music": { "not": { "required": ["spotify_playlist"] } } } }
+    },
+    {
       "if": { "properties": { "music": { "properties": { "source": { "const": "none" } } } } },
       "then": {
         "properties": {
@@ -53,7 +60,7 @@
     }
   ],
   "$defs": {
-    "formatVersion": { "enum": ["1.0", "1.1"] },
+    "formatVersion": { "enum": ["1.0", "1.1", "1.2"] },
     "ms": { "type": "integer", "minimum": 0 },
     "positiveMs": { "type": "integer", "minimum": 1 },
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
@@ -82,7 +89,14 @@
       "properties": {
         "source": { "enum": ["spotify", "swedebeat", "none"] },
         "design_crossfade_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
-        "song_timing": { "$ref": "#/$defs/quality" }
+        "song_timing": { "$ref": "#/$defs/quality" },
+        "spotify_playlist": {
+          "description": "Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
+          "type": "string",
+          "minLength": 22,
+          "maxLength": 22,
+          "pattern": "^[A-Za-z0-9]{22}$"
+        }
       }
     },
     "zoneDef": {

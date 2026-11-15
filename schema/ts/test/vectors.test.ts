@@ -61,6 +61,26 @@ test("a pattern document is 1.1 and the same document labelled 1.0 is refused", 
   for (const mode of ["strict", "reader"] as const) assert.notDeepEqual(checkDocument(classSchema, doc, mode), []);
 });
 
+for (const kind of ["colons-22", "quote-22", "space-22", "trailing-newline", "uri"]) {
+  test(`a playlist id that is not 22 letters or digits is refused in both modes: ${kind}`, () => {
+    const doc = load(join(EXAMPLES, "invalid", `schema-spotify-playlist-${kind}.json`));
+    for (const mode of ["strict", "reader"] as const) {
+      const found = checkDocument(classSchema, doc, mode).map((v) => [...v].join(" "));
+      assert.ok(found.includes("schema /music/spotify_playlist"), `${mode}: ${found}`);
+    }
+  });
+}
+
+test("a playlist document is 1.2 and older labels are refused", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-spotify-playlist.json"));
+  assert.equal(doc.format_version, "1.2");
+  assert.deepEqual(checkDocument(classSchema, doc, "strict"), []);
+  for (const old of ["1.0", "1.1"]) {
+    doc.format_version = old;
+    for (const mode of ["strict", "reader"] as const) assert.notDeepEqual(checkDocument(classSchema, doc, mode), []);
+  }
+});
+
 const invalidExpect = load(join(EXAMPLES, "invalid", "expected.json"));
 for (const name of names(join(EXAMPLES, "invalid"))) {
   test(`invalid document fails for the named rule: ${name}`, () => {

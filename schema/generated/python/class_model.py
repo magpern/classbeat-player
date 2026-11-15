@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 class FormatVersion(Enum):
     field_1_0 = '1.0'
     field_1_1 = '1.1'
+    field_1_2 = '1.2'
 
 
 class Ms(RootModel[int]):
@@ -68,6 +69,15 @@ class Music(BaseModel):
     source: Source
     design_crossfade_ms: Annotated[int, Field(ge=0, le=30000)]
     song_timing: Quality
+    spotify_playlist: Annotated[
+        str | None,
+        Field(
+            description="Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
+            max_length=22,
+            min_length=22,
+            pattern='^[A-Za-z0-9]{22}$',
+        ),
+    ] = None
 
 
 class ZoneDef(BaseModel):
