@@ -11,12 +11,12 @@ export interface Tree {
 
 import { countMatches, stripComments, stripXmlComments } from "./kotlin_text.js";
 import { listenerShapeProblem, networkLoadsProblem, sessionsProblem } from "./kotlin_shape.js";
+import { reflectionProblem } from "./reflection_rules.js";
+import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
 
 export { stripComments };
 
 const READER = "/SpotifyReader.kt";
-/** Reflection and class loading get around every name list, so none is allowed (`javaClass.name` and `::class.java.name` are). */
-const REFLECTION = /Class\.forName|java\.lang\.reflect|kotlin\.reflect|\.getMethods?\(|\.getDeclared\w+\(|\.getFields?\(|\.getConstructors?\(|\bMethodHandles?\b|ClassLoader|::class\.java\.(?!name\b|simpleName\b)|javaClass\.(?!name\b|simpleName\b)/;
 /** Other ways to get the unfiltered session list: never used here. */
 const SESSION_SOURCES = /addOnActiveSessionsChangedListener|getActiveSessionsForUser|\bMediaController\b/;
 const KT_PATHS = /^(?:app\/src\/main|core\/src\/main|core\/src\/test)\/kotlin\/.+\.kt$/;
@@ -79,7 +79,8 @@ export function checkTree(tree: Tree): string[] {
     if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
     const loads = networkLoadsProblem(t);
     if (loads) add("webview", p, loads);
-    if (REFLECTION.test(t)) add("reflection", p, "uses reflection or class loading");
+    const reflection = reflectionProblem(t);
+    if (reflection) add("reflection", p, reflection);
     if (SESSION_SOURCES.test(t)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
     if (!p.endsWith(READER) && /\bMediaSessionManager\b/.test(t)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
   }
@@ -116,16 +117,15 @@ export function checkTree(tree: Tree): string[] {
       if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
     }
     for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
+    const catalog = catalogProblem(t);
+    if (catalog) add("dependencies", p, catalog);
   }
+  for (const p of tree.paths) if (/\.toml$/i.test(p) && !p.startsWith("tools/")) add("dependencies", p, "a version catalog file is not allowed");
   const app = kts.find(([p]) => p === "app/build.gradle.kts");
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
 
   // The check is wired to every path to a built or installed app, not only `assemble` (#559, N6).
-  if (app) {
-    for (const task of GUARDED_TASKS) {
-      if (!app[1].includes(`"${task}"`)) add("manifest", "app/build.gradle.kts", `the merged-manifest check is not wired to ${task}`);
-    }
-  }
+  if (app) for (const what of gradleWiringProblems(app[1], GUARDED_TASKS)) add("manifest", "app/build.gradle.kts", what);
 
   // The pure module imports no Android class and no I/O.
   for (const [p, t] of kt) {

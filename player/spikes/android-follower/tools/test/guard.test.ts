@@ -146,6 +146,30 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["a committed env file", "signing", () => ({ ...real, paths: [...real.paths, ".env"] })],
   ["Android code in the pure core", "core", () => mutate(CORE, "package org.classbeat.spike", "package org.classbeat.spike\n\nimport android.os.Build")],
   ["no manifest check in the build", "manifest", () => mutate(APP_GRADLE, /CheckManifest/g, "Nothing")],
+  // #565 NB-B: reflection by property.
+  ["NB-B: javaClass bound to a variable, methods and invoke", "reflection", () => mutate(READER, "class SpotifyReader", 'val k = manager.javaClass\nval r = k.methods.first { it.name == "getActive" + "Sessions" }.invoke(manager, null)\nclass SpotifyReader')],
+  ["NB-B: bare javaClass", "reflection", () => mutate(READER, "class SpotifyReader", "val k = this.javaClass\nclass SpotifyReader")],
+  ["NB-B: ::class.java bound to a variable", "reflection", () => mutate(READER, "class SpotifyReader", "val k = String::class.java\nclass SpotifyReader")],
+  ["NB-B: .invoke(", "reflection", () => mutate(READER, "class SpotifyReader", "val r = f.invoke(1)\nclass SpotifyReader")],
+  ["NB-B: methods", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.methods\nclass SpotifyReader")],
+  ["NB-B: declaredMethods", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.declaredMethods\nclass SpotifyReader")],
+  ["NB-B: fields", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.fields\nclass SpotifyReader")],
+  ["NB-B: declaredFields", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.declaredFields\nclass SpotifyReader")],
+  ["NB-B: constructors", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.constructors\nclass SpotifyReader")],
+  // #565 NB-A: a line after `blockNetworkLoads = true` that starts with `?.` (or an operator or keyword) continues it.
+  ["NB-A: blockNetworkLoads = true then ?.", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            ?.let { flag }")],
+  ["NB-A: blockNetworkLoads = true then as", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            as Boolean")],
+  ["NB-A: blockNetworkLoads = true then ?:", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            ?: flag")],
+  // #565 NB3: a nested "/*" inside a template must not hide code.
+  ["NB3: a nested \"/*\" in a template hides a network class", "network", () => mutate(READER, "class SpotifyReader", 'val a = "${"/*"}"\nval u = java.net.URL("x")\nval b = "*/"\nclass SpotifyReader')],
+  // #565 NB4: a task name elsewhere in the file is not the list passed to dependsOn.
+  ["NB4: install$cap named elsewhere, not in the list", "manifest", () => mutate(APP_GRADLE, '"install$cap", "assemble$cap")', '"assemble$cap")\n        val unused = listOf("install$cap")')],
+  ["NB4: the list is not the one dependsOn uses", "manifest", () => mutate(APP_GRADLE, "it.name in guarded", "it.name in emptyList<String>()")],
+  ["NB4: dependsOn something other than the check", "manifest", () => mutate(APP_GRADLE, "dependsOn(check) }", "dependsOn(syncSceneAssets) }")],
+  // #565 NB-C: version catalogs hide coordinates from the allowlist.
+  ["NB-C: a libs.* dependency", "dependencies", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    implementation(libs.thing)')],
+  ["NB-C: a version catalog file", "dependencies", () => ({ ...real, paths: [...real.paths, "gradle/libs.versions.toml"] })],
+  ["NB-C: a catalog declared in settings", "dependencies", () => mutate("settings.gradle.kts", /^/, 'dependencyResolutionManagement { versionCatalogs { create("x") { from(files("a.toml")) } } }\n')],
 ];
 
 describe("each hard limit fails when broken", () => {
@@ -167,6 +191,17 @@ describe("stripComments", () => {
 
   it("keeps escaped char literals whole", () => {
     assert.match(stripComments("val a = '\\'' /* x */ val b = '\\u0041'"), /'\\''\s+val b = '\\u0041'/);
+  });
+
+  it("reads a `${...}` template as code, so a nested \"/*\" does not open a comment", () => {
+    const out = stripComments('val a = "x ${"/*"} y"\nval u = MediaCodec\nval b = "*/"');
+    assert.match(out, /MediaCodec/);
+  });
+
+  it("strips a comment inside a template and handles nested braces and raw strings", () => {
+    const out = stripComments('val a = "${ mapOf(1 to {2}) /* gone */ }"\nval r = """${"/*"} raw"""\nval u = MediaCodec');
+    assert.doesNotMatch(out, /gone/);
+    assert.match(out, /MediaCodec/);
   });
 
   it("drops comments and keeps a URL inside a string", () => {

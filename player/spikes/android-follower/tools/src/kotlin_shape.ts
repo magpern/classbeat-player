@@ -35,7 +35,7 @@ export function sessionsProblem(text: string): string | null {
 export function networkLoadsProblem(text: string): string | null {
   if (!/blocknetworkloads/i.test(text)) return null;
   const left = text
-    .replace(/\bblockNetworkLoads[ \t]*=[ \t]*true[ \t]*(?:;|\r?\n(?!\s*(?:&&|\|\||\.|\?:))|$)/g, "")
+    .replace(/\bblockNetworkLoads[ \t]*=[ \t]*true[ \t]*(?:;|\r?\n(?=\s*(?:(?!(?:as|is|in)\b)[\w}]|$))|$)/g, "")
     .replace(/\bsetBlockNetworkLoads\(\s*true\s*\)/g, "");
   return /blocknetworkloads/i.test(left) ? "blockNetworkLoads may only appear as `blockNetworkLoads = true` ending its statement" : null;
 }
