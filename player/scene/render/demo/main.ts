@@ -41,6 +41,9 @@ interface DemoApi {
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
 }
+declare global {
+  interface Window { __scene: DemoApi }
+}
 let nowMs = 0;
 let ended = false;
 const api: DemoApi = {
@@ -64,7 +67,7 @@ const api: DemoApi = {
   get ended() { return ended; },
   get burst() { return lastBurst; },
 };
-(window as unknown as { __scene: DemoApi }).__scene = api;
+window.__scene = api;
 
 if (params.get("auto") === "1") {
   const speed = Number(params.get("speed") ?? 1);

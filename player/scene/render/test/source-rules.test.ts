@@ -19,7 +19,8 @@ const FORBIDDEN: readonly [string, RegExp][] = [
   ["a network request or storage", /\bfetch\(|XMLHttpRequest|WebSocket|EventSource|\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b/],
   ["randomness", /Math\.random|\bcrypto\b|getRandomValues/],
   ["a beacon, a dynamic import or a worker", /sendBeacon|\bimport\s*\(|\bWorker\b|WebTransport|RTCPeerConnection|document\.cookie|\bcaches\b/],
-];for (const [what, re] of FORBIDDEN) {
+];
+for (const [what, re] of FORBIDDEN) {
   test(`no ${what} in the renderer`, () => assert.deepEqual(sources.filter((s) => re.test(s.text)).map((s) => s.name), []));
 }
 

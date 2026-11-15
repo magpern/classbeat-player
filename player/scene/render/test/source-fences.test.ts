@@ -53,12 +53,46 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
     ['export const a = () => fetch("https://example.invalid");', "no-restricted-globals", "src/probe.ts"],
     ["export const a = (d: { cookie: string }) => d.cookie;", "no-restricted-syntax", "src/probe.ts"],
     ["export const a = Math.random();", "no-restricted-properties", "src/probe.ts"],
+    // Plain DOM (the second review's bypass): the document is out of reach of src/, the window only by its allowlist.
+    ['export const a = () => document.createElement("audio");', "no-restricted-globals", "src/probe.ts"],
+    ["export const a = () => document.body;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = () => new window.Image();", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => window["Image"];', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => window.open("https://example.invalid");', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => window.fetch("https://example.invalid");', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = window;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (() => { const w = window; return w; })();", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => window.addEventListener("message", () => 0);', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = () => top;", "no-restricted-globals", "src/probe.ts"],
+    ['export const a = (e: { src: string }) => { e.src = "https://example.invalid/x.png"; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (e: { srcset: string }) => { e.srcset = "x"; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (e: { href: string }) => { e.href = "x"; };', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (e: { autoplay: boolean }) => { e.autoplay = true; };", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (e: { setAttribute(n: string, v: string): void }) => e.setAttribute("src", "x");', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (e: { appendChild(n: unknown): void }) => e.appendChild({});", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (e: { innerHTML: string }) => { e.innerHTML = "<audio autoplay>"; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => document.createElement("audio");', "no-restricted-syntax", "demo/probe.ts"],
+    ["export const a = () => document.body;", "no-restricted-syntax", "demo/probe.ts"],
+    ["export const a = () => document.head;", "no-restricted-syntax", "demo/probe.ts"],
+    ["export const a = () => new window.Image();", "no-restricted-syntax", "demo/probe.ts"],
+    ['export const a = () => { location.href = "https://example.invalid"; };', "no-restricted-syntax", "demo/probe.ts"],
+    ['export const a = (e: { src: string }) => { e.src = "x"; };', "no-restricted-syntax", "demo/probe.ts"],
     ['import { Color } from "three";\nexport const a = Color;', "no-restricted-imports", "src/loop.ts"],
     ["export const a = performance;", "no-restricted-globals", "src/bursts.ts"],
   ];
   for (const [src, rule, file] of bad) {
     const [r] = await eslint.lintText(src, { filePath: join(RENDER_DIR, file) });
     assert.ok(r!.messages.some((m) => m.ruleId === rule), `not rejected by ${rule}: ${src}`);
+  }
+  // What each page may still do raises no restriction.
+  const allowed: [string, string][] = [
+    ["export const a = () => [window.innerWidth, window.innerHeight, window.devicePixelRatio];", "src/probe.ts"],
+    ['export const a = () => window.addEventListener("resize", () => 0);', "src/probe.ts"],
+    ['export const a = () => [document.getElementById("scene"), document.documentElement, location.search];', "demo/probe.ts"],
+  ];
+  for (const [src, file] of allowed) {
+    const [r] = await eslint.lintText(src, { filePath: join(RENDER_DIR, file) });
+    assert.deepEqual(r!.messages.filter((m) => m.ruleId?.startsWith("no-restricted")).map((m) => m.message), [], src);
   }
   const [ok] = await eslint.lintText('import { Color, Mesh } from "three";\nexport const a = [Color, Mesh];', { filePath: join(RENDER_DIR, "src/probe.ts") });
   assert.deepEqual(ok!.messages.map((m) => m.ruleId), []);

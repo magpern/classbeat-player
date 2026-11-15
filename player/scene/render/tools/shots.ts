@@ -12,6 +12,7 @@ import { pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
 import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
+import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
 
@@ -58,6 +59,7 @@ async function open(browser: Browser, w: number, h: number, query: string): Prom
   page.on("pageerror", (e) => problems.push(`page error: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
   page.on("request", (r) => { if (!/^(file|data|blob):/.test(r.url())) problems.push(`left the file system: ${r.url()}`); });
+  await install(page);
   await page.goto(`${PAGE}?manual=1${query}`);
   await page.waitForFunction(() => "__scene" in window);
   return { page, problems };
@@ -93,7 +95,7 @@ async function screenshots(browser: Browser): Promise<void> {
     assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
-    assert.deepEqual(problems, [], `${shot.name}: ${problems.join("; ")}`);
+    assert.deepEqual([...problems, ...(await violations(page))], [], `${shot.name}: ${problems.join("; ")}`);
     assert.ok(b.lit > 0.01, `${shot.name} at ${w}x${h} is blank (${b.lit} of the pixels lit)`);
     await page.close();
   }
@@ -107,6 +109,7 @@ async function screenshots(browser: Browser): Promise<void> {
 async function browserFrameLog(browser: Browser): Promise<void> {
   mkdirSync(ARTIFACTS, { recursive: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await install(page);
   await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=6`);
   await page.waitForFunction(() => (window as unknown as Api).__scene?.ended === true, undefined, { timeout: 120_000, polling: 250 });
   const out = await page.evaluate(() => { const l = (window as unknown as Api).__scene.log; return { rows: l.rows, seen: l.seen, failures: l.failures, csv: l.csv(), peak: l.peakOverall }; });
@@ -115,11 +118,31 @@ async function browserFrameLog(browser: Browser): Promise<void> {
   assert.ok(out.rows.length >= 8, `the run logged ${out.rows.length} seconds`);
   assert.ok(out.seen.phraseFlips >= 1 && out.seen.songChangesFromMirrored >= 1 && out.seen.gathers >= 1 && out.seen.drops >= 1 && out.seen.bursts >= 1, `without the transitions the check measures nothing: ${JSON.stringify(out.seen)}`);
   assert.deepEqual(out.rows.filter((r) => r.peakDegPerSecond > LIMIT_DEG_PER_SECOND), [], `a beam went over 30 degrees a second (peak ${out.peak})`);
+  assert.deepEqual(await violations(page), [], "the real-time run triggered the runtime trap or the content-security policy");
+  await page.close();
+}
+
+/** The trap and the page's policy fire on the Reviewer's bypass (an audio element, an image with an https src, ...). */
+async function trapSelfTest(browser: Browser): Promise<void> {
+  const page = await browser.newPage();
+  const requests: string[] = [];
+  // A request the policy blocks never gets a response; a request that left would.
+  page.on("response", (r) => { if (!/^(file|data|blob):/.test(r.url())) requests.push(r.url()); });
+  await install(page);
+  await page.goto(`${PAGE}?manual=1`);
+  await page.waitForFunction(() => "__scene" in window);
+  assert.deepEqual(await violations(page), [], "a clean page has no violation");
+  const seen = await selfTest(page);
+  for (const want of ["createElement(audio)", "setAttribute(autoplay)", "new Audio", "new Image", "fetch", "navigator.sendBeacon", "WebSocket", "XMLHttpRequest.open", "createElement(script)", "createElement(iframe)", "csp: img-src"]) {
+    assert.ok(seen.some((s) => s.startsWith(want)), `the trap missed ${want}; it recorded ${JSON.stringify(seen)}`);
+  }
+  assert.deepEqual(requests, [], "nothing was answered from outside the file system, not even the bypass");
   await page.close();
 }
 
 const browser = await launch();
 try {
+  await trapSelfTest(browser);
   await screenshots(browser);
   await browserFrameLog(browser);
   console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);

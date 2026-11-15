@@ -16,5 +16,6 @@ await build({
   bundle: true, format: "iife", target: "es2022", minify: false, sourcemap: false, logLevel: "warning",
 });
 cpSync(join(here, "demo", "index.html"), join(dist, "index.html"));
+cpSync(join(here, "demo", "demo.css"), join(dist, "demo.css"));
 cpSync(join(design, "tokens.css"), join(dist, "design", "tokens.css"));
 cpSync(join(design, "fonts"), join(dist, "design", "fonts"), { recursive: true });
