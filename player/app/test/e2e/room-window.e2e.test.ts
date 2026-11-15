@@ -15,7 +15,7 @@ import type { DisplayFacts } from "../../src/core/room/placement.ts";
 import { ROOM_CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { converterExamples } from "../unit/fixtures.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 import { startBackend } from "./room-backend.ts";
 
 const TITLE = "Room window spin";
@@ -39,7 +39,7 @@ before(async () => {
   });
 });
 after(async () => {
-  if (!closed) await app?.close();
+  if (!closed) await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 });

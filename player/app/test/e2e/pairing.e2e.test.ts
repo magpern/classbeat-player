@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
-import { launch, sleep } from "./launch.ts";
+import { closeApp, launch, sleep } from "./launch.ts";
 
 const newToken = (type: string): string => ["cbp", type, randomBytes(32).toString("base64url")].join("_");
 const DEVICE_CODE = newToken("dc");
@@ -71,7 +71,7 @@ before(async () => {
   });
 });
 after(async () => {
-  if (!closed) await app?.close();
+  if (!closed) await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 });

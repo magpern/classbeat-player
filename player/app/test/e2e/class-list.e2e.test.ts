@@ -10,7 +10,7 @@ import type { ElectronApplication, Page } from "playwright-core";
 import { NEWER_VERSION_MESSAGE } from "../../src/core/class-file.ts";
 import { LIST_CSP } from "../../src/main/web-preferences.ts";
 import { converterExamples, EXAMPLES } from "../unit/fixtures.ts";
-import { launch } from "./launch.ts";
+import { closeApp, launch } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
@@ -19,7 +19,7 @@ before(async () => {
   ({ app, page } = await launch({ page: "list" }));
 });
 after(async () => {
-  await app?.close();
+  await closeApp(app);
 });
 
 async function openFromMenu(path: string): Promise<void> {

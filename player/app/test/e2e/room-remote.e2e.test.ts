@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 import { LIVE_HOST_TOKEN, LIVE_JOIN_CODE, startLiveBackend } from "./live-backend.ts";
 import type { FakeLive } from "./live-backend.ts";
 import { onPage, theRoom, waitFor, windowCount } from "./room-helpers.ts";
@@ -34,7 +34,7 @@ before(async () => {
   });
 }, T);
 after(async () => {
-  await app?.close();
+  await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 }, T);
