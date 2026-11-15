@@ -6,7 +6,7 @@ import type { LinkPlate } from "./model.ts";
 type View = NonNullable<RoomInput["view"]>;
 
 /** Link plates are at most about 20 characters so they fit beside the class time at 4:3. */
-export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean, notice: PlayNotice | null = null): LinkPlate {
+export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean, notice: PlayNotice | null = null, playlistNotLoaded = false): LinkPlate {
   if (notice !== null) return NOTICES[notice];
   if (!started) {
     return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "manual" };
@@ -22,9 +22,13 @@ export function linkPlate(doc: Class, link: LinkInput | null, view: View, starte
     case "Ambiguous":
       return { text: "Song is in twice", look: "alert" };
     default:
-      return { text: followingText(doc), look: "quiet" };
+      // A link fault above wins; this takes the place of the quiet states only.
+      return playlistNotLoaded ? PLAYLIST_NOT_LOADED : { text: followingText(doc), look: "quiet" };
   }
 }
+
+/** The plate for the 30 s after a Start that did not load the class playlist: white, the square marker (room-2d.md, "Playlist not loaded"). */
+const PLAYLIST_NOT_LOADED: LinkPlate = { text: "Playlist not loaded", look: "alert" };
 
 /**
  * The web player page's two notices (play.md, "Wording"): white, the square marker, the style of the

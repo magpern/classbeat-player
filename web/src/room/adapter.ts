@@ -38,7 +38,7 @@ export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCAL
   const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
   if (finished) return outside("finished", doc, view, link, notice, scale);
   if (before) return outside("before-start", doc, view, link, notice, scale);
-  return running(doc, view, link, notice, scale);
+  return running(doc, view, link, notice, scale, input.playlistNotLoaded === true);
 }
 
 function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreScale) {
@@ -69,7 +69,7 @@ function outside(kind: "finished" | "before-start", doc: Class, view: View, link
   };
 }
 
-function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale): RoomModel {
+function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded: boolean): RoomModel {
   const iv = doc.intervals[Math.min(view.intervalIndex, doc.intervals.length - 1)];
   const paused = link?.state === "Paused" || view.status === "paused";
   const song = songOf(doc, view, link);
@@ -82,7 +82,7 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
   return {
     kind: "running",
     gel,
-    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice) },
+    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded) },
     clock: clockFor(doc, view, link, paused, song),
     metrics: metricsFor(iv, song, link),
     beat: beatFor(view, link, song),

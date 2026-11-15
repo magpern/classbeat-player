@@ -15,7 +15,7 @@ function fields(file: string, name: string): Map<string, string> {
   const body = src.match(new RegExp(`export interface ${name}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1];
   assert.ok(body, `${name} not found in ${file}`);
   const out = new Map<string, string>();
-  for (const m of body.matchAll(/readonly (\w+):\s*([^;]+);/g)) out.set(m[1], m[2].trim());
+  for (const m of body.matchAll(/readonly (\w+)\??:\s*([^;]+);/g)) out.set(m[1], m[2].trim());
   return out;
 }
 
@@ -39,6 +39,20 @@ describe("the room input follows the player's snapshot", () => {
 
   it("LinkInput is read from LinkView", () => {
     assertCovered(own("LinkInput"), player(join("link", "view.ts"), "LinkView"), "LinkInput");
+  });
+
+  it("every top-level RoomInput field is in the player's RoomFrame, but the page-only ones", () => {
+    // `notice` and `startingPoint` are set by the web player page (/play) only; the player's window never sends them.
+    const WEB_ONLY = new Set(["notice", "startingPoint"]);
+    const frame = player(join("room", "frame.ts"), "RoomFrame");
+    const ours = own("RoomInput");
+    assert.ok(ours.has("playlistNotLoaded"), "RoomInput reads the frame's playlistNotLoaded");
+    for (const [k, type] of ours) {
+      if (WEB_ONLY.has(k)) continue;
+      assert.ok(frame.has(k), `RoomInput.${k} is not a field of RoomFrame`);
+      if (k === "playlistNotLoaded") assert.equal(type, frame.get(k), "playlistNotLoaded: same type");
+    }
+    for (const k of WEB_ONLY) assert.ok(!frame.has(k), `${k} is in RoomFrame now: drop it from the page-only list`);
   });
 
   it("the link states are the player's", () => {
