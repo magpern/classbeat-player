@@ -13,6 +13,8 @@ export const THREE_ALLOWED = [
   "AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial",
   "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3",
 ];
+// guard/ (the run-time check of the render callbacks) also reads `Material`, to recognise a material held by any field.
+export const THREE_GUARD_ALLOWED = [...THREE_ALLOWED, "Material"];
 // The demo (the host) alone builds the three.js renderer and hands it to src/ (src/host.ts).
 export const THREE_DEMO_ALLOWED = [...THREE_ALLOWED, "WebGLRenderer"];
 // 2. The DOM: `document` is not reachable from src/ at all, and `window` only by these members.
@@ -97,7 +99,14 @@ const properties = ["error",
   { object: "Math", property: "random", message: "The rig is deterministic." },
 ];
 const base = { "no-restricted-properties": properties, "no-eval": "error", "no-implied-eval": "error", "no-new-func": "error" };
-const threeImports = (allowed) => ["error", { paths: [{ name: "three", allowImportNames: allowed, message: "That three.js name is not on the allowlist (no audio, no loaders; the renderer is built by the host, not src/)." }] }];
+// src/ imports three.js (the allowlist above), its own siblings, the scene model and the guard's one entry, and nothing else
+// (not tools/, not demo/, not other guard/ files, no package). guard/ imports three.js only.
+export const SRC_IMPORT_PATTERN = "^(?!three$|\\./[A-Za-z0-9-]+\\.ts$|\\.\\./\\.\\./model/src/index\\.ts$|\\.\\./guard/render-callbacks\\.ts$).*$";
+export const GUARD_IMPORT_PATTERN = "^(?!three$).*$";
+const threeImports = (allowed, pattern) => ["error", {
+  paths: [{ name: "three", allowImportNames: allowed, message: "That three.js name is not on the allowlist (no audio, no loaders; the renderer is built by the host, not src/)." }],
+  ...(pattern ? { patterns: [{ regex: pattern, message: "Not on this directory's import allowlist (three.js by name, its siblings, the scene model and guard/render-callbacks.ts for src/; three.js only for guard/)." }] } : {}),
+}];
 
 // The pure modules (light calculations, bursts, the loop, the tokens reader) import no three.js and
 // no DOM, and read no clock.
@@ -113,9 +122,22 @@ export default tseslint.config(
     rules: {
       ...base,
       "no-undef": "error",
-      "no-restricted-imports": threeImports(THREE_ALLOWED),
+      "no-restricted-imports": threeImports(THREE_ALLOWED, SRC_IMPORT_PATTERN),
       "no-restricted-globals": globals([...new Set([...BANNED_GLOBALS, ...SRC_BUILTINS_RESTRICTED]), "document", "location", "history", "screen", "name"], "The scene draws what the model says: no network, storage, worker, audio, image or document."),
       "no-restricted-syntax": srcSyntax,
+    },
+  },
+  {
+    // guard/ names prototypes and the callbacks (the src/ syntax fences would refuse that) and nothing else of the page:
+    // the src/ globals, banned names and three.js allowlist, plus the common syntax fences.
+    files: ["guard/**/*.ts"],
+    languageOptions: { globals: Object.fromEntries(SRC_GLOBALS.map((name) => [name, "readonly"])) },
+    rules: {
+      ...base,
+      "no-undef": "error",
+      "no-restricted-imports": threeImports(THREE_GUARD_ALLOWED, GUARD_IMPORT_PATTERN),
+      "no-restricted-globals": globals([...new Set([...BANNED_GLOBALS, ...SRC_BUILTINS_RESTRICTED]), "document", "location", "history", "screen", "name"], "The guard reads three.js's prototypes and nothing of the page: no network, storage, worker, audio, image or document."),
+      "no-restricted-syntax": ["error", ...common],
     },
   },
   {

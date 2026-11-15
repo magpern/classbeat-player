@@ -13,6 +13,17 @@
 // It runs once, when the rig is built, never per frame. Whatever is added to the scene or given a new
 // material after that needs the same check. Import this module before any module that builds a scene
 // (`src/index.ts` and `src/rig.ts` do, first), so the defaults are captured before anything can change them.
+//
+// The capture is eager and does NOT depend on import order alone. ES modules run depth-first, so with
+// `src/renderer.ts` as the entry (as demo/main.ts uses it) the model, the loop, the bursts, the light
+// calculations and the lookup run before rig.ts reaches this module. That is safe because nothing in
+// src/ can reach a prototype, so nothing there can move a default: lint bans `prototype`, `__proto__`,
+// `constructor`, the callback names (member, literal key and destructured), `Object` reflection and
+// subclasses (eslint.config.js, src/ fences), and src/ may import only three.js by allowlisted names, its
+// siblings, the model and this file's one export. guard/ itself is fenced the same way, so it cannot
+// import tools/. Letting src/ reach a prototype would be a reviewed change of those fences, and this
+// module would then have to be the first import of every entry. test/guard-fence.test.ts loads the
+// renderer.ts entry and shows no default moved.
 
 import { Group, InstancedMesh, Material, Mesh, MeshBasicMaterial, Object3D, Scene, ShaderMaterial } from "three";
 
@@ -20,8 +31,8 @@ const NAMES = ["onBeforeRender", "onAfterRender", "onBeforeCompile", "onBeforeSh
 type Bag = Readonly<Record<string, unknown>>;
 
 const defaultsOf = (prototype: object): Bag => Object.freeze(Object.fromEntries(NAMES.map((name) => [name, (prototype as Bag)[name]])));
-/** three's own defaults, as read from a plain object and a plain material when this module loads. */
-export const DEFAULTS = Object.freeze({ object: defaultsOf(Object3D.prototype), material: defaultsOf(MeshBasicMaterial.prototype) });
+/** three's own defaults, read from a plain object and a plain material when this module loads. Not exported: a test compares against three's own prototypes. */
+const DEFAULTS = Object.freeze({ object: defaultsOf(Object3D.prototype), material: defaultsOf(MeshBasicMaterial.prototype) });
 
 const OBJECT_PROTOTYPES: readonly object[] = Object.freeze([Object3D, Scene, Mesh, InstancedMesh, Group].map((c) => c.prototype as object));
 const MATERIAL_PROTOTYPES: readonly object[] = Object.freeze([MeshBasicMaterial, ShaderMaterial].map((c) => c.prototype as object));
