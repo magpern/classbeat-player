@@ -9,8 +9,8 @@ export interface Tree {
   paths: string[];
 }
 
-import { countMatches, stripComments, stripXmlComments } from "./kotlin_text.js";
-import { listenerShapeProblem, networkLoadsProblem, sessionsProblem } from "./kotlin_shape.js";
+import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
+import { listenerShapeProblem, networkLoadsProblem, readerOrderProblem, sessionsProblem } from "./kotlin_shape.js";
 import { reflectionProblem } from "./reflection_rules.js";
 import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
 
@@ -80,9 +80,11 @@ export function checkTree(tree: Tree): string[] {
     if (both(NETWORK, t, raw)) add("network", p, "uses a network class or a JavaScript bridge");
     if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
     for (const m of raw.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
-    if (/allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(t)) add("webview", p, "opens file access");
-    if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
-    const loads = networkLoadsProblem(t);
+    const views = [t, liteText(raw)];
+    if (syntaxProblem(t)) add("syntax", p, syntaxProblem(t)!);
+    if (views.some((x) => /allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(x))) add("webview", p, "opens file access");
+    if (p.endsWith("/SceneActivity.kt") && !views.every((x) => /blockNetworkLoads\s*=\s*true/.test(x))) add("webview", p, "the web view must set blockNetworkLoads = true");
+    const loads = views.map(networkLoadsProblem).find(Boolean);
     if (loads) add("webview", p, loads);
     const reflection = reflectionProblem(t) ?? reflectionProblem(raw);
     if (reflection) add("reflection", p, reflection);
@@ -99,32 +101,37 @@ export function checkTree(tree: Tree): string[] {
 
   // Reads Spotify's session only: filtered to Spotify's package before anything is read.
   // getActiveSessions occurs exactly once in the whole tree (occurrences, not files), in SpotifyReader.kt.
-  const readers = kt.filter(([, t]) => /\bgetActiveSessions\b/.test(t));
-  const calls = kt.reduce((n, [, t]) => n + countMatches(t, /\bgetActiveSessions\b/g), 0);
-  if (calls !== 1 || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls})`);
+  // Counted on the stripped text and on the raw text minus `//` lines: both must say once.
+  const SESSIONS = /\bgetActiveSessions\b/g;
+  const viewsOf = (p: string, t: string) => [t, liteText(tree.files[p]!)];
+  const readers = kt.filter(([p, t]) => viewsOf(p, t).some((x) => countMatches(x, SESSIONS) > 0));
+  const calls = [0, 1].map((i) => kt.reduce((n, [p, t]) => n + countMatches(viewsOf(p, t)[i]!, SESSIONS), 0));
+  if (calls.some((n) => n !== 1) || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls.join(" and ")})`);
   for (const [p, t] of readers) {
-    const used = sessionsProblem(t);
-    if (used) add("filter", p, used);
-    const from = t.indexOf("getActiveSessions");
-    const filter = t.indexOf("spotifyOnly(", from);
-    const firstRead = Math.min(...[".metadata", ".playbackState", "getMetadata", "getPlaybackState"].map((k) => { const i = t.indexOf(k, from); return i < 0 ? Infinity : i; }));
-    if (filter < 0) add("filter", p, "the active sessions are not filtered with spotifyOnly");
-    else if (filter > firstRead) add("filter", p, "metadata or state is read before the Spotify filter");
+    // The shape checks read identifiers, so the second view also drops block comments (their prose names the list), with a plain non-nesting pattern that does not track strings.
+    for (const x of [t, liteText(tree.files[p]!).replace(/\/\*[\s\S]*?\*\//g, " ")]) {
+      const used = sessionsProblem(x) ?? readerOrderProblem(x);
+      if (used) { add("filter", p, used); break; }
+    }
   }
 
   // The build: pinned dependencies from an allowlist, debug signing only, the manifest check in place.
   for (const [p, t] of kts) {
     const raw = tree.files[p]!;
     if (both(SIGNING, t, raw)) add("signing", p, "defines signing");
-    // The build scripts' own comments name `release` and Spotify, so these two stay on the stripped text.
-    if (/\brelease\b/.test(t)) add("signing", p, "defines or names a release build");
-    if (/spotify|media3|exoplayer|bluetooth|okhttp|retrofit|firebase/i.test(t)) add("dependencies", p, "names a forbidden library");
+    // Every code rule runs on the stripped text and on the raw text minus whole-line `//` comments.
+    const views = [t, liteText(raw)];
+    if (syntaxProblem(t)) add("syntax", p, syntaxProblem(t)!);
+    if (views.some((x) => /\brelease\b/.test(x))) add("signing", p, "defines or names a release build");
+    if (views.some((x) => /spotify|media3|exoplayer|bluetooth|okhttp|retrofit|firebase/i.test(x))) add("dependencies", p, "names a forbidden library");
     if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
-    for (const m of t.matchAll(/\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\(\s*"([^"]+)"\s*\)/g)) {
-      if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
+    for (const x of views) {
+      for (const m of x.matchAll(/\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\(\s*"([^"]+)"\s*\)/g)) {
+        if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
+      }
+      for (const m of x.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
     }
-    for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
-    const catalog = catalogProblem(t);
+    const catalog = views.map(catalogProblem).find(Boolean);
     if (catalog) add("dependencies", p, catalog);
   }
   for (const p of tree.paths) if (/\.toml$/i.test(p) && !p.startsWith("tools/")) add("dependencies", p, "a version catalog file is not allowed");
@@ -136,7 +143,7 @@ export function checkTree(tree: Tree): string[] {
 
   // The pure module imports no Android class and no I/O.
   for (const [p, t] of kt) {
-    if (p.startsWith("core/") && /^\s*import\s+(?:android\.|java\.io|java\.nio|java\.net|javax\.)/m.test(t)) add("core", p, "the pure core imports Android or I/O");
+    if (p.startsWith("core/") && [t, liteText(tree.files[p]!)].some((x) => /^\s*import\s+(?:android\.|java\.io|java\.nio|java\.net|javax\.)/m.test(x))) add("core", p, "the pure core imports Android or I/O");
   }
   return v;
 }

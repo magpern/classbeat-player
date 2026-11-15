@@ -31,6 +31,15 @@ export function sessionsProblem(text: string): string | null {
   return null;
 }
 
+/** In the file with getActiveSessions: the Spotify filter comes before any read of metadata or state. */
+export function readerOrderProblem(t: string): string | null {
+  const from = t.indexOf("getActiveSessions");
+  const filter = t.indexOf("spotifyOnly(", from);
+  const firstRead = Math.min(...[".metadata", ".playbackState", "getMetadata", "getPlaybackState"].map((k) => { const i = t.indexOf(k, from); return i < 0 ? Infinity : i; }));
+  if (filter < 0) return "the active sessions are not filtered with spotifyOnly";
+  return filter > firstRead ? "metadata or state is read before the Spotify filter" : null;
+}
+
 /** Every mention of blockNetworkLoads is exactly `blockNetworkLoads = true` ending its statement, or setBlockNetworkLoads(true). */
 export function networkLoadsProblem(text: string): string | null {
   if (!/blocknetworkloads/i.test(text)) return null;

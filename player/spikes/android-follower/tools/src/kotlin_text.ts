@@ -75,6 +75,17 @@ function text(src: string, from: number, raw: boolean): [string, number] {
   return [out, i];
 }
 
+/** The raw text without whole-line `//` comments: the second view every code rule also runs on, since a parser slip in `stripComments` can only hide code from the first. */
+export const liteText = (src: string) => src.replace(/^[ \t]*\/\/.*$/gm, "");
+
+/**
+ * What the stripper cannot be trusted with. In its output a backtick identifier (`val `q"``) can desync it,
+ * and a comment token left in the output sits in a string it believes it is in: the trick that hides code.
+ */
+export const syntaxProblem = (stripped: string): string | null =>
+  /`/.test(stripped) ? "backtick identifiers are not allowed (they can confuse the comment stripper)"
+  : /\/\*|\*\//.test(stripped) ? "a comment token inside a string or stray in the code (it can hide code from the checks)" : null;
+
 export const stripXmlComments = (x: string) => x.replace(/<!--[\s\S]*?-->/g, "");
 
 /** Counts the matches of a global pattern. */
