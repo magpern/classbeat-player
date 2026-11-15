@@ -14,7 +14,8 @@
 // call answers, and a player that hangs or fails only means it is not known to play.
 import { execFile } from "node:child_process";
 import { createCallSlot } from "../core/link/call-slot.ts";
-import { BUSCTL, LINUX_CALLS, LINUX_MAX_OUTPUT_BYTES, LINUX_POLL_MS, LINUX_TIMEOUT_MS, otherPlayerArgs } from "../core/link/linux-calls.ts";
+import { BUSCTL, LINUX_CALLS, LINUX_MAX_OUTPUT_BYTES, LINUX_POLL_MS, LINUX_TIMEOUT_MS, linuxOpenUriArgs, otherPlayerArgs } from "../core/link/linux-calls.ts";
+import type { PlaylistLoader } from "../core/link/playlist.ts";
 import { otherPlayerReading, parseLinuxOutput, parseOtherPlayers } from "../core/link/linux-parse.ts";
 import type { MusicReader } from "../core/link/reader.ts";
 import type { MusicTransport } from "../core/link/transport.ts";
@@ -42,7 +43,7 @@ const systemExec: ExecFileFn = (file, args, options, done) => {
 
 export type LinuxDeps = PollDeps;
 
-export interface LinuxMusic extends MusicReader, MusicTransport {
+export interface LinuxMusic extends MusicReader, MusicTransport, PlaylistLoader {
   readonly kind: "linux";
   setActive(on: boolean): void;
   unavailable(): boolean;
@@ -116,5 +117,18 @@ export function createLinuxMusic(deps: LinuxDeps = {}): LinuxMusic {
     deps.every ?? systemEvery,
   );
 
-  return { kind: "linux", latest: () => other ?? life.latest(), setActive: life.setActive, send: life.send, unavailable: life.unavailable };
+  /**
+   * Start's playlist load, best effort: only while following, and only `OpenUri` on Spotify's own
+   * name with the checked link (linux-calls.ts). An id that is not 22 letters or digits builds no
+   * call and runs nothing. MPRIS answers nothing about the load: a call that went is "asked", and
+   * the first fresh reading tells whether song 1 plays (core/link/playlist-load.ts).
+   */
+  const loadPlaylist: LinuxMusic["loadPlaylist"] = (id, done) => {
+    if (!life.active || life.unavailable()) return done("unsupported");
+    const args = linuxOpenUriArgs(id);
+    if (args === null) return done("failed");
+    call(args, (called) => done(called.out === null ? "failed" : "asked"));
+  };
+
+  return { kind: "linux", latest: () => other ?? life.latest(), setActive: life.setActive, send: life.send, unavailable: life.unavailable, loadPlaylist };
 }

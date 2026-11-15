@@ -72,7 +72,7 @@ def test_every_route_answers_with_the_headers_signed_in_or_not(site: Site) -> No
 
 
 def test_every_response_that_carries_a_token_is_not_stored(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)  # the one kind the email link is open for (ADR 0010, section 7)
     asked = site.first.post("/api/site/sign-in/link", json={"email": EMAIL})
     assert "set-cookie" in asked.headers and asked.headers["cache-control"] == "no-store"
     token = site.ask(site.first, EMAIL)
@@ -133,17 +133,21 @@ def test_a_cross_site_state_change_is_refused_on_every_route(
     ]
     assert len(changing) >= 8
     sent = {k: v for k, v in headers.items() if v is not None}
+    sessions = "SELECT id, token_hash, signed_in_at FROM player.sessions ORDER BY id"
     for method, path in changing:
         signed_in = site.sign_in(EMAIL, site.browser(f"198.51.100.{len(changing)}"))
         # No default Origin here: exactly the headers of the case.
         browser = site.browser(headers={"User-Agent": FIREFOX})
         browser.take_cookies(signed_in)
+        before = site.su.execute(sessions).fetchall()
         refused = browser.request(method, path, json={"email": EMAIL}, headers=sent)
         assert refused.status_code == 403 and refused.json() == {"error": "cross_site_request"}
+        # Nothing was done: every session is still there, as it was, and none was added. (The
+        # sign-ins themselves may pass the account's session cap; that is checked per request.)
+        assert site.su.execute(sessions).fetchall() == before, (method, path)
         site.su.execute("DELETE FROM player.rate_limits")
-    # Nothing was done: no mail beyond the sign-ins, and every session is still there.
-    assert len(site.mailer.sent) == len(changing)
-    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (len(changing),)
+    # And no mail: the sign-ins (tests/sitehelp.py) send none either.
+    assert site.mailer.sent == []
 
 
 def test_a_same_origin_state_change_and_a_read_go_through(site: Site) -> None:

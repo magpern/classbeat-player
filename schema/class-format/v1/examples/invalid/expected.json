@@ -11,7 +11,7 @@
       "/zone_scale/0"
     ]
   ],
-  "schema-strict-refuses-minor-1-1.json": [
+  "schema-strict-refuses-minor-1-3.json": [
     [
       "schema",
       "/format_version"
@@ -363,6 +363,156 @@
     [
       "segment_not_on_interval_boundary",
       "/segments/0/end_ms"
+    ]
+  ],
+  "pattern-length-mismatch.json": [
+    [
+      "pattern_length_mismatch",
+      "/intervals/5/pattern/beats"
+    ]
+  ],
+  "pattern-position-mismatch.json": [
+    [
+      "pattern_position_mismatch",
+      "/intervals/5/position"
+    ]
+  ],
+  "schema-pattern-beats-zero.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/beats/0"
+    ]
+  ],
+  "schema-pattern-beats-over-64.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/beats/1"
+    ]
+  ],
+  "schema-pattern-beats-not-integer.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/beats/1"
+    ]
+  ],
+  "schema-pattern-one-position.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/positions"
+    ]
+  ],
+  "schema-pattern-five-positions.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/positions"
+    ]
+  ],
+  "schema-pattern-unknown-kind.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/kind"
+    ]
+  ],
+  "schema-pattern-start-on-unknown.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/start_on"
+    ]
+  ],
+  "schema-pattern-position-unknown.json": [
+    [
+      "schema",
+      "/intervals/5/pattern/positions/1"
+    ]
+  ],
+  "schema-pattern-in-format-1-0.json": [
+    [
+      "schema",
+      "/intervals/5"
+    ]
+  ],
+  "schema-pattern-on-running-interval.json": [
+    [
+      "schema",
+      "/intervals/5"
+    ]
+  ],
+  "schema-spotify-playlist-malformed.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-in-format-1-1.json": [
+    [
+      "schema",
+      "/music"
+    ]
+  ],
+  "schema-spotify-playlist-in-format-1-0.json": [
+    [
+      "schema",
+      "/music"
+    ]
+  ],
+  "playlist-without-spotify-source.json": [
+    [
+      "playlist_without_spotify_source",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-uri.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-url.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-21-chars.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-23-chars.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-trailing-newline.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "playlist-with-swedebeat-source.json": [
+    [
+      "playlist_without_spotify_source",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-colons-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-quote-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-space-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
     ]
   ]
 }

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .pattern import check_patterns
+
 Violation = tuple[str, str]
 
 RUNNING_MAX_ZONE = 5
@@ -40,6 +42,12 @@ def _check_songs(doc: dict[str, Any], out: list[Violation]) -> None:
         _check_song_points(s, base, out)
     if songs and songs[-1]["end_ms"] != doc["class"]["length_ms"]:
         out.append(("songs_last_end_mismatch", f"/songs/{len(songs) - 1}/end_ms"))
+
+
+def _check_music(doc: dict[str, Any], out: list[Violation]) -> None:
+    music = doc["music"]
+    if "spotify_playlist" in music and music["source"] != "spotify":
+        out.append(("playlist_without_spotify_source", "/music/spotify_playlist"))
 
 
 def _check_points(
@@ -128,9 +136,11 @@ def _check_totals(doc: dict[str, Any], out: list[Violation]) -> None:
 def check_semantics(doc: dict[str, Any]) -> list[Violation]:
     """Return every semantic violation of a schema-valid class document, sorted."""
     out: list[Violation] = []
+    _check_music(doc, out)
     _check_intervals(doc, out)
     _check_songs(doc, out)
     _check_segments(doc, out)
     _check_zones(doc, out)
     _check_totals(doc, out)
+    check_patterns(doc, out)
     return sorted(out)

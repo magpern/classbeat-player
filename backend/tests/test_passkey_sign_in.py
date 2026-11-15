@@ -34,8 +34,8 @@ def _away_from_a_window_edge() -> None:  # pyright: ignore[reportUnusedFunction]
 
 
 def _with_passkey(site: Site, email: str, authenticator: Authenticator) -> Browser:
-    site.allow(email)
-    browser = site.sign_in(email)
+    site.follower(email)
+    browser = site.link_sign_in(email)
     assert register(browser, authenticator).status_code == 201
     return browser
 

@@ -15,6 +15,7 @@ SELECT id, name, created_at, last_used_at
 FROM player.passkeys
 WHERE account_id = %s
 ORDER BY created_at, id
+LIMIT %s
 """
 )
 
@@ -24,6 +25,9 @@ STARTS_LIMIT_HIT: Final[Query] = Query("SELECT player.rate_limit_hit(%s, %s, %s)
 COUNT_PASSKEYS: Final[Query] = Query(
     "SELECT count(*)::int FROM player.passkeys WHERE account_id = %s"
 )
+
+# ADR 0010, section 7: registration is open only for the kinds of own_sign_in_policy.
+ACCOUNT_KIND: Final[Query] = Query("SELECT kind FROM player.accounts WHERE id = %s")
 
 # What the registration options name: the account, and its passkeys to exclude.
 ACCOUNT_USER: Final[Query] = Query(

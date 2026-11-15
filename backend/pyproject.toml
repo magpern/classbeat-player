@@ -14,6 +14,8 @@ dependencies = [
   "webauthn==3.0.1",
   # The live WebSocket (ADR 0002, section 8): the server side uvicorn serves it with.
   "websockets>=15,<17",
+  # Sign in with classbeat (ADR 0010, section 3): the ES256 check of classbeat's ID tokens.
+  "cryptography>=50,<51",
 ]
 
 [tool.uv.sources]

@@ -6,8 +6,8 @@
  */
 
 /**
- * The answer of GET /api/site/me for a site session (ADR 0002, section 4): the signed-in account's own email, as stored (trimmed and lower-cased, at most 254 characters), and nothing else. No other field is allowed.
+ * The answer of GET /api/site/me for a site session (ADR 0002, section 4): the signed-in account's own email, as stored (trimmed and lower-cased, at most 254 characters), and nothing else. The email is null for an account that has none, such as an instructor signed in with classbeat without a verified email (ADR 0010); the field is still required. No other field is allowed.
  */
 export interface MeAnswer {
-  email: string;
+  email: string | null;
 }

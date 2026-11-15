@@ -1,8 +1,10 @@
 """`auth_request_login` does the same lookups and writes for every address (ADR 0002, section 4,
 step 2), counted with the database's own per-transaction statistics.
 
-Whether the address can sign in changes one thing only: an address that has an account gets
-its "link requested" event (section 11). The requester's limits change two, whatever the
+Whether the address can sign in changes one thing only: an address that has a follower gets its
+"link requested" event (section 11). Since ADR 0010, section 7 only a follower is found by its
+email and the allowlist is not read: an instructor, an unlinked account and an allowlisted
+address each do the work of an address with nothing. The requester's limits change two, whatever the
 address: a request over its per-pair limits does not count toward the total per email (section
 10), so it makes one counter write fewer, and a request over any limit cancels no older link
 (section 4, step 3).
@@ -67,7 +69,7 @@ def _request(su: Conn, email: str, browser: bytes) -> bool:
 def _measured(
     su: Conn,
     *,
-    account: bool = False,
+    kind: str | None = None,
     listed: bool = False,
     over: str | None = None,
     older_link: bool = True,
@@ -79,14 +81,17 @@ def _measured(
     """
     email = f"{uuid.uuid4().hex}@example.test"
     browser = _h()
-    if account:
+    if kind is not None:
+        identity = ("https://classbeat.test", email) if kind == "instructor" else (None, None)
         su.execute(
-            "INSERT INTO player.accounts (email, passkey_user_handle) VALUES (%s, %s)",
-            (email, _h()),
+            "INSERT INTO player.accounts "
+            "(kind, email, passkey_user_handle, classbeat_issuer, classbeat_subject) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (kind, email, _h(), *identity),
         )
     if listed:
         su.execute("INSERT INTO player.signup_allowlist (email) VALUES (%s)", (email,))
-    assert _request(su, email, browser if older_link else _h()) is (account or listed)
+    assert _request(su, email, browser if older_link else _h()) is (kind == "follower")
     if over is not None:
         key, hits = {"email": (_email_key(email), 30), "pair": (_pair_key(email), 3)}[over]
         raised = su.execute(
@@ -118,57 +123,57 @@ def _without_the_event(work: Work, account: bool) -> Work:
     }
 
 
+# (kind of the account with the email, or None; on the allowlist). Only a follower can sign in.
 CAN_SIGN_IN = [
-    # (account, listed): cannot, may sign up, has an account, both
-    (False, False),
-    (False, True),
-    (True, False),
-    (True, True),
+    (kind, listed)
+    for kind in (None, "follower", "instructor", "unlinked")
+    for listed in (False, True)
 ]
 
 
 def test_within_the_limits_every_address_gets_the_same_lookups_and_writes(su: Conn) -> None:
     _, unknown = _measured(su)
-    # What is compared is real work: both lookups, three counters, and the older link of the
-    # browser found, deleted and replaced, for an address that cannot sign in too.
+    # What is compared is real work: the lookup, three counters, and the older link of the
+    # browser found, deleted and replaced, for an address that cannot sign in too. The allowlist
+    # is not read (ADR 0010, section 7).
     assert unknown["accounts"] == (1, 0, 0, 0)
-    assert unknown["signup_allowlist"] == (1, 0, 0, 0)
+    assert unknown["signup_allowlist"] == (0, 0, 0, 0)
     assert unknown["login_links"][0] >= 1 and unknown["login_links"][1:] == (1, 0, 1)
     assert unknown["rate_limits"][1:] == (0, 3, 0)
-    for account, listed in CAN_SIGN_IN:
-        mail, work = _measured(su, account=account, listed=listed)
-        assert mail is (account or listed)
-        assert _without_the_event(work, account) == unknown, (account, listed)
+    for kind, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, kind=kind, listed=listed)
+        assert mail is (kind == "follower")
+        assert _without_the_event(work, kind == "follower") == unknown, (kind, listed)
 
 
 def test_over_the_total_per_email_only_the_cancelling_differs(su: Conn) -> None:
     _, within = _measured(su)
-    for account, listed in CAN_SIGN_IN:
-        mail, work = _measured(su, account=account, listed=listed, over="email")
+    for kind, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, kind=kind, listed=listed, over="email")
         assert mail is False
         # Step 3: over its limits a request cancels nothing. The older link is found and left.
-        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (account, listed)
-        work = _without_the_event(work, account)
-        assert {**work, "login_links": within["login_links"]} == within, (account, listed)
+        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (kind, listed)
+        work = _without_the_event(work, kind == "follower")
+        assert {**work, "login_links": within["login_links"]} == within, (kind, listed)
 
 
 def test_over_the_per_pair_limits_it_also_makes_one_counter_write_fewer(su: Conn) -> None:
     _, within = _measured(su)
-    for account, listed in CAN_SIGN_IN:
-        mail, work = _measured(su, account=account, listed=listed, over="pair")
+    for kind, listed in CAN_SIGN_IN:
+        mail, work = _measured(su, kind=kind, listed=listed, over="pair")
         assert mail is False
         # Section 10: what is over its own limits does not count toward the total per email.
-        assert work["rate_limits"][1:] == (0, 2, 0), (account, listed)
+        assert work["rate_limits"][1:] == (0, 2, 0), (kind, listed)
         assert work["rate_limits"][0] < within["rate_limits"][0]
-        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (account, listed)
-        work = _without_the_event(work, account)
+        assert work["login_links"] == (within["login_links"][0], 1, 0, 0), (kind, listed)
+        work = _without_the_event(work, kind == "follower")
         # Nothing else differs.
         same = {"rate_limits": within["rate_limits"], "login_links": within["login_links"]}
-        assert {**work, **same} == within, (account, listed)
+        assert {**work, **same} == within, (kind, listed)
 
 
 def test_the_cancelling_statement_runs_with_no_older_link_to_find(su: Conn) -> None:
     _, with_one = _measured(su)
-    for account, listed in CAN_SIGN_IN:
-        _, none = _measured(su, account=account, listed=listed, older_link=False)
-        assert none["login_links"] == (with_one["login_links"][0], 1, 0, 0), (account, listed)
+    for kind, listed in CAN_SIGN_IN:
+        _, none = _measured(su, kind=kind, listed=listed, older_link=False)
+        assert none["login_links"] == (with_one["login_links"][0], 1, 0, 0), (kind, listed)

@@ -57,7 +57,7 @@ Top level:
 
 | Field | Meaning |
 |---|---|
-| `format_version` | `"MAJOR.MINOR"`, this ADR defines `"1.0"` |
+| `format_version` | `"MAJOR.MINOR"`, this ADR defines `"1.0"`. Note (2026-11-15): minors `"1.1"` (`interval.pattern`, #469) and `"1.2"` (`music.spotify_playlist`, #482) were added under section 7; they are listed in `schema/class-format/README.md` |
 | `class` | `title`, optional `description`, `sport` (`cycling` or `running`), `length_ms` |
 | `music` | `source` (`spotify`, `swedebeat` or `none`), `design_crossfade_ms` (the crossfade the class was designed for, 0 or more), `song_timing` (`measured`, `estimated` or `missing`) |
 | `zone_scale` | The zones this class uses: per zone its number, name, and optional target ranges (`ftp_pct`, `hrmax_pct`, `rpe`, each `[low, high]`) |

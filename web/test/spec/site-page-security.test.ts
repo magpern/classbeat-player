@@ -12,6 +12,8 @@ import { domMetas, domOnlyPolicy, domPolicies } from "../lib/dom-policy.ts";
 import { onlyPolicy, referrerMetas } from "../lib/html-meta.ts";
 import { MARKUP } from "../lib/markup-apis.ts";
 import { reach } from "../lib/site-measure.ts";
+import { navigationProblems } from "../lib/site-navigations.ts";
+import { CLASSBEAT_ORIGIN } from "../lib/site-source-origin.ts";
 import { CHALLENGE_B64, LINK_TOKEN, STATES } from "../lib/site-states.ts";
 import { NOTICES } from "../../src/site/core/sign-in-model.ts";
 import { pageOf } from "../../src/site/core/routes.ts";
@@ -121,6 +123,35 @@ describe("the fake's cross-site refusal (backend `cross_site_refusal`)", () => {
   }
 });
 
+describe("the navigation check (#508 B1)", () => {
+  it("records a navigation to classbeat in `toClassbeat`, and fails a state that does not declare it", async () => {
+    const state = STATES.find((s) => s.name === "account-passkeys");
+    assert.ok(state && state.toClassbeat === undefined && state.leaves === undefined);
+    const site = await reach(browser, { state, width: 390, zoom: 1, ink: false });
+    await settled(site);
+    assert.deepEqual(navigationProblems(state, site), []);
+    await site.page.evaluate((to) => location.assign(to), `${CLASSBEAT_ORIGIN}/oauth/authorize?state=undeclared`);
+    for (let i = 0; i < 200 && site.toClassbeat.length === 0; i += 1) await site.page.waitForTimeout(10);
+    assert.deepEqual(site.toClassbeat, [`${CLASSBEAT_ORIGIN}/oauth/authorize?state=undeclared`]);
+    assert.deepEqual(site.external, [], "a top-level navigation to classbeat is not in `external`");
+    assert.equal(navigationProblems(state, site).length, 1, "an undeclared navigation to classbeat passes the check");
+    // Declared, the same navigation passes; declared but not made, it fails.
+    assert.deepEqual(navigationProblems({ toClassbeat: site.toClassbeat[0] }, site), []);
+    assert.equal(navigationProblems({ toClassbeat: site.toClassbeat[0] }, { left: [], toClassbeat: [] }).length, 1);
+    assert.equal(navigationProblems({}, { left: ["https://source.test/x"], toClassbeat: [] }).length, 1);
+    await site.context.close();
+  });
+
+  it("every state that declares a classbeat navigation answers the classbeat start", () => {
+    const declared = STATES.filter((s) => s.toClassbeat !== undefined);
+    assert.ok(declared.length >= 1);
+    for (const s of declared) {
+      assert.ok(s.toClassbeat?.startsWith(`${CLASSBEAT_ORIGIN}/`), s.name);
+      assert.ok(s.script?.["POST sign-in/classbeat/start"] !== undefined, `${s.name} goes to classbeat without starting a flow`);
+    }
+  });
+});
+
 describe("nothing secret leaves the page, in any state", () => {
   // The router's own replaceState is checked as well: a state opens each address it sends on (#436 N1).
   it("opens every address the router sends on", () => {
@@ -141,6 +172,9 @@ describe("nothing secret leaves the page, in any state", () => {
       assert.deepEqual(site.external, [], "a request to another origin");
       // The linked app's site only by the one navigation the state names, after an approval.
       assert.deepEqual(site.left, state.leaves === undefined ? [] : [state.leaves], "a navigation to the linked app's site");
+      // classbeat only by the one navigation the state names, after "Confirm with classbeat" (#508 B1).
+      assert.deepEqual(site.toClassbeat, state.toClassbeat === undefined ? [] : [state.toClassbeat], "a navigation to classbeat");
+      assert.deepEqual(navigationProblems(state, site), []);
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
       assert.deepEqual(site.crossSite, [], "an API request the backend refuses as cross-site");
       for (const a of site.api) {
@@ -365,6 +399,9 @@ describe("the keyboard (site.md, S8)", () => {
     await site.page.keyboard.press("Enter");
     assert.equal(await site.page.evaluate(() => document.activeElement?.id), "main");
     assert.equal(site.page.url(), `${ORIGIN}/sign-in`);
+    // "Sign in with classbeat" comes first (#511), then the follower group's address field.
+    await site.page.keyboard.press("Tab");
+    assert.equal(await site.page.evaluate(() => document.activeElement?.textContent), "Sign in with classbeat");
     await site.page.keyboard.press("Tab");
     assert.equal(await site.page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.name), "email");
     await site.context.close();

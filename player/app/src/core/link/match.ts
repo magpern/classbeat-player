@@ -30,6 +30,16 @@ export function artistMatches(a: string, b: string): boolean {
 
 const isSpotify = (app: string): boolean => /spotify/i.test(app);
 
+/**
+ * Spotify on macOS reports a playing song's length minus the crossfade setting (paused, or just
+ * after a skip, the real length). So a reported length matches the class's length or the class's
+ * length minus the class's own crossfade, each within the tolerance; nothing wider.
+ */
+export function lengthMatches(reportedMs: number, classMs: number, crossfadeMs: number, toleranceMs: number): boolean {
+  if (Math.abs(reportedMs - classMs) <= toleranceMs) return true;
+  return crossfadeMs > 0 && Math.abs(reportedMs - (classMs - crossfadeMs)) <= toleranceMs;
+}
+
 export function matchCandidates(plan: LinkPlan, obs: Observation, cfg: Pick<LinkConfig, "lengthToleranceMs">): number[] {
   // Another app playing is never part of the class.
   if (obs.app && !isSpotify(obs.app)) return [];
@@ -43,6 +53,6 @@ export function matchCandidates(plan: LinkPlan, obs: Observation, cfg: Pick<Link
   const known = obs.lengthMs != null && obs.lengthMs > 0;
   return plan.songs
     .filter((s) => norm(s.title) === title && artistMatches(s.artist, obs.artist))
-    .filter((s) => !known || Math.abs((obs.lengthMs as number) - s.lengthMs) <= cfg.lengthToleranceMs)
+    .filter((s) => !known || lengthMatches(obs.lengthMs as number, s.lengthMs, plan.plannedCrossfadeMs, cfg.lengthToleranceMs))
     .map((s) => s.index);
 }

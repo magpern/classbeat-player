@@ -1,8 +1,10 @@
 // Account: Passkeys (docs/design/site.md, "Account"; ADR 0002, sections 4 and 6): the list, adding
 // one by the browser's prompt, renaming and removing in place, and the limit of 10. Adding and
 // removing need a recent sign-in: a 403 shows "Confirm it is you" and nothing is sent again by
-// itself. The registration's challenge and attestation never leave net/passkey-add.ts.
-import { outcomeOf } from "../core/account-model.ts";
+// itself. A 403 `passkeys_closed` (ADR 0010, section 7) shows its own plate, never "Confirm it is
+// you", and "Add a passkey" is not offered again on this page; the list stays, to rename and
+// remove. The registration's challenge and attestation never leave net/passkey-add.ts.
+import { accountPlateWords, outcomeOf } from "../core/account-model.ts";
 import { nameOf } from "../core/pairing-model.ts";
 import { afterAdd, afterRename, atLimit, countWords, PASSKEY_WORDS, passkeysOf } from "../core/passkeys-model.ts";
 import type { Passkey } from "../core/passkeys-model.ts";
@@ -35,6 +37,8 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
   let done: Done = null;
   let lastName = "";
   let waitingOnline = false;
+  // The backend said adding is closed for this account: kept in memory for this page only.
+  let closed = false;
 
   const host = {
     env,
@@ -45,7 +49,6 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       focusMessage(main, box);
       if (m.plate?.kind === "offline") enableWhenOnline();
     },
-    readAgain: (m: Messages) => void readAgain(m),
   };
   const busy = (): boolean => mode.kind !== "list" && mode.busy;
 
@@ -84,7 +87,8 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       return draw(".note");
     }
     // Not added, or asked to confirm it is them: back to the list. A fault keeps the form under the plate.
-    if (next.plate.kind === "not-added" || next.plate.kind === "confirm") mode = LIST;
+    if (next.plate.kind === "passkeys-closed") closed = true;
+    if (next.plate.kind === "not-added" || next.plate.kind === "confirm" || closed) mode = LIST;
     host.set(plateOnly(next.plate));
   }
 
@@ -202,14 +206,18 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
     }
     const plain = !hasMessage(messages) && done === null && mode.kind === "list";
     if (plain || !list.length) out.push(p(PASSKEY_WORDS.intro));
-    if (!list.length) out.push(p(PASSKEY_WORDS.none));
+    if (closed) {
+      // Once the plate has gone (after a rename or a removal), the page still says why there is no "Add a passkey".
+      const w = accountPlateWords({ kind: "passkeys-closed" });
+      if (messages.plate?.kind !== "passkeys-closed") out.push(p(`${w.head}. ${w.detail}`));
+    } else if (!list.length) out.push(p(PASSKEY_WORDS.none));
     const full = atLimit(list.length);
-    const limit = full ? note(PASSKEY_WORDS.limit, PASSKEY_WORDS.limitDetail) : null;
+    const limit = full && !closed ? note(PASSKEY_WORDS.limit, PASSKEY_WORDS.limitDetail) : null;
     if (limit) {
       limit.id = uid("limit");
       out.push(limit);
     }
-    if (canAdd && !notAdded) {
+    if (canAdd && !notAdded && !closed) {
       // Offline, the plate "You are offline" is the reason the button is off (site.md, Errors, Offline).
       const offline = messages.plate?.kind === "offline" ? idOfPlate(out, "list-offline") : null;
       const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full || offline !== null, onPress: openAdd });

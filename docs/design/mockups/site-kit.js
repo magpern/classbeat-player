@@ -16,7 +16,9 @@ const KIND = {
 // A text leaf. lines: how many lines it may take before the checker calls it a problem.
 function T(kind, text, lines = 6) {
   const [tier, min] = KIND[kind];
-  return `<span data-tier="${tier}" data-min-cap="${min}" data-lines="${lines}">${esc(text)}</span>`;
+  // A real ellipsis stays joined to the word before it, so a wrapping label never leaves "…" alone on a line.
+  const body = esc(text).replace(/(\S+…)$/, '<span class="nw">$1</span>');
+  return `<span data-tier="${tier}" data-min-cap="${min}" data-lines="${lines}">${body}</span>`;
 }
 
 const h1 = (text, count) => `<h1>${T('h1', text, 3)}${count ? `<span class="count">${T('small', count, 2)}</span>` : ''}</h1>`;

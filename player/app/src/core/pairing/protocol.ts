@@ -30,6 +30,15 @@ export function shownText(v: unknown, max: number): string | null {
   return kept.length >= 1 && kept.length <= max ? kept : null;
 }
 
+/**
+ * The account's email as the server gives it: an address, or `null` for an account that has none
+ * (ADR 0010). `undefined` for anything else: a missing field, a non-string, an empty address.
+ */
+export function accountEmail(v: unknown): string | null | undefined {
+  if (v === null) return null;
+  return shownText(v, MAX_EMAIL) ?? undefined;
+}
+
 export type StartAnswer =
   | { readonly kind: "started"; readonly deviceCode: string; readonly userCode: string; readonly page: string; readonly expiresInMs: number; readonly intervalMs: number }
   | { readonly kind: "too_many" | "unreachable" | "unexpected" };
@@ -51,7 +60,7 @@ export function parseStartAnswer(a: HttpAnswer, origin: string): StartAnswer {
 }
 
 export type PollAnswer =
-  | { readonly kind: "ok"; readonly token: string; readonly email: string }
+  | { readonly kind: "ok"; readonly token: string; readonly email: string | null }
   | { readonly kind: "authorization_pending" | "slow_down" | "access_denied" | "expired_token" | "unexpected" }
   /** No answer, a server fault or a rate limit: ask again later. */
   | { readonly kind: "retry"; readonly afterMs: number | null };
@@ -67,8 +76,8 @@ export function parsePollAnswer(a: HttpAnswer): PollAnswer {
   }
   if (a.status !== 200) return { kind: "unexpected" };
   const token = field(a.body, "device_token");
-  const email = shownText(field(a.body, "email"), MAX_EMAIL);
-  return isDeviceToken(token) && email !== null ? { kind: "ok", token, email } : { kind: "unexpected" };
+  const email = accountEmail(field(a.body, "email"));
+  return isDeviceToken(token) && email !== undefined ? { kind: "ok", token, email } : { kind: "unexpected" };
 }
 
 /** `GET /api/player/device`: the token works, is gone for good, ran out, or nothing is known. */

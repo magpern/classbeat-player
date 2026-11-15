@@ -51,7 +51,7 @@ def _nothing_of_the_mail(logged: str, mail: Mail) -> None:
 
 
 def test_send_gets_the_time_limit(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     assert site.ask(site.first, EMAIL) is not None
     assert site.mailer.timeouts == [SEND_TIMEOUT_SECONDS]
     assert 0 < SEND_TIMEOUT_SECONDS <= 30
@@ -68,7 +68,7 @@ def test_a_send_that_fails_is_logged_without_anything_of_the_mail(
     caplog.set_level(logging.DEBUG)
     mailer = FailingMailer(error)
     _use(site, mailer)
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     # The browser raises whatever the app lets out: the failure stays inside.
     accepted = site.first.post(LINK, json={"email": EMAIL})
     assert accepted.status_code == 200 and accepted.json() == {"status": "accepted"}
@@ -97,7 +97,7 @@ def test_the_failing_send_runs_after_the_response_has_been_sent(site: Site) -> N
             raise RuntimeError(mail.body)
 
     _use(site, Late())
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     body = json.dumps({"email": EMAIL}).encode()
 
     async def receive() -> dict[str, object]:

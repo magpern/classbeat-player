@@ -20,6 +20,12 @@ from player_backend.db.context import AccountContext
 from player_backend.db.executor import DatabaseError, Row
 from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import passkeys as q
+from player_backend.passkey_list_policy import (
+    LIST_READ_MAX,
+    PasskeysOverCap,
+    passkeys_open,
+    within_cap,
+)
 from player_backend.passkey_policy import (
     ADDITIONS_LOCK_WAIT,
     PASSKEYS_MAX,
@@ -33,8 +39,8 @@ from player_backend.passkey_policy import (
 ADDED = "passkey.added"
 REMOVED = "passkey.removed"
 
-type AddOutcome = Literal["refused", "too_many", "exists", "busy"]
-type StartRefusal = Literal["limited", "too_many"]
+type AddOutcome = Literal["closed", "refused", "too_many", "exists", "busy"]
+type StartRefusal = Literal["closed", "limited", "too_many"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,14 @@ class PasskeyInfo:
     name: str
     created_at: datetime
     last_used_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PasskeyList:
+    """The account's passkeys, the oldest first, and whether its kind may add one."""
+
+    passkeys: list[PasskeyInfo]
+    can_add: bool
 
 
 @dataclass(frozen=True)
@@ -89,9 +103,19 @@ def lock_additions(ctx: AccountContext) -> bool:
     return True
 
 
-def list_passkeys(ctx: AccountContext) -> list[PasskeyInfo]:
-    """The account's passkeys, the oldest first."""
-    return [_info(row) for row in ctx.db.rows(q.LIST_PASSKEYS, (ctx.account_id,))]
+def registration_open(ctx: AccountContext) -> bool:
+    """Whether the account's kind may register a passkey (ADR 0010, section 7)."""
+    return passkeys_open(ctx.db.rows(q.ACCOUNT_KIND, (ctx.account_id,)))
+
+
+def list_passkeys(ctx: AccountContext) -> PasskeyList:
+    """The account's passkeys, the oldest first, and `can_add`: the very rule registration
+    refuses with (`registration_open`). Raises `PasskeysOverCap` when the account holds more
+    than the cap, a data fault (passkey_list_policy.py): never a partial list."""
+    rows = ctx.db.rows(q.LIST_PASSKEYS, (ctx.account_id, LIST_READ_MAX))
+    if not within_cap(len(rows)):
+        raise PasskeysOverCap
+    return PasskeyList([_info(row) for row in rows], registration_open(ctx))
 
 
 def start_registration(
@@ -100,10 +124,13 @@ def start_registration(
     """Count one registration start for the account, then store a registration challenge for
     this session, replacing its older one.
 
-    Nothing but the count is stored when the account is over its limit of starts (`limited`,
-    section 10) or holds its 10 passkeys already (`too_many`). The caller returns these
-    refusals rather than raising them: raising would roll the count back.
+    Nothing at all is stored for an account whose kind is closed to passkeys (`closed`, ADR
+    0010, section 7). Nothing but the count is stored when the account is over its limit of
+    starts (`limited`, section 10) or holds its 10 passkeys already (`too_many`). The caller
+    returns these refusals rather than raising them: raising would roll the count back.
     """
+    if not registration_open(ctx):
+        return "closed"
     limited = ctx.db.rows(
         q.STARTS_LIMIT_HIT, (registration_starts_key(ctx.account_id), STARTS_WINDOW, STARTS_MAX)
     )
@@ -143,8 +170,11 @@ def finish_registration(
     raising it: raising would roll the use back. `exists` when any account holds the
     credential id already. `busy` when the wait for the account's additions lock ran out
     (#158): nothing is added, and the caller raises it, so that the use is rolled back too and
-    the same answer can be sent again.
+    the same answer can be sent again. `closed` for an account whose kind is closed to
+    passkeys (ADR 0010, section 7), before anything is used up or added.
     """
+    if not registration_open(ctx):
+        return "closed"
     if challenge_hash is None:
         return "refused"
     used = ctx.db.rows(q.USE_REGISTRATION, (ctx.account_id, ctx.credential_id, challenge_hash))

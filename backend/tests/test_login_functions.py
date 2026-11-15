@@ -29,10 +29,11 @@ def _one(conn: Conn, statement: LiteralString, params: tuple[object, ...] = ()) 
 
 
 def _account(su: Conn, email: str = EMAIL) -> uuid.UUID:
+    """A follower: the one kind the email link is open for (ADR 0010, section 7)."""
     found = _one(
         su,
-        "INSERT INTO player.accounts (email, passkey_user_handle) "
-        "VALUES (%s, decode(md5(%s) || md5(%s || 'x'), 'hex')) RETURNING id",
+        "INSERT INTO player.accounts (kind, email, passkey_user_handle) "
+        "VALUES ('follower', %s, decode(md5(%s) || md5(%s || 'x'), 'hex')) RETURNING id",
         (email, email, email),
     )
     assert isinstance(found, uuid.UUID)

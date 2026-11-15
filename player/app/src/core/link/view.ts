@@ -34,12 +34,14 @@ export interface LinkView {
   readonly crossfadeDiffers: boolean;
   /** Rule 7: time left follows the measurement. */
   readonly classRemainingMs: number;
+  /** The class names a playlist and Start could not load it in the music app (playlist-load.ts). */
+  readonly playlistNotLoaded: boolean;
 }
 
 /** A measured crossfade this close to the planned one is not worth a remark. */
 export const CROSSFADE_DIFF_MS = 1000;
 
-export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean, unavailable = false, noReading: NoReadingReason | null = null): LinkView {
+export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, lengthMs: number, now: number, available: boolean, unavailable = false, playlistNotLoaded = false, noReading: NoReadingReason | null = null): LinkView {
   const live = l.announce !== null && now <= l.announce.until;
   const holdRemaining = l.held && l.holdUntil !== null ? Math.max(0, l.holdUntil - now) : null;
   const measured = l.measuredCrossfadeMs;
@@ -69,5 +71,6 @@ export function linkViewAt(l: LinkModel, clock: ClockState, plan: LinkPlan, leng
       measuredCrossfadeMs: measured,
       holdRemainingMs: holdRemaining,
     }),
+    playlistNotLoaded,
   };
 }

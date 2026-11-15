@@ -8,23 +8,34 @@ after every test. Tokens are whatever the app made at run time.
 from __future__ import annotations
 
 import asyncio
+import secrets
+import time
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import cast
 
 import httpx
 import psycopg
 from fastapi import FastAPI
 
 from player_backend.app import create_app
-from player_backend.client_policy import Network
+from player_backend.classbeat_client import ClassbeatClient
+from player_backend.classbeat_policy import Identity
+from player_backend.client_policy import Network, address_hash, client_address, client_info
+from player_backend.db import classbeat, site_sessions
 from player_backend.live.recheck import RecheckTiming
 from player_backend.mail import Mail
 from player_backend.settings import Settings
+from player_backend.site.state import SiteState
 from player_backend.source_policy import KnownSource
+from player_backend.token_issue import new_token
+from player_backend.token_policy import token_hash
 from tests.dbhelp import Conn
 
 ORIGIN = "https://player.test"
+# classbeat as the tests' sign-in provider (ADR 0010): a made-up address, never contacted.
+ISSUER = "https://classbeat.test"
 ADDRESS = "203.0.113.7"
 SESSION_COOKIE = "__Host-cbp_session"
 LOGIN_COOKIE = "__Host-cbp_login"
@@ -35,7 +46,8 @@ SOURCE = KnownSource("classbeat", "classbeat", frozenset({"https://classbeat.tes
 
 _CLEAN = (
     "TRUNCATE player.accounts, player.login_links, player.login_challenges, player.pairings, "
-    "player.source_link_codes, player.rate_limits, player.signup_allowlist CASCADE"
+    "player.source_link_codes, player.rate_limits, player.signup_allowlist, "
+    "player.classbeat_sign_ins, player.classbeat_event_ids CASCADE"
 )
 
 
@@ -65,6 +77,8 @@ class Browser:
             app=app, client=(address, 40000), raise_app_exceptions=raise_errors
         )
         self._loop = loop
+        self.address = address
+        self.user_agent = headers.get("User-Agent")
         self._client = httpx.AsyncClient(transport=transport, base_url=ORIGIN, headers=headers)
 
     @property
@@ -143,7 +157,45 @@ class Site:
         return link_token(new[0])
 
     def sign_in(self, email: str, browser: Browser | None = None) -> Browser:
-        """A browser signed in to `email` (on the allowlist, or with an account already)."""
+        """A browser signed in to `email` as an instructor (ADR 0010, sections 4 and 5): on the
+        allowlist, or an instructor already, with the subject `subject_of(email)`.
+
+        Made by the call the classbeat callback makes once it has checked the ID token
+        (`db.classbeat.complete`), on the app's own pool; the browser's earlier session is ended
+        as the callback ends it. The whole flow, with the fake classbeat, is tested in
+        tests/test_classbeat_sign_in.py.
+        """
+        browser = browser or self.browser()
+        state = cast(SiteState, self.app.state.site)
+        address = client_address(browser.address, None, ())
+        info = client_info(address, browser.user_agent)
+        token = new_token("ses")
+        outcome = classbeat.complete(
+            state.pool,
+            identity=Identity(ISSUER, subject_of(email), email, int(time.time())),
+            session_hash=token_hash(token),
+            address_hash=address_hash(address),
+            client=info,
+        )
+        assert outcome == "signed_in", outcome
+        held = browser.cookies.get(SESSION_COOKIE)
+        if held is not None:
+            site_sessions.end_asking_session(state.pool, token_hash(held), info)
+        browser.cookies.set(SESSION_COOKIE, token, domain="player.test")
+        return browser
+
+    def follower(self, email: str) -> None:
+        """An account of kind `follower`, the one kind the email link and passkeys are open
+        for (ADR 0010, section 7). No function makes one yet, so the tests' superuser does,
+        to test the code behind the refusal."""
+        self.su.execute(
+            "INSERT INTO player.accounts (kind, email, passkey_user_handle) "
+            "VALUES ('follower', %s, %s)",
+            (email, secrets.token_bytes(32)),
+        )
+
+    def link_sign_in(self, email: str, browser: Browser | None = None) -> Browser:
+        """A browser signed in to the follower `email` by the email link (ADR 0002, section 4)."""
         browser = browser or self.browser()
         token = self.ask(browser, email)
         assert token is not None
@@ -159,6 +211,11 @@ class Site:
             (email,),
         ).fetchall()
         return [(str(event), detail) for event, detail in found]
+
+
+def subject_of(email: str) -> str:
+    """The classbeat subject of the tests' instructor with `email`: one per email."""
+    return "subject-" + email
 
 
 def link_token(mail: Mail) -> str:
@@ -177,16 +234,20 @@ def running_site(
     proxies: tuple[Network, ...] = (),
     live_recheck: RecheckTiming | None = None,
     live_default: bool = False,
+    classbeat: ClassbeatClient | None = None,
 ) -> Generator[Site]:
     """The app under test. Without `live_recheck` it runs no live re-check loop: a test that
     needs one passes its timing (tests/test_live_recheck.py). `live_default` builds the app as
-    production does, with `create_app`'s own default (the 30-second loop)."""
+    production does, with `create_app`'s own default (the 30-second loop). `classbeat` is the
+    sign-in provider's client, over a fake transport (tests/classbeathelp.py)."""
     mailer = RecordingMailer()
     settings = Settings(
         database_url=app_url, site_origin=ORIGIN, trusted_proxies=proxies, sources=(SOURCE,)
     )
     app = (
-        create_app(settings, mailer) if live_default else create_app(settings, mailer, live_recheck)
+        create_app(settings, mailer, classbeat=classbeat)
+        if live_default
+        else create_app(settings, mailer, live_recheck, classbeat=classbeat)
     )
     loop = asyncio.new_event_loop()
     started = app.router.lifespan_context(app)  # the app's start and stop: the pool

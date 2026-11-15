@@ -26,8 +26,8 @@ REFUSED = {"error": "passkey_refused"}
 
 
 def _signed_in(site: Site, email: str = A) -> Browser:
-    site.allow(email)
-    return site.sign_in(email)
+    site.follower(email)
+    return site.link_sign_in(email)
 
 
 def _rows(site: Site, email: str) -> list[tuple[object, ...]]:
@@ -148,7 +148,7 @@ def test_the_registration_challenge_is_single_use_and_the_sessions_own(site: Sit
     assert replayed.status_code == 400 and replayed.json() == REFUSED
 
     # Another session of the same account cannot use this session's challenge.
-    second = site.sign_in(A, site.browser())
+    second = site.link_sign_in(A, site.browser())
     other = Authenticator()
     theirs = other.create(options_of(browser.post(OPTIONS)))
     assert second.post(PASSKEYS, json={"name": "Key", "credential": theirs}).status_code == 400
@@ -218,7 +218,7 @@ def test_at_most_ten_passkeys_per_account(site: Site) -> None:
         assert register(browser, Authenticator(), f"Key {n}").status_code == 201
     pending = Authenticator().create(options_of(browser.post(OPTIONS)))
     # The tenth is added from another session while this one's challenge waits.
-    other = site.sign_in(A, site.browser())
+    other = site.link_sign_in(A, site.browser())
     assert register(other, Authenticator(), "Key 9").status_code == 201
     full = browser.post(PASSKEYS, json={"name": "Key 10", "credential": pending})
     assert full.status_code == 409 and full.json() == {"error": "too_many_passkeys"}

@@ -177,10 +177,12 @@ const src = (path: string): string => code(sources.find((s) => s.path === path)?
 test("the calls are constants: no template text, no joining with data, and one place names busctl and the bus", () => {
   const calls = src("core/link/linux-calls.ts");
   assert.doesNotMatch(calls, /`|\$\{|\+|\.concat\(|\.replace\(|\.join\(|\.push\(|\.map\(/);
-  // The only spreading is of the frozen constant lists. The one value that is not a constant is
-  // another player's bus name, checked where it is used (test/unit/linux-others.test.ts).
-  assert.deepEqual([...calls.matchAll(/\.\.\.(\w+)/g)].map((m) => m[1]), ["CALL", "BASE", "GET_ALL", "BASE", "BASE", "BASE", "CALL", "CALL", "GET_ALL"]);
+  // The only spreading is of the frozen constant lists. The values that are not constants are
+  // another player's bus name, checked where it is used (test/unit/linux-others.test.ts), and
+  // Start's playlist link, built only by playlistUri from a re-checked id (test/unit/playlist-edge.test.ts).
+  assert.deepEqual([...calls.matchAll(/\.\.\.(\w+)/g)].map((m) => m[1]), ["CALL", "BASE", "GET_ALL", "BASE", "BASE", "BASE", "CALL", "CALL", "GET_ALL", "BASE"]);
   assert.match(calls, /return isOtherPlayer\(name\) \? Object\.freeze\(\[\.\.\.CALL, name, PATH, \.\.\.GET_ALL\]\) : null;/);
+  assert.match(calls, /const uri = playlistUri\(id\);\n {2}return uri === null \? null : Object\.freeze\(\[\.\.\.BASE, PLAYER, "OpenUri", "s", uri\]\);/);
   const namers = sources.filter((s) => /busctl"|org\.mpris|org\.freedesktop|--user|--auto-start|dbus/i.test(code(s.text))).map((s) => s.path);
   assert.deepEqual(namers, ["core/link/linux-calls.ts"]);
   assert.equal(calls.match(/org\.mpris\.MediaPlayer2\.\w+/g)?.join(), "org.mpris.MediaPlayer2.spotify,org.mpris.MediaPlayer2.Player");

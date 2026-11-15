@@ -13,5 +13,6 @@ class MeAnswer(BaseModel):
         extra='forbid',
     )
     email: Annotated[
-        str, Field(max_length=254, min_length=3, pattern='^[^\\sA-Z]+@[^@\\sA-Z]+$')
+        str | None,
+        Field(max_length=254, min_length=3, pattern='^[^\\sA-Z]+@[^@\\sA-Z]+$'),
     ]

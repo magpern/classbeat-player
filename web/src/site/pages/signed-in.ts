@@ -22,8 +22,6 @@ export interface SignedInEnv {
   readonly signedOut: () => void;
   /** The account was deleted: Sign in, with "Your account was deleted". */
   readonly deleted: () => void;
-  /** "Confirm it is you" by email: Sign in, which comes back to this page afterwards. */
-  readonly confirmByLink: () => void;
 }
 
 export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedInEnv, view?: View): void {
@@ -65,7 +63,7 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
           break;
         }
         // A page without a view: a refused first request (403, 404 and the like) is the server fault,
-        // also on a page that only reads `sessions` to know the person is signed in (/pair, Your data).
+        // also on a page that only reads `sessions` to know the person is signed in (/pair), and on Your data (`me`).
         serverFault(main, () => void load());
         break;
       default:

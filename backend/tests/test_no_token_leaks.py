@@ -26,7 +26,7 @@ def _flow(site: Site) -> tuple[list[str], list[str]]:
         response = browser.request(method, path, json=json)
         urls.append(str(response.request.url))
 
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     browser, other = site.browser(), site.browser("198.51.100.3")
     call(browser, "POST", "/api/site/sign-in/link", json={"email": EMAIL})
     link = link_token(site.mailer.sent[-1])
@@ -73,7 +73,7 @@ def test_no_token_or_hash_reaches_a_log_an_event_or_a_url(
 
 
 def test_the_mail_holds_the_token_in_the_fragment_and_is_never_shown(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     token = site.ask(site.first, EMAIL)
     assert token is not None
     (mail,) = site.mailer.sent

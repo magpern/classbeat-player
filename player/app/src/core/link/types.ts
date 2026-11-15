@@ -43,29 +43,8 @@ export interface LinkPlan {
   readonly manualOnly: boolean;
 }
 
-export interface LinkConfig {
-  /** Readings older than this (by `seenAt`) are stale: coasting is entered within 3 s. */
-  readonly staleMs: number;
-  /** Backward corrections up to this are smoothed out (the measuring error). */
-  readonly backwardToleranceMs: number;
-  /** A same-song jump larger than this is reported as a seek. */
-  readonly seekMs: number;
-  /** A re-lock correction larger than this is announced, with an undo. */
-  readonly announceMs: number;
-  /** How long an announcement and its undo stay available. */
-  readonly undoWindowMs: number;
-  /** A reader's length may differ this much from the class's song length. */
-  readonly lengthToleranceMs: number;
-}
-
-export const DEFAULT_LINK_CONFIG: LinkConfig = {
-  staleMs: 2500,
-  backwardToleranceMs: 500,
-  seekMs: 1500,
-  announceMs: 5000,
-  undoWindowMs: 30_000,
-  lengthToleranceMs: 2500,
-};
+export type { LinkConfig } from "./config.ts";
+export { DEFAULT_LINK_CONFIG } from "./config.ts";
 
 /** The states in which the clock follows the music's own position. */
 export const FOLLOWING: readonly LinkStateName[] = ["Locked", "Paused", "Ambiguous"];
@@ -105,6 +84,10 @@ export interface LinkModel {
   /** The last unambiguous reading, for measuring the crossfade at a song change. */
   readonly lastPlayed: { readonly songIndex: number; readonly obs: Observation } | null;
   readonly measuredCrossfadeMs: number | null;
+  /** The last reading that was applied; a held torn reading never is (torn.ts). */
+  readonly applied: Observation | null;
+  /** The torn reading being held, and since when; a different reading decides (torn.ts). */
+  readonly tornHeld: { readonly obs: Observation; readonly since: number } | null;
 }
 
 export type LinkEvent =
@@ -123,7 +106,8 @@ export type LinkEvent =
   | "undo_unavailable"
   | "relink"
   | "manual"
-  | "pick";
+  | "pick"
+  | "torn_hold";
 
 export function initialLink(following: boolean): LinkModel {
   return {
@@ -142,5 +126,7 @@ export function initialLink(following: boolean): LinkModel {
     undo: null,
     lastPlayed: null,
     measuredCrossfadeMs: null,
+    applied: null,
+    tornHeld: null,
   };
 }

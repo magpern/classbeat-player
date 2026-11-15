@@ -28,6 +28,9 @@ CLOSED_TABLES = frozenset(
         "source_link_codes",
         "rate_limits",
         "signup_allowlist",
+        # ADR 0010, section 9 (#481).
+        "classbeat_sign_ins",
+        "classbeat_event_ids",
     }
 )
 
@@ -54,6 +57,13 @@ SECURITY_DEFINER_FUNCTIONS = frozenset(
         "auth_exchange_link_code",
         "rate_limit_hit",
         "auth_purge_expired",
+        # ADR 0010, section 9 (#481).
+        "auth_start_classbeat",
+        "auth_take_classbeat",
+        "auth_complete_classbeat",
+        "auth_reauth_classbeat",
+        # ADR 0010, section 8 (#496).
+        "auth_classbeat_event",
     }
 )
 
@@ -91,12 +101,16 @@ AUTH_TABLE_GRANTS: TableGrants = {
     "source_link_codes": _ALL,
     "rate_limits": _ALL,
     "signup_allowlist": _g("SELECT"),
-    "accounts": _g("SELECT", "INSERT"),
+    # DELETE: ADR 0010, section 9, for classbeat's `account-deleted` event (#496).
+    "accounts": _g("SELECT", "INSERT", "DELETE"),
     "sessions": _g("SELECT", "INSERT", "DELETE"),
     "devices": _g("SELECT", "INSERT", "DELETE"),
     "source_links": _g("SELECT", "INSERT"),
     "passkeys": _g("SELECT"),
     "audit_events": _g("INSERT", "DELETE"),
+    # ADR 0010, section 9 (#481).
+    "classbeat_sign_ins": _ALL,
+    "classbeat_event_ids": _ALL,
 }
 AUTH_COLUMN_GRANTS: ColumnGrants = {
     ("sessions", "last_used_at"): _g("UPDATE"),
@@ -106,4 +120,8 @@ AUTH_COLUMN_GRANTS: ColumnGrants = {
     ("passkeys", "last_used_at"): _g("UPDATE"),
     # Beyond the ADR's table, for the retention purge (review note on #8; flagged in the PR).
     ("audit_events", "occurred_at"): _g("SELECT"),
+    # ADR 0010, section 9 (#481).
+    ("accounts", "email"): _g("UPDATE"),
+    ("signup_allowlist", "bound_issuer"): _g("UPDATE"),
+    ("signup_allowlist", "bound_subject"): _g("UPDATE"),
 }

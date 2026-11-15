@@ -5,6 +5,7 @@
 import type { Page } from "playwright-core";
 import type { Script } from "./site-fake.ts";
 import type { State } from "./site-states.ts";
+import { CLASSBEAT_ORIGIN } from "./site-source-origin.ts";
 
 const b64 = (bytes: string | number[]): string => Buffer.from(bytes as string).toString("base64url");
 const range = (from: number): number[] => Array.from({ length: 32 }, (_, i) => from + i);
@@ -14,8 +15,6 @@ export const REG_CHALLENGE_BYTES = range(32);
 export const REG_CHALLENGE = b64(REG_CHALLENGE_BYTES);
 export const USER_HANDLE_BYTES = range(96);
 export const USER_HANDLE = b64(USER_HANDLE_BYTES);
-/** The sign-in challenge of "Use a passkey" (site-states.ts, PASSKEY_OPTIONS), as bytes. */
-export const SIGN_IN_CHALLENGE_BYTES = range(0);
 
 /** The credential the stand-in makes (site-passkey.ts, `create`), as the page sends it. */
 export const NEW_CREDENTIAL = {
@@ -24,8 +23,6 @@ export const NEW_CREDENTIAL = {
   clientDataJSON: b64('{"type":"webauthn.create","n":"cdj-5e"}'),
   attestationObject: b64("attestation-object-3c"),
 } as const;
-/** The assertion the stand-in gives (site-passkey.ts, `get`), as the page sends it. */
-export const ASSERTION = { rawId: b64("cred-1"), clientDataJSON: b64('{"type":"webauthn.get"}'), authenticatorData: b64("auth"), signature: b64("sig") } as const;
 
 export const REG_OPTIONS = {
   rp: { name: "Class player", id: "site.test" },
@@ -37,7 +34,6 @@ export const REG_OPTIONS = {
   authenticatorSelection: { residentKey: "required", requireResidentKey: true, userVerification: "required" },
   attestation: "none",
 } as const;
-const SIGN_IN_OPTIONS = { challenge: b64(SIGN_IN_CHALLENGE_BYTES), timeout: 300000, rpId: "site.test", allowCredentials: [], userVerification: "required" };
 
 export const SESSIONS = [
   { id: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", browser: "Firefox", created_at: "2026-11-12T08:00:00+00:00", last_used_at: "2026-11-13T09:55:00+00:00", current: true },
@@ -55,7 +51,12 @@ export const TEN = Array.from({ length: 10 }, (_, i) => ({ ...PASSKEYS[i % 3], i
 export const SESSIONS_LISTED: Script = { "GET sessions": { status: 200, body: { sessions: SESSIONS } } };
 export const PASSKEYS_LISTED: Script = { "GET passkeys": { status: 200, body: { passkeys: PASSKEYS } } };
 export const RECENT = { status: 403, body: { error: "recent_sign_in_required" } } as const;
+/** Adding a passkey is closed for every account kind there is today (ADR 0010, section 7). */
+export const CLOSED = { status: 403, body: { error: "passkeys_closed" } } as const;
+/** classbeat's authorize address, as `POST sign-in/classbeat/start` answers it (ADR 0010, section 2). */
+export const AUTHORIZE = `${CLASSBEAT_ORIGIN}/oauth/authorize?response_type=code&client_id=player&state=st-1&prompt=login`;
 const regOptions: Script = { "POST passkeys/options": { status: 200, body: REG_OPTIONS } };
+const START = "POST sign-in/classbeat/start";
 
 const press = (name: string) => async (page: Page): Promise<void> => {
   await page.getByRole("button", { name, exact: true }).first().click();
@@ -71,7 +72,8 @@ const endSecond = async (page: Page): Promise<void> => {
   await page.locator(`[data-session="${SESSIONS[1].id}"]`).click();
 };
 const endAll = then(press("Sign out everywhere"), async (page) => void (await page.locator(".ac-panel").getByRole("button", { name: "Sign out everywhere" }).click()));
-const confirmByPasskey = then(addAs("Tablet"), press("Use a passkey"));
+const confirmByClassbeat = then(addAs("Tablet"), press("Confirm with classbeat"));
+const removeFirst = then(press("Remove"), press("Remove passkey"));
 const p = (state: State): State => ({ clock: "day", ...state });
 
 export const ACCOUNT_STATES: readonly State[] = [
@@ -95,14 +97,15 @@ export const ACCOUNT_STATES: readonly State[] = [
   p({ name: "passkey-removed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, [`DELETE passkeys/${PASSKEYS[0].id}`]: { status: 204 } }, steps: then(press("Remove"), press("Remove passkey")), ready: ".note" }),
   p({ name: "passkeys-limit", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: TEN } } }, ready: "[data-add]:disabled" }),
   p({ name: "recent-sign-in", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
-  p({ name: "recent-sign-in-waiting", path: "/account/passkeys", passkey: "hold", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, "POST sign-in/passkey/options": { status: 200, body: SIGN_IN_OPTIONS } }, steps: confirmByPasskey, ready: ".status" }),
-  p({
-    name: "recent-sign-in-done",
-    path: "/account/passkeys",
-    script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, "POST sign-in/passkey/options": { status: 200, body: SIGN_IN_OPTIONS }, "POST sign-in/passkey": { status: 200, body: { status: "signed_in" } } },
-    steps: confirmByPasskey,
-    ready: ".note",
-  }),
+  p({ name: "recent-sign-in-register", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, ...regOptions, "POST passkeys": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
+  p({ name: "recent-sign-in-opening", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 200, hold: true } }, steps: confirmByClassbeat, ready: ".status" }),
+  // The one account state that goes to classbeat, and declares it (#508 B1).
+  p({ name: "recent-sign-in-left", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 200, body: { authorize: AUTHORIZE } } }, steps: confirmByClassbeat, ready: "[data-confirm=waiting]", toClassbeat: AUTHORIZE }),
+  p({ name: "recent-sign-in-failed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 0, fail: true } }, steps: confirmByClassbeat, ready: ".plate[data-confirm=failed]" }),
+  // ADR 0010, section 7: adding is closed, at either step; the list stays, to rename and remove.
+  p({ name: "passkey-add-closed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": CLOSED }, steps: addAs("Tablet"), ready: ".plate" }),
+  p({ name: "passkey-add-closed-register", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, ...regOptions, "POST passkeys": CLOSED }, steps: addAs("Tablet"), ready: ".plate" }),
+  p({ name: "passkeys-closed-removed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": CLOSED, [`DELETE passkeys/${PASSKEYS[0].id}`]: { status: 204 } }, steps: then(addAs("Tablet"), removeFirst), ready: ".note" }),
 ];
 
 /** A secret a state handles: its text as it would leak, the routes whose body may carry it, and where it must be seen (so the check cannot pass with nothing to look for). */
@@ -120,8 +123,6 @@ const REG: readonly Secret[] = [
   { label: "user handle", value: USER_HANDLE, routes: [], seen: { prompt: USER_HANDLE_BYTES } },
 ];
 const CREDENTIAL: readonly Secret[] = Object.entries(NEW_CREDENTIAL).map(([k, value]) => ({ label: `credential ${k}`, value, routes: ["POST passkeys"], seen: { body: "POST passkeys" } }));
-const SIGN_IN: readonly Secret[] = [{ label: "sign-in challenge", value: SIGN_IN_OPTIONS.challenge, routes: [], seen: { prompt: SIGN_IN_CHALLENGE_BYTES } }];
-const SIGNED: readonly Secret[] = Object.entries(ASSERTION).map(([k, value]) => ({ label: `assertion ${k}`, value, routes: ["POST sign-in/passkey"], seen: { body: "POST sign-in/passkey" } }));
 
 /** The secrets each account state handles. Every state of ACCOUNT_STATES has an entry; the check compares the two lists. */
 export const ACCOUNT_SECRETS: Readonly<Record<string, readonly Secret[]>> = {
@@ -145,6 +146,11 @@ export const ACCOUNT_SECRETS: Readonly<Record<string, readonly Secret[]>> = {
   "passkey-removed": [],
   "passkeys-limit": [],
   "recent-sign-in": [],
-  "recent-sign-in-waiting": SIGN_IN,
-  "recent-sign-in-done": [...SIGN_IN, ...SIGNED],
+  "recent-sign-in-register": [...REG, ...CREDENTIAL],
+  "recent-sign-in-opening": [],
+  "recent-sign-in-left": [],
+  "recent-sign-in-failed": [],
+  "passkey-add-closed": [],
+  "passkey-add-closed-register": [...REG, ...CREDENTIAL],
+  "passkeys-closed-removed": [],
 };

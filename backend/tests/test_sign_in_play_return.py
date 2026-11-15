@@ -40,7 +40,7 @@ def _count(site: Site, table: str) -> object:
 
 @pytest.mark.parametrize("value", ["play", "play." + CLASS_ID, f"play.{uuid.uuid4()}"])
 def test_the_play_entry_follows_the_token_in_the_mailed_link(site: Site, value: str) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     asked = site.first.post(LINK, json={"email": EMAIL, "return_to": value})
     assert asked.status_code == 200 and asked.json() == {"status": "accepted"}
     fragment = _mailed_fragment(site)
@@ -56,7 +56,7 @@ def test_the_play_entry_follows_the_token_in_the_mailed_link(site: Site, value: 
 def test_a_wrong_play_entry_is_invalid_return(
     site: Site, value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     calls: list[object] = []
     real = login.request_link
 
@@ -82,7 +82,7 @@ def test_a_bad_email_is_answered_before_a_play_entry(site: Site) -> None:
 
 
 def test_the_address_limit_is_answered_before_a_wrong_play_entry(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser()
     for _ in range(10):
         bad = {"email": EMAIL, "return_to": "play." + CLASS_ID.upper()}
@@ -94,7 +94,7 @@ def test_the_address_limit_is_answered_before_a_wrong_play_entry(site: Site) -> 
 
 
 def test_a_wrong_play_entry_counts_toward_no_limit_of_the_email(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser()
     for value in ("Play", "play.", "play." + CLASS_ID.replace("-", "")):
         assert here.post(LINK, json={"email": EMAIL, "return_to": value}).status_code == 422
@@ -103,8 +103,8 @@ def test_a_wrong_play_entry_counts_toward_no_limit_of_the_email(site: Site) -> N
 
 
 def test_the_class_id_is_kept_in_no_row(site: Site) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)  # the account exists, so the request writes an audit event too
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)  # the account exists, so the request writes an audit event too
     asked = site.browser().post(LINK, json={"email": EMAIL, "return_to": "play." + CLASS_ID})
     assert asked.status_code == 200 and len(site.mailer.sent) == 2
     stored = every_value(site.su)
@@ -115,7 +115,7 @@ def test_the_class_id_is_kept_in_no_row(site: Site) -> None:
 def test_no_log_line_for_the_request_holds_the_class_id(
     site: Site, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     configure_logging("DEBUG")
     caplog.set_level(logging.DEBUG)
     capsys.readouterr()

@@ -2,7 +2,7 @@
 // shell holds the state and passes a monotonic `now`.
 import { readClassText } from "./class-file.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
-import { createClock, tick } from "./clock/clock.ts";
+import { createClock, positionAt, tick } from "./clock/clock.ts";
 import { applyToClock } from "./clock/apply.ts";
 import type { ClockState } from "./clock/clock.ts";
 import { planFrom } from "./clock/plan.ts";
@@ -13,6 +13,9 @@ import { goManual, handOver, pickOccurrence, relink, undo } from "./link/command
 import type { CommandResult } from "./link/commands.ts";
 import { step } from "./link/follower.ts";
 import { linkPlanFrom } from "./link/plan.ts";
+import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNotLoaded } from "./link/playlist-load.ts";
+import type { PlaylistLoad } from "./link/playlist-load.ts";
+import type { LoadOutcome } from "./link/playlist.ts";
 import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
 import type { NoReadingReason } from "./link/reader.ts";
@@ -34,6 +37,8 @@ export interface Loaded {
   readonly following: boolean;
   /** The reader said following cannot work on this computer; shown as the reason. */
   readonly unavailable: boolean;
+  /** Whether Start loaded the class playlist (link/playlist-load.ts). */
+  readonly playlist: PlaylistLoad;
 }
 
 export interface PlayerState {
@@ -56,7 +61,7 @@ export function openText(s: PlayerState, fileName: string, text: string, classSc
   const plan = planFrom(r.doc);
   const linkPlan = linkPlanFrom(r.doc);
   const link = initialLink(following && followAtOnce && !linkPlan.manualOnly);
-  const loaded: Loaded = { fileName, doc: r.doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following, unavailable: false };
+  const loaded: Loaded = { fileName, doc: r.doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following, unavailable: false, playlist: NO_LOAD };
   return { loaded, error: null, loadId: s.loadId + 1 };
 }
 
@@ -119,12 +124,34 @@ export function command(s: PlayerState, cmd: ClockCommand, now: number, canSend 
   return { ...s, loaded: { ...l, link, clock: applyToClock(l.clock, l.plan, cmd, now) } };
 }
 
+/**
+ * What Start asks the follower to load, decided before the command is applied (link/playlist-load.ts),
+ * and the state that records it. `canLoad` says the follower can load a playlist. The clock is not
+ * touched: the command then goes on exactly as before.
+ */
+export function playlistAtStart(s: PlayerState, cmd: ClockCommand, now: number, canSend: boolean, canLoad: boolean): { readonly state: PlayerState; readonly ask: string | null } {
+  const l = s.loaded;
+  if (l === null || cmd.type !== "start") return { state: s, ask: null };
+  const atZero = l.clock.status === "ready" && positionAt(l.clock, now) === 0;
+  const toMusic = transportFor(s, cmd, canSend) !== null;
+  const r = loadAtStart(l.playlist, { isStart: true, playlist: l.doc.music.spotify_playlist, atZero, toMusic, canLoad }, now);
+  return { state: r.load === l.playlist ? s : { ...s, loaded: { ...l, playlist: r.load } }, ask: r.ask };
+}
+
+/** The follower's answer to a load; ignored when another class was opened since (`loadId`). */
+export function answerLoad(s: PlayerState, loadId: number, outcome: LoadOutcome, now: number): PlayerState {
+  const l = s.loaded;
+  if (l === null || s.loadId !== loadId) return s;
+  return { ...s, loaded: { ...l, playlist: loadAnswered(l.playlist, outcome, now) } };
+}
+
 /** One tick: follow the music (when there is a reader) and advance the clock. */
 export function advance(s: PlayerState, now: number, obs: Observation | null = null): PlayerState {
   const l = s.loaded;
   if (l === null) return s;
   const r = step(l.link, l.clock, l.linkPlan, obs, now);
-  return { ...s, loaded: { ...l, link: r.link, clock: tick(r.clock, now) } };
+  const playlist = confirmLoad(l.playlist, l.linkPlan, obs, now);
+  return { ...s, loaded: { ...l, link: r.link, clock: tick(r.clock, now), playlist } };
 }
 
 /**
@@ -152,7 +179,7 @@ export function snapshotOf(s: PlayerState, now: number, canSend = false, noReadi
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view: l ? viewAt(l.clock, l.plan, now) : null,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, noReading) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNotLoaded(l.playlist), noReading) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
     error: s.error,

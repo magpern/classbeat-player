@@ -1,9 +1,11 @@
 # Screen spec: the website pages
 
-Status: proposed in the pull request for issue #131. Design system: [system.md](system.md).
+Status: proposed in the pull request for issue #131; amended for issue #511 (instructors sign in with
+classbeat, ADR 0010; the account states built in #508 and #513). Two account states differ from #508 as
+built and are marked "Specified for #511, not yet built" (Opening classbeat, the reason line). Design system: [system.md](system.md).
 Neighbouring specs: [class-list.md](class-list.md) (the same class list, in the computer's own
 window) and [presenter.md](presenter.md) (wording convention). Reference mock-ups and screenshots:
-[mockups/](mockups/), files `site-*.html` (61 mock-ups) and `site-*-<width>.png`. **Where a mock-up and this text
+[mockups/](mockups/), files `site-*.html` (76 mock-ups) and `site-*-<width>.png`. **Where a mock-up and this text
 differ, the text wins**; the mock-ups are layout references, and the rows below say where one
 shows something older. The product's CI shoots 23 states of the first website issue (sign-in,
 the shell and the errors). Seven have no mock-up of their own and are held to the row that
@@ -37,10 +39,15 @@ player" in the header, one string to replace.
 | Errors | shown in place of a page, or on any page | Anyone |
 
 A signed-in page reached while signed out (a 401 `not_signed_in` from any route) goes to Sign in
-with the note "Your session ended" and, after sign-in, returns to the page that asked. **Only a
-path of this site from the table above is ever returned to** (no address typed by anyone else is
-followed, no open redirect), and the `/pair` and `/link/source` query is kept with it. No page
-address is ever put in the sign-in address, and it never holds a token. The one thing the sign-in address may carry is a **return entry** in the fragment (never a query), taken from a fixed table in the site's code (today one entry, `control`, which means `/control`). The fragment is `#return=control`, or `#return=control.<class code>` when the rider has typed a class code in full or arrived with `#<join code>`; the class code only names the session and gives no control, and the control code is never sent. The page reads the entry, keeps it in memory only and removes it from the address bar at once, before any request. Anything that is not in the table, or a code that is not in the class-code alphabet, is ignored and the sign-in goes to the default page (`/classes`). After sign-in the page returns by a full page load (`/control` is a separate bundle), to `/control` or `/control#<class code>`. Nothing is written to storage. A sign-in by email link opened in a new tab returns to the companion too (ADR 0006); the page looks the same.
+with the note "Your session ended". **A sign-in with classbeat does not return to the page that
+asked**: it lands on `/classes` (ADR 0010, section 6), and the page that asked, `/pair?code=…` and
+`/link/source?...` included, is opened again by hand, with the pairing code typed again. The sign-in
+page says so under "Sign in with classbeat" (row "Session ended"), so nothing promises a return
+the backend does not make. **Only for a sign-in by email link** (follower accounts; ADR 0006) the
+page returns to the page that asked: only a path of this site from the table above is ever
+returned to (no address typed by anyone else is followed, no open redirect), and the `/pair` and
+`/link/source` query is kept with it. No page
+address is ever put in the sign-in address, and it never holds a token. The one thing the sign-in address may carry is a **return entry** in the fragment (never a query), taken from a fixed table in the site's code (today one entry, `control`, which means `/control`). The fragment is `#return=control`, or `#return=control.<class code>` when the rider has typed a class code in full or arrived with `#<join code>`; the class code only names the session and gives no control, and the control code is never sent. The page reads the entry, keeps it in memory only and removes it from the address bar at once, before any request. Anything that is not in the table, or a code that is not in the class-code alphabet, is ignored and the sign-in goes to the default page (`/classes`). After sign-in the page returns by a full page load (`/control` is a separate bundle), to `/control` or `/control#<class code>`. Nothing is written to storage. A sign-in by email link opened in a new tab returns to the companion too (ADR 0006); the page looks the same. **A sign-in with classbeat carries no return entry** (ADR 0010, section 6): it lands on `/classes`, the entry is kept in memory only and is never sent, and the sign-in page says so before the person leaves (row "Start, from the companion" below).
 
 ## What every page has
 
@@ -66,7 +73,7 @@ address is ever put in the sign-in address, and it never holds a token. The one 
   that asks for a decision opens with focus on its safe button ("Keep it", "Keep the class",
   "Cancel", "Keep my account"), and that button is the filled primary; the destructive button
   is second and outlined. This holds when the panel also holds a field: the delete-account panel
-  asks for the typed address, and still opens on "Keep my account", with "Delete everything"
+  asks for the typed address (or, for an account with no email, the words “your classbeat account”), and still opens on "Keep my account", with "Delete everything"
   off until the field has text; the person tabs back to the field. A panel that is a form (add
   a passkey, rename) opens with focus in its first field, and its main button is the filled
   primary. Nothing is sent when a panel opens.
@@ -109,27 +116,56 @@ remove.
 
 ### Sign in
 
-The email link, a passkey, and the pages around them. One narrow column.
+Sign in with classbeat, the email link and a passkey, and the pages around them. One narrow column.
+
+**How the page serves both kinds of account.** Before sign-in the page cannot know which kind of
+account the person has (ADR 0010, section 7: the email link and passkeys are closed for
+instructors; followers keep them). So the page holds both, in a fixed order:
+
+1. **"Sign in with classbeat" first.** It is the only filled button on the page, full width at
+   phone width, and the line under it (16 px, `--light-2`) says "You sign in at classbeat, then
+   come back to your classes."
+2. **The follower group second.** A 1 px `--stage-line` rule, 32 px of space above it, the heading
+   "Follower accounts" (a `h2`) and one sentence: "Instructors sign in with classbeat, above.
+   Follower accounts sign in with an email link or a passkey." Under it the email form and the
+   passkey button as before, with one change: "Email me a sign-in link" and "Sign in with a
+   passkey" are both **outlined**, so the page has one primary action. The "or" label between them
+   stays.
+3. **No dead end for an instructor who types an address.** The answer to an address that cannot
+   sign in never differs (row "Not on the allowlist"), so the page cannot say "not for
+   instructors" there. The group heading says it up front, and the "Check your mail" page repeats
+   it in one line.
+
+The email form and the passkey button are not removed and not hidden behind a control: nothing
+hides in a menu, and the follower group is a fixed block that can be dropped later without a
+change to the classbeat block above it. Every other state of this page (a note above the form, a
+plate, the busy states) shows the same two blocks. Whenever one request is under way (the
+classbeat start, a link request, a passkey), **all three actions are disabled** and keep their
+labels, so only one request is open.
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
-| Start | "Sign in", an email field, "Email me a sign-in link", the label "or", "Sign in with a passkey" and the line "A passkey uses this device's fingerprint, face or screen lock." From the steering page, `/sign-in#return=control[.<code>]` looks the same as Start: no extra text. | `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
+| Start | "Sign in"; "Sign in with classbeat" (filled, focus order first) with "You sign in at classbeat, then come back to your classes."; then the follower group: "Follower accounts", its sentence, an email field, "Email me a sign-in link" (outlined), the label "or", "Sign in with a passkey" (outlined) and the line "A passkey uses this device's fingerprint, face or screen lock." A browser without passkey support shows no passkey button and no explanation. Pressing "Sign in with classbeat" sends `POST sign-in/classbeat/start` with the body `{"purpose":"sign_in"}` and **no `return_to`** (ADR 0010, section 6), then goes to the address the answer holds | `POST sign-in/classbeat/start`; `POST sign-in/link`; `POST sign-in/passkey/options`, then `POST sign-in/passkey` | [sign-in](mockups/site-sign-in.html) |
+| Start, from the companion | `/sign-in#return=control[.<code>]` (the steering page): the same page, with one more sentence under "Sign in with classbeat": "Then open the companion again." The entry is read, kept in memory and removed from the address bar at once, as before; the class code is never shown and never sent. The email link under it still returns to the companion (ADR 0006) | the same | [from the companion](mockups/site-sign-in-classbeat-return.html) |
+| Opening classbeat | One working line under the heading, "Opening classbeat…" (a hollow circle and the words, the "…" a real ellipsis kept with "classbeat"). The three actions are disabled and keep their labels; the classbeat button does not change to "Opening classbeat…". Nothing else says it | pending, then the page leaves for classbeat | [opening](mockups/site-sign-in-classbeat-opening.html) |
+| classbeat did not finish | `/sign-in#error=classbeat`. Plate "The sign-in with classbeat did not finish", "It may have run out of time (a sign-in works for 10 minutes), been used already, been started in a different browser, or your classbeat account may not be let in yet. Nothing was changed." One plate for every refusal of the callback, because the address carries no reason (ADR 0010, section 2). The plate heads the form; **the button under it is "Sign in with classbeat" again, never "Try again"**. Focus goes to the plate. The fragment is read, kept in memory and removed from the address bar at once; only the exact value `classbeat` is read, anything else after `#error=` is ignored and shows the plain Start | none (the callback's `303`) | [did not finish](mockups/site-sign-in-classbeat-error.html) |
+| classbeat did not open | Plate "That did not work, and it was not your doing", "Try again in a moment. If you were changing something, check that it happened before you repeat it." The same plate for a 5xx and for an answer with no usable address (not HTTPS, a user name in it, and the other checks of `classbeat-start-model.ts`). Offline: the plate "You are offline", "Check your connection, then try again." ([offline](mockups/site-sign-in-classbeat-offline.html)). The button under the plate is "Sign in with classbeat" again | 5xx, or an answer the page does not accept; offline | [did not open](mockups/site-sign-in-classbeat-failed.html) |
+| classbeat limit | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "One network connection can start 20 sign-ins with classbeat in 10 minutes." The page stays | 429 from `POST sign-in/classbeat/start` | [limit](mockups/site-sign-in-classbeat-limited.html) |
+| classbeat did not confirm (still signed in) | Every refusal of the callback answers `/sign-in#error=classbeat`, a **re-authentication** too (ADR 0010, sections 2 and 5): the classbeat user was another account, the sign-in was too old, or the cookie did not match. The person is **still signed in** and arrives from "Confirm with classbeat". On `#error=classbeat` the page first asks `GET me`: 401 shows the row "classbeat did not finish" above; 200 shows this state; while it is pending, one working line "Checking your sign-in…". This state is **not the sign-in page**: signed-in header, `h1` "Confirm it is you", and plate "classbeat did not confirm it is you", "You may have signed in at classbeat as a different user. You are still signed in here, and nothing was changed. Sign in at classbeat as the same user, then make the change again." No email form, no passkey, no follower group. Two buttons: "Confirm with classbeat" (it sends `{"purpose":"reauth"}`, **never `sign_in`**, because a `sign_in` would end this session and could sign in as another account) and "Back to your classes" (a link). A failed or offline `GET me` shows that failure's plate with no sign-in action | `GET me`; `POST sign-in/classbeat/start` with `{"purpose":"reauth"}` | [not confirmed](mockups/site-sign-in-classbeat-reauth-refused.html) |
 | Not an email | Field error "That does not look like an email address", the typed text kept | 422 `invalid_email` | [invalid](mockups/site-sign-in-invalid-email.html) |
 | Too many requests | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "One network connection can ask for 10 sign-in links an hour, whatever the email address"; the form stays | 429 `too_many_requests` | [limited](mockups/site-sign-in-limited.html) |
-| Check your mail | Note "A link is on its way if *address* can sign in", how long it works (once, 15 minutes, this browser), a hint about spam and spelling, "Send the link again", "Use a different address" | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
+| Check your mail | Note "A link is on its way if *address* can sign in", how long it works (once, 15 minutes, this browser), a hint about spam and spelling, the line "If you run classes, an email link does not work for you. Go back and sign in with classbeat.", "Send the link again", "Use a different address" | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
 | **Not on the allowlist** | **The same "Check your mail" page, word for word.** ADR 0002 section 4 fixes that the answer for an address that cannot sign in never differs from one that can, so no page may say "not allowed" (it would tell anyone whether an address has an account). The hint on the page ("Only addresses that have been let in can sign in") is there for every visitor and is how the person learns the reason | 200 `accepted` | [sent](mockups/site-sign-in-sent.html) |
 | Link opened | "Finish signing in", a "Sign in" button, "This works only in the browser where you asked for the link". The token is read from the fragment and removed from the address bar; opening the page signs nobody in | `POST sign-in/complete` on the button | [link](mockups/site-sign-in-link.html) |
 | Signing in | The button disabled, "Signing you in…" | pending | [working](mockups/site-sign-in-link-working.html) |
-| Link expired, used or refused | Plate "This link cannot be used" with the three possible reasons, and the sign-in form to ask for a new link. One page for every refusal (expired, used, unknown, other browser) | 401 `sign_in_refused` | [refused](mockups/site-sign-in-link-refused.html) |
-| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button, now reading "Waiting for your passkey…", and "Email me a sign-in link" both disabled, so only one request is under way (disabled text keeps 7 : 1, S2). It lasts until the answer is in, through the one resend after a busy answer (below) | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
-| Passkey failed | Plate "That passkey could not be used", "Try again", and the email form | 401 from `POST sign-in/passkey` | [failed](mockups/site-sign-in-passkey-failed.html) |
+| Link expired, used or refused | Plate "This link cannot be used" with the three possible reasons, and the sign-in page (both blocks) to ask for a new link. One page for every refusal (expired, used, unknown, other browser) | 401 `sign_in_refused` | [refused](mockups/site-sign-in-link-refused.html) |
+| Waiting for a passkey | "Waiting for your passkey. Follow the prompt from your browser or device", the passkey button, now reading "Waiting for your passkey…", "Email me a sign-in link" and "Sign in with classbeat" all disabled, so only one request is under way (disabled text keeps 7 : 1, S2). It lasts until the answer is in, through the one resend after a busy answer (below) | the browser's prompt | [waiting](mockups/site-sign-in-passkey-waiting.html) |
+| Passkey failed | Plate "That passkey could not be used", "The request may have been cancelled, or the passkey may have been removed. Try again, or ask for an email link below." (the plate sits above the page, so "below" is the follower group), "Try again", and the email form | 401 from `POST sign-in/passkey` | [failed](mockups/site-sign-in-passkey-failed.html) |
 | Passkey limit | Plate "Too many sign-in requests", "Please try again in about N minutes" from `Retry-After`, then "After 10 passkey sign-ins that fail within 10 minutes, this network connection has to wait"; the form stays | 429 from `POST sign-in/passkey` with a `Retry-After` over 1 second | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-limited-*` show them |
 | Passkey wait | Plate "Too many sign-in requests", then only "Please try again in about N minutes" from `Retry-After`, or "Please try again in a moment" when it is 1 second. Nothing about failed sign-ins: the person may have made none. The form stays | 429 from `POST sign-in/passkey/options` (sign-ins started); 429 from `POST sign-in/passkey` with no `Retry-After`; 429 from `POST sign-in/passkey` with `Retry-After: 1` (another attempt still being checked) on the one resend too | [limited](mockups/site-sign-in-limited.html), layout only: it shows the link limit's words. The words are this row's; the CI shots `site-sign-in-passkey-wait-*` and `site-sign-in-passkey-busy-*` show them |
-| Session ended | Note "Your session ended" above the form | 401 `not_signed_in` | [ended](mockups/site-sign-in-session-ended.html) |
+| Session ended | Note "Your session ended", "Sign in again. You come back to your classes, so open the page you were on again." above the form, and under "Sign in with classbeat" the line "You sign in at classbeat, then come back to your classes. Open the page you were on again." (a classbeat sign-in keeps no way back, ADR 0010, section 6; only the follower email link returns to the page) | 401 `not_signed_in` | [ended](mockups/site-sign-in-session-ended.html) |
 | Signed out | Note "You are signed out" | `POST sign-out` (204) | [signed out](mockups/site-signed-out.html) |
 | Account deleted | Note "Your account was deleted", "Devices remove their saved classes the next time they connect" | `POST account/delete` (204) | [deleted](mockups/site-account-deleted.html) |
-
-A browser without passkey support shows no passkey button and no explanation.
 
 **A busy passkey answer is sent again once** (ADR 0002, section 10). A 429 from
 `POST sign-in/passkey` with `Retry-After: 1` means another sign-in from the same network
@@ -151,7 +187,7 @@ the busy plate alike, because the page cannot always tell them apart (the last s
 busy plate only appears after the resend was refused too, so the person has waited once already.
 A softer "One moment" was weighed and not taken.
 
-**The "or" and "Try again".** The "or" between the email form and the passkey button is a label:
+**The "or" and "Try again".** The "or" between the email form and the passkey button, inside the follower group, is a label:
 14 px, `--light-3`, held to 4.5 : 1 (S1, S2), between two 1 px lines in `--stage-line` that run to the edges of the 28 em form, with 20 px above and below it. The line "A passkey uses this device's fingerprint, face or screen lock." sits 12 px under the passkey button (the first mock-ups drew it touching the button). "Try again" on a plate, "Passkey failed" included,
 is a quiet, outlined button. Where a mock-up shows a larger "or" or a filled "Try again", this
 text and S1 and S2 hold.
@@ -222,18 +258,29 @@ one other session removes its row at once and shows the note "Ended the session 
 the line "That browser is signed out." ([mockup](mockups/site-account-sessions-ended.html)); focus goes
 to the next row, or the one before when the last went, or to "Sign out everywhere" when none is left.
 
-**Passkeys.** The explanation says the email link always works too.
+**Passkeys.** An instructor signs in with classbeat, and adding a passkey is closed for the account
+(ADR 0010, section 7); a passkey that is already listed can still be renamed and removed. The page
+does not know that before the first press: `GET passkeys` does not say whether adding is open, so
+"Add a passkey" is offered until the backend answers 403 `passkeys_closed`, and then it is gone for
+the rest of the page view (kept in memory only, nothing stored). If the contract later says it
+from the start, the page shows the closed state at once, with the same words and mock-ups. The
+page never says that an email link "always works": that is untrue for instructors, and it
+contradicts "You sign in with classbeat" on the same page. Its explanation is: "A passkey signs
+you in with this device's fingerprint, face or screen lock. Accounts that run classes sign in with
+classbeat and cannot add one."
 
 | State | What the person sees | Route | Mock-up |
 |---|---|---|---|
 | List | "3 of 10 passkeys", "Add a passkey", rows with name, added date, last used or "Not used yet", "Rename", "Remove" | `GET passkeys` | [passkeys](mockups/site-account-passkeys.html) |
-| None | An explanation and "Add a passkey" | the same | [empty](mockups/site-account-passkeys-empty.html) |
+| None | The explanation, "You have no passkeys yet." and "Add a passkey" | the same | [empty](mockups/site-account-passkeys-empty.html) |
 | Add | A panel with a name field (1 to 40 characters) and "Add passkey", "Cancel"; focus is in the name field (a form panel, see the focus rule); at 390 px both buttons are full width and stacked; the browser's prompt follows | `POST passkeys/options`, then `POST passkeys` | [add](mockups/site-passkey-add.html) |
 | Added | Note "Passkey added", "We emailed you to say a passkey was added" (ADR 0002 section 6) | 200 | [added](mockups/site-passkey-added.html) |
 | Not added | Plate "The passkey was not added", "Nothing was saved", "Try again" | cancelled, or 422 | [failed](mockups/site-passkey-add-failed.html) |
 | Rename | The row turns into a field with "Save" and "Cancel"; focus in the field | `PATCH passkeys/{id}` | [rename](mockups/site-passkey-rename.html) |
-| Remove, confirming | Panel "Remove “*name*”?", "You can no longer sign in with it. Email links still work.", "Keep it" (default), "Remove passkey" | `DELETE passkeys/{id}` | [remove](mockups/site-passkey-remove.html) |
+| Remove, confirming | Panel "Remove “*name*”?", "You can no longer sign in with it.", "Keep it" (default), "Remove passkey" | `DELETE passkeys/{id}` | [remove](mockups/site-passkey-remove.html) |
 | At the limit | Note "You have 10 passkeys", the add button disabled with its reason in words | list | [limit](mockups/site-passkeys-limit.html) |
+| **Not available for this account** | Plate "Passkeys are not available for this account", "You sign in with classbeat. Passkeys already listed here can still be renamed and removed." **No button on the plate**: no sign-in again can open adding, so it never asks to confirm and never shows "Confirm it is you". Focus goes to the plate. Below it the count and the list, unchanged. "Add a passkey", the explanation, the "none yet" line and the limit note are gone. The same from the options step and from the registration step (the CI shots `site-passkey-add-closed` and `site-passkey-add-closed-register` hold the same screen); nothing is sent again and the page does not leave | 403 `passkeys_closed` from `POST passkeys/options` or `POST passkeys` | [not available](mockups/site-passkey-add-closed.html) |
+| Not available, after a removal | After a rename or a removal clears the plate, the page still says why there is no add button, in a **reason line**: the hollow square and one sentence, "Passkeys are not available for this account. You sign in with classbeat.", 18 px, `--light-1`, not a plate and not a note (no box, no `role`; it is a fact, not an event). It sits where "Add a passkey" would be: under the page's note or heading, above the count, with 16 px above and below. A paragraph of plain text in that place is not allowed. **As built (#508):** `passkeys.ts` writes a plain paragraph with three sentences ("… You sign in with classbeat. Passkeys already listed here can still be renamed and removed."). **Specified for #511, not yet built:** the hollow square and the two sentences above; the site build changes it | list, after `DELETE passkeys/{id}` | [reason line](mockups/site-passkeys-closed-removed.html) |
 
 **Linked apps.** "An app you link can send classes to your account and remove the ones it sent. It
 sees nothing else." Rows: name, linked date, last used or "Not used yet", "Revoke"; "1 of 5 apps".
@@ -262,20 +309,43 @@ no detail about why), [5 apps already](mockups/site-link-source-limit.html) (409
 | Export limit | Plate "No more exports today", "try again in about N hours" from `Retry-After`; the button disabled | 429 | [limit](mockups/site-account-export-limit.html) |
 | Delete, confirming | Panel "Delete your account?", what goes, "Type your email address to confirm", the field, then **"Keep my account" first, filled and focused**, and "Delete everything" second, outlined and off until the field has text. Esc keeps the account. See the focus rule in "What every page has" | `POST account/delete` | [delete](mockups/site-account-delete.html), [typed](mockups/site-account-delete-typed.html) |
 | Not the address | Field error "That is not the email address of this account. Nothing was deleted."; focus returns to the field | 422 `confirmation_mismatch` | [mismatch](mockups/site-account-delete-mismatch.html) |
-| Confirm it is you | The plate heads the whole page, above "Export your data", whichever action asked (see "Messages head the page"); the page below it is unchanged and nothing is repeated | 403 `recent_sign_in_required` | [confirm](mockups/site-account-data-confirm.html) |
+| Delete, confirming, no email | An account with no email (`GET me` answered `email: null`, ADR 0010, section 8). The same panel and the same order, with three strings changed: the consequence ends "Type “your classbeat account” to confirm.", the field label is "Type “your classbeat account”", and the field is a **plain text field** (not an email field), `autocomplete=off`, `maxlength=254`. "Keep my account" first, filled and focused; "Delete everything" off until the field has text; Esc keeps the account. Everything else is as for the email | `POST account/delete` | [no email](mockups/site-account-delete-no-email.html) |
+| Typed, no email | The words typed (any case, with spaces around them); focus in the field; "Delete everything" on. The page does not compare them: the server does | `POST account/delete` | [typed](mockups/site-account-delete-no-email-typed.html) |
+| Not the words | Field error "That is not “your classbeat account”. Nothing was deleted."; focus returns to the field; the typed text is kept | 422 `confirmation_mismatch` | [not the words](mockups/site-account-delete-no-email-mismatch.html) |
+
+| Confirm it is you | The plate heads the whole page, above "Export your data", whichever action asked (see "Messages head the page"); the page below it is unchanged and nothing is repeated. Its one action is "Confirm with classbeat" (below) | 403 `recent_sign_in_required` | [confirm](mockups/site-account-data-confirm.html) |
 | Deleted | The signed-out page with the note "Your account was deleted" | 204 | [deleted](mockups/site-account-deleted.html) |
 
-The page cannot compare the typed address itself (no route returns it), so "Delete everything"
-is enabled once the field is not empty and the server decides.
+**The server compares the typed text, never the page.** "Delete everything" is enabled once the
+field is not empty, and the server decides, ignoring case and surrounding spaces. Your data loads
+`GET me` first, and from it the page learns only **whether the account has an email**, to choose
+between the two panels above. The address itself is never kept, shown or sent; the page holds no
+copy of it to compare. A `me` body the page does not understand (no `email`, or neither a text nor
+null) shows the server fault plate, as a refused first request does ([server](mockups/site-error-server.html)).
+The phrase is always in curly quotes and always the same words as the desktop app's pairing screen
+shows for an account with no email: "your classbeat account". Where an address would have been
+shown, these words stand in its place, in every string, with no variation of case or wording.
 
-**Confirm it is you** ([mockup](mockups/site-recent-sign-in.html)). Adding or removing a passkey,
-"sign out everywhere", export and deletion need a sign-in within the last 10 minutes (ADR 0002,
-section 4). When one of them answers 403 `recent_sign_in_required`, the page shows the plate "Confirm
-it is you", "For this change you need to have signed in within the last 10 minutes. After that you
-come back here.", with "Use a passkey" and "Email me a link". The action is not repeated for the
-person: they press it again. After signing in again with a passkey the page stays where it is and
-shows the note "You signed in again", "Nothing was changed for you. Make the change again." (the
-change itself was not made; the note says so in words).
+**Confirm it is you.** Export, account deletion and "sign out everywhere" need a sign-in within
+the last 10 minutes (ADR 0002, section 4; ADR 0010, section 5), met by a fresh sign-in at
+classbeat. The email link and a passkey cannot confirm it for an instructor (ADR 0010, section 7),
+so the plate offers neither. When a change answers 403 `recent_sign_in_required`, whichever page it
+came from, the plate heads the page (see "Messages head the page"). The action is not repeated for
+the person. classbeat's sign-in lands on `/classes` (ADR 0010, sections 5 and 6), so the person
+goes back to the change by hand and makes it again; the plate says so in words, and nothing is
+promised that the page cannot do. There is no "You signed in again" note: the page the person left
+is not the page they come back to.
+
+| State | What the person sees | Route | Mock-up |
+|---|---|---|---|
+| Confirm it is you | Plate "Confirm it is you", "For this change you need to have signed in within the last 10 minutes. Sign in again with classbeat, which takes you to your classes, then come back here and make the change again.", and one button, **"Confirm with classbeat"**. No "Use a passkey", no "Email me a link". Focus goes to the plate. The same from the registration step of a passkey (the CI shot `site-recent-sign-in-register`) | 403 `recent_sign_in_required` | [confirm](mockups/site-recent-sign-in.html) |
+| Opening classbeat | **One message, at the head of the page, and only one.** The plate is replaced by the working line "Opening classbeat…" (hollow circle and words) with the small line "Nothing was changed here." under it. The button is gone with the plate: it appears neither as a disabled button nor as a second line "Opening classbeat" under the plate. Focus goes to the line (`role="status"`). The page is left a moment later. **As built (#508):** `confirm.ts` keeps the plate, relabels its button "Opening classbeat…" (disabled) and adds the line "Opening classbeat. Nothing was changed here.", so the same words show twice. **Specified for #511, not yet built:** the one line above; the site build changes it, and a screenshot of the as-built state fails this row | `POST sign-in/classbeat/start` with `{"purpose":"reauth"}` and no `return_to`, pending | [opening](mockups/site-recent-sign-in-opening.html) |
+| Not opened | The failed plate **replaces** the "Confirm it is you" plate; it does not stack under it. Its words: "That did not work, and it was not your doing" with the server fault's detail (5xx, or an address the page does not accept); "Please wait a little", "You have asked for too much in a short time. Try again in about N minutes. Nothing was changed." (429); "You are offline", "Check your connection, then try again." (offline). **The plate's button keeps the label "Confirm with classbeat"** and never becomes "Try again": it does the same thing again. A 401 is not a failed plate: it goes to Sign in with "Your session ended" | 5xx, 429, offline, or a start with no usable address | [not opened](mockups/site-recent-sign-in-failed.html) |
+
+**A label that ends in "…" keeps it.** "Opening classbeat…", "Delete my account…" and every other label
+or line that ends in an ellipsis use the real character (U+2026), never three full stops, and
+the last word and the ellipsis are one unbreakable unit. At 390 px and at 200 % text the rest of
+the text may wrap, but the "…" never starts a line.
 
 ### Errors
 
@@ -326,13 +396,17 @@ its word tables, and a change of words is a change of this table):
 | Where | Kind | Words |
 |---|---|---|
 | Sessions, after ending another browser | Note | "Ended the session in *browser*", then "That browser is signed out." |
-| Any account page, after signing in again to confirm | Note | "You signed in again", then "Nothing was changed for you. Make the change again." |
 | Your data, while the export is made | Working | "Making your export. Your browser saves it when it is ready." (two sentences, so it keeps its full stop) |
 | Your data, a wrong address | Field error | "That is not the email address of this account. Nothing was deleted." |
 | Class details, deleting | Working | "Deleting the class…" |
 | Class list, after deleting | Note | "Deleted “*title*”" ("Deleted the class" when the title was not known), then "Your devices remove it the next time they sync" |
 | Devices, after revoking | Note | "Revoked “*name*”", then "The classes saved on it are removed the next time it connects." |
-| Passkeys, after removing | Note | "Removed “*name*”", then "You can no longer sign in with it. Email links still work." |
+| Passkeys, after removing | Note | "Removed “*name*”", then "You can no longer sign in with it." |
+| Any account page, while classbeat opens | Working | "Opening classbeat…", then "Nothing was changed here." (one message, at the head of the page) |
+| Passkeys, adding closed | Plate | "Passkeys are not available for this account", then "You sign in with classbeat. Passkeys already listed here can still be renamed and removed." |
+| Passkeys, adding closed, plate gone | Reason line | "Passkeys are not available for this account. You sign in with classbeat." |
+| Sign in, classbeat refused | Plate | "The sign-in with classbeat did not finish", then the reasons of the row, ending "Nothing was changed." |
+| Your data, a wrong phrase (no email) | Field error | "That is not “your classbeat account”. Nothing was deleted." |
 
 ## Measurable criteria
 
@@ -354,6 +428,8 @@ same numbers. The font sizes are those at the browser's default text size.
 | S10 | Motion | Nothing animates (the checker's flash-rate and reduced-motion tests pass with no exemption) |
 | S11 | Text | All text is live text; nothing is baked into a picture |
 | S12 | Structure | One `h1` and one `main` per page; every field has a label; headings do not skip a level |
+| S13 | Ellipsis | A label or line that ends in "…" uses U+2026 and keeps it joined to its last word at 390 px and at 200 % text; the "…" never starts a line |
+| S14 | The sign-in page (#511) | At 390 × 844 the header, the title, "Sign in with classbeat" and the line under it are in view without scrolling, and at 1280 × 800 so is the whole follower group down to the passkey line. Exactly one filled button on the page. "Sign in with classbeat" is 18 px bold (cap height at least 12 px, S1) and 48 px high; the follower group's heading is 26 px (cap at least 17 px) and its sentence 18 px (12 px). The working line "Opening classbeat…" is 18 px (12 px), "Nothing was changed here." and the reason line's small text 16 px (10 px) and 18 px (12 px). Contrast 7 : 1 for all of them (S2) |
 
 ## What the backend would need (not blocking the design)
 
@@ -361,8 +437,9 @@ Nothing here changes a route this spec relies on; each is a gap the Orchestrator
 web issue or a backend issue.
 
 1. **The passkey routes** (issue #130) are working names; see above.
-2. **No route returns the account's email**, so the site never shows it. If "signed in as" is
-   wanted, a `GET /api/site/me` is needed.
+2. **The site never shows the account's email.** `GET me` tells the page only whether an email
+   exists (an instructor may have none, ADR 0010, section 8), to choose the deletion panel; the
+   address is never kept or shown. If "signed in as" is wanted, that is a new decision.
 3. **Title order.** `GET classes` pages by latest change. Until it has a title-ordered cursor the
    page loads every page and sorts here; with many thousands of classes that is slow, and a
    server order would be better. The page lists 100 rows and then "Show 100 more" past that.
@@ -377,6 +454,20 @@ web issue or a backend issue.
    shows the family as it is and adds nothing (#421).
 8. **The "download the application" link** of plan section 5 is not in issue #131 and not
    designed here.
+9. **The account kind is not in the contract.** `/me` and `GET passkeys` do not say whether adding
+   a passkey is open, so "Add a passkey" shows until the first `passkeys_closed` (#508). A field
+   such as `can_add` would show the closed state from the start, with the words already
+   specified here. Not blocking. Until then, adding checks a recent sign-in before it checks
+   `passkeys_closed`: an instructor more than 10 minutes after sign-in sees "Confirm it is you",
+   makes the round trip to classbeat and only then "Passkeys are not available". Checking
+   "closed" first, or the field, removes that detour.
+10. **Followers and "Confirm it is you".** The plate offers classbeat only, because that is the
+    only confirmation built. How a follower account confirms is for the follower decision
+    (ADR 0010, section 7), and not specified here. The follower group on the sign-in page is a
+    block that can be dropped without touching the classbeat block above it, if followers do not
+    ship. The follower account kind does not exist yet: today the backend refuses every email-link
+    and passkey sign-in (ADR 0010, section 7), so the group describes a path that is closed until
+    the follower decision.
 
 ## What the site never shows (plan section 3)
 

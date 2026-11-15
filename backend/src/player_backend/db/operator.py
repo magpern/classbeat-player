@@ -3,7 +3,9 @@
 The commands connect with `PLAYER_DATABASE_OWNER_URL`, like the migration runner, and refuse
 to go on when the connection is not `player_owner`: no running role's credential is used.
 Everything goes through the schema's own rules: the allowlist's `player_owner` policy and the
-`auth_purge_expired` function. Emails are checked and normalised by the caller.
+`auth_purge_expired` function, and for `account link` the tenant policy with the one account
+set for its transaction (also for `account delete`). Emails are checked and normalised by the
+caller.
 
 The check reads `current_user`, which a superuser's URL that sets `-c role=player_owner` also
 passes. What the commands do is the same then (they act as `player_owner`); the README asks for
@@ -16,6 +18,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Final
+from uuid import UUID
 
 from player_backend.db.executor import Handle, connect
 from player_backend.db.queries import operator as q
@@ -63,3 +66,27 @@ def purge_expired(db: Handle) -> None:
     """One call of `auth_purge_expired()`, in its own transaction. It returns nothing."""
     with db.transaction():
         db.rows(q.PURGE_EXPIRED)
+
+
+def account_link(db: Handle, account_id: UUID, issuer: str, subject: str) -> bool:
+    """ADR 0010, section 8: make an `unlinked` account the instructor of `(issuer, subject)`,
+    once, and delete its passkeys. False when there is no unlinked account with that id."""
+    with db.transaction():
+        db.rows(q.SET_ACCOUNT, (str(account_id),))
+        if not db.rows(q.LINK_ACCOUNT, (issuer, subject, account_id)):
+            return False
+        deleted = len(db.rows(q.DELETE_ACCOUNT_PASSKEYS, (account_id,)))
+        db.rows(q.ACCOUNT_LINKED_EVENT, (account_id, deleted))
+        return True
+
+
+def account_delete(db: Handle, account_id: UUID) -> bool:
+    """ADR 0010, section 8: delete the account, as ADR 0002, section 12 does: everything it owns
+    goes by cascade, its events too, and its live sessions are told (`live_revocations`, sent
+    at commit). False when there is no account with that id."""
+    with db.transaction():
+        db.rows(q.SET_ACCOUNT, (str(account_id),))
+        if not db.rows(q.DELETE_ACCOUNT, (account_id,)):
+            return False
+        db.rows(q.NOTIFY_REVOKED, (account_id,))
+        return True

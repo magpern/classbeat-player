@@ -3,6 +3,8 @@
 The session cookie is accepted by the site's API (`/api/site/`) and by exactly one live route,
 `POST /api/live/controller` (PL8). Nowhere else. The two routes that complete a sign-in read it
 too, through `asking_session` alone, only to end that session once a new one is issued (#427).
+Sign-in with classbeat (ADR 0010, section 9 on ADR 0002 section 5) adds its start and its
+callback, which read the binding cookie and, through `asking_session`, the session cookie.
 A new route that reads a cookie
 fails here until it is listed, and it can be listed only if the ADR allows it.
 """
@@ -14,9 +16,14 @@ from pathlib import Path
 import pytest
 
 from player_backend.app import create_app
+from player_backend.classbeat_api.events import server_only
 from player_backend.player_api.deps import app_only, device_token
 from player_backend.settings import Settings
-from player_backend.site.cookies import login_cookie_token, session_cookie_token
+from player_backend.site.cookies import (
+    classbeat_cookie_token,
+    login_cookie_token,
+    session_cookie_token,
+)
 from player_backend.site.deps import asking_session, same_origin, site_session
 from player_backend.source_api.deps import source_token
 from tests.guards.cookie_source_check import READERS, check_source, check_tree
@@ -93,6 +100,9 @@ CONTROL_CODE_ROUTES = frozenset({("POST", "/api/live/control")})
 # Section 8, "Joining as a rider" (ADR 0007): the join code and a nickname in the body, from the
 # rider's page. No cookie and no other credential.
 JOIN_ROUTES = frozenset({("POST", "/api/live/join")})
+# ADR 0010, section 8: classbeat's events, from classbeat's server. One signed token in the body;
+# no cookie and no other credential, and a browser's request (`Sec-Fetch-Site`) is refused.
+CLASSBEAT_EVENT_ROUTES = frozenset({("POST", "/api/classbeat/events")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -111,12 +121,24 @@ PAGE_ROUTES = frozenset(
         ("GET", "/j/{name:path}"),
     }
 )
-# Section 5 (#427): a sign-in ends the session the browser held. These two routes read the
+# Section 5 (#427): a sign-in ends the session the browser held. These routes read the
 # session cookie through `asking_session`, which only hashes it, and never through `site_session`.
 ASKING_SESSION_ROUTES = frozenset(
     {
         ("POST", "/api/site/sign-in/complete"),
         ("POST", "/api/site/sign-in/passkey"),
+        # ADR 0010, sections 2 and 5: a re-authentication's start names the asking session, and
+        # the callback matches it (or, for a sign-in, ends the session the browser held).
+        ("POST", "/api/site/sign-in/classbeat/start"),
+        ("GET", "/api/site/sign-in/classbeat/callback"),
+    }
+)
+# ADR 0010, section 2: the binding cookie signs nobody in; it is read where a classbeat sign-in
+# starts (to drop the browser's earlier flow) and where it ends. The callback is the one GET.
+CLASSBEAT_COOKIE_ROUTES = frozenset(
+    {
+        ("POST", "/api/site/sign-in/classbeat/start"),
+        ("GET", "/api/site/sign-in/classbeat/callback"),
     }
 )
 # The browser token's cookie signs nobody in; it is read where a sign-in starts and ends.
@@ -148,6 +170,14 @@ def _using(dependency: object) -> set[tuple[str, str]]:
     return {(r.method, r.path) for r in _routes() if dependency in r.dependencies}
 
 
+def _cookie_readers() -> set[tuple[str, str]]:
+    readers = (session_cookie_token, login_cookie_token, classbeat_cookie_token)
+    found: set[tuple[str, str]] = set()
+    for reader in readers:
+        found |= _using(reader)
+    return found
+
+
 def test_the_routes_that_read_the_session_cookie_equal_the_list() -> None:
     assert _using(session_cookie_token) == SESSION_COOKIE_ROUTES | ASKING_SESSION_ROUTES
 
@@ -156,8 +186,19 @@ def test_the_routes_that_read_the_browser_tokens_cookie_equal_the_list() -> None
     assert _using(login_cookie_token) == LOGIN_COOKIE_ROUTES
 
 
+def test_the_routes_that_read_the_binding_cookie_equal_the_list() -> None:
+    assert _using(classbeat_cookie_token) == CLASSBEAT_COOKIE_ROUTES
+
+
 def test_the_readers_checked_here_are_all_the_readers() -> None:
-    assert {session_cookie_token.__name__, login_cookie_token.__name__} == READERS
+    readers = (session_cookie_token, login_cookie_token, classbeat_cookie_token)
+    assert {reader.__name__ for reader in readers} == READERS
+
+
+def test_the_callback_is_the_one_get_that_reads_a_cookie_without_a_session() -> None:
+    # ADR 0010, section 9 on ADR 0002 section 5: the one state-changing GET of the site.
+    getters = {(m, p) for m, p in _cookie_readers() if m == "GET"}
+    assert getters - SESSION_COOKIE_ROUTES == {("GET", "/api/site/sign-in/classbeat/callback")}
 
 
 def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
@@ -167,19 +208,19 @@ def test_the_session_cookie_is_read_by_the_session_dependency_alone() -> None:
     assert _using(asking_session) == ASKING_SESSION_ROUTES
     assert _using(session_cookie_token) == _using(site_session) | _using(asking_session)
     assert not _using(asking_session) & _using(site_session)
-    assert ASKING_SESSION_ROUTES < LOGIN_COOKIE_ROUTES
+    assert ASKING_SESSION_ROUTES < LOGIN_COOKIE_ROUTES | CLASSBEAT_COOKIE_ROUTES
 
 
 def test_the_routes_that_take_a_device_token_equal_the_list_and_read_no_cookie() -> None:
     assert _using(device_token) == DEVICE_TOKEN_ROUTES
-    assert not _using(device_token) & (_using(session_cookie_token) | _using(login_cookie_token))
+    assert not _using(device_token) & _cookie_readers()
     for method, path in DEVICE_TOKEN_ROUTES:
         assert path.startswith("/api/player/") or (method, path) == LIVE_SESSIONS_ROUTE
 
 
 def test_the_routes_that_take_a_source_token_equal_the_list_and_read_no_cookie() -> None:
     assert _using(source_token) == SOURCE_TOKEN_ROUTES
-    assert not _using(source_token) & (_using(session_cookie_token) | _using(login_cookie_token))
+    assert not _using(source_token) & _cookie_readers()
     assert not _using(source_token) & _using(device_token)
     for _, path in SOURCE_TOKEN_ROUTES | LINK_CODE_ROUTES:
         assert path.startswith("/api/source/")
@@ -187,22 +228,31 @@ def test_the_routes_that_take_a_source_token_equal_the_list_and_read_no_cookie()
 
 def test_the_code_exchange_takes_no_cookie_and_no_bearer_token() -> None:
     bearer = _using(device_token) | _using(source_token)
-    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    cookie = _cookie_readers()
     assert not LINK_CODE_ROUTES & (bearer | cookie)
 
 
 def test_the_control_code_route_takes_no_cookie_and_no_bearer_token() -> None:
     bearer = _using(device_token) | _using(source_token) | _using(app_only)
-    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    cookie = _cookie_readers()
     assert not CONTROL_CODE_ROUTES & (bearer | cookie)
     assert all(path.startswith("/api/live/") for _, path in CONTROL_CODE_ROUTES)
 
 
 def test_the_join_route_takes_no_cookie_and_no_bearer_token() -> None:
     bearer = _using(device_token) | _using(source_token) | _using(app_only)
-    cookie = _using(session_cookie_token) | _using(login_cookie_token)
+    cookie = _cookie_readers()
     assert not JOIN_ROUTES & (bearer | cookie)
     assert all(path.startswith("/api/live/") for _, path in JOIN_ROUTES)
+
+
+def test_the_classbeat_event_route_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token) | _using(app_only)
+    cookie = _cookie_readers()
+    assert not CLASSBEAT_EVENT_ROUTES & (bearer | cookie | _using(same_origin))
+    # The browser check is on it, and on nothing else.
+    assert _using(server_only) == CLASSBEAT_EVENT_ROUTES
+    assert all(path.startswith("/api/classbeat/") for _, path in CLASSBEAT_EVENT_ROUTES)
 
 
 def test_every_route_is_on_one_of_the_lists() -> None:
@@ -210,11 +260,13 @@ def test_every_route_is_on_one_of_the_lists() -> None:
     listed = (
         SESSION_COOKIE_ROUTES
         | LOGIN_COOKIE_ROUTES
+        | CLASSBEAT_COOKIE_ROUTES
         | DEVICE_TOKEN_ROUTES
         | SOURCE_TOKEN_ROUTES
         | LINK_CODE_ROUTES
         | CONTROL_CODE_ROUTES
         | JOIN_ROUTES
+        | CLASSBEAT_EVENT_ROUTES
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES | PAGE_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES
@@ -237,13 +289,12 @@ def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_al
 
 
 def test_every_cookie_route_is_in_the_sites_api_or_is_the_one_live_route() -> None:
-    for method, path in SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES:
+    for method, path in SESSION_COOKIE_ROUTES | LOGIN_COOKIE_ROUTES | CLASSBEAT_COOKIE_ROUTES:
         assert path.startswith(SITE_API) or (method, path) == LIVE_COOKIE_ROUTE
 
 
 def test_every_cookie_route_applies_the_origin_check() -> None:
-    cookie_routes = _using(session_cookie_token) | _using(login_cookie_token)
-    assert cookie_routes <= _using(same_origin)
+    assert _cookie_readers() <= _using(same_origin)
 
 
 def test_no_route_takes_a_token_in_its_path() -> None:

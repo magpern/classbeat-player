@@ -3,7 +3,7 @@ export { goManual, handOver, pickOccurrence, relink, undo } from "./commands.ts"
 export { measureCrossfade } from "./crossfade.ts";
 export { isCurrent, step } from "./follower.ts";
 export type { StepResult } from "./follower.ts";
-export { artistMatches, matchCandidates, norm, normalizeId } from "./match.ts";
+export { artistMatches, lengthMatches, matchCandidates, norm, normalizeId } from "./match.ts";
 export { linkPlanFrom } from "./plan.ts";
 export { manualReader } from "./reader.ts";
 export type { MusicReader } from "./reader.ts";

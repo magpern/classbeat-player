@@ -11,7 +11,8 @@ import hashlib
 import re
 from typing import Final, Literal
 
-type TokenKind = Literal["lgn", "ml", "ses", "dc", "dev", "lc", "src", "hst", "ctl", "rdr"]
+# `cbs`: the binding token of a classbeat sign-in, also its PKCE verifier (ADR 0010, section 2).
+type TokenKind = Literal["lgn", "ml", "ses", "dc", "dev", "lc", "src", "hst", "ctl", "rdr", "cbs"]
 
 PREFIX: Final = "cbp"
 SECRET_BYTES: Final = 32

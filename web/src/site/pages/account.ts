@@ -2,12 +2,14 @@
 // the four sub-page links, beside the content at desktop width and above it below that. Which
 // sub-page an address shows is read here, at the edge.
 import { ACCOUNT_SUBS } from "../core/account-model.ts";
+import { confirmationOf } from "../core/data-model.ts";
 import type { AccountSub } from "../core/account-model.ts";
 import type { SignedInPage } from "../core/routes.ts";
 import { el, t } from "../ui/dom.ts";
 import { h1 } from "../ui/kit.ts";
 import { connectPage } from "./connect.ts";
 import { dataPage } from "./data.ts";
+import { serverFault } from "./errors.ts";
 import { linksPage } from "./links.ts";
 import { passkeysPage } from "./passkeys.ts";
 import { sessionsPage } from "./sessions.ts";
@@ -44,12 +46,19 @@ export function shownByAccountPage(main: HTMLElement, page: SignedInPage, body: 
   }
   const sub = SUBS.get(location.pathname);
   if (sub === undefined) return false;
+  // Your data reads `me` first: whether the account has an email decides what the deletion asks to
+  // be typed. A body that is not that answer is the server fault, as a refused first request is.
+  const confirm = sub === "data" ? confirmationOf(body) : null;
+  if (sub === "data" && confirm === null) {
+    serverFault(main, reload);
+    if (focus) main.querySelector<HTMLElement>(".plate")?.focus();
+    return true;
+  }
   const box = accountFrame(main, sub);
   if (sub === "sessions") sessionsPage(main, box, body, env, reload);
   else if (sub === "passkeys") passkeysPage(main, box, body, env, reload);
   else if (sub === "links") linksPage(main, box, body, env, reload);
-  // Your data reads `sessions` first only to know the person is signed in; its body is not used.
-  else dataPage(main, box, env);
+  else if (confirm !== null) dataPage(main, box, env, confirm);
   if (focus && main.contains(box)) main.querySelector<HTMLElement>("h1")?.focus();
   return true;
 }

@@ -8,7 +8,8 @@
 import { execFile } from "node:child_process";
 import { parseMacOutput } from "../core/link/macos-parse.ts";
 import { reasonForFailure } from "../core/link/macos-reason.ts";
-import { MAC_FIRST_READ_MS, MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_PROMPT_WAIT_MS, MAC_TIMEOUT_MS, OSASCRIPT, osascriptArgs } from "../core/link/macos-scripts.ts";
+import { MAC_FIRST_READ_MS, MAC_MAX_OUTPUT_BYTES, MAC_POLL_MS, MAC_PROMPT_WAIT_MS, MAC_TIMEOUT_MS, macLoadOutcome, OSASCRIPT, osascriptArgs, osascriptLoadArgs } from "../core/link/macos-scripts.ts";
+import type { PlaylistLoader } from "../core/link/playlist.ts";
 import type { MusicReader, NoReadingReason } from "../core/link/reader.ts";
 import type { MusicTransport } from "../core/link/transport.ts";
 import { callWith, createPolledReader, systemEvery, systemNow } from "./polled-reader.ts";
@@ -39,7 +40,7 @@ const systemExec: ExecFileFn = (file, args, options, done) => {
 
 export type MacDeps = PollDeps;
 
-export interface MacMusic extends MusicReader, MusicTransport {
+export interface MacMusic extends MusicReader, MusicTransport, PlaylistLoader {
   readonly kind: "macos";
   setActive(on: boolean): void;
   unavailable(): boolean;
@@ -134,5 +135,17 @@ export function createMacMusic(deps: MacDeps = {}): MacMusic {
     deps.every ?? systemEvery,
   );
 
-  return { kind: "macos", latest: life.latest, setActive: life.setActive, send: life.send, unavailable: life.unavailable, reason: reasonNow };
+  /**
+   * Start's playlist load: only while following, and only the fixed load script with the checked
+   * link (macos-scripts.ts). An id that is not 22 letters or digits builds no command and runs
+   * nothing. A closed Spotify is not started: the script's guard answers "notrunning".
+   */
+  const loadPlaylist: MacMusic["loadPlaylist"] = (id, done) => {
+    if (!life.active || life.unavailable()) return done("unsupported");
+    const args = osascriptLoadArgs(id);
+    if (args === null) return done("failed");
+    call(args, (called) => done(macLoadOutcome(called.out)));
+  };
+
+  return { kind: "macos", latest: life.latest, setActive: life.setActive, send: life.send, unavailable: life.unavailable, reason: reasonNow, loadPlaylist };
 }

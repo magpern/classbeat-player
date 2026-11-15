@@ -47,8 +47,8 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    This is the main thing to prove first (section 12, spike 1).
 4. **Recommended technology:** a web-technology application on every device (in a desktop
    shell on computers), because it lets a rider's phone join with nothing to install. The room's
-   3D scene is a replaceable part: the free Godot engine is the leading candidate for it, with
-   web 3D as the alternative, settled by a small trial (sections 8 and 9). For the
+   3D scene is a replaceable part, drawn with web 3D (three.js), decided after a small trial
+   (sections 8 and 9; ADR 0009). For the
    backend, Python with FastAPI and PostgreSQL (section 5).
 5. **An own player does not make classbeat independent of MOWL yet.** Class design still reads
    each song's length, BPM and sections through the user's MOWL account. The
@@ -336,8 +336,10 @@ MOWL or Swedebeat connection.
 
 **What it does**
 
-- **Accounts.** The product's own accounts, independent of classbeat's. Recommended sign-in: a
-  link sent by email plus passkeys, with no passwords to store.
+- **Accounts.** An instructor's account is their classbeat account: "Sign in with classbeat"
+  (owner, 2026-11-14; ADR 0010). The player keeps its own sessions, devices and database. Riders
+  need no account. The player's own sign-in (email link and passkeys) is kept for a later
+  read-only follower account.
 - **Class library.** Each account's classes in the published class format, with a content hash
   and the source they came from.
 - **Source API (classes in).** A source such as classbeat sends a class as a **publication**:
@@ -580,8 +582,8 @@ three ways to join, and they differ in who owns the projector window and who dra
 | Godot's web export running inside the shell | The shell's | HTML over the scene | Godot's simpler web renderer, not its best one |
 | A transparent shell window laid over Godot's | Both | HTML | Fragile across systems and in full screen; not recommended |
 
-**The choice does not have to be made now**, but it is made on the integrated application, not on
-pictures alone. The real shell, class clock and plain 2D screen are the same in every case and
+The choice was made after spike 2 (ADR 0009), on the integrated application, not on pictures
+alone. The real shell, class clock and plain 2D screen are the same in every case and
 are built in phases PL4 and PL5. Spike 2 runs earlier, in PL0, on a **throwaway harness**: a
 minimal shell with a presenter window, a fake class clock and the 2D screen as a stub, written
 only for the trial and deleted after it. Its result is required before phase PL6 starts. Spike 2 builds the same rough light-show scene in web 3D
@@ -597,7 +599,8 @@ and in Godot (as its own program and as a web export) and must show, for each:
   within two seconds and the class clock is unaffected;
 - how well agents could build it and check its pictures automatically.
 
-Godot is the leading candidate; the spike confirms it or shows why not, before phase PL6 starts.
+Godot was the leading candidate. **Decided after spike 2 (owner, 2026-11-14): web 3D**, see
+[ADR 0009](adr/0009-the-room-scene-is-web-3d.md).
 
 No choice here changes the music question: no engine can play Spotify itself, and all can follow it.
 
@@ -695,14 +698,13 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
 2. **Music:** follow the Spotify desktop app locally (A) with the manual clock (D) as fallback.
    Recommended. The alternative is the Web API (B) for the beta circle only.
 3. **Client technology:** a web-technology shell on computers (Electron), with the phone page
-   and the website in web technology too. Recommended. **The room's 3D scene:** Godot 4 is the
-   leading candidate (the owner's leaning), web 3D the alternative; decided after spike 2 and
-   before phase PL6.
+   and the website in web technology too. Recommended. **The room's 3D scene:** web 3D
+   (three.js), decided after spike 2 (owner, 2026-11-14; ADR 0009).
 4. **Backend stack: decided (2026-11-12).** Python, FastAPI and PostgreSQL, maintained by AI
    agents.
-5. **Accounts:** the product's own accounts, with email link and passkey sign-in and no
-   passwords. Recommended. Alternative: sign in with a classbeat account, which ties the two
-   products together.
+5. **Accounts: decided (owner, 2026-11-14; ADR 0010).** Instructors sign in with their
+   classbeat account; riders need no account. The player's own sign-in is kept for a later
+   follower account.
 6. **Scope of the first version:** the instructor's display only (section 2), cycling first.
    Recommended. Phones joining a live class come next (phase PL8). Games, teams, a group
    display and a virtual world are ruled out (section 3).
@@ -733,10 +735,7 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
   III.6; whether the Web API sees an offline desktop app; current position accuracy of the Windows
   media session and of AppleScript with crossfade on (spike 1 measures both).
 - Whether Sweden qualifies for Microsoft's signing service as an individual, and its price.
-- 3D frame rate on studio-class integrated graphics and on phones (spike 2).
-- Godot's web export on iPhone: its 4.2 documentation says it does not run there; later versions
-  are said to have improved it, not confirmed.
-- Whether any Godot Bluetooth plugin covers iPhone and Android.
+- 3D frame rate on studio-class integrated graphics and on phones: the re-check in ADR 0009.
 - Bluefy on iPhone with bike and heart-rate sensors: not tested. It is a third party's app; if it
   stops working, iPhone sensors stop with it.
 - Which Bluetooth services each studio bike and treadmill model really exposes.

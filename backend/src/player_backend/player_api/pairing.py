@@ -104,10 +104,13 @@ def token(body: PairingPoll, request: Request, who: TheCaller) -> JSONResponse:
         device_token_hash=token_hash(device_token),
         client=who.info,
     )
-    if outcome != POLL_OK or not isinstance(email, str):
+    if outcome != POLL_OK or not (email is None or isinstance(email, str)):
         return error_response(400, poll_refusal(outcome))
+    # ADR 0010, section 8: an instructor classbeat gave no email has none here (null); the app
+    # shows "your classbeat account" in its place, and there is no address to tell.
     response = JSONResponse({"device_token": device_token, "email": email})
-    # Section 6: the account is told, after the response.
-    mail = paired_mail(state.settings.site_origin, email)
-    response.background = BackgroundTask(deliver, state.mailer, mail)
+    if email is not None:
+        # Section 6: the account is told, after the response.
+        mail = paired_mail(state.settings.site_origin, email)
+        response.background = BackgroundTask(deliver, state.mailer, mail)
     return response

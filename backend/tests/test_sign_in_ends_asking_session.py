@@ -50,8 +50,8 @@ def _signed_out_events(site: Site, email: str) -> list[object]:
 
 
 def _with_passkey(site: Site, email: str, authenticator: Authenticator) -> Browser:
-    site.allow(email)
-    browser = site.sign_in(email)
+    site.follower(email)
+    browser = site.link_sign_in(email)
     assert register(browser, authenticator).status_code == 201
     return browser
 
@@ -76,10 +76,10 @@ def test_confirming_by_passkey_ends_the_session_that_asked(site: Site) -> None:
 
 
 def test_confirming_by_link_ends_the_session_that_asked(site: Site) -> None:
-    site.allow(A)
-    browser = site.sign_in(A)
+    site.follower(A)
+    browser = site.link_sign_in(A)
     old = _holding(site, browser)
-    site.sign_in(A, browser)
+    site.link_sign_in(A, browser)
     assert _sessions(site, A) == 1
     _one_current_row(browser)
     assert old.get(SESSIONS).status_code == 401
@@ -88,7 +88,7 @@ def test_confirming_by_link_ends_the_session_that_asked(site: Site) -> None:
 
 def test_a_refused_passkey_sign_in_ends_nothing(site: Site) -> None:
     _with_passkey(site, A, Authenticator())
-    browser = site.sign_in(A)
+    browser = site.link_sign_in(A)
     assert _sessions(site, A) == 2
     # A passkey the backend does not know: refused, and the browser's session stays.
     assert sign_in(browser, Authenticator()).status_code == 401
@@ -98,8 +98,8 @@ def test_a_refused_passkey_sign_in_ends_nothing(site: Site) -> None:
 
 
 def test_a_refused_link_ends_nothing(site: Site) -> None:
-    site.allow(A)
-    browser = site.sign_in(A)
+    site.follower(A)
+    browser = site.link_sign_in(A)
     token = site.ask(browser, A)
     assert token is not None
     assert browser.post("/api/site/sign-in/complete", json={"token": token}).status_code == 200
@@ -122,7 +122,7 @@ def test_a_sign_in_ends_no_session_of_another_browser(site: Site) -> None:
 def test_a_cookie_of_an_ended_session_ends_nothing_and_signs_in(site: Site) -> None:
     authenticator = Authenticator()
     browser = _with_passkey(site, A, authenticator)
-    other = site.sign_in(A)
+    other = site.link_sign_in(A)
     stale = _holding(site, browser)
     assert browser.post("/api/site/sign-out").status_code == 204
     events = len(site.events(A))
@@ -139,9 +139,9 @@ def test_a_passkey_of_another_account_ends_this_browsers_session_only(site: Site
     # browser's session of A is ended as signing out would end it; A's other sessions stay.
     theirs = Authenticator()
     _with_passkey(site, B, theirs)
-    site.allow(A)
-    browser = site.sign_in(A)
-    elsewhere = site.sign_in(A)
+    site.follower(A)
+    browser = site.link_sign_in(A)
+    elsewhere = site.link_sign_in(A)
     assert sign_in(browser, theirs).status_code == 200
     assert _sessions(site, A) == 1
     assert elsewhere.get(SESSIONS).status_code == 200

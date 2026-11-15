@@ -8,6 +8,8 @@ import { DEVICE_STATES } from "./site-device-states.ts";
 import { ACCOUNT_STATES, SESSIONS_LISTED } from "./site-account-states.ts";
 import { LINK_STATES } from "./site-link-states.ts";
 import { DATA_STATES } from "./site-data-states.ts";
+import { NO_EMAIL_STATES } from "./site-no-email-states.ts";
+import { CLASSBEAT_STATES } from "./site-classbeat-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -29,6 +31,8 @@ export interface State {
   readonly clock?: "day";
   /** The one address of the linked app's site the page goes to in this state (site-fake.ts, `left`); none when absent. */
   readonly leaves?: string;
+  /** The one classbeat address the page goes to in this state (site-fake.ts, `toClassbeat`); none when absent. */
+  readonly toClassbeat?: string;
 }
 
 export const CLASS_DETAILS_ID = "3f6d2c1a-8b4e-4f7a-9c2d-1e5a7b9c0d3f";
@@ -80,6 +84,7 @@ export const STATES: readonly State[] = [
     steps: pressText("Sign in with a passkey"),
     ready: ".plate",
   },
+  ...CLASSBEAT_STATES,
   { name: "sign-in-session-ended", path: "/classes", script: { "GET classes": { status: 401, body: { error: "not_signed_in" } } }, ready: ".note" },
   { name: "signed-out", path: "/classes", script: { ...signedInClasses, "POST sign-out": { status: 204 } }, steps: pressText("Sign out"), ready: ".note" },
   { name: "shell-signed-in", path: "/classes", script: signedInClasses, ready: "nav .a.cur", main: true },
@@ -98,4 +103,5 @@ export const STATES: readonly State[] = [
   ...ACCOUNT_STATES,
   ...LINK_STATES,
   ...DATA_STATES,
+  ...NO_EMAIL_STATES,
 ];

@@ -41,7 +41,7 @@ describe("the page", () => {
     const text = await site.page.locator(".acct-body").innerText();
     assert.match(text, /You can export 3 times a day\. The file is made when you ask and is not kept\./);
     assert.match(text, /It cannot be undone\./);
-    assert.deepEqual(site.api.map((a) => a.route), ["GET sessions"]);
+    assert.deepEqual(site.api.map((a) => a.route), ["GET me"]);
     await site.context.close();
   });
 });
@@ -124,7 +124,7 @@ describe("export", () => {
     await press(site.page, "Download export");
     await site.page.waitForSelector(".plate[data-confirm=ask]");
     assert.match(await site.page.locator(".plate").innerText(), /Confirm it is you/);
-    assert.deepEqual(await site.page.locator(".plate button").allInnerTexts(), ["Use a passkey", "Email me a link"]);
+    assert.deepEqual(await site.page.locator(".plate button").allInnerTexts(), ["Confirm with classbeat"]);
     await site.page.waitForTimeout(100);
     assert.equal(routes(site, EXPORT), 1);
     await site.context.close();
