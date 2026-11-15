@@ -17,6 +17,7 @@ import psycopg
 from fastapi import FastAPI
 
 from player_backend.app import create_app
+from player_backend.classbeat_client import ClassbeatClient
 from player_backend.client_policy import Network
 from player_backend.live.recheck import RecheckTiming
 from player_backend.mail import Mail
@@ -35,7 +36,8 @@ SOURCE = KnownSource("classbeat", "classbeat", frozenset({"https://classbeat.tes
 
 _CLEAN = (
     "TRUNCATE player.accounts, player.login_links, player.login_challenges, player.pairings, "
-    "player.source_link_codes, player.rate_limits, player.signup_allowlist CASCADE"
+    "player.source_link_codes, player.rate_limits, player.signup_allowlist, "
+    "player.classbeat_sign_ins, player.classbeat_event_ids CASCADE"
 )
 
 
@@ -177,16 +179,20 @@ def running_site(
     proxies: tuple[Network, ...] = (),
     live_recheck: RecheckTiming | None = None,
     live_default: bool = False,
+    classbeat: ClassbeatClient | None = None,
 ) -> Generator[Site]:
     """The app under test. Without `live_recheck` it runs no live re-check loop: a test that
     needs one passes its timing (tests/test_live_recheck.py). `live_default` builds the app as
-    production does, with `create_app`'s own default (the 30-second loop)."""
+    production does, with `create_app`'s own default (the 30-second loop). `classbeat` is the
+    sign-in provider's client, over a fake transport (tests/classbeathelp.py)."""
     mailer = RecordingMailer()
     settings = Settings(
         database_url=app_url, site_origin=ORIGIN, trusted_proxies=proxies, sources=(SOURCE,)
     )
     app = (
-        create_app(settings, mailer) if live_default else create_app(settings, mailer, live_recheck)
+        create_app(settings, mailer, classbeat=classbeat)
+        if live_default
+        else create_app(settings, mailer, live_recheck, classbeat=classbeat)
     )
     loop = asyncio.new_event_loop()
     started = app.router.lifespan_context(app)  # the app's start and stop: the pool

@@ -14,7 +14,7 @@ from tests.guards.adr0002 import SECURITY_DEFINER_FUNCTIONS
 # migration 0006 (tests/test_pairing_functions.py, tests/test_device_functions.py) and by
 # migration 0008 (tests/test_source_functions.py) and by migration 0011
 # (tests/test_passkey_functions.py and the passkey tests) and by migration 0013
-# (tests/test_live_check_functions.py).
+# (tests/test_live_check_functions.py) and by migration 0014 (tests/test_classbeat_functions.py).
 IMPLEMENTED = {
     "auth_enter_session",
     "auth_request_login",
@@ -33,6 +33,10 @@ IMPLEMENTED = {
     "auth_complete_passkey",
     "auth_device_active",
     "auth_session_active",
+    "auth_start_classbeat",
+    "auth_take_classbeat",
+    "auth_complete_classbeat",
+    "auth_reauth_classbeat",
 }
 STUB_TEXT = "is not implemented"
 

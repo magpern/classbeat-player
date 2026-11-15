@@ -25,6 +25,7 @@ QUERY_MODULES: Final = (
     "player_backend.db.queries.passkeys",
     "player_backend.db.queries.revocation",
     "player_backend.db.queries.live",
+    "player_backend.db.queries.classbeat",
 )
 
 SQL_DIR: Final = Path(__file__).resolve().parent.parent / "migrations"
@@ -42,4 +43,5 @@ SQL_FILES: Final = (
     "0011_passkeys.sql",
     "0012_bounded_lock_waits.sql",
     "0013_live_checks.sql",
+    "0014_classbeat_sign_in.sql",
 )

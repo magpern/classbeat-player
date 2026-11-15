@@ -71,6 +71,8 @@ NOT_ON_A_LIVE_ROUTE: dict[str, set[str]] = {
         "put_session_cookie",
         "clear_session_cookie",
         "put_login_cookie",
+        "put_classbeat_cookie",
+        "clear_classbeat_cookie",
     },
 }
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "player_backend"

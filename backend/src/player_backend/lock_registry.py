@@ -52,13 +52,21 @@ _MIGRATION_DIR: Final = "db/migrations/"
 # Where each lock is taken, relative to the package: one entry per call.
 SITES: Final[dict[int | str, tuple[str, ...]]] = {
     MIGRATIONS: ("db/queries/migrations.py",),
-    SIGN_IN_LINK: (_MIGRATION_DIR + "0005_sign_in_hardening.sql",),
+    SIGN_IN_LINK: (
+        _MIGRATION_DIR + "0005_sign_in_hardening.sql",
+        # Its body replaced: the email link never finds an instructor (#481).
+        _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
+    ),
     ACCOUNT_SESSIONS: (
         _MIGRATION_DIR + "0005_sign_in_hardening.sql",
         _MIGRATION_DIR + "0011_passkeys.sql",
         # Both again, their bodies replaced with the wait bounded (#158).
         _MIGRATION_DIR + "0012_bounded_lock_waits.sql",
         _MIGRATION_DIR + "0012_bounded_lock_waits.sql",
+        # Sign-in and re-authentication with classbeat, and the email link's body replaced (#481).
+        _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
+        _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
+        _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
     ),
     PASSKEY_ADDITIONS: ("db/queries/passkeys.py",),
     PAIRING_CODES: (

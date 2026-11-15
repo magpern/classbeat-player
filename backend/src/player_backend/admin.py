@@ -4,11 +4,14 @@
     python -m player_backend.admin allowlist remove <email>
     python -m player_backend.admin allowlist list
     python -m player_backend.admin purge
+    python -m player_backend.admin account link <account id> <issuer> <subject>
 
 They connect with `PLAYER_DATABASE_OWNER_URL` (as the migration runner does) and refuse any
 other role. `purge` calls `auth_purge_expired()` once; the deploy runs it every hour (README,
-"Operator commands"). Output goes to the operator's terminal only, never to a log. A database
-error is shown by its type and SQLSTATE, never by its message.
+"Operator commands"). `account link` makes an existing (`unlinked`) account the instructor of a
+classbeat identity, once, and deletes its passkeys (ADR 0010, section 8). Output goes to the
+operator's terminal only, never to a log. A database error is shown by its type and SQLSTATE,
+never by its message.
 """
 
 from __future__ import annotations
@@ -18,10 +21,12 @@ import os
 import sys
 from collections.abc import Sequence
 from typing import TextIO
+from uuid import UUID
 
 from player_backend.db.executor import DatabaseError
 from player_backend.db.operator import (
     NotOperatorRole,
+    account_link,
     allowlist_add,
     allowlist_list,
     allowlist_remove,
@@ -42,7 +47,27 @@ def _parser() -> argparse.ArgumentParser:
     actions.add_parser("remove", help="take an email off the list").add_argument("email")
     actions.add_parser("list", help="the listed emails")
     commands.add_parser("purge", help="remove what is past its time, once")
+    account = commands.add_parser("account", help="an existing account")
+    account_actions = account.add_subparsers(dest="action", required=True)
+    link = account_actions.add_parser("link", help="make an unlinked account an instructor")
+    link.add_argument("account_id")
+    link.add_argument("issuer")
+    link.add_argument("subject")
     return parser
+
+
+def _identity(args: argparse.Namespace) -> tuple[UUID, str, str] | None:
+    """The account id and the identity of `account link`, or None when one is not valid."""
+    try:
+        account_id = UUID(str(args.account_id))
+    except ValueError:
+        return None
+    issuer, subject = str(args.issuer), str(args.subject)
+    if not (1 <= len(issuer) <= 255 and 1 <= len(subject) <= 255):
+        return None
+    if not issuer.startswith("https://") or any(not c.isprintable() for c in issuer + subject):
+        return None
+    return account_id, issuer, subject
 
 
 def main(
@@ -55,6 +80,12 @@ def main(
         if email is None:
             print("not an email address", file=err)
             return 2
+    link: tuple[UUID, str, str] | None = None
+    if args.command == "account":
+        link = _identity(args)
+        if link is None:
+            print("not an account id, an https issuer and a subject", file=err)
+            return 2
     url = os.environ.get(OWNER_URL_VARIABLE, "").strip()
     if not url:
         print(f"{OWNER_URL_VARIABLE} is required", file=err)
@@ -64,6 +95,9 @@ def main(
             if args.command == "purge":
                 purge_expired(db)
                 print("purged expired rows", file=out)
+            elif link is not None:
+                done = account_link(db, *link)
+                print(f"{'linked' if done else 'no unlinked account'}: {link[0]}", file=out)
             elif args.action == "list":
                 for listed, added_at in allowlist_list(db):
                     print(f"{listed}\t{added_at.isoformat()}", file=out)
