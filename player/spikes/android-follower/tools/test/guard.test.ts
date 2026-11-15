@@ -41,6 +41,7 @@ function mutate(path: string, from: string | RegExp, to: string): Tree {
 const MANIFEST = "app/src/main/AndroidManifest.xml";
 const LISTENER = "app/src/main/kotlin/org/classbeat/spike/follower/SpikeListener.kt";
 const READER = "app/src/main/kotlin/org/classbeat/spike/follower/SpotifyReader.kt";
+const FOLLOW = "app/src/main/kotlin/org/classbeat/spike/follower/FollowSession.kt";
 const SCENE = "app/src/main/kotlin/org/classbeat/spike/follower/SceneActivity.kt";
 const CORE = "core/src/main/kotlin/org/classbeat/spike/SpotifyFilter.kt";
 const APP_GRADLE = "app/build.gradle.kts";
@@ -79,6 +80,29 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["a fallback to an unfiltered session", "filter", () => mutate(READER, "?: return Poll(polledAt, null, null)", "?: sessions.first()")],
   ["a package lambda that returns a constant", "filter", () => mutate(READER, "spotifyOnly(sessions) { it.packageName }", 'spotifyOnly(sessions) { "com.spotify.music" }')],
   ["the session list read through another path", "filter", () => mutate(READER, "val metadata = spotify.metadata", "val metadata = sessions.last().metadata")],
+  // Review of #561, B1: one getActiveSessions in the whole tree, no other source of the session list.
+  ["M1: a second, unassigned getActiveSessions read", "filter", () => mutate(READER, "val spotify = spotifyOnly", "val other = manager.getActiveSessions(listener).first().metadata\n        val spotify = spotifyOnly")],
+  ["M2: addOnActiveSessionsChangedListener in another file", "filter", () => mutate(FOLLOW, "class FollowSession", "fun peek(m: android.media.session.MediaSessionManager, c: android.content.ComponentName) = m.addOnActiveSessionsChangedListener({ l -> l?.first()?.metadata }, c)\nclass FollowSession")],
+  ["a second getActiveSessions in another file", "filter", () => mutate(FOLLOW, "class FollowSession", "fun peek(m: Any) = m.getActiveSessions()\nclass FollowSession")],
+  ["getActiveSessionsForUser", "filter", () => mutate(READER, "class SpotifyReader", "fun f(m: Any) = m.getActiveSessionsForUser()\nclass SpotifyReader")],
+  ["a MediaController", "filter", () => mutate(READER, "class SpotifyReader", "fun f(t: Any) = MediaController(t)\nclass SpotifyReader")],
+  ["MediaSessionManager outside SpotifyReader.kt", "filter", () => mutate(FOLLOW, "class FollowSession", "val m: android.media.session.MediaSessionManager? = null\nclass FollowSession")],
+  // Review of #561, B2: every blockNetworkLoads is exactly `= true` ending its statement.
+  ["M3: blockNetworkLoads = true && flag", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true && flag")],
+  ["blockNetworkLoads = true.and(flag)", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true.and(flag)")],
+  ["blockNetworkLoads = true on a continued line", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            || flag")],
+  // Review of #561, NB1, NB2, NB5.
+  ["reflection: Class.forName", "reflection", () => mutate(READER, "class SpotifyReader", 'val c = Class.forName("x")\nclass SpotifyReader')],
+  ["reflection: ::class.java.getMethod", "reflection", () => mutate(READER, "class SpotifyReader", 'val c = String::class.java.getMethod("x")\nclass SpotifyReader')],
+  ["reflection: java.lang.reflect", "reflection", () => mutate(READER, "class SpotifyReader", "import java.lang.reflect.Method\nclass SpotifyReader")],
+  ["ToneGenerator", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.ToneGenerator::class\nclass SpotifyReader")],
+  ["AsyncPlayer", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.AsyncPlayer::class\nclass SpotifyReader")],
+  ["JetPlayer", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.JetPlayer::class\nclass SpotifyReader")],
+  ["a .java file", "sources", () => ({ ...real, paths: [...real.paths, "app/src/main/kotlin/org/classbeat/spike/follower/Evil.java"] })],
+  ["a .java file under src/main/java", "sources", () => ({ ...real, paths: [...real.paths, "app/src/main/java/Evil.java"] })],
+  ["a .kt in another source set", "sources", () => ({ ...real, paths: [...real.paths, "app/src/debug/kotlin/Evil.kt"] })],
+  ["a .kt under src/main/java", "sources", () => ({ ...real, paths: [...real.paths, "app/src/main/java/Evil.kt"] })],
+  ["another build script", "sources", () => ({ ...real, paths: [...real.paths, "extra/build.gradle.kts"] })],
   // #559 N2: any assignment of blockNetworkLoads other than true.
   ["a second blockNetworkLoads = false", "webview", () => mutate(SCENE, "web.webViewClient =", "web.settings.blockNetworkLoads = false\n        web.webViewClient =")],
   ["setBlockNetworkLoads(false)", "webview", () => mutate(SCENE, "web.webViewClient =", "web.settings.setBlockNetworkLoads(false)\n        web.webViewClient =")],

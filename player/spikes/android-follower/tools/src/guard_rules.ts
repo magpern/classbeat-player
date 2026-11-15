@@ -9,47 +9,21 @@ export interface Tree {
   paths: string[];
 }
 
-/** A Kotlin char literal: 'x', '"', '\n', '\'' or 'A'. */
-const CHAR_LITERAL = /^'(?:\\u[0-9a-fA-F]{4}|\\.|[^\\'\n])'/;
+import { countMatches, stripComments, stripXmlComments } from "./kotlin_text.js";
+import { listenerShapeProblem, networkLoadsProblem, sessionsProblem } from "./kotlin_shape.js";
 
-/** Removes comments but keeps string and char literals (so a `//` inside "https://..." survives). */
-export function stripComments(src: string): string {
-  let out = "";
-  for (let i = 0; i < src.length; ) {
-    const c = src[i]!;
-    const two = src.slice(i, i + 2);
-    const chr = c === "'" ? CHAR_LITERAL.exec(src.slice(i, i + 8)) : null;
-    if (src.startsWith('"""', i)) {
-      const end = src.indexOf('"""', i + 3);
-      const stop = end < 0 ? src.length : end + 3;
-      out += src.slice(i, stop);
-      i = stop;
-    } else if (chr) {
-      // Kept whole, so a quote inside it (`'"'`) does not open a string.
-      out += chr[0];
-      i += chr[0].length;
-    } else if (c === '"') {
-      let j = i + 1;
-      while (j < src.length && src[j] !== '"') j += src[j] === "\\" ? 2 : 1;
-      out += src.slice(i, j + 1);
-      i = j + 1;
-    } else if (two === "//") {
-      while (i < src.length && src[i] !== "\n") i++;
-    } else if (two === "/*") {
-      const end = src.indexOf("*/", i + 2);
-      i = end < 0 ? src.length : end + 2;
-      out += " ";
-    } else {
-      out += c;
-      i++;
-    }
-  }
-  return out;
-}
+export { stripComments };
 
-const stripXmlComments = (x: string) => x.replace(/<!--[\s\S]*?-->/g, "");
+const READER = "/SpotifyReader.kt";
+/** Reflection and class loading get around every name list, so none is allowed (`javaClass.name` and `::class.java.name` are). */
+const REFLECTION = /Class\.forName|java\.lang\.reflect|kotlin\.reflect|\.getMethods?\(|\.getDeclared\w+\(|\.getFields?\(|\.getConstructors?\(|\bMethodHandles?\b|ClassLoader|::class\.java\.(?!name\b|simpleName\b)|javaClass\.(?!name\b|simpleName\b)/;
+/** Other ways to get the unfiltered session list: never used here. */
+const SESSION_SOURCES = /addOnActiveSessionsChangedListener|getActiveSessionsForUser|\bMediaController\b/;
+const KT_PATHS = /^(?:app\/src\/main|core\/src\/main|core\/src\/test)\/kotlin\/.+\.kt$/;
+const KTS_PATHS = /^(?:|app\/|core\/)(?:build|settings)\.gradle\.kts$/;
+const CODE_FILE = /\.(?:java|kt|kts|groovy|gradle|scala|aidl|c|cc|cpp|h|rs|dex|jar|aar|so)$/i;
 
-const AUDIO = /\b(?:MediaCodec\w*|MediaExtractor|MediaMuxer|Ringtone\w*|playSoundEffect|MediaPlayer|ExoPlayer|AudioTrack|AudioRecord|MediaRecorder|SoundPool|AudioPlaybackCapture\w*|MediaProjection\w*|AudioEffect|Visualizer|TextToSpeech)\b|androidx\.media3|androidx\.media\.|com\.spotify\.(?!music")/;
+const AUDIO =/\b(?:MediaCodec\w*|MediaExtractor|MediaMuxer|Ringtone\w*|playSoundEffect|MediaPlayer|ExoPlayer|AudioTrack|AudioRecord|MediaRecorder|SoundPool|AudioPlaybackCapture\w*|MediaProjection\w*|AudioEffect|Visualizer|TextToSpeech|ToneGenerator|AsyncPlayer|JetPlayer)\b|androidx\.media3|androidx\.media\.|com\.spotify\.(?!music")/;
 const TRANSPORT = /transportControls|TransportControls|dispatchMediaButtonEvent|dispatchMediaKeyEvent|KEYCODE_MEDIA|sendCommand|sendCustomAction|playFromMediaId|playFromUri|adjustVolume|setVolumeTo|MediaBrowser|MediaButtonReceiver/;
 const NOTIFICATION_READ = /getActiveNotifications|activeNotifications|\.notification\b|\.extras\b|tickerText|EXTRA_TITLE|EXTRA_TEXT|EXTRA_BIG_TEXT|snoozeNotification|cancelNotification|currentRanking|getCurrentRanking/;
 const BLUETOOTH = /android\.bluetooth|Bluetooth\w*|BLUETOOTH/;
@@ -60,36 +34,6 @@ const ALLOWED_DEPENDENCIES = ["androidx.core:core-ktx:1.15.0", "androidx.webkit:
 /** The Gradle tasks (as written in app/build.gradle.kts) that must depend on the merged-manifest check. */
 const GUARDED_TASKS = ["compile${cap}Kotlin", "compile${cap}JavaWithJavac", "package$cap", "package${cap}Bundle", "bundle$cap", "install$cap", "assemble$cap"];
 const ALLOWED_URL = "https://appassets.androidplatform.net/";
-
-const CALLBACK = /override\s+fun\s+(?:onNotificationPosted|onNotificationRemoved)\s*\(\s*\w+\s*:\s*StatusBarNotification\??\s*\)\s*\{\s*\}/g;
-
-/** The listener file is the class header and the two empty callbacks: no init block, field or other member (N3). */
-function listenerShapeProblem(text: string): string | null {
-  const t = text.replace(/^\s*(?:import|package)\s.*$/gm, "");
-  const header = /class\s+SpikeListener\s*:\s*NotificationListenerService\(\)\s*\{/.exec(t);
-  if (!header) return "SpikeListener must be `class SpikeListener : NotificationListenerService() {`";
-  const start = header.index + header[0].length;
-  let depth = 1;
-  let end = start;
-  for (; end < t.length && depth > 0; end++) depth += t[end] === "{" ? 1 : t[end] === "}" ? -1 : 0;
-  if (depth !== 0) return "the listener's braces do not balance";
-  const body = t.slice(start, end - 1).replace(CALLBACK, "");
-  const outside = t.slice(0, header.index) + t.slice(end);
-  if (body.trim() !== "" || outside.trim() !== "") return "the listener may hold only the two empty callbacks (no init block, field or other member)";
-  return null;
-}
-
-/** The list from getActiveSessions may be used only as `spotifyOnly(list) { it.packageName }`, nothing else reads it (N1). */
-function sessionsProblem(text: string): string | null {
-  const decl = /\bval\s+(\w+)\s*=\s*(?:try\s*\{\s*)?\w+\.getActiveSessions\s*\([^)]*\)\s*(?:\}\s*catch\b|$)/m.exec(text);
-  if (!decl) return "getActiveSessions must be assigned alone to a val (`val x = try { manager.getActiveSessions(c) } catch ...`)";
-  const name = decl[1]!;
-  const use = `spotifyOnly\\(\\s*${name}\\s*\\)\\s*\\{\\s*it\\.packageName\\s*\\}`;
-  if (!new RegExp(use).test(text)) return `the session list ${name} is never filtered with spotifyOnly(${name}) { it.packageName }`;
-  const rest = text.replace(decl[0], "").replace(new RegExp(use, "g"), "");
-  if (new RegExp(`\\b${name}\\b`).test(rest)) return `the session list ${name} is read other than through spotifyOnly(${name}) { it.packageName }`;
-  return null;
-}
 
 export function checkTree(tree: Tree): string[] {
   const v: string[] = [];
@@ -133,14 +77,25 @@ export function checkTree(tree: Tree): string[] {
     for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
     if (/allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(t)) add("webview", p, "opens file access");
     if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
-    // Any other assignment of it, anywhere (property or setter form), is a violation.
-    if (/blockNetworkLoads\s*=(?!=)(?!\s*true\b)|setBlockNetworkLoads\s*\((?!\s*true\s*\))/.test(t)) add("webview", p, "blockNetworkLoads may only ever be set to true");
+    const loads = networkLoadsProblem(t);
+    if (loads) add("webview", p, loads);
+    if (REFLECTION.test(t)) add("reflection", p, "uses reflection or class loading");
+    if (SESSION_SOURCES.test(t)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
+    if (!p.endsWith(READER) && /\bMediaSessionManager\b/.test(t)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
+  }
+  // Source files come from an allowlist of paths: no .java, no other source set, no other build script.
+  for (const p of tree.paths) {
+    if (p.startsWith("tools/") || !CODE_FILE.test(p)) continue;
+    const ok = p.endsWith(".kt") ? KT_PATHS.test(p) : p.endsWith(".kts") ? KTS_PATHS.test(p) : p === "gradle/wrapper/gradle-wrapper.jar";
+    if (!ok) add("sources", p, "a source or binary file outside the allowlisted paths");
   }
   for (const p of tree.paths) if (/\.(?:jks|keystore|p12|pfx)$|(?:^|\/)(?:keystore\.properties|\.env[\w.]*)$/i.test(p)) add("signing", p, "committed signing material or env file");
 
   // Reads Spotify's session only: filtered to Spotify's package before anything is read.
-  const readers = kt.filter(([, t]) => t.includes("getActiveSessions"));
-  if (readers.length !== 1) add("filter", "app", "exactly one file may call getActiveSessions");
+  // getActiveSessions occurs exactly once in the whole tree (occurrences, not files), in SpotifyReader.kt.
+  const readers = kt.filter(([, t]) => /\bgetActiveSessions\b/.test(t));
+  const calls = kt.reduce((n, [, t]) => n + countMatches(t, /\bgetActiveSessions\b/g), 0);
+  if (calls !== 1 || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls})`);
   for (const [p, t] of readers) {
     const used = sessionsProblem(t);
     if (used) add("filter", p, used);
