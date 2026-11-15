@@ -148,8 +148,13 @@ chase, accent, phrase) without a lock, and a gather or a fan is none of them. Th
 - **Frozen states do not move them.** Paused and a hold freeze the rig where it was, so the
   moments freeze with it.
 - **Off the list has none.** The music is not the planned song, so its position says nothing
-  about the planned song's moments: the "Holding" look has no gather, no fan and no breakdown.
-  The renderer passes no moments in that state.
+  about the planned song's moments: the "Holding" look has no gather, no fan, no breakdown, no
+  drop burst and **no light-only burst on an interval change** either.
+- **The drop's white burst also shows at the None level**, with the gather and the fan, except
+  while paused, holding or off the list. It is light, not a beat.
+- **Where this is gated.** The model's `sceneFrame` must gate the moments by link state (none
+  when Paused, held or Off the list), with a test; today it computes them in every state. That is
+  a scene-lane change after this PR, not part of it, and not left to the renderer.
 
 ### How a beam turns (decided, #526 review)
 
@@ -163,7 +168,9 @@ The model's `directions` are therefore **targets**, not what is drawn. Several o
 a step: the phrase boundary mirrors every pan (a 104 degree pan step on the fan's edge fixture,
 102 degrees of turn), the lead half is 60 degrees of phase ahead (up to 31 degrees of turn),
 gather and fan switch on and off (up to 105 degrees; 83 into a gather), and a song change
-brings a new look (up to 79 degrees). Measured on the model at 2a129c7, the
+brings a new look (up to 79 degrees in the same phrase, but a new song starts on the first phrase,
+so from a mirrored phrase the step is about 102 degrees; leaving the Beat level mid-phrase, which
+un-mirrors, gives the same). Measured on the model at 2a129c7, the
 largest step between any two targets of one fixture is 104.7 degrees. The renderer draws each
 beam with a **turn-rate limiter**:
 
@@ -172,17 +179,19 @@ beam with a **turn-rate limiter**:
    starts turning on the frame the target changes.
 2. **A re-aim takes as long as its turn needs.** The longest turn, 104.7 degrees, takes 3.5 s,
    so a song change, a phrase flip, a gather or a fan **completes within 3.5 s** and most take
-   less. The "1.2 s" of the earlier text is gone: the 1.2 s now only names the **light's** blend
-   (the dim for one beat and the colour of the new look), not how fast a beam turns. The look
+   less. The "1.2 s" of the earlier text is gone and names nothing now: the dim is one beat
+   long, and no colour belongs to a look (the zone alone gives colour, rule 7). The look
    ranges are not shrunk to fit 1.2 s; that would flatten every look to under 36 degrees.
 3. The frame time used is at most 100 ms, so a stalled frame or a tab brought back to the front
    never makes a beam jump. A frame over 100 ms turns the beam by at most 3 degrees.
 4. Nothing turns in the first frame of the scene (the beams start on their targets), and nothing
    turns while the rig is frozen (Paused, hold, the still rig).
-5. **Beat words.** The phrase mirror and the first beat of a pattern side are beat-level
-   events (S8): the **target** changes within 50 ms of the anchor beat and the beam starts
-   turning on that frame; its arrival may be later, up to 3.5 s. The beat's accent is carried by
-   the lift and the wall's chase, which are not limited. A beam never "arrives on the beat".
+5. **Beat words.** The only targets that change on a beat are the phrase mirror and the
+   lead-half swap (S8, Beat level only): the **target** changes within 50 ms of the anchor beat
+   and the beam starts turning on that frame; its arrival may be later, up to 3.5 s. A position
+   pattern never changes a target (rule 4, "What drives what"): its accent on the first beat of
+   a side is **brightness only**, is not turn-limited, lands within 50 ms of the beat, and is
+   carried by the lift and the wall's chase. A beam never "arrives on the beat".
 6. **A gather may arrive late.** The gather is the 8 beats before a drop. A gather turn of up to
    83 degrees takes 2.8 s, which fits 8 beats up to about 170 bpm; above that the beams are
    gathered only as far as the limit allows when the drop's burst comes, and then fan. This is
@@ -203,11 +212,20 @@ renderer:
   phrase flip, a look change, the gather and the fan switching on and off, each from the
   worst phase of the motion) at 30, 60 and 144 frames a second. On every frame the angle
   between the drawn directions of two consecutive frames, over the frame time, is at most 30
-  degrees a second, and every drawn direction is at its target within 3.5 s.
+  degrees a second, and every drawn direction is at its target within 3.5 s plus one frame (the bound is tight:
+  the worst case, a fan to a cross on the back truss, arrives at 3.49 s before rounding up to
+  whole frames). The drive also includes stalled frames of 250 ms and 1 s, which the clamp of
+  item 3 turns into 100 ms: a stalled frame turns a beam by at most 3 degrees. (The clamp is the
+  caller's, so the drive tests the renderer's loop and not `limitTurn` alone.)
 - **Both together** with the existing rule-4 test: two classes that differ only in intervals
-  give identical drawn directions on every frame, not only identical targets.
+  give identical drawn directions on every frame, not only identical targets. The test feeds both
+  classes the same sequence of motion phases and frame times: the phase's rate comes from the
+  zone, so a time-driven run would differ, and the zone is not taken out of the rate to make it
+  pass.
 - **In CI's scene screenshots run:** the frame log (S9) also records the highest beam speed of
-  each second; the run fails above 30 degrees a second (with 2 percent for timing).
+  each second; the run fails above 30 degrees a second (with 2 percent for timing). The run plays through a
+  phrase flip, a song change (from a mirrored phrase) and a build with its drop, so the gather
+  and the fan are in the log; without those transitions the check measures nothing.
 
 ### Values the scene model fixed (as built, #526)
 
@@ -468,7 +486,7 @@ straight on the scene.
 | Interval change | Front truss crosses to the new colour in 700 ms (`--m-change`); every lens flashes white once (160 ms, `--m-flash`), unless a burst falls on the same moment, which then replaces the lens flash (one event, not two); the gel crosses as in 2D | New values; one white line down the gel's edge |
 | Song change | Rig dims to 25 % for one beat, back on the first beat of the new song; the beams turn to the new song's look at no more than 30 degrees a second, so the turn is done within 3.5 s ("How a beam turns") | Score moves on; song clip and BPM change |
 | Build (8 beats before a drop, or a `build` moment) | Beams turn, at the turn limit, to gather at one point in the middle of the room (complete in time up to about 170 bpm), the haze brightens to 1.5 ×, the lift deepens to 55 % | Nothing new (the score shows the "Drop" tick) |
-| Drop | One white burst over the whole scene (peak at 0.85 of white, 250 ms decay; the only full-screen flash), then every fixture on and turning, at the turn limit, to the wide fan for 4 bars (the fan is open within 3.5 s and 4 bars last 5.3 s even at 180 bpm), then the zone's own energy | Unchanged; the text is never flashed (dark-under-text holds during the burst) |
+| Drop | One white burst over the whole scene (also at the None level, except paused, holding and off the list) (peak at 0.85 of white, 250 ms decay; the only full-screen flash), then every fixture on and turning, at the turn limit, to the wide fan for 4 bars (the fan is open within 3.5 s and 4 bars last 5.3 s even at 180 bpm), then the zone's own energy | Unchanged; the text is never flashed (dark-under-text holds during the burst) |
 | Breakdown | One slow beam on the front truss and the wall's wave for 8 bars | Unchanged |
 | Paused | Lights down: everything to 6 %, frozen where it was | As 2D: gel lights down, "Paused" plate, link plate "Music paused" |
 | Coasting (readings stopped or stale) | No beat at all (the beat cannot be measured); the rig keeps the zone's colour and moves at its energy | As 2D: "estimated", dimmed dashed countdown, link plate "Music not heard" |
@@ -552,7 +570,7 @@ pull request:
 | `--scene-burst` | 0.85, 250 ms | The drop burst's peak share of white and its decay |
 | `--scene-anticipate` | 10 s | How long before an interval change the next colour comes in |
 | `--scene-turn-max` | 30 degrees a second | The fastest any beam turns; the limiter's rate (S7) |
-| `--scene-reaim` | 3.5 s at most | The longest a re-aim, phrase flip, gather or fan may take: the largest target step of 105 degrees at the turn limit. Replaces the 1.2 s of earlier revisions, which now names only the dim and the colour blend of a song change |
+| `--scene-reaim` | 3.5 s at most | The longest a re-aim, phrase flip, gather or fan may take: the largest target step of 105 degrees at the turn limit. Replaces the 1.2 s of earlier revisions, which names nothing now (the song-change dim is one beat) |
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
 | `--scene-tempo-pulse` | 0.12 | The tempo pulse's depth when there are no anchors |
 | `--score-ahead` | 8 min (6 at 3:2 and narrower) | The score's look-ahead |
