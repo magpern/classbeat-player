@@ -7,10 +7,13 @@ export interface Tree {
   files: Record<string, string>;
   /** Every path in the tree (for committed signing material). */
   paths: string[];
+  /** SHA-256 (hex) of the binary build inputs by path (the wrapper jar). Computed by the loader, not here. */
+  hashes?: Record<string, string>;
 }
 
 import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
 import { listenerShapeProblem, networkLoadsProblem, readerOrderProblem, sessionsProblem } from "./kotlin_shape.js";
+import { useSiteProblem } from "./use_sites.js";
 import { reflectionProblem } from "./reflection_rules.js";
 import { buildScriptProblems } from "./gradle_shape.js";
 import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
@@ -93,6 +96,9 @@ export function checkTree(tree: Tree): string[] {
     const loads = views.map(networkLoadsProblem).find(Boolean);
     if (loads) add("webview", p, loads);
     const reflection = reflectionProblem(t) ?? reflectionProblem(raw);
+    // Intent, ComponentName and getSystemService only in the pinned statements, on both views.
+    const useSite = useSiteProblem(p, [t, liteText(raw)]);
+    if (useSite) add("reflection", p, useSite);
     if (reflection) add("reflection", p, reflection);
     if (both(SESSION_SOURCES, t, raw)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
     if (!p.endsWith(READER) && both(/\bMediaSessionManager\b/, t, raw)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
@@ -142,7 +148,7 @@ export function checkTree(tree: Tree): string[] {
   }
   for (const p of tree.paths) if (/\.toml$/i.test(p) && !p.startsWith("tools/")) add("dependencies", p, "a version catalog file is not allowed");
   // Every build script equals its pinned text (the real guard); extra scripts and included builds fail.
-  for (const [rule, path, what] of buildScriptProblems(tree.files, tree.paths)) add(rule, path, what);
+  for (const [rule, path, what] of buildScriptProblems(tree.files, tree.paths, tree.hashes ?? {})) add(rule, path, what);
   const app = kts.find(([p]) => p === "app/build.gradle.kts");
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
 

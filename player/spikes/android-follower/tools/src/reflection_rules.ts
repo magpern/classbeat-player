@@ -32,7 +32,7 @@ export function shadowProblem(text: string): string | null {
     `\\b(?:class|interface|object|typealias) ${TYPE_PARAMS}${SHADOWED}\\b`,
     `\\b(?:val|var) ${TYPE_PARAMS}(?:[^(){};=]*\\. ?)?${SHADOWED}\\b`,
     `\\b(?:val|var) ?\\([^)]*\\b${SHADOWED}\\b`,
-    `\\bfun ${TYPE_PARAMS}(?:[^(){};=]*\\. ?)?${SHADOWED} ?\\(`,
+    `\\bfun [^{};=]*?\\b${SHADOWED} ?\\(`,
   ];
   if (declared.some((d) => new RegExp(d).test(code)) || new RegExp(`\\b${SHADOWED}\\b(?! ?[(.])`).test(code)) return "declares, binds or passes Intent, ComponentName or getSystemService: they may only be called or used as a qualifier";
   return null;
