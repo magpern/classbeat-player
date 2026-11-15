@@ -9,14 +9,14 @@ export interface Tree {
   paths: string[];
 }
 
-import { countMatches, stripComments, stripXmlComments } from "./kotlin_text.js";
-import { listenerShapeProblem, networkLoadsProblem, sessionsProblem } from "./kotlin_shape.js";
+import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
+import { listenerShapeProblem, networkLoadsProblem, readerOrderProblem, sessionsProblem } from "./kotlin_shape.js";
+import { reflectionProblem } from "./reflection_rules.js";
+import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
 
 export { stripComments };
 
 const READER = "/SpotifyReader.kt";
-/** Reflection and class loading get around every name list, so none is allowed (`javaClass.name` and `::class.java.name` are). */
-const REFLECTION = /Class\.forName|java\.lang\.reflect|kotlin\.reflect|\.getMethods?\(|\.getDeclared\w+\(|\.getFields?\(|\.getConstructors?\(|\bMethodHandles?\b|ClassLoader|::class\.java\.(?!name\b|simpleName\b)|javaClass\.(?!name\b|simpleName\b)/;
 /** Other ways to get the unfiltered session list: never used here. */
 const SESSION_SOURCES = /addOnActiveSessionsChangedListener|getActiveSessionsForUser|\bMediaController\b/;
 const KT_PATHS = /^(?:app\/src\/main|core\/src\/main|core\/src\/test)\/kotlin\/.+\.kt$/;
@@ -62,26 +62,34 @@ export function checkTree(tree: Tree): string[] {
     if (funs !== empty) add("listener", p, "every function of the notification listener must have an empty body");
     if (funs === 0) add("listener", p, "no callbacks found: the check cannot see the listener");
   }
+  // Name lists run on the stripped text and on the raw text: a name inside a comment or string fails too,
+  // so a parser slip can only cause a false positive, never hide code.
+  const both = (re: RegExp, t: string, raw: string) => re.test(t) || re.test(raw);
   for (const [p, t] of kt) {
     // Imports are left out: `android.service.notification.X` is a package, not a read.
-    if (NOTIFICATION_READ.test(t.replace(/^\s*(?:import|package)\s.*$/gm, ""))) add("notifications", p, "reads notifications");
+    const noImports = (x: string) => x.replace(/^\s*(?:import|package)\s.*$/gm, "");
+    if (both(NOTIFICATION_READ, noImports(t), noImports(tree.files[p]!))) add("notifications", p, "reads notifications");
     if (!p.endsWith("/SpikeListener.kt") && /StatusBarNotification/.test(t)) add("notifications", p, "touches StatusBarNotification outside the listener");
   }
 
   for (const [p, t] of kt) {
-    if (TRANSPORT.test(t)) add("transport", p, "sends or can send a transport command");
-    if (AUDIO.test(t)) add("audio", p, "uses an audio player, recorder or Spotify SDK");
-    if (BLUETOOTH.test(t)) add("bluetooth", p, "uses Bluetooth");
-    if (NETWORK.test(t)) add("network", p, "uses a network class or a JavaScript bridge");
-    if (SECRET.test(t)) add("secrets", p, "names a credential");
-    for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
-    if (/allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(t)) add("webview", p, "opens file access");
-    if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
-    const loads = networkLoadsProblem(t);
+    const raw = tree.files[p]!;
+    if (both(TRANSPORT, t, raw)) add("transport", p, "sends or can send a transport command");
+    if (both(AUDIO, t, raw)) add("audio", p, "uses an audio player, recorder or Spotify SDK");
+    if (both(BLUETOOTH, t, raw)) add("bluetooth", p, "uses Bluetooth");
+    if (both(NETWORK, t, raw)) add("network", p, "uses a network class or a JavaScript bridge");
+    if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
+    for (const m of raw.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
+    const views = [t, liteText(raw)];
+    if (syntaxProblem(t)) add("syntax", p, syntaxProblem(t)!);
+    if (views.some((x) => /allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(x))) add("webview", p, "opens file access");
+    if (p.endsWith("/SceneActivity.kt") && !views.every((x) => /blockNetworkLoads\s*=\s*true/.test(x))) add("webview", p, "the web view must set blockNetworkLoads = true");
+    const loads = views.map(networkLoadsProblem).find(Boolean);
     if (loads) add("webview", p, loads);
-    if (REFLECTION.test(t)) add("reflection", p, "uses reflection or class loading");
-    if (SESSION_SOURCES.test(t)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
-    if (!p.endsWith(READER) && /\bMediaSessionManager\b/.test(t)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
+    const reflection = reflectionProblem(t) ?? reflectionProblem(raw);
+    if (reflection) add("reflection", p, reflection);
+    if (both(SESSION_SOURCES, t, raw)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
+    if (!p.endsWith(READER) && both(/\bMediaSessionManager\b/, t, raw)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
   }
   // Source files come from an allowlist of paths: no .java, no other source set, no other build script.
   for (const p of tree.paths) {
@@ -93,43 +101,49 @@ export function checkTree(tree: Tree): string[] {
 
   // Reads Spotify's session only: filtered to Spotify's package before anything is read.
   // getActiveSessions occurs exactly once in the whole tree (occurrences, not files), in SpotifyReader.kt.
-  const readers = kt.filter(([, t]) => /\bgetActiveSessions\b/.test(t));
-  const calls = kt.reduce((n, [, t]) => n + countMatches(t, /\bgetActiveSessions\b/g), 0);
-  if (calls !== 1 || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls})`);
+  // Counted on the stripped text and on the raw text minus `//` lines: both must say once.
+  const SESSIONS = /\bgetActiveSessions\b/g;
+  const viewsOf = (p: string, t: string) => [t, liteText(tree.files[p]!)];
+  const readers = kt.filter(([p, t]) => viewsOf(p, t).some((x) => countMatches(x, SESSIONS) > 0));
+  const calls = [0, 1].map((i) => kt.reduce((n, [p, t]) => n + countMatches(viewsOf(p, t)[i]!, SESSIONS), 0));
+  if (calls.some((n) => n !== 1) || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls.join(" and ")})`);
   for (const [p, t] of readers) {
-    const used = sessionsProblem(t);
-    if (used) add("filter", p, used);
-    const from = t.indexOf("getActiveSessions");
-    const filter = t.indexOf("spotifyOnly(", from);
-    const firstRead = Math.min(...[".metadata", ".playbackState", "getMetadata", "getPlaybackState"].map((k) => { const i = t.indexOf(k, from); return i < 0 ? Infinity : i; }));
-    if (filter < 0) add("filter", p, "the active sessions are not filtered with spotifyOnly");
-    else if (filter > firstRead) add("filter", p, "metadata or state is read before the Spotify filter");
+    // The shape checks read identifiers, so the second view also drops block comments (their prose names the list), with a plain non-nesting pattern that does not track strings.
+    for (const x of [t, liteText(tree.files[p]!).replace(/\/\*[\s\S]*?\*\//g, " ")]) {
+      const used = sessionsProblem(x) ?? readerOrderProblem(x);
+      if (used) { add("filter", p, used); break; }
+    }
   }
 
   // The build: pinned dependencies from an allowlist, debug signing only, the manifest check in place.
   for (const [p, t] of kts) {
-    if (SIGNING.test(t)) add("signing", p, "defines signing");
-    if (/\brelease\b/.test(t)) add("signing", p, "defines or names a release build");
-    if (/spotify|media3|exoplayer|bluetooth|okhttp|retrofit|firebase/i.test(t)) add("dependencies", p, "names a forbidden library");
-    if (SECRET.test(t)) add("secrets", p, "names a credential");
-    for (const m of t.matchAll(/\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\(\s*"([^"]+)"\s*\)/g)) {
-      if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
+    const raw = tree.files[p]!;
+    if (both(SIGNING, t, raw)) add("signing", p, "defines signing");
+    // Every code rule runs on the stripped text and on the raw text minus whole-line `//` comments.
+    const views = [t, liteText(raw)];
+    if (syntaxProblem(t)) add("syntax", p, syntaxProblem(t)!);
+    if (views.some((x) => /\brelease\b/.test(x))) add("signing", p, "defines or names a release build");
+    if (views.some((x) => /spotify|media3|exoplayer|bluetooth|okhttp|retrofit|firebase/i.test(x))) add("dependencies", p, "names a forbidden library");
+    if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
+    for (const x of views) {
+      for (const m of x.matchAll(/\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\(\s*"([^"]+)"\s*\)/g)) {
+        if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
+      }
+      for (const m of x.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
     }
-    for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
+    const catalog = views.map(catalogProblem).find(Boolean);
+    if (catalog) add("dependencies", p, catalog);
   }
+  for (const p of tree.paths) if (/\.toml$/i.test(p) && !p.startsWith("tools/")) add("dependencies", p, "a version catalog file is not allowed");
   const app = kts.find(([p]) => p === "app/build.gradle.kts");
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
 
   // The check is wired to every path to a built or installed app, not only `assemble` (#559, N6).
-  if (app) {
-    for (const task of GUARDED_TASKS) {
-      if (!app[1].includes(`"${task}"`)) add("manifest", "app/build.gradle.kts", `the merged-manifest check is not wired to ${task}`);
-    }
-  }
+  if (app) for (const what of gradleWiringProblems(app[1], GUARDED_TASKS)) add("manifest", "app/build.gradle.kts", what);
 
   // The pure module imports no Android class and no I/O.
   for (const [p, t] of kt) {
-    if (p.startsWith("core/") && /^\s*import\s+(?:android\.|java\.io|java\.nio|java\.net|javax\.)/m.test(t)) add("core", p, "the pure core imports Android or I/O");
+    if (p.startsWith("core/") && [t, liteText(tree.files[p]!)].some((x) => /^\s*import\s+(?:android\.|java\.io|java\.nio|java\.net|javax\.)/m.test(x))) add("core", p, "the pure core imports Android or I/O");
   }
   return v;
 }

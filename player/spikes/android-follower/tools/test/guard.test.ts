@@ -38,7 +38,18 @@ function mutate(path: string, from: string | RegExp, to: string): Tree {
   return { ...real, files: { ...real.files, [path]: next } };
 }
 
-const MANIFEST = "app/src/main/AndroidManifest.xml";
+/** Several edits in a row on app/build.gradle.kts. */
+function gradle(...edits: [from: string, to: string][]): Tree {
+  let text = real.files["app/build.gradle.kts"]!;
+  for (const [from, to] of edits) {
+    const next = text.replace(from, () => to);
+    assert.notEqual(next, text, `edit of the build script changed nothing: ${from}`);
+    text = next;
+  }
+  return { ...real, files: { ...real.files, "app/build.gradle.kts": text } };
+}
+
+const MANIFEST ="app/src/main/AndroidManifest.xml";
 const LISTENER = "app/src/main/kotlin/org/classbeat/spike/follower/SpikeListener.kt";
 const READER = "app/src/main/kotlin/org/classbeat/spike/follower/SpotifyReader.kt";
 const FOLLOW = "app/src/main/kotlin/org/classbeat/spike/follower/FollowSession.kt";
@@ -146,6 +157,62 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["a committed env file", "signing", () => ({ ...real, paths: [...real.paths, ".env"] })],
   ["Android code in the pure core", "core", () => mutate(CORE, "package org.classbeat.spike", "package org.classbeat.spike\n\nimport android.os.Build")],
   ["no manifest check in the build", "manifest", () => mutate(APP_GRADLE, /CheckManifest/g, "Nothing")],
+  // #565 NB-B: reflection by property.
+  ["NB-B: javaClass bound to a variable, methods and invoke", "reflection", () => mutate(READER, "class SpotifyReader", 'val k = manager.javaClass\nval r = k.methods.first { it.name == "getActive" + "Sessions" }.invoke(manager, null)\nclass SpotifyReader')],
+  ["NB-B: bare javaClass", "reflection", () => mutate(READER, "class SpotifyReader", "val k = this.javaClass\nclass SpotifyReader")],
+  ["NB-B: ::class.java bound to a variable", "reflection", () => mutate(READER, "class SpotifyReader", "val k = String::class.java\nclass SpotifyReader")],
+  ["NB-B: .invoke(", "reflection", () => mutate(READER, "class SpotifyReader", "val r = f.invoke(1)\nclass SpotifyReader")],
+  ["NB-B: methods", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.methods\nclass SpotifyReader")],
+  ["NB-B: declaredMethods", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.declaredMethods\nclass SpotifyReader")],
+  ["NB-B: fields", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.fields\nclass SpotifyReader")],
+  ["NB-B: declaredFields", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.declaredFields\nclass SpotifyReader")],
+  ["NB-B: constructors", "reflection", () => mutate(READER, "class SpotifyReader", "val r = k.constructors\nclass SpotifyReader")],
+  // #565 NB-A: a line after `blockNetworkLoads = true` that starts with `?.` (or an operator or keyword) continues it.
+  ["NB-A: blockNetworkLoads = true then ?.", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            ?.let { flag }")],
+  ["NB-A: blockNetworkLoads = true then as", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            as Boolean")],
+  ["NB-A: blockNetworkLoads = true then ?:", "webview", () => mutate(SCENE, "blockNetworkLoads = true", "blockNetworkLoads = true\n            ?: flag")],
+  // #565 NB3: a nested "/*" inside a template must not hide code.
+  ["NB3: a nested \"/*\" in a template hides a network class", "network", () => mutate(READER, "class SpotifyReader", 'val a = "${"/*"}"\nval u = java.net.URL("x")\nval b = "*/"\nclass SpotifyReader')],
+  // #565 NB4: a task name elsewhere in the file is not the list passed to dependsOn.
+  ["NB4: install$cap named elsewhere, not in the list", "manifest", () => mutate(APP_GRADLE, '"install$cap", "assemble$cap")', '"assemble$cap")\n        val unused = listOf("install$cap")')],
+  ["NB4: the list is not the one dependsOn uses", "manifest", () => mutate(APP_GRADLE, "it.name in guarded", "it.name in emptyList<String>()")],
+  ["NB4: dependsOn something other than the check", "manifest", () => mutate(APP_GRADLE, "dependsOn(check) }", "dependsOn(syncSceneAssets) }")],
+  // #565 NB-C: version catalogs hide coordinates from the allowlist.
+  ["NB-C: a libs.* dependency", "dependencies", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    implementation(libs.thing)')],
+  ["NB-C: a version catalog file", "dependencies", () => ({ ...real, paths: [...real.paths, "gradle/libs.versions.toml"] })],
+  ["NB-C: a catalog declared in settings", "dependencies", () => mutate("settings.gradle.kts", /^/, 'dependencyResolutionManagement { versionCatalogs { create("x") { from(files("a.toml")) } } }\n')],
+  // Review of #566, B1: compiling routes from a class object to a method by name (fixture compiled by the reviewer).
+  ["B1: the reviewer's compiling reflection routes", "reflection", () => mutate(READER, "class SpotifyReader", `${readFileSync(new URL("fixtures/reflection_routes.kt.txt", import.meta.url), "utf8")}\nclass SpotifyReader`)],
+  ["B1: Class<*>::getMethod callable reference", "reflection", () => mutate(READER, "class SpotifyReader", "val find = Class<*>::getMethod\nclass SpotifyReader")],
+  ["B1: getMethod with a space before the parenthesis", "reflection", () => mutate(READER, "class SpotifyReader", 'fun peek(c: Class<*>) = c.getMethod ("x")\nclass SpotifyReader')],
+  ["B1: ::class without .java", "reflection", () => mutate(READER, "class SpotifyReader", "val k = MediaSessionManager::class\nclass SpotifyReader")],
+  ["B1: a class object bound through listOf", "reflection", () => mutate(READER, "class SpotifyReader", "val c = listOf(MediaSessionManager::class.java).first()\nclass SpotifyReader")],
+  ["B1: newInstance", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> make(c: Class<T>) = c.newInstance()\nclass SpotifyReader")],
+  ["B1: a class object as a plain call argument", "reflection", () => mutate(READER, "class SpotifyReader", "val c = peek(String::class.java)\nclass SpotifyReader")],
+  ["B1: a reflection name in a comment", "reflection", () => mutate(READER, "class SpotifyReader", "// getDeclaredMethod\nclass SpotifyReader")],
+  // Review of #566, B2: names fail in comments and strings too; a crafted string or comment cannot hide code.
+  ["B2: a raw string closed by a run of quotes hides code", "network", () => mutate(READER, "class SpotifyReader", 'val a = """x""""\nval b = "/*"\nval u = java.net.URL("x")\nval c = "*/"\nclass SpotifyReader')],
+  ["B2: a nested block comment hides code", "network", () => mutate(READER, "class SpotifyReader", '/* /* */ " */\nval b = "/*"\nval u = java.net.URL("x")\nval c = "*/"\nclass SpotifyReader')],
+  ["B2: a network class named in a comment", "network", () => mutate(READER, "class SpotifyReader", "// java.net.URL\nclass SpotifyReader")],
+  ["B2: an audio class named in a string", "audio", () => mutate(READER, "class SpotifyReader", 'val s = "MediaPlayer"\nclass SpotifyReader')],
+  // Review of #566 round 2: a backtick identifier holding a quote desyncs the stripper (fixture Tick.kt).
+  ["Q1: a backtick quote hides blockNetworkLoads = false", "webview", () => mutate(SCENE, "blockNetworkLoads = true", 'blockNetworkLoads = true\n        val `q"` = 0\n        val b = "/*"\n        web.settings.blockNetworkLoads = false\n        val c = "*/"')],
+  ["Q1: the same, caught as a backtick", "syntax", () => mutate(SCENE, "blockNetworkLoads = true", 'blockNetworkLoads = true\n        val `q"` = 0\n        val b = "/*"\n        web.settings.blockNetworkLoads = false\n        val c = "*/"')],
+  ["Q2: a backtick quote hides a second, unfiltered session read", "filter", () => mutate(READER, "class SpotifyReader", 'val `q"` = 0\nval b = "/*"\nfun x(m: MediaSessionManager, l: ComponentName) = m.getActiveSessions(l).first().metadata\nval c = "*/"\nclass SpotifyReader')],
+  ["Q3: a backtick quote hides an off-list dependency", "dependencies", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    val `q"` = 0\n    val b = "/*"\n    implementation("com.evil:lib:1.0")\n    val c = "*/"')],
+  ["Q3: the same, caught as a backtick", "syntax", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    val `q"` = 0\n    val b = "/*"\n    implementation("com.evil:lib:1.0")\n    val c = "*/"')],
+  ["a backtick identifier", "syntax", () => mutate(READER, "class SpotifyReader", "val `x` = 1\nclass SpotifyReader")],
+  ["a comment token inside a string", "syntax", () => mutate(READER, "class SpotifyReader", 'val s = "/*"\nclass SpotifyReader')],
+  ["a second getActiveSessions in a block comment", "filter", () => mutate(READER, "class SpotifyReader", "/* getActiveSessions */\nclass SpotifyReader")],
+  ["a commented-out off-list dependency", "dependencies", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    /* implementation("com.evil:lib:1.0") */')],
+  ["a release block in a block comment", "signing", () => mutate(APP_GRADLE, "android {", "android {\n    /* release */")],
+  ["NB-1 Q4: :: class with spaces", "reflection", () => mutate(READER, "class SpotifyReader", "val k = MediaSessionManager :: class\nclass SpotifyReader")],
+  ["NB-1 Q5: a shadowing Intent function", "reflection", () => mutate(READER, "class SpotifyReader", "fun Intent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
+  ["NB-1 Q6: enclosingMethod", "reflection", () => mutate(READER, "class SpotifyReader", "val m = c.enclosingMethod\nclass SpotifyReader")],
+  // Review of #566, B3: the wiring list is one bare listOf, declared once.
+  ["B3: .filter { false } on the guarded list", "manifest", () => mutate(APP_GRADLE, '"assemble$cap")', '"assemble$cap").filter { false }')],
+  ["B3: a decoy list declared earlier, real list without install", "manifest", () => gradle(['"install$cap", "assemble$cap")', '"assemble$cap")'], ["    onVariants { variant ->", '    val guarded = listOf("compile${cap}Kotlin", "install$cap")\n    onVariants { variant ->'])],
+  ["B3: a second wiring statement", "manifest", () => mutate(APP_GRADLE, "tasks.matching { it.name in guarded }", "tasks.matching { it.name in guarded }.configureEach { dependsOn(check) }\n        tasks.matching { it.name in guarded }")],
 ];
 
 describe("each hard limit fails when broken", () => {
@@ -167,6 +234,29 @@ describe("stripComments", () => {
 
   it("keeps escaped char literals whole", () => {
     assert.match(stripComments("val a = '\\'' /* x */ val b = '\\u0041'"), /'\\''\s+val b = '\\u0041'/);
+  });
+
+  it("reads a `${...}` template as code, so a nested \"/*\" does not open a comment", () => {
+    const out = stripComments('val a = "x ${"/*"} y"\nval u = MediaCodec\nval b = "*/"');
+    assert.match(out, /MediaCodec/);
+  });
+
+  it("strips a comment inside a template and handles nested braces and raw strings", () => {
+    const out = stripComments('val a = "${ mapOf(1 to {2}) /* gone */ }"\nval r = """${"/*"} raw"""\nval u = MediaCodec');
+    assert.doesNotMatch(out, /gone/);
+    assert.match(out, /MediaCodec/);
+  });
+
+  it("closes a raw string at the last quote of a run, so what follows is code again", () => {
+    const out = stripComments('val a = """x""""\nval b = "/*"\nval u = MediaCodec\nval c = "*/"');
+    assert.match(out, /MediaCodec/);
+  });
+
+  it("nests block comments", () => {
+    const out = stripComments('/* a /* b */ still comment MediaPlayer */ val u = MediaCodec\nval s = "/*"\nval v = AudioTrack\nval t = "*/"');
+    assert.doesNotMatch(out, /MediaPlayer|still/);
+    assert.match(out, /MediaCodec/);
+    assert.match(out, /AudioTrack/);
   });
 
   it("drops comments and keeps a URL inside a string", () => {
