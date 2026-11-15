@@ -22,6 +22,8 @@ describe("site addresses", () => {
   it("each signed-in page reads its own route first", () => {
     assert.deepEqual(pageOf(`/classes/${ID}`), { kind: "signed-in", title: "Class details", nav: "classes", load: `classes/${ID}` });
     assert.equal((pageOf("/account/passkeys") as { load: string }).load, "passkeys");
+    // Your data reads the account itself: whether it has an email decides the deletion's confirmation (#505).
+    assert.equal((pageOf("/account/data") as { load: string }).load, "me");
   });
 });
 

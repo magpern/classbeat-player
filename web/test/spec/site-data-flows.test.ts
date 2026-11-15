@@ -41,7 +41,7 @@ describe("the page", () => {
     const text = await site.page.locator(".acct-body").innerText();
     assert.match(text, /You can export 3 times a day\. The file is made when you ask and is not kept\./);
     assert.match(text, /It cannot be undone\./);
-    assert.deepEqual(site.api.map((a) => a.route), ["GET sessions"]);
+    assert.deepEqual(site.api.map((a) => a.route), ["GET me"]);
     await site.context.close();
   });
 });

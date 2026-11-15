@@ -21,7 +21,10 @@ export const TYPED = "ana.deletes@example.com";
 export const TYPED_WRONG = "ana.typo@example.org";
 
 const RECENT = { status: 403, body: { error: "recent_sign_in_required" } } as const;
-export const SIGNED_IN: Script = { "GET sessions": { status: 200, body: { sessions: [] } } };
+/** The account's own email, as `GET me` answers it (#505). The page keeps only that there is one: it is never shown, sent or stored. */
+export const ME_EMAIL = "ana.account-zq7rk@example.com";
+/** Signed in with an email: Your data reads `GET me`; the other pages these tests open read `GET sessions`. */
+export const SIGNED_IN: Script = { "GET sessions": { status: 200, body: { sessions: [] } }, "GET me": { status: 200, body: { email: ME_EMAIL } } };
 const EXPORT = "POST account/export";
 const DELETE = "POST account/delete";
 
