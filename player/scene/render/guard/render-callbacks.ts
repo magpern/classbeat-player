@@ -29,10 +29,15 @@ import { Group, InstancedMesh, Material, Mesh, MeshBasicMaterial, Object3D, Scen
 
 const NAMES = ["onBeforeRender", "onAfterRender", "onBeforeCompile", "onBeforeShadow", "onAfterShadow"] as const;
 type Bag = Readonly<Record<string, unknown>>;
-
-const defaultsOf = (prototype: object): Bag => Object.freeze(Object.fromEntries(NAMES.map((name) => [name, (prototype as Bag)[name]])));
+/** What `callbacksOf` reads, each by a literal member, in the order of NAMES. No key is built at run time anywhere here (the guard/ lint fence allows none). */
+interface Callbacks { readonly onBeforeRender?: unknown; readonly onAfterRender?: unknown; readonly onBeforeCompile?: unknown; readonly onBeforeShadow?: unknown; readonly onAfterShadow?: unknown }
+type Reads = readonly [unknown, unknown, unknown, unknown, unknown];
+const callbacksOf = (o: object): Reads => {
+  const c = o as Callbacks;
+  return Object.freeze([c.onBeforeRender, c.onAfterRender, c.onBeforeCompile, c.onBeforeShadow, c.onAfterShadow] as const);
+};
 /** three's own defaults, read from a plain object and a plain material when this module loads. Not exported: a test compares against three's own prototypes. */
-const DEFAULTS = Object.freeze({ object: defaultsOf(Object3D.prototype), material: defaultsOf(MeshBasicMaterial.prototype) });
+const DEFAULTS = Object.freeze({ object: callbacksOf(Object3D.prototype), material: callbacksOf(MeshBasicMaterial.prototype) });
 
 const OBJECT_PROTOTYPES: readonly object[] = Object.freeze([Object3D, Scene, Mesh, InstancedMesh, Group].map((c) => c.prototype as object));
 const MATERIAL_PROTOTYPES: readonly object[] = Object.freeze([MeshBasicMaterial, ShaderMaterial].map((c) => c.prototype as object));
@@ -40,10 +45,11 @@ const MATERIAL_PROTOTYPES: readonly object[] = Object.freeze([MeshBasicMaterial,
 function refuseUnlessDefault(item: object, kind: "object" | "material"): void {
   const prototypes = kind === "object" ? OBJECT_PROTOTYPES : MATERIAL_PROTOTYPES;
   if (!prototypes.includes(Object.getPrototypeOf(item) as object)) throw new Error(`a scene ${kind} has a prototype that is not a three.js class src/ may use`);
-  const defaults = kind === "object" ? DEFAULTS.object : DEFAULTS.material; // a literal key: the fence allows no other computed one but `[name]`
-  for (const name of NAMES) {
-    if ((item as Bag)[name] !== defaults[name]) throw new Error(`a scene ${kind} carries the render callback ${name}`);
-  }
+  const defaults = kind === "object" ? DEFAULTS.object : DEFAULTS.material;
+  const found = callbacksOf(item);
+  NAMES.forEach((name, i) => {
+    if (found.at(i) !== defaults.at(i)) throw new Error(`a scene ${kind} carries the render callback ${name}`);
+  });
 }
 
 /** The materials an object holds, by whatever field: every own value that is a material or an array of them. */

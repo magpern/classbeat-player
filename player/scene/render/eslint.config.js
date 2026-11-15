@@ -78,10 +78,9 @@ const REFLECTION_PROPS = alt(REFLECTION_NAMES);
 const GUARD_REFLECTION_PROPS = alt(REFLECTION_NAMES.filter((n) => n !== "prototype" && !RENDER_CALLBACKS.includes(n)));
 export const GUARD_OBJECT_MEMBERS_ALLOWED = [...OBJECT_MEMBERS_ALLOWED, "getPrototypeOf"];
 const LITERAL_KEYS_ONLY = "MemberExpression[computed=true]:not([property.type='Literal'])";
-// guard/ also reads `x[name]`, `name` being its loop variable over the five callback names, and no other key built at run time.
-const GUARD_COMPUTED_KEY = `${LITERAL_KEYS_ONLY}:not([property.type='Identifier'][property.name='name'])`;
 // The syntax fences of a directory that reads three.js and nothing of the page. src/ bans every reflection name; guard/ takes the same
-// rules minus `prototype` and the five callback names, with `getPrototypeOf` on top of the Object members and the narrow `x[name]` key.
+// rules minus `prototype` and the five callback names, with `getPrototypeOf` on top of the Object members. Both read members by a
+// literal key only: guard/ reads the five callbacks as explicit member accesses, never `x[name]` (any binding of `name` can be built at run time).
 const scriptSyntax = (where, reflectionProps, objectMembers, computedKey) => ["error", ...common,
   // src/ is handed the host's painter (src/host.ts) and never reaches for the renderer's element or the page through it or through three.js callbacks.
   { selector: `MemberExpression[computed=false][property.name=/^(${reflectionProps})$/]`, message: `No prototype access, render callback, element or page member in ${where}.` },
@@ -101,7 +100,7 @@ const scriptSyntax = (where, reflectionProps, objectMembers, computedKey) => ["e
 ];
 const srcSyntax = scriptSyntax("src/", REFLECTION_PROPS, OBJECT_MEMBERS_ALLOWED, LITERAL_KEYS_ONLY);
 // The strings "constructor" and "__proto__" are not guard/ data either: no key spelled out for a lookup.
-const guardSyntax = [...scriptSyntax("guard/", GUARD_REFLECTION_PROPS, GUARD_OBJECT_MEMBERS_ALLOWED, GUARD_COMPUTED_KEY),
+const guardSyntax = [...scriptSyntax("guard/", GUARD_REFLECTION_PROPS, GUARD_OBJECT_MEMBERS_ALLOWED, LITERAL_KEYS_ONLY),
   { selector: "Literal[value=/^(constructor|__proto__)$/]", message: "guard/ holds no string that names `constructor` or `__proto__`." }];
 const demoSyntax = ["error", ...common,
   { selector: identifierAllowedAsObject("window", DEMO_WINDOW_ALLOWED), message: `The demo reaches the window only by ${DEMO_WINDOW_ALLOWED.join(", ")}.` },
@@ -131,7 +130,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.{ts,mts,cts,js,mjs,cjs}"],
     languageOptions: { globals: Object.fromEntries(SRC_GLOBALS.map((name) => [name, "readonly"])) },
     rules: {
       ...base,
@@ -144,7 +143,7 @@ export default tseslint.config(
   {
     // guard/ names prototypes and the callbacks (the src/ syntax fences would refuse that) and nothing else of the page:
     // the src/ globals, banned names and three.js allowlist, plus the common syntax fences.
-    files: ["guard/**/*.ts"],
+    files: ["guard/**/*.{ts,mts,cts,js,mjs,cjs}"],
     languageOptions: { globals: Object.fromEntries(SRC_GLOBALS.map((name) => [name, "readonly"])) },
     rules: {
       ...base,

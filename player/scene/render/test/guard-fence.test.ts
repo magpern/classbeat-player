@@ -4,7 +4,7 @@
 // by the allowlist, its siblings, the scene model and guard/render-callbacks.ts, so it cannot reach tools/.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ESLint } from "eslint";
@@ -56,7 +56,6 @@ test("guard/: every route to Function, the global object and a moved prototype i
     ['export const a = (x: Record<string, unknown>, k: string) => x?.[k];', "no-restricted-syntax"],
     ['export const a = (x: Record<string, number>, k: string) => { const { [k]: v } = x; return v; };', "no-restricted-syntax"],
     ["export const a = (x: Record<string, number>) => { const { 'a': v } = x; return v; };", "no-restricted-syntax"],
-    ['export const a = (x: Record<string, unknown>, name: string) => x[name === "a" ? "constructor" : "b"];', "no-restricted-syntax"],
     ['export const a = () => "constructor";', "no-restricted-syntax"],
     ['export const a = () => "__proto__";', "no-restricted-syntax"],
     ["export const a = (o: object, p: object) => Object.setPrototypeOf(o, p);", "no-restricted-syntax"],
@@ -76,17 +75,52 @@ test("guard/: every route to Function, the global object and a moved prototype i
   for (const [src, rule] of bad) assert.ok((await rulesOf(src, "guard/probe.ts")).includes(rule), `guard/ not rejected by ${rule}: ${src}`);
 });
 
-test("guard/: it may name prototypes and the callbacks, read `x[name]`, use getPrototypeOf and the Object members, and nothing more", async () => {
+// The second review of #564: the narrow `x[name]` key was no fence, because any binding of `name` can be built at run time
+// (`const name = "constr" + "uctor"`, a template, `.join`, a parameter, a for-of or `.map` variable). guard/ has no computed key at all.
+test("guard/: a computed key is refused whatever it is bound to, `name` included", async () => {
+  const header = "const o = {} as Record<string, unknown>;\n";
+  const bad = [
+    'const name = "constr" + "uctor";\nexport const a = (): unknown => (((() => 0) as unknown) as Record<string, (s: string) => () => unknown>)[name]!("return typeof fet" + "ch")();',
+    "const name = `constructor`;\nexport const a = (o: Record<string, unknown>): unknown => o[name];",
+    'const name = ["constr", "uctor"].join("");\nexport const a = (o: Record<string, unknown>): unknown => o[name];',
+    "export const a = (o: Record<string, unknown>, name: string): unknown => o[name];",
+    'export const a = (o: Record<string, unknown>): unknown[] => { const r: unknown[] = []; for (const name of ["constr" + "uctor"]) r.push(o[name]); return r; };',
+    'export const a = (o: Record<string, unknown>): unknown[] => ["__pro" + "to__"].map((name) => o[name]);',
+    'export const a = (o: Record<string, unknown>): unknown[] => ["onBeforeRender", "onAfterRender"].map((name) => o[name]);',
+    "export const a = (o: Record<string, unknown>, name: string): unknown => o?.[name];",
+    "export const a = (o: Record<string, unknown>, name: string): unknown => { const { [name]: v } = o; return v; };",
+    "export const a = (o: Record<string, unknown>, i: number): unknown => o[i];",
+    'export const a = (o: Record<string, unknown>): unknown => o["on" + "BeforeRender"];',
+  ];
+  for (const src of bad) {
+    const rules = await rulesOf(header + src, "guard/probe.ts");
+    assert.ok(rules.includes("no-restricted-syntax"), `guard/ not rejected: ${src}`);
+  }
+});
+
+test("guard/: it may name prototypes and the callbacks by literal member, use getPrototypeOf and the Object members, and nothing more", async () => {
   const ok = `import { Material, Mesh, Object3D } from "three";
-const NAMES = ["onBeforeRender", "onAfterRender", "onBeforeCompile", "onBeforeShadow", "onAfterShadow"] as const;
-export const a = (x: object): unknown => [Mesh.prototype, Object3D.prototype, Object.getPrototypeOf(x), x instanceof Material, NAMES.map((name) => (x as Record<string, unknown>)[name]), Object.freeze({}), Object.values(x), Object.entries(x), Object.fromEntries([]), Array.isArray(x), new Error("e"), Object3D.prototype.onBeforeRender];`;
+export const a = (x: { onBeforeRender?: unknown; onAfterShadow?: unknown }): unknown => [Mesh.prototype, Object3D.prototype, Object.getPrototypeOf(x), x instanceof Material, x.onBeforeRender, x.onAfterShadow, [1].at(0), Object.freeze({}), Object.values(x), Object.entries(x), Object.fromEntries([]), Array.isArray(x), new Error("e"), Object3D.prototype.onBeforeRender];`;
   assert.deepEqual(await rulesOf(ok, "guard/probe.ts"), []);
-  // The same names stay banned in src/: it must not name a prototype or a callback, nor read `x[name]`, nor getPrototypeOf.
+  // The same names stay banned in src/: it must not name a prototype or a callback, nor getPrototypeOf.
   const inSrc = await rulesOf(ok, "src/probe.ts");
   assert.ok(inSrc.filter((r) => r === "no-restricted-syntax").length >= 4, "src/ still refuses what guard/ may name");
   // The real file lints clean under its own fence.
   const [real] = await eslint.lintFiles([join(RENDER_DIR, "guard/render-callbacks.ts")]);
   assert.deepEqual(real!.messages.map((m) => `${m.ruleId}: ${m.message}`), []);
+});
+
+test("every JavaScript or TypeScript spelling under src/ and guard/ gets the fence, and only .ts files exist there", async () => {
+  for (const dir of ["src", "guard"]) {
+    for (const ext of ["ts", "mts", "cts", "js", "mjs", "cjs"]) {
+      const rules = await rulesOf('export const a = () => fetch("https://example.invalid");', `${dir}/probe.${ext}`);
+      assert.ok(rules.includes("no-restricted-globals"), `${dir}/probe.${ext} is not fenced`);
+    }
+  }
+  for (const dir of ["src", "guard"]) {
+    const odd = readdirSync(join(RENDER_DIR, dir), { recursive: true, encoding: "utf8" }).filter((f) => !f.endsWith(".ts"));
+    assert.deepEqual(odd, [], `${dir}/ holds only .ts files`);
+  }
 });
 
 test("guard/ is in the tsconfig include, so it is type-checked directly", () => {
