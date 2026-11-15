@@ -9,7 +9,7 @@ import { RENDER_DIR } from "../tools/tokens-file.ts";
 
 const read = (dir: string) => readdirSync(join(RENDER_DIR, dir)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${dir}/${f}`, text: readFileSync(join(RENDER_DIR, dir, f), "utf8") }));
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const sources = [...read("src"), ...read("demo")].map((s) => ({ ...s, text: code(s.text) }));
+const sources = [...read("src"), ...read("demo"), ...read("layer")].map((s) => ({ ...s, text: code(s.text) }));
 
 const FORBIDDEN: readonly [string, RegExp][] = [
   ["audio (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bMediaSource\b|\.play\s*\(|\bgetUserMedia\b|\b\w*(Audio|Loader)\w*\b/],

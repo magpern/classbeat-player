@@ -1,5 +1,6 @@
 // CI's scene run, in headless Chrome on the built demo page (dist/), no network and no real account:
-//  1. Screenshots of the scene in each state at two room sizes, for the Designer (screenshots/).
+//  1. Screenshots of the scene in each state at two room sizes, for the Designer (screenshots/), and
+//     of the text layer in each zone at 16:9, 16:10 and 4:3 with its measured checks (text-shots.ts).
 //  2. The browser frame log: a real-time run through a phrase flip, a song change from a mirrored
 //     phrase and a build with its drop, at the page's own frame times, recording the highest beam
 //     speed of each second (artifacts/frame-log-browser.csv). The run fails above 30 degrees a second
@@ -14,6 +15,7 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
+import { lightMeasurement, reducedMotion, worstCase, zoneShots } from "./text-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
 
 const PAGE = pathToFileURL(join(RENDER_DIR, "dist", "index.html")).href;
@@ -144,8 +146,13 @@ const browser = await launch();
 try {
   await trapSelfTest(browser);
   await screenshots(browser);
+  const opener = (w: number, h: number, query: string) => open(browser, w, h, query);
+  await zoneShots(opener, SHOTS);
+  await worstCase(opener, SHOTS);
+  await lightMeasurement(opener);
+  await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser);
-  console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
+  console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 34 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
 } finally {
   await browser.close();
 }

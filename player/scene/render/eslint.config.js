@@ -91,6 +91,27 @@ const demoSyntax = ["error", ...common,
   { selector: identifierAllowedAsObject("location", ["search"]), message: "The demo reads location.search and nothing else." },
 ];
 
+// 4. The text layer (layer/) is the one place that builds DOM nodes, and it is closed the same way: a node is a `div` or a
+//    `span` (a literal), set by text, class and style; no markup, no `src`, no link, no `setAttribute`; the document only by
+//    `getElementById` and `createElement`; no three.js. `test/layer-fences.test.ts` shows each fence firing.
+export const LAYER_DOCUMENT_ALLOWED = ["getElementById", "createElement"];
+export const LAYER_TAGS = ["div", "span"];
+const LAYER_BAD_PROPS = BAD_PROPS.split("|").filter((p) => p !== "createElement" && p !== "appendChild").join("|");
+const layerSyntax = ["error",
+  ...common.filter((rule) => !rule.selector.includes(BAD_PROPS) && !rule.selector.startsWith("ImportDeclaration[source.value='three']")),
+  { selector: `MemberExpression[computed=false][property.name=/^(${LAYER_BAD_PROPS})$/]`, message: "No beacon, playback, markup, src, href, cookie, attribute setting or crypto randomness in the text layer." },
+  { selector: `MemberExpression[computed=true][property.type='Literal'][property.value=/^(${LAYER_BAD_PROPS})$/]`, message: "No beacon, playback, markup, src, href, cookie, attribute setting or crypto randomness in the text layer." },
+  { selector: `CallExpression[callee.property.name='createElement']:not([arguments.0.value=/^(${alt(LAYER_TAGS)})$/])`, message: `The text layer makes only ${LAYER_TAGS.join(" and ")} nodes (a literal tag).` },
+  { selector: "MemberExpression[computed=true][property.value='createElement']", message: "Call createElement by name, with a literal tag." },
+  { selector: `MemberExpression[computed=false][property.name=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in the text layer." },
+  { selector: `MemberExpression[computed=true][property.type='Literal'][property.value=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in the text layer." },
+  { selector: "MemberExpression[computed=false][property.name='constructor']", message: "No `constructor` member in the text layer." },
+  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only (use .at(i) or a lookup)." },
+  { selector: "ImportDeclaration[source.value=/^three/]", message: "The text layer draws no three.js." },
+  { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `The text layer reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
+  { selector: identifierAllowedAsObject("document", LAYER_DOCUMENT_ALLOWED), message: `The text layer reaches the document only by ${LAYER_DOCUMENT_ALLOWED.join(", ")}.` },
+];
+
 const properties = ["error",
   { object: "Math", property: "random", message: "The rig is deterministic." },
 ];
@@ -99,7 +120,12 @@ const threeImports = (allowed) => ["error", { paths: [{ name: "three", allowImpo
 
 // The pure modules (light calculations, bursts, the loop, the tokens reader) import no three.js and
 // no DOM, and read no clock.
-const pure = ["src/light-calc.ts", "src/bursts.ts", "src/loop.ts", "src/tokens.ts"];
+const pure = [
+  "src/light-calc.ts", "src/bursts.ts", "src/loop.ts", "src/tokens.ts",
+  // The text layer's rules and calculations: words, fitting, the score, the pattern count, the mask's numbers.
+  "src/text-types.ts", "src/text-view.ts", "src/text-box.ts", "src/text-words.ts", "src/text-pattern-calc.ts", "src/text-fit-calc.ts",
+  "src/text-score-calc.ts", "src/text-view-calc.ts", "src/text-mask-calc.ts",
+];
 
 export default tseslint.config(
   { ignores: ["dist/", "node_modules/", "screenshots/", "artifacts/"] },
@@ -123,6 +149,15 @@ export default tseslint.config(
       "no-restricted-imports": threeImports(THREE_DEMO_ALLOWED),
       "no-restricted-globals": globals(BANNED_GLOBALS, "The demo draws what the model says: no network, storage, worker, audio or image."),
       "no-restricted-syntax": demoSyntax,
+    },
+  },
+  {
+    files: ["layer/**/*.ts"],
+    rules: {
+      ...base,
+      "no-restricted-imports": ["error", { patterns: [{ regex: "^(?!\\./[A-Za-z0-9-]+\\.ts$|\\.\\./src/[A-Za-z0-9-]+\\.ts$).*$", message: "The text layer imports its siblings and the scene's own src/ modules only." }] }],
+      "no-restricted-globals": globals([...BANNED_GLOBALS, "location", "history"], "The text layer draws what the view says: no network, storage, worker, audio or image."),
+      "no-restricted-syntax": layerSyntax,
     },
   },
   {

@@ -13,10 +13,13 @@ import type { Draw, Feed } from "./loop.ts";
 import { SceneRig } from "./rig.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { lookup } from "./lookup.ts";
+import type { TextBox } from "./text-box.ts";
 
 export interface RendererOptions {
   readonly tokens: SceneTokens;
   readonly quality?: QualityLevel;
+  /** False only in the test that shows the light without the dark-under-text mask. */
+  readonly textMask?: boolean;
   /** Called after each frame with what was drawn and the rig's measured beam directions. */
   readonly onFrame?: (draw: Draw, measured: ReturnType<SceneRig["measuredDirections"]>, nowMs: number) => void;
 }
@@ -28,6 +31,7 @@ export class SceneRenderer {
   private readonly options: RendererOptions;
   private readonly unsubscribe: () => void;
   private quality: QualityLevel;
+  private boxes: readonly TextBox[] = [];
   private last: number | null = null;
   private cancel: (() => void) | null = null;
   private running = false;
@@ -39,7 +43,15 @@ export class SceneRenderer {
     this.rig = new SceneRig(options.tokens);
     this.loop = new RigLoop(options.tokens);
     this.unsubscribe = host.onResize(() => this.resize());
+    this.rig.mask.setEnabled(options.textMask !== false);
     this.resize();
+  }
+
+  /** The text lines' boxes now (CSS pixels): the light under them is held to the cap (S2). */
+  setTextBoxes(boxes: readonly TextBox[]): void {
+    this.boxes = boxes;
+    const { width, height } = this.host.size();
+    this.rig.mask.set(boxes, width, height);
   }
 
   /** The render scale is a share of the window (the text layer stays at full resolution). */
@@ -49,6 +61,7 @@ export class SceneRenderer {
     this.host.painter.setPixelRatio(lookup(QUALITY, this.quality).renderScale * (pixelRatio || 1));
     this.host.painter.setSize(w, h);
     this.rig.setAspect(w / h);
+    this.rig.mask.set(this.boxes, w, h);
   }
 
   setQuality(level: QualityLevel): void {

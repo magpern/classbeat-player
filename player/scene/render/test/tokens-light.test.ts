@@ -20,10 +20,10 @@ test("the zone colours and the white are read from tokens.css, never from a tabl
 
 test("scene tokens the screens lane has not added yet fall back to the spec and are named", () => {
   const t = tokensFromFile();
-  const known = ["--scene-down", "--scene-burst"];
+  const known = ["--scene-down", "--scene-burst", "--scene-text-cap"];
   assert.ok(t.missing.every((m) => known.includes(m)), t.missing.join(","));
   if (t.missing.includes("--scene-down")) assert.equal(t.down, SCENE_TOKEN_DEFAULTS.down);
-  const given = readSceneTokens({ getPropertyValue: (n) => (n === "--scene-burst" ? "0.85, 250 ms" : n === "--scene-down" ? "0.06" : styleFromCss(css).getPropertyValue(n)) });
+  const given = readSceneTokens({ getPropertyValue: (n) => (n === "--scene-burst" ? "0.85, 250 ms" : n === "--scene-down" ? "0.06" : n === "--scene-text-cap" ? "0.08" : styleFromCss(css).getPropertyValue(n)) });
   assert.deepEqual([given.burstPeak, given.burstMs, given.down, given.missing], [0.85, 250, 0.06, []]);
 });
 

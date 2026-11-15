@@ -1,0 +1,65 @@
+// What the text layer is told about the class (scene.md "Content, in priority order"): the class
+// as the room window reads it, in the words the screen shows. The shell maps its class format onto
+// this; the scene never sees the class file. Types only: no per-person data has a place here (rule 1).
+
+import type { BeatAnchor, LinkInput, SongMoment, StartOn } from "../../model/src/index.ts";
+
+export type Side = "seated" | "standing";
+export type Cadence = { readonly from: number; readonly to: number } | "beat";
+
+export interface TextPattern {
+  readonly positions: readonly Side[];
+  readonly beats: readonly number[];
+  readonly startOn: StartOn;
+}
+
+export interface TextInterval {
+  readonly startMs: number;
+  readonly lengthMs: number;
+  readonly zone: number;
+  readonly name: string;
+  readonly cue: string;
+  readonly cadence: Cadence | null;
+  readonly position: Side | null;
+  readonly pattern: TextPattern | null;
+}
+
+export interface TextSong {
+  readonly title: string;
+  readonly artist: string;
+  /** Where the song starts on the class clock. */
+  readonly startMs: number;
+  readonly lengthMs: number;
+  readonly bpm?: number;
+  readonly anchors?: readonly BeatAnchor[];
+  readonly moments?: readonly SongMoment[];
+}
+
+/** The class's own name and targets for a zone (the class's scale, not ours). */
+export interface TextZone {
+  readonly zone: number;
+  readonly name: string;
+  readonly targets: readonly string[];
+}
+
+export interface TextClass {
+  readonly title: string;
+  readonly endMs: number;
+  readonly zones: readonly TextZone[];
+  readonly intervals: readonly TextInterval[];
+  readonly songs: readonly TextSong[];
+  readonly segments: readonly { readonly startMs: number; readonly name: string }[];
+  /** "Following Spotify": the link state's words while the music is followed. */
+  readonly following: string;
+}
+
+export interface TextInput {
+  readonly cls: TextClass;
+  readonly classMs: number;
+  readonly songIndex: number;
+  readonly songPosMs: number;
+  readonly link: LinkInput;
+  readonly reducedMotion: boolean;
+  /** Window width over height. */
+  readonly aspect: number;
+}

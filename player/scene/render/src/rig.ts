@@ -12,6 +12,7 @@ import { FixtureView, buildFixtures } from "./fixtures.ts";
 import { HazeLayer } from "./haze.ts";
 import type { Draw } from "./loop.ts";
 import type { SceneTokens } from "./tokens.ts";
+import { TextMask } from "./text-mask.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
 import { lookup, nth } from "./lookup.ts";
@@ -29,15 +30,18 @@ export class SceneRig {
   readonly haze = [new HazeLayer(-12, 30), new HazeLayer(-20, 40)] as const;
   private readonly flash = new Mesh(new PlaneGeometry(8, 8), new MeshBasicMaterial({ color: new Color(1, 1, 1), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false }));
 
+  /** Drawn last: holds the light under the text to the cap (S2). */
+  readonly mask: TextMask;
   private readonly tokens: SceneTokens;
 
   constructor(tokens: SceneTokens) {
     this.tokens = tokens;
+    this.mask = new TextMask(tokens.textCap);
     this.scene.background = new Color(0x000000);
     for (const f of this.fixtures) this.scene.add(f.pivot);
     this.flash.position.z = -1;
     this.flash.renderOrder = 100;
-    this.scene.add(this.wall.mesh, this.haze[0].mesh, this.haze[1].mesh, this.flash);
+    this.scene.add(this.wall.mesh, this.haze[0].mesh, this.haze[1].mesh, this.flash, this.mask.group);
     this.flash.material.color.setHex(tokens.white);
   }
 
