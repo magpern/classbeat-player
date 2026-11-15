@@ -8,20 +8,19 @@ import pytest
 from player_backend.account_policy import NO_EMAIL
 from tests import pairhelp
 from tests.accounthelp import DELETE, EXPORT
-from tests.sitehelp import Browser, Site
+from tests.sitehelp import ISSUER, Browser, Site, subject_of
 
 EMAIL = "gone@example.test"
-ISSUER = "https://classbeat.test"
 
 
 def _no_email(site: Site) -> Browser:
-    """Signed in, then made an instructor whose email classbeat no longer gives."""
+    """A signed-in instructor whose email classbeat no longer gives."""
     site.allow(EMAIL)
     browser = site.sign_in(EMAIL)
     site.su.execute(
-        "UPDATE player.accounts SET kind = 'instructor', classbeat_issuer = %s, "
-        "classbeat_subject = 'pairwise-no-email', email = NULL WHERE email = %s",
-        (ISSUER, EMAIL),
+        "UPDATE player.accounts SET email = NULL "
+        "WHERE kind = 'instructor' AND classbeat_issuer = %s AND classbeat_subject = %s",
+        (ISSUER, subject_of(EMAIL)),
     )
     return browser
 

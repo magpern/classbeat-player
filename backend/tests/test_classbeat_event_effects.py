@@ -25,7 +25,6 @@ from tests.classbeathelp import (
     ACCOUNT_DELETED,
     EVENTS,
     FORM,
-    ISSUER,
     SESSIONS_REVOKED,
     FakeClassbeat,
     client,
@@ -34,12 +33,12 @@ from tests.classbeathelp import (
 )
 from tests.dbhelp import Conn
 from tests.pairhelp import DEVICE, bearer
-from tests.sitehelp import SESSION_COOKIE, Site, running_site
+from tests.sitehelp import SESSION_COOKIE, Site, running_site, subject_of
 
 A = "a@example.test"
 B = "b@example.test"
-SUBJECT_A = "pairwise-subject-a"
-SUBJECT_B = "pairwise-subject-b"
+SUBJECT_A = subject_of(A)
+SUBJECT_B = subject_of(B)
 KNOWN = {
     "accounts",
     "sessions",
@@ -74,19 +73,12 @@ def listener(db_url: str) -> Iterator[Conn]:
         yield conn
 
 
-def _linked(site: Site, held: Held, subject: str) -> Held:
-    site.su.execute(
-        "UPDATE player.accounts SET kind = 'instructor', classbeat_issuer = %s, "
-        "classbeat_subject = %s WHERE id = %s",
-        (ISSUER, subject, held.account_id),
-    )
-    return held
-
-
 def _two(site: Site) -> tuple[Held, Held]:
-    a = full_account(site, A, "198.51.100.1", "192.0.2.21")
-    b = full_account(site, B, "198.51.100.2", "192.0.2.22")
-    return _linked(site, a, SUBJECT_A), _linked(site, b, SUBJECT_B)
+    # Instructors of `subject_of(email)`: `Site.sign_in` signs in through classbeat.
+    return (
+        full_account(site, A, "198.51.100.1", "192.0.2.21"),
+        full_account(site, B, "198.51.100.2", "192.0.2.22"),
+    )
 
 
 def _send(site: Site, fake: FakeClassbeat, event: str, subject: str) -> None:

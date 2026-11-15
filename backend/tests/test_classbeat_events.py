@@ -36,11 +36,11 @@ from tests.classbeathelp import (
     event_token,
 )
 from tests.dbhelp import every_value
-from tests.sitehelp import SESSION_COOKIE, Browser, Site, running_site
+from tests.sitehelp import SESSION_COOKIE, Browser, Site, running_site, subject_of
 
 SERVER_ADDRESS = "192.0.2.80"
-SUBJECT = "pairwise-subject-1"
 EMAIL = "ann@example.test"
+SUBJECT = subject_of(EMAIL)
 
 
 @pytest.fixture
@@ -67,15 +67,16 @@ def _now() -> int:
     return int(time.time())
 
 
-def _instructor(site: Site, email: str = EMAIL, subject: str = SUBJECT) -> Browser:
-    """A signed-in instructor of `subject` (signed in by the email link, then linked)."""
+def _instructor(site: Site, email: str = EMAIL, subject: str | None = None) -> Browser:
+    """A signed-in instructor (`Site.sign_in`: subject `subject_of(email)`), or of `subject`."""
     site.allow(email)
     browser = site.sign_in(email)
-    site.su.execute(
-        "UPDATE player.accounts SET kind = 'instructor', classbeat_issuer = %s, "
-        "classbeat_subject = %s WHERE email = %s",
-        (ISSUER, subject, email),
-    )
+    if subject is not None:
+        site.su.execute(
+            "UPDATE player.accounts SET classbeat_subject = %s "
+            "WHERE classbeat_issuer = %s AND classbeat_subject = %s",
+            (subject, ISSUER, subject_of(email)),
+        )
     return browser
 
 
@@ -217,15 +218,19 @@ def test_a_subject_with_no_account_answers_200_and_changes_nothing(
     assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
 
 
-def test_an_unlinked_account_with_the_same_subject_is_not_found(
+def test_an_account_that_is_not_an_instructor_is_never_matched(
     site: Site, fake: FakeClassbeat
 ) -> None:
-    # Only an instructor has an identity; an email account is never matched.
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    # Only an instructor has an identity; a follower of the same email is not one.
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     answer = _post(_server(site), event_token(fake.key, ACCOUNT_DELETED, _now(), SUBJECT))
-    assert answer.status_code == 200
-    assert browser.get("/api/site/me").status_code == 200
+    assert (answer.status_code, answer.content) == (200, b"")
+    assert site.su.execute(
+        "SELECT kind::text, count(*) FROM player.accounts GROUP BY 1"
+    ).fetchall() == [("follower", 1)]
+    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
+    assert browser.get("/api/site/sessions").status_code == 200
 
 
 def test_the_jti_is_kept_as_a_hash_for_8_days(site: Site, fake: FakeClassbeat) -> None:
@@ -315,3 +320,59 @@ def test_no_token_subject_or_jti_is_logged_or_stored(
     # The subject stays where it was (the account's identity), and in no event.
     events = site.su.execute("SELECT row_to_json(e)::text FROM player.audit_events e").fetchall()
     assert events and all(subject not in str(event) and jti not in str(event) for event in events)
+
+
+def test_an_unknown_subjects_jti_is_recorded_so_its_replay_is_a_repeat(
+    site: Site, fake: FakeClassbeat
+) -> None:
+    jti = "e-unknown-1"
+    first = _post(_server(site), event_token(fake.key, SESSIONS_REVOKED, _now(), "later", jti))
+    assert (first.status_code, first.content) == (200, b"")
+    assert site.su.execute("SELECT jti_hash FROM player.classbeat_event_ids").fetchall() == [
+        (jti_hash(jti),)
+    ]
+    # The subject has an account now; the same `jti`, signed afresh, still does nothing.
+    _instructor(site, subject="later")
+    before = _counts(site)
+    replay = _post(_server(site), event_token(fake.key, SESSIONS_REVOKED, _now(), "later", jti))
+    assert (replay.status_code, replay.content) == (200, b"")
+    assert _counts(site) == before
+    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
+
+
+def _hits(site: Site, address: str = SERVER_ADDRESS) -> int:
+    key = limit_key(address_hash(ipaddress.ip_address(address)))
+    row = site.su.execute(
+        "SELECT coalesce(sum(hits), 0)::int FROM player.rate_limits WHERE key_hash = %s", (key,)
+    ).fetchone()
+    assert row is not None and isinstance(row[0], int)
+    return row[0]
+
+
+def test_without_classbeat_a_browser_is_still_refused_first(app_url: str, db_url: str) -> None:
+    # 403 comes before 404: the router's check runs before the route's.
+    with running_site(app_url, db_url) as plain:
+        token = event_token(SigningKey(), SESSIONS_REVOKED, _now(), SUBJECT)
+        answer = _post(_server(plain), token, {**FORM, "Sec-Fetch-Site": "cross-site"})
+        assert (answer.status_code, answer.json()) == (403, {"error": "cross_site_request"})
+
+
+def test_without_classbeat_a_body_that_is_not_a_form_is_404(app_url: str, db_url: str) -> None:
+    # 404 comes before 415, and neither is counted.
+    with running_site(app_url, db_url) as plain:
+        answer = _server(plain).post(EVENTS, json={"logout_token": "a.b.c"})
+        assert (answer.status_code, answer.json()) == (404, {"error": "not_found"})
+        assert _hits(plain) == 0
+
+
+def test_a_415_is_not_counted_and_a_400_is(site: Site, fake: FakeClassbeat) -> None:
+    server = _server(site)
+    before = _hits(site)
+    token = event_token(fake.key, SESSIONS_REVOKED, _now(), SUBJECT)
+    assert server.post(EVENTS, json={"logout_token": token}).status_code == 415
+    assert _hits(site) == before
+    forged = _post(server, event_token(SigningKey(), SESSIONS_REVOKED, _now(), SUBJECT))
+    assert (forged.status_code, forged.json()) == (400, {"error": "bad_event"})
+    assert _hits(site) == before + 1
+    assert server.post(EVENTS, content=b"x=1", headers=FORM).status_code == 400
+    assert _hits(site) == before + 2
