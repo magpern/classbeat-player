@@ -514,24 +514,33 @@ step of the countdown (26 vh), by up to **30 %** and **78 %**. Some steps are sm
    tick at or after them, never early.
 2. **Frames are at least 500 ms apart.** Call a **frame mark** every tick, the change frame and a
    drop's frame (the **fixed frames**).
-   - **Fixed frames less than 1 s apart merge** into one frame. A drop within 1 s of `t0`, before
-     or after it, lands on the change frame at `t0`; in that one frame the new interval wins what
-     it sets (the gel, its numeral and name, the zone's colour, energy and values) and the drop
-     adds its look in that colour (the fan's fixtures on, aimed as the drop sets them). Of two
-     drops less than 1 s apart, the later joins the earlier's frame. The interval's timing never
-     moves; a drop's frame moves by less than 1 s.
-   - Then any two frame marks, fixed frames included, are **at least 500 ms apart, in time**: a
-     tick goes on the first frame shown at least 500 ms after the last frame mark, and a tick
-     that would fall less than 500 ms before a fixed frame joins it (latest value wins).
-   - **Without the beat** the spacing is **1 s**: a tick goes at least 1 s after the last frame
-     mark, and a tick less than 1 s before a fixed frame joins it.
+   - **Interval changes less than 1 s apart merge** into **one change frame at the first `t0`**,
+     which shows the **latest** of them (the latest state wins): its gel, numeral and name,
+     colour, energy and values. A change less than 1 s after a merged change frame joins it. A
+     skipped interval is never shown on the gel, the next row or the text layer: its name is
+     simply skipped (the score keeps its block, as wide as its length). No `t0` moves later and
+     nothing is aimed at a timing; the merged frame is one fixed frame.
+   - **A drop within 1 s of a change frame**, before or after it, merges its **light only** onto
+     that frame: which fixtures are lit, the energy and the burst. In that frame the interval
+     wins what it sets (the gel, its numeral and name, the zone's colour, energy and values), and
+     the fan's fixtures come on in that colour. Of two drops less than 1 s apart, the later's
+     light joins the earlier's frame. **Movement never merges**: the end of the gather's hold-still
+     and the start of the fan's turn stay on the song's own drop moment (below, "The drop"), so
+     beam direction still depends only on the song position (S7, scene rule 4).
+   - **A user action's frame is a frame mark too.** It is shown at the next frame mark if one
+     falls within 500 ms, otherwise on the first frame at least 500 ms after the last frame mark,
+     whichever comes first: **at most 500 ms late**, and the latest state wins (a second action
+     before the first is shown replaces it).
+   - Then any two frame marks (ticks, change frames, drops' frames, user actions' frames) are
+     **at least 500 ms apart, in time**: a tick goes on the first frame shown at least 500 ms
+     after the last frame mark, and a tick that would fall less than 500 ms before a fixed frame
+     joins it (latest value wins).
 
    The minimum wins over rounding to frames, so it holds at any refresh rate (30 frames at 60 Hz,
    25 at 50 Hz, 72 at 144 Hz), and a "1 s window" is any 1 s of time, from a frame up to but not
    including the frame 1 s later, not a count of frames. So there are **at most 2 frame marks in
-   any 1 s** with the beat, and **1** without it. A user
-   action's frame is not a frame mark, but the next tick after it waits 500 ms too (the
-   scheduler, g). This cap is the budget, and the count's cadence gives way to it, never the cap.
+   any 1 s**, in every state. This cap is the budget, and the count's cadence gives way to it,
+   never the cap.
    On each beat of a pattern the count ticks if:
    - it is a **switch beat** (the first beat of a side) at least 500 ms after the last frame mark;
      when a side is shorter than 500 ms (one-beat sides above 120 bpm, two-beat sides above
@@ -595,8 +604,8 @@ PR's notes name it for the Orchestrator).
    late (700 ms at most), and a moved tick still keeps 500 ms from the frame marks after it (text
    rule 2). No run starts or ends inside another: the later one waits.
 2. **Fixed frames are never inside a run.** `t0`'s change frame, a drop's frame (once merged,
-   text rule 2), a beat's timing and a user action's frame never move, so a run is placed to end before them or to start
-   on them. The interval change is covered so: its energy ramp ends on the frame before `t0` (its
+   text rule 2) and a beat's timing never move, and a user action's frame is placed by text
+   rule 2, so a run is placed to end before them or to start on them. The interval change is covered so: its energy ramp ends on the frame before `t0` (its
    change frame is the frame after the run), a light-only burst on it starts on the change frame,
    and any other run that would hold `t0` gives way by the scheduler's order (a dim is skipped,
    any other run waits); when a run starts on the change frame there is no lens flash. A user
@@ -606,16 +615,16 @@ PR's notes name it for the Orchestrator).
    the frame of the first count tick at or after its time (a ramp, a quality step, the fan's end),
    in the change frame (the energy), in the drop's frame (the fan's fixtures, no burst), or in the
    user action's frame (pause to 6 % and resume in one frame each). Bursts and dims are skipped.
-   So with the count and the beat a 1 s window holds at most **2 frame marks and 1 user action's
-   frame: 3 changes**.
+   So with the count and the beat a 1 s window holds at most **2 frame marks, user actions
+   included: 2 changes**.
 
 **The scheduler.** Before it places an event it counts, in every 1 s window the event touches,
 as if all were in one region: every step and every run as 1 (a burst and a dim as 2), and steady
 light's possible change at the earliest frame one could pass 10 % (none while a beat-like rise
 comes at least once a beat; otherwise 1.73 s after the last rise, then every 3.3 s, and below
 60 bpm 1.73 and 3.3 beats). The cap is
-**3 in every window**. Fixed: `t0`'s change frame, a drop's frame (merged as text rule 2 says), a beat's timing and a user
-action's frame. If a window would hold a fourth, these apply in this order, again and again, until
+**3 in every window**. Fixed: `t0`'s change frame and a drop's frame (merged as text rule 2 says)
+and a beat's timing; a user action's frame is placed by text rule 2. If a window would hold a fourth, these apply in this order, again and again, until
 it fits:
 
 | Order | What gives way | How |
@@ -626,23 +635,26 @@ it fits:
 | d | A drop burst | Skipped: the fan's fixtures come on in the drop's frame (1 change) |
 | e | A song-change dim | Skipped: the re-aim marks the song |
 | f | A run that cannot be a step yet | It waits for the first frame where it fits whole (rule 1 and 2 for runs) |
-| g | A user action | Its frame is never late, except a second action within 1 s of the last, which is shown at the first frame it fits, at most 1 s later (the latest state wins). The next tick after an action's frame waits until 500 ms after it |
+| g | A user action | Its frame is a frame mark (text rule 2): at most 500 ms late, the latest state wins. Its run, if any, gives way by a |
 
-The order always ends inside the cap. With a count running, a window holds at most 2 frame marks
-and 1 user action's frame (rule 3 for runs; steady light makes none within 1 s of a lift, and
-after a pause its first possible change is at least 0.73 s after the action's frame, where no
-2 marks fit before it). Without a count, a, b, d, e and f remove every run and burst until only
-the frame marks, at most 1 user action's frame and steady light's possible change remain, and c
-joins a countdown step to the next mark wherever those would still be 4. **Colour is never late**: the hue cross and the
+The order always ends inside the cap, because every step is a frame mark, at least 500 ms
+apart, so **at most 2 in any 1 s** (text rule 2), and everything else is a run or steady light:
+
+| State | Frame marks | Runs | Steady light | Counted |
+|---|---|---|---|---|
+| Beat running, a count running | at most 2 | 0 (rule 3 for runs) | 0 (a lift at least once a beat) | **2** |
+| Beat running, no count | at most 2 | what the scheduler fits beside them (a to f remove runs first) | 0 | **3** |
+| Without the beat | at most 2 | 0: every run becomes a step in a mark (a) | at most 1 | **3** |
+| Just after a pause (the beat stops) | at most 2 | what the scheduler fits beside them and steady light (a) | its first possible change at least 0.73 s after the action's frame (1.73 s, or 1.73 beats, after the last lift, which is at most one beat before) | **3** |
+
+**Colour is never late**: the hue cross and the
 anticipation make no change (constant luminance), so they are never scheduled.
 
 **Without the beat** steady light may take one of the 3, so there is no burst, no dim and no
 energy ramp at the None level: the drop is the fan's frame, a song change is its re-aim, and an
-interval change is its change frame. The cap then holds by construction: **1 frame mark** (the
-1 s spacing, with any fixed frames merged into it), **1 user action's frame** (a first action is
-never late; a second within 1 s waits, g) and **steady light's 1** make 3, and every run gives
-way to a step in a frame already counted (a: a ramp into the next mark, the resume ramp into the
-action's frame). Steady light never has to wait and the action's frame never absorbs anything.
+interval change is its change frame. The cap holds by the table above: 2 frame marks, user
+actions included, and steady light's 1, with every run a step in a mark already counted (a: a
+ramp into the next mark, the resume ramp into the action's frame). Steady light never waits.
 
 **All bursts**, drop bursts and light-only bursts alike, are at least **10 s apart**, and there is
 one drop burst at most per drop moment (S6).
@@ -650,18 +662,18 @@ one drop burst at most per drop moment (S6).
 **The drop.** For the last **1 s** before a drop the build's haze has finished rising and the
 beams **hold still** where the gather has brought them (slowing to a stop over the 250 ms
 before): the gather is the song's moment, so this keeps rule 4. The fixtures that come on for
-the fan come on under the burst, inside its decay, and the fan's turn starts after the decay.
+the fan come on in the drop's frame, under the burst, wherever text rule 2 puts that frame. The
+hold-still ends and **the fan's turn starts on the song's drop moment**, never on a merged frame.
+The turn is **steady light**: it starts from rest and is held, in every region, within
+`--scene-steady-max` (3 % a second), by its rate and the beams' width, so its start is never a
+change and needs no place in the schedule; where it overlaps a run it cannot split it (the 2.1 %
+bound). A gated run that finds the turn passing 10 % is fixed in the light (the levers below).
 
-**Every moment, worst case** (any 1 s, counted as if every scheduled change changed every region;
-the rules above decide each case, so the table is a summary, not a list to extend):
-
-| State | What can be in one 1 s window | Most |
-|---|---|---|
-| Beat running, no count | Up to 2 frame marks, at least 500 ms apart (the countdown's second, and a fixed frame with any other fixed frame within 1 s merged into it), and the runs the scheduler fits beside them: a ramp, a burst's decay, a dim's edges | 3 |
-| Beat running, a count running | Up to 2 frame marks (ticks and merged fixed frames, at least 500 ms apart), which carry every rig change as a step; 1 user action's frame | 3 |
-| Without the beat (coasting, off the list, paused, manual clock, hold, no `bpm`) | 1 frame mark (1 s spacing, fixed frames merged into it), 1 user action's frame, steady light's 1; every run a step (a) | 3 |
-| A user action, no count | its frame and its run, with the frame marks around it (g; a, if needed) | 3 |
-| Build, anticipation, beats with no event | the frame marks only (the haze step is beat-like, the colour constant) | 2 |
+**Every moment, worst case.** Every moment (beats, a pattern, an interval change, a drop, a song
+change, a build, a breakdown, the anticipation, the class's end, a quality step, a user action)
+is decided by the rules above, and its worst 1 s is the scheduler's table: at most 2 frame marks,
+user actions included, plus the runs the scheduler fits or steady light's 1, **at most 3 counted
+changes, steady light included**. No list of moments is kept beside it.
 
 The **strict gate in #577 is the authority** for any case these rules miss: a gated run that
 finds a fourth change is fixed by a rule here, never by an exception.
@@ -948,7 +960,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 | S3. Look-ahead | The score shows at least **5 minutes** ahead of "now" at every supported size (**8** at 16:9 and wider, **6** at 3:2 and narrower, to the screen's edge). Every interval of **40 s or more** starting within the labelled window (7 min at 16:9, 5 min narrower) shows its **number and its length**; any block that cannot show its number shows no zone colour. The **next interval's number, name, length, targets and cue are always on screen in the next row**, whatever the score shows |
 | S4. Visible at once | All nine content items in every running state, with the band hidden, at every supported size |
 | S5. Zone | The zone is a number and a name as well as a colour on the gel, the next row and the score (as C5); a score block never shows its colour without its number. The rig shows only the current zone's colour, the next zone's colour during the 10 s anticipation (while its number and name are in the next row), and white. Never another hue, never a measured heart-rate zone (rule 7). A token keeps its hue at any lightness and any share of white: in linear light every rig pixel is `a × T + w × white` for one allowed token `T`. Tested on the rendered pixels of every frame of the S6 runs, 0 failing pixels ("Colour: two hues, never a mix", the test) |
-| S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. One full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart. Measured as "The flash budget" says (every region of at least 10 %, each direction a change, no duration gate, any sliding 1 s), locked with the beat and in every other state; **the gate on the real running states, locked with the beat, is the authority**. To be built in #577, the design that meets it: beat-like light at most 5 % per run in every region, steady light at most 3 % of a region in any 1 s, and the scheduled changes, text ticks included, at most 3 in any 1 s with the beat running and 2 without |
+| S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. One full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart. Measured as "The flash budget" says (every region of at least 10 %, each direction a change, no duration gate, any sliding 1 s), locked with the beat and in every other state; **the gate on the real running states, locked with the beat, is the authority**. To be built in #577, the design that meets it: beat-like light at most 5 % per run in every region, steady light at most 3 % of a region in any 1 s, and at most 3 counted changes in any 1 s, steady light included (every step a frame mark at least 500 ms apart, so at most 2) |
 | S7. Movement | The camera never moves. No beam turns faster than 30 degrees a second **on any frame**, a re-aim, a phrase flip and a moment included: the drawn direction follows the model's target through a turn-rate limiter ("How a beam turns"). Rule 4: a beam's direction is a function of the song's look, the fixture, the motion phase, the phrase and the song's moments only. Test (scene model): two classes that differ only in their intervals (zones, targets, positions, patterns, cues), evaluated at the same song, look, phrase, moments and **motion phase**, give every beam the same direction; and the motion phase's rate depends only on the zone's row, at most 30 degrees a second. Light-only bursts on interval changes change no direction |
 | S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 4 % (to be built in #577; 12 % as built) and the pattern count of S14 (at the `bpm` from the interval start, `start_on: "interval_start"` only), and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
 | S9. Frame rate | ADR 0009's re-check: at the **default quality level (High)**, on a studio-class computer at 1920 × 1080, a **median of at least 58 fps over a full class** and **no second under 30 fps**, from the frame-rate log (once a second, with the quality level). A class that steps down from High misses this criterion; the steps of the table above only keep the room usable on a weaker computer |
