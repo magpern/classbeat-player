@@ -117,14 +117,15 @@ test("playlistAtStart asks only while the clock is ready: a paused or running cl
 });
 
 /** Like rig, but every load stays open until answered by its own number, so two loads can be out at once. */
-function rigMany(): { c: ReturnType<typeof createController>; log: string[]; answer: (n: number, o: LoadOutcome) => void } {
+function rigMany(): { c: ReturnType<typeof createController>; log: string[]; answer: (n: number, o: LoadOutcome) => void; clock: { t: number } } {
   const log: string[] = [];
   const pending: ((o: LoadOutcome) => void)[] = [];
   const f: MusicReader & MusicTransport = { kind: "fake", latest: () => null, send: (a) => void log.push(a) };
   Object.assign(f, { loadPlaylist: (_id: string, done: (o: LoadOutcome) => void) => void (log.push("load"), pending.push(done)) });
-  const c = createController(() => 1000, f, f);
+  const clock = { t: 1000 };
+  const c = createController(() => clock.t, f, f);
   c.open("class.json", WITH);
-  return { c, log, answer: (n, o) => pending[n](o) };
+  return { c, log, answer: (n, o) => pending[n](o), clock };
 }
 
 test("two loads out: the first answer does not end the hold of the second", () => {
@@ -197,10 +198,36 @@ test("the gate alone: tokens, a repeated release and expiry of one of two loads"
   g.release(a);
   g.release(a);
   assert.deepEqual(out, []);
-  g.expire(120);
-  assert.deepEqual(out, [], "only the first load expired; the second is still open");
-  g.expire(151);
-  assert.deepEqual(out, ["pause"]);
+  assert.deepEqual(out, [], "a repeated release of a load changes nothing");
   g.release(b);
-  assert.deepEqual(out, ["pause"]);
+  assert.deepEqual(out, ["pause"], "the last open load answered: the Pause goes out");
+});
+
+test("expiry drops only the loads that are too old: a younger load still holds", () => {
+  const out: string[] = [];
+  const g = createLoadGate((a) => void out.push(a), 3000);
+  g.hold(0); // A never answers
+  const b = g.hold(2900);
+  g.send("pause");
+  g.expire(3001); // A is past the window, B is not
+  assert.deepEqual(out, [], "B is inside the window: the Pause still waits");
+  g.send("next");
+  assert.deepEqual(out, [], "a command sent now is held too");
+  g.expire(5901);
+  assert.deepEqual(out, ["pause", "next"], "B expired as well: all go out, in order");
+  g.release(b);
+  assert.deepEqual(out, ["pause", "next"]);
+});
+
+test("through the controller: an old load expires while a younger one is inside the window", () => {
+  const { c, log, answer, clock } = rigMany();
+  c.command({ type: "start" }); // load A at t = 1000, never answers
+  clock.t += 2900;
+  c.open("class-b.json", WITH);
+  c.command({ type: "start" }); // load B at t = 3900
+  clock.t += 101; // t = 4001: A is 3001 old, B is 101 old
+  c.music("pause");
+  assert.deepEqual(log, ["load", "load"], "B is still out: the Pause waits");
+  answer(1, "asked");
+  assert.deepEqual(log, ["load", "load", "pause"]);
 });
