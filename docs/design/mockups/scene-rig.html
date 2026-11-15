@@ -280,7 +280,7 @@ const LOOKS = ['fan', 'cross', 'sweep', 'circle', 'split', 'fan'];
 // Energy by zone (scene.md): ambient, lit fixtures, movement, beat lift.
 const AMB = [0, .045, .055, .065, .075, .085, .095, .11];
 const LIT = [0, 8, 10, 12, 15, 17, 20, 22];
-const DEPTH = [0, .035, .04, .045, .05, .055, .06, .065]; // under the flash threshold (S6)
+const DEPTH = [0, .015, .02, .025, .03, .035, .04, .045]; // on every light of the rig, each run at most 5 % (S6)
 const Ylum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 
 // ---------- Helpers ----------
@@ -744,7 +744,7 @@ function frame(now) {
   const xF = crossing ? 1 - (1 - Math.pow(1 - cs, 3)) : 2;
   const ramp = cs;
   st.flashT += dt;
-  $('edge').classList.toggle('on', !rm && st.flashT < 0.16);
+  $('edge').classList.remove('on'); // on the scene the gel draws no white edge line: the lens flash marks the change
 
   // Beat, phrase, moments.
   // Beat known: locked and anchored. Tempo only: locked with a bpm, no anchors (plan section 4:
@@ -762,13 +762,18 @@ function frame(now) {
     moms = []; let lastAt = -99;
     for (const i2 of IV) if (i2.a > song.a && i2.a < song.b && i2.a - lastAt >= 10) { moms.push([i2.a, 'burst']); lastAt = i2.a; }
   }
-  let gather = 0, wide = 0, burst = 0, brk = 0, extraDepth = 0;
+  let gather = 0, wide = 0, burst = 0, brk = 0, build = 0, hzUp = 0;
   for (const [at, kind] of moms) {
     if (kind === 'drop') {
       const bs = moms.find(([a2, k2]) => k2 === 'build' && a2 < at && at - a2 < 30);
       const start = bs ? bs[0] : at - 8 * beatLen;
-      // The gather and the haze are complete 1 s before the drop, then hold still (S6).
-      if (t >= start && t < at) { gather = sstep(start, Math.max(start + 0.1, at - 1), t); extraDepth = (0.07 - DEPTH[z]) * gather; }
+      // The gather and the haze are complete 1 s before the drop, then hold still (S6). With the beat
+      // the haze steps up on each beat (beat-like light, with a 2 % lift); without it, it rises slowly.
+      if (t >= start && t < at) {
+        gather = sstep(start, Math.max(start + 0.1, at - 1), t); build = 1;
+        const nSteps = Math.max(1, Math.floor((at - 1 - start) / beatLen));
+        hzUp = beatKnown ? Math.min(1, Math.ceil((t - start) / beatLen) / nSteps) : gather;
+      }
       const age = t - at;
       if (age >= 0 && age < 16 * beatLen) { wide = 1 - sstep(15 * beatLen, 16 * beatLen, age); burst = age < 0.6 ? 0.85 * Math.exp(-age / 0.08) : 0; }
     }
@@ -805,16 +810,17 @@ function frame(now) {
   if (wide) litN = Math.max(litN, Math.round(LIT[z] + (22 - LIT[z]) * wide));
   if (st.state === 'finished') litN = 22;
   // Beat-like light is held at rest around a counted event (scene.md "The flash budget").
-  const held = (nx && iv.b - t < 0.85 && iv.b - t > 0) || (iIdx > 0 && t - iv.a < 0.3) || burst > 0.001 || (prev && sAge < beatLen * 1.2 + 0.3);
-  const depth = rm || held ? 0 : beatKnown ? DEPTH[z] + extraDepth : tempoOnly ? 0.05 : 0;
-  const lift = 1 - depth + depth * env;
-  // A position pattern: the room is brighter on the up beats and every switch is an accent.
-  // Energy only: no angle or shape comes from it (rule 4).
+  const held = (nx && iv.b - t < 0.95 && iv.b - t > 0) || (iIdx > 0 && t - iv.a < 0.3) || burst > 0.001 || (prev && sAge < beatLen * 1.2 + 0.3);
+  // A position pattern: the room is brighter on the up beats (a one-frame step on the switch beat)
+  // and the first beat of each side carries a 5 % accent in place of that beat's lift, never on top
+  // of it. Energy only: no angle or shape comes from it (rule 4).
   const pt = beatKnown && !rm ? patAt(iv, song, t) : null;
   const patOk = pt && !pt.pre && !pt.unknown;
   const patB = patOk ? (iv.pat.p[pt.i] === 'Standing' ? 1 : 0.72) : 1;
-  const patAcc = patOk && pt.first ? (held ? 0 : 0.07 * Math.exp(-pt.frac * 3)) : 0;
-  const bright = (0.55 + 0.45 * eR) * dip * patB * (1 + patAcc);
+  const accent = patOk && pt.first;
+  const depth = rm || (held && !accent) ? 0 : beatKnown ? (accent ? 0.05 : build ? 0.02 : DEPTH[z]) : tempoOnly ? 0.04 : 0;
+  const lift = 1 - depth + depth * env; // every light of the rig by the same share
+  const bright = (0.55 + 0.45 * eR) * dip * patB;
   const G = [0, 0.5, -20];
   FX.forEach((f, i) => {
     const on = i < litN ? 1 : 0;
@@ -845,9 +851,9 @@ function frame(now) {
   gl.uniform3fv(U.uCA, st.colA); gl.uniform3fv(U.uCB, colB); gl.uniform1f(U.uAnt, ant);
   gl.uniform1f(U.uYA, Ylum(st.colA)); gl.uniform1f(U.uYB, Ylum(colB)); gl.uniform1f(U.uYs, yS); gl.uniform1f(U.uXF, xF);
   gl.uniform1i(U.uN, nFx); gl.uniform3fv(U.uBO, bO); gl.uniform3fv(U.uBD, bD); gl.uniform4fv(U.uBP, bP);
-  gl.uniform1f(U.uAmb, (AMB[z] + (AMB[zN] - AMB[z]) * ramp) * (1 + 0.5 * gather) * (st.state === 'before' ? 0.5 : 1));
-  gl.uniform1f(U.uHaze, 1 + 0.5 * gather);
-  gl.uniform1f(U.uWall, st.state === 'finished' ? 0.25 : (0.35 + 0.5 * eR) * dip);
+  gl.uniform1f(U.uAmb, (AMB[z] + (AMB[zN] - AMB[z]) * ramp) * (1 + 0.25 * hzUp) * lift * (st.state === 'before' ? 0.5 : 1));
+  gl.uniform1f(U.uHaze, 1 + 0.25 * hzUp);
+  gl.uniform1f(U.uWall, st.state === 'finished' ? 0.25 : (0.35 + 0.5 * eR) * dip * lift);
   gl.uniform1f(U.uWallWave, rm ? 0.3 : 0.8 - 0.5 * e);
   gl.uniform1f(U.uWallBeat, (beatKnown && !rm && z >= 3) ? 0.3 + 0.7 * e : 0);
   gl.uniform1f(U.uWallOn, Q[3]);
