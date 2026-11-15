@@ -106,6 +106,20 @@ jobs:
           path: player/app/screenshots/
           if-no-files-found: error
           retention-days: 14
+      # The scene renderer's `npm run test:shots` (run by `npm test` above) writes the PNGs to
+      # screenshots/ and the frame log to artifacts/ (#544). Only those files are named here, so no
+      # env file, token or other output can be swept in. always() keeps the failing shots on red runs.
+      - name: Keep the scene screenshots and frame log
+        if: always() && hashFiles('player/scene/render/tools/shots.ts') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scene-screenshots
+          path: |
+            player/scene/render/screenshots/*.png
+            player/scene/render/artifacts/frame-log-browser.csv
+            player/scene/render/artifacts/frame-log-browser.json
+          if-no-files-found: error
+          retention-days: 14
 
   # The desktop app on the three systems it ships for (plan section 12, PL4): lint, types, unit
   # tests, then the e2e test (a display is present on the macOS and Windows runners; Linux runs
