@@ -131,6 +131,16 @@ before_android="$(git rev-parse HEAD)"
 commit player/scene/render/src/z.ts
 check "a scene render change also runs android (the APK bundles it)" "player android desktop" "$(flags push "$before_android" HEAD)"
 
+before_tok="$(git rev-parse HEAD)"
+commit web/src/design/tokens.css
+check "web tokens.css alone runs the scene tests: web, player, android and desktop (#579)" "player android web desktop" "$(flags push "$before_tok" HEAD)"
+before_tok="$(git rev-parse HEAD)"
+commit web/src/design/fonts/x.woff2
+check "a web design font alone runs player and android too (#579)" "player android web desktop" "$(flags push "$before_tok" HEAD)"
+before_tok="$(git rev-parse HEAD)"
+commit web/src/design/other.css
+check "another web design file does not run player or android (#579)" "web desktop" "$(flags push "$before_tok" HEAD)"
+
 before_scene="$(git rev-parse HEAD)"
 commit docs/design/scene.md
 check "docs/design/scene.md alone sets scene_spec (#527)" "true" "$(scenefn push "$before_scene" HEAD)"
