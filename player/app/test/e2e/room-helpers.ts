@@ -45,13 +45,35 @@ export async function theRoom(app: ElectronApplication): Promise<Page> {
 export const menu = (app: ElectronApplication, id: string): Promise<void> =>
   within(STEP_MS, `the menu item ${id}`, app.evaluate(({ Menu }, i) => Menu.getApplicationMenu()?.getMenuItemById(i)?.click(), id));
 export const onPage = (page: Page, name: string): Promise<unknown> => page.waitForFunction((n) => location.pathname.endsWith(`/${n}`), name);
+/**
+ * On macOS the room window enters full screen with the system's animation, and closing it while
+ * that transition runs wedges the main process (#571). A person cannot close it that fast, so the
+ * test waits until the window is settled in full screen before closing it. Other systems have no
+ * such transition to wait for.
+ */
+async function settledInFullScreen(app: ElectronApplication): Promise<void> {
+  if (process.platform !== "darwin") return;
+  await waitFor(
+    () =>
+      within(
+        STEP_MS,
+        "read the room window's full screen",
+        app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.isFullScreen() ?? true),
+      ),
+    20_000,
+    "the room window to settle in full screen",
+  );
+}
+
 /** Closes the room window the way the instructor's window manager does. */
-export const closeRoomByHand = (app: ElectronApplication): Promise<void> =>
-  within(
+export async function closeRoomByHand(app: ElectronApplication): Promise<void> {
+  await settledInFullScreen(app);
+  await within(
     STEP_MS,
     "close the room window by hand",
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.close()),
   );
+}
 
 /** File > Open a class file, with the dialog answering the first converter example. Returns its title. */
 export async function openClassFile(app: ElectronApplication): Promise<string> {
