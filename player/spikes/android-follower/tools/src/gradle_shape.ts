@@ -1,22 +1,47 @@
-// The shape of every Gradle build script in the spike, as an allowlist. Pure: text in, problem out.
-// After the exact allowed statements (gradle_pins.ts) and the one check wiring are taken out, nothing
-// that configures, reorders, disables or hooks a task may remain, in any script (root and settings too).
+// The build scripts of the spike, pinned whole. Pure: files and paths in, problems out.
+// What the guard relies on is the pin (gradle_pins.ts): each script equals its pinned text. The list of
+// forbidden words is a second layer only: it names what a changed line adds, so a failure explains itself.
 
-import { PINNED } from "./gradle_pins.js";
+import { PINNED_SCRIPTS } from "./gradle_pins.js";
 
-/** The one wiring of the check to the guarded tasks (the list and its tasks are checked by gradleWiringProblems). */
-const WIRING = /tasks\.matching \{ it\.name in \w+ \}\.configureEach \{ dependsOn\(check\) \}/g;
+/** Line endings, trailing whitespace and blank lines do not count; everything else does. */
+export const normalizeScript = (text: string): string =>
+  text.replace(/\r\n?/g, "\n").split("\n").map((l) => l.trimEnd()).filter((l) => l !== "").join("\n");
 
-/** Ways to configure, hook, disable or redirect a task, or to run code around the build. None may remain. */
-const FORBIDDEN = /\b(?:tasks|check|configure|configureEach|whenTaskAdded|whenObjectAdded|doFirst|doLast|actions|setActions|dependsOn|setDependsOn|finalizedBy|mustRunAfter|shouldRunAfter|subprojects|allprojects|startParameter|excludedTaskNames|taskGraph|enabled|isEnabled|setEnabled|onlyIf|setOnlyIf|afterEvaluate|beforeEvaluate|StopExecutionException|TaskAction|DefaultTask|buildscript|includeBuild)\b|\ball\s*\{|(?<![\w.])gradle\s*\.|(?<!\.)\bapply\b(?!\s+false\b)|\bapply\s*\(/;
+/** Ways to configure, hook, disable or redirect a task, or to run code around the build (second layer). */
+const FORBIDDEN = /\b(?:tasks|getTasks|check|configure|configureEach|whenTaskAdded|whenObjectAdded|doFirst|doLast|actions|getActions|setActions|dependsOn|setDependsOn|finalizedBy|mustRunAfter|shouldRunAfter|subprojects|allprojects|startParameter|getStartParameter|excludedTaskNames|taskGraph|enabled|isEnabled|setEnabled|onlyIf|setOnlyIf|getGradle|afterEvaluate|beforeEvaluate|StopExecutionException|TaskAction|DefaultTask|buildscript|includeBuild|Regex|isNotEmpty)\b|\ball\s*\{|(?<![\w.])gradle\s*\./;
 
-const collapse = (s: string) => s.replace(/\s+/g, " ");
+const BUILD_DIRS = /(?:^|\/)(?:buildSrc|build-logic)(?:\/|$)/;
+const SCRIPT_FILE = /\.(?:kts|gradle)$/;
+const PROPERTIES_FILE = /(?:^|\/)gradle\.properties$/;
 
-/** Null when `kts` holds only allowed statements, else what is left that must not be there. */
-export function gradleShapeProblem(path: string, kts: string): string | null {
-  let rest = collapse(kts);
-  for (const pin of PINNED[path] ?? []) rest = rest.split(pin).join(" ");
-  rest = rest.replace(WIRING, " ");
-  const left = FORBIDDEN.exec(rest);
-  return left ? `${left[0].trim()}: a build script may configure tasks only in the allowed statements (the check cannot be disabled, redirected or detached)` : null;
+/** What a script adds to its pin: its lines that the pin does not have, tested against the forbidden words. */
+function addedLineProblem(path: string, text: string): string | null {
+  const pinned = new Set((PINNED_SCRIPTS[path] ?? "").split("\n").map((l) => l.trim()));
+  for (const line of normalizeScript(text).split("\n")) {
+    const hit = pinned.has(line.trim()) ? null : FORBIDDEN.exec(line);
+    if (hit) return `\`${hit[0].trim()}\` in the added line \`${line.trim()}\`: the merged-manifest check cannot be disabled, redirected or detached`;
+  }
+  return null;
+}
+
+/** [rule, path, what] for every build script that differs from its pin, and for every script that should not exist. */
+export function buildScriptProblems(files: Record<string, string>, paths: string[]): [rule: string, path: string, what: string][] {
+  const v: [string, string, string][] = [];
+  for (const [path, pin] of Object.entries(PINNED_SCRIPTS)) {
+    const text = files[path];
+    if (text === undefined) { v.push(["build", path, "a pinned build script is missing"]); continue; }
+    const added = addedLineProblem(path, text);
+    if (added) v.push(["manifest", path, added]);
+    const have = normalizeScript(text).split("\n");
+    const want = pin.split("\n");
+    const at = have.findIndex((l, i) => l !== want[i]);
+    if (at >= 0 || have.length !== want.length) v.push(["build", path, `differs from its pinned text (first difference at line ${at >= 0 ? at + 1 : Math.min(have.length, want.length) + 1}): change the pin in tools/src/gradle_pins.ts in the same pull request`]);
+  }
+  for (const p of paths) {
+    if (p.startsWith("tools/")) continue;
+    if (BUILD_DIRS.test(p)) v.push(["build", p, "buildSrc and build-logic (included builds) are not allowed"]);
+    else if ((SCRIPT_FILE.test(p) || PROPERTIES_FILE.test(p)) && !(p in PINNED_SCRIPTS)) v.push(["build", p, "a build script or gradle.properties that is not pinned"]);
+  }
+  return v;
 }

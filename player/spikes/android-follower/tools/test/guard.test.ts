@@ -22,7 +22,7 @@ function load(): Tree {
   const paths = walk(root).map((p) => relative(root, p).split("\\").join("/"));
   const files: Record<string, string> = {};
   for (const p of paths) {
-    const wanted = p === "app/src/main/AndroidManifest.xml" || (p.endsWith(".kt") && p.includes("/src/main/")) || p.endsWith(".kts");
+    const wanted = p === "app/src/main/AndroidManifest.xml" || (p.endsWith(".kt") && p.includes("/src/main/")) || p.endsWith(".kts") || p === "gradle.properties";
     if (wanted) files[p] = readFileSync(join(root, p), "utf8");
   }
   return { files, paths };
@@ -248,8 +248,8 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["B1: the registration with another input", "manifest", () => mutate(APP_GRADLE, "variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)", "layout.projectDirectory.file(\"src/main/AndroidManifest.xml\")")],
   ["B1: the core test task disabled", "manifest", () => mutate(CORE_GRADLE, "useJUnitPlatform()", "useJUnitPlatform(); enabled = false")],
   // Review of #568, N1: the body of CheckManifest is pinned.
-  ["N1: the allowed pattern widened", "manifest", () => mutate(APP_GRADLE, 'Regex("""org', 'Regex(""".*|org')],
-  ["N1: the check's result ignored", "manifest", () => mutate(APP_GRADLE, "if (extra.isNotEmpty())", "if (false)")],
+  ["N1: the allowed pattern widened", "build", () => mutate(APP_GRADLE, 'Regex("""org', 'Regex(""".*|org')],
+  ["N1: the check's result ignored", "build", () => mutate(APP_GRADLE, "if (extra.isNotEmpty())", "if (false)")],
   // Review of #568, B2: Intent, ComponentName and getSystemService are never declared, bound or passed.
   ["B2: fun <T> Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> Intent(a: Any, c: Class<T>): Class<T> = c\nclass SpotifyReader")],
   ["B2: fun <T> T.Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> T.Intent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
@@ -266,6 +266,28 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   // Review of #568, N2 and N3.
   ["N2: an import alias has its own message", "reflection", () => mutate(READER, "class SpotifyReader", "import a.b.C as Intent\nclass SpotifyReader")],
   ["N3: the listener shape on the second view (a nested comment hides a member)", "listener", () => mutate(LISTENER, "/**", "/* /* */ val boot = 1 */\n\n/**")],
+  // Review of #568, round 3, B1: each build script equals its pinned text, so getter forms and shadowing fail too.
+  ["B1r3: getTasks().withType { getActions().clear() }", "build", () => beforeWiring("getTasks().withType(CheckManifest::class.java) { getActions().clear() }")],
+  ["B1r3: getTasks().withType { getManifest().set(source manifest) }", "build", () => beforeWiring('getTasks().withType(CheckManifest::class.java) { getManifest().set(layout.projectDirectory.file("src/main/AndroidManifest.xml")) }')],
+  ["B1r3: getGradle().getStartParameter() in settings", "build", () => append(SETTINGS_GRADLE, 'getGradle().getStartParameter().getExcludedTaskNames().add(":app:verifyDebugManifestPermissions")')],
+  ["B1r3: fun Regex shadows the allowed pattern", "build", () => mutate(APP_GRADLE, "android {", 'fun Regex(p: String): kotlin.text.Regex = kotlin.text.Regex(".*")\nandroid {')],
+  ["B1r3: List.isNotEmpty shadowed", "build", () => mutate(APP_GRADLE, "android {", "fun <T> List<T>.isNotEmpty(): Boolean = false\nandroid {")],
+  ["B1r3: a harmless extra line in the root script", "build", () => append(ROOT_GRADLE, "val note = 1")],
+  ["B1r3: a changed comment in the app script", "build", () => mutate(APP_GRADLE, "Debug-signed only", "Debug-signed mostly")],
+  ["B1r3: gradle.properties changed", "build", () => mutate("gradle.properties", "android.useAndroidX=true", "android.useAndroidX=true\norg.gradle.unsafe.configuration-cache=true")],
+  ["B1r3: a pinned script missing", "build", () => { const files = { ...real.files }; delete files[CORE_GRADLE]; return { ...real, files }; }],
+  ["B1r3: an extra build script", "build", () => ({ ...real, paths: [...real.paths, "app/extra.gradle.kts"] })],
+  ["B1r3: an extra .gradle script", "build", () => ({ ...real, paths: [...real.paths, "init.gradle"] })],
+  ["B1r3: buildSrc", "build", () => ({ ...real, paths: [...real.paths, "buildSrc/build.gradle.kts"] })],
+  ["B1r3: build-logic, an included build", "build", () => ({ ...real, paths: [...real.paths, "build-logic/src/main/kotlin/Evil.kt"] })],
+  ["B1r3: a second gradle.properties", "build", () => ({ ...real, paths: [...real.paths, "app/gradle.properties"] })],
+  ["B1r3: includeBuild in settings (named as an added line)", "manifest", () => append(SETTINGS_GRADLE, 'includeBuild("../evil")')],
+  // Review of #568, round 3, B2: a line break between the keyword and the name hides nothing.
+  ["B2r3: fun <T> then a line break, then Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T>\nIntent(a: Any, c: Class<T>): Class<T> = c\nclass SpotifyReader")],
+  ["B2r3: class then a line break, then Intent", "reflection", () => mutate(READER, "class SpotifyReader", "class\nIntent(a: Any, val c: Class<*>)\nclass SpotifyReader")],
+  ["B2r3: fun Any. then a line break, then Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun Any.\nIntent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
+  ["B2r3: val then a line break, then ComponentName", "reflection", () => mutate(READER, "class SpotifyReader", "val\nComponentName = { a: Any, c: Class<*> -> c }\nclass SpotifyReader")],
+  ["B2r3: a comment between the receiver and the name", "reflection", () => mutate(READER, "class SpotifyReader", "fun Any./* x */Intent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
 ];
 
 describe("each hard limit fails when broken", () => {
@@ -275,6 +297,25 @@ describe("each hard limit fails when broken", () => {
       assert.ok(found.some((x) => x.startsWith(`${rule}:`)), `expected a "${rule}" violation, got ${JSON.stringify(found)}`);
     });
   }
+});
+
+describe("build scripts pinned whole", () => {
+  it("ignore line endings, trailing whitespace and blank lines, and nothing else", () => {
+    const files = { ...real.files };
+    for (const p of [SETTINGS_GRADLE, ROOT_GRADLE, APP_GRADLE, CORE_GRADLE, "gradle.properties"]) {
+      files[p] = files[p]!.split("\n").map((l) => `${l}   `).join("\r\n\r\n") + "\r\n\r\n";
+    }
+    assert.deepEqual(checkTree({ ...real, files }), []);
+  });
+
+  it("name the added line that uses a switch-off word (the second layer)", () => {
+    const found = checkTree(beforeWiring("check.configure { enabled = false }"));
+    assert.ok(found.some((x) => x.startsWith("manifest:") && x.includes("in the added line")), JSON.stringify(found));
+  });
+
+  it("leave a pinned line alone even when it holds a forbidden word", () => {
+    assert.deepEqual(checkTree(real).filter((x) => x.startsWith("manifest:")), []);
+  });
 });
 
 describe("messages", () => {

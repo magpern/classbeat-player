@@ -12,7 +12,7 @@ export interface Tree {
 import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
 import { listenerShapeProblem, networkLoadsProblem, readerOrderProblem, sessionsProblem } from "./kotlin_shape.js";
 import { reflectionProblem } from "./reflection_rules.js";
-import { gradleShapeProblem } from "./gradle_shape.js";
+import { buildScriptProblems } from "./gradle_shape.js";
 import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
 
 export { stripComments };
@@ -137,12 +137,12 @@ export function checkTree(tree: Tree): string[] {
       }
       for (const m of x.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
     }
-    const shape = views.map((x) => gradleShapeProblem(p, x)).find(Boolean);
-    if (shape) add("manifest", p, shape);
     const catalog = views.map(catalogProblem).find(Boolean);
     if (catalog) add("dependencies", p, catalog);
   }
   for (const p of tree.paths) if (/\.toml$/i.test(p) && !p.startsWith("tools/")) add("dependencies", p, "a version catalog file is not allowed");
+  // Every build script equals its pinned text (the real guard); extra scripts and included builds fail.
+  for (const [rule, path, what] of buildScriptProblems(tree.files, tree.paths)) add(rule, path, what);
   const app = kts.find(([p]) => p === "app/build.gradle.kts");
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
 
