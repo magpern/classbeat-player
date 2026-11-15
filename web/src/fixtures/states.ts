@@ -84,6 +84,8 @@ export const STATE_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     // Held at the end of the song window: the last interval stays, its countdown is the expected time to the next song.
     hold: { doc, view: { ...view, classMs: 1_169_000, intervalRemainingMs: 0 }, link: linkAt(view, "Locked", { held: true, holdRemainingMs: 12_000 }) },
     "long-interval": snapshot(longClass(), 1_008_000, "Locked"),
+    // The 30 s after a Start that did not load the class playlist (ADR 0001, #486): the frame says so, the rail shows the plate.
+    "playlist-not-loaded": { ...snapshot(doc, 2_000, "Locked"), playlistNotLoaded: true },
     "before-start-manual": { doc, view: clockAt(doc, 0, "ready"), link: linkAt(clockAt(doc, 0, "ready"), "Manual") },
   };
 })();

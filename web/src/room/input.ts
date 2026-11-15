@@ -55,4 +55,10 @@ export interface RoomInput {
   readonly notice?: PlayNotice | null;
   /** The web player page: the clock is not started and its starting point may be moved (Previous, Next); the screen stays the one before the start. */
   readonly startingPoint?: boolean;
+  /**
+   * The player's frame field (`RoomFrame.playlistNotLoaded`): true exactly while the "Playlist not loaded" plate shows
+   * (the 30 s after the first Start that asked the music app to play and did not load the class playlist). The top-level
+   * field is the one source; the screen keeps no clock of its own. Absent counts as false.
+   */
+  readonly playlistNotLoaded?: boolean;
 }
