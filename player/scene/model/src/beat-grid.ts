@@ -37,6 +37,26 @@ export function phraseOfIndex(index: number): Phrase {
   return { index: i, mirrored: i % 2 === 1, leadHalf: Math.floor(i / 2) % 2 === 0 ? 0 : 1 };
 }
 
+/** The song positions (ms) in `[fromMs, toMs]` where a phrase begins after the first (the flips); none without anchors. */
+export function phraseFlipsMs(anchors: readonly BeatAnchor[] | undefined, fromMs: number, toMs: number): number[] {
+  if (!anchors || anchors.length === 0) return [];
+  const per = BEATS_PER_BAR * BARS_PER_PHRASE;
+  const out: number[] = [];
+  let beats = 0;
+  anchors.forEach((a, i) => {
+    const next = anchors[i + 1];
+    const end = next === undefined ? Infinity : next.at_ms;
+    const first = Math.ceil(beats / per - 1e-9) * per;
+    for (let b = Math.max(per, first); beats + ((end - a.at_ms) * a.bpm) / 60_000 >= b - 1e-9; b += per) {
+      const at = a.at_ms + ((b - beats) * 60_000) / a.bpm;
+      if (at > toMs) return;
+      if (at >= fromMs) out.push(at);
+    }
+    beats += ((end - a.at_ms) * a.bpm) / 60_000;
+  });
+  return out;
+}
+
 /** The phrase at a song position; the first phrase when the grid is not known. */
 export function phraseAt(anchors: readonly BeatAnchor[] | undefined, posMs: number): Phrase {
   const beats = beatsAt(anchors, posMs);

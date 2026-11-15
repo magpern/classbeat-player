@@ -3,10 +3,9 @@
 // the wall's chase. Every number here is a brightness, never an angle (rule 4). Pure.
 
 import type { BeatLevel, Frame, LinkInput, QualityLevel } from "../../model/src/index.ts";
-import { FIXTURES, MAX_BEAT_LIFT, QUALITY, TEMPO_PULSE_DEPTH } from "../../model/src/index.ts";
+import { BUILD_LIFT, FIXTURES, MAX_BEAT_LIFT, QUALITY, TEMPO_PULSE_DEPTH, liftShape } from "../../model/src/index.ts";
 import { lookup } from "./lookup.ts";
 
-export const BUILD_LIFT_MAX = 0.55;
 export const OFF_LIST_LEVEL = 0.6;
 export const SONG_CHANGE_DIM = 0.25;
 const MAX_LIFTS_PER_SECOND = 3;
@@ -27,13 +26,13 @@ export function fixturesLit(frame: Frame, quality: QualityLevel): boolean[] {
   return litMask(frame.moments.fan ? cap : Math.min(frame.energy.lit, cap));
 }
 
-/** Beats per second never lifts more than 3 times: above 180 bpm every second beat. */
-function liftBeat(beats: number, bpm: number): number {
+/** The beats since the last lifting beat, as ms; null when this beat does not lift (above 180 bpm every second beat lifts). */
+function sinceLift(beats: number, bpm: number): number | null {
   const whole = Math.floor(beats);
-  return whole % beatStride(bpm) === 0 ? beats - whole : -1;
+  return whole % beatStride(bpm) === 0 ? ((beats - whole) * 60_000) / bpm : null;
 }
 
-/** 1, or 2 above 180 bpm: nothing lifts or steps more than 3 times a second. */
+/** Beats per second never lifts more than 3 times: above 180 bpm every second beat. */
 export function beatStride(bpm: number): 1 | 2 {
   return bpm / 60 > MAX_LIFTS_PER_SECOND ? 2 : 1;
 }
@@ -47,34 +46,52 @@ export interface LiftInput {
   readonly reduced: boolean;
 }
 
+/** ms since the beat that is lifting started, or null when no lift is running (a lift is skipped, never cut, by a hold: it is decided on its start). */
+export function liftAgeMs({ frame, bpm, beats, songPosMs, reduced }: LiftInput): number | null {
+  if (reduced || bpm === undefined || !(bpm > 0)) return null;
+  if (frame.level === "Beat" && beats !== null) return sinceLift(beats, bpm);
+  if (frame.level === "Tempo only") return sinceLift((songPosMs * bpm) / 60_000, bpm);
+  return null;
+}
+
 /**
- * The beat lift, 0 to 0.55: a brightness added to every lit beam. Only at the Beat level (on the
- * anchor beat); a shallow pulse at Tempo only on its own phase; nothing at None, and nothing in the
- * still rig. A build deepens it to at most 55 %.
+ * The beat lift, 0 to 0.045: a share added to every light of the rig (beams, lenses, haze glow, wall; never the gel, the
+ * score or the text). Only at the Beat level, on the anchor beat; a 4 % pulse at Tempo only on its own phase; nothing at
+ * None, and nothing in the still rig. A build lifts by 2 %, beside the haze's 3 % step. Each rise takes 40 ms and each
+ * fall 200 ms, so no run of it passes 5 % in any region (`--scene-lift-cap`).
  */
 export function beatLift({ frame, bpm, beats, songPosMs, reduced }: LiftInput): number {
   if (reduced || bpm === undefined || !(bpm > 0)) return 0;
   const level: BeatLevel = frame.level;
-  const depth = frame.moments.gather ? Math.min(BUILD_LIFT_MAX, frame.energy.beatLift * 1.4) : Math.min(MAX_BEAT_LIFT, frame.energy.beatLift);
-  const decay = (phase: number) => (phase < 0 ? 0 : (1 - phase) ** 3);
-  if (level === "Beat" && beats !== null) return depth * decay(liftBeat(beats, bpm));
-  if (level === "Tempo only") return TEMPO_PULSE_DEPTH * decay(liftBeat((songPosMs * bpm) / 60_000, bpm));
+  const depth = frame.moments.gather ? BUILD_LIFT : Math.min(MAX_BEAT_LIFT, frame.energy.beatLift);
+  if (level === "Beat" && beats !== null) return depth * liftShape(sinceLift(beats, bpm) ?? -1);
+  if (level === "Tempo only") return TEMPO_PULSE_DEPTH * liftShape(sinceLift((songPosMs * bpm) / 60_000, bpm) ?? -1);
   return 0;
 }
 
-/** The master level of the whole rig for the link state (scene.md "States"). */
-export function masterLevel(link: LinkInput, down: number, songChangeDim: boolean): number {
+/** The master level of the whole rig for the link state (scene.md "States"); `songChangeDim` is how far the song-change dim has gone, 0 to 1 (true is all the way). */
+export function masterLevel(link: LinkInput, down: number, songChangeDim: boolean | number): number {
   const base = link.state === "Paused" || link.held === true ? down : link.state === "Off the list" ? OFF_LIST_LEVEL : 1;
-  return songChangeDim ? base * SONG_CHANGE_DIM : base;
+  const depth = songChangeDim === true ? 1 : songChangeDim === false ? 0 : songChangeDim;
+  return base * (1 - (1 - SONG_CHANGE_DIM) * depth);
 }
 
-/** The burst's share of white: 1 at its start, linear to 0 over `decayMs`. */
+/** The burst's share of white: 1 at its start (one frame up), linear to 0 over `decayMs`. */
 export function burstEnvelope(msSince: number | null, decayMs: number): number {
   return msSince === null || msSince < 0 || msSince >= decayMs ? 0 : 1 - msSince / decayMs;
 }
 
 export type WallMode = Frame["energy"]["wall"];
 export const WALL_COLUMNS = 56;
+/** The wall's chase is a comb that travels: a lit dot every `COMB` columns, one column on a beat, so any region holds the same number of them. */
+export const COMB = 6;
+export const COMB_HALF_WIDTH = 1.5;
+/** 0 to 1: how near a column is to a tooth of the comb at `head`, as a triangle. */
+export function comb(col: number, head: number): number {
+  const d = Math.abs(((((col - head) % COMB) + COMB * 1.5) % COMB) - COMB / 2);
+  return Math.max(0, 1 - d / COMB_HALF_WIDTH);
+}
+
 /**
  * One wall dot's brightness, 0 to 1: a slow wave, plus a chase that steps with the beat where the
  * zone has one and the beat is known (`chaseStep` null otherwise: no chase without the beat, S8).
@@ -83,7 +100,7 @@ export function wallDot(col: number, row: number, mode: WallMode, chaseStep: num
   if (reduced) return 0.2;
   const wave = 0.18 + 0.12 * Math.sin(col * 0.35 + row * 0.5 + seconds * 0.6);
   if (mode === "slow wave" || chaseStep === null) return wave;
-  const head = (chaseStep * 7) % WALL_COLUMNS;
-  const dist = Math.min(Math.abs(col - head), mode === "beat chase both ways" ? Math.abs(col - (WALL_COLUMNS - 1 - head)) : WALL_COLUMNS);
-  return wave + (dist < 3 ? 0.6 * (1 - dist / 3) : 0);
+  const head = chaseStep % COMB;
+  const lit = mode === "beat chase both ways" ? Math.max(comb(col, head), comb(WALL_COLUMNS - 1 - col, head)) : comb(col, head);
+  return wave + 0.6 * lit;
 }

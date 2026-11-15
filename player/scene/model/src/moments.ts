@@ -37,6 +37,17 @@ export function momentsAt(items: readonly SongMoment[] | undefined, bpm: number 
   return { gather, fan: fan && !gather, breakdown };
 }
 
+/** How long the build has gone on, in ms, or null outside a build (the gather's window, as `momentsAt` has it). */
+export function buildElapsedMs(items: readonly SongMoment[] | undefined, bpm: number | undefined, posMs: number): number | null {
+  if (!items || bpm === undefined || !(bpm > 0)) return null;
+  const beat = 60_000 / bpm;
+  for (const m of items) {
+    const from = m.kind === "drop" ? m.at_ms - BUILD_BEATS * beat : m.kind === "build" ? m.at_ms : null;
+    if (from !== null && posMs >= from && posMs < from + BUILD_BEATS * beat) return posMs - from;
+  }
+  return null;
+}
+
 export interface LightBurst {
   readonly kind: "light";
   readonly colour: "white";

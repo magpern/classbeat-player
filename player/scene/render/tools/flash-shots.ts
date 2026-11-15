@@ -1,11 +1,11 @@
-// A report, not a gate (#546; the gate is the flash-budget issue's): the strict S6 count of scene.md on the real
-// page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
+// The strict S6 gate (#577; reported since #546): the count of scene.md on the real page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
 // the scene's canvas is read every frame (linear light), and tools/luminance-steps.ts counts every change over
 // 10 % of the larger end, each direction, no gate on duration, in every region: the whole screen, the four
 // quadrants, every 1/3 x 1/3 window at a stride of 1/6 (the 3 x 3 grid, the grid offset by half a cell, and the
 // positions between) and the 1/3 strips. The most changes in any sliding second, and the region it is in, go to the
-// log and to artifacts/flash-steps.json, so a change can be compared with `main`. `main` does not meet the strict
-// gate today (the review of #569 measured it), so this run fails only if it measured nothing.
+// log and to artifacts/flash-steps.json. The run fails if any run of any moment, locked with the beat or coasting, has more
+// than 3 changes in a sliding second in any region, and if it measured nothing. A run that fails is fixed in the light or
+// the schedule, never in the measure.
 //
 // The same frames carry S5 (tools/s5-fit.ts): every pixel of every frame, read from the canvas as shown, must be
 // `a x token + w x white` within 1 code value for the current zone's token, or the next zone's during the
@@ -19,20 +19,46 @@ import { MAX_CHANGES_PER_SECOND, findChanges, mostInASecond } from "./luminance-
 import type { Change } from "./luminance-steps.ts";
 import type { Open } from "./text-shots.ts";
 
-interface Moment { readonly name: string; readonly fromS: number; readonly toS: number }
+/** What the person does during a moment, each once: a link state ("paused", or "base" for the run's own), a quality step, a seek or jump (`jumpMs`). */
+interface Event { readonly atMs: number; readonly link?: string; readonly quality?: string; readonly jumpMs?: number }
+interface Moment {
+  readonly name: string; readonly fromS: number; readonly toS: number;
+  /** A variant of the demo class (`class=`), for collisions. */
+  readonly cls?: string;
+  readonly events?: readonly Event[];
+  /** The states in which the budget (on) must place a white burst in this moment: a gate that the scene bursts, not only that it stays under the count. */
+  readonly bursts?: readonly string[];
+  /** Frames the run must have (a jump skips time). */
+  readonly frames?: number;
+}
 // The demo class (demo/scenario.ts): intervals at 20, 40, 60, 80, 100, 120 and 140 s; song changes at 60 s (into a
 // song with no moments, so with a burst) and 100 s (into a song with a breakdown); a drop at 40 s; a pattern from 120 s.
 export const MOMENTS: readonly Moment[] = [
+  { name: "steady beats in zone 1", fromS: 6, toS: 9.5 },
   { name: "beats in zone 2", fromS: 24, toS: 27 },
+  { name: "steady beats in zone 4", fromS: 50.6, toS: 54 },
+  { name: "steady beats in zone 5", fromS: 64, toS: 67.5 },
+  { name: "steady beats in zone 6", fromS: 88, toS: 91.5 },
   { name: "interval change (20 s)", fromS: 18.5, toS: 22.5 },
-  { name: "build, drop, burst and fan, on an interval change (40 s)", fromS: 36, toS: 44 },
+  { name: "build, drop and fan on an interval change (40 s): locked the ramp has the room (no burst, the fan is the drop frame); coasting the drop bursts", fromS: 36, toS: 44, bursts: ["coasting"] },
+  { name: "build, drop and fan away from a change (58 s): the drop bursts", fromS: 54, toS: 59, bursts: ["locked", "coasting"] },
   { name: "song change that is also an interval change into a song with no moments (60 s)", fromS: 58.5, toS: 63.5 },
-  { name: "light-only burst on an interval change in a song with no moments (80 s)", fromS: 78.5, toS: 83 },
+  { name: "interval change in a song with no moments (80 s): locked the ramp has the room (no burst); coasting the light-only burst", fromS: 78.5, toS: 83, bursts: ["coasting"] },
   { name: "song change and interval change into a song with moments (100 s)", fromS: 98.5, toS: 103.5 },
   { name: "zone 7 beats", fromS: 103.5, toS: 106.5 },
   { name: "breakdown and the interval change at 120 s", fromS: 118.5, toS: 131 },
   { name: "interval change (140 s)", fromS: 138.5, toS: 142.5 },
   { name: "the class ends (160 s)", fromS: 158.5, toS: 161.5 },
+  // What the person does, and what collides (scene.md "Every moment, worst case"): a user action, a quality step, merges.
+  { name: "user actions: pause at 70 s, resume at 71.2 s", fromS: 68.5, toS: 73, events: [{ atMs: 70_000, link: "paused" }, { atMs: 71_200, link: "base" }] },
+  { name: "user action: a 15 s jump at 71 s, from 71 s to 86 s", fromS: 69.5, toS: 88, events: [{ atMs: 71_000, jumpMs: 86_000 }], frames: 3.5 },
+  { name: "user action: a seek back at 20.5 s to 19 s, across the change at 20 s again", fromS: 18.5, toS: 23, events: [{ atMs: 20_500, jumpMs: 19_000 }], frames: 6 },
+  { name: "quality steps: High to Medium at 70 s, Medium to Low at 72 s", fromS: 68.5, toS: 74, events: [{ atMs: 70_000, quality: "Medium" }, { atMs: 72_000, quality: "Low" }] },
+  { name: "song change away from an interval change (70 s: the song-change dim)", fromS: 68.5, toS: 72.5, cls: "dim" },
+  { name: "collision: intervals 0.4 s apart (20.0 s and 20.4 s)", fromS: 18.5, toS: 23, cls: "collide" },
+  { name: "collision: a drop 0.4 s after a change (40.0 s and 40.4 s)", fromS: 38.5, toS: 44, cls: "collide", bursts: ["coasting"] },
+  { name: "collision: intervals 0.3 s apart in a song with no moments (80.0 s and 80.3 s)", fromS: 78.5, toS: 83, cls: "collide" },
+  { name: "collision: song change and intervals 0.6 s apart (100.0 s and 100.6 s)", fromS: 98.5, toS: 103.5, cls: "collide" },
 ];
 /** The states measured on the moments: the real running state, and without the beat. */
 const STATES = [["locked", ""], ["coasting", "&state=coasting"]] as const;
@@ -50,7 +76,7 @@ export const REGIONS: readonly Rect[] = (() => {
 const WARM_UP_S = 12;
 
 /** Reads the canvas after every frame: the relative luminance (linear light) of each region, by a summed-area table. */
-const setup = `(() => {
+export const probeSetup = `(() => {
   const [w, h] = [96, 54];
   const rects = ${JSON.stringify(REGIONS)};
   const cv = document.createElement("canvas");
@@ -81,10 +107,10 @@ const setup = `(() => {
       }
       this.s5.frames++; this.s5.pixels += px.length / 4; this.s5.bad += bad;
     },
-    run(from, to) {
+    run(from, to, events) {
       const self = this;
       window.__scene.advance(Math.max(0, from - ${WARM_UP_S}) * 1000, from * 1000, 60, { draws: () => false, after() {} });
-      window.__scene.advance(from * 1000, to * 1000, 60, { draws: () => true, after(ms) {
+      window.__scene.advance(from * 1000, to * 1000, 60, { events: events || [], draws: () => true, after(ms) {
         ctx.drawImage(document.getElementById("scene"), 0, 0, w, h);
         const px = ctx.getImageData(0, 0, w, h).data;
         for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -119,9 +145,9 @@ export interface Run {
 export interface Counted { readonly moment: string; readonly state: string; readonly run: Run }
 
 async function play(open: Open, m: Moment, query: string): Promise<Run> {
-  const { page, problems } = await open(480, 270, query);
-  await page.evaluate(setup);
-  await page.evaluate(`window.__steps.run(${m.fromS}, ${m.toS})`);
+  const { page, problems } = await open(480, 270, query + (m.cls === undefined ? "" : `&class=${m.cls}`));
+  await page.evaluate(probeSetup);
+  await page.evaluate(`window.__steps.run(${m.fromS}, ${m.toS}, ${JSON.stringify(m.events ?? [])})`);
   const out = await page.evaluate(() => (window as unknown as { __steps: Series }).__steps);
   assert.deepEqual([...problems, ...(await violations(page))], [], m.name);
   await page.close();
@@ -137,19 +163,25 @@ async function play(open: Open, m: Moment, query: string): Promise<Run> {
 export async function reportS6(open: Open, artifacts: string): Promise<Counted[]> {
   const counted: Counted[] = [];
   const s5Faults: string[] = [];
+  const s6Faults: string[] = [];
+  const burstFaults: string[] = [];
   for (const m of MOMENTS) {
     const line: string[] = [];
     for (const [state, query] of STATES) {
       const run = await play(open, m, query);
-      assert.ok(run.frames >= (m.toS - m.fromS) * 55, `${m.name}, ${state}: only ${run.frames} frames measured`);
+      assert.ok(run.frames >= (m.frames ?? m.toS - m.fromS) * 55, `${m.name}, ${state}: only ${run.frames} frames measured`);
       if (run.s5.bad > 0) s5Faults.push(`${m.name}, ${state}: ${run.s5.bad} of ${run.s5.pixels} pixels are not a x token + w x white, for example ${run.s5.worst}`);
+      if (run.most > MAX_CHANGES_PER_SECOND) s6Faults.push(`${m.name}, ${state}: ${run.most} changes in a second in ${run.worstRegion} (limit ${MAX_CHANGES_PER_SECOND})`);
+      if ((m.bursts ?? []).includes(state) && run.burstFrames === 0) burstFaults.push(`${m.name}, ${state}: no white burst with the budget on`);
       counted.push({ moment: m.name, state, run });
-      line.push(`${state} ${run.most} (${run.worstRegion}), S5 ${run.s5.bad} of ${run.s5.pixels} px`);
+      line.push(`${state} ${run.most} (${run.worstRegion}), bursts ${run.burstFrames} fr, S5 ${run.s5.bad} of ${run.s5.pixels} px`);
     }
-    console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND}; not gated here)`);
+    console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND})`);
   }
   mkdirSync(artifacts, { recursive: true });
   writeFileSync(join(artifacts, "flash-steps.json"), JSON.stringify({ limitPerSecond: MAX_CHANGES_PER_SECOND, moments: counted }, null, 2));
   assert.deepEqual(s5Faults, [], "S5: a rendered pixel is not a x token + w x white");
+  assert.deepEqual(s6Faults, [], "S6: more than 3 changes in a sliding second");
+  assert.deepEqual(burstFaults, [], "the scene bursts where the scheduler has room");
   return counted;
 }

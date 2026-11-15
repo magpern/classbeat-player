@@ -8,7 +8,8 @@
 // A source changes token by a flag, in one frame, at constant luminance (the flag moves no luminance). Text only:
 // strings and the numbers they are built from; nothing here reads a clock or the page.
 
-import { FADE, GROW, MAX_BOXES } from "./text-mask-calc.ts";
+import { COMB, COMB_HALF_WIDTH } from "./light-calc.ts";
+import { BURST_SHADOW, BURST_SHADOW_DEPTH, FADE, GROW, MAX_BOXES } from "./text-mask-calc.ts";
 
 export const BEAMS = 22;
 /** A wall dot: full inside this share of its radius, nothing at the edge (the mock-up's smoothstep(.3, .1, r)). */
@@ -40,6 +41,7 @@ uniform float uWallLevel;
 uniform float uWallMode;     // 0 a slow wave, 1 a chase, 2 a chase both ways
 uniform float uChase;        // the chase's step
 uniform float uBurst;        // white luminance of the burst
+uniform float uLensW;        // the white share of a lens: 0.5 at rest, up to 0.75 in the lens flash
 uniform int uN;
 uniform vec3 uBO[${BEAMS}];
 uniform vec3 uBD[${BEAMS}];
@@ -76,15 +78,26 @@ float wallDot(float col, float row) {
   float wave = 0.18 + 0.12 * sin(col * 0.35 + row * 0.5 + uTime * 0.6);
   if (uStill > 0.5) return 0.2;
   if (uWallMode < 0.5) return wave;
-  float head = mod(uChase * 7.0, 56.0);
-  float d = abs(col - head);
-  if (uWallMode > 1.5) d = min(d, abs(col - (55.0 - head)));
-  return wave + (d < 3.0 ? 0.6 * (1.0 - d / 3.0) : 0.0);
+  // The chase is a comb that travels, a lit dot every ${COMB} columns and one column a beat: any region holds the same number of them.
+  float head = mod(uChase, ${COMB}.0);
+  float d = abs(mod(mod(col - head, ${COMB}.0) + ${COMB}.0 * 1.5, ${COMB}.0) - ${COMB}.0 / 2.0);
+  if (uWallMode > 1.5) d = min(d, abs(mod(mod(55.0 - col - head, ${COMB}.0) + ${COMB}.0 * 1.5, ${COMB}.0) - ${COMB}.0 / 2.0));
+  return wave + 0.6 * max(0.0, 1.0 - d / ${COMB_HALF_WIDTH.toFixed(1)});
 }
 
 void main() {
   vec2 uv = vUv;
   float sx = uv.x * 0.5 + 0.5;
+  // The text boxes: w is the cap's weight (the box grown by 1.2 vh, faded over 3 vh); shadow a wider, rounded one for the burst.
+  float x = sx * uAspect, y = uv.y * 0.5 + 0.5, w = 0.0, shadow = 0.0;
+  for (int j = 0; j < ${MAX_BOXES}; j++) {
+    if (j >= uBoxN) break;
+    float dd = max(max(uBoxA[j].x - x, x - uBoxB[j].x), max(uBoxA[j].y - y, y - uBoxB[j].y));
+    w = max(w, 1.0 - smoothstep(${f(GROW)}, ${f(GROW + FADE)}, dd));
+    float de = length(max(vec2(max(uBoxA[j].x - x, x - uBoxB[j].x), max(uBoxA[j].y - y, y - uBoxB[j].y)), 0.0));
+    float s = 1.0 - smoothstep(0.0, ${f(BURST_SHADOW)}, de);
+    shadow = 1.0 - (1.0 - shadow) * (1.0 - s * s); // a union that is smooth where two boxes meet
+  }
   vec3 R = normalize(vec3(uv.x * uAspect * uTanH, uv.y * uTanH, -1.0));
   vec3 L = vec3(0.0); // luminance: the current token, the next token, white
 
@@ -130,9 +143,10 @@ void main() {
     float lens = uBL[i] * fc * (exp(-dl * dl * 12000.0) * 3.0 + 0.0005 / (dl * dl + 0.0005) * 0.3);
     // The lens is half white, half its token.
     if (uBF[i] > 0.5) L.y += beam + 0.5 * lens; else L.x += beam + 0.5 * lens;
-    L.z += 0.5 * lens;
+    L.z += uLensW * lens;
   }
-  L.z += uBurst;
+  // The burst is held back round the text by a soft shadow (rounded, wide), so the dark under the text is a penumbra and not a slab.
+  L.z += uBurst * (1.0 - ${f(BURST_SHADOW_DEPTH)} * shadow * uMaskOn);
 
   // Ownership: the token with the larger share owns the pixel and shows the other's light in its hue.
   float own = L.y > L.x ? 1.0 : 0.0;
@@ -147,12 +161,6 @@ void main() {
     if (m > 1.0) col3 = vec3(mapped) + (col3 - vec3(mapped)) * ((1.0 - mapped) / (m - mapped));
   }
   // The dark-under-text rule: the colour scaled so its luminance is at most the cap, in linear light.
-  float x = sx * uAspect, y = uv.y * 0.5 + 0.5, w = 0.0;
-  for (int j = 0; j < ${MAX_BOXES}; j++) {
-    if (j >= uBoxN) break;
-    float dd = max(max(uBoxA[j].x - x, x - uBoxB[j].x), max(uBoxA[j].y - y, y - uBoxB[j].y));
-    w = max(w, 1.0 - smoothstep(${f(GROW)}, ${f(GROW + FADE)}, dd));
-  }
   float Y = lum(col3);
   if (Y > uCap) col3 *= mix(1.0, uCap / Y, w * uMaskOn);
   gl_FragColor = vec4(encode(col3), 1.0);

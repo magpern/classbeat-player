@@ -28,7 +28,7 @@ export function movementScale(stage: Stage, link: LinkInput): number {
  * The master level of the whole rig: lights down before the start (as paused), else the link
  * state's (and the song-change dim).
  */
-export function stageMaster(stage: Stage, link: LinkInput, tokens: { readonly down: number }, songChangeDim: boolean): number {
+export function stageMaster(stage: Stage, link: LinkInput, tokens: { readonly down: number }, songChangeDim: boolean | number): number {
   if (stage === "before") return tokens.down;
   return masterLevel(link, tokens.down, songChangeDim);
 }

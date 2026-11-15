@@ -6,7 +6,7 @@
 // whose size is more than 10 % of the larger of its two ends; a wobble under that does not turn the
 // series. Each direction counts, so a flash that rises and falls is two changes. There is no duration
 // or abruptness gate and no pairing: a slow ramp over 10 % is a change too. Under `FLOOR` is black. A
-// change is placed at the time it ends. Pure: no browser, no clock.
+// change is placed at the frame where its run first passes 10 %. Pure: no browser, no clock.
 
 /** The size that counts, as a share of the larger end. */
 export const CHANGE_THRESHOLD = 0.1;
@@ -16,7 +16,7 @@ export const MAX_CHANGES_PER_SECOND = 3;
 export const FLOOR = 0.002;
 
 export interface Change {
-  /** When the run ended. */
+  /** When the run first passed the threshold: the frame it is placed on. */
   readonly atMs: number;
   readonly rising: boolean;
   /** The luminance at its two ends. */
@@ -29,30 +29,30 @@ const differs = (a: number, b: number): boolean => {
   return top > FLOOR && Math.abs(b - a) / top > CHANGE_THRESHOLD;
 };
 
-/** The changes of one region: the zigzag of the series, each over the threshold. */
+/** The changes of one region: the zigzag of the series, each over the threshold, each placed at the frame where it first passes it. */
 export function findChanges(timesMs: readonly number[], luminance: readonly number[]): Change[] {
   const changes: Change[] = [];
   const first = luminance.at(0);
   if (first === undefined) return changes;
   let anchor = first;
-  let [extreme, extremeAt, direction] = [first, 0, 0];
+  let [extreme, passedAt, direction] = [first, 0, 0];
   for (let i = 1; i < luminance.length; i++) {
     const y = luminance[i]!;
     if (direction === 0) {
       if (!differs(anchor, y)) continue;
-      [direction, extreme, extremeAt] = [y > anchor ? 1 : -1, y, i];
+      [direction, extreme, passedAt] = [y > anchor ? 1 : -1, y, i];
     } else if (y * direction > extreme * direction) {
-      [extreme, extremeAt] = [y, i];
+      extreme = y;
     } else if (differs(extreme, y)) {
-      changes.push({ atMs: timesMs[extremeAt]!, rising: direction > 0, from: anchor, to: extreme });
-      [anchor, direction, extreme, extremeAt] = [extreme, -direction, y, i];
+      changes.push({ atMs: timesMs[passedAt]!, rising: direction > 0, from: anchor, to: extreme });
+      [anchor, direction, extreme, passedAt] = [extreme, -direction, y, i];
     }
   }
-  if (direction !== 0 && differs(anchor, extreme)) changes.push({ atMs: timesMs[extremeAt]!, rising: direction > 0, from: anchor, to: extreme });
+  if (direction !== 0 && differs(anchor, extreme)) changes.push({ atMs: timesMs[passedAt]!, rising: direction > 0, from: anchor, to: extreme });
   return changes;
 }
 
-/** The most changes that end within any one second (a window opening at each change). */
+/** The most changes that fall within any one second (a window opening at each change). */
 export function mostInASecond(changes: readonly Change[]): number {
   return Math.max(0, ...changes.map((s) => changes.filter((o) => o.atMs >= s.atMs && o.atMs < s.atMs + 1000).length));
 }

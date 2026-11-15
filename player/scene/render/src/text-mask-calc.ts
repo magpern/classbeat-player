@@ -14,6 +14,10 @@ export const GROW = SPEC_GROW + 0.003;
 /** The share of the cap the mask holds the light to (0.075 of 0.08). */
 export const CAP_MARGIN = 0.075 / 0.08;
 export const MAX_BOXES = 48;
+/** The burst's own soft shadow round the text, in window heights: wider than the cap's fade and rounded, so under a burst the dark reads as a penumbra, not a slab. */
+export const BURST_SHADOW = 0.2;
+/** How much of the burst the shadow takes away under the text (the cap still holds the rest). */
+export const BURST_SHADOW_DEPTH = 0.94;
 
 /** A box in window-height units with y up (x runs 0 to the aspect ratio, y 0 to 1). */
 export interface MaskBox {

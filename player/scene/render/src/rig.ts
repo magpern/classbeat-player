@@ -7,7 +7,7 @@
 import { assertNoRenderCallbacks } from "../guard/render-callbacks.ts"; // first: it captures three's defaults before any scene is built
 import { Color, Mesh, PerspectiveCamera, PlaneGeometry, Scene, ShaderMaterial, Vector3 } from "three";
 import type { Direction, QualityLevel, RigHue } from "../../model/src/index.ts";
-import { QUALITY } from "../../model/src/index.ts";
+import { LENS_WHITE_AT_REST, QUALITY } from "../../model/src/index.ts";
 import { BEAM_AXIS, aimQuaternion, aimedDirection } from "./aim.ts";
 import { FixtureView, buildFixtures } from "./fixtures.ts";
 import type { Draw } from "./loop.ts";
@@ -19,8 +19,6 @@ import { lookup, nth } from "./lookup.ts";
 /** The fixed camera's half field of view, as the shader's `tan`: 25 degrees. */
 const TAN_H = Math.tan((25 * Math.PI) / 180);
 const BEAM_GAIN = 0.2;
-/** How much of the beat lift the beams and lenses show: the lift moves a region by less than the S6 threshold, and the haze and the wall do not lift. */
-const LIFT_SHARE = 0.4;
 const LENS_UNLIT = 0.04;
 const LENS_LIT = 0.9;
 const WALL_LEVEL = 0.4; // the wall is a back layer, well under the beams (a deep, dark room)
@@ -49,7 +47,7 @@ export class SceneRig {
         uAspect: { value: 16 / 9 }, uTanH: { value: TAN_H }, uTime: { value: 0 },
         uTokA: { value: new Color() }, uTokB: { value: new Color() },
         uMaster: { value: 1 }, uAmb: { value: 0 }, uHazeDetail: { value: 3 }, uCrossX: { value: 2 }, uWipe: { value: 0 }, uStill: { value: 0 },
-        uWallOn: { value: 1 }, uWallLevel: { value: 0 }, uWallMode: { value: 0 }, uChase: { value: 0 }, uBurst: { value: 0 },
+        uWallOn: { value: 1 }, uWallLevel: { value: 0 }, uWallMode: { value: 0 }, uChase: { value: 0 }, uBurst: { value: 0 }, uLensW: { value: LENS_WHITE_AT_REST },
         uN: { value: BEAMS },
         uBO: { value: array(BEAMS, () => new Vector3()) }, uBD: { value: array(BEAMS, () => new Vector3(0, 0, -1)) },
         uBI: { value: array(BEAMS, () => 0) }, uBL: { value: array(BEAMS, () => 0) }, uBF: { value: array(BEAMS, () => 0) }, uBS: { value: array(BEAMS, () => 0.03) },
@@ -94,11 +92,12 @@ export class SceneRig {
 
   apply(draw: Draw, quality: QualityLevel): void {
     const u = this.material.uniforms;
-    const { energy, moments, colours } = draw.frame;
+    const { energy, colours } = draw.frame;
     const q = lookup(QUALITY, quality);
     this.linear(draw.tokens.current, u.uTokA!.value as Color);
     this.linear(draw.tokens.next ?? draw.tokens.current, u.uTokB!.value as Color);
-    const { ramp } = draw.cross;
+    const ramp = draw.energyRamp; // the energy's ramp, where the scheduler placed it; the hue cross has its own front
+    const lift = 1 + draw.lift; // every light of the rig by the same share (beams, lenses, haze, wall; never the text)
     const mix = (a: number, b: number) => a + (b - a) * ramp;
     const share = (g: number) => Math.min(1, Math.max(0, (g - 0.045) / 0.065));
     const e = draw.ahead ? mix(share(energy.ambientGlow), share(draw.ahead.energy.ambientGlow)) : share(energy.ambientGlow);
@@ -109,8 +108,8 @@ export class SceneRig {
       const lit = draw.ahead ? now + ((nth(draw.ahead.lit, i) === true ? 1 : 0) - now) * ramp : now;
       return {
         dir: BEAM_AXIS.clone().applyQuaternion(fx.pivot.quaternion),
-        beam: BEAM_GAIN * fx.gain * (0.55 + 0.45 * e) * (1 + LIFT_SHARE * draw.lift) * draw.master * lit,
-        lens: (LENS_UNLIT + (LENS_LIT * (1 + LIFT_SHARE * draw.lift) - LENS_UNLIT) * lit) * draw.master,
+        beam: BEAM_GAIN * fx.gain * (0.55 + 0.45 * e) * lift * draw.master * lit * draw.beamLevel,
+        lens: (LENS_UNLIT + (LENS_LIT * lift - LENS_UNLIT) * lit) * draw.master,
         next: this.takesNext(fx, draw) ? 1 : 0,
       };
     });
@@ -120,14 +119,15 @@ export class SceneRig {
     u.uBF!.value = beams.map((b) => b.next);
     const glow = draw.ahead ? mix(energy.ambientGlow, draw.ahead.energy.ambientGlow) : energy.ambientGlow;
     u.uMaster!.value = draw.master;
-    u.uAmb!.value = glow * (moments.gather ? 1.5 : 1);
+    u.uAmb!.value = glow * draw.hazeGain * lift;
+    u.uLensW!.value = LENS_WHITE_AT_REST + this.tokens.lensFlash * draw.lens;
     u.uHazeDetail!.value = q.hazeLayers === 2 ? 3 : 2;
     u.uCrossX!.value = draw.cross.front;
     u.uWipe!.value = colours.wipe;
     u.uStill!.value = draw.reduced ? 1 : 0;
     u.uTime!.value = draw.seconds;
     u.uWallOn!.value = q.wall && draw.stage !== "before" ? 1 : 0;
-    u.uWallLevel!.value = WALL_LEVEL;
+    u.uWallLevel!.value = WALL_LEVEL * lift;
     const mode = draw.ahead ? draw.ahead.energy.wall : energy.wall;
     u.uWallMode!.value = draw.chaseStep === null ? 0 : lookup(WALL_MODES, ramp > 0.5 ? mode : energy.wall);
     u.uChase!.value = draw.chaseStep ?? 0;

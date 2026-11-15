@@ -12,8 +12,8 @@ const tokens = tokensFromFile();
 type Make = (classMs: number) => Feed;
 interface Run { readonly gather: number; readonly fan: number; readonly breakdown: number; readonly burstFrames: number; readonly bursts: number; readonly minMaster: number; readonly maxLift: number }
 
-function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60): Run {
-  const loop = new RigLoop(tokens);
+function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60, budgetOff = false): Run {
+  const loop = new RigLoop(tokens, budgetOff);
   const r = { gather: 0, fan: 0, breakdown: 0, burstFrames: 0, bursts: 0, minMaster: 1, maxLift: 0 };
   let [classMs, was] = [fromMs, 0];
   for (let n = 0; classMs < toMs; n++) {
@@ -34,18 +34,21 @@ function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60): Run {
 // and 100 s) and song 2's breakdown (120 s) across the interval changes.
 const through = (link: Feed["link"], reducedMotion = false): Make => (ms) => feedAt(ms, { link, reducedMotion });
 
-test("locked: the build gathers, the drop bursts once and fans, the breakdown runs", () => {
-  const a = play(through({ state: "Locked" }), 30_000, 52_000);
+test("locked: the build gathers, the drop fans, the 58 s drop (away from a change) bursts, the 40 s drop (on a change, beside the ramp) does not, the breakdown runs", () => {
+  // At the Beat level the 40 s drop's frame is the interval change's: the ramp (step c) takes the room, so its burst is skipped (step f) and the fan is the drop's frame.
+  const a = play(through({ state: "Locked" }), 30_000, 59_500);
   assert.ok(a.gather > 0 && a.fan > 0);
-  assert.equal(a.bursts, 1);
+  assert.equal(a.bursts, 1, "the 58 s drop");
+  assert.equal(play(through({ state: "Locked" }), 30_000, 59_500, 1 / 60, true).bursts, 2, "budget off: both drops burst, 18 s apart");
   const b = play(through({ state: "Locked" }), 110_000, 128_000);
   assert.ok(b.breakdown > 0);
 });
 
-test("the drop's burst and its gather and fan also run at the None level (coasting) and when ambiguous", () => {
+test("the drop's gather, fan and burst also run at the None level (coasting) and when ambiguous, with no lift: both drops burst (no ramp competes at 40 s)", () => {
   for (const state of ["Coasting", "Ambiguous", "Manual"] as const) {
-    const a = play(through({ state }), 30_000, 52_000);
-    assert.ok(a.gather > 0 && a.fan > 0 && a.bursts === 1, state);
+    const a = play(through({ state }), 30_000, 62_000);
+    assert.ok(a.gather > 0 && a.fan > 0, state);
+    assert.equal(a.bursts, 2, `${state}: the drops at 40 s and 58 s burst`);
     assert.equal(a.maxLift, 0, `${state}: no lift without the beat`);
   }
 });
@@ -72,29 +75,16 @@ test("reduced motion: the still rig has no burst, no lift, no moments", () => {
   assert.deepEqual([r.gather, r.fan, r.breakdown, r.burstFrames, r.maxLift], [0, 0, 0, 0, 0]);
 });
 
-test("a song with marked moments never bursts on an interval change; one without does, at least 10 s apart", () => {
-  // Song 0 has moments: the interval change at 20 s makes no burst. Song 1 has none: 80 s and 100 s each do.
-  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0);
-  const song1 = play(through({ state: "Locked" }), 70_000, 98_000);
-  assert.equal(song1.bursts, 1);
-  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000, 1 / 144).bursts, 1);
-  // Two interval changes closer than 10 s: only the first bursts.
-  const cls = { ...DEMO_CLASS, intervals: [{ startMs: 0, zone: 2 }, { startMs: 65_000, zone: 3 }, { startMs: 70_000, zone: 4 }, { startMs: 90_000, zone: 5 }] };
-  const loop = new RigLoop(tokens);
-  let n = 0;
-  let was = 0;
-  for (let ms = 62_000; ms < 100_000; ms += 1000 / 60) {
-    const d = loop.step({ ...feedAt(ms), cls }, 1 / 60, "High");
-    n += d.burst > 0 && was === 0 ? 1 : 0;
-    was = d.burst;
-  }
-  assert.equal(n, 2, "65 s bursts, 70 s is within 10 s and does not, 90 s bursts");
+test("a song with no moments: a light-only burst on its interval change where nothing competes (coasting, 80 s); locked, the ramp has the room and the burst is skipped", () => {
+  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0, "song 0 has moments: no light-only burst on its change at 20 s");
+  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000).bursts, 0, "locked: the ramp, the change frame, the decay and steady light would be four");
+  assert.equal(play(through({ state: "Coasting" }), 70_000, 98_000).bursts, 1, "coasting: the change frame, the decay and steady light are three");
 });
 
 test("drops closer than 10 s share one burst; drops 10 s or more apart each burst (S6)", () => {
   const drops = (...at: number[]): Feed["cls"] => ({ ...DEMO_CLASS, songs: [{ bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: at.map((at_ms) => ({ at_ms, kind: "drop" as const })) }] });
-  const count = (cls: Feed["cls"]) => {
-    const loop = new RigLoop(tokens);
+  const count = (cls: Feed["cls"], budgetOff = false) => {
+    const loop = new RigLoop(tokens, budgetOff);
     let [n, was] = [0, 0];
     for (let ms = 30_000, i = 0; ms < 75_000; i++) {
       const d = loop.step({ ...feedAt(ms), cls, songIndex: 0, songPosMs: ms }, i === 0 ? 0 : 1 / 60, "High");
@@ -104,16 +94,51 @@ test("drops closer than 10 s share one burst; drops 10 s or more apart each burs
     }
     return n;
   };
-  assert.equal(count(drops(40_000, 45_000)), 1, "5 s apart: the second drop does not burst");
-  assert.equal(count(drops(40_000, 49_900)), 1, "just under 10 s");
-  assert.equal(count(drops(40_000, 51_000)), 2, "11 s apart: both burst");
+  // The spacing is the burst's own, with the budget on (drops away from a change) and off.
+  assert.equal(count(drops(44_000, 47_000), true), 1, "budget off: the same spacing");
+  assert.equal(count(drops(44_000, 47_000)), 1, "3 s apart: the second drop does not burst");
+  assert.equal(count(drops(44_000, 53_900)), 1, "just under 10 s");
+  assert.equal(count(drops(44_000, 55_000)), 2, "11 s apart: both burst (on the countdown's second)");
 });
 
-test("a song change dims the rig to a quarter for one beat", () => {
+const playMasters = (cls: Feed["cls"], from: number, to: number, change: number | null, link: Feed["link"] = { state: "Locked" }): number[] => {
   const loop = new RigLoop(tokens);
-  const masters: number[] = [];
-  for (let ms = 59_000; ms < 61_500; ms += 1000 / 60) masters.push(loop.step(feedAt(ms), 1 / 60, "High").master);
+  const out: number[] = [];
+  for (let ms = from; ms < to; ms += 1000 / 60) {
+    const f = feedAt(ms, { link });
+    out.push(loop.step(change !== null && ms >= change ? { ...f, cls, songIndex: 2, songPosMs: ms - change } : { ...f, cls }, 1 / 60, "High").master);
+  }
+  return out;
+};
+
+test("a song change dims the rig to a quarter: down in 120 ms, held, up in 120 ms on the first beat (100 bpm: 600 ms)", () => {
+  // The change at 70 s is no interval change and no burst, so the scheduler has room for both edges.
+  const masters = playMasters(DEMO_CLASS, 69_000, 72_000, 70_000);
   assert.equal(Math.min(...masters), 0.25);
-  const dimmed = masters.filter((m) => m === 0.25).length / 60;
-  assert.ok(Math.abs(dimmed - 60 / 128) < 0.05, `dimmed for ${dimmed} s, one beat at 128 bpm is ${60 / 128}`);
+  const frames = (test: (m: number) => boolean) => masters.filter(test).length / 60;
+  assert.ok(Math.abs(frames((m) => m < 1) - (0.6 + 0.12) ) < 0.05, "the dim lasts the beat and the up edge");
+  assert.ok(Math.abs(frames((m) => m === 0.25) - 0.48) < 0.05, "held at a quarter between the edges");
+  assert.ok(masters.filter((m) => m < 1 && m > 0.25).length >= 12, "and the edges are ramps, not steps");
+});
+
+test("Tempo only (bpm, no anchors) is as the Beat level: the ramp runs, so a drop away from a change bursts, a drop on a change and a no-moments change do not (the gap, as built)", () => {
+  const tempo: Feed["cls"] = { ...DEMO_CLASS, songs: DEMO_CLASS.songs.map((song) => Object.fromEntries(Object.entries(song).filter(([k]) => k !== "anchors")) as typeof song) };
+  const make: Make = (ms) => ({ ...feedAt(ms, { link: { state: "Locked" } }), cls: tempo });
+  assert.equal(play(make, 30_000, 59_500).bursts, 1, "the 58 s drop bursts, the 40 s drop on a change does not");
+  assert.equal(play(make, 70_000, 98_000).bursts, 0, "no moments, a change at 80 s: no light-only burst");
+});
+
+test("a seek across an interval change in a song with no moments gives no light-only burst in the jump frame (the class clock is not continuous)", () => {
+  for (const state of ["Coasting", "Locked"] as const) {
+    const loop = new RigLoop(tokens);
+    let seen = 0;
+    loop.step(feedAt(70_000, { link: { state } }), 0, "High");
+    for (const ms of [90_000, 90_017, 90_033]) seen += loop.step(feedAt(ms, { link: { state } }), 1 / 60, "High").burst > 0 ? 1 : 0;
+    assert.equal(seen, 0, state);
+  }
+});
+
+test("the dim is left out where the scheduler has no room for both edges: beside a burst, and at the None level", () => {
+  assert.equal(Math.min(...playMasters(DEMO_CLASS, 58_500, 62_000, 60_000)), 1, "the burst of the song change at 60 s takes the room: the re-aim marks the song");
+  assert.equal(Math.min(...playMasters(DEMO_CLASS, 69_000, 72_000, 70_000, { state: "Coasting" })), 1, "no runs without the beat");
 });

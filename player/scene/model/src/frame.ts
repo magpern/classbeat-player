@@ -17,6 +17,9 @@ import type { Look } from "./looks.ts";
 import { momentsAt } from "./moments.ts";
 import type { Moments, SongMoment } from "./moments.ts";
 
+/** The beams' turn follows the song's moments this long after them: the drop's burst has its own second before the fan's turn starts (a function of the moments only, rule 4). */
+export const TURN_DELAY_MS = 650;
+
 export interface SceneSong {
   readonly bpm?: number;
   readonly anchors?: readonly BeatAnchor[];
@@ -69,11 +72,12 @@ export function sceneFrame(input: FrameInput): Frame {
   const level = beatLevel(link, song ?? null);
   const phrase = allowanceFor(level).phrase ? phraseAt(song?.anchors, songPosMs) : FIRST_PHRASE;
   const moments = gatedMoments(link, momentsAt(song?.moments, song?.bpm, songPosMs));
+  const turning = gatedMoments(link, momentsAt(song?.moments, song?.bpm, songPosMs - TURN_DELAY_MS));
   const look = lookForSong(songIndex);
   return {
     look, level, phrase, moments,
     energy: energyFor(iv.zone),
     colours: rigColours(iv.zone, next ? next.zone : null, next ? next.startMs - classMs : null),
-    directions: FIXTURES.map((fixture) => beamDirection({ look, fixture, phaseDeg, phrase, moments })),
+    directions: FIXTURES.map((fixture) => beamDirection({ look, fixture, phaseDeg, phrase, moments: turning })),
   };
 }

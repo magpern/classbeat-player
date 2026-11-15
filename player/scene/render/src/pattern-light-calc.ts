@@ -1,17 +1,17 @@
 // A position pattern's light (scene.md "What drives what", S8): energy only. The beams are at full
 // brightness on the "up" side and at `--pattern-down` (72 %) on the "down" side, and the first beat of
-// each side carries a 25 % accent. Brightness only: no angle, height or shape comes from a pattern
+// each side carries a 5 % accent in place of that beat's lift (the flash budget, scene.md "Beat-like light"). Brightness only: no angle, height or shape comes from a pattern
 // (rule 4), and it runs only where the beat is known (the Beat level, S8). The pattern is read from
 // the class's interval by shape and checked, never trusted. Pure.
 
-import { BEATS_PER_BAR, beatsAt, intervalIndexAt } from "../../model/src/index.ts";
+import { ACCENT, BEATS_PER_BAR, beatsAt, intervalIndexAt, liftShape } from "../../model/src/index.ts";
 import type { BeatLevel, SceneClass } from "../../model/src/index.ts";
 import { nth } from "./lookup.ts";
 
-export const ACCENT_DEPTH = 0.25;
+export const ACCENT_DEPTH = ACCENT;
 export const DEFAULT_DOWN = 0.72;
-/** A side shorter than this leaves no room for the accent: the pattern's light is left out (at most 3 switches a second, S6). */
-export const MIN_SIDE_SECONDS = 1 / 3;
+/** A side shorter than this leaves no room for its step (a frame mark, at least 500 ms from the last): the pattern's light is left out (S6). */
+export const MIN_SIDE_SECONDS = 0.5;
 const MAX_SIDES = 4;
 
 export interface ScenePattern {
@@ -35,10 +35,12 @@ export function readPattern(raw: unknown): ScenePattern | null {
 export interface PatternLight {
   /** 1 on the up side, `down` on the down side. */
   readonly level: number;
-  /** 0 to 0.25: the accent of the first beat of a side. */
+  /** 0 to 0.05: the accent of the first beat of a side (rise 40 ms, fall 200 ms). */
   readonly accent: number;
+  /** ms since the side's first beat while its accent runs (the hold skips an accent by its start), else null. */
+  readonly ageMs: number | null;
 }
-export const NO_PATTERN_LIGHT: PatternLight = { level: 1, accent: 0 };
+export const NO_PATTERN_LIGHT: PatternLight = { level: 1, accent: 0, ageMs: null };
 
 export interface PatternLightInput {
   readonly cls: SceneClass;
@@ -78,6 +80,6 @@ export function patternLight(a: PatternLightInput): PatternLight {
   const from = pattern.startOn === "next_downbeat" ? Math.ceil(start / BEATS_PER_BAR - 1e-9) * BEATS_PER_BAR : Math.floor(start);
   if (now < from) return NO_PATTERN_LIGHT; // before the first downbeat: as the zone
   const { up, into } = sideAt(pattern, now - from);
-  const first = Math.max(0, 1 - into);
-  return { level: up ? 1 : Math.min(1, Math.max(0, a.down)), accent: ACCENT_DEPTH * first ** 3 };
+  const ageMs = (into * 60_000) / bpm;
+  return { level: up ? 1 : Math.min(1, Math.max(0, a.down)), accent: ACCENT_DEPTH * liftShape(ageMs), ageMs: into < 1 ? ageMs : null };
 }

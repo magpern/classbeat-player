@@ -6,11 +6,13 @@
 // the cross and the energy ramp are brightness and colour only.
 
 import type { Direction, Energy, Frame, LinkInput, QualityLevel, RigHue, RigState, SceneClass } from "../../model/src/index.ts";
-import { ANTICIPATION_MS, START_STATE, energyFor, beatsAt, intervalIndexAt, rigFrozen, stepRig } from "../../model/src/index.ts";
+import { ANTICIPATION_MS, START_STATE, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, rigFrozen, stepRig } from "../../model/src/index.ts";
+import { RAMP_MS } from "./budget-calc.ts";
 import { BurstTracker } from "./bursts.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
-import { beatLift, beatStride, fixturesLit } from "./light-calc.ts";
+import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
+import { NO_PATTERN_LIGHT, patternLight } from "./pattern-light-calc.ts";
 import { movementScale, stageLit, stageMaster, stageOf } from "./stage-calc.ts";
 import type { Stage } from "./stage-calc.ts";
 import type { SceneTokens } from "./tokens.ts";
@@ -35,8 +37,16 @@ export interface Draw {
   readonly frame: Frame;
   readonly dtSeconds: number;
   readonly lit: readonly boolean[];
-  /** Added to every lit beam's brightness, 0 to 0.55. */
+  /** Added to every light of the rig, 0 to 0.05 (the flash budget); 0 while beat-like light is held around a run. */
   readonly lift: number;
+  /** The beams' level: 1, or the down side's share in a position pattern (the accent of a side's first beat is in `lift`). */
+  readonly beamLevel: number;
+  /** The haze's gain in a build: a 3 % step a beat at the Beat level, steady light below it. */
+  readonly hazeGain: number;
+  /** The lens flash at an interval change, 0 to 1. */
+  readonly lens: number;
+  /** How far the energy has got from the zone left to the zone entered: the cross's ramp where the scheduler placed it, else 0 (a step in the change frame). */
+  readonly energyRamp: number;
   /** The rig's master level: 1, 0.6 off the list, the down level paused or before the start a quarter after a song change. */
   readonly master: number;
   /** The white burst's share of its peak, 0 to 1. */
@@ -55,22 +65,39 @@ export interface Draw {
   readonly seconds: number;
 }
 
-type LoopTokens = Pick<SceneTokens, "down" | "burstMs">;
+/** The ramp is decided this long before the change, before the bursts (decided 1.5 s ahead), as the scheduler's order has it: its hold starts 950 ms before it. */
+const RAMP_HOLD_MS = 1700;
+const FRAME_MS = 1000 / 60;
+
+type LoopTokens = Pick<SceneTokens, "down" | "burstMs" | "patternDown" | "liftCap" | "holdBeforeMs" | "holdAfterMs">;
 
 export class RigLoop {
   private state: RigState = START_STATE;
-  private readonly bursts = new BurstTracker();
+  private readonly bursts: BurstTracker;
   private readonly gate = new CrossGate();
   private seconds = 0;
 
   private readonly tokens: LoopTokens;
 
-  constructor(tokens: LoopTokens) {
+  private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
+
+  private merged(cls: SceneClass): SceneClass {
+    const known = this.mergedClasses.get(cls);
+    if (known !== undefined) return known;
+    const made = mergeIntervals(cls);
+    this.mergedClasses.set(cls, made);
+    return made;
+  }
+
+  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). */
+  constructor(tokens: LoopTokens, budgetOff = false) {
     this.tokens = tokens;
+    this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
   }
 
   step(feed: Feed, rawDtSeconds: number, quality: QualityLevel): Draw {
-    const { cls, classMs, songIndex, songPosMs, link, reducedMotion: reduced } = feed;
+    const { classMs, songIndex, songPosMs, link, reducedMotion: reduced } = feed;
+    const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
     const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: movementScale(stage, link), noMusic: stage === "before" });
@@ -79,19 +106,36 @@ export class RigLoop {
     const song = nth(cls.songs, songIndex);
     const beats = beatsAt(song?.anchors, songPosMs);
     const quiet = still || stage === "before";
-    const { burst, dim } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: quiet });
-    if (!still && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;
-    const lift = beatLift({ frame, bpm: song?.bpm, beats, songPosMs, reduced: still });
-    const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
     const at = intervalIndexAt(cls, classMs);
     const wipe = frame.colours.wipe;
     const msToChange = wipe > 0 ? (1 - wipe) * ANTICIPATION_MS : null;
+    // The ramp is decided first (1.7 s ahead, step c), the bursts after (1.5 s ahead, steps e and f): steady light counts as one change in
+    // every window, so a ramp, a change frame and a burst's decay do not all fit; the burst is then skipped, the fan comes on in the drop's frame.
+    // The energy ramp is a run: the scheduler places it in the 700 ms before the change or the energy is in the change frame.
+    const t0 = nth(cls.intervals, at + 1)?.startMs;
+    const rampPlaced = t0 !== undefined && msToChange !== null && msToChange <= RAMP_HOLD_MS && !quiet && !rigFrozen(link) &&
+      this.bursts.budget.admit(`ramp@${t0}`, "ramp", [{ fromMs: t0 - RAMP_MS, toMs: t0 - FRAME_MS }], { cls, classMs, songIndex, songPosMs, level: frame.level });
+    const { burst, dim, lens } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, level: frame.level, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: quiet });
+    if (!still && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;
     const startMs = nth(cls.intervals, at)?.startMs ?? 0;
     const asked = still || stage === "before" || rigFrozen(link) ? NO_CROSS : crossLook(msToChange, classMs - startMs, CROSS_MS);
     const cross = this.gate.filter(classMs, asked);
-    const nextEnergy = cross.front < 2 && frame.colours.back.kind === "zone" ? energyFor(frame.colours.back.zone) : null;
+    const nextEnergy = cross.front < 2 && rampPlaced && frame.colours.back.kind === "zone" ? energyFor(frame.colours.back.zone) : null;
+    // Beat-like light: the beat lift (the pattern's accent in place of it on a side's first beat), held around every run.
+    const pattern = patternLight({ cls, classMs, songIndex, songPosMs, level: frame.level, down: this.tokens.patternDown, still });
+    const input = { frame, bpm: song?.bpm, beats, songPosMs, reduced: still };
+    // A hold skips a lift that would start in it and never cuts one: it is decided on the lift's start.
+    const started = (ageMs: number | null) => (ageMs === null ? classMs : classMs - ageMs);
+    const accent = pattern.accent > 0;
+    const skipped = this.bursts.budget.held(started(accent ? pattern.ageMs : liftAgeMs(input)));
+    const lift = skipped ? 0 : Math.min(this.tokens.liftCap, accent ? pattern.accent : beatLift(input));
+    const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
+    const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
+    const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;
     return {
-      drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds,
+      drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
+      hazeGain: still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs),
+      energyRamp: rampPlaced ? cross.ramp : 0,
       tokens: { current: frame.colours.front, next: wipe > 0 ? frame.colours.back : null },
       cross,
       ahead: nextEnergy === null ? null : { energy: nextEnergy, lit: fixturesLit({ ...frame, energy: nextEnergy }, quality) },

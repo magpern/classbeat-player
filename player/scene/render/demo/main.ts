@@ -6,7 +6,7 @@
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low), `class=long` (sixteen
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
-// dark-under-text mask, to show what the mask darkens), `text=0` (the scene without the text layer).
+// dark-under-text mask, to show what the mask darkens), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
@@ -20,7 +20,7 @@ import { TextLayer } from "../layer/text-layer.ts";
 import { FrameLog } from "../tools/frame-log.ts";
 import { DEMO_TEXT } from "./demo-text.ts";
 import { LONG_END_MS, LONG_TEXT, WORST_TEXT, longFeedAt } from "./long-class.ts";
-import { DEMO_CLASS, feedAt } from "./scenario.ts";
+import { DEMO_CLASS, VARIANTS, feedAt } from "./scenario.ts";
 
 const params = new URLSearchParams(location.search);
 const LINKS: Record<string, LinkInput> = { locked: { state: "Locked" }, paused: { state: "Paused" }, coasting: { state: "Coasting" }, off: { state: "Off the list" }, held: { state: "Locked", held: true } };
@@ -35,6 +35,7 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
+let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
 const gl = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
@@ -49,9 +50,10 @@ const long = params.get("class") === "long" || params.get("class") === "worst";
 const textClass = params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT;
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
-  tokens, quality: state.quality, textMask: params.get("mask") !== "0",
+  tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off",
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
+    lastMaster = draw.master;
     const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
     lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
     log.add(draw, measured, song);
@@ -59,7 +61,7 @@ const renderer = new SceneRenderer(host, {
 });
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
-const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage }));
+const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
 let view: TextView | null = null;
 let lastFeed: Feed = feed();
 let lastBoxes: readonly TextBox[] = [];
@@ -75,7 +77,12 @@ function paintText(f: Feed): void {
 }
 
 /** Which frames of a run are drawn, and what to do after one (the light measurement). */
-interface Sampler { draws(classMs: number): boolean; after(classMs: number): void }
+interface Sampler {
+  draws(classMs: number): boolean;
+  after(classMs: number): void;
+  /** What the person does during the run, each once, when the class clock first reaches `atMs`: a link state ("base" is the run's own), a quality level, a seek. */
+  events?: readonly { readonly atMs: number; readonly link?: string; readonly quality?: QualityLevel; readonly jumpMs?: number }[];
+}
 
 interface DemoApi {
   /** Plays frames from `fromMs` to `toMs` at `fps` on a synthetic clock; the class clock steps by the frame time. */
@@ -89,6 +96,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** The rig's master level on the last frame: 1 running, a quarter at the bottom of a song-change dim. */
+  readonly master: number;
   /** The two tokens in play on the last frame, as 0xRRGGBB: the planned zone's, and the next zone's during the anticipation. */
   readonly tokens: { readonly current: number; readonly next: number | null };
 }
@@ -100,7 +109,14 @@ let ended = false;
 const api: DemoApi = {
   advance(fromMs, toMs, fps, sampler) {
     classMs = fromMs;
+    const due = [...(sampler?.events ?? [])];
     while (classMs < toMs) {
+      for (const e of due.filter((x) => x.atMs <= classMs)) {
+        due.splice(due.indexOf(e), 1);
+        if (e.link) state.link = LINKS[e.link === "base" ? (params.get("state") ?? "locked") : e.link] ?? state.link;
+        if (e.quality) renderer.setQuality(e.quality);
+        if (e.jumpMs !== undefined) classMs = e.jumpMs;
+      }
       nowMs += 1000 / fps;
       const f = feed();
       song = f.songIndex;
@@ -126,6 +142,7 @@ const api: DemoApi = {
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
   get burst() { return lastBurst; },
+  get master() { return lastMaster; },
   get tokens() { return lastTokens; },
 };
 window.__scene = api;
