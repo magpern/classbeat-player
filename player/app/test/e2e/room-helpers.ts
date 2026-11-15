@@ -48,11 +48,14 @@ export const onPage = (page: Page, name: string): Promise<unknown> => page.waitF
 /**
  * On macOS the room window enters full screen with the system's animation, and closing it while
  * that transition runs wedges the main process (#571). A person cannot close it that fast, so the
- * test waits until the window is settled in full screen before closing it. Other systems have no
- * such transition to wait for.
+ * test activates the application and waits until the window is settled in full screen before
+ * closing it. Other systems have no such transition to wait for.
  */
 async function settledInFullScreen(app: ElectronApplication): Promise<void> {
   if (process.platform !== "darwin") return;
+  // macOS holds the transition back while the application is not the active one, and a window
+  // opened from a file is shown without taking the focus; a person at the machine has it active.
+  await within(STEP_MS, "activate the application", app.evaluate(({ app: electron }) => electron.focus({ steal: true })));
   await waitFor(
     () =>
       within(
