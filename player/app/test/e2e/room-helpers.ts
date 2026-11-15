@@ -46,31 +46,39 @@ export const menu = (app: ElectronApplication, id: string): Promise<void> =>
   within(STEP_MS, `the menu item ${id}`, app.evaluate(({ Menu }, i) => Menu.getApplicationMenu()?.getMenuItemById(i)?.click(), id));
 export const onPage = (page: Page, name: string): Promise<unknown> => page.waitForFunction((n) => location.pathname.endsWith(`/${n}`), name);
 /**
- * On macOS the room window enters full screen with the system's animation, and closing it while
- * that transition runs wedges the main process (#571). A person cannot close it that fast, so the
- * test activates the application and waits until the window is settled in full screen before
- * closing it. Other systems have no such transition to wait for.
+ * On macOS the room window enters full screen with the system's animation (or, when the
+ * application is not the active one, does not enter it at all), and closing it while that
+ * transition runs wedges the main process (#571). A person cannot close it that fast, so the test
+ * waits until the window's full-screen state and bounds have stopped changing for a while. Other
+ * systems have no such animation to wait for.
  */
-async function settledInFullScreen(app: ElectronApplication): Promise<void> {
+async function settled(app: ElectronApplication): Promise<void> {
   if (process.platform !== "darwin") return;
-  // macOS holds the transition back while the application is not the active one, and a window
-  // opened from a file is shown without taking the focus; a person at the machine has it active.
-  await within(STEP_MS, "activate the application", app.evaluate(({ app: electron }) => electron.focus({ steal: true })));
-  await waitFor(
-    () =>
-      within(
-        STEP_MS,
-        "read the room window's full screen",
-        app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.isFullScreen() ?? true),
-      ),
+  await within(
     20_000,
-    "the room window to settle in full screen",
+    "the room window to stop changing",
+    app.evaluate(async ({ BrowserWindow }) => {
+      const look = (): string => {
+        const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"));
+        return w ? `${w.isFullScreen()} ${JSON.stringify(w.getBounds())}` : "none";
+      };
+      let last = look();
+      let since = Date.now();
+      while (Date.now() - since < 1500) {
+        await new Promise<void>((r) => setTimeout(r, 100));
+        const now = look();
+        if (now !== last) {
+          last = now;
+          since = Date.now();
+        }
+      }
+    }),
   );
 }
 
 /** Closes the room window the way the instructor's window manager does. */
 export async function closeRoomByHand(app: ElectronApplication): Promise<void> {
-  await settledInFullScreen(app);
+  await settled(app);
   await within(
     STEP_MS,
     "close the room window by hand",
