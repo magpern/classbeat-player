@@ -1,0 +1,42 @@
+# TEMPORARY (#571): repeats the affected e2e tests 20 times. Removed again in the next commit.
+name: repeat-571
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: repeat-571-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  repeat:
+    name: repeat (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, label: macos, files: "test/e2e/room-window-lifecycle.e2e.test.ts" }
+          - { os: windows-latest, label: windows, files: "test/e2e/class.e2e.test.ts" }
+    defaults:
+      run:
+        shell: bash
+        working-directory: player/app
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Repeat 20 times
+        run: |
+          for i in $(seq 1 20); do
+            echo "::group::run $i"
+            node --import tsx --test --test-concurrency=1 --test-timeout=300000 ${{ matrix.files }}
+            echo "::endgroup::"
+          done
