@@ -21,30 +21,35 @@ const SIZES: readonly (readonly [number, number])[] = [[1280, 800], [1000, 720]]
 const WITH = readFileSync(join(CONVERTER_FIXTURES, "class-30min-spotify-playlist.expected.json"), "utf8");
 const doc = JSON.parse(WITH) as { music: Record<string, unknown>; songs: { title: string; artist: string; length_ms: number }[] };
 const WITHOUT = JSON.stringify({ ...doc, music: { ...doc.music, spotify_playlist: undefined } });
-const NOTICE = "Class playlist not loaded in Spotify";
+const NOTICE = "Playlist not loaded";
+const DETAIL = "Start played what Spotify had loaded";
 
 /** The snapshot 2 s after Start, with the follower answering `outcome` and then reading `title`. */
-function started(text: string, outcome: LoadOutcome, title: string | null): Snapshot {
+function started(text: string, outcome: LoadOutcome, title: string | null, at = 3000, manual = false): Snapshot {
   const clock = { t: 1000 };
   let obs: Observation | null = null;
   const s0 = doc.songs[0];
   const f = { kind: "fake" as const, latest: () => obs, send: () => undefined, loadPlaylist: (_id: string, done: (o: LoadOutcome) => void) => done(outcome) };
-  const c = createController(() => clock.t, f, f);
+  // A follower with `setActive` (macOS-like) opens a class on the manual clock; one without follows.
+  const g = manual ? Object.assign({ ...f }, { setActive: () => undefined }) : f;
+  const c = createController(() => clock.t, g, g);
   c.open("class.json", text);
   c.command({ type: "start" });
   clock.t = 1500;
   if (title !== null) obs = { title, artist: title === s0.title ? s0.artist : "Someone", lengthMs: s0.length_ms, positionMs: 400, playing: true, at: 1500, seenAt: 1500 };
   c.snapshot();
-  clock.t = 3000;
-  if (obs) obs = { ...obs, positionMs: 1900, at: 3000, seenAt: 3000 };
+  clock.t = at;
+  if (obs) obs = { ...obs, positionMs: 1900, at, seenAt: at };
   return c.snapshot();
 }
 
 const STATES: readonly { readonly name: string; readonly snap: () => Snapshot; readonly shown: boolean }[] = [
-  { name: "not-loaded", snap: () => started(WITH, "failed", null), shown: true },
-  { name: "not-confirmed", snap: () => started(WITH, "asked", "Something else"), shown: true },
+  { name: "not-loaded", snap: () => started(WITH, "failed", doc.songs[0].title), shown: true },
+  { name: "no-playlist", snap: () => started(WITHOUT, "asked", doc.songs[0].title), shown: true },
+  { name: "fault-wins", snap: () => started(WITH, "asked", "Something else"), shown: false },
   { name: "loaded", snap: () => started(WITH, "asked", doc.songs[0].title), shown: false },
-  { name: "no-playlist", snap: () => started(WITHOUT, "asked", doc.songs[0].title), shown: false },
+  { name: "after-30s", snap: () => started(WITH, "failed", doc.songs[0].title, 1000 + 30_000), shown: false },
+  { name: "manual-clock", snap: () => started(WITH, "failed", doc.songs[0].title, 3000, true), shown: false },
 ];
 
 const STUB = `
@@ -97,7 +102,14 @@ test("the playlist notice shows only when the class's playlist was not loaded", 
         await page.screenshot({ path: join(SHOT_DIR, `presenter-playlist-${name}.png`), fullPage: true, animations: "disabled" });
         const notice = page.locator("#link-playlist");
         assert.equal(await notice.isVisible(), s.shown, `${name}: the notice`);
-        assert.equal((await notice.textContent())?.trim(), NOTICE);
+        assert.equal((await notice.locator("#link-playlist-notice").textContent())?.trim(), NOTICE);
+        assert.equal((await notice.locator("#link-playlist-detail").textContent())?.trim(), DETAIL);
+        if (s.shown) {
+          const a = await notice.locator("#link-playlist-notice").boundingBox();
+          const b = await notice.locator("#link-playlist-detail").boundingBox();
+          assert.ok(a && b && b.y >= a.y + a.height - 1, `${name}: the detail is on its own line`);
+        }
+        assert.equal(await page.locator("#link p").first().isVisible(), !s.shown, `${name}: the notice takes the link state's place`);
         assert.equal(await notice.getAttribute("role"), "status", "read out when it appears");
         assert.deepEqual(external, [], `${name}: requests left the file system`);
         assert.deepEqual(errors, [], `${name}: page errors`);

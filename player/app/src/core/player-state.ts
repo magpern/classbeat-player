@@ -13,7 +13,7 @@ import { goManual, handOver, pickOccurrence, relink, undo } from "./link/command
 import type { CommandResult } from "./link/commands.ts";
 import { step } from "./link/follower.ts";
 import { linkPlanFrom } from "./link/plan.ts";
-import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNotLoaded } from "./link/playlist-load.ts";
+import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNoticeAt } from "./link/playlist-load.ts";
 import type { PlaylistLoad } from "./link/playlist-load.ts";
 import type { LoadOutcome } from "./link/playlist.ts";
 import { initialLink } from "./link/types.ts";
@@ -181,7 +181,7 @@ export function snapshotOf(s: PlayerState, now: number, canSend = false, noReadi
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNotLoaded(l.playlist), noReading) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNoticeAt(l.playlist, l.link, now), noReading) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
     pattern: l && view ? patternSnapshotAt(l.plan, view.classMs) : null,

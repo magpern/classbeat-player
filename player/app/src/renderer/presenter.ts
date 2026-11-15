@@ -77,6 +77,10 @@ function renderLink(s: Snapshot): void {
   hide("link-announcement", k.announcement === null);
   setText("link-announcement", k.announcement ?? "");
   hide("link-playlist", !k.playlistNotLoaded);
+  // The notice takes the link state's place (presenter.md); it shows only while following in a quiet state,
+  // so the unavailable and no-reading reasons of the manual clock never share the line with it.
+  const stateLine = $("link-state").parentElement;
+  if (stateLine) stateLine.hidden = k.playlistNotLoaded;
   hide("undo", !k.canUndo);
   hide("follow", k.mode === "following" || !k.available);
   hide("manual", k.mode === "manual" || !k.available);
