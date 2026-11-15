@@ -43,13 +43,25 @@ native plugins**, written in Kotlin on Android. One web code base serves the des
 | The class clock and the music-link state machine (`player/app/src/core/`) | Sync with the backend and the class cache on the device |
 | Opening a class the native side returns | The live connection, as transport only (below) |
 | What the live session sends and receives, built and checked by the shared TypeScript | The Android music follower (section 5) |
-| | Bluetooth sensors (section 6), keep-awake, an external display |
+| | Bluetooth sensors (section 7), keep-awake, an external display |
+
+On an external display the app shows only the room view, as the desktop room window does. The
+riders' list is never shown there ([ADR 0007](0007-the-presenter-view.md), section 4).
 
 This is more than a thin shell: on the desktop about 1,950 lines of the main process do pairing,
 sync and the live host. What moves to Kotlin is the part that holds a secret or needs the
-system: pairing, the token, the authenticated requests, the cache and the socket. The live
-session's messages stay in the shared TypeScript, so the rule guards for live sessions (rules 13
-and 14) keep covering them; the native socket carries them as opaque text and adds nothing.
+system: pairing, the token, the authenticated requests, the cache and the socket.
+
+**The live session.** The live session's messages stay in the shared TypeScript, so the rule
+guards for live sessions (rules 13 and 14) keep covering them. The exceptions are the messages
+that carry a host token:
+
+- Native code builds and sends the host's `hello`, and the ender's `hello` and `end`.
+- Native code strips the host token from the answer that starts the live session before anything
+  reaches the web view.
+- The TypeScript builds every other message and never sees the host token. The native socket
+  carries those messages as opaque text and adds nothing to them.
+- A test checks that no bridge answer or event contains the host token.
 
 ### 3. The bridge: named intents only
 
@@ -74,8 +86,14 @@ intents** with checked arguments and answers, never a general channel. In partic
 - The Content Security Policy is the desktop room window's, unchanged: `default-src 'none';
   script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; connect-src 'none';
   media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none';
-  base-uri 'none'; form-action 'none'`, widened only as the desktop room window is when the 3D
-  scene mounts, and never with `unsafe-eval` or a script source from outside the bundle.
+  base-uri 'none'; form-action 'none'`.
+  - It is widened only as the desktop room window is when the 3D scene mounts there. That widening
+    is decided, with a top-tier review, in the desktop pull request that mounts the scene.
+  - The app uses the same constant as the desktop, and a test compares the two.
+  - `connect-src` stays `'none'`, and no remote source is ever added.
+  - Never `unsafe-eval`, and never a script source from outside the bundle.
+  - `'wasm-unsafe-eval'` or `blob:` workers are allowed only if that desktop pull request
+    justifies them.
 - **Plugins: an allowlist, including the core ones.** Only our own plugins are installed.
   Capacitor's Android bridge registers some core plugins by itself (in recent versions
   `CapacitorHttp`, `CapacitorCookies` and `WebView`; the first pull request confirms the list for
@@ -146,7 +164,7 @@ equipment control, no stray network use) are extended to all of `player/mobile/`
 and its Kotlin, in the first pull request that adds code there. For Kotlin they also forbid
 `MediaPlayer`, ExoPlayer and Media3 players, `AudioTrack`, `AudioRecord` and any Spotify SDK
 (rule 3). The Bluetooth check allows exactly the one descriptor write of section 7. These are
-additions; no existing guard is changed, and `rules.test.ts` itself is the owner's.
+only additions; no existing check is loosened.
 
 ### 9. Building and signing
 
