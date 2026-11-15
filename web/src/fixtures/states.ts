@@ -86,6 +86,8 @@ export const STATE_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     "long-interval": snapshot(longClass(), 1_008_000, "Locked"),
     // The 30 s after a Start that did not load the class playlist (ADR 0001, #486): the frame says so, the rail shows the plate.
     "playlist-not-loaded": { ...snapshot(doc, 2_000, "Locked"), playlistNotLoaded: true },
+    // Following the music, clock running, before the first lock (state Manual, mode following): the rail says "Waiting for the first song", not "Manual clock".
+    "following-before-lock": { doc, view, link: linkAt(view, "Manual", { mode: "following", available: true }) },
     "before-start-manual": { doc, view: clockAt(doc, 0, "ready"), link: linkAt(clockAt(doc, 0, "ready"), "Manual") },
   };
 })();

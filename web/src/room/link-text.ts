@@ -14,6 +14,8 @@ export function linkPlate(doc: Class, link: LinkInput | null, view: View, starte
   if (!started) {
     return link?.mode === "following" ? { text: "Waiting for the first song", look: "quiet" } : { text: "Press Start", look: "manual" };
   }
+  // Following before the first lock (mode "following", state "Manual"): the quiet text, never "Manual clock" (the instructor chose the music).
+  if (link?.mode === "following" && link.state === "Manual") return { text: "Waiting for the first song", look: "quiet" };
   if (!link || link.mode === "manual" || link.state === "Manual") return manualPlate(link, view);
   switch (link.state) {
     case "Paused":
