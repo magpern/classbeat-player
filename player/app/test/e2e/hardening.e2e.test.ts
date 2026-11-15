@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
@@ -15,7 +15,7 @@ before(async () => {
   ({ app, page } = await launch());
 });
 after(async () => {
-  await app?.close();
+  await closeApp(app);
 });
 
 test("web preferences of the live window", async () => {

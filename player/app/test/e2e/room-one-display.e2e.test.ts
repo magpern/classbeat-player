@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 import { captureScreen, menu, onPage, openClassFile, theRoom, waitFor, whiteShare, windowCount } from "./room-helpers.ts";
 
 const SHOTS = join(APP_DIR, "screenshots");
@@ -25,7 +25,7 @@ before(async () => {
   ({ app, page } = await launch({ page: "list" }));
 });
 after(async () => {
-  await app?.close();
+  await closeApp(app);
 });
 
 /** Opens a class file with the focus in the application or elsewhere; returns both windows and who has the focus. */

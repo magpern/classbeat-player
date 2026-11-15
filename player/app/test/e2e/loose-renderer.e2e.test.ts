@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { secureWebPreferences } from "../../src/main/web-preferences.ts";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
@@ -51,7 +51,7 @@ before(async () => {
 }, T);
 after(async () => {
   try {
-    await app?.close();
+    await closeApp(app);
   } finally {
     rmSync(probeDir, { recursive: true, force: true });
   }

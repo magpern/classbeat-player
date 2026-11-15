@@ -8,7 +8,7 @@ import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { ROOM_CSP } from "../../src/main/web-preferences.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
-import { launch, sleep } from "./launch.ts";
+import { closeApp, launch, sleep } from "./launch.ts";
 import { startBackend } from "./room-backend.ts";
 import { closeRoomByHand, menu, onPage, openClassFile, roomPage, theRoom, waitFor, windowCount, within } from "./room-helpers.ts";
 
@@ -28,7 +28,7 @@ before(async () => {
   });
 }, T);
 after(async () => {
-  await app?.close();
+  await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 }, T);

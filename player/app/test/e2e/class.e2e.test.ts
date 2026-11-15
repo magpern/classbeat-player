@@ -7,7 +7,7 @@ import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
 import { NEWER_VERSION_MESSAGE } from "../../src/core/class-file.ts";
 import { converterExamples, EXAMPLES } from "../unit/fixtures.ts";
-import { launch, sleep } from "./launch.ts";
+import { closeApp, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
@@ -16,7 +16,7 @@ before(async () => {
   ({ app, page } = await launch());
 });
 after(async () => {
-  await app?.close();
+  await closeApp(app);
 });
 
 const text = (id: string): Promise<string> => page.locator(`#${id}`).innerText();
