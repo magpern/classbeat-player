@@ -513,13 +513,23 @@ step of the countdown (26 vh), by up to **30 %** and **78 %**. Some steps are sm
    count's ticks; the countdown's seconds, the bars line and the score's step join the first count
    tick at or after them, never early.
 2. **Frames are at least 500 ms apart.** Call a **frame mark** every tick, the change frame and a
-   drop's frame. Any two frame marks are **at least 500 ms apart, in time**: a tick goes on the
-   first frame shown at least 500 ms after the last frame mark, and a tick that would fall less
-   than 500 ms before a change frame or a drop's frame joins that frame. The minimum wins over
-   rounding to frames, so it holds at any refresh rate (30 frames at 60 Hz, 25 at 50 Hz, 72 at
-   144 Hz), and a "1 s window" is any 1 s of time, from a frame up to but not including the frame 1 s
-   later, not a count of frames. So there are **at most
-   2 frame marks in any 1 s**; without a count, normally 1 (the countdown's second). A user
+   drop's frame (the **fixed frames**).
+   - **Fixed frames less than 1 s apart merge** into one frame. A drop within 1 s of `t0`, before
+     or after it, lands on the change frame at `t0`; in that one frame the new interval wins what
+     it sets (the gel, its numeral and name, the zone's colour, energy and values) and the drop
+     adds its look in that colour (the fan's fixtures on, aimed as the drop sets them). Of two
+     drops less than 1 s apart, the later joins the earlier's frame. The interval's timing never
+     moves; a drop's frame moves by less than 1 s.
+   - Then any two frame marks, fixed frames included, are **at least 500 ms apart, in time**: a
+     tick goes on the first frame shown at least 500 ms after the last frame mark, and a tick
+     that would fall less than 500 ms before a fixed frame joins it (latest value wins).
+   - **Without the beat** the spacing is **1 s**: a tick goes at least 1 s after the last frame
+     mark, and a tick less than 1 s before a fixed frame joins it.
+
+   The minimum wins over rounding to frames, so it holds at any refresh rate (30 frames at 60 Hz,
+   25 at 50 Hz, 72 at 144 Hz), and a "1 s window" is any 1 s of time, from a frame up to but not
+   including the frame 1 s later, not a count of frames. So there are **at most 2 frame marks in
+   any 1 s** with the beat, and **1** without it. A user
    action's frame is not a frame mark, but the next tick after it waits 500 ms too (the
    scheduler, g). This cap is the budget, and the count's cadence gives way to it, never the cap.
    On each beat of a pattern the count ticks if:
@@ -584,8 +594,8 @@ PR's notes name it for the Orchestrator).
    another event) moves to the **first frame after the run**, so it is at most one run's length
    late (700 ms at most), and a moved tick still keeps 500 ms from the frame marks after it (text
    rule 2). No run starts or ends inside another: the later one waits.
-2. **Fixed frames are never inside a run.** `t0`'s change frame, a drop's frame, a beat's
-   timing and a user action's frame never move, so a run is placed to end before them or to start
+2. **Fixed frames are never inside a run.** `t0`'s change frame, a drop's frame (once merged,
+   text rule 2), a beat's timing and a user action's frame never move, so a run is placed to end before them or to start
    on them. The interval change is covered so: its energy ramp ends on the frame before `t0` (its
    change frame is the frame after the run), a light-only burst on it starts on the change frame,
    and any other run that would hold `t0` gives way by the scheduler's order (a dim is skipped,
@@ -604,7 +614,7 @@ as if all were in one region: every step and every run as 1 (a burst and a dim a
 light's possible change at the earliest frame one could pass 10 % (none while a beat-like rise
 comes at least once a beat; otherwise 1.73 s after the last rise, then every 3.3 s, and below
 60 bpm 1.73 and 3.3 beats). The cap is
-**3 in every window**. Fixed: `t0`'s change frame, a drop's frame, a beat's timing and a user
+**3 in every window**. Fixed: `t0`'s change frame, a drop's frame (merged as text rule 2 says), a beat's timing and a user
 action's frame. If a window would hold a fourth, these apply in this order, again and again, until
 it fits:
 
@@ -628,7 +638,11 @@ anticipation make no change (constant luminance), so they are never scheduled.
 
 **Without the beat** steady light may take one of the 3, so there is no burst, no dim and no
 energy ramp at the None level: the drop is the fan's frame, a song change is its re-aim, and an
-interval change is its change frame.
+interval change is its change frame. The cap then holds by construction: **1 frame mark** (the
+1 s spacing, with any fixed frames merged into it), **1 user action's frame** (a first action is
+never late; a second within 1 s waits, g) and **steady light's 1** make 3, and every run gives
+way to a step in a frame already counted (a: a ramp into the next mark, the resume ramp into the
+action's frame). Steady light never has to wait and the action's frame never absorbs anything.
 
 **All bursts**, drop bursts and light-only bursts alike, are at least **10 s apart**, and there is
 one drop burst at most per drop moment (S6).
@@ -643,9 +657,9 @@ the rules above decide each case, so the table is a summary, not a list to exten
 
 | State | What can be in one 1 s window | Most |
 |---|---|---|
-| Beat running, no count | 1 frame mark (2 when one was moved), and the rig's runs and steps the scheduler fits: a ramp and the change frame, a burst's 2, a dim's 2 | 3 |
-| Beat running, a count running | 2 frame marks, which carry every rig change as a step; 1 user action's frame | 3 |
-| Without the beat (coasting, off the list, paused, manual clock, hold, no `bpm`) | 1 or 2 frame marks and at most one run or step of the rig; steady light's 1 | 3 |
+| Beat running, no count | Up to 2 frame marks, at least 500 ms apart (the countdown's second, and a fixed frame with any other fixed frame within 1 s merged into it), and the runs the scheduler fits beside them: a ramp, a burst's decay, a dim's edges | 3 |
+| Beat running, a count running | Up to 2 frame marks (ticks and merged fixed frames, at least 500 ms apart), which carry every rig change as a step; 1 user action's frame | 3 |
+| Without the beat (coasting, off the list, paused, manual clock, hold, no `bpm`) | 1 frame mark (1 s spacing, fixed frames merged into it), 1 user action's frame, steady light's 1; every run a step (a) | 3 |
 | A user action, no count | its frame and its run, with the frame marks around it (g; a, if needed) | 3 |
 | Build, anticipation, beats with no event | the frame marks only (the haze step is beat-like, the colour constant) | 2 |
 
