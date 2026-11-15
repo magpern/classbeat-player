@@ -58,19 +58,17 @@ async function settled(app: ElectronApplication): Promise<void> {
     20_000,
     "the room window to stop changing",
     app.evaluate(async ({ BrowserWindow }) => {
-      const look = (): string => {
-        const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"));
-        return w ? `${w.isFullScreen()} ${JSON.stringify(w.getBounds())}` : "none";
-      };
-      let last = look();
+      // No named helper inside: the test loader would wrap it in a function the app cannot see.
+      let last = "";
       let since = Date.now();
       while (Date.now() - since < 1500) {
-        await new Promise<void>((r) => setTimeout(r, 100));
-        const now = look();
+        const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"));
+        const now = w ? `${w.isFullScreen()} ${JSON.stringify(w.getBounds())}` : "none";
         if (now !== last) {
           last = now;
           since = Date.now();
         }
+        await new Promise<void>((resolve) => setTimeout(() => resolve(), 100));
       }
     }),
   );
