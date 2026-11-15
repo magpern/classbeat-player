@@ -153,21 +153,27 @@ the 2 % tier is kept for labels, link states and the score's song titles.
 screen, by reference to [scene.md](scene.md), "The flash budget"; built in #583): a change is any
 monotone run of more than 10 % of the larger end of a region's luminance, and more than 3 in any
 1 s fails. On the plain screen **nothing runs and nothing flashes**: every change is a **step**, one
-frame, on a frame mark (a tick, the change frame, a user action's frame), any two marks at least
+frame, on a frame mark (a tick, the change frame, a user action's or a timed change's frame), any two marks at least
 500 ms apart ([room-2d.md](room-2d.md), "Motion and reduced motion", with the cap arithmetic of
 each state). So the transitions below are **cut**.
 
-The tokens keep their **built** values in `tokens.css` (and its copy in `mockups/tokens.css`,
-which a test compares) until #583 changes both files together; the middle column is what #583
-builds.
+**The shared tokens do not change.** `--m-change`, `--m-flash` and `--m-state` keep 700 ms, 160 ms
+and 300 ms in `tokens.css` and its copies (`web/src/design/`, `mockups/`, `player/app/src/renderer/design/`),
+because other designs read them: the scene's colour-cross front and lens flash (scene.md,
+"Tokens"), the companion and the rider page (companion.md, rider.md), the play screen, and
+room-join.md. The plain room screen is cut **locally**: its own CSS (`web/src/room/room.css`, and
+the band's and the join sheet's CSS in `player/app/src/renderer/`) sets no transition, animation
+or `var(--m-...)` on the gel, plates, lights down and up, the band or the join sheet. Built in #583
+(the room screen) and #585 (the band and the join sheet); every row below that changes is "to be
+built" there.
 
-| Token | Built (tokens.css) | Decided, **to be built in #583** | Where | With reduced motion |
+| Token or motion | Built | Plain room screen, decided (**to be built in #583 / #585**) | Where | With reduced motion |
 |---|---|---|---|---|
-| `--m-change` | 700 ms, ease out | 0: the colour is cut in the change frame | The gel's colour at an interval change | 0: the new colour is there at once (the same, now with or without the setting) |
-| `--m-flash` | 160 ms | Removed: no white line is drawn (it was two changes) | A white line, 1 vh wide, down the gel's right edge at an interval change | 0: no flash |
-| `--m-state` | 300 ms, ease out | 0: a plate, the control band and lights down and up appear and go in one frame, on a tick or in the user action's frame | A link-state plate appearing or leaving; lights down and up; the control band | 0 |
+| `--m-change` (700 ms, ease out) | Used by the gel's colour at an interval change | The plain screen no longer reads it: the colour is cut in the change frame. The token stays for the scene's cross | The gel (room.css); the scene, companion and rider keep it | The same |
+| `--m-flash` (160 ms) | A white line, 1 vh wide, down the gel's right edge | The line is **not drawn** (it was two changes). The token stays for the scene's lens flash | The gel's edge | No flash, as before |
+| `--m-state` (300 ms, ease out) | A link-state plate appearing or leaving; lights down and up; the control band; the join sheet | The plain screen no longer reads it: each is one frame, in a tick or an action's or timed change's own mark (room-2d.md). The token stays for the play screen and others | Room plates and lights (#583); the band and the join sheet (#585) | The same |
 | (score) | continuous, 0.22 vw per second (changed from 0.28 by room-2d.md, "The follow-up to the scene", #483; `web/src/room/score.ts` still uses 0.28 until the build follows) | Steps in the countdown's tick, by the distance since the last step (0.22 vw a second at one tick a second) | The score moving under "now" | The same steps, at most once a second |
-| (beat) | 120 ms | **Removed**: no beat dot (measured 4.1 to 14.4 % of a region, over the 5 % allowed beat-like light, and above 10 % at 3:2 and narrower) | A dot after the BPM on the beats from the song's beat anchors, two lights at least 1/3 s apart (in steady time, every beat up to 180 BPM and every second beat above), only when the link is locked and the song has beat anchors | Off (not shown) |
+| (beat) 120 ms | A dot after the BPM on the beats from the song's beat anchors, two lights at least 1/3 s apart, only when the link is locked and the song has beat anchors | **Removed**: no beat dot (about 3.3 to 11.5 % of a region, rest to lit, over the 5 % allowed beat-like light at 3:2 and narrower; room-2d.md) | A dot after the BPM | Off (not shown) |
 
 As built, the single orchestrated moment is the interval change, and its white edge line is the one
 large flash the screen makes, once per change; apart from that line and the beat dot nothing
