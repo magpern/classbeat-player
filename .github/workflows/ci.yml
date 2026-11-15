@@ -25,6 +25,7 @@ jobs:
       backend: ${{ steps.detect.outputs.backend }}
       schema: ${{ steps.detect.outputs.schema }}
       player: ${{ steps.detect.outputs.player }}
+      android: ${{ steps.detect.outputs.android }}
       web: ${{ steps.detect.outputs.web }}
       desktop: ${{ steps.detect.outputs.desktop }}
       code: ${{ steps.detect.outputs.code }}
@@ -308,9 +309,50 @@ jobs:
           PLAYER_TEST_DATABASE_URL: postgresql://postgres:ci-throwaway@127.0.0.1:5432/postgres
         run: bash backend/ci.sh
 
+  # The Android spike (player/spikes/android-follower, ADR 0011 section 9; later player/mobile/): the
+  # JVM tests, then the debug APK, whose build also runs the merged-manifest check (it fails on any
+  # permission, INTERNET included). Uses the JDK 17 and Android SDK preinstalled on the pinned runner
+  # image instead of setup actions, so no new third-party action is added (#558). Debug-signed only: no
+  # signing secret, no release. The APK is a short-lived test build, never published. No test touches
+  # the network; only Gradle, Maven, npm and SDK package downloads happen, during setup.
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/scene/render/package-lock.json
+      - name: JDK 17 and Android SDK from the runner image
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >>"$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >>"$GITHUB_PATH"
+          # compileSdk 35 (app/build.gradle.kts); build tools 34.0.0 is the default of AGP 8.7.3.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;34.0.0"
+      - name: Build the scene demo the APK bundles
+        working-directory: player/scene/render
+        run: |
+          npm ci
+          npm run build
+      - name: Core tests and debug APK (with the manifest check)
+        working-directory: player/spikes/android-follower
+        run: ./gradlew --no-daemon :core:test :app:assembleDebug
+      - name: Keep the debug APK (test build)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-follower-debug-TEST-BUILD
+          path: player/spikes/android-follower/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
+
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend]
+    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend, android]
     if: always()
     runs-on: ubuntu-latest
     steps:
