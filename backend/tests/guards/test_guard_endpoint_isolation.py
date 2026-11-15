@@ -287,7 +287,7 @@ def _own_class_id(a: Actor, source_class_id: str) -> str:
 
 def _list_passkeys(site: Site, a: Actor) -> None:
     answer = a.browser.get(PASSKEYS)
-    assert answer.status_code == 200 and answer.json() == {"passkeys": []}
+    assert answer.status_code == 200 and answer.json() == {"passkeys": [], "can_add": True}
     assert a.other.passkey_id not in answer.text
 
 

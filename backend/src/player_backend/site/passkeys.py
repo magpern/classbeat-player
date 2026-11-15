@@ -3,10 +3,13 @@ remove.
 
 Adding (both its steps) and removing need a recent sign-in; listing and renaming need a session.
 Adding is refused (403 `passkeys_closed`) for every account kind there is today (ADR 0010,
-section 7); listing, renaming and removing stay, so passkeys made before are removable. Starting
-a registration is counted per account (section 10). Adding uses up this session's registration
-challenge whatever the check of the credential says, so its refusals are returned, not raised:
-raising would roll the use back.
+section 7); listing, renaming and removing stay, so passkeys made before are removable. The list
+says so in `can_add`, from the very rule registration refuses with (passkey_list_policy.py), and
+is built through the contract's generated model (schema/site-api/v1/passkeys.schema.json); more
+than 10 rows, a data fault, is a 500, never a partial list. Starting a registration is counted
+per account (section 10). Adding uses up this session's registration challenge whatever the
+check of the credential says, so its refusals are returned, not raised: raising would roll the
+use back.
 What the site is told of a passkey is its id, its name and its dates: never its credential
 id or its key.
 """
@@ -37,6 +40,7 @@ from player_backend.passkey_policy import (
     challenge_hash,
     clean_name,
 )
+from player_backend.site.answers import passkeys_answer
 from player_backend.site.bodies import RawBody, parsed
 from player_backend.site.deps import RecentSignIn, SiteSession, TheCaller
 from player_backend.site.state import site_state
@@ -89,7 +93,12 @@ def _name_of(raw: str) -> str:
 
 @router.get("/passkeys")
 def list_passkeys(context: SiteSession) -> JSONResponse:
-    return JSONResponse({"passkeys": [_shown(p) for p in passkeys.list_passkeys(context)]})
+    # Over the cap raises in `list_passkeys` (`PasskeysOverCap`): the access log answers 500.
+    listed = passkeys.list_passkeys(context)
+    answer = passkeys_answer().model_validate(
+        {"passkeys": [_shown(p) for p in listed.passkeys], "can_add": listed.can_add}
+    )
+    return JSONResponse(answer.model_dump(mode="json"))
 
 
 @router.post("/passkeys/options")

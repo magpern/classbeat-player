@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Final, cast
 if TYPE_CHECKING:
     # Found by pyright through `extraPaths` (pyproject.toml); loaded below at run time.
     from site_api_me import MeAnswer
+    from site_api_passkeys import PasskeysAnswer
 
 # backend/src/player_backend/site/ -> the repository's root.
 GENERATED_DIR: Final = Path(__file__).resolve().parents[4] / "schema" / "generated" / "python"
@@ -57,3 +58,10 @@ def _load(name: str) -> ModuleType:
 def me_answer() -> type[MeAnswer]:
     """`MeAnswer`: the answer of `GET /api/site/me`. It refuses any field but the email."""
     return cast("type[MeAnswer]", _load("site_api_me").MeAnswer)
+
+
+@cache
+def passkeys_answer() -> type[PasskeysAnswer]:
+    """`PasskeysAnswer`: the answer of `GET /api/site/passkeys`. It refuses any other field and
+    more than 10 passkeys."""
+    return cast("type[PasskeysAnswer]", _load("site_api_passkeys").PasskeysAnswer)
