@@ -75,6 +75,11 @@ export async function selfTest(page: Page): Promise<string[]> {
     div.style.backgroundImage = "url(https://example.invalid/bg.png)"; // a style, not a script: only the policy can stop it
     div.innerHTML = '<img src="https://example.invalid/parsed.png">';
   });
-  await page.waitForTimeout(300);
-  return violations(page);
+  // The policy reports a style's image when the page next styles and paints, and a page busy drawing the scene can be slow to: wait for both policy reports (up to 10 s) instead of a fixed 300 ms. Nothing is excused: a report that never comes is still missed.
+  let seen = await violations(page);
+  for (let waited = 0; waited < 10_000 && !(seen.some((v) => v.includes("bg.png")) && seen.some((v) => v.includes("parsed.png"))); waited += 100) {
+    await page.waitForTimeout(100);
+    seen = await violations(page);
+  }
+  return seen;
 }

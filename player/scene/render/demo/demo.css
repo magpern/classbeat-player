@@ -1,2 +1,3 @@
 html, body { margin: 0; height: 100%; background: var(--stage, #000); overflow: hidden; }
-canvas { display: block; width: 100vw; height: 100vh; }
+/* The scene renders below the window's size (the quality level's scale) and is scaled up nearest-neighbour: a smooth scale-up would blend two tokens along an edge (S5). */
+canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }

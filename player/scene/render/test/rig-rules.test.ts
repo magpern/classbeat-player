@@ -8,7 +8,7 @@ import { Color } from "three";
 import type { SceneClass } from "../../model/src/index.ts";
 import { angleBetween } from "../../model/src/index.ts";
 import { DEMO_CLASS, feedAt } from "../demo/scenario.ts";
-import { aimQuaternion, aimedDirection } from "../src/aim.ts";
+import { aimQuaternion, aimedDirection, worldVector } from "../src/aim.ts";
 import type { Draw, Feed } from "../src/loop.ts";
 import { RigLoop } from "../src/loop.ts";
 import { SceneRig } from "../src/rig.ts";
@@ -58,12 +58,13 @@ test("rule 5: the camera is fixed; only its aspect may change", () => {
 });
 
 const hexOf = (c: Color) => c.getHex();
-const CHANNEL = 1e-3;
 const allowed = [...Object.values(tokens.zones), tokens.white];
-const direction = (c: Color) => { const m = Math.max(c.r, c.g, c.b) || 1; return [c.r / m, c.g / m, c.b / m] as const; };
-const isAllowedHue = (c: Color) => c.r + c.g + c.b === 0 || allowed.some((h) => { const a = direction(new Color(h)); const b = direction(c); return a.every((v, i) => Math.abs(v - b[i]!) < CHANNEL); });
+const hueHex = (h: { kind: "zone"; zone: 1 | 2 | 3 | 4 | 5 | 6 | 7 } | { kind: "white" }) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
+const tokenA = (rig: SceneRig) => hexOf(rig.uniform("uTokA") as Color);
+const tokenB = (rig: SceneRig) => hexOf(rig.uniform("uTokB") as Color);
+const flags = (rig: SceneRig) => rig.uniform("uBF") as number[];
 
-test("rule 7: every colour in the rig, on every frame, is a zone token or white", () => {
+test("rule 7: the shader is given the planned zone's token, the next zone's only during the anticipation, and a flag per light that is 0 or 1; on every frame of the class", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);
   const seenZones = new Set<number>();
@@ -71,53 +72,55 @@ test("rule 7: every colour in the rig, on every frame, is a zone token or white"
   for (let ms = 0, n = 0; ms < 160_000; n++) {
     const d: Draw = loop.step(feedAt(ms), n === 0 ? 0 : 1 / 30, "High");
     rig.apply(d, "High");
-    if (n % 20 === 0) {
-      for (const f of rig.fixtures) {
-        const u = f.beamMaterial.uniforms.uColor!.value as Color;
-        assert.ok(allowed.includes(hexOf(u)), `beam ${hexOf(u).toString(16)}`);
-        assert.ok(isAllowedHue(f.lensMaterial.color));
-        seenZones.add(hexOf(u));
-      }
-      const wall = rig.wall.mesh.instanceColor!.array;
-      for (let i = 0; i < wall.length; i += 3 * 37) assert.ok(isAllowedHue(new Color().setRGB(wall[i]!, wall[i + 1]!, wall[i + 2]!)), "wall dot");
-    }
+    assert.equal(tokenA(rig), hueHex(d.tokens.current), `current at ${ms}`);
+    assert.equal(tokenB(rig), hueHex(d.tokens.next ?? d.tokens.current), `next at ${ms}`);
+    assert.ok(allowed.includes(tokenA(rig)) && allowed.includes(tokenB(rig)));
+    assert.ok(flags(rig).every((f) => f === 0 || f === 1), "a source carries one token or the other, never a share");
+    if (d.tokens.next === null) assert.ok(flags(rig).every((f) => f === 0), `no next token, no light on it at ${ms}`);
+    seenZones.add(tokenA(rig));
     ms += d.dtSeconds * 1000;
     frames++;
   }
   assert.ok(frames > 4000 && seenZones.size >= 6, `zones seen ${seenZones.size}`);
 });
 
-test("the anticipation: the back truss turns to the next zone's colour from the far side, the front stays (S5)", () => {
+test("the anticipation: the back truss takes the next zone's token from the far side, the front stays (S5)", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);
   const d = loop.step(feedAt(35_000), 0, "High"); // zone 2 -> 4 at 40 s: 5 s into the 10 s anticipation
   rig.apply(d, "High");
-  const colour = (layer: string, index: number) => hexOf(rig.fixtures.find((f) => f.model.layer === layer && f.model.index === index)!.beamMaterial.uniforms.uColor!.value as Color);
-  assert.equal(colour("front", 0), tokens.zones[2]);
-  assert.equal(colour("front", 7), tokens.zones[2]);
-  assert.equal(colour("back", 0), tokens.zones[2]); // the far side turns first
-  assert.equal(colour("back", 7), tokens.zones[4]);
+  const flag = (layer: string, index: number) => flags(rig)[rig.fixtures.findIndex((f) => f.model.layer === layer && f.model.index === index)];
+  assert.equal(tokenA(rig), tokens.zones[2]);
+  assert.equal(tokenB(rig), tokens.zones[4]);
+  assert.equal(flag("front", 0), 0);
+  assert.equal(flag("front", 7), 0);
+  assert.equal(flag("back", 0), 0); // the far side turns first
+  assert.equal(flag("back", 7), 1);
 });
 
-test("S5 at High quality: through the anticipation the haze shows no hue but the zone it is in; only the back truss and the wall wipe", () => {
+test("the hue cross runs only in the 700 ms that end at the change, from the right edge to the left, and its front only moves left", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);
-  let inAnticipation = 0;
-  for (let ms = 28_000, n = 0; ms < 41_000; n++) {
+  let [crossing, last] = [0, 2];
+  for (let ms = 36_000, n = 0; ms < 41_000; n++) {
     const d = loop.step(feedAt(ms), n === 0 ? 0 : 1 / 60, "High");
     rig.apply(d, "High");
-    const haze = rig.haze;
-    for (const layer of haze) assert.equal(hexOf(layer.material.uniforms.uColor!.value as Color), tokens.zones[d.frame.colours.front.kind === "zone" ? d.frame.colours.front.zone : 1], `haze at ${ms}`);
-    if (d.frame.colours.wipe > 0) inAnticipation++;
+    const front = rig.uniform("uCrossX") as number;
+    if (front < 2) {
+      crossing++;
+      assert.ok(ms >= 39_290 && ms < 40_000, `a cross at ${ms}`);
+      assert.ok(front <= last + 1e-9 && front >= 0 && front <= 1, "it moves toward the gel");
+      last = front;
+    } else assert.equal(front, 2);
     ms += d.dtSeconds * 1000;
   }
-  assert.ok(inAnticipation > 300);
+  assert.ok(crossing >= 38 && crossing <= 44, `about 700 ms of frames: ${crossing}`);
 });
 
 test("reduced motion (S11): the still rig shows no change between two frames a second apart", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);
-  const snap = () => JSON.stringify([rig.measuredDirections(), rig.fixtures.map((f) => [f.beamMaterial.uniforms.uOpacity!.value, f.lensMaterial.opacity, hexOf(f.beamMaterial.uniforms.uColor!.value as Color)])]);
+  const snap = () => JSON.stringify([rig.measuredDirections(), rig.uniform("uBI"), rig.uniform("uBL"), flags(rig), tokenA(rig), rig.uniform("uAmb"), rig.uniform("uCrossX")]);
   let first = "";
   for (let ms = 22_000, n = 0; ms < 24_100; n++) {
     const d = loop.step(feedAt(ms, { reducedMotion: true }), n === 0 ? 0 : 1 / 60, "High");
@@ -129,13 +132,18 @@ test("reduced motion (S11): the still rig shows no change between two frames a s
   assert.ok(first.length > 100);
 });
 
-test("the beams' length runs along the direction they are turned to", () => {
+test("the shader draws the beams along the directions the rig holds, from the lenses' fixed places", () => {
   const rig = new SceneRig(tokens);
-  const f = rig.fixtures[0]!;
-  const tip = f.pivot.children[0]!;
-  const geometry = (tip as unknown as { geometry: { boundingBox: unknown; computeBoundingBox(): void } }).geometry;
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox as { min: { z: number }; max: { z: number; y: number } };
-  assert.ok(box.max.z <= 1e-9 && box.min.z < -40, `the cone runs from the lens along -z: ${box.min.z}..${box.max.z}`);
-  assert.ok(Math.abs(box.max.y) < 2);
+  const loop = new RigLoop(tokens);
+  for (let ms = 30_000, n = 0; ms < 45_000; n++) {
+    const d = loop.step(feedAt(ms), n === 0 ? 0 : 1 / 60, "High");
+    rig.apply(d, "High");
+    const [dirs, origins] = [rig.uniform("uBD") as { x: number; y: number; z: number }[], rig.uniform("uBO") as { x: number; y: number; z: number }[]];
+    rig.measuredDirections().forEach((m, i) => {
+      const [v, w] = [dirs.at(i)!, worldVector(m)];
+      assert.ok(Math.abs(v.x - w.x) + Math.abs(v.y - w.y) + Math.abs(v.z - w.z) < 1e-9, `beam ${i}`);
+      assert.ok(origins.at(i)!.z < -15 && origins.at(i)!.z > -24, "the three trusses' depths");
+    });
+    ms += d.dtSeconds * 1000;
+  }
 });

@@ -33,20 +33,10 @@ export function decodeSrgb(encoded: number): number {
   return encoded <= 0.04045 ? encoded / 12.92 : Math.pow((encoded + 0.055) / 1.055, 2.4);
 }
 
-/** The encoded level every channel is held to inside a text box: relative luminance can then not pass `cap`. */
-export const maskLevel = (cap: number): number => encodeSrgb(cap * CAP_MARGIN);
-
 /** A text box (CSS pixels, y down) in the mask's units. At most `MAX_BOXES` are kept; the layer keeps under it by measuring one box per text line. */
 export function maskBoxes(boxes: readonly TextBox[], height: number): MaskBox[] {
   const h = Math.max(1, height);
   return boxes.slice(0, MAX_BOXES).map((b) => ({ l: b.left / h, b: 1 - b.bottom / h, r: b.right / h, t: 1 - b.top / h }));
-}
-
-/** The quad that covers a box and its growth and fade, in clip space: its centre and half-size. */
-export function maskQuad(m: MaskBox, aspect: number): { cx: number; cy: number; hx: number; hy: number } {
-  const reach = GROW + FADE;
-  const [x0, x1, y0, y1] = [(m.l - reach) / aspect, (m.r + reach) / aspect, m.b - reach, m.t + reach];
-  return { cx: x0 + x1 - 1, cy: y0 + y1 - 1, hx: x1 - x0, hy: y1 - y0 };
 }
 
 function smooth(edge0: number, edge1: number, x: number): number {

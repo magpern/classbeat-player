@@ -198,7 +198,7 @@ const threeImports = (allowed, pattern) => ["error", {
 const pure = [
   "src/light-calc.ts", "src/bursts.ts", "src/loop.ts", "src/tokens.ts",
   // The deferred looks (#546): the stage looks and a pattern's parsing and numbers.
-  "src/stage-calc.ts", "src/pattern-light-calc.ts",
+  "src/stage-calc.ts", "src/pattern-light-calc.ts", "src/cross-calc.ts", "src/scene-shader.ts",
   // The text layer's rules and calculations: words, fitting, the score, the pattern count, the mask's numbers.
   "src/text-types.ts", "src/text-view.ts", "src/text-box.ts", "src/text-words.ts", "src/text-pattern-calc.ts", "src/text-fit-calc.ts",
   "src/text-score-calc.ts", "src/text-view-calc.ts", "src/text-mask-calc.ts",
