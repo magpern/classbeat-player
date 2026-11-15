@@ -56,6 +56,8 @@ export const PATTERN_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
     "pattern-no-count": recorded(doc, at, "Coasting", null),
     "pattern-tempo-only": recorded(doc, at, "Locked", count("standing", 5, 8), tempoOnly),
     "pattern-no-tempo": recorded(noTempo, at, "Locked", null, { bpm: undefined, beat_anchors: undefined }),
+    // Beat anchors but no `bpm`: still no tempo (the anchors alone give none).
+    "pattern-anchors-only": recorded(noTempo, at, "Locked", count("standing", 6, 8), { bpm: undefined }),
     // Three entries named in the next row.
     "pattern-three": recorded(patterned(base, 6, EIGHT_EIGHT, { pattern: alt(["standing", "seated", "standing"], [4, 4, 8]), cue: NEXT_CUE }), at, "Locked", count("standing", 1, 8)),
   };

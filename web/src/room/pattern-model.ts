@@ -4,7 +4,6 @@
 // the song has what the count needs; it is never guessed here.
 import type { Class, LinkInput, PatternInput } from "./input.ts";
 import type { PatternValue } from "./model.ts";
-import { songBpm } from "./score.ts";
 
 type Interval = Class["intervals"][number];
 type Song = Class["songs"][number];
@@ -28,7 +27,8 @@ function hasAnchors(song: Song): boolean {
   return !!a && a.quality !== "missing" && a.anchors.length > 0;
 }
 
-const hasTempo = (song: Song): boolean => songBpm(song) !== null;
+/** "No tempo" means the song has no `bpm`; beat anchors alone do not give one (class-format README; the player's `planFrom`). */
+const hasTempo = (song: Song): boolean => song.bpm !== undefined;
 
 /** The link follows the music and holds a lock now (not coasting, off the list, paused, held or manual). */
 const locked = (link: LinkInput | null): boolean => link?.mode === "following" && link.state === "Locked" && !link.held;
@@ -39,10 +39,11 @@ const locked = (link: LinkInput | null): boolean => link?.mode === "following" &
  * - `next_downbeat`, the first downbeat not yet come: the side of the first entry and "Starts on the next bar";
  * - otherwise a note: "No tempo: count from the music" when the song has no tempo, else "Count from the music".
  */
-export function patternValue(iv: Interval, song: Song | null, link: LinkInput | null, snapshot: PatternInput | null): PatternValue | null {
+export function patternValue(iv: Interval, song: Song | null, link: LinkInput | null, snapshot: PatternInput | null, running = true): PatternValue | null {
   const pat = iv.pattern;
   if (!pat) return null;
-  if (!locked(link) || !song) return { kind: "note", text: NOTE_NO_COUNT };
+  // A paused clock with the link still Locked shows no frozen count.
+  if (!running || !locked(link) || !song) return { kind: "note", text: NOTE_NO_COUNT };
   if (!hasTempo(song)) return { kind: "note", text: NOTE_NO_TEMPO };
   const onDownbeat = pat.start_on === "next_downbeat";
   // Tempo only: an interval-start pattern counts at the bpm; a next-downbeat one needs the grid.

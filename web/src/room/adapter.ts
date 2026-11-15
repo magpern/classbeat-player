@@ -80,14 +80,14 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
   const segment = doc.segments?.find((s) => view.classMs >= s.start_ms && view.classMs < s.end_ms)?.name ?? null;
   const following = link?.mode === "following";
   const left = following ? link.classRemainingMs : view.classRemainingMs;
-  const position = patternValue(iv, song, link, pattern);
+  const position = patternValue(iv, song, link, pattern, view.status === "running");
   return {
     kind: "running",
     gel,
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
     metrics: metricsFor(iv, song, link, position),
-    beat: beatFor(view, link, song),
+    beat: isNoTempo(position) ? null : beatFor(view, link, song),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
     intro: null,
@@ -137,7 +137,8 @@ function lineFor(view: View, link: LinkInput | null, song: Song | null, last: bo
 
 function metricsFor(iv: Class["intervals"][number], song: Song | null, link: LinkInput | null, position: PatternValue | null): MetricModel[] {
   const cadence = cadenceText(iv);
-  const bpm = song ? songBpm(song) : null;
+  // A song with no `bpm` in a pattern interval reads "–", whatever its anchors say.
+  const bpm = song && !isNoTempo(position) ? songBpm(song) : null;
   const songLabel = isNoTempo(position) ? "Song, no tempo" : link?.state === "Off the list" ? "Song, planned" : "Song";
   return [
     { label: "Cadence", value: cadence?.value ?? "–", unit: cadence?.unit ?? null },

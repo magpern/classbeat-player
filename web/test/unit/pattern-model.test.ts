@@ -75,6 +75,26 @@ describe("the Position metric in a pattern interval", () => {
     assert.equal(m.beat, null);
   });
 
+  it("beat anchors without a bpm are still no tempo: the note, 'Song, no tempo' and '–', no bars line, no beat dot, even with a count sent", () => {
+    const input = FIXTURES["pattern-anchors-only"];
+    const song = (input.doc as Class).songs.find((s) => s.start_ms <= (input.view?.classMs ?? 0) && (input.view?.classMs ?? 0) < s.end_ms);
+    assert.ok(song?.beat_anchors && song.bpm === undefined, "the fixture has anchors and no bpm");
+    const m = toRoomModel(input);
+    assert.deepEqual(position(input)?.pattern, { kind: "note", text: NOTE_NO_TEMPO });
+    assert.deepEqual([m.metrics[2].label, m.metrics[2].value, m.metrics[2].unit], ["Song, no tempo", "–", null]);
+    assert.equal(m.clock?.line, null);
+    assert.equal(m.beat, null);
+  });
+
+  it("a paused clock with the link still Locked shows no frozen count", () => {
+    const input = FIXTURES.pattern;
+    assert.equal(position(input)?.pattern?.kind, "count");
+    const view = input.view;
+    assert.ok(view);
+    const paused = { ...input, view: { ...view, status: "paused" as const } };
+    assert.deepEqual(position(paused)?.pattern, { kind: "note", text: NOTE_NO_COUNT });
+  });
+
   it("an interval with no pattern keeps its word, even if a count is sent", () => {
     const m = toRoomModel({ ...FIXTURES.running, pattern: SNAP });
     assert.deepEqual([m.metrics[1].value, m.metrics[1].pattern], ["Seated", undefined]);
