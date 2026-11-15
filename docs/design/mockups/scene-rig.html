@@ -57,17 +57,20 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .metric .v { font: 800 7.6vh/0.95 var(--face-number); white-space: nowrap; }
 .metric .u { font: 600 var(--t-minor)/1 var(--face-number); margin-left: 0.4vw; }
 .beat { display: inline-block; width: 0.22em; height: 0.22em; margin-left: 0.18em; border-radius: 50%; background: var(--light-1); vertical-align: 0.25em; opacity: 0; }
-.clock { position: absolute; right: var(--safe-x); top: 10.4vh; text-align: right; }
-.chead { display: flex; justify-content: flex-end; align-items: baseline; gap: 1.2vw; white-space: nowrap; height: 4.6vh; }
-.clock .count { font: 800 26vh/0.82 var(--face-number); margin: 0.8vh 0 0 auto; width: fit-content; white-space: nowrap; }
+.clock { position: absolute; right: var(--safe-x); top: 10.9vh; text-align: right; }
+.chead { display: flex; justify-content: flex-end; align-items: center; gap: 1.2vw; white-space: nowrap; height: 4.2vh; }
+.clock .count { font: 800 26vh/0.82 var(--face-number); margin: 1.6vh 0 0 auto; width: fit-content; white-space: nowrap; }
 .clock .bars:empty { display: none; }
 .clock .count.est { border-bottom: 0.5vh dashed var(--light-1); }
-.clock .bars { font: 600 var(--t-minor)/1 var(--face-number); }
+/* 4.1 vh (cap 3.3 %): the head line holds its ink 1 vh clear of the rail above and the countdown below */
+.clock .bars { font: 600 4.1vh/1 var(--face-number); }
 .clock .bars .w { font-family: var(--face-text); font-weight: 400; font-size: 0.8em; }
-.pplate { display: inline-block; font-size: var(--t-label); }
+/* Compact plates: the paused plate stays inside the 4.2 vh head line, at least 1 vh from the countdown and the rail */
+.pplate { display: inline-block; font-size: var(--t-label); line-height: 1; padding: 0.25vh 0.8vw; }
+.rail .plate { line-height: 1; padding: 0.15vh 0.8vw; }
 .next { margin-top: 1.2vh; }
 .nx1 { display: flex; justify-content: flex-end; align-items: baseline; gap: 1vw; font: 600 var(--t-minor)/1.05 var(--face-number); white-space: nowrap; }
-.nxc { font: 400 var(--t-label)/1.05 var(--face-text); max-width: 52vw; width: fit-content; margin: 0.4vh 0 0 auto; text-align: left; }
+.nxc { font: 400 var(--t-label)/1.05 var(--face-text); max-width: 52vw; width: fit-content; margin: 1vh 0 0 auto; text-align: left; }
 .chip { background: var(--zone); color: var(--ink); font-weight: 800; padding: 0 0.6vw; border-radius: 0.4vh; }
 .next .lbl { font-family: var(--face-text); }
 .cue { position: absolute; left: 27vw; right: var(--safe-x); bottom: 31.6vh; font: 700 var(--t-text)/1.06 var(--face-text); }
@@ -75,7 +78,7 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .title { font: 800 9vh/1 var(--face-number); }
 
 /* ---- Beat-counted position pattern (format 1.1): word, big beat count, beats left ---- */
-.pat { position: absolute; left: 46vw; top: 10.4vh; display: none; }
+.pat { position: absolute; left: 46vw; top: 10.9vh; display: none; }
 .pat.on { display: block; }
 .prow { display: flex; align-items: flex-end; gap: 1vw; margin-top: 0.8vh; }
 .pat .pw { font: 800 9vh/0.82 var(--face-number); text-transform: uppercase; white-space: nowrap; }
@@ -90,7 +93,7 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .pips .pn { flex-basis: 100%; white-space: normal; font: 400 var(--t-label)/1.1 var(--face-text); margin-top: 0.6vh; }
 .cfm { display: inline-block; white-space: normal; max-width: 24vw; font: 400 var(--t-minor)/1.05 var(--face-text); }
 .metric .v .pw2 { text-transform: uppercase; }
-.metric .v .pc2 { font-size: 1.8em; margin-left: 0.5vw; }
+.metric .v .pc2 { font-size: 12.7vh; margin-left: 0.5vw; }
 
 /* ---- The score: opaque, flat, 8 minutes ahead ---- */
 .score { position: fixed; left: 0; right: 0; top: 70.4vh; bottom: 0; background: var(--stage); z-index: 2; overflow: hidden; border-top: 0.3vh solid var(--stage-line); }
@@ -132,26 +135,30 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
   .gel { width: 30vw; height: 48vh; }
   .gel-num { font-size: 28vh; }
   .gel-name { font-size: 7vh; }
-  .rail, .metrics { left: 33vw; }
+  .rail { left: 33vw; }
   .rail .seg { display: none; }
-  /* Metrics: label and value on one line, left of the countdown */
-  .metrics { top: 16vh; gap: 1vh; }
-  .metric { display: flex; align-items: baseline; gap: 1vw; }
+  /* Metrics: one row under the countdown (room-2d), so a five-glyph countdown never meets them */
+  .metrics { left: 33vw; right: var(--safe-x); top: 39.4vh; flex-direction: row; align-items: baseline; gap: 2.4vw; }
+  .metric { display: flex; align-items: baseline; }
   .metric .v { font-size: 7.2vh; }
-  /* Narrow: the units and the values carry the meaning; no labels beside the countdown. */
+  /* The units ("rpm", "bpm") and the values ("Seated") carry the meaning: no labels in the row */
   .metric > .lbl { display: none; }
-  .next { position: fixed; left: var(--safe-x); right: var(--safe-x); top: 48.5vh; margin: 0; text-align: left; }
+  .metric:nth-child(2) { flex: 1 1 0; min-width: 0; }
+  .metric:nth-child(2) .v { white-space: normal; min-width: 0; }
+  .cfm { display: block; max-width: none; font: 400 var(--t-label)/1.05 var(--face-text); }
+  .next { position: fixed; left: var(--safe-x); right: var(--safe-x); top: 52.4vh; margin: 0; text-align: left; }
   .nx1 { justify-content: flex-start; }
   .nxc { max-width: none; margin-left: 0; }
-  .cue { left: var(--safe-x); bottom: 24.7vh; }
-  .score, .panel { top: 76vh; }
-  .blk { top: 0.6vh; height: 7vh; }
+  .cue { left: var(--safe-x); bottom: 19.7vh; }
+  .score, .panel { top: 81vh; }
+  .blk { top: 0.5vh; height: 6.6vh; }
   .l2 { display: none; }
-  .clip { top: 8.2vh; height: 6.8vh; }
-  .clip .in { padding-top: 0.3vh; }
-  .mom { top: 11.8vh; height: 3vh; padding-top: 0; }
-  .now { height: 15vh; }
-  .mins { top: 15.2vh; }
+  .clip { top: 7.6vh; height: 6.4vh; }
+  .clip .in { padding-top: 0.2vh; }
+  .mom { top: 10.6vh; height: 3.4vh; padding-top: 0; }
+  .now { height: 14vh; }
+  /* No minute labels at 3:2 and narrower: the band ends at the 95 vh safe edge */
+  .mins { display: none; }
   .pst { height: 0.8vh; }
   .blk .in { padding-top: 0.3vh; }
 }
@@ -257,6 +264,15 @@ const IV = [
 const patTxt = (p) => p.b.map((n, i) => n + ' ' + UPDN[p.p[i]]).join(', ');
 const END = 1440;
 const LONG_CUE = 'Stay seated and add a quarter turn every chorus; keep the cadence steady, breathe out on the beat, and hold it.';
+const WORST_RPM = '100–110';
+let WORST_NAME = 'Endurance';
+function measureWorstName() {
+  const c = document.createElement('canvas').getContext('2d');
+  c.font = '800 100px ' + getComputedStyle(document.documentElement).getPropertyValue('--face-number');
+  WORST_NAME = Object.values(ZONES).map((z) => z[0]).reduce((a, b) => (c.measureText(b).width > c.measureText(a).width ? b : a));
+}
+const zName = (z) => (st.worst ? WORST_NAME : ZONES[z][0]);
+const zRpm = (iv) => (st.worst ? WORST_RPM : iv.rpm);
 const LONG_CUE2 = 'Out of the saddle on the first beat, hands light, hips back; push down on every kick drum and keep going to the end.';
 const SEGS = [[0, 230, 'Warm-up'], [230, 1200, 'Main set'], [1200, 1440, 'Cool-down']];
 const LOOKS = ['fan', 'cross', 'sweep', 'circle', 'split', 'fan'];
@@ -547,14 +563,14 @@ function updateText(t, iIdx, sIdx, locked, beatKnown) {
   if (!fin && gelZone !== iv.z) { gelZone = iv.z; zoneVars(gel, iv.z); }
   set('gNum', fin ? '' : String(iv.z));
   set('gLbl', fin ? '' : bef ? 'First zone' : 'Zone');
-  set('gName', fin ? 'Class complete' : ZONES[iv.z][0]);
+  set('gName', fin ? 'Class complete' : zName(iv.z));
   set('gTg', fin ? '<span>24:00</span>' : `<span>${ZONES[iv.z][1]}</span><span>${ZONES[iv.z][2]}</span>`);
   set('tLeft', mmss(END - t)); set('tDone', mmss(t));
   const seg = SEGS.find((s) => t >= s[0] && t < s[1]); set('seg', seg ? seg[2] : '');
   const linkTxt = { running: 'Following Spotify', paused: 'Music paused', coasting: 'Music not heard', offlist: 'Not a class song', before: 'Waiting for the first song', finished: 'Following Spotify' }[state];
   set('link', linkTxt);
   $('link').classList.toggle('plate', ['paused', 'coasting', 'offlist'].includes(state));
-  set('mCad', `${iv.rpm}<span class="u">rpm</span>`);
+  set('mCad', `${zRpm(iv)}<span class="u">rpm</span>`);
   const pt = patAt(iv, song, t);
   const showPat = pt && !fin && !bef;
   document.body.classList.toggle('patOn', !!showPat);
@@ -570,10 +586,14 @@ function updateText(t, iIdx, sIdx, locked, beatKnown) {
       word = UPDN[p.p[pt.i]]; cnt = String(pt.left);
       after = pt.same ? 'then ' + UPDN[p.p[pt.nxt]] + ' again' : 'then ' + UPDN[p.p[pt.nxt]];
     }
-    if (narrow) {
+    // Folded into the Position value at 3:2 and narrower, and wherever the block would get less
+    // than 16 vw between the metrics and the countdown at its widest in this interval (Fitting).
+    const fold = () => {
       $('pat').classList.remove('on');
       set('mPos', word ? `<span class="pw2 tx">${word}</span><span class="pc2 tx">${cnt}</span>` : `<span class="cfm tx">${why}</span>`);
-    } else {
+    };
+    if (narrow || patternRoom(iv) < 16 * innerWidth / 100) fold();
+    else {
       $('pat').classList.add('on');
       set('mPos', 'Up / down');
       set('pLbl', patTxt(p));
@@ -609,7 +629,7 @@ function updateText(t, iIdx, sIdx, locked, beatKnown) {
   if (fin) { set('nx1', ''); set('nxc', ''); }
   else if (nx) {
     set('nxc', st.worst ? LONG_CUE2 : nx.cue);
-    set('nx1', `<span class="lbl">Next</span><span class="chip" style="--zone:var(--zone-${nx.z})">${nx.z}</span><span>${ZONES[nx.z][0]}</span><span>${mmss(nx.b - nx.a)}</span><span>${nx.rpm} rpm</span><span>${nx.pat ? patTxt(nx.pat) : nx.pos}</span>`);
+    set('nx1', `<span class="lbl">Next</span><span class="chip" style="--zone:var(--zone-${nx.z})">${nx.z}</span><span>${zName(nx.z)}</span><span>${mmss(nx.b - nx.a)}</span><span>${zRpm(nx)} rpm</span><span>${nx.pat ? patTxt(nx.pat) : nx.pos}</span>`);
   } else { set('nx1', '<span class="lbl">Next</span><span>End of class</span>'); set('nxc', ''); }
   const cue = fin ? 'Thank you, well ridden.' : bef ? 'Press Start, or start the first song in Spotify.' : st.worst ? LONG_CUE : iv.cue;
   document.body.classList.toggle('five', $('count').textContent.replace(':', '').length >= 4);
@@ -619,6 +639,17 @@ function updateText(t, iIdx, sIdx, locked, beatKnown) {
 // countdown's ink; where it cannot, the side word goes under the count (see "Fitting").
 function inkRight(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().right; }
 function inkLeft(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().left; }
+// Room for the pattern block: from 2 vw right of the widest metric value (or 46 vw) to 2 vw before
+// the countdown at its widest in this interval (five glyphs if the interval starts at 10:00 or more).
+function patternRoom(iv) {
+  const vw = innerWidth / 100, c = $('count'), r = document.createRange();
+  r.selectNodeContents(c); const box = r.getBoundingClientRect();
+  const five = c.textContent.replace(':', '').length >= 4;
+  const widest = five || !(st.worst || iv.b - iv.a >= 600) ? box.width : box.width * 2.16 / 1.70;
+  // Cadence and BPM only: a folded Position value must not decide whether it folds.
+  const right = Math.max(inkRight($('mCad')), inkRight($('mBpm')));
+  return (box.right - widest - 2 * vw) - Math.max(46 * vw, right + 2 * vw);
+}
 function placePattern() {
   const vw = innerWidth / 100, p = $('pat');
   let right = 0;
@@ -626,11 +657,15 @@ function placePattern() {
   p.style.left = Math.max(46 * vw, right + 2 * vw) + 'px';
   // Measure the ink of the label, the side, the count and the squares; the note wraps in what is left.
   const limit = inkLeft($('count')) - 2 * vw;
+  // The label shares the head line's height: it ends 2 vw before the head line's ink and wraps.
+  const head = [$('cLbl'), $('bars')].filter((e) => e.textContent.trim());
+  const headLimit = Math.min(limit, ...head.map((e) => inkLeft(e) - 2 * vw));
+  $('pLbl').style.maxWidth = Math.max(10 * vw, headLimit - parseFloat(p.style.left)) + 'px';
   const ink = () => Math.max(...[...p.querySelectorAll('#pLbl, #pWord, #pCount, .pips i')].map(inkRight), 0);
   p.classList.remove('tight');
   if (ink() > limit) p.classList.add('tight');
-  const pn = p.querySelector('.pn');
-  if (pn) pn.style.maxWidth = Math.max(10 * vw, limit - p.getBoundingClientRect().left) + 'px';
+  // The squares and the note share the width left; the note always takes a line of its own.
+  $('pips').style.maxWidth = Math.max(10 * vw, limit - p.getBoundingClientRect().left) + 'px';
 }
 function textRects() {
   const out = [], s = QUAL[st.q][1];
@@ -838,7 +873,7 @@ function refreshPanel() {
   document.querySelector('[data-v=q]').textContent = `Quality: ${QUAL[st.q][0]}`;
   document.querySelector('[data-v=sound]').textContent = `Sound: ${st.sound ? 'on' : 'off'}`;
   document.querySelector('[data-v=detail]').textContent = 'Music detail: ' + { full: 'full', noanchors: 'no anchors', nomoments: 'no moments', nobpm: 'no tempo' }[st.detail];
-  document.querySelector('[data-v=worst]').textContent = `Worst case: ${st.worst ? 'on (120-character cues, 10:00+)' : 'off'}`;
+  document.querySelector('[data-v=worst]').textContent = `Worst case: ${st.worst ? `on (120-character cues, 10:00+, ${WORST_RPM} rpm, ${WORST_NAME})` : 'off'}`;
 }
 function view(v) {
   if (v === 'speed') st.speed = st.speed === 1 ? 4 : 1;
@@ -883,7 +918,7 @@ if (qs.get('rm') === '1') st.rm = true;
 if (qs.has('q')) st.q = +qs.get('q');
 if (qs.has('detail')) st.detail = qs.get('detail');
 if (qs.get('worst') === '1') st.worst = true;
-Promise.all(['800 40px "Big Shoulders Display"', '600 40px "Big Shoulders Display"', '700 40px "Atkinson Hyperlegible"', '400 40px "Atkinson Hyperlegible"'].map((f) => document.fonts.load(f))).catch(() => {}).then(() => document.fonts.ready).then(() => { loadColours(); resize(); refreshPanel(); requestAnimationFrame(frame); });
+Promise.all(['800 40px "Big Shoulders Display"', '600 40px "Big Shoulders Display"', '700 40px "Atkinson Hyperlegible"', '400 40px "Atkinson Hyperlegible"'].map((f) => document.fonts.load(f))).catch(() => {}).then(() => document.fonts.ready).then(() => { measureWorstName(); loadColours(); resize(); refreshPanel(); requestAnimationFrame(frame); });
 </script>
 </body>
 </html>

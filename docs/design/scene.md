@@ -185,8 +185,8 @@ whole window behind everything; the gel plate and the score are opaque.
 | Gel plate | 0, 0, 24 vw, 68.4 vh; opaque zone colour | "Zone" label, numeral (32 vh, Big Shoulders 800, ink), name (at most min(7.6 vh, 4.4 vw), two lines; a name that cannot fit two lines steps to `--t-minor` as room-2d.md), targets (`--t-minor`) |
 | Rail | 27 vw, 5 vh, to 95 vw | Class time left and done, segment, link state (as room-2d.md) |
 | Metrics | 27 vw, 12 vh, stacked | Cadence, position, BPM: label `--t-label`, value 7.6 vh (Big Shoulders 800), unit `--t-minor` |
-| Clock | right-aligned to 95 vw, from 10.4 vh | First line: label and bars line side by side (`--t-minor`); under it the countdown (26 vh, cap 21.1 %); see "Fitting" |
-| Pattern | from 46 vw, or 2 vw right of the widest metric value if that is further right, from 10.4 vh; only in an interval with a pattern | See "Intervals first: climbs and patterns" and "Fitting" |
+| Clock | right-aligned to 95 vw, from 10.9 vh | Head line, 4.2 vh high, items centred: label (`--t-label`, or the compact "Paused" plate, 3.6 vh high) and bars line (4.1 vh, Big Shoulders 600, cap 3.3 %) side by side; 1.6 vh under it the countdown (26 vh, cap 21.1 %). The head line's ink keeps 1 vh from the rail above and the countdown below; see "Fitting" |
+| Pattern | from 46 vw, or 2 vw right of the widest metric value if that is further right, from 10.9 vh; only in an interval with a pattern | See "Intervals first: climbs and patterns" and "Fitting" |
 | Next | right-aligned to 95 vw, 1.2 vh under the countdown (about 38 to 54 vh) | Line 1: "Next", zone chip, name, length, cadence, position or pattern ("8 up, 8 down") (`--t-minor`, one line). Line 2: **the next interval's cue** (`--t-label`, at most 52 vw wide, at most 3 lines) |
 | Cue | 27 vw to 95 vw, ends at 68.4 vh | `--t-text`, two lines; over 60 characters `--t-text-min`, three lines |
 | Score | 0, 70.4 vh, full width, to 95 vh | See "The score" |
@@ -198,16 +198,17 @@ whole window behind everything; the gel plate and the score are opaque.
 |---|---|---|
 | Gel plate | 0, 0, 30 vw, 48 vh | Numeral 28 vh (cap 22.8 %), name 7 vh (cap 5.7 %), targets |
 | Rail | 33 vw, 5 vh, to 95 vw | As 16:9, without the segment name |
-| Metrics | 33 vw, from 16 vh, ending by 46 vh | Value and unit only, 7.2 vh (cap 5.85 %): the units ("rpm", "bpm") and the values ("Seated") carry the meaning, so no labels stand beside the countdown |
-| Clock | right-aligned to 95 vw, from 10.4 vh | As 16:9: label and bars line, then the countdown at 26 vh |
-| Next | 5 vw to 95 vw, from 48.5 vh | Line 1 as 16:9, left-aligned; line 2 the next cue (`--t-label`, at most 2 lines) |
-| Cue | 5 vw to 95 vw, ends at 75.3 vh | `--t-text-min`, at most 3 lines |
-| Score | 0, 76 vh, to 94.8 vh | Intervals 7 vh (no second line: the next cue is in the next row), songs 6.8 vh; **6 minutes** wide |
+| Metrics | one row **under the countdown**, 33 vw to 95 vw, from 39.4 vh (to about 52 vh with a folded count) | Cadence, position, BPM side by side, 2.4 vw apart, on one baseline; value and unit only, 7.2 vh (cap 5.85 %): the units ("rpm", "bpm") and the values ("Seated") carry the meaning. As room-2d's narrow layout, nothing stands beside the countdown, so a five-glyph countdown never meets a metric |
+| Clock | right-aligned to 95 vw, from 10.9 vh | As 16:9: head line, then the countdown at 26 vh (ink to about 38 vh, the estimated underline included) |
+| Next | 5 vw to 95 vw, from 52.4 vh (under the gel and the metrics row) | Line 1 as 16:9, left-aligned; 1 vh under it the next cue (`--t-label`, at most 2 lines) |
+| Cue | 5 vw to 95 vw, ends at 80.3 vh | `--t-text-min`, at most 3 lines |
+| Score | 0, 81 vh, to 95 vh | Intervals 6.6 vh (no second line: the next cue is in the next row), songs 6.4 vh; **6 minutes** wide; no minute labels under it (the band ends at the safe edge) |
 
 In an interval with a pattern there is no room for the pattern block: the Position value becomes
-the side and the count (count at 1.8 × the value, 12.96 vh, cap 10.5 %), and the bars line stays.
-Without a count the value reads "Count from the music" (`--t-minor`, at most two lines,
-24 vw wide).
+the side and the count (count 12.7 vh, cap 10.3 %), and the bars line stays. The row is set on
+the count's baseline, so the count's top is the row's top and stays 1 vh under the countdown.
+Without a count the value reads "Count from the music" (`--t-label`, wrapping in the width the
+row leaves it, at most three lines, inside the row's height).
 ### Laptop and phone
 
 - **Presenter preview (laptop, a second display only):** the preview shows the room as drawn,
@@ -266,7 +267,7 @@ song may hold any number of them. The screen is built on the intervals; the song
   (seated). A pattern of three or four entries works the same way: "4 up, 4 down, 8 up" counts
   4, 4, 8; where two neighbouring entries are the same side, the note says "then up again".
 
-**Pattern block** (16:9; at 3:2 and narrower it is folded into the Position metric, see
+**Pattern block** (16:9; at 3:2 and narrower, and where "Fitting" leaves it under 16 vw, it is folded into the Position metric, see
 Layout), top to bottom, all text in `--light-1`:
 
 | Line | Content | Size |
@@ -322,18 +323,31 @@ straight on the scene.
 ## Fitting
 
 - **Countdown** 26 vh at every size. Four glyphs ("1:10") and five ("10:50", an interval of
-  10 minutes or more) both fit right of the metrics at 16:9 and 16:10. At 3:2 and narrower the
-  metrics carry no labels at all (see Layout), so a five-glyph countdown still leaves at least
-  2 vw to the widest value.
+  10 minutes or more) both fit right of the metrics at 16:9 and 16:10 (at 16:10 the widest value,
+  "100–110 rpm", ends about 18 vw before a five-glyph countdown). At 3:2 and narrower they do
+  not fit side by side (a five-glyph countdown is about 45 vw wide at 5:4), so the metrics sit in
+  a row **under** the countdown (see Layout) and nothing shares its height.
+- **Head line**: label and bars line are centred in a 4.2 vh line; the paused label is a compact
+  plate (3.6 vh high), so it never reaches the countdown or the rail. Its ink keeps at least 1 vh
+  from both in every state.
 - **Pattern block**: it starts at 46 vw or 2 vw right of the widest metric value. If its label,
   side, count or squares would come within 2 vw of the countdown's ink, the count steps to
-  14.6 vh (cap 11.9 %) and the side to 7.4 vh; the note wraps in the width left.
+  14.6 vh (cap 11.9 %) and the side to 7.4 vh; the squares and the note wrap in the width left,
+  the note always on a line of its own. The label shares the head line's height, so it also ends
+  2 vw before the head line's ink (the paused plate, the bars line) and wraps. Where the block
+  would get **less than 16 vw** between the cadence or BPM value and the countdown at its widest
+  in that interval (five glyphs if the interval starts at 10:00 or more), it **folds into the
+  Position value** as at 3:2 and narrower (side and count, count 12.7 vh), decided once per
+  interval; at 16:10 that happens with a five-glyph countdown next to "100–110 rpm".
 - **Next row**: line 1 is one line; the next cue wraps at 52 vw (3 lines at most at 16:9; 2 at
   3:2 and narrower), and its ink ends at least 1.5 vh above the cue's first line.
 - **Cue**: as room-2d.md (two lines at `--t-text`, over 60 characters `--t-text-min`, three
-  lines); the box ends at 68.4 vh (16:9) or 75.3 vh (narrower) and grows upward.
+  lines); the box ends at 68.4 vh (16:9) or 80.3 vh (narrower) and grows upward.
 - **Worst case** (checked in every state at every size): 120-character current and next cues,
-  a five-glyph countdown, a pattern interval, cadence "100–110 rpm", the longest zone name.
+  a five-glyph countdown, a pattern interval, cadence "100–110 rpm", the widest zone name
+  (measured in the number face; the mock-up's `W` sets all of them). The mock-up's clearances
+  were measured from the rendered ink at 1280 × 1024, 1440 × 1080, 1680 × 1050, 1920 × 1080 and
+  1920 × 1200, running, paused, coasting, off the list and before the start: every pair meets S16.
 
 ## States
 
@@ -397,15 +411,15 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 
 | Check | Requirement |
 |---|---|
-| S1. Text height (cap height / screen height) | As C1, **measured in the product's own browser** (cap heights about 2.3 % lower than the mock-up's), so the product's sizes carry that margin over the floors, which are not lowered. Countdown at least **20 %** (26 vh gives 21.1 %); zone numeral at least **25 %** wider than 3:2 (32 vh: 26.0 %) and **22 %** at 3:2 and narrower (28 vh: 22.8 %; a deliberate departure from C1's 25 %, so the clock, the metrics and a 6-minute score fit beside and under a 30 vw gel); metric values, zone name and pattern side at least **5.5 %** (narrow values 7.2 vh: 5.85 %; narrow name 7 vh: 5.69 %; a name stepped down by the fitting rules: 3 %); the pattern's beat count at least **10 %** (14.6 % at 16:9, 11.9 % stepped, 10.5 % folded); the cue, class time and next row's first line at least **3 %**; labels, the next cue, link state and score text at least **2 %** |
+| S1. Text height (cap height / screen height) | As C1, **measured in the product's own browser** (cap heights about 2.3 % lower than the mock-up's), so the product's sizes carry that margin over the floors, which are not lowered. Countdown at least **20 %** (26 vh gives 21.1 %); zone numeral at least **25 %** wider than 3:2 (32 vh: 26.0 %) and **22 %** at 3:2 and narrower (28 vh: 22.8 %; a deliberate departure from C1's 25 %, so the clock, the metrics and a 6-minute score fit beside and under a 30 vw gel); metric values, zone name and pattern side at least **5.5 %** (narrow values 7.2 vh: 5.85 %; narrow name 7 vh: 5.69 %; a name stepped down by the fitting rules: 3 %); the pattern's beat count at least **10 %** (14.6 % at 16:9, 11.9 % stepped, 10.3 % folded); the cue, class time and next row's first line at least **3 %**; labels, the next cue, link state and score text at least **2 %** |
 | S2. Contrast | **Only `--light-1` text over the scene.** Text against the worst pixel under its ink, over a sequence of at least 120 frames covering a beat, a build, a drop and an interval change: at least **7 : 1** for every text on the scene, labels included. The scene's relative luminance inside each text box (grown by 1.2 vh, faded over 3 vh) is at most **0.08** on every frame. Text on opaque fills as room-2d.md |
 | S3. Look-ahead | The score shows at least **5 minutes** ahead of "now" at every supported size (**8** at 16:9 and wider, **6** at 3:2 and narrower, to the screen's edge). Every interval of **40 s or more** starting within the labelled window (7 min at 16:9, 5 min narrower) shows its **number and its length**; any block that cannot show its number shows no zone colour. The **next interval's number, name, length, targets and cue are always on screen in the next row**, whatever the score shows |
 | S4. Visible at once | All nine content items in every running state, with the band hidden, at every supported size |
 | S5. Zone | The zone is a number and a name as well as a colour on the gel, the next row and the score (as C5); a score block never shows its colour without its number. The rig shows only the current zone's colour, the next zone's colour during the 10 s anticipation (while its number and name are in the next row), and white. Never another hue, never a measured heart-rate zone (rule 7) |
 | S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. One full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart |
 | S7. Movement | The camera never moves. No beam turns faster than 30 degrees a second. Rule 4: a beam's direction is a function of the song's look, the fixture, the motion phase, the phrase and the song's moments only. Test (scene model): two classes that differ only in their intervals (zones, targets, positions, patterns, cues), evaluated at the same song, look, phrase, moments and **motion phase**, give every beam the same direction; and the motion phase's rate depends only on the zone's row, at most 30 degrees a second. Light-only bursts on interval changes change no direction |
-| S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 12 % and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
-| S9. Frame rate | At least 50 fps at High on the reference studio computer at 1920 × 1080; the quality steps of the table above, measured by the frame log |
+| S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 12 % and the pattern count of S14 (at the `bpm` from the interval start, `start_on: "interval_start"` only), and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
+| S9. Frame rate | ADR 0009's re-check: at the **default quality level (High)**, on a studio-class computer at 1920 × 1080, a **median of at least 58 fps over a full class** and **no second under 30 fps**, from the frame-rate log (once a second, with the quality level). A class that steps down from High misses this criterion; the steps of the table above only keep the room usable on a weaker computer |
 | S10. Fallback | Scene killed: the plain 2D screen within 2 s, the clock continuous (plan section 9) |
 | S11. Reduced motion | With reduced motion the room shows the plain screen; a still-rig screenshot shows no change between two frames 1 s apart except the score's one-second step, the countdown and the pattern count |
 | S12. Hue in the text layer | As C6: hue only on elements that stand for a zone |
@@ -470,7 +484,7 @@ Ctrl+Cmd+F), ideally on the studio projector in the dark.
   switches states (running, paused,
   coasting, off the list, before the start, finished), speed (1 ×, 4 ×), reduced motion, quality,
   **Music detail** (full, no anchors, no moments, no tempo: the levels of "How much of the music
-  is known"), **Worst case** (120-character cues and a countdown over 10 minutes), and **Sound**: a synthesised beat (kick, hats, a riser and a crash on the drop), so the light can
+  is known"), **Worst case** (120-character current and next cues, a countdown over 10 minutes, cadence "100–110 rpm" and the widest zone name, measured in the number face, in the gel and the next row), and **Sound**: a synthesised beat (kick, hats, a riser and a crash on the drop), so the light can
   be judged against something audible. Nothing is fetched.
 - Keys: Space pause, arrows jump 15 s, `1` to `7` jump to that zone, `D` before the next drop,
   `S` before the next song change, `I` before the next interval change, `C` the next climb,
