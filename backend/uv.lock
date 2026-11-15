@@ -319,6 +319,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "classformat" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
@@ -338,6 +339,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "classformat", directory = "../schema/python" },
+    { name = "cryptography", specifier = ">=50,<51" },
     { name = "fastapi", specifier = ">=0.137.2,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "psycopg-pool", specifier = ">=3.2,<4" },

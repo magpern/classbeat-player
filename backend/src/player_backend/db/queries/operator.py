@@ -20,3 +20,19 @@ ALLOWLIST_LIST: Final[Query] = Query(
 )
 
 PURGE_EXPIRED: Final[Query] = Query("SELECT player.auth_purge_expired()")
+
+# ADR 0010, section 8: `account link`. The tenant policy lets player_owner (the tables' owner,
+# under FORCE ROW LEVEL SECURITY) reach the one account set for the transaction, and no other.
+SET_ACCOUNT: Final[Query] = Query("SELECT set_config('app.account_id', %s, true)")
+LINK_ACCOUNT: Final[Query] = Query(
+    "UPDATE player.accounts SET kind = 'instructor', classbeat_issuer = %s, "
+    "classbeat_subject = %s WHERE id = %s AND kind = 'unlinked' RETURNING id"
+)
+DELETE_ACCOUNT_PASSKEYS: Final[Query] = Query(
+    "DELETE FROM player.passkeys WHERE account_id = %s RETURNING id"
+)
+# The event holds no identity: the subject is never in an audit event (ADR 0010, section 9).
+ACCOUNT_LINKED_EVENT: Final[Query] = Query(
+    "INSERT INTO player.audit_events (account_id, event, detail) "
+    "VALUES (%s, 'account.linked', jsonb_build_object('by', 'operator', 'passkeys_deleted', %s))"
+)

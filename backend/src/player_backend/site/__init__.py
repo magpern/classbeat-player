@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from player_backend.site.account import router as account_router
+from player_backend.site.classbeat_sign_in import router as classbeat_sign_in_router
 from player_backend.site.classes import router as classes_router
 from player_backend.site.deps import same_origin
 from player_backend.site.devices import router as devices_router
@@ -22,6 +23,7 @@ from player_backend.site.source_links import router as source_links_router
 
 router = APIRouter(prefix="/api/site", dependencies=[Depends(same_origin)])
 router.include_router(sign_in_router)
+router.include_router(classbeat_sign_in_router)
 router.include_router(passkey_sign_in_router)
 router.include_router(passkeys_router)
 router.include_router(sessions_router)

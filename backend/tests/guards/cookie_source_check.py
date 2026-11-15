@@ -19,7 +19,7 @@ import ast
 from pathlib import Path
 
 COOKIE_MODULE = "player_backend/site/cookies.py"
-READERS = frozenset({"session_cookie_token", "login_cookie_token"})
+READERS = frozenset({"session_cookie_token", "login_cookie_token", "classbeat_cookie_token"})
 _COOKIE_NAMES = frozenset({"Cookie", "SimpleCookie", "BaseCookie", "cookies"})
 
 

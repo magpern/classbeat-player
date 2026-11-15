@@ -3,6 +3,7 @@ the executor's pool is opened when the server starts the app and closed when it 
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -13,6 +14,8 @@ from fastapi import FastAPI, Request, Response
 
 from player_backend.bearer_blocks import BearerBlocks
 from player_backend.body_cap import install_body_cap
+from player_backend.classbeat_client import ClassbeatClient, client_from
+from player_backend.classbeat_settings import ClassbeatSettings
 from player_backend.control_page import (
     CONTROL_DIR,
     RIDER_DIR,
@@ -52,18 +55,24 @@ def create_app(
     live_recheck: RecheckTiming | None = RecheckTiming(),  # noqa: B008 (frozen)
     control_dir: Path = CONTROL_DIR,
     rider_dir: Path = RIDER_DIR,
+    classbeat: ClassbeatClient | None = None,
 ) -> FastAPI:
     """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand.
 
     `control_dir` is the built companion page and `rider_dir` the built rider page
-    (control_page.py), each read once, here.
+    (control_page.py), each read once, here. `classbeat` None: no sign-in with classbeat.
     """
     configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         pool = open_pool(settings.database_url)
-        app.state.site = SiteState(settings=settings, pool=pool, mailer=mailer or NoMailer())
+        app.state.site = SiteState(
+            settings=settings, pool=pool, mailer=mailer or NoMailer(), classbeat=classbeat
+        )
+        if classbeat is not None and not await asyncio.to_thread(classbeat.keys.refresh):
+            # ADR 0010, section 3: fetched at start; a token is refused until a fetch succeeds.
+            _log.warning("classbeat key set not fetched")
         # ADR 0002, section 8: the live sessions, in this process's memory only.
         app.state.live = service = LiveService(Registry(), pool)
         # Its WebSocket connections (live/ws.py), told by the registry of ends and drops.
@@ -143,6 +152,13 @@ def create_app(
 def app_from_env() -> FastAPI:
     """Entry point for the server: `uvicorn --factory player_backend.app:app_from_env`.
 
-    The SMTP mailer when `PLAYER_SMTP_HOST` is set (smtp_settings.py), else `NoMailer`.
+    The SMTP mailer when `PLAYER_SMTP_HOST` is set (smtp_settings.py), else `NoMailer`. Sign-in
+    with classbeat when `PLAYER_CLASSBEAT_ISSUER` is set (classbeat_settings.py).
     """
-    return create_app(Settings.from_env(), mailer_from_env())
+    settings = Settings.from_env()
+    classbeat = ClassbeatSettings.from_env(settings.site_origin)
+    return create_app(
+        settings,
+        mailer_from_env(),
+        classbeat=None if classbeat is None else client_from(classbeat),
+    )
