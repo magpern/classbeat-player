@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Answer } from "../../src/site/core/answer.ts";
-import { ACCOUNT_SUBS, accountPlateWords, CONFIRM_WORDS, isRecentRefusal, outcomeOf, plateOf } from "../../src/site/core/account-model.ts";
+import { ACCOUNT_SUBS, accountPlateWords, CONFIRM_WORDS, isPasskeysClosed, isRecentRefusal, outcomeOf, plateOf } from "../../src/site/core/account-model.ts";
 import { rowAction, SESSION_WORDS, sessionsOf } from "../../src/site/core/sessions-model.ts";
 import { impurities } from "../lib/core-purity.ts";
 
@@ -34,8 +34,19 @@ describe("the answer to a change", () => {
 
   it("words the plates; 'Confirm it is you' as the spec has it", () => {
     assert.equal(accountPlateWords({ kind: "confirm" }).head, "Confirm it is you");
-    assert.deepEqual([CONFIRM_WORDS.passkey, CONFIRM_WORDS.link], ["Use a passkey", "Email me a link"]);
-    for (const k of ["not-added", "offline", "server"] as const) assert.ok(accountPlateWords({ kind: k }).detail.length > 0, k);
+    assert.equal(CONFIRM_WORDS.classbeat, "Confirm with classbeat");
+    for (const k of ["not-added", "passkeys-closed", "offline", "server"] as const) assert.ok(accountPlateWords({ kind: k }).detail.length > 0, k);
+    assert.equal(accountPlateWords({ kind: "passkeys-closed" }).head, "Passkeys are not available for this account");
+  });
+
+  it("reads a 403 passkeys_closed as its own plate, never as 'Confirm it is you' (ADR 0010, section 7)", () => {
+    const closed: Answer = { kind: "refused", status: 403, code: "passkeys_closed" };
+    assert.ok(isPasskeysClosed(closed));
+    assert.ok(!isRecentRefusal(closed));
+    assert.deepEqual(plateOf(closed), { kind: "passkeys-closed" });
+    assert.deepEqual(outcomeOf(closed), { kind: "plate", plate: { kind: "passkeys-closed" } });
+    assert.ok(!isPasskeysClosed({ kind: "refused", status: 409, code: "passkeys_closed" }));
+    assert.ok(!isPasskeysClosed(RECENT));
   });
 
   it("lists the four sub-pages in order", () => {

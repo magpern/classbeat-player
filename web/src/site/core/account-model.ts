@@ -2,6 +2,8 @@
 // sub-page links, what the answer to a change means, the plates and "Confirm it is you". Pure: no
 // I/O. A change that needs a recent sign-in is never repeated for the person: a 403
 // `recent_sign_in_required` only shows the plate, and they press the button again afterwards.
+// A 403 `passkeys_closed` (ADR 0010, section 7) is its own plate: no sign-in again can open it, so
+// it never asks to confirm.
 import type { Answer } from "./answer.ts";
 import { waitWords } from "./answer.ts";
 
@@ -22,6 +24,7 @@ export const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 export type AccountPlate =
   | { readonly kind: "confirm" }
   | { readonly kind: "not-added" }
+  | { readonly kind: "passkeys-closed" }
   | { readonly kind: "too-many"; readonly retryAfter: number | null }
   | { readonly kind: "offline" }
   | { readonly kind: "server" };
@@ -31,9 +34,13 @@ export type Outcome = { readonly kind: "done"; readonly body: unknown } | { read
 
 export const isRecentRefusal = (a: Answer): boolean => a.kind === "refused" && a.status === 403 && a.code === "recent_sign_in_required";
 
-/** The plate for an answer that is not a success, a 404 or a 401. */
+/** Adding a passkey is closed for this account's kind (ADR 0010, section 7). */
+export const isPasskeysClosed = (a: Answer): boolean => a.kind === "refused" && a.status === 403 && a.code === "passkeys_closed";
+
+/** The plate for an answer that is not a success, a 404 or a 401. Only `recent_sign_in_required` asks to confirm. */
 export function plateOf(a: Answer): AccountPlate {
   if (isRecentRefusal(a)) return { kind: "confirm" };
+  if (isPasskeysClosed(a)) return { kind: "passkeys-closed" };
   if (a.kind === "too_many") return { kind: "too-many", retryAfter: a.retryAfter };
   return a.kind === "offline" ? { kind: "offline" } : { kind: "server" };
 }
@@ -53,13 +60,10 @@ export interface Words {
 
 export const CONFIRM_WORDS = {
   head: "Confirm it is you",
-  detail: "For this change you need to have signed in within the last 10 minutes. After that you come back here.",
-  passkey: "Use a passkey",
-  waiting: "Waiting for your passkey…",
-  waitingLine: "Waiting for your passkey. Follow the prompt from your browser or device.",
-  link: "Email me a link",
-  done: "You signed in again",
-  doneDetail: "Nothing was changed for you. Make the change again.",
+  detail: "For this change you need to have signed in within the last 10 minutes. Sign in again with classbeat, which takes you to your classes, then come back here and make the change again.",
+  classbeat: "Confirm with classbeat",
+  waiting: "Opening classbeat…",
+  waitingLine: "Opening classbeat. Nothing was changed here.",
 } as const;
 
 export function accountPlateWords(p: AccountPlate): Words {
@@ -68,6 +72,8 @@ export function accountPlateWords(p: AccountPlate): Words {
       return { head: CONFIRM_WORDS.head, detail: CONFIRM_WORDS.detail };
     case "not-added":
       return { head: "The passkey was not added", detail: "Your browser or device cancelled or refused it. Nothing was saved." };
+    case "passkeys-closed":
+      return { head: "Passkeys are not available for this account", detail: "You sign in with classbeat. Passkeys already listed here can still be renamed and removed." };
     case "too-many":
       return { head: "Please wait a little", detail: `You have asked for too much in a short time. Try again ${waitWords(p.retryAfter)}. Nothing was changed.` };
     case "offline":

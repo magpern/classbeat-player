@@ -49,6 +49,12 @@ describe("after adding", () => {
     assert.deepEqual(options({ kind: "offline" }), { kind: "plate", plate: { kind: "offline" } });
     assert.deepEqual(options({ kind: "too_many", retryAfter: 30 }), { kind: "plate", plate: { kind: "too-many", retryAfter: 30 } });
   });
+
+  it("reads 403 passkeys_closed from either step as its own plate, never 'Confirm it is you' (ADR 0010, section 7)", () => {
+    const closed = refused(403, "passkeys_closed");
+    assert.deepEqual(options(closed), { kind: "plate", plate: { kind: "passkeys-closed" } });
+    assert.deepEqual(register(closed), { kind: "plate", plate: { kind: "passkeys-closed" } });
+  });
 });
 
 describe("after renaming", () => {

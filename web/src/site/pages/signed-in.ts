@@ -22,8 +22,6 @@ export interface SignedInEnv {
   readonly signedOut: () => void;
   /** The account was deleted: Sign in, with "Your account was deleted". */
   readonly deleted: () => void;
-  /** "Confirm it is you" by email: Sign in, which comes back to this page afterwards. */
-  readonly confirmByLink: () => void;
 }
 
 export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedInEnv, view?: View): void {

@@ -10,7 +10,7 @@ import { instrument } from "./site-instrument.ts";
 import { linkRequest } from "./site-mail.ts";
 import type { Passkey } from "./site-instrument.ts";
 import { passkeyStandIn } from "./site-passkey.ts";
-import { SOURCE_ORIGIN } from "./site-source-origin.ts";
+import { CLASSBEAT_ORIGIN, SOURCE_ORIGIN } from "./site-source-origin.ts";
 import { trapKit } from "./site-trap-kit.ts";
 
 export const ORIGIN = "https://site.test";
@@ -63,6 +63,8 @@ export interface FakeSite {
   readonly external: string[];
   /** Top-level navigations to the linked app's site (SOURCE_ORIGIN), in order: each cancelled, so the page stays. */
   readonly left: string[];
+  /** Top-level navigations to classbeat (CLASSBEAT_ORIGIN), in order: each cancelled, so the page stays. */
+  readonly toClassbeat: string[];
   /** API requests with no answer in the script (answered 500). */
   readonly unscripted: string[];
   /** API requests the backend would refuse as cross-site (answered 403 `cross_site_request`). */
@@ -130,7 +132,7 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
     if (isJavascriptUrl(e.url)) fromBrowser.push({ kind: "script", detail: "navigation javascript:" });
   });
   await cdp.send("Page.enable");
-  const site: FakeSite = { page, context, api: [], urls: [], external: [], left: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
+  const site: FakeSite = { page, context, api: [], urls: [], external: [], left: [], toClassbeat: [], unscripted: [], crossSite: [], console: [], realms, release: async () => undefined };
   const held: Route[] = [];
   const turns = new Map<string, number>();
   page.on("console", (m) => site.console.push(`${m.type()} ${m.text()}`));
@@ -146,6 +148,10 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
     site.urls.push(request.url());
     if (url.origin === SOURCE_ORIGIN && request.isNavigationRequest() && request.frame() === page.mainFrame()) {
       site.left.push(request.url());
+      return route.abort("aborted");
+    }
+    if (url.origin === CLASSBEAT_ORIGIN && request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      site.toClassbeat.push(request.url());
       return route.abort("aborted");
     }
     if (url.origin !== ORIGIN) {

@@ -105,11 +105,6 @@ function render(focus: "heading" | "none"): void {
         returnTo = null;
         go("/sign-in", "deleted");
       },
-      // "Confirm it is you" by email: the sign-in comes back here, kept in memory as above.
-      confirmByLink: () => {
-        returnTo = asked === null ? null : { to: asked, load: false };
-        go("/sign-in");
-      },
     };
     signedInPage(main, page, env, viewOf(page, env));
   }
