@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Answer } from "../../src/site/core/answer.ts";
-import { afterAdd, afterRename, atLimit, countWords, PASSKEY_MAX, passkeysOf } from "../../src/site/core/passkeys-model.ts";
+import { addOpenOf, afterAdd, afterRename, atLimit, countWords, PASSKEY_MAX, PASSKEY_WORDS, passkeysOf } from "../../src/site/core/passkeys-model.ts";
+import { plateWords } from "../../src/site/core/sign-in-model.ts";
 
 const K = { id: "4d5e6f70-8192-4dae-9f20-3b4c5d6e7f80", name: "Laptop", created_at: "2026-11-03T09:00:00+00:00", last_used_at: null };
 const refused = (status: number, code: string): Answer => ({ kind: "refused", status, code });
@@ -24,6 +25,36 @@ describe("the list and the limit", () => {
     assert.deepEqual(passkeysOf({ passkeys: [K] }), [{ id: K.id, name: "Laptop", addedAt: K.created_at, lastUsedAt: null }]);
     const bad: unknown[] = [null, { passkeys: null }, { passkeys: [{ ...K, id: "x" }] }, { passkeys: [{ ...K, last_used_at: 3 }] }, { passkeys: [{ ...K, name: 1 }] }];
     for (const body of bad) assert.equal(passkeysOf(body), null, JSON.stringify(body));
+  });
+});
+
+describe("whether adding is open (can_add, ADR 0010, section 7)", () => {
+  it("is open only for a body of the schema with can_add true", () => {
+    assert.equal(addOpenOf({ passkeys: [K], can_add: true }), true);
+    assert.equal(addOpenOf({ can_add: true, passkeys: [] }), true);
+    assert.equal(addOpenOf({ passkeys: [K], can_add: false }), false);
+  });
+
+  it("fails closed for an answer that does not match the schema", () => {
+    const bad: unknown[] = [null, undefined, true, "can_add", [], [true], { passkeys: [K] }, { can_add: true }, { passkeys: [K], can_add: "true" }, { passkeys: [K], can_add: 1 }, { passkeys: [K], can_add: null }, { passkeys: [K], can_add: true, extra: 1 }, { passkeys: [K], canAdd: true }];
+    for (const body of bad) assert.equal(addOpenOf(body), false, JSON.stringify(body));
+  });
+});
+
+describe("the words (docs/design/site.md, \"Passkeys\")", () => {
+  it("never say an email link always works, and give the spec's explanation and reason line", () => {
+    for (const [key, value] of Object.entries(PASSKEY_WORDS)) {
+      const text = typeof value === "function" ? value("Laptop") : value;
+      assert.doesNotMatch(text, /email link|always works|without waiting for an email/i, key);
+    }
+    assert.equal(PASSKEY_WORDS.intro, "A passkey signs you in with this device's fingerprint, face or screen lock. Accounts that run classes sign in with classbeat and cannot add one.");
+    assert.equal(PASSKEY_WORDS.closed, "Passkeys are not available for this account. You sign in with classbeat.");
+    assert.equal(PASSKEY_WORDS.removedDetail, "You can no longer sign in with it.");
+    assert.equal(PASSKEY_WORDS.removeConsequence, "You can no longer sign in with it.");
+  });
+
+  it("'Passkey failed' points at the email form below it", () => {
+    assert.equal(plateWords({ kind: "passkey-failed" }).detail, "The request may have been cancelled, or the passkey may have been removed. Try again, or ask for an email link below.");
   });
 });
 

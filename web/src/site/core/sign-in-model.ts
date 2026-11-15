@@ -100,7 +100,7 @@ export function plateWords(p: Plate): Words {
     case "too-many":
       return { head: "Please wait a little", detail: `You have asked for too much in a short time. Try again ${waitWords(p.retryAfter)}. Nothing was changed.` };
     case "passkey-failed":
-      return { head: "That passkey could not be used", detail: "The request may have been cancelled, or the passkey may have been removed. Try again, or get a link by email." };
+      return { head: "That passkey could not be used", detail: "The request may have been cancelled, or the passkey may have been removed. Try again, or ask for an email link below." };
     case "link-refused":
       return { head: "This link cannot be used", detail: "It may have run out (a link works for 15 minutes), been used already, or been asked for in a different browser." };
     case "offline":

@@ -92,6 +92,9 @@ export function note(head: string, detail = ""): HTMLDivElement {
   return box;
 }
 
+/** A reason line: a hollow square and a sentence, for a fact (no box, no role), such as why an action is not offered. */
+export const reason = (text: string): HTMLParagraphElement => el("p", { class: "reason" }, [el("span", { class: "mark away", "aria-hidden": "true" }), t("body", text, 3)]);
+
 /** Working: a hollow circle and a sentence. Nothing turns. */
 export const working = (text: string): HTMLDivElement => el("div", { class: "status", role: "status" }, [el("span", { class: "mark work", "aria-hidden": "true" }), t("body", text, 3)]);
 

@@ -49,7 +49,10 @@ export const NEW_PASSKEY = { id: "708192a3-b4c5-4d01-a253-6e7f8091a2b3", name: "
 export const TEN = Array.from({ length: 10 }, (_, i) => ({ ...PASSKEYS[i % 3], id: `${String(i).padStart(8, "0")}-0000-4000-8000-000000000000`, name: `Passkey ${i + 1}` }));
 
 export const SESSIONS_LISTED: Script = { "GET sessions": { status: 200, body: { sessions: SESSIONS } } };
-export const PASSKEYS_LISTED: Script = { "GET passkeys": { status: 200, body: { passkeys: PASSKEYS } } };
+/** `GET passkeys` with adding open (`can_add: true`), so the add flows can be reached; the 403 `passkeys_closed` stays their fallback. */
+export const PASSKEYS_LISTED: Script = { "GET passkeys": { status: 200, body: { passkeys: PASSKEYS, can_add: true } } };
+/** `GET passkeys` for an account closed to adding (`can_add: false`), as the backend answers for every kind today (ADR 0010, section 7). */
+export const PASSKEYS_CLOSED: Script = { "GET passkeys": { status: 200, body: { passkeys: PASSKEYS, can_add: false } } };
 export const RECENT = { status: 403, body: { error: "recent_sign_in_required" } } as const;
 /** Adding a passkey is closed for every account kind there is today (ADR 0010, section 7). */
 export const CLOSED = { status: 403, body: { error: "passkeys_closed" } } as const;
@@ -83,7 +86,7 @@ export const ACCOUNT_STATES: readonly State[] = [
   p({ name: "account-sessions-confirm", path: "/account/sessions", script: { ...SESSIONS_LISTED, "POST sessions/end-all": RECENT }, steps: endAll, ready: ".plate[data-confirm=ask]" }),
   p({ name: "account-sessions-end-all-offline", path: "/account/sessions", script: { ...SESSIONS_LISTED, "POST sessions/end-all": { status: 0, fail: true } }, steps: endAll, ready: ".plate" }),
   p({ name: "account-passkeys", path: "/account/passkeys", script: PASSKEYS_LISTED, ready: ".ac-item", main: true }),
-  p({ name: "account-passkeys-empty", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: [] } } }, ready: "[data-add]" }),
+  p({ name: "account-passkeys-empty", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: [], can_add: true } } }, ready: "[data-add]" }),
   p({ name: "passkey-add", path: "/account/passkeys", script: PASSKEYS_LISTED, steps: press("Add a passkey"), ready: "input[name=name]:focus" }),
   p({ name: "passkey-add-name", path: "/account/passkeys", script: PASSKEYS_LISTED, steps: addAs("   "), ready: ".field.err" }),
   p({ name: "passkey-add-waiting", path: "/account/passkeys", passkey: "hold", script: { ...PASSKEYS_LISTED, ...regOptions }, steps: addAs("Tablet"), ready: ".status" }),
@@ -95,7 +98,7 @@ export const ACCOUNT_STATES: readonly State[] = [
   p({ name: "passkey-remove", path: "/account/passkeys", script: PASSKEYS_LISTED, steps: press("Remove"), ready: ".ac-panel [data-keep]:focus" }),
   p({ name: "passkey-remove-offline", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, [`DELETE passkeys/${PASSKEYS[0].id}`]: { status: 0, fail: true } }, steps: then(press("Remove"), press("Remove passkey")), ready: ".plate ~ .btns [data-add]:disabled" }),
   p({ name: "passkey-removed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, [`DELETE passkeys/${PASSKEYS[0].id}`]: { status: 204 } }, steps: then(press("Remove"), press("Remove passkey")), ready: ".note" }),
-  p({ name: "passkeys-limit", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: TEN } } }, ready: "[data-add]:disabled" }),
+  p({ name: "passkeys-limit", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: TEN, can_add: true } } }, ready: "[data-add]:disabled" }),
   p({ name: "recent-sign-in", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
   p({ name: "recent-sign-in-register", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, ...regOptions, "POST passkeys": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
   p({ name: "recent-sign-in-opening", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 200, hold: true } }, steps: confirmByClassbeat, ready: ".status" }),
@@ -105,6 +108,9 @@ export const ACCOUNT_STATES: readonly State[] = [
   // ADR 0010, section 7: adding is closed, at either step; the list stays, to rename and remove.
   p({ name: "passkey-add-closed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": CLOSED }, steps: addAs("Tablet"), ready: ".plate" }),
   p({ name: "passkey-add-closed-register", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, ...regOptions, "POST passkeys": CLOSED }, steps: addAs("Tablet"), ready: ".plate" }),
+  p({ name: "passkeys-closed", path: "/account/passkeys", script: PASSKEYS_CLOSED, ready: ".reason" }),
+  p({ name: "passkeys-closed-empty", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: [], can_add: false } } }, ready: ".reason" }),
+  p({ name: "passkeys-closed-malformed", path: "/account/passkeys", script: { "GET passkeys": { status: 200, body: { passkeys: PASSKEYS } } }, ready: ".reason" }),
   p({ name: "passkeys-closed-removed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": CLOSED, [`DELETE passkeys/${PASSKEYS[0].id}`]: { status: 204 } }, steps: then(addAs("Tablet"), removeFirst), ready: ".note" }),
 ];
 
@@ -152,5 +158,8 @@ export const ACCOUNT_SECRETS: Readonly<Record<string, readonly Secret[]>> = {
   "recent-sign-in-failed": [],
   "passkey-add-closed": [],
   "passkey-add-closed-register": [...REG, ...CREDENTIAL],
+  "passkeys-closed": [],
+  "passkeys-closed-empty": [],
+  "passkeys-closed-malformed": [],
   "passkeys-closed-removed": [],
 };

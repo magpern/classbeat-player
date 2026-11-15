@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
 import type { FakeSite, Passkey, Script } from "../lib/site-fake.ts";
-import { AUTHORIZE, CLOSED, NEW_CREDENTIAL, NEW_PASSKEY, PASSKEYS, PASSKEYS_LISTED, RECENT, REG_OPTIONS, TEN } from "../lib/site-account-states.ts";
+import { AUTHORIZE, CLOSED, NEW_CREDENTIAL, NEW_PASSKEY, PASSKEYS, PASSKEYS_CLOSED, PASSKEYS_LISTED, RECENT, REG_OPTIONS, TEN } from "../lib/site-account-states.ts";
 
 const START = "POST sign-in/classbeat/start";
 const FIRST = PASSKEYS[0];
@@ -48,14 +48,14 @@ describe("the list", () => {
   });
 
   it("with none, says so and offers 'Add a passkey'", async () => {
-    const site = await open({ "GET passkeys": { status: 200, body: { passkeys: [] } } }, { ready: "[data-add]" });
+    const site = await open({ "GET passkeys": { status: 200, body: { passkeys: [], can_add: true } } }, { ready: "[data-add]" });
     assert.equal(await site.page.locator(".ac-item").count(), 0);
     assert.equal(await site.page.getByRole("button", { name: "Add a passkey" }).count(), 1);
     await site.context.close();
   });
 
   it("at the limit, the add button is off and says why", async () => {
-    const site = await open({ "GET passkeys": { status: 200, body: { passkeys: TEN } } }, { ready: "[data-add]:disabled" });
+    const site = await open({ "GET passkeys": { status: 200, body: { passkeys: TEN, can_add: true } } }, { ready: "[data-add]:disabled" });
     const add = site.page.locator("[data-add]");
     const why = await add.getAttribute("aria-describedby");
     assert.ok(why);
@@ -197,7 +197,7 @@ describe("adding a passkey", () => {
   });
 
   it("at the limit by the time it is sent, reads the list again", async () => {
-    const site = await open({ "GET passkeys": [{ status: 200, body: { passkeys: PASSKEYS } }, { status: 200, body: { passkeys: TEN } }], "POST passkeys/options": { status: 409, body: { error: "too_many_passkeys" } } });
+    const site = await open({ "GET passkeys": [{ status: 200, body: { passkeys: PASSKEYS, can_add: true } }, { status: 200, body: { passkeys: TEN, can_add: true } }], "POST passkeys/options": { status: 409, body: { error: "too_many_passkeys" } } });
     await addAs(site, "Tablet");
     await site.page.waitForSelector("[data-add]:disabled");
     assert.equal(sent(site, "GET passkeys"), 2);
@@ -317,6 +317,100 @@ describe("adding is closed (ADR 0010, section 7)", () => {
     assert.match(await site.page.locator("main").innerText(), /Passkeys are not available for this account\. You sign in with classbeat\./);
     assert.equal(await site.page.locator("[data-add], form[data-add]").count(), 0);
     assert.equal(sent(site, "POST passkeys/options"), 1);
+    await site.context.close();
+  });
+});
+
+describe("closed from the start: GET passkeys says can_add (ADR 0010, section 7)", () => {
+  const REASON = "Passkeys are not available for this account. You sign in with classbeat.";
+  const noAdd = async (site: FakeSite): Promise<void> => {
+    assert.equal(await site.page.locator("[data-add], form[data-add]").count(), 0, "no add action");
+    assert.equal(await site.page.getByRole("button", { name: "Add a passkey" }).count(), 0);
+  };
+  /** The reason line: the hollow square and the two sentences, no box and no role, above the count. */
+  const reasonLine = async (site: FakeSite): Promise<void> => {
+    const line = site.page.locator(".reason");
+    assert.equal(await line.count(), 1);
+    assert.equal((await line.innerText()).trim(), REASON);
+    assert.equal(await line.locator(".mark.away").count(), 1);
+    assert.equal(await line.getAttribute("role"), null);
+    assert.equal(await site.page.locator(".plate").count(), 0, "a fact, not a plate");
+  };
+
+  it("can_add true offers 'Add a passkey' and no reason line", async () => {
+    const site = await open();
+    assert.equal(await site.page.getByRole("button", { name: "Add a passkey" }).count(), 1);
+    assert.equal(await site.page.locator(".reason").count(), 0);
+    assert.doesNotMatch(await site.page.locator("main").innerText(), /email link|always works/i);
+    await site.context.close();
+  });
+
+  it("can_add false shows the reason line in place of 'Add a passkey', and sends nothing", async () => {
+    const site = await open(PASSKEYS_CLOSED, { ready: ".reason" });
+    await reasonLine(site);
+    await noAdd(site);
+    const main = await site.page.locator("main").innerText();
+    assert.doesNotMatch(main, /A passkey signs you in|You have no passkeys yet|Confirm it is you/);
+    // Where "Add a passkey" would be: above the count and the rows.
+    assert.equal(await site.page.locator(".reason + .small").innerText(), "3 of 10 passkeys");
+    assert.equal(await site.page.locator(".ac-item").count(), 3);
+    await settled(site, 600);
+    assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys"]);
+    await site.context.close();
+  });
+
+  it("can_add false with no passkeys shows the reason line alone", async () => {
+    const site = await open({ "GET passkeys": { status: 200, body: { passkeys: [], can_add: false } } }, { ready: ".reason" });
+    await reasonLine(site);
+    await noAdd(site);
+    assert.equal(await site.page.locator(".ac-item").count(), 0);
+    assert.doesNotMatch(await site.page.locator("main").innerText(), /You have no passkeys yet/);
+    await site.context.close();
+  });
+
+  it("can_add false keeps the passkeys renamable and removable, with the reason line after each", async () => {
+    const rename = `PATCH passkeys/${FIRST.id}`;
+    const remove = `DELETE passkeys/${PASSKEYS[1].id}`;
+    const site = await open({ ...PASSKEYS_CLOSED, [rename]: { status: 200, body: { ...FIRST, name: "Old laptop" } }, [remove]: { status: 204 } }, { ready: ".reason" });
+    await press(site.page, "Rename");
+    await site.page.fill("input[name=name]", "Old laptop");
+    await site.page.keyboard.press("Enter");
+    await site.page.waitForFunction(() => document.querySelector(".ac-item")?.textContent?.includes("Old laptop"));
+    await reasonLine(site);
+    await site.page.locator(`[data-row="${PASSKEYS[1].id}"][data-act="remove"]`).click();
+    await press(site.page, "Remove passkey");
+    await site.page.waitForSelector(".note");
+    assert.match(await site.page.locator(".note").innerText(), /You can no longer sign in with it\./);
+    assert.doesNotMatch(await site.page.locator(".note").innerText(), /Email links/);
+    await reasonLine(site);
+    await noAdd(site);
+    assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys", rename, remove]);
+    await site.context.close();
+  });
+
+  for (const [what, body] of [
+    ["no can_add", { passkeys: PASSKEYS }],
+    ["can_add as a string", { passkeys: PASSKEYS, can_add: "true" }],
+    ["can_add null", { passkeys: PASSKEYS, can_add: null }],
+    ["a field the schema does not allow", { passkeys: PASSKEYS, can_add: true, kind: "follower" }],
+  ] as const) {
+    it(`an answer that does not match the schema (${what}) fails closed: no add action`, async () => {
+      const site = await open({ "GET passkeys": { status: 200, body } }, { ready: ".reason" });
+      await noAdd(site);
+      await reasonLine(site);
+      assert.equal(await site.page.locator(".ac-item").count(), 3);
+      await settled(site, 600);
+      assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys"]);
+      await site.context.close();
+    });
+  }
+
+  it("a list read again that says can_add false closes adding too", async () => {
+    const site = await open({ "GET passkeys": [{ status: 200, body: { passkeys: PASSKEYS, can_add: true } }, { status: 200, body: { passkeys: PASSKEYS, can_add: false } }], "POST passkeys/options": { status: 409, body: { error: "too_many_passkeys" } } });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".reason");
+    await noAdd(site);
+    assert.equal(sent(site, "GET passkeys"), 2);
     await site.context.close();
   });
 });
