@@ -56,6 +56,13 @@ const FOLLOW = "app/src/main/kotlin/org/classbeat/spike/follower/FollowSession.k
 const SCENE = "app/src/main/kotlin/org/classbeat/spike/follower/SceneActivity.kt";
 const CORE = "core/src/main/kotlin/org/classbeat/spike/SpotifyFilter.kt";
 const APP_GRADLE = "app/build.gradle.kts";
+const ROOT_GRADLE = "build.gradle.kts";
+const SETTINGS_GRADLE = "settings.gradle.kts";
+const CORE_GRADLE = "core/build.gradle.kts";
+const WIRING = "        tasks.matching { it.name in guarded }";
+/** A line placed before the check wiring in the app build script. */
+const beforeWiring = (line: string) => mutate(APP_GRADLE, WIRING, `        ${line}\n${WIRING}`);
+const append = (path: string, line: string) => mutate(path, /$/, `\n${line}\n`);
 const perm = (name: string) => mutate(MANIFEST, "<application", `<uses-permission android:name="android.permission.${name}" />\n    <application`);
 
 describe("the real sources", () => {
@@ -228,6 +235,37 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["NB-C: a second listener in a block comment", "listener", () => mutate(READER, "class SpotifyReader", "/* class Other : NotificationListenerService() */\nclass SpotifyReader")],
   ["NB-C: a non-empty listener function in a block comment", "listener", () => mutate(LISTENER, "NotificationListenerService() {", "NotificationListenerService() {\n    /* fun x() { 1 } */")],
   ["NB-C: a second wiring statement in a block comment", "manifest", () => mutate(APP_GRADLE, "        tasks.matching { it.name in guarded }", "        /* tasks.matching { it.name in guarded }.configureEach { dependsOn(check) } */\n        tasks.matching { it.name in guarded }")],
+  // Review of #568, B1: the check cannot be switched off, redirected or detached (the six probes, then more).
+  ["B1: doFirst throws StopExecutionException", "manifest", () => beforeWiring("check.configure { doFirst { throw StopExecutionException() } }")],
+  ["B1: actions.clear()", "manifest", () => beforeWiring("check.configure { actions.clear() }")],
+  ["B1: the check pointed at the source manifest", "manifest", () => beforeWiring('check.configure { manifest.set(layout.projectDirectory.file("src/main/AndroidManifest.xml")) }')],
+  ["B1: setDependsOn detaches the check", "manifest", () => beforeWiring("tasks.configureEach { setDependsOn(dependsOn.filterNot { it === check }) }")],
+  ["B1: subprojects switches the check off from the root script", "manifest", () => append(ROOT_GRADLE, 'subprojects { tasks.configureEach { if (name.startsWith("verify")) enabled = false } }')],
+  ["B1: startParameter excludes the check from settings", "manifest", () => append(SETTINGS_GRADLE, 'gradle.startParameter.excludedTaskNames.add(":app:verifyDebugManifestPermissions")')],
+  ["B1: whenTaskAdded in the core script", "manifest", () => append(CORE_GRADLE, "tasks.whenTaskAdded { }")],
+  ["B1: a second use of the check name", "manifest", () => beforeWiring("val again = check")],
+  ["B1: tasks.named for the check", "manifest", () => beforeWiring('tasks.named("verifyDebugManifestPermissions") { }')],
+  ["B1: the registration with another input", "manifest", () => mutate(APP_GRADLE, "variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)", "layout.projectDirectory.file(\"src/main/AndroidManifest.xml\")")],
+  ["B1: the core test task disabled", "manifest", () => mutate(CORE_GRADLE, "useJUnitPlatform()", "useJUnitPlatform(); enabled = false")],
+  // Review of #568, N1: the body of CheckManifest is pinned.
+  ["N1: the allowed pattern widened", "manifest", () => mutate(APP_GRADLE, 'Regex("""org', 'Regex(""".*|org')],
+  ["N1: the check's result ignored", "manifest", () => mutate(APP_GRADLE, "if (extra.isNotEmpty())", "if (false)")],
+  // Review of #568, B2: Intent, ComponentName and getSystemService are never declared, bound or passed.
+  ["B2: fun <T> Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> Intent(a: Any, c: Class<T>): Class<T> = c\nclass SpotifyReader")],
+  ["B2: fun <T> T.Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> T.Intent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
+  ["B2: fun X.Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun Any.Intent(a: Any, c: Class<*>) = c\nclass SpotifyReader")],
+  ["B2: val Intent as a lambda", "reflection", () => mutate(READER, "class SpotifyReader", "val Intent = { a: Any, c: Class<*> -> c }\nclass SpotifyReader")],
+  ["B2: var Intent", "reflection", () => mutate(READER, "class SpotifyReader", "var Intent = { a: Any, c: Class<*> -> c }\nclass SpotifyReader")],
+  ["B2: a parameter named getSystemService", "reflection", () => mutate(READER, "class SpotifyReader", "fun z(getSystemService: (Class<*>) -> Any) = getSystemService(String::class.java)\nclass SpotifyReader")],
+  ["B2: a lambda parameter named Intent", "reflection", () => mutate(READER, "class SpotifyReader", "val f = { Intent: Any, c: Class<*> -> c }\nclass SpotifyReader")],
+  ["B2: a lambda parameter without a type", "reflection", () => mutate(READER, "class SpotifyReader", "val f = listOf(1).map { ComponentName -> ComponentName }\nclass SpotifyReader")],
+  ["B2: a loop variable named Intent", "reflection", () => mutate(READER, "class SpotifyReader", "fun g(xs: List<Int>) { for (Intent in xs) { } }\nclass SpotifyReader")],
+  ["B2: a destructured name", "reflection", () => mutate(READER, "class SpotifyReader", "val (Intent, b) = Pair(1, 2)\nclass SpotifyReader")],
+  ["B2: class Intent with generics", "reflection", () => mutate(READER, "class SpotifyReader", "class Intent<T>(a: Any, val c: Class<T>)\nclass SpotifyReader")],
+  ["B2: a bare reference passed on", "reflection", () => mutate(READER, "class SpotifyReader", "val f = ::Intent\nclass SpotifyReader")],
+  // Review of #568, N2 and N3.
+  ["N2: an import alias has its own message", "reflection", () => mutate(READER, "class SpotifyReader", "import a.b.C as Intent\nclass SpotifyReader")],
+  ["N3: the listener shape on the second view (a nested comment hides a member)", "listener", () => mutate(LISTENER, "/**", "/* /* */ val boot = 1 */\n\n/**")],
 ];
 
 describe("each hard limit fails when broken", () => {
@@ -237,6 +275,13 @@ describe("each hard limit fails when broken", () => {
       assert.ok(found.some((x) => x.startsWith(`${rule}:`)), `expected a "${rule}" violation, got ${JSON.stringify(found)}`);
     });
   }
+});
+
+describe("messages", () => {
+  it("an import alias or cast named Intent says why", () => {
+    const found = checkTree(mutate(READER, "class SpotifyReader", "import a.b.C as Intent\nclass SpotifyReader"));
+    assert.ok(found.some((x) => /import alias or a cast/.test(x)), JSON.stringify(found));
+  });
 });
 
 describe("stripComments", () => {

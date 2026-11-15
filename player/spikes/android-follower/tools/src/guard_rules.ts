@@ -12,6 +12,7 @@ export interface Tree {
 import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
 import { listenerShapeProblem, networkLoadsProblem, readerOrderProblem, sessionsProblem } from "./kotlin_shape.js";
 import { reflectionProblem } from "./reflection_rules.js";
+import { gradleShapeProblem } from "./gradle_shape.js";
 import { catalogProblem, gradleWiringProblems } from "./gradle_rules.js";
 
 export { stripComments };
@@ -56,7 +57,8 @@ export function checkTree(tree: Tree): string[] {
   const listeners = kt.filter(([p, t]) => isListener(p, t));
   if (listeners.length !== 1 || !listeners[0]![0].endsWith("/SpikeListener.kt")) add("listener", "app", "exactly one listener, SpikeListener.kt, may exist");
   for (const [p, t] of listeners) {
-    const shape = listenerShapeProblem(t);
+    // The second view also drops block comments (the doc comment), with a plain non-nesting pattern.
+    const shape = [t, liteText(tree.files[p]!).replace(/\/\*[\s\S]*?\*\//g, " ")].map(listenerShapeProblem).find(Boolean);
     if (shape) add("listener", p, shape);
     // The two-views rule: the stripped text and the raw text minus `//` lines must both say the same.
     for (const x of [t, liteText(tree.files[p]!)]) {
@@ -135,6 +137,8 @@ export function checkTree(tree: Tree): string[] {
       }
       for (const m of x.matchAll(/https?:\/\/[^"\s)]*/g)) add("network", p, `URL ${m[0]}`);
     }
+    const shape = views.map((x) => gradleShapeProblem(p, x)).find(Boolean);
+    if (shape) add("manifest", p, shape);
     const catalog = views.map(catalogProblem).find(Boolean);
     if (catalog) add("dependencies", p, catalog);
   }
@@ -146,8 +150,6 @@ export function checkTree(tree: Tree): string[] {
   if (app) {
     const wiring = [app[1], liteText(tree.files[app[0]]!)].flatMap((x) => gradleWiringProblems(x, GUARDED_TASKS));
     for (const what of new Set(wiring)) add("manifest", "app/build.gradle.kts", what);
-    // The check task must not be switched off or made conditional: `check.configure { enabled = false }`.
-    if ([app[1], liteText(tree.files[app[0]]!)].some((x) => /\b(?:enabled|isEnabled|setEnabled|onlyIf|setOnlyIf)\b/.test(x))) add("manifest", "app/build.gradle.kts", "enabled and onlyIf are not allowed: they can switch the merged-manifest check off");
   }
 
   // The pure module imports no Android class and no I/O.

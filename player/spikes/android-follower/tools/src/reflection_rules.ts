@@ -13,9 +13,27 @@ const ALLOWED_USES = [
   /\bjavaClass\s*\??\.(?:name|simpleName)\b/g,
 ];
 
+const SHADOWED = "(?:Intent|ComponentName|getSystemService)";
+
+/**
+ * The names the allowed class-object shapes rely on may not be declared, aliased, passed or bound again.
+ * An allowlist: after the imports, each use is a call `Name(` or a qualifier `Name.`; anything else
+ * (a type, a parameter, a lambda parameter, `val`, `typealias`, a bare reference) is refused. A declaration
+ * that is itself a call shape (`fun <T> T.Intent(`, `class Intent(`) is refused by its keyword.
+ */
+export function shadowProblem(text: string): string | null {
+  if (new RegExp(`\\bas\\s+${SHADOWED}\\b`).test(text)) return "`as Intent`, `as ComponentName` or `as getSystemService` is an import alias or a cast to a name the guard relies on";
+  const code = text.replace(/^\s*(?:import|package)\s.*$/gm, "");
+  const declared = new RegExp(`\\b(?:class|interface|object|typealias|val|var)\\b[^\\n=]*?\\b${SHADOWED}\\b|\\bfun\\b[^\\n{=]*?\\b${SHADOWED}\\s*\\(`);
+  if (declared.test(code) || new RegExp(`\\b${SHADOWED}\\b(?!\\s*[(.])`).test(code)) return "declares, binds or passes Intent, ComponentName or getSystemService: they may only be called or used as a qualifier";
+  return null;
+}
+
 export function reflectionProblem(text: string): string | null {
+  const shadow = shadowProblem(text);
+  if (shadow) return shadow;
   if (NAMES.test(text)) return "uses reflection or class loading";
   const rest = ALLOWED_USES.reduce((t, re) => t.replace(re, " "), text);
-  if (/::\s*class\b|\bjavaClass\b|\bfun\s+(?:[\w.<>]+\.)?(?:Intent|ComponentName|getSystemService)\b|\b(?:class|interface|object|typealias|as)\s+(?:Intent|ComponentName|getSystemService)\b/.test(rest)) return "reads a class object other than for its name, getSystemService(X::class.java) or Intent(c, X::class.java)";
+  if (/::\s*class\b|\bjavaClass\b/.test(rest)) return "reads a class object other than for its name, getSystemService(X::class.java) or Intent(c, X::class.java)";
   return null;
 }
