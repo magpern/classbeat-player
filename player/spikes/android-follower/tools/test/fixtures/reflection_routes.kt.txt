@@ -1,0 +1,23 @@
+class Mgr { fun getActiveSessions(x: String?): String = "SESSIONS($x)" }
+fun peek(c: Class<*>, mgr: Any): Any? {
+    val find = Class<*>::getMethod
+    val meth = find(c, "getActive" + "Sessions", arrayOf(String::class.java))
+    return meth(mgr, null)
+}
+fun peek2(c: Class<*>, mgr: Any): Any? {
+    val meth = c.getMethod ("getActive" + "Sessions", String::class.java)
+    return meth(mgr, "y")
+}
+val a = """x""""
+val b = "/*"
+val hiddenByRaw = 1
+val c2 = "*/"
+/* /* */ " */
+val b2 = "/*"
+val hiddenByNested = 2
+val c3 = "*/"
+fun main() {
+    println(peek(Mgr::class.java, Mgr()))
+    println(peek2(Mgr::class.java, Mgr()))
+    println("a=[" + a + "] " + hiddenByRaw + " " + hiddenByNested)
+}

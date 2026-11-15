@@ -31,8 +31,14 @@ function code(src: string, from: number, inTemplate: boolean): [string, number] 
     } else if (src.startsWith("//", i)) {
       while (i < src.length && src[i] !== "\n") i++;
     } else if (src.startsWith("/*", i)) {
-      const end = src.indexOf("*/", i + 2);
-      i = end < 0 ? src.length : end + 2;
+      // Kotlin block comments nest.
+      let level = 1;
+      i += 2;
+      while (i < src.length && level > 0) {
+        if (src.startsWith("/*", i)) { level++; i += 2; }
+        else if (src.startsWith("*/", i)) { level--; i += 2; }
+        else i++;
+      }
       out += " ";
     } else if (inTemplate && c === "}" && depth === 0) {
       return [out, i];
@@ -51,7 +57,9 @@ function text(src: string, from: number, raw: boolean): [string, number] {
   let i = from;
   while (i < src.length) {
     if (raw ? src.startsWith('"""', i) : src[i] === '"') {
-      const len = raw ? 3 : 1;
+      // A raw string closes at the last three quotes of a run of quotes: `"""x""""` is `x"`.
+      let len = 1;
+      if (raw) for (len = 3; src[i + len] === '"'; len++);
       return [out + src.slice(i, i + len), i + len];
     }
     if (src.startsWith("${", i)) {

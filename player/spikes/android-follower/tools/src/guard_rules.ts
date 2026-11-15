@@ -62,27 +62,32 @@ export function checkTree(tree: Tree): string[] {
     if (funs !== empty) add("listener", p, "every function of the notification listener must have an empty body");
     if (funs === 0) add("listener", p, "no callbacks found: the check cannot see the listener");
   }
+  // Name lists run on the stripped text and on the raw text: a name inside a comment or string fails too,
+  // so a parser slip can only cause a false positive, never hide code.
+  const both = (re: RegExp, t: string, raw: string) => re.test(t) || re.test(raw);
   for (const [p, t] of kt) {
     // Imports are left out: `android.service.notification.X` is a package, not a read.
-    if (NOTIFICATION_READ.test(t.replace(/^\s*(?:import|package)\s.*$/gm, ""))) add("notifications", p, "reads notifications");
+    const noImports = (x: string) => x.replace(/^\s*(?:import|package)\s.*$/gm, "");
+    if (both(NOTIFICATION_READ, noImports(t), noImports(tree.files[p]!))) add("notifications", p, "reads notifications");
     if (!p.endsWith("/SpikeListener.kt") && /StatusBarNotification/.test(t)) add("notifications", p, "touches StatusBarNotification outside the listener");
   }
 
   for (const [p, t] of kt) {
-    if (TRANSPORT.test(t)) add("transport", p, "sends or can send a transport command");
-    if (AUDIO.test(t)) add("audio", p, "uses an audio player, recorder or Spotify SDK");
-    if (BLUETOOTH.test(t)) add("bluetooth", p, "uses Bluetooth");
-    if (NETWORK.test(t)) add("network", p, "uses a network class or a JavaScript bridge");
-    if (SECRET.test(t)) add("secrets", p, "names a credential");
-    for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
+    const raw = tree.files[p]!;
+    if (both(TRANSPORT, t, raw)) add("transport", p, "sends or can send a transport command");
+    if (both(AUDIO, t, raw)) add("audio", p, "uses an audio player, recorder or Spotify SDK");
+    if (both(BLUETOOTH, t, raw)) add("bluetooth", p, "uses Bluetooth");
+    if (both(NETWORK, t, raw)) add("network", p, "uses a network class or a JavaScript bridge");
+    if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
+    for (const m of raw.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
     if (/allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(t)) add("webview", p, "opens file access");
     if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
     const loads = networkLoadsProblem(t);
     if (loads) add("webview", p, loads);
-    const reflection = reflectionProblem(t);
+    const reflection = reflectionProblem(t) ?? reflectionProblem(raw);
     if (reflection) add("reflection", p, reflection);
-    if (SESSION_SOURCES.test(t)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
-    if (!p.endsWith(READER) && /\bMediaSessionManager\b/.test(t)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
+    if (both(SESSION_SOURCES, t, raw)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
+    if (!p.endsWith(READER) && both(/\bMediaSessionManager\b/, t, raw)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
   }
   // Source files come from an allowlist of paths: no .java, no other source set, no other build script.
   for (const p of tree.paths) {
@@ -109,10 +114,12 @@ export function checkTree(tree: Tree): string[] {
 
   // The build: pinned dependencies from an allowlist, debug signing only, the manifest check in place.
   for (const [p, t] of kts) {
-    if (SIGNING.test(t)) add("signing", p, "defines signing");
+    const raw = tree.files[p]!;
+    if (both(SIGNING, t, raw)) add("signing", p, "defines signing");
+    // The build scripts' own comments name `release` and Spotify, so these two stay on the stripped text.
     if (/\brelease\b/.test(t)) add("signing", p, "defines or names a release build");
     if (/spotify|media3|exoplayer|bluetooth|okhttp|retrofit|firebase/i.test(t)) add("dependencies", p, "names a forbidden library");
-    if (SECRET.test(t)) add("secrets", p, "names a credential");
+    if (both(SECRET, t, raw)) add("secrets", p, "names a credential");
     for (const m of t.matchAll(/\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\(\s*"([^"]+)"\s*\)/g)) {
       if (p.startsWith("app/") && !ALLOWED_DEPENDENCIES.includes(m[1]!)) add("dependencies", p, `dependency ${m[1]} is not on the allowlist`);
     }

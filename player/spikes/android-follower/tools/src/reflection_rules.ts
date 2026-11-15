@@ -1,15 +1,21 @@
 // Reflection and class loading get around every name list, so none is allowed. Pure: text in, problem out.
-// An allowlist where the code allows one: a class object may be read only for its name, or handed straight
-// to a call as an argument (`getSystemService(X::class.java)`, `Intent(this, X::class.java)`).
+// Fails closed: the names are refused as whole words wherever they appear (a callable reference, a space
+// before the parenthesis and a comment all count), and a class object is allowed only in the few shapes
+// the real sources use.
 
-/** Reflection API names, refused wherever they appear (a class object bound to a variable gets here too). */
-const API = /Class\.forName|java\.lang\.reflect|kotlin\.reflect|\.getMethods?\(|\.getDeclared\w+\(|\.getFields?\(|\.getConstructors?\(|\bgetClass\b|\bMethodHandles?\b|ClassLoader|\.invoke\s*\(|\b(?:methods|declaredMethods|fields|declaredFields|constructors|declaredConstructors)\b/;
+const NAMES = /\b(?:get(?:Declared)?(?:Method|Field|Constructor|Class)s?|getEnclosing\w+|newInstance|invoke|forName|callBy|KClass|KFunction|KProperty\w*|MethodHandles?|ClassLoader|methods|fields|constructors|declared\w+)\b|java\.lang\.(?:reflect|invoke)|kotlin\.reflect/;
 
-/** `javaClass` and `::class.java` not followed by `.name`/`.simpleName`; `::class.java` may also end an argument. */
-const JAVA_CLASS = /\bjavaClass\b(?!\s*\??\.(?:name|simpleName)\b)|::class\.java(?!\s*\??\.(?:name|simpleName)\b)(?!\s*[,)])/;
+/** The only places a class object may appear (a positive allowlist; `X::class.java` anywhere else is refused). */
+const ALLOWED_USES = [
+  /\bgetSystemService\(\s*[\w.]+::class\.java\s*\)/g,
+  /\b(?:Intent|ComponentName)\(\s*[\w.]+\s*,\s*[\w.]+::class\.java\s*\)/g,
+  /[\w.]+::class\.java\s*\??\.(?:name|simpleName)\b/g,
+  /\bjavaClass\s*\??\.(?:name|simpleName)\b/g,
+];
 
 export function reflectionProblem(text: string): string | null {
-  if (API.test(text)) return "uses reflection or class loading";
-  if (JAVA_CLASS.test(text)) return "reads a class object other than for its name or as a call argument";
+  if (NAMES.test(text)) return "uses reflection or class loading";
+  const rest = ALLOWED_USES.reduce((t, re) => t.replace(re, " "), text);
+  if (/::class\b|\bjavaClass\b/.test(rest)) return "reads a class object other than for its name, getSystemService(X::class.java) or Intent(c, X::class.java)";
   return null;
 }

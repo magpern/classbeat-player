@@ -38,7 +38,18 @@ function mutate(path: string, from: string | RegExp, to: string): Tree {
   return { ...real, files: { ...real.files, [path]: next } };
 }
 
-const MANIFEST = "app/src/main/AndroidManifest.xml";
+/** Several edits in a row on app/build.gradle.kts. */
+function gradle(...edits: [from: string, to: string][]): Tree {
+  let text = real.files["app/build.gradle.kts"]!;
+  for (const [from, to] of edits) {
+    const next = text.replace(from, () => to);
+    assert.notEqual(next, text, `edit of the build script changed nothing: ${from}`);
+    text = next;
+  }
+  return { ...real, files: { ...real.files, "app/build.gradle.kts": text } };
+}
+
+const MANIFEST ="app/src/main/AndroidManifest.xml";
 const LISTENER = "app/src/main/kotlin/org/classbeat/spike/follower/SpikeListener.kt";
 const READER = "app/src/main/kotlin/org/classbeat/spike/follower/SpotifyReader.kt";
 const FOLLOW = "app/src/main/kotlin/org/classbeat/spike/follower/FollowSession.kt";
@@ -170,6 +181,24 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["NB-C: a libs.* dependency", "dependencies", () => mutate(APP_GRADLE, 'implementation("androidx.webkit:webkit:1.12.1")', 'implementation("androidx.webkit:webkit:1.12.1")\n    implementation(libs.thing)')],
   ["NB-C: a version catalog file", "dependencies", () => ({ ...real, paths: [...real.paths, "gradle/libs.versions.toml"] })],
   ["NB-C: a catalog declared in settings", "dependencies", () => mutate("settings.gradle.kts", /^/, 'dependencyResolutionManagement { versionCatalogs { create("x") { from(files("a.toml")) } } }\n')],
+  // Review of #566, B1: compiling routes from a class object to a method by name (fixture compiled by the reviewer).
+  ["B1: the reviewer's compiling reflection routes", "reflection", () => mutate(READER, "class SpotifyReader", `${readFileSync(new URL("fixtures/reflection_routes.kt.txt", import.meta.url), "utf8")}\nclass SpotifyReader`)],
+  ["B1: Class<*>::getMethod callable reference", "reflection", () => mutate(READER, "class SpotifyReader", "val find = Class<*>::getMethod\nclass SpotifyReader")],
+  ["B1: getMethod with a space before the parenthesis", "reflection", () => mutate(READER, "class SpotifyReader", 'fun peek(c: Class<*>) = c.getMethod ("x")\nclass SpotifyReader')],
+  ["B1: ::class without .java", "reflection", () => mutate(READER, "class SpotifyReader", "val k = MediaSessionManager::class\nclass SpotifyReader")],
+  ["B1: a class object bound through listOf", "reflection", () => mutate(READER, "class SpotifyReader", "val c = listOf(MediaSessionManager::class.java).first()\nclass SpotifyReader")],
+  ["B1: newInstance", "reflection", () => mutate(READER, "class SpotifyReader", "fun <T> make(c: Class<T>) = c.newInstance()\nclass SpotifyReader")],
+  ["B1: a class object as a plain call argument", "reflection", () => mutate(READER, "class SpotifyReader", "val c = peek(String::class.java)\nclass SpotifyReader")],
+  ["B1: a reflection name in a comment", "reflection", () => mutate(READER, "class SpotifyReader", "// getDeclaredMethod\nclass SpotifyReader")],
+  // Review of #566, B2: names fail in comments and strings too; a crafted string or comment cannot hide code.
+  ["B2: a raw string closed by a run of quotes hides code", "network", () => mutate(READER, "class SpotifyReader", 'val a = """x""""\nval b = "/*"\nval u = java.net.URL("x")\nval c = "*/"\nclass SpotifyReader')],
+  ["B2: a nested block comment hides code", "network", () => mutate(READER, "class SpotifyReader", '/* /* */ " */\nval b = "/*"\nval u = java.net.URL("x")\nval c = "*/"\nclass SpotifyReader')],
+  ["B2: a network class named in a comment", "network", () => mutate(READER, "class SpotifyReader", "// java.net.URL\nclass SpotifyReader")],
+  ["B2: an audio class named in a string", "audio", () => mutate(READER, "class SpotifyReader", 'val s = "MediaPlayer"\nclass SpotifyReader')],
+  // Review of #566, B3: the wiring list is one bare listOf, declared once.
+  ["B3: .filter { false } on the guarded list", "manifest", () => mutate(APP_GRADLE, '"assemble$cap")', '"assemble$cap").filter { false }')],
+  ["B3: a decoy list declared earlier, real list without install", "manifest", () => gradle(['"install$cap", "assemble$cap")', '"assemble$cap")'], ["    onVariants { variant ->", '    val guarded = listOf("compile${cap}Kotlin", "install$cap")\n    onVariants { variant ->'])],
+  ["B3: a second wiring statement", "manifest", () => mutate(APP_GRADLE, "tasks.matching { it.name in guarded }", "tasks.matching { it.name in guarded }.configureEach { dependsOn(check) }\n        tasks.matching { it.name in guarded }")],
 ];
 
 describe("each hard limit fails when broken", () => {
@@ -202,6 +231,18 @@ describe("stripComments", () => {
     const out = stripComments('val a = "${ mapOf(1 to {2}) /* gone */ }"\nval r = """${"/*"} raw"""\nval u = MediaCodec');
     assert.doesNotMatch(out, /gone/);
     assert.match(out, /MediaCodec/);
+  });
+
+  it("closes a raw string at the last quote of a run, so what follows is code again", () => {
+    const out = stripComments('val a = """x""""\nval b = "/*"\nval u = MediaCodec\nval c = "*/"');
+    assert.match(out, /MediaCodec/);
+  });
+
+  it("nests block comments", () => {
+    const out = stripComments('/* a /* b */ still comment MediaPlayer */ val u = MediaCodec\nval s = "/*"\nval v = AudioTrack\nval t = "*/"');
+    assert.doesNotMatch(out, /MediaPlayer|still/);
+    assert.match(out, /MediaCodec/);
+    assert.match(out, /AudioTrack/);
   });
 
   it("drops comments and keeps a URL inside a string", () => {
