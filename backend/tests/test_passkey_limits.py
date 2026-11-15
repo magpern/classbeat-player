@@ -60,9 +60,9 @@ def test_thirty_sign_in_starts_per_address_then_429(site: Site) -> None:
 def test_a_sign_in_start_over_the_limit_does_not_replace_the_browsers_challenge(
     site: Site,
 ) -> None:
-    site.allow(A)
+    site.follower(A)
     authenticator = Authenticator()
-    assert register(site.sign_in(A), authenticator).status_code == 201
+    assert register(site.link_sign_in(A), authenticator).status_code == 201
     browser = site.browser("198.51.100.22")
     options = options_of(browser.post(SIGN_IN_OPTIONS))
     for _ in range(29):
@@ -76,13 +76,13 @@ def test_a_sign_in_start_over_the_limit_does_not_replace_the_browsers_challenge(
 
 
 def test_thirty_registration_starts_per_account_then_429(site: Site) -> None:
-    site.allow(A)
-    site.allow(B)
-    first = site.sign_in(A)
+    site.follower(A)
+    site.follower(B)
+    first = site.link_sign_in(A)
     for _ in range(15):
         assert first.post(OPTIONS).status_code == 200
     # Another session of the same account shares the account's count.
-    second = site.sign_in(A, site.browser("198.51.100.23"))
+    second = site.link_sign_in(A, site.browser("198.51.100.23"))
     for _ in range(15):
         assert second.post(OPTIONS).status_code == 200
     assert _registrations(site) == 2
@@ -92,12 +92,12 @@ def test_thirty_registration_starts_per_account_then_429(site: Site) -> None:
         assert 1 <= int(limited.headers["Retry-After"]) <= 600
     # Nothing stored or dropped past the limit; another account keeps working.
     assert _registrations(site) == 2
-    assert site.sign_in(B).post(OPTIONS).status_code == 200
+    assert site.link_sign_in(B).post(OPTIONS).status_code == 200
 
 
 def test_a_registration_start_over_the_limit_keeps_the_sessions_challenge(site: Site) -> None:
-    site.allow(A)
-    browser = site.sign_in(A)
+    site.follower(A)
+    browser = site.link_sign_in(A)
     for _ in range(29):
         assert browser.post(OPTIONS).status_code == 200
     authenticator = Authenticator()

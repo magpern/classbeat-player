@@ -72,7 +72,7 @@ def test_every_route_answers_with_the_headers_signed_in_or_not(site: Site) -> No
 
 
 def test_every_response_that_carries_a_token_is_not_stored(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)  # the one kind the email link is open for (ADR 0010, section 7)
     asked = site.first.post("/api/site/sign-in/link", json={"email": EMAIL})
     assert "set-cookie" in asked.headers and asked.headers["cache-control"] == "no-store"
     token = site.ask(site.first, EMAIL)
@@ -146,8 +146,8 @@ def test_a_cross_site_state_change_is_refused_on_every_route(
         # sign-ins themselves may pass the account's session cap; that is checked per request.)
         assert site.su.execute(sessions).fetchall() == before, (method, path)
         site.su.execute("DELETE FROM player.rate_limits")
-    # And no mail beyond the sign-ins.
-    assert len(site.mailer.sent) == len(changing)
+    # And no mail: the sign-ins (tests/sitehelp.py) send none either.
+    assert site.mailer.sent == []
 
 
 def test_a_same_origin_state_change_and_a_read_go_through(site: Site) -> None:

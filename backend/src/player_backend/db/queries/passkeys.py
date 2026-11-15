@@ -25,6 +25,9 @@ COUNT_PASSKEYS: Final[Query] = Query(
     "SELECT count(*)::int FROM player.passkeys WHERE account_id = %s"
 )
 
+# ADR 0010, section 7: registration is open only for the kinds of own_sign_in_policy.
+ACCOUNT_KIND: Final[Query] = Query("SELECT kind FROM player.accounts WHERE id = %s")
+
 # What the registration options name: the account, and its passkeys to exclude.
 ACCOUNT_USER: Final[Query] = Query(
     "SELECT email, passkey_user_handle FROM player.accounts WHERE id = %s"

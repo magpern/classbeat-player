@@ -29,10 +29,11 @@ def _one(conn: Conn, statement: LiteralString, params: tuple[object, ...] = ()) 
 
 
 def _passkey(su: Conn, sign_count: int = 0) -> tuple[uuid.UUID, bytes]:
+    """A passkey of a follower: the one kind passkeys are open for (ADR 0010, section 7)."""
     account = _one(
         su,
-        "INSERT INTO player.accounts (email, passkey_user_handle) "
-        "VALUES ('rider@example.test', %s) RETURNING id",
+        "INSERT INTO player.accounts (kind, email, passkey_user_handle) "
+        "VALUES ('follower', 'rider@example.test', %s) RETURNING id",
         (_h(),),
     )
     credential = _h()

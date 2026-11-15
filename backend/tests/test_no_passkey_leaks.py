@@ -91,8 +91,8 @@ def test_no_challenge_credential_key_or_signature_reaches_a_log_an_event_a_mail_
     # Bind the app's log handler to the output this test captures, at the most talkative level.
     configure_logging("DEBUG")
     caplog.set_level(logging.DEBUG)
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     capsys.readouterr()
     values, urls = _flow(site, browser)
     captured = capsys.readouterr()

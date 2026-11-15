@@ -38,8 +38,8 @@ def _forget_the_short_windows(site: Site) -> None:
 
 
 def test_three_links_per_email_and_address_in_15_minutes(site: Site) -> None:
-    site.allow(EMAIL)
-    site.allow("other@example.test")
+    site.follower(EMAIL)
+    site.follower("other@example.test")
     here = site.browser(_address(1))
     assert [site.ask(here, EMAIL) is not None for _ in range(4)] == [True, True, True, False]
     # The limit is of this email from this address: neither alone is held.
@@ -48,7 +48,7 @@ def test_three_links_per_email_and_address_in_15_minutes(site: Site) -> None:
 
 
 def test_a_link_over_the_limit_does_not_cancel_the_one_in_the_mail(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     tokens = [site.ask(site.first, EMAIL) for _ in range(4)]
     assert tokens[3] is None
     done = site.first.post("/api/site/sign-in/complete", json={"token": tokens[2]})
@@ -56,7 +56,7 @@ def test_a_link_over_the_limit_does_not_cancel_the_one_in_the_mail(site: Site) -
 
 
 def test_ten_links_per_email_and_address_in_a_day(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser(_address(1))
     sent: list[bool] = []
     for _ in range(4):
@@ -67,7 +67,7 @@ def test_ten_links_per_email_and_address_in_a_day(site: Site) -> None:
 
 
 def test_thirty_links_per_email_in_a_day_from_all_addresses(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     # One stranger at one address: 3 mails, and what is over their own limit counts for nobody.
     stranger = site.browser(_address(1))
     assert sum(site.ask(stranger, EMAIL) is not None for _ in range(10)) == 3
@@ -81,7 +81,7 @@ def test_thirty_links_per_email_in_a_day_from_all_addresses(site: Site) -> None:
 
 
 def test_a_link_over_the_total_per_email_does_not_cancel_the_one_in_the_mail(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     # The user's own browser has a link in the mail: the first of the email's 30 a day.
     token = site.ask(site.first, EMAIL)
     assert token is not None
@@ -99,7 +99,7 @@ def test_a_link_over_the_total_per_email_does_not_cancel_the_one_in_the_mail(sit
 
 
 def test_ten_requests_per_address_in_an_hour_then_429(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser(_address(1))
     for n in range(10):
         assert here.post(LINK, json={"email": f"user{n}@example.test"}).status_code == 200
@@ -130,16 +130,14 @@ def test_the_proxy_header_is_ignored_from_an_untrusted_peer(site: Site) -> None:
 def test_behind_a_trusted_proxy_the_header_gives_the_client(app_url: str, db_url: str) -> None:
     proxy = ipaddress.ip_network(ADDRESS)
     with running_site(app_url, db_url, proxies=(proxy,)) as site:
-        site.allow(EMAIL)
-        site.sign_in(EMAIL)
-        site.su.execute("DELETE FROM player.rate_limits")
+        site.follower(EMAIL)
         via_proxy = site.browser()  # its peer is the proxy
         for n in range(11):
             forwarded = {"X-Forwarded-For": f"192.0.2.66, 198.51.100.{n}"}
             asked = via_proxy.post(LINK, json={"email": EMAIL}, headers=forwarded)
             assert asked.status_code == 200
         # Eleven clients, not one: no 429, a mail each, and each event has its client's network.
-        assert len(site.mailer.sent) == 12
+        assert len(site.mailer.sent) == 11
         networks = site.su.execute(
             "SELECT DISTINCT client_network::text FROM player.audit_events "
             "WHERE event = 'login.link_requested'"
@@ -155,7 +153,7 @@ def test_behind_a_trusted_proxy_the_header_gives_the_client(app_url: str, db_url
 
 
 def test_counters_hold_hashes_only(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     site.ask(site.browser(_address(1)), EMAIL)
     keys = site.su.execute("SELECT key_hash FROM player.rate_limits").fetchall()
     assert len(keys) == 4  # the address, the pair twice (15 minutes, a day), the email

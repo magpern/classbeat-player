@@ -1,10 +1,12 @@
 """The account's passkeys on the site (ADR 0002, sections 4, 10 and 11): list, add, rename,
 remove.
 
-Adding (both its steps) and removing need a recent sign-in; listing and renaming need a
-session. Starting a registration is counted per account (section 10). Adding uses up this
-session's registration challenge whatever the check of the credential says, so its refusals
-are returned, not raised: raising would roll the use back.
+Adding (both its steps) and removing need a recent sign-in; listing and renaming need a session.
+Adding is refused (403 `passkeys_closed`) for every account kind there is today (ADR 0010,
+section 7); listing, renaming and removing stay, so passkeys made before are removable. Starting
+a registration is counted per account (section 10). Adding uses up this session's registration
+challenge whatever the check of the credential says, so its refusals are returned, not raised:
+raising would roll the use back.
 What the site is told of a passkey is its id, its name and its dates: never its credential
 id or its key.
 """
@@ -95,6 +97,9 @@ def registration_start(request: Request, context: RecentSignIn) -> JSONResponse:
     """A registration challenge for this session, and the options to use it."""
     challenge = secrets.token_bytes(CHALLENGE_BYTES)
     user = passkeys.start_registration(context, challenge_hash(challenge))
+    if user == "closed":
+        # ADR 0010, section 7: no account kind there is today may add a passkey.
+        return error_response(403, "passkeys_closed")
     # Returned, not raised: raising would roll the count of starts back.
     if user == "limited":
         after = retry_after(time.time(), STARTS_WINDOW)
@@ -136,6 +141,8 @@ def register(raw: RawBody, request: Request, context: RecentSignIn, who: TheCall
         # Raised, not returned: the challenge's use is rolled back, so the same answer can be
         # sent again after `Retry-After`. The session's "last used" is kept.
         raise ApiError(429, "too_many_requests", {"Retry-After": str(BUSY_RETRY_SECONDS)})
+    if outcome == "closed":
+        return error_response(403, "passkeys_closed")
     if outcome == "refused":
         # One answer for a used, expired or other session's challenge and a credential that
         # fails a check: start again.
