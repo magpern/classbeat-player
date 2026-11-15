@@ -70,8 +70,9 @@ is the player server's own credential at classbeat; no other product's secret is
    The `code_challenge` is base64url(SHA-256(token)), so the server needs no clear copy of it.
    The authorize request carries `response_type=code`, `client_id`, the exact registered
    `redirect_uri`, `scope=openid email`, `state`, `nonce`, `code_challenge`,
-   `code_challenge_method=S256` and `max_age=600`. No `offline_access`, so no refresh token is
-   asked for.
+   `code_challenge_method=S256`. A plain sign-in sends no `max_age`: classbeat's own session is
+   enough. A re-authentication (section 5) adds `prompt=login`. No `offline_access`, so no
+   refresh token is asked for.
 2. **Callback.** `GET /api/site/sign-in/classbeat/callback?code=…&state=…`. This is the one GET
    that changes state on the site (section 9 lists the amendment to ADR 0002 section 5). It is
    accepted only as a top-level navigation: when `Sec-Fetch-Mode` is present it must be
@@ -107,12 +108,15 @@ module), changed only in a security-critical pull request.
 - **Algorithm.** `ES256` only, a constant. The header's `alg` must equal it; `none`, every `HS*`
   and every other value are refused before any key is looked at. The algorithm is never taken
   from the token.
+- **Type.** An ID token's header `typ`, when present, is `JWT`; a token typed `logout+jwt` is
+  refused at the callback. An event token (section 8) must be typed `logout+jwt`.
 - **Key.** The header's `kid` must name exactly one key in the cached key set, with `kty` `EC`,
   `crv` `P-256`, and `use` `sig` and `alg` `ES256` where present.
 - **Claims.** `iss` equals the configured issuer exactly. `aud` is the client id, or an array
   holding only it. `azp`, when present, equals the client id. `exp` is in the future and `iat`
   not more than 5 minutes old, each with 60 seconds of allowed clock difference. `nonce` hashes
-  to the row's nonce hash. `sub` is present, at most 255 characters. `auth_time` is present.
+  to the row's nonce hash. `sub` is present, at most 255 characters. `auth_time` is present and not later than now plus
+  60 seconds.
 - **Email.** `email` and `email_verified` are read. The email is kept only when
   `email_verified` is `true`, for display and the security mails (section 7). It is never used
   to find, create or merge an account, except for the allowlist match in section 4.
@@ -140,6 +144,10 @@ function, does the following in one transaction:
     identity, so a classbeat email later freed and taken by another person does not match again.
 - Otherwise nothing is created, and the counters of section 10 count it.
 
+Entries by email are the normal way to let an instructor in. An entry by subject needs the
+pairwise subject classbeat issues for the player's client, which classbeat's operator reads from
+classbeat's own admin tools. The player's logs and events hold no subject.
+
 The identity is `(iss, sub)`. classbeat issues a **pairwise** `sub` for the player's client (a
 value derived from its user id and the client, not the user id itself), so the subject the
 player stores and sees in URLs is not classbeat's internal id.
@@ -159,8 +167,10 @@ export, account deletion and "sign out everywhere"; passkeys are closed for inst
   session with "last signed in" set to the token's `auth_time`, as a sign-in does; the asking
   session is ended. The page then returns to where it asked. A refusal changes no session.
 - A recent sign-in holds while now − `auth_time` ≤ 600 seconds, checked when the sensitive action
-  is asked, with no clock allowance beyond that. `max_age=600` makes classbeat authenticate
-  again when its own sign-in is older. classbeat applies its own TOTP step-up when the user has it.
+  is asked, with no clock allowance beyond that. `prompt=login` makes classbeat authenticate the
+  user again, and the callback refuses a re-authentication whose `auth_time` is older than the
+  flow's start minus 60 seconds, so a fresh one always gives close to the full 10 minutes.
+  classbeat applies its own TOTP step-up when the user has it.
 
 ### 6. Return entries across the round trip
 
@@ -207,8 +217,10 @@ events. An account with no verified email gets the page notices only.
   - `account-deleted`: the account with that identity is deleted fully, as ADR 0002 section 12
     (no recent sign-in, no typed confirmation: classbeat's user did that at classbeat);
   - `sessions-revoked`: every site session of that account ends (classbeat's "sign out
-    everywhere", a disabled account, a credential reset). Devices are not ended: they are
-    read-only and revocable on the site.
+    everywhere", a disabled account, a credential reset), with the same `session.signed_out`
+    events and `live_revocations` notice as "sign out everywhere", so a live controller taken
+    with one of those sessions is dropped (ADR 0002 sections 5 and 8). Devices are not ended:
+    they are read-only and revocable on the site.
   `jti` is single use: its hash is kept in the closed table `classbeat_event_ids` for 8 days. A
   repeat `jti`, or a `sub` with no account, answers `202` and changes nothing. classbeat retries
   until it gets `2xx`, for up to 7 days, signing each attempt afresh with the same `jti`; it keeps
@@ -226,10 +238,31 @@ events. An account with no verified email gets the page notices only.
 - **The email column.** For an instructor `accounts.email` is the display email: not unique,
   nullable, replaced at each sign-in by `auth_complete_classbeat` (a column grant to
   `player_auth`, section 9). The unique index becomes partial, for `kind = follower` only.
-  `player_app` still has no `UPDATE` on `accounts`.
+  `player_app` still has no `UPDATE` on `accounts`. Where an email used to be shown, a null one
+  shows "your classbeat account": `auth_collect_pairing` returns the email or null, and the app
+  then shows that text after pairing.
+- **An event that never arrives.** If `account-deleted` is never delivered, the account cannot
+  be signed in to, but a paired device in use keeps syncing its classes, since it never reaches
+  its idle limit. The deploy runbook gives the operator `admin account delete <account id>`
+  (run as `player_owner`) for the case classbeat's operator reports an undelivered deletion.
 - **classbeat unreachable.** New sign-ins and re-authentications wait. Existing site sessions,
   paired devices and the class cache keep working, and a studio still runs its synced classes
   offline (plan section 5). Events are delivered when classbeat is back.
+
+### 9a. Linking classbeat as a source
+
+The source link of ADR 0002 section 7 stays, with a server-side binding so that one classbeat
+user can never link into another instructor's account (for example on a shared studio computer
+where someone else is signed in):
+- classbeat sends `login_hint=<pairwise subject>` with the link request. The site refuses to
+  approve a `classbeat` link unless the signed-in account is an instructor with that subject,
+  and an account that is not an instructor cannot approve one. The hint grants nothing.
+- The link code row stores the approving account's `(issuer, subject)`. The answer of
+  `POST /api/source/token` returns it as `account_subject`. classbeat keeps the link only if it
+  equals the pairwise subject of the classbeat user who started the link, and otherwise ends it
+  at once with `DELETE /api/source/link`.
+- The subject is pairwise, so no classbeat user id is in a link URL. A sign-in grants no
+  publishing, and a source token grants no sign-in (ADR 0002 principle 2).
 
 ### 9. What this changes in ADR 0002
 
@@ -243,6 +276,7 @@ events. An account with no verified email gets the page notices only.
 | Section 4 | Sign-up and sign-in for instructors are sections 4 and 5 here; the email link and passkeys are closed (section 7) |
 | Section 5 | The callback is the one state-changing GET, guarded as section 2 says. The routes that read the session cookie gain the callback (through `asking_session`, and for `reauth` to match the asking session) and `POST /api/site/sign-in/classbeat/start` (for `reauth`). The events route (`/api/classbeat/events`) reads no cookie and is outside the site's API and its `Origin` rule, guarded like the app's routes without a credential. "No form posts to, or is redirected to, another origin" stands; the site's script navigates to classbeat, as for a source link |
 | Section 6 | The pairing mail stays (section 7 here). Pairing is otherwise unchanged |
+| Section 7 | A `classbeat` link is approved only by the instructor named by `login_hint`, and the code exchange returns `account_subject` (section 9a). `auth_new_link_code` stores the subject; `auth_exchange_link_code` returns it |
 | Section 9 | Closed tables gain `classbeat_sign_ins` and `classbeat_event_ids`. New functions: `auth_start_classbeat`, `auth_take_classbeat`, `auth_complete_classbeat`, `auth_reauth_classbeat` (the identity check and the session of section 5), `auth_classbeat_event` (section 8). `player_auth` gains `UPDATE (email)` on `accounts`, `DELETE` on `accounts` for `account-deleted`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` on the two new tables, and `UPDATE (bound_issuer, bound_subject)` on `signup_allowlist`. The guard tests' lists gain all of these. The bound in "What this stops" gains the rows below |
 | Section 10 | New limits (below) |
 | Section 11 | New events (below) |
@@ -308,7 +342,8 @@ deletion. None holds a code, `state`, nonce, token, `jti` or subject.
 
 - **classbeat (phase PL3, in its own repository and under its own rules)** becomes an OIDC
   provider: a client registry with exact redirect addresses, pairwise subjects, an authorize
-  endpoint on its cookie session with consent and `max_age`, codes of at most 60 seconds bound to
+  endpoint on its cookie session with consent and `prompt=login`, the source-link binding of
+  section 9a (`login_hint` and the `account_subject` check), codes of at most 60 seconds bound to
   client, redirect and PKCE, a token endpoint, ES256 signing keys, key-set and discovery
   documents, rate limits and security events, and the signed event delivery of section 8 with
   retries. All of it is security-critical there.
@@ -318,7 +353,9 @@ deletion. None holds a code, `state`, nonce, token, `jti` or subject.
   and the guard tests extended, never loosened.
 - **Website:** "Sign in with classbeat" on the sign-in page, the re-authentication step, the
   account page's identity and notices. These need a Design review.
-- **Deploy runbook:** the classbeat settings, the client secret file, and the reverse proxy's
+- **Desktop app:** after pairing it shows "your classbeat account" when the email is null.
+- **Deploy runbook:** `admin account delete` for an undelivered deletion (section 8); the
+  classbeat settings, the client secret file, and the reverse proxy's
   rule of section 2, step 3.
 - **The owner** gives the player's client registration at classbeat (issuer, client id, redirect
   address, events address) and its secret file when deploying, and still a mail service, now for
