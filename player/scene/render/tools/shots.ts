@@ -19,27 +19,29 @@ const PAGE = pathToFileURL(join(RENDER_DIR, "dist", "index.html")).href;
 const SHOTS = join(RENDER_DIR, "screenshots");
 const ARTIFACTS = join(RENDER_DIR, "artifacts");
 const CANDIDATES = ["/usr/bin/google-chrome", "/opt/google/chrome/chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"];
+// The song change at 60 s is also an interval change into a song with no moments, so it bursts too.
+const BURST_SHOTS = ["drop-burst", "no-moments-song-burst", "song-change-dim"];
 const SIZES = [[1920, 1080], [1366, 768]] as const;
 
 interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number }
 // Each plays from `fromS` to `toS` on a synthetic 60 fps clock, so a screenshot is the same every time.
 const SHOTS_LIST: readonly Shot[] = [
   { name: "warm-up-zone-1", query: "", fromS: 0, toS: 5 },
-  { name: "zone-2-beat", query: "", fromS: 26, toS: 30.1 },
+  { name: "zone-2-beat", query: "", fromS: 23, toS: 29.5 },
   { name: "anticipation", query: "", fromS: 32, toS: 35.6 },
   { name: "build-gather", query: "", fromS: 33, toS: 39.6 },
   { name: "drop-burst", query: "", fromS: 38, toS: 40.05 },
   { name: "drop-fan", query: "", fromS: 38, toS: 45 },
   { name: "song-change-dim", query: "", fromS: 58, toS: 60.2 },
-  { name: "no-moments-song-burst", query: "", fromS: 78, toS: 80.03 },
+  { name: "no-moments-song-burst", query: "", fromS: 68, toS: 80.03 },
   { name: "breakdown", query: "", fromS: 112, toS: 122 },
   { name: "zone-7-peak", query: "", fromS: 100, toS: 106 },
   { name: "paused", query: "&state=paused", fromS: 30, toS: 36 },
   { name: "coasting-none-level", query: "&state=coasting", fromS: 30, toS: 38 },
   { name: "off-the-list-holding", query: "&state=off", fromS: 36, toS: 44 },
   { name: "reduced-motion-still-rig", query: "&rm=1", fromS: 30, toS: 38 },
-  { name: "quality-medium", query: "&q=Medium", fromS: 26, toS: 30.1 },
-  { name: "quality-low", query: "&q=Low", fromS: 26, toS: 30.1 },
+  { name: "quality-medium", query: "&q=Medium", fromS: 23, toS: 29.5 },
+  { name: "quality-low", query: "&q=Low", fromS: 23, toS: 29.5 },
 ];
 
 function launch(): Promise<Browser> {
@@ -48,7 +50,7 @@ function launch(): Promise<Browser> {
   return chromium.launch({ executablePath: found, args: ["--no-sandbox", "--force-color-profile=srgb", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 }
 
-interface Api { __scene: { play(a: number, b: number, fps: number): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean } }
+interface Api { __scene: { advance(a: number, b: number, fps: number): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean; burst: number } }
 
 async function open(browser: Browser, w: number, h: number, query: string): Promise<{ page: Page; problems: string[] }> {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
@@ -85,8 +87,10 @@ async function screenshots(browser: Browser): Promise<void> {
   const means = new Map<string, number>();
   for (const [w, h] of SIZES) for (const shot of SHOTS_LIST) {
     const { page, problems } = await open(browser, w, h, shot.query);
-    await page.evaluate(([a, b]) => (window as unknown as Api).__scene.play(a! * 1000, b! * 1000, 60), [shot.fromS, shot.toS]);
+    await page.evaluate(([a, b]) => (window as unknown as Api).__scene.advance(a! * 1000, b! * 1000, 60), [shot.fromS, shot.toS]);
     const b = await brightness(page);
+    const burst = await page.evaluate(() => (window as unknown as Api).__scene.burst);
+    assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
     assert.deepEqual(problems, [], `${shot.name}: ${problems.join("; ")}`);

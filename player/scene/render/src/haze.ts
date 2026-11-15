@@ -19,7 +19,7 @@ void main() {
 
 export class HazeLayer {
   readonly mesh: Mesh;
-  private readonly material: ShaderMaterial;
+  readonly material: ShaderMaterial;
 
   constructor(depth: number, size: number) {
     this.material = new ShaderMaterial({

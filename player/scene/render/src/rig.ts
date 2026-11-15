@@ -25,7 +25,7 @@ export class SceneRig {
   readonly camera = new PerspectiveCamera(50, 16 / 9, 0.1, 100);
   readonly fixtures: readonly FixtureView[] = buildFixtures();
   readonly wall = new Wall();
-  private readonly haze = [new HazeLayer(-12, 30), new HazeLayer(-20, 40)] as const;
+  readonly haze = [new HazeLayer(-12, 30), new HazeLayer(-20, 40)] as const;
   private readonly flash = new Mesh(new PlaneGeometry(8, 8), new MeshBasicMaterial({ color: new Color(1, 1, 1), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false }));
 
   private readonly tokens: SceneTokens;
@@ -64,7 +64,7 @@ export class SceneRig {
     });
     const hazeLevel = energy.ambientGlow * HAZE_GAIN * (moments.gather ? 1.5 : 1) * draw.master;
     this.haze[0].set(this.hex(colours.front), hazeLevel, draw.seconds, true);
-    this.haze[1].set(this.hex(colours.back), hazeLevel * 0.7, draw.seconds * 0.7, q.hazeLayers === 2);
+    this.haze[1].set(this.hex(colours.front), hazeLevel * 0.7, draw.seconds * 0.7, q.hazeLayers === 2);
     this.wall.mesh.visible = q.wall;
     if (q.wall) {
       this.wall.update((c) => this.hex(reached(c / (WALL_COLUMNS - 1)) ? colours.back : colours.front), energy.wall, draw.chaseStep, draw.seconds, draw.master * WALL_GAIN, draw.reduced);

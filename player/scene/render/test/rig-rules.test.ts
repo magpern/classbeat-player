@@ -99,6 +99,21 @@ test("the anticipation: the back truss turns to the next zone's colour from the 
   assert.equal(colour("back", 7), tokens.zones[4]);
 });
 
+test("S5 at High quality: through the anticipation the haze shows no hue but the zone it is in; only the back truss and the wall wipe", () => {
+  const rig = new SceneRig(tokens);
+  const loop = new RigLoop(tokens);
+  let inAnticipation = 0;
+  for (let ms = 28_000, n = 0; ms < 41_000; n++) {
+    const d = loop.step(feedAt(ms), n === 0 ? 0 : 1 / 60, "High");
+    rig.apply(d, "High");
+    const haze = rig.haze;
+    for (const layer of haze) assert.equal(hexOf(layer.material.uniforms.uColor!.value as Color), tokens.zones[d.frame.colours.front.kind === "zone" ? d.frame.colours.front.zone : 1], `haze at ${ms}`);
+    if (d.frame.colours.wipe > 0) inAnticipation++;
+    ms += d.dtSeconds * 1000;
+  }
+  assert.ok(inAnticipation > 300);
+});
+
 test("reduced motion (S11): the still rig shows no change between two frames a second apart", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);

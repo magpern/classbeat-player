@@ -7,7 +7,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { feedAt } from "../demo/scenario.ts";
+import type { Direction } from "../../model/src/index.ts";
+import { angleBetween } from "../../model/src/index.ts";
 import { RigLoop } from "../src/loop.ts";
+import { SceneRig } from "../src/rig.ts";
 import { FrameLog, LIMIT_DEG_PER_SECOND, measure } from "../tools/frame-log.ts";
 import { RENDER_DIR, tokensFromFile } from "../tools/tokens-file.ts";
 
@@ -31,11 +34,27 @@ for (const fps of [30, 60, 144]) {
   });
 }
 
-test("stalled frames of 250 ms and 1 s are clamped: the measured speed stays within the limit", () => {
-  const stalls = new Map<number, number>();
-  for (let n = 40; n < 3600; n += 97) stalls.set(n, n % 2 === 0 ? 0.25 : 1);
-  const log = measure(tokens, { fps: 60, ...RUN, stalls });
-  assert.deepEqual(log.failures, []);
+test("stalled frames of 250 ms and 1 s are clamped: on a stalled frame no beam turns more than 3 degrees", () => {
+  const [loop, rig] = [new RigLoop(tokens), new SceneRig(tokens)];
+  let prev: readonly Direction[] | null = null;
+  let classMs = RUN.fromMs;
+  let stalled = 0;
+  for (let n = 0; classMs < RUN.toMs; n++) {
+    const stall = n > 0 && n % 97 === 40 ? (n % 2 === 0 ? 0.25 : 1) : null;
+    const draw = loop.step(feedAt(classMs), n === 0 ? 0 : (stall ?? 1 / 60), "High");
+    rig.apply(draw, "High");
+    const now = rig.measuredDirections();
+    // The angle moved is compared with the raw stall, not the frame time used: a clamp raised to 1 s would turn up to 30 degrees here.
+    if (prev && stall !== null) {
+      stalled++;
+      now.forEach((d, i) => assert.ok(angleBetween(prev![i]!, d) <= 3.01, `a stalled frame turned a beam ${angleBetween(prev![i]!, d)} degrees`));
+      assert.equal(draw.dtSeconds, 0.1);
+    }
+    prev = now;
+    classMs += draw.dtSeconds * 1000;
+  }
+  assert.ok(stalled > 20);
+  assert.deepEqual(measure(tokens, { fps: 60, ...RUN, stalls: new Map([[40, 1], [500, 0.25]]) }).failures, []);
 });
 
 test("at the lower quality levels too", () => {

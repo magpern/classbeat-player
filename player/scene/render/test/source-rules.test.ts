@@ -12,14 +12,14 @@ const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])
 const sources = [...read("src"), ...read("demo")].map((s) => ({ ...s, text: code(s.text) }));
 
 const FORBIDDEN: readonly [string, RegExp][] = [
-  ["audio (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bMediaSource\b|\.play\(\)|\bgetUserMedia\b/],
+  ["audio (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bMediaSource\b|\.play\s*\(|\bgetUserMedia\b|\b\w*(Audio|Loader)\w*\b/],
   ["a Spotify interface (rule 3)", /spotify\.com|api\.spotify|sdk\.scdn|Spotify\.Player/i],
   ["equipment control (rule 2)", /\bnavigator\.(bluetooth|usb|serial|hid)\b|\bresistance\b|\bsetSpeed\b|\bbrake\b/i],
   ["a camera or microphone (rule 12)", /\bmediaDevices\b/],
   ["a network request or storage", /\bfetch\(|XMLHttpRequest|WebSocket|EventSource|\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b/],
-  ["randomness", /Math\.random/],
-];
-for (const [what, re] of FORBIDDEN) {
+  ["randomness", /Math\.random|\bcrypto\b|getRandomValues/],
+  ["a beacon, a dynamic import or a worker", /sendBeacon|\bimport\s*\(|\bWorker\b|WebTransport|RTCPeerConnection|document\.cookie|\bcaches\b/],
+];for (const [what, re] of FORBIDDEN) {
   test(`no ${what} in the renderer`, () => assert.deepEqual(sources.filter((s) => re.test(s.text)).map((s) => s.name), []));
 }
 

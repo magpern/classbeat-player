@@ -1,7 +1,7 @@
 // The renderer on a page, for the screenshots and the browser frame log: the real SceneRenderer on a
 // canvas, tokens read from the page's computed style (tokens.css), fed by the fake class of
 // scenario.ts. Two modes. Manual (`?manual=1`): nothing runs on its own, the driver plays frames at a
-// stated frame rate through `window.__scene.play`, so a screenshot is the same every time. Auto
+// stated frame rate through `window.__scene.advance`, so a screenshot is the same every time. Auto
 // (`?auto=1&t=10&speed=6`): requestAnimationFrame at the page's real frame times, the class clock
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low).
@@ -22,9 +22,10 @@ const canvas = document.getElementById("scene") as HTMLCanvasElement;
 const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
+let lastBurst = 0;
 const renderer = new SceneRenderer(canvas, {
   tokens, quality: state.quality, preserveDrawingBuffer: true,
-  onFrame: (draw, measured) => log.add(draw, measured, song),
+  onFrame: (draw, measured) => { lastBurst = draw.burst; log.add(draw, measured, song); },
 });
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
@@ -32,16 +33,18 @@ const feed = () => feedAt(classMs, { link: state.link, reducedMotion: state.redu
 
 interface DemoApi {
   /** Plays frames from `fromMs` to `toMs` at `fps` on a synthetic clock; the class clock steps by the frame time. */
-  play(fromMs: number, toMs: number, fps: number): void;
+  advance(fromMs: number, toMs: number, fps: number): void;
   set(next: { link?: string; reduced?: boolean; quality?: QualityLevel }): void;
   readonly log: FrameLog;
   readonly missingTokens: readonly string[];
   readonly ended: boolean;
+  /** The white burst's share of its peak on the last frame. */
+  readonly burst: number;
 }
 let nowMs = 0;
 let ended = false;
 const api: DemoApi = {
-  play(fromMs, toMs, fps) {
+  advance(fromMs, toMs, fps) {
     classMs = fromMs;
     while (classMs < toMs) {
       nowMs += 1000 / fps;
@@ -59,6 +62,7 @@ const api: DemoApi = {
   },
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
+  get burst() { return lastBurst; },
 };
 (window as unknown as { __scene: DemoApi }).__scene = api;
 

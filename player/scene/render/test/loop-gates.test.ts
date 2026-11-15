@@ -91,6 +91,24 @@ test("a song with marked moments never bursts on an interval change; one without
   assert.equal(n, 2, "65 s bursts, 70 s is within 10 s and does not, 90 s bursts");
 });
 
+test("drops closer than 10 s share one burst; drops 10 s or more apart each burst (S6)", () => {
+  const drops = (...at: number[]): Feed["cls"] => ({ ...DEMO_CLASS, songs: [{ bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: at.map((at_ms) => ({ at_ms, kind: "drop" as const })) }] });
+  const count = (cls: Feed["cls"]) => {
+    const loop = new RigLoop(tokens);
+    let [n, was] = [0, 0];
+    for (let ms = 30_000, i = 0; ms < 75_000; i++) {
+      const d = loop.step({ ...feedAt(ms), cls, songIndex: 0, songPosMs: ms }, i === 0 ? 0 : 1 / 60, "High");
+      n += d.burst > 0 && was === 0 ? 1 : 0;
+      was = d.burst;
+      ms += d.dtSeconds * 1000;
+    }
+    return n;
+  };
+  assert.equal(count(drops(40_000, 45_000)), 1, "5 s apart: the second drop does not burst");
+  assert.equal(count(drops(40_000, 49_900)), 1, "just under 10 s");
+  assert.equal(count(drops(40_000, 51_000)), 2, "11 s apart: both burst");
+});
+
 test("a song change dims the rig to a quarter for one beat", () => {
   const loop = new RigLoop(tokens);
   const masters: number[] = [];
