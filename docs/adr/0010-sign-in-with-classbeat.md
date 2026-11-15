@@ -93,7 +93,7 @@ is the player server's own credential at classbeat; no other product's secret is
       `Referrer-Policy: no-referrer`.
 
    Every refusal answers the same `303` to `/sign-in#error=classbeat`, with no reason in the
-   address; the reason goes to the audit event where an account is known (section 10).
+   address; the reason goes to the audit event where an account is known ("Audit events" in section 9).
 3. **Log hygiene for the callback.** The backend's access log writes method, path and status
    only, never the query string (as built). The deploy runbook requires the host's reverse proxy
    to log no query string for `/api/site/sign-in/classbeat/` and `/link/source`, and a test asserts that no log
@@ -142,7 +142,8 @@ function, does the following in one transaction:
   - its email, equal to the token's email **with** `email_verified` true, and only while the
     entry has no bound subject. The first sign-in that uses an email entry binds the entry to its
     identity, so a classbeat email later freed and taken by another person does not match again.
-- Otherwise nothing is created, and the counters of section 10 count it.
+- Otherwise nothing is created, and the limits of ADR 0002 section 10 count it ("Limits" in
+  section 9).
 
 Entries by email are the normal way to let an instructor in. An entry by subject needs the
 pairwise subject classbeat issues for the player's client, which classbeat's operator reads from
@@ -213,10 +214,13 @@ events. An account with no verified email gets the page notices only.
   `Sec-Fetch-Site` header is present (`403 cross_site_request`), as the app's routes without a
   credential do (ADR 0002 section 6). The token is a JWT checked as in section 3 (algorithm, key,
   `iss`, `aud`, `iat` within 5 minutes, `exp` if present), with `nonce` absent, a `jti`, a `sub`
-  and an `events` claim naming exactly one of:
-  - `account-deleted`: the account with that identity is deleted fully, as ADR 0002 section 12
+  and an `events` claim, a JSON object whose members are exactly the back-channel logout event
+  `http://schemas.openid.net/event/backchannel-logout` (value `{}`) and one of these two
+  (value `{}`); any other member, or both, is refused with `400 bad_event`. The names are pinned
+  with classbeat (its ADR 0034):
+  - `urn:classbeat:player:account-deleted` (below, `account-deleted`): the account with that identity is deleted fully, as ADR 0002 section 12
     (no recent sign-in, no typed confirmation: classbeat's user did that at classbeat);
-  - `sessions-revoked`: every site session of that account ends (classbeat's "sign out
+  - `urn:classbeat:player:sessions-revoked` (below, `sessions-revoked`): every site session of that account ends (classbeat's "sign out
     everywhere", a disabled account, a credential reset), with the same "all sessions ended"
     event (detail `by: classbeat`) and `live_revocations` notice as "sign out everywhere", so a live controller taken
     with one of those sessions is dropped (ADR 0002 sections 5 and 8). Devices are not ended:
@@ -261,7 +265,7 @@ events. An account with no verified email gets the page notices only.
 | Section 4 | Sign-up and sign-in for instructors are sections 4 and 5 here; the email link and passkeys are closed (section 7) |
 | Section 5 | The callback is the one state-changing GET, guarded as section 2 says. The routes that read the session cookie gain the callback (through `asking_session`, and for `reauth` to match the asking session) and `POST /api/site/sign-in/classbeat/start` (for `reauth`). The events route (`/api/classbeat/events`) reads no cookie and is outside the site's API and its `Origin` rule, guarded like the app's routes without a credential. "No form posts to, or is redirected to, another origin" stands; the site's script navigates to classbeat, as for a source link |
 | Section 6 | The pairing mail stays (section 7 here). Pairing is otherwise unchanged |
-| Section 7 | Steps 2, 3 and 5: a `classbeat` link needs `login_hint` and is approved only by the instructor it names; the exchange answer holds `account_subject` (section 10). Section 9's function table: `auth_new_link_code` stores the set account's `(issuer, subject)`; `auth_exchange_link_code` returns `NULL` or that pair instead of true or false; `auth_collect_pairing` returns the email or null |
+| Section 7 | Steps 2, 3 and 5: a `classbeat` link needs `login_hint` and is approved only by the instructor it names; the exchange answer holds `account_subject` (section 10). Section 9's function table: `auth_new_link_code` takes `login_hint`, refuses another account (writing `source.link_refused`) and stores the set account's `(issuer, subject)`; `auth_exchange_link_code` returns `NULL` or that pair instead of true or false; `auth_collect_pairing` returns the email or null |
 | Section 9 | Closed tables gain `classbeat_sign_ins` and `classbeat_event_ids`. New functions: `auth_start_classbeat`, `auth_take_classbeat`, `auth_complete_classbeat`, `auth_reauth_classbeat` (the identity check and the session of section 5), `auth_classbeat_event` (section 8). `player_auth` gains `UPDATE (email)` on `accounts`, `DELETE` on `accounts` for `account-deleted`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` on the two new tables, and `UPDATE (bound_issuer, bound_subject)` on `signup_allowlist`. The guard tests' lists gain all of these. The bound in "What this stops" gains the rows below |
 | Section 10 | New limits (below) |
 | Section 11 | New events (below) |
@@ -274,7 +278,7 @@ session for that instructor, because the ID token is checked by the backend, not
 the subjects of every account are in rows it can read once it enters them. It can create an
 account for any email on the allowlist that has no bound subject, by passing a made-up identity
 and `email_verified` true. It can call `auth_classbeat_event` and delete an account or end its
-sessions. Each leaves the events of section 10 where the account survives. It cannot create an
+sessions. Each leaves the audit events of ADR 0002 section 11 where the account survives. It cannot create an
 account that the allowlist does not allow, or change an identity.
 
 **Limits (ADR 0002 section 10).**
@@ -318,11 +322,16 @@ where someone else is signed in):
   approval answers `403 wrong_account`, no code is made, and the account gets the event
   `source.link_refused` with the reason `wrong_account`. An account that is not an instructor
   gets the same answer. The hint grants nothing.
-- `auth_new_link_code` stores, with the code, the `(issuer, subject)` of the account already set.
-  It takes no new argument. `auth_exchange_link_code` returns nothing (`NULL`) on a refusal,
+- The check is made in the database, not by the backend: `auth_new_link_code` gains the argument
+  `login_hint` (null for other sources). For source `classbeat` it compares the hint with the
+  set account's issuer and subject; on a mismatch, or for an account that is not an instructor,
+  it writes `source.link_refused` (`wrong_account`), stores no code and raises `wrong_account`,
+  which the backend answers as `403 wrong_account`. The backend writes no audit row itself.
+- `auth_new_link_code` stores, with the code, the `(issuer, subject)` of the account already set. `auth_exchange_link_code` returns nothing (`NULL`) on a refusal,
   and on success the link's `(issuer, subject)`. The answer of `POST /api/source/token` holds
   it as `account_subject: {"iss": …, "sub": …}`.
-- classbeat keeps the link only if `account_subject` equals both the player issuer it expects and
+- classbeat keeps the link only if `account_subject` equals both classbeat's own issuer (the one it
+  signs ID tokens as) and
   the pairwise subject of the classbeat user who started the link. Otherwise it ends the link at
   once with `DELETE /api/source/link`. That leaves `source.linked` then `source.revoked` in the
   account the link reached, and its owner gets the link mail, which tells them what happened.
