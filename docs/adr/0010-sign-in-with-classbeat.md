@@ -89,7 +89,8 @@ is the player server's own credential at classbeat; no other product's secret is
    3. checks the ID token (section 3), and discards the access token and any refresh token
       unread. No user-info call is made;
    4. completes the sign-in (section 4) or the re-authentication (section 5);
-   5. answers `303` to `/classes` (section 6).
+   5. answers `303` to `/classes` (section 6), for `sign_in` and `reauth` alike; the path is a
+      constant, not a return entry.
       The code and `state` are never in a later address, and every page has
       `Referrer-Policy: no-referrer`.
 
@@ -167,7 +168,9 @@ export, account deletion and "sign out everywhere"; passkeys are closed for inst
 - On success, `auth_reauth_classbeat(asking_session_hash, issuer, subject, auth_time,
   session_hash)` checks the identity against the asking session's account and issues a new
   session with "last signed in" set to the token's `auth_time`, as a sign-in does; the asking
-  session is ended. The page then returns to where it asked. A refusal changes no session.
+  session is ended. The callback then lands on `/classes`, like a sign-in (step 2.5 and
+  section 6): no destination is carried, and the instructor goes back to the export, deletion
+  or "sign out everywhere" by hand, within the 10 minutes. A refusal changes no session.
 - A recent sign-in holds while now − `auth_time` ≤ 600 seconds, checked when the sensitive action
   is asked, with no clock allowance beyond that. `prompt=login` makes classbeat authenticate the
   user again, and the callback refuses a re-authentication whose `auth_time` is older than the
@@ -185,8 +188,10 @@ weakens a guard, so the decision changed instead.)
 The return entries of ADR 0006 and ADR 0008 (`control`, `control.XXXX-XXXX`, `play`,
 `play.<class id>`) are kept in memory only on the site, and the round trip to classbeat leaves
 the page. **A classbeat sign-in carries no return entry.**
-- The start request takes no `return_to`. A body that carries one is refused with `422`
-  (`invalid_return`) and nothing is stored, so no class code is kept by this route.
+- The start request takes no `return_to`. A body that has the field at all, with any value
+  (`null`, a string valid or not, any other JSON type), is refused with `422 invalid_return`,
+  after the limits of section 10 and before anything else. The value is not echoed, logged or
+  audited, and no row and no cookie are made, so no class code is kept by this route.
 - Nothing about a return entry is stored, in `state`, the `classbeat_sign_ins` row, an address
   sent to classbeat, a log line or an audit event.
 - The callback's `303` goes to `/classes`, as a sign-in without a return entry does today. The
@@ -196,8 +201,15 @@ the page. **A classbeat sign-in carries no return entry.**
   That is screens-lane wording, from memory only.
 
 So after a classbeat sign-in, the companion (`/control`) and the web app's `/play` are reached
-again by hand and the class code is entered again, as the pairing way back below already is.
-The email-link path of ADR 0006 keeps its return entry where that path is still open.
+again by hand, and the class code (for `/control`) or the class (for `/play`) is chosen again,
+as the pairing way back below already is.
+
+**This accepts the gap that ADR 0006 rejected.** Under section 7 the email link and passkeys are
+closed for every account kind today, so the classbeat sign-in is the only open instructor
+path and no instructor sign-in keeps a way back. ADR 0006 rejected "accepting the gap" when the
+email link was open; here the backend return-entry guard comes first, and a PR never weakens a
+guard. The email-link return entry of ADR 0006 stays built and tested for when that path is
+reopened.
 
 The way back of ADR 0006 decision 5 that is not a return entry (`/pair?code=…`, other site
 paths) is not carried either: after a classbeat sign-in such a page is reached again by hand, and
@@ -383,7 +395,9 @@ where someone else is signed in):
 - (2026-11-15, #490) After a classbeat sign-in the instructor lands on `/classes` and opens the
   companion or `/play` again by hand. A later ADR may restore the way back without storage, for
   example by finishing the sign-in in a second tab while the first tab, which still holds the
-  entry in memory, notices the new session; that needs its own design and review.
+  entry in memory, notices the new session; that needs its own design and review, and must
+  answer ADR 0006's objection to its `BroadcastChannel` alternative (it fails once the
+  first tab is closed).
 
 - **classbeat (phase PL3, in its own repository and under its own rules)** becomes an OIDC
   provider: a client registry with exact redirect addresses, pairwise subjects, an authorize

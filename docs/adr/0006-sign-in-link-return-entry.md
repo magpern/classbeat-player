@@ -99,6 +99,9 @@ never put in a link.
   have to carry it back.
 - **Accepting the gap.** Rejected: an instructor who signs in by mail on the handlebar loses
   the companion, which is the case the return entry exists for.
+  (ADR 0010, section 6, as amended 2026-11-15: for the classbeat sign-in, the only open
+  instructor path today, this gap is accepted, because storing the entry would break the
+  backend return-entry guard.)
 
 ## Consequences
 
