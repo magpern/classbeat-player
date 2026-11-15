@@ -1,0 +1,4 @@
+# The wrapper is pinned by exact bytes (tools/src/wrapper_pins.ts): checkouts must not change line endings.
+gradlew text eol=lf
+gradle/wrapper/gradle-wrapper.properties text eol=lf
+gradlew.bat -text

@@ -3,6 +3,10 @@
 // fixture with the refused part removed is accepted, so the test shows the refusal is what stops it.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkTree } from "../src/guard_rules.js";
 import type { Tree } from "../src/guard_rules.js";
@@ -174,5 +178,40 @@ describe("NB-C: the second view finds what the stripped view cannot see", () => 
     const found = checkTree(bad);
     assert.ok(found.some((x) => x.startsWith("manifest:") && /exactly one `tasks\.matching/.test(x)), JSON.stringify(found));
     assert.deepEqual(checkTree(real), []);
+  });
+});
+
+describe("loader: entries that are not regular files are refused", () => {
+  const LINK = "core/src/main/kotlin/linked";
+  const SUB = "app/src/main/kotlin/sub";
+
+  it("the guard refuses a symlink or submodule path, and accepts the tree without it", () => {
+    for (const p of [LINK, SUB]) fires({ ...real, paths: [...real.paths, p], special: [p] }, real, "sources", /not a regular file/, p);
+  });
+
+  it("the loader marks a symlink to a directory, a dangling symlink and a gitlink, and no regular file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "follower-load-"));
+    try {
+      const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "pipe" });
+      git("init", "-q");
+      mkdirSync(join(dir, "elsewhere"));
+      writeFileSync(join(dir, "elsewhere/Evil.kt"), "class Evil\n");
+      mkdirSync(join(dir, "core/src/main/kotlin"), { recursive: true });
+      writeFileSync(join(dir, "core/src/main/kotlin/Ok.kt"), "class Ok\n");
+      symlinkSync("../../../../elsewhere", join(dir, LINK));
+      symlinkSync("nowhere", join(dir, "core/dangling"));
+      mkdirSync(join(dir, SUB), { recursive: true });
+      git("update-index", "--add", "--cacheinfo", `160000,${"1".repeat(40)},${SUB}`);
+      const loaded = loadTree(dir);
+      assert.deepEqual([...(loaded.special ?? [])].sort(), ["core/dangling", LINK, SUB].sort());
+      assert.ok(loaded.files["core/src/main/kotlin/Ok.kt"] !== undefined);
+      assert.ok(!loaded.special!.includes("core/src/main/kotlin/Ok.kt"));
+      // Without the entries nothing is special.
+      rmSync(join(dir, LINK)); rmSync(join(dir, "core/dangling")); rmSync(join(dir, SUB), { recursive: true });
+      git("rm", "-q", "--cached", "-f", SUB);
+      assert.deepEqual(loadTree(dir).special, []);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

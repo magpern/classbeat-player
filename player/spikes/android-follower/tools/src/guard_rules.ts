@@ -3,12 +3,14 @@
 // Where a list can be closed it is an allowlist (permissions, dependencies, URLs), not a blocklist.
 
 export interface Tree {
-  /** Paths relative to android-follower/, mapped to their text: manifest, `.kt` under src/main, `.kts`. */
+  /** Paths relative to android-follower/, mapped to their text: the manifest, the wrapper texts and every `.kt` and `.kts` file in the tree. */
   files: Record<string, string>;
   /** Every path in the tree (for committed signing material). */
   paths: string[];
   /** SHA-256 (hex) of the binary build inputs by path (the wrapper jar). Computed by the loader, not here. */
   hashes?: Record<string, string>;
+  /** Tracked entries that are not regular files (a symlink of any kind, a submodule): the loader cannot read what is behind them. Computed by the loader. */
+  special?: string[];
 }
 
 import { countMatches, liteText, stripComments, stripXmlComments, syntaxProblem } from "./kotlin_text.js";
@@ -109,6 +111,7 @@ export function checkTree(tree: Tree): string[] {
     const ok = p.endsWith(".kt") ? KT_PATHS.test(p) : p.endsWith(".kts") ? KTS_PATHS.test(p) : p === "gradle/wrapper/gradle-wrapper.jar";
     if (!ok) add("sources", p, "a source or binary file outside the allowlisted paths");
   }
+  for (const p of tree.special ?? []) add("sources", p, "not a regular file (a symlink or a submodule hides what is behind it)");
   // Every Kotlin source and script that exists must have been read (#570, N10): the loader reads them all, and one it did not read is refused, not skipped.
   for (const p of tree.paths) if (/\.kts?$/i.test(p) && (tree.files[p] === undefined || !/\.kts?$/.test(p))) add("sources", p, "Kotlin the guard did not read: every .kt and .kts file must be loaded and checked");
   for (const p of tree.paths) if (/\.(?:jks|keystore|p12|pfx)$|(?:^|\/)(?:keystore\.properties|\.env[\w.]*)$/i.test(p)) add("signing", p, "committed signing material or env file");
