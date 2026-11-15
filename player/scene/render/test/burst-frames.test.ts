@@ -56,10 +56,31 @@ function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? sources(join(dir, n)) : n.endsWith(".ts") ? [join(dir, n)] : []));
 }
 
+/** The last top-level argument of each `new RigLoop|BurstTracker|RunBudget(...)` call that has two or more, found by matching brackets. */
+function lastArgs(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/new (?:RigLoop|BurstTracker|RunBudget)\(/g)) {
+    let [depth, cur] = [1, ""];
+    const args: string[] = [];
+    for (let i = (m.index ?? 0) + m[0].length; i < text.length; i++) {
+      const c = text.charAt(i);
+      if ("([{".includes(c)) depth++;
+      else if (")]}".includes(c)) depth--;
+      if (depth === 0) break;
+      if (c === "," && depth === 1) { args.push(cur.trim()); cur = ""; } else cur += c;
+    }
+    args.push(cur.trim());
+    if (args.length > 1) out.push(args[args.length - 1] ?? "");
+  }
+  return out;
+}
+
 test("source fence: nothing under src/ turns the budget off; only the demo's page does, from its query", () => {
-  const turnsOff = /new (RigLoop|BurstTracker|RunBudget)\([^)]*,\s*true\s*\)|budgetOff:\s*true/;
-  const bad = ["src", "../model/src"].flatMap((d) => sources(join(import.meta.dirname, "..", d))).filter((f) => turnsOff.test(readFileSync(f, "utf8")));
-  assert.deepEqual(bad, []);
+  // A second constructor argument is only the plumbed option, never a literal or a variable holding one.
+  const plumbed = new Set(["budgetOff", "options.budgetOff === true"]);
+  const files = ["src", "../model/src"].flatMap((d) => sources(join(import.meta.dirname, "..", d)));
+  assert.deepEqual(files.flatMap((f) => lastArgs(readFileSync(f, "utf8"))).filter((a) => !plumbed.has(a)), []);
+  assert.deepEqual(files.filter((f) => /budgetOff:\s*true/.test(readFileSync(f, "utf8"))), []);
   const main = readFileSync(join(import.meta.dirname, "..", "demo", "main.ts"), "utf8");
   assert.match(main, /budget/);
   // Only the loop, the renderer's options and the tracker take the option; nothing under src/ reads the page's query.

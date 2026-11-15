@@ -121,6 +121,23 @@ test("a song change dims the rig to a quarter: down in 120 ms, held, up in 120 m
   assert.ok(masters.filter((m) => m < 1 && m > 0.25).length >= 12, "and the edges are ramps, not steps");
 });
 
+test("Tempo only (bpm, no anchors) is as the Beat level: the ramp runs, so a drop away from a change bursts, a drop on a change and a no-moments change do not (the gap, as built)", () => {
+  const tempo: Feed["cls"] = { ...DEMO_CLASS, songs: DEMO_CLASS.songs.map((song) => Object.fromEntries(Object.entries(song).filter(([k]) => k !== "anchors")) as typeof song) };
+  const make: Make = (ms) => ({ ...feedAt(ms, { link: { state: "Locked" } }), cls: tempo });
+  assert.equal(play(make, 30_000, 59_500).bursts, 1, "the 58 s drop bursts, the 40 s drop on a change does not");
+  assert.equal(play(make, 70_000, 98_000).bursts, 0, "no moments, a change at 80 s: no light-only burst");
+});
+
+test("a seek across an interval change in a song with no moments gives no light-only burst in the jump frame (the class clock is not continuous)", () => {
+  for (const state of ["Coasting", "Locked"] as const) {
+    const loop = new RigLoop(tokens);
+    let seen = 0;
+    loop.step(feedAt(70_000, { link: { state } }), 0, "High");
+    for (const ms of [90_000, 90_017, 90_033]) seen += loop.step(feedAt(ms, { link: { state } }), 1 / 60, "High").burst > 0 ? 1 : 0;
+    assert.equal(seen, 0, state);
+  }
+});
+
 test("the dim is left out where the scheduler has no room for both edges: beside a burst, and at the None level", () => {
   assert.equal(Math.min(...playMasters(DEMO_CLASS, 58_500, 62_000, 60_000)), 1, "the burst of the song change at 60 s takes the room: the re-aim marks the song");
   assert.equal(Math.min(...playMasters(DEMO_CLASS, 69_000, 72_000, 70_000, { state: "Coasting" })), 1, "no runs without the beat");

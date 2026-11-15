@@ -86,7 +86,8 @@ export class BurstTracker {
     if (!a.still && momentsAllowed(a.link) && drops.length === 0 && (song?.moments ?? []).length === 0 && nextChange !== undefined && nextChange - a.classMs <= AHEAD_MS && nextChange > a.classMs &&
       (this.sinceBurst === null || this.sinceBurst + nextChange - a.classMs >= BURST_GAP_MS)) this.budget.admit(`light@${nextChange}`, "lightBurst", decay(nextChange), where);
     const passed = continuous && canBurst ? frames.find(({ at }) => this.clock < at && at <= a.classMs)?.m : undefined;
-    const light = gatedBurst(a.link, (song?.moments ?? []).length > 0, intervalChanged, this.sinceBurst);
+    const clockContinuous = !first && Math.abs(a.classMs - this.clock) < CONTINUOUS_MS;
+    const light = clockContinuous ? gatedBurst(a.link, (song?.moments ?? []).length > 0, intervalChanged, this.sinceBurst) : null;
     let burstNow = false;
     if (!a.still && spaced && (passed !== undefined || light !== null)) {
       const id = passed !== undefined ? `drop@${passed.at_ms}` : `light@${nth(a.cls.intervals, interval)?.startMs ?? 0}`;
