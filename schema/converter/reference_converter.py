@@ -9,8 +9,11 @@ Input:
      "segments": [{"name", "kind", "intervals": [{"sec", "zone", "rpm" | "gradient",
                                                    "standing"?, "game"?, "ftp_test"?, "cue"?}]}],
      "music"?: {"crossfade_sec": number,
+                "spotify_playlist"?: "<22-character id>",
                 "songs": [{"spotify_id", "title", "artist", "bpm"?, "length_sec"}]}}
-A class without "music" (or with no songs) is a soundless class.
+A class without "music" (or with no songs) is a soundless class. A playlist id on a class with
+songs is written as music.spotify_playlist and the document is then format 1.2; without it the
+document stays 1.0.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 FORMAT_VERSION = "1.0"
+FORMAT_VERSION_WITH_PLAYLIST = "1.2"
 MAX_TITLE = 80  # the format's name limit (classbeat's class names go to 100)
 
 # The zone scale travels with the class (ADR 0003 section 3). classbeat has zones 1 to 7 and no
@@ -129,13 +133,17 @@ def convert(fixture: dict[str, Any]) -> dict[str, Any]:
         "song_timing": "missing" if soundless else "estimated",
     }
 
+    playlist = None if soundless else music_in.get("spotify_playlist")
+    if playlist:
+        music["spotify_playlist"] = playlist
+
     klass: dict[str, Any] = {"title": _text(fixture["name"])[:MAX_TITLE].strip()}
     if fixture.get("description"):
         klass["description"] = _text(fixture["description"])
     klass.update({"sport": sport, "length_ms": at})
 
     return {
-        "format_version": FORMAT_VERSION,
+        "format_version": FORMAT_VERSION_WITH_PLAYLIST if playlist else FORMAT_VERSION,
         "class": klass,
         "music": music,
         "zone_scale": [{"zone": z, **ZONE_SCALE[z]} for z in sorted(time_in_zone)],

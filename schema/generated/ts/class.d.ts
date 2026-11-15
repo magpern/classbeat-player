@@ -34,7 +34,7 @@ export type Class = {
   intervals: [Interval, ...Interval[]];
   songs: Song[];
 };
-export type FormatVersion = "1.0" | "1.1";
+export type FormatVersion = "1.0" | "1.1" | "1.2";
 export type Name = string;
 export type Quality = "measured" | "estimated" | "missing";
 /**
@@ -61,6 +61,10 @@ export interface Music {
   source: "spotify" | "swedebeat" | "none";
   design_crossfade_ms: number;
   song_timing: Quality;
+  /**
+   * Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).
+   */
+  spotify_playlist?: string;
 }
 export interface ZoneDef {
   zone: number;

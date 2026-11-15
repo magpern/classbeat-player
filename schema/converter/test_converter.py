@@ -113,3 +113,23 @@ def test_songs_that_cannot_fill_the_class_are_refused() -> None:
     fixture["music"]["songs"] = fixture["music"]["songs"][:2]  # last window would pass its length
     with pytest.raises(ConversionError):
         convert(fixture)
+
+
+def test_playlist_id_is_carried_and_makes_the_document_1_2() -> None:
+    doc = convert(load(FIXTURES / "class-30min-spotify-playlist.input.json"))
+    assert doc["format_version"] == "1.2"
+    assert doc["music"]["spotify_playlist"] == "37i9dQZF1DXcBWIGoYBM5M"
+
+
+def test_without_a_playlist_the_document_stays_1_0() -> None:
+    doc = convert(load(FIXTURES / "class-30min-crossfade-off.input.json"))
+    assert doc["format_version"] == "1.0"
+    assert "spotify_playlist" not in doc["music"]
+
+
+def test_playlist_on_a_soundless_class_is_dropped() -> None:
+    fixture = load(FIXTURES / "class-30min-spotify-playlist.input.json")
+    fixture["music"]["songs"] = []
+    doc = convert(fixture)
+    assert doc["format_version"] == "1.0"
+    assert "spotify_playlist" not in doc["music"]

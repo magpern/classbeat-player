@@ -68,7 +68,7 @@ The valid vectors are hand-maintained. Changing a valid document means recomputi
    `song_timing: missing`; any other source requires at least one song. Anchors or moments of
    quality `missing` must be empty lists; of any other quality, non-empty.
 5. **Producers strict, readers lax.** One schema file, strict (`additionalProperties: false`
-   everywhere, `format_version` `"1.0"` or `"1.1"`, the minors this schema knows). The reader schema is derived from it in code
+   everywhere, `format_version` `"1.0"`, `"1.1"` or `"1.2"`, the minors this schema knows). The reader schema is derived from it in code
    (`reader_schema`): unknown fields allowed, any `1.x` accepted. A reader first checks the
    version string: an unknown major gives `unsupported_major` (the plain "needs a newer version"
    message is the player's), a malformed string a `schema` error. Everything else (types,
@@ -163,6 +163,35 @@ New vectors: `valid/class-pattern-climb-and-jumps.json`, `valid/class-pattern-so
 (bad lengths, beat counts of 0, 65 and 7.5, unknown kind, `start_on` and position, one and
 five positions, `position` differing from `positions[0]`, a 1.0 label, a running interval).
 
+## Format 1.2: Spotify playlist id (issue #464, contract part)
+
+Minor 1.2 is additive, by ADR 0003 section 7 ("a minor version only adds optional fields"): it
+adds one optional field, `music.spotify_playlist`, and nothing else. It is a new minor, not an
+addition to 1.1, because strict producers validate against the exact version they write and 1.1
+has no such field; this follows the 1.1 precedent. Every 1.0 and 1.1 document is a valid 1.2
+document and is unchanged. A 1.0 or 1.1 reader accepts a 1.2 document by the reader rules and
+ignores the field.
+
+```json
+"music": { "source": "spotify", "design_crossfade_ms": 0, "song_timing": "estimated", "spotify_playlist": "37i9dQZF1DXcBWIGoYBM5M" }
+```
+
+1. **Same pattern as `ids.spotify_track`:** exactly 22 letters or digits (`^[A-Za-z0-9]{22}$`),
+   the bare id, never a URL or a `spotify:` URI. A malformed id is a schema error at
+   `/music/spotify_playlist`.
+2. **Strict producers must write `"1.2"` to use it.** A document labelled `"1.0"` or `"1.1"`
+   that carries the field is a schema error in both modes (pointer `/music`).
+3. **Only with source `spotify`:** semantic rule `playlist_without_spotify_source` at
+   `/music/spotify_playlist` (a playlist id beside source `none` or `swedebeat` is meaningless).
+4. **Data only.** The field names a playlist; this contract does not say what a player does
+   with it. Spotify audio is never downloaded, stored or played by this product.
+
+Vectors: `valid/class-spotify-playlist.json`, `invalid/schema-spotify-playlist-malformed`,
+`invalid/schema-spotify-playlist-in-format-1-0`, `invalid/schema-spotify-playlist-in-format-1-1`,
+`invalid/playlist-without-spotify-source`; the strict future-minor vector is now
+`schema-strict-refuses-minor-1-3`. The reference converter writes the field (format 1.2) when
+the fixture has a playlist id (`converter/fixtures/class-30min-spotify-playlist.*`).
+
 ## Where each ADR rule is enforced
 
 `S` = JSON Schema, `V` = semantic validator (`semantic.py` / `semantic.ts`), `P` = publication
@@ -174,7 +203,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s1 types generated; stale types fail CI | `generate.sh`, `check-generated.sh` | edit-without-regenerating check; `tests/test_generated.py`, `test/generated-types.test.ts` (round trip) |
 | s2 times are whole milliseconds | S (`integer`) | `schema-time-not-integer` |
 | s2 cue at most 120 characters, names at most 80 | S | `schema-cue-over-120-chars`, `schema-title-over-80-chars` |
-| s3 `format_version` `"1.0"` or `"1.1"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-2`, `reader/` |
+| s3 `format_version` `"1.0"`, `"1.1"` or `"1.2"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-3`, `reader/` |
 | s3 required top-level fields, no unknown fields (no games, no colour) | S | `schema-missing-required-music`, `schema-unknown-field-games`, `schema-unknown-nested-field-colour` |
 | s3 sport, music source, `design_crossfade_ms` at least 0, `song_timing` values | S | `schema-sport-unknown`, `schema-source-none-timing-not-missing` |
 | s3 zone scale: unique numbers, ranges | S, V | `zone-scale-duplicate`, `zone-scale-range-inverted`, `schema-zone-out-of-1-to-7` |

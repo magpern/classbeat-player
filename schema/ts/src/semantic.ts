@@ -24,6 +24,13 @@ function checkIntervals(doc: Doc, out: Violation[]): void {
   if (expected !== doc.class.length_ms) out.push(["intervals_end_mismatch", "/intervals"]);
 }
 
+function checkMusic(doc: Doc, out: Violation[]): void {
+  const music = doc.music;
+  if ("spotify_playlist" in music && music.source !== "spotify") {
+    out.push(["playlist_without_spotify_source", "/music/spotify_playlist"]);
+  }
+}
+
 function checkPoints(points: Doc[], length: number, base: string, kind: string, out: Violation[]): void {
   let previous = -1;
   points.forEach((p, j) => {
@@ -114,6 +121,7 @@ function checkTotals(doc: Doc, out: Violation[]): void {
 /** Every semantic violation of a schema-valid class document, sorted. */
 export function checkSemantics(doc: unknown): Violation[] {
   const out: Violation[] = [];
+  checkMusic(doc, out);
   checkIntervals(doc, out);
   checkSongs(doc, out);
   checkSegments(doc, out);
