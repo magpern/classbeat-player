@@ -266,26 +266,25 @@ coral. Energy rises with the zone:
 
 | Zone | Ambient glow | Fixtures lit (of 22) | Movement (deg/s, at most) | Beat lift | Wall |
 |---|---|---|---|---|---|
-| 1 | 0.045 | 8 | 6 | 15 % | Slow wave |
-| 2 | 0.055 | 10 | 8 | 18 % | Slow wave |
-| 3 | 0.065 | 12 | 11 | 22 % | Wave and beat |
-| 4 | 0.075 | 15 | 15 | 27 % | Beat chase |
-| 5 | 0.085 | 17 | 19 | 32 % | Beat chase |
-| 6 | 0.095 | 20 | 24 | 38 % | Beat chase, both ways |
-| 7 | 0.11 | 22 | 30 | 45 % | Beat chase, both ways |
+| 1 | 0.045 | 8 | 6 | 1.5 % | Slow wave |
+| 2 | 0.055 | 10 | 8 | 2.0 % | Slow wave |
+| 3 | 0.065 | 12 | 11 | 2.5 % | Wave and beat |
+| 4 | 0.075 | 15 | 15 | 3.0 % | Beat chase |
+| 5 | 0.085 | 17 | 19 | 3.5 % | Beat chase |
+| 6 | 0.095 | 20 | 24 | 4.0 % | Beat chase, both ways |
+| 7 | 0.11 | 22 | 30 | 4.5 % | Beat chase, both ways |
 
 "Ambient glow" is the linear-light level of the zone colour lighting the haze and the room, before
 the beams and before the text rule below; it is kept low so the beams carry the light. A class with
 fewer than seven zones uses the rows of its own zone numbers.
 
-The "Beat lift" column is the lift **as built today** (15 to 45 %, 55 % in a build), and a test
-holds the code to this table. Measured strictly, a lift and its fall are two changes in every
-region a lit beam crosses, so at 120 bpm the beat alone made 5 changes a second (#569). **To be
-built in #577:** the lift goes **under the flash threshold** in every region, 1.5, 2.0, 2.5,
-3.0, 3.5, 4.0 and 4.5 % for zones 1 to 7, on every light of the rig (2 % in a build, with the
-haze's step; "The flash budget"), and #577 puts these values in this column together with the
-code: the energy of a zone shows in how many fixtures are lit, how bright and how fast they are
-and how dense the haze is, and the beat is a breath on top, not a flash.
+The "Beat lift" column is the lift as built (#577), and a test holds the code to this table. It is
+a share of **every light of the rig** (beams, lenses, haze glow, wall), 1.5 to 4.5 % and 2 % in a
+build, so no run of it passes 5 % in any region ("The flash budget"): measured strictly, a lift and
+its fall are two changes in every region a lit beam crosses, and at 120 bpm the larger lifts of
+earlier revisions made 5 changes a second (#569). The energy of a zone shows in how many fixtures
+are lit, how bright and how fast they are and how dense the haze is, and the beat is a breath on
+top, not a flash.
 
 ### Colour: two hues, never a mix (S5, decided, #569 review)
 

@@ -1,6 +1,7 @@
 // How much of the music is known (scene.md, S8). Nothing beat-like is ever guessed. Pure.
 
 import type { BeatAnchor } from "./beat-grid.ts";
+import { TEMPO_PULSE } from "./flash-budget.ts";
 
 export type BeatLevel = "Beat" | "Tempo only" | "None";
 export type LinkStateName = "Locked" | "Paused" | "Coasting" | "Off the list" | "Ambiguous" | "Manual";
@@ -35,7 +36,7 @@ export interface BeatAllowance {
   readonly patternCount: readonly StartOn[];
 }
 
-export const TEMPO_PULSE_DEPTH = 0.12;
+export const TEMPO_PULSE_DEPTH = TEMPO_PULSE;
 
 export const ALLOWED: Readonly<Record<BeatLevel, BeatAllowance>> = {
   Beat: { beatLift: true, wallChase: true, phrase: true, barsLine: true, patternAccent: true, tempoPulse: 0, patternCount: ["interval_start", "next_downbeat"] },

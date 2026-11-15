@@ -40,6 +40,8 @@ export interface Room {
   readonly beatMs: number;
   readonly endMs: number;
   readonly frameMs: number;
+  /** Runs already placed, which the new ones must not touch and count beside. */
+  readonly placed?: readonly PlacedRun[];
 }
 export interface PlacedRun { readonly wish: RunWish; readonly pieces: readonly Span[] }
 export interface RunPlan {
@@ -81,7 +83,7 @@ const point = (t: number): Span => ({ fromMs: t, toMs: t });
 /** Steps c to g: the wishes in the scheduler's order, each into a gap that holds it whole, or a step or skipped. */
 export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const items: Span[] = [...room.marks.map(point), ...steadyChanges(room.beat, room.endMs, room.beatMs).map(point)];
-  const runs: PlacedRun[] = [];
+  const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
   const fits = (pieces: readonly Span[]): boolean => {
@@ -102,8 +104,8 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   return { runs, steps, skipped };
 }
 
-/** The window in which beat-like light is held at rest around a run: 250 ms before its start until 300 ms after its end. */
-export function holdOf(run: PlacedRun): Span {
-  return { fromMs: Math.min(...run.pieces.map((p) => p.fromMs)) - HOLD_BEFORE_MS, toMs: Math.max(...run.pieces.map((p) => p.toMs)) + HOLD_AFTER_MS };
+/** The window in which beat-like light is held at rest around a run (`--scene-hold`): 250 ms before its start until 300 ms after its end. */
+export function holdOf(run: PlacedRun, before = HOLD_BEFORE_MS, after = HOLD_AFTER_MS): Span {
+  return { fromMs: Math.min(...run.pieces.map((p) => p.fromMs)) - before, toMs: Math.max(...run.pieces.map((p) => p.toMs)) + after };
 }
-export const inHold = (runs: readonly PlacedRun[], ms: number): boolean => runs.some((r) => { const h = holdOf(r); return ms >= h.fromMs && ms < h.toMs; });
+export const inHold = (runs: readonly PlacedRun[], ms: number, before = HOLD_BEFORE_MS, after = HOLD_AFTER_MS): boolean => runs.some((r) => { const h = holdOf(r, before, after); return ms >= h.fromMs && ms < h.toMs; });

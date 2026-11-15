@@ -49,7 +49,7 @@ test("S8: what each level allows", () => {
   const b = ALLOWED.Beat;
   assert.deepEqual([b.beatLift, b.wallChase, b.phrase, b.barsLine, b.patternAccent, b.tempoPulse], [true, true, true, true, true, 0]);
   const t = ALLOWED["Tempo only"];
-  assert.deepEqual([t.beatLift, t.wallChase, t.phrase, t.barsLine, t.patternAccent, t.tempoPulse], [false, false, false, false, false, 0.12]);
+  assert.deepEqual([t.beatLift, t.wallChase, t.phrase, t.barsLine, t.patternAccent, t.tempoPulse], [false, false, false, false, false, 0.04]);
   const n = ALLOWED.None;
   assert.deepEqual([n.beatLift, n.wallChase, n.phrase, n.barsLine, n.patternAccent, n.tempoPulse], [false, false, false, false, false, 0]);
   assert.ok(patternCountRuns("Beat", "interval_start") && patternCountRuns("Beat", "next_downbeat"));

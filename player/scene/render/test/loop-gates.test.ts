@@ -42,10 +42,11 @@ test("locked: the build gathers, the drop bursts once and fans, the breakdown ru
   assert.ok(b.breakdown > 0);
 });
 
-test("the drop's burst and its gather and fan also run at the None level (coasting) and when ambiguous", () => {
+test("the drop's gather and fan also run at the None level (coasting) and when ambiguous, with no burst and no lift: steady light takes one of the 3 (S6)", () => {
   for (const state of ["Coasting", "Ambiguous", "Manual"] as const) {
     const a = play(through({ state }), 30_000, 52_000);
-    assert.ok(a.gather > 0 && a.fan > 0 && a.bursts === 1, state);
+    assert.ok(a.gather > 0 && a.fan > 0, state);
+    assert.equal(a.bursts, 0, `${state}: the drop is the fan's frame, with no burst`);
     assert.equal(a.maxLift, 0, `${state}: no lift without the beat`);
   }
 });
@@ -109,11 +110,27 @@ test("drops closer than 10 s share one burst; drops 10 s or more apart each burs
   assert.equal(count(drops(40_000, 51_000)), 2, "11 s apart: both burst");
 });
 
-test("a song change dims the rig to a quarter for one beat", () => {
+const playMasters = (cls: Feed["cls"], from: number, to: number, change: number | null, link: Feed["link"] = { state: "Locked" }): number[] => {
   const loop = new RigLoop(tokens);
-  const masters: number[] = [];
-  for (let ms = 59_000; ms < 61_500; ms += 1000 / 60) masters.push(loop.step(feedAt(ms), 1 / 60, "High").master);
+  const out: number[] = [];
+  for (let ms = from; ms < to; ms += 1000 / 60) {
+    const f = feedAt(ms, { link });
+    out.push(loop.step(change !== null && ms >= change ? { ...f, cls, songIndex: 2, songPosMs: ms - change } : { ...f, cls }, 1 / 60, "High").master);
+  }
+  return out;
+};
+
+test("a song change dims the rig to a quarter: down in 120 ms, held, up in 120 ms on the first beat (100 bpm: 600 ms)", () => {
+  // The change at 70 s is no interval change and no burst, so the scheduler has room for both edges.
+  const masters = playMasters(DEMO_CLASS, 69_000, 72_000, 70_000);
   assert.equal(Math.min(...masters), 0.25);
-  const dimmed = masters.filter((m) => m === 0.25).length / 60;
-  assert.ok(Math.abs(dimmed - 60 / 128) < 0.05, `dimmed for ${dimmed} s, one beat at 128 bpm is ${60 / 128}`);
+  const frames = (test: (m: number) => boolean) => masters.filter(test).length / 60;
+  assert.ok(Math.abs(frames((m) => m < 1) - (0.6 + 0.12) ) < 0.05, "the dim lasts the beat and the up edge");
+  assert.ok(Math.abs(frames((m) => m === 0.25) - 0.48) < 0.05, "held at a quarter between the edges");
+  assert.ok(masters.filter((m) => m < 1 && m > 0.25).length >= 12, "and the edges are ramps, not steps");
+});
+
+test("the dim is left out where the scheduler has no room for both edges: beside a burst, and at the None level", () => {
+  assert.equal(Math.min(...playMasters(DEMO_CLASS, 58_500, 62_000, 60_000)), 1, "the burst of the song change at 60 s takes the room: the re-aim marks the song");
+  assert.equal(Math.min(...playMasters(DEMO_CLASS, 69_000, 72_000, 70_000, { state: "Coasting" })), 1, "no runs without the beat");
 });

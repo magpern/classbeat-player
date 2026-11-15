@@ -4,6 +4,7 @@ export * from "./beat-grid.ts";
 export * from "./beat-level.ts";
 export * from "./colour.ts";
 export * from "./energy.ts";
+export * from "./flash-budget.ts";
 export * from "./flash-marks.ts";
 export * from "./flash-runs.ts";
 export * from "./frame.ts";

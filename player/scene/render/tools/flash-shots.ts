@@ -1,11 +1,11 @@
-// A report, not a gate (#546; the gate is the flash-budget issue's): the strict S6 count of scene.md on the real
-// page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
+// The strict S6 gate (#577; reported since #546): the count of scene.md on the real page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
 // the scene's canvas is read every frame (linear light), and tools/luminance-steps.ts counts every change over
 // 10 % of the larger end, each direction, no gate on duration, in every region: the whole screen, the four
 // quadrants, every 1/3 x 1/3 window at a stride of 1/6 (the 3 x 3 grid, the grid offset by half a cell, and the
 // positions between) and the 1/3 strips. The most changes in any sliding second, and the region it is in, go to the
-// log and to artifacts/flash-steps.json, so a change can be compared with `main`. `main` does not meet the strict
-// gate today (the review of #569 measured it), so this run fails only if it measured nothing.
+// log and to artifacts/flash-steps.json. The run fails if any run of any moment, locked with the beat or coasting, has more
+// than 3 changes in a sliding second in any region, and if it measured nothing. A run that fails is fixed in the light or
+// the schedule, never in the measure.
 //
 // The same frames carry S5 (tools/s5-fit.ts): every pixel of every frame, read from the canvas as shown, must be
 // `a x token + w x white` within 1 code value for the current zone's token, or the next zone's during the
@@ -23,7 +23,11 @@ interface Moment { readonly name: string; readonly fromS: number; readonly toS: 
 // The demo class (demo/scenario.ts): intervals at 20, 40, 60, 80, 100, 120 and 140 s; song changes at 60 s (into a
 // song with no moments, so with a burst) and 100 s (into a song with a breakdown); a drop at 40 s; a pattern from 120 s.
 export const MOMENTS: readonly Moment[] = [
+  { name: "steady beats in zone 1", fromS: 6, toS: 9.5 },
   { name: "beats in zone 2", fromS: 24, toS: 27 },
+  { name: "steady beats in zone 4 (after the fan)", fromS: 50, toS: 53.5 },
+  { name: "steady beats in zone 5", fromS: 64, toS: 67.5 },
+  { name: "steady beats in zone 6", fromS: 88, toS: 91.5 },
   { name: "interval change (20 s)", fromS: 18.5, toS: 22.5 },
   { name: "build, drop, burst and fan, on an interval change (40 s)", fromS: 36, toS: 44 },
   { name: "song change that is also an interval change into a song with no moments (60 s)", fromS: 58.5, toS: 63.5 },
@@ -137,19 +141,22 @@ async function play(open: Open, m: Moment, query: string): Promise<Run> {
 export async function reportS6(open: Open, artifacts: string): Promise<Counted[]> {
   const counted: Counted[] = [];
   const s5Faults: string[] = [];
+  const s6Faults: string[] = [];
   for (const m of MOMENTS) {
     const line: string[] = [];
     for (const [state, query] of STATES) {
       const run = await play(open, m, query);
       assert.ok(run.frames >= (m.toS - m.fromS) * 55, `${m.name}, ${state}: only ${run.frames} frames measured`);
       if (run.s5.bad > 0) s5Faults.push(`${m.name}, ${state}: ${run.s5.bad} of ${run.s5.pixels} pixels are not a x token + w x white, for example ${run.s5.worst}`);
+      if (run.most > MAX_CHANGES_PER_SECOND) s6Faults.push(`${m.name}, ${state}: ${run.most} changes in a second in ${run.worstRegion} (limit ${MAX_CHANGES_PER_SECOND})`);
       counted.push({ moment: m.name, state, run });
       line.push(`${state} ${run.most} (${run.worstRegion}), S5 ${run.s5.bad} of ${run.s5.pixels} px`);
     }
-    console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND}; not gated here)`);
+    console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND})`);
   }
   mkdirSync(artifacts, { recursive: true });
   writeFileSync(join(artifacts, "flash-steps.json"), JSON.stringify({ limitPerSecond: MAX_CHANGES_PER_SECOND, moments: counted }, null, 2));
   assert.deepEqual(s5Faults, [], "S5: a rendered pixel is not a x token + w x white");
+  assert.deepEqual(s6Faults, [], "S6: more than 3 changes in a sliding second");
   return counted;
 }

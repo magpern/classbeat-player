@@ -1,7 +1,6 @@
 // A position pattern's light (scene.md "What drives what", S8, rule 4): beams at full brightness on the
-// "up" side and at 72 % on the "down" side, a 25 % accent on the first beat of each side, at the Beat
-// level only; brightness only. The module is the pattern's parsing and its numbers; nothing draws it yet
-// (the flash budget, #577, sets how much of it fits in S6).
+// "up" side and at 72 % on the "down" side, a 5 % accent (rise 40 ms, fall 200 ms) on the first beat of each side in place
+// of that beat's lift, at the Beat level only; brightness only. The rig draws it (the flash budget, #577).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SceneClass } from "../../model/src/index.ts";
@@ -39,11 +38,12 @@ test("full on the up side, 72 % on the down side, and back to full", () => {
   assert.equal(light(cls, SIDE_START_MS(43) + 400, { down: 0.5 }).level, 0.5);
 });
 
-test("the accent: 25 % on the first beat of each side, within 50 ms of the beat, gone by the next beat, once per side", () => {
+test("the accent: 5 % on the first beat of each side, within 50 ms of the beat, gone by 240 ms, once per side", () => {
   for (const beat of [41, 49, 57]) {
     const t = SIDE_START_MS(beat);
-    assert.ok(Math.abs(light(DEMO_CLASS, t + 1).accent - ACCENT_DEPTH) < 0.01, `beat ${beat}: the accent peaks on the beat`);
-    assert.ok(light(DEMO_CLASS, t + 50).accent > 0.15, "and is still there 50 ms on");
+    assert.ok(Math.abs(light(DEMO_CLASS, t + 40).accent - ACCENT_DEPTH) < 0.001, `beat ${beat}: the accent peaks 40 ms after the beat`);
+    assert.ok(light(DEMO_CLASS, t + 50).accent > 0.04, "and is still there 50 ms on");
+    assert.equal(light(DEMO_CLASS, t + 241).accent, 0, "and spent by 240 ms");
     assert.ok(light(DEMO_CLASS, t - 20).accent < 0.001, `beat ${beat}: and was not there before it`);
     assert.equal(light(DEMO_CLASS, t + BEAT_S * 1000 + 1).accent < 0.001, true, "gone by the second beat of the side");
     assert.equal(light(DEMO_CLASS, t + 3 * BEAT_S * 1000).accent, 0, "none mid-side");
@@ -59,12 +59,12 @@ test("only where the beat is known (S8): not at the Tempo only or None level, no
 test("next_downbeat: as the zone until the first downbeat (beat 36), then the first side starts there", () => {
   const cls = withPattern({ positions: ["seated", "standing"], beats: [8, 8], startOn: "next_downbeat" });
   assert.deepEqual(light(cls, SIDE_START_MS(35)), NO_PATTERN_LIGHT);
-  assert.ok(Math.abs(light(cls, SIDE_START_MS(36) + 1).accent - ACCENT_DEPTH) < 0.01);
+  assert.ok(Math.abs(light(cls, SIDE_START_MS(36) + 40).accent - ACCENT_DEPTH) < 0.001);
   assert.equal(light(cls, SIDE_START_MS(40)).level, 0.72, "the first side is the pattern's first entry (seated: down)");
   assert.equal(light(cls, SIDE_START_MS(46)).level, 1);
 });
 
-test("a side shorter than a third of a second is left out: at most 3 switches a second", () => {
+test("a side shorter than half a second is left out: its step is a frame mark, 500 ms from the last", () => {
   const quick = { positions: ["standing", "seated"], beats: [1, 1], startOn: "interval_start" };
   assert.deepEqual(light(withPattern(quick, { bpm: 200, anchors: [{ at_ms: 0, bpm: 200 }] }), 121_000), NO_PATTERN_LIGHT);
   assert.notDeepEqual(light(withPattern(quick), 121_000 + BEAT_S * 1000), NO_PATTERN_LIGHT, "at 100 bpm a beat is 0.6 s");

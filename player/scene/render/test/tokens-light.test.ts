@@ -2,9 +2,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ENERGY_BY_ZONE, MAX_BEAT_LIFT, QUALITY, ZONES, beatLevel, sceneFrame } from "../../model/src/index.ts";
+import { BUILD_LIFT, ENERGY_BY_ZONE, QUALITY, TEMPO_PULSE, ZONES, beatLevel, sceneFrame } from "../../model/src/index.ts";
 import { DEMO_CLASS } from "../demo/scenario.ts";
-import { BUILD_LIFT_MAX, beatLift, beatStride, burstEnvelope, fixturesLit, litMask, masterLevel, wallDot } from "../src/light-calc.ts";
+import { beatLift, beatStride, burstEnvelope, fixturesLit, litMask, masterLevel, wallDot } from "../src/light-calc.ts";
 import { SCENE_TOKEN_DEFAULTS, parseHex, readSceneTokens } from "../src/tokens.ts";
 import { TOKENS_CSS, styleFromCss, tokensFromFile } from "../tools/tokens-file.ts";
 
@@ -46,34 +46,41 @@ test("lit fixtures: the zone's count, spread along the rig, capped by the qualit
   assert.equal(fixturesLit(at(25_000, 2), "High").filter(Boolean).length, 1);
 });
 
-test("the beat lift: only at the Beat level on the beat, at most 3 a second, at most 45 % (55 % in a build), none in the still rig", () => {
+test("the beat lift: only at the Beat level on the beat (40 ms up, 200 ms down), at most 3 a second, at most 4.5 % (2 % in a build), none in the still rig", () => {
   const frame = (pos: number, link: { state: "Locked" | "Coasting" }, zone = 7) =>
     sceneFrame({ cls: { ...DEMO_CLASS, intervals: [{ startMs: 0, zone }] }, classMs: 0, songIndex: 0, songPosMs: pos, phaseDeg: 0, link });
   const f = frame(10_000, { state: "Locked" });
   assert.equal(f.level, "Beat");
-  assert.equal(beatLift({ frame: f, bpm: 120, beats: 20, songPosMs: 10_000, reduced: false }), ENERGY_BY_ZONE[7].beatLift); // on the beat
-  assert.ok(beatLift({ frame: f, bpm: 120, beats: 20.5, songPosMs: 10_000, reduced: false }) < MAX_BEAT_LIFT * 0.2);
+  const at = (ms: number, bpm = 120) => beatLift({ frame: f, bpm, beats: 20 + (ms * bpm) / 60_000, songPosMs: 10_000, reduced: false });
+  assert.equal(at(0), 0, "the rise starts on the beat");
+  assert.ok(Math.abs(at(40) - ENERGY_BY_ZONE[7].beatLift) < 1e-9, "the peak is the zone's, 4.5 % in zone 7");
+  assert.ok(Math.abs(at(140) - ENERGY_BY_ZONE[7].beatLift / 2) < 1e-9, "and falls linearly to rest in 200 ms");
+  assert.equal(at(240), 0);
+  assert.equal(at(300), 0);
+  assert.equal(beatLift({ frame: f, bpm: 120, beats: 20.5, songPosMs: 10_000, reduced: false }), 0, "at rest before the next lift");
   assert.equal(beatLift({ frame: f, bpm: 120, beats: 20, songPosMs: 10_000, reduced: true }), 0);
   const none = frame(10_000, { state: "Coasting" });
   assert.equal(beatLevel({ state: "Coasting" }, DEMO_CLASS.songs[0]!), "None");
   assert.equal(beatLift({ frame: none, bpm: 120, beats: 20, songPosMs: 10_000, reduced: false }), 0);
   const build = frame(38_000, { state: "Locked" });
-  assert.ok(beatLift({ frame: build, bpm: 120, beats: 76, songPosMs: 38_000, reduced: false }) <= BUILD_LIFT_MAX);
+  assert.ok(Math.abs(beatLift({ frame: build, bpm: 120, beats: 76.08, songPosMs: 38_000, reduced: false }) - BUILD_LIFT) < 1e-9, "2 % in a build");
   assert.equal(beatStride(180), 1);
   assert.equal(beatStride(181), 2); // above 180 bpm every second beat
   let lifts = 0;
   const fast = frame(10_000, { state: "Locked" });
-  for (let i = 0; i < 6; i++) if (beatLift({ frame: fast, bpm: 200, beats: 10 + i, songPosMs: 0, reduced: false }) > 0.4) lifts++;
+  for (let i = 0; i < 6; i++) if (beatLift({ frame: fast, bpm: 200, beats: 10 + i + 0.2, songPosMs: 0, reduced: false }) > 0.01) lifts++;
   assert.equal(lifts, 3, "above 180 bpm every second beat lifts");
 });
 
-test("tempo only: a 12 % pulse and nothing at None; no wall chase without the beat", () => {
+test("tempo only: a 4 % pulse and nothing at None; no wall chase without the beat", () => {
   const noAnchors = { ...DEMO_CLASS, songs: [{ bpm: 120 }], intervals: [{ startMs: 0, zone: 4 }] };
   const f = sceneFrame({ cls: noAnchors, classMs: 0, songIndex: 0, songPosMs: 5_000, phaseDeg: 0, link: { state: "Locked" } });
   assert.equal(f.level, "Tempo only");
-  assert.ok(beatLift({ frame: f, bpm: 120, beats: null, songPosMs: 5_000, reduced: false }) <= 0.12);
+  assert.ok(beatLift({ frame: f, bpm: 120, beats: null, songPosMs: 5_000, reduced: false }) <= TEMPO_PULSE);
+  assert.ok(Math.abs(beatLift({ frame: f, bpm: 120, beats: null, songPosMs: 5_040, reduced: false }) - TEMPO_PULSE) < 1e-9, "40 ms into the pulse");
   assert.ok(wallDot(10, 3, "beat chase", null, 5, false) < 0.31);
-  assert.ok(wallDot(0, 3, "beat chase", 0, 5, false) > 0.6); // the chase head, with the beat known
+  assert.ok(wallDot(0, 3, "beat chase", 0, 5, false) > 0.6); // a tooth of the chase, with the beat known
+  assert.ok(wallDot(0, 3, "beat chase", 1, 5, false) < wallDot(1, 3, "beat chase", 1, 5, false), "the comb moved on by a column");
   assert.equal(wallDot(10, 3, "beat chase", 2, 5, true), 0.2); // the still rig's wall does not move
 });
 
@@ -83,5 +90,6 @@ test("master level and burst envelope", () => {
   assert.equal(masterLevel({ state: "Locked", held: true }, 0.06, false), 0.06);
   assert.equal(masterLevel({ state: "Off the list" }, 0.06, false), 0.6);
   assert.equal(masterLevel({ state: "Locked" }, 0.06, true), 0.25);
+  assert.equal(masterLevel({ state: "Locked" }, 0.06, 0.5), 0.625, "half way into the dim");
   assert.deepEqual([null, 0, 125, 250, 400].map((ms) => burstEnvelope(ms, 250)), [0, 1, 0.5, 0, 0]);
 });
