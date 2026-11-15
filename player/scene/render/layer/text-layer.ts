@@ -6,7 +6,7 @@
 
 import type { TextBox } from "../src/text-box.ts";
 import type { TextView } from "../src/text-view.ts";
-import { Pool, make, setClass, setText, show } from "./dom-kit.ts";
+import { Pool, make, setClass, setText, show, vh, vw2 } from "./dom-kit.ts";
 import { ScoreLayer } from "./score-layer.ts";
 
 /** Mask boxes grow by this share of the window height above and below each line box (descenders on the tight line-height tiers). */
@@ -41,12 +41,14 @@ export class TextLayer {
     const gelRoot = make(root, "div", "gel");
     const gelHead = make(gelRoot, "div", "gel-head");
     setText(make(gelHead, "span", "lbl"), "Zone");
-    const [gelNum, gelName] = [make(gelHead, "span", "gel-num n"), make(gelRoot, "div", "gel-name")];
+    const gelNum = make(gelHead, "span", "gel-num n");
+    const gelName = make(gelRoot, "div", "gel-name");
     const gelTargets = make(gelRoot, "div", "gel-targets");
     this.gel = { root: gelRoot, num: gelNum, name: gelName, targets: new Pool(() => ({ root: make(gelTargets, "span", "") })) };
 
     const rail = make(root, "div", "rail");
-    const [time, done] = [ink(rail, "span", "t"), ink(rail, "span", "t")];
+    const time = ink(rail, "span", "t");
+    const done = ink(rail, "span", "t");
     make(rail, "span", "grow");
     this.rail = { time, done, seg: ink(rail, "span", "seg"), link: ink(rail, "span", "link") };
 
@@ -104,7 +106,8 @@ export class TextLayer {
     this.score.update(view.score);
   }
 
-  private updateGel({ gel }: TextView): void {
+  private updateGel(view: TextView): void {
+    const gel = view.gel;
     setClass(this.gel.root, `gel z${gel.zone}${gel.look === "down" ? " down" : ""}`);
     setText(this.gel.num, gel.numeral);
     setText(this.gel.name, gel.name);
@@ -112,7 +115,8 @@ export class TextLayer {
     this.gel.targets.use(gel.targets.length).forEach((n, i) => setText(n.root, gel.targets.at(i) ?? ""));
   }
 
-  private updateRail({ rail }: TextView): void {
+  private updateRail(view: TextView): void {
+    const rail = view.rail;
     setText(this.rail.time, rail.left);
     setText(this.rail.done, rail.done);
     setText(this.rail.seg, rail.segment ?? "");
@@ -121,7 +125,8 @@ export class TextLayer {
     setClass(this.rail.link, `link ink${rail.link.alert ? " alert" : ""}`);
   }
 
-  private updateClock({ clock }: TextView): void {
+  private updateClock(view: TextView): void {
+    const clock = view.clock;
     setText(this.clock.label, clock.label);
     show(this.clock.label, !clock.paused);
     setText(this.clock.paused, "Paused");
@@ -134,7 +139,8 @@ export class TextLayer {
     show(this.clock.pause, clock.pauseLine !== null);
   }
 
-  private updateMetrics({ metrics }: TextView): void {
+  private updateMetrics(view: TextView): void {
+    const metrics = view.metrics;
     this.metrics.forEach((n, i) => {
       const m = metrics.at(i);
       if (m === undefined) return;
@@ -153,10 +159,11 @@ export class TextLayer {
     });
   }
 
-  private updatePattern({ pattern }: TextView): void {
+  private updatePattern(view: TextView): void {
+    const pattern = view.pattern;
     show(this.pattern.root, pattern !== null);
     if (pattern === null) return;
-    const { state } = pattern;
+    const state = pattern.state;
     setClass(this.pattern.root, `pattern${pattern.compact ? " compact" : ""}`);
     setText(this.pattern.label, pattern.label);
     show(this.pattern.side, state.kind !== "note");
@@ -169,7 +176,8 @@ export class TextLayer {
     setText(this.pattern.note, state.kind === "count" ? state.then : state.text);
   }
 
-  private updateNext({ next }: TextView): void {
+  private updateNext(view: TextView): void {
+    const next = view.next;
     setText(this.next.label, next.end ? "" : "Next");
     show(this.next.chip, !next.end);
     setClass(this.next.chip, `chip z${next.zone}`);
@@ -179,8 +187,8 @@ export class TextLayer {
     show(this.next.length, !next.end);
     setText(this.next.spec, next.spec ?? "");
     show(this.next.spec, next.spec !== null);
-    this.next.root.style.left = `${next.leftVw.toFixed(2)}vw`;
-    this.next.line.style.fontSize = `${next.sizeVh}vh`;
+    this.next.root.style.left = vw2(next.leftVw);
+    this.next.line.style.fontSize = vh(next.sizeVh);
     setText(this.next.cue, next.cue ?? "");
     show(this.next.cue, next.cue !== null && next.cueLines > 0);
     setClass(this.next.cue, `n-cue ink l${next.cueLines}`);

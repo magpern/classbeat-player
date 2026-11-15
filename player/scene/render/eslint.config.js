@@ -104,6 +104,10 @@ export const LAYER_GLOBALS = [...SRC_GLOBALS, "document", "window", "HTMLElement
 // Allowlist of every member name the layer's code reads, calls or sets: the DOM members it uses on its own nodes, and the names of
 // the view it is handed. A member not on it (setHTMLUnsafe, attachShadow, replaceChildren, cssText, createContextualFragment,
 // parseHTMLUnsafe, construct ...) is refused; adding one is a reviewed change, and test/layer-fences.test.ts holds its own copy.
+export const LAYER_STYLE_PROPS = ["left", "width", "fontSize", "backgroundImage", "backgroundSize", "backgroundPosition"];
+export const LAYER_STYLE_BUILDERS = ["vw", "vw2", "vh", "bgSize", "bgPos", "stripGradient"];
+// `value` is there for the view's own field (MetricView.value); no DOM node that has one (an Attr, an input) is reachable, because
+// `attributes`, `children`, `parent*`, `*Sibling`, `firstChild`, `ownerDocument` and `getRootNode` are not on this list.
 export const LAYER_MEMBERS_ALLOWED = [
   "alert", "appendChild", "at", "backgroundImage", "backgroundPosition", "backgroundSize", "bars", "block", "blocks", "bottom", "boxes", "build", "cached",
   "chip", "className", "clip", "clips", "clock", "compact", "count", "createElement", "cue", "cueLines", "cycleVw", "detail", "done", "end", "endX",
@@ -111,7 +115,7 @@ export const LAYER_MEMBERS_ALLOWED = [
   "innerHeight", "innerWidth", "intervals", "join", "kind", "label", "layout", "left", "leftVw", "len", "length", "line", "link", "look", "map", "marks",
   "max", "metrics", "moments", "name", "nameSmall", "next", "note", "now", "nowX", "num", "number", "numeral", "offsetVw", "parts", "pattern", "pause",
   "pauseLine", "paused", "phrases", "push", "rail", "reduced", "right", "root", "row", "score", "seg", "segment", "side", "signature", "sizeVh", "slice",
-  "small", "songs", "spec", "squares", "strip", "style", "targets", "text", "textContent", "textLeft", "textRight", "then", "ticks", "time", "title", "to",
+  "small", "songs", "spec", "squares", "state", "strip", "style", "targets", "text", "textContent", "textLeft", "textRight", "then", "ticks", "time", "title", "to",
   "toFixed", "top", "total", "ts", "txt", "unit", "up", "update", "updateClock", "updateGel", "updateMetrics", "updateNext", "updatePattern", "updateRail",
   "use", "val", "value", "width", "word", "x", "x0", "x1", "zone", "zoneName", "invalidate",
 ];
@@ -128,9 +132,16 @@ const layerSyntax = ["error",
   { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only (use .at(i) or a lookup)." },
   { selector: "ImportDeclaration[source.value=/^three/]", message: "The text layer draws no three.js." },
   { selector: `MemberExpression[computed=false]:not([property.name=/^(${alt(LAYER_MEMBERS_ALLOWED)})$/])`, message: "That member is not on the text layer's allowlist of members (eslint.config.js LAYER_MEMBERS_ALLOWED)." },
-  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only." },
-  { selector: "ObjectPattern > Property:not([computed=false][key.type='Identifier'])", message: "The text layer destructures by a plain identifier key only." },
-  { selector: `ObjectPattern > Property[key.name=/^(constructor|${REFLECTION_PROPS})$/]`, message: "No `constructor`, prototype or page member in the text layer, destructured or not." },
+  // One syntax only: dot access. No computed key, literal or not; no destructuring (it reads members by key without a dot).
+  { selector: "MemberExpression[computed=true]", message: "The text layer reads members by dot access only (no computed key, literal or not)." },
+  { selector: ":matches(ObjectPattern, ArrayPattern)", message: "The text layer does not destructure: read members by dot access, so each one is checked." },
+  // Style: only these properties, each assigned only a direct call of the layer's own builders (layer/dom-kit.ts), so no string can reach a style.
+  { selector: `MemberExpression[object.property.name='style']:not([property.name=/^(${alt(LAYER_STYLE_PROPS)})$/])`, message: `The text layer sets only these style properties: ${LAYER_STYLE_PROPS.join(", ")}.` },
+  { selector: `AssignmentExpression[left.object.property.name='style']:not([right.type='CallExpression'][right.callee.name=/^(${alt(LAYER_STYLE_BUILDERS)})$/])`, message: `A style is assigned only a direct call of ${LAYER_STYLE_BUILDERS.join(", ")}.` },
+  { selector: "AssignmentExpression[left.property.name='backgroundImage']:not([right.type='CallExpression'][right.callee.name='stripGradient'])", message: "backgroundImage is assigned only stripGradient(...)." },
+  { selector: "AssignmentExpression[left.property.name='style']", message: "A node's style object is never replaced." },
+  { selector: "MemberExpression[property.name='style']:not(MemberExpression[object.property.name='style'] > MemberExpression.object)", message: "`style` is used only to set one of its listed properties." },
+  { selector: "BinaryExpression[operator='+']:matches([left.raw=/^[\"']/], [right.raw=/^[\"']/], [left.type='TemplateLiteral'], [right.type='TemplateLiteral'])", message: "No string concatenation in the text layer (a url( could be spelled in pieces); use a template in a builder." },
   { selector: `CallExpression[callee.property.name='getElementById']:not([arguments.0.value='${LAYER_ROOT_ID}'])`, message: `The text layer finds only its own root, #${LAYER_ROOT_ID}.` },
   { selector: "Literal[value=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },
   { selector: "TemplateElement[value.raw=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },

@@ -3,13 +3,12 @@
 // are neutral or cut, and where "now" is, are all in src/text-score-calc.ts.
 
 import type { IntervalBlock, ScoreView, SongClip, Strip } from "../src/text-view.ts";
-import { Pool, make, setClass, setText, show } from "./dom-kit.ts";
+import { Pool, bgPos, bgSize, make, setClass, setText, show, vw } from "./dom-kit.ts";
 
 interface BlockNodes { readonly root: HTMLElement; readonly txt: HTMLElement; readonly num: HTMLElement; readonly len: HTMLElement; readonly name: HTMLElement; readonly detail: HTMLElement; readonly strip: HTMLElement }
 interface ClipNodes { readonly root: HTMLElement; readonly txt: HTMLElement; readonly title: HTMLElement; readonly detail: HTMLElement }
 interface MarkNodes { readonly root: HTMLElement; readonly word: HTMLElement }
 
-const vw = (n: number): string => `${n.toFixed(3)}vw`;
 
 /** `linear-gradient` with hard stops: dark on the "up" beats, clear on the "down" beats (scene.md "Intervals first"). */
 export function stripGradient(strip: Strip): string {
@@ -82,8 +81,8 @@ export class ScoreLayer {
     show(n.strip, b.strip !== null);
     if (b.strip !== null) {
       n.strip.style.backgroundImage = stripGradient(b.strip);
-      n.strip.style.backgroundSize = `${vw(b.strip.cycleVw)} 100%`;
-      n.strip.style.backgroundPosition = `${vw(b.strip.offsetVw)} 0`;
+      n.strip.style.backgroundSize = bgSize(b.strip.cycleVw);
+      n.strip.style.backgroundPosition = bgPos(b.strip.offsetVw);
     }
   }
 

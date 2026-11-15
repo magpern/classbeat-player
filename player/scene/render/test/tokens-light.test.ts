@@ -36,7 +36,7 @@ test("--scene-text-cap fails closed: never above 0.08, and a value that is not a
   assert.deepEqual(cap("none"), [0.08, true]);
 });
 
-test("lit fixtures:the zone's count, spread along the rig, capped by the quality level; the fan lights all; a breakdown one", () => {
+test("lit fixtures: the zone's count, spread along the rig, capped by the quality level; the fan lights all; a breakdown one", () => {
   for (const z of ZONES) assert.equal(litMask(ENERGY_BY_ZONE[z].lit).filter(Boolean).length, ENERGY_BY_ZONE[z].lit);
   assert.equal(litMask(0).filter(Boolean).length, 0);
   const at = (songPosMs: number, songIndex = 0, zone = 4) => sceneFrame({ cls: { ...DEMO_CLASS, intervals: [{ startMs: 0, zone }] }, classMs: 0, songIndex, songPosMs, phaseDeg: 0, link: { state: "Locked" } });

@@ -39,3 +39,12 @@ export class Pool<T extends { readonly root: HTMLElement }> {
     return this.parts.slice(0, count);
   }
 }
+
+// The only values the layer writes to a node's style, each built here from a number: a share of the
+// window, a size, a gradient. eslint.config.js lets `style.<property>` be assigned only a direct call
+// of one of these, so no other string can reach a style (and none can spell a url).
+export const vw = (n: number): string => `${n.toFixed(3)}vw`;
+export const vw2 = (n: number): string => `${n.toFixed(2)}vw`;
+export const vh = (n: number): string => `${n}vh`;
+export const bgSize = (n: number): string => `${vw(n)} 100%`;
+export const bgPos = (n: number): string => `${vw(n)} 0`;
