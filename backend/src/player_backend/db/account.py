@@ -4,8 +4,9 @@ and 12).
 Every read filters by the account in the code; the policy is the backstop.
 
 - `own_email` reads the account's own email for `GET /api/site/me`, in the request's
-  transaction. `_email_and_created_at` reads the email with the account's creation time, for the
-  export's head and for the deletion's confirmation.
+  transaction; it tells an account that is gone from an instructor with no email.
+  `_email_and_created_at` reads the email with the account's creation time, for the export's
+  head and for the deletion's confirmation.
 - `export_head` runs in the signed-in request's transaction: it writes the "export made" event
   and reads the account's small parts, column by column.
 - `class_pages` reads the classes after that transaction has committed, while the answer is
@@ -24,6 +25,7 @@ Every read filters by the account in the code; the policy is the backstop.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
@@ -62,12 +64,20 @@ def _email_and_created_at(ctx: AccountContext) -> tuple[str | None, object] | No
     return found[0][0], found[0][1]
 
 
-def own_email(ctx: AccountContext) -> str | None:
+@dataclass(frozen=True)
+class OwnEmail:
+    """The account's own email, as stored: None for an instructor classbeat gave none (ADR 0010,
+    section 8)."""
+
+    email: str | None
+
+
+def own_email(ctx: AccountContext) -> OwnEmail | None:
     """The account's own email, as stored, or None when the account is gone."""
     found = ctx.db.rows(q.OWN_EMAIL, (ctx.account_id,))
-    if len(found) != 1 or not isinstance(found[0][0], str):
+    if len(found) != 1 or not (found[0][0] is None or isinstance(found[0][0], str)):
         return None
-    return found[0][0]
+    return OwnEmail(found[0][0])
 
 
 def export_head(ctx: AccountContext, client: ClientInfo) -> dict[str, object] | None:

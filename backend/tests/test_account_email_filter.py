@@ -105,10 +105,14 @@ def test_the_me_email_keeps_to_its_account_without_the_policy(
     a, b = _account(su, A), _account(su, B)
     # The handle is not held by the policy: it sees both accounts.
     assert su.execute("SELECT count(*) FROM player.accounts").fetchone() == (2,)
-    assert account.own_email(_context(db, a)) == A
-    assert account.own_email(_context(db, b)) == B
+    assert account.own_email(_context(db, a)) == account.OwnEmail(A)
+    assert account.own_email(_context(db, b)) == account.OwnEmail(B)
     # An id that is no account's finds nothing, not some other account's email.
     assert account.own_email(_context(db, uuid.uuid4())) is None
+    # An account with no email is still found, with its email null, not taken for one gone.
+    su.execute("UPDATE player.accounts SET email = NULL WHERE id = %s", (a,))
+    assert account.own_email(_context(db, a)) == account.OwnEmail(None)
+    assert account.own_email(_context(db, b)) == account.OwnEmail(B)
 
 
 def _emails(su: Conn) -> set[object]:
