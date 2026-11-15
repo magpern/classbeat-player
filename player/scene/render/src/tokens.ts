@@ -13,7 +13,7 @@ export interface StyleSource {
 export interface SceneTokens {
   /** `--zone-1` to `--zone-7`, as 0xRRGGBB. */
   readonly zones: Readonly<Record<ZoneNumber, number>>;
-  /** `--light-1`: the white of the rig (bursts, the finished house). */
+  /** `--light-1`: the white of the rig (bursts). */
   readonly white: number;
   /** `--scene-down`: lights down (paused), a share of full. */
   readonly down: number;
@@ -21,14 +21,8 @@ export interface SceneTokens {
   readonly burstPeak: number;
   /** `--scene-burst`: the burst's decay, ms. */
   readonly burstMs: number;
-  /** `--scene-house`: the house lights when the class is finished (white), a share of full. */
-  readonly house: number;
   /** `--pattern-down`: a pattern's "down" side, a share of the "up" side's brightness. */
   readonly patternDown: number;
-  /** `--m-change`: the colour cross at an interval change, ms (0 with reduced motion). */
-  readonly changeMs: number;
-  /** `--m-flash`: the lens flash at an interval change, ms (0 with reduced motion). */
-  readonly flashMs: number;
   /** `--scene-text-cap`: the highest relative luminance of the scene under text (S2). */
   readonly textCap: number;
   /** Scene tokens that were not in tokens.css, so the spec's value was used. */
@@ -36,7 +30,7 @@ export interface SceneTokens {
 }
 
 /** The spec's values for the scene-only tokens (scene.md "Tokens"), used only while tokens.css lacks them. */
-export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250, textCap: 0.08, house: 0.4, patternDown: 0.72, changeMs: 700, flashMs: 160 } as const;
+export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250, textCap: 0.08, patternDown: 0.72 } as const;
 
 export function parseHex(value: string): number | null {
   const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
@@ -71,19 +65,9 @@ export function readSceneTokens(style: StyleSource): SceneTokens {
   const burstRaw = style.getPropertyValue("--scene-burst");
   const burstMs = /(\d+)\s*ms/.exec(burstRaw);
   const burstPeak = number("--scene-burst", SCENE_TOKEN_DEFAULTS.burstPeak);
-  /** A duration in ms (`700ms cubic-bezier(...)` gives 700; `0ms` is a real zero: reduced motion). */
-  const duration = (name: string, fallback: number): number => {
-    const m = /^\s*(\d*\.?\d+)\s*ms/.exec(style.getPropertyValue(name));
-    if (m) return Number(m[1]);
-    if (!missing.includes(name)) missing.push(name);
-    return fallback;
-  };
   return {
     zones, white: colour("--light-1"),
-    house: Math.min(1, number("--scene-house", SCENE_TOKEN_DEFAULTS.house)),
     patternDown: Math.min(1, number("--pattern-down", SCENE_TOKEN_DEFAULTS.patternDown)),
-    changeMs: duration("--m-change", SCENE_TOKEN_DEFAULTS.changeMs),
-    flashMs: duration("--m-flash", SCENE_TOKEN_DEFAULTS.flashMs),
     down: number("--scene-down", SCENE_TOKEN_DEFAULTS.down),
     burstPeak, burstMs: burstMs ? Number(burstMs[1]) : SCENE_TOKEN_DEFAULTS.burstMs,
     textCap: textCap(style.getPropertyValue("--scene-text-cap"), missing),

@@ -15,7 +15,7 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
-import { flashSteps } from "./flash-shots.ts";
+import { reportS6 } from "./flash-shots.ts";
 import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
@@ -28,7 +28,7 @@ const CANDIDATES = ["/usr/bin/google-chrome", "/opt/google/chrome/chrome", "/usr
 const BURST_SHOTS = ["drop-burst", "no-moments-song-burst", "song-change-dim"];
 const SIZES = [[1920, 1080], [1366, 768]] as const;
 
-interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number; readonly flash?: true; /** The lit share the shot must still have (default 1 %): the house look before the start is two beams at 6 %. */ readonly minLit?: number }
+interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number; /** The lit share the shot must still have (default 1 %): the house look before the start is two beams at 6 %. */ readonly minLit?: number }
 // Each plays from `fromS` to `toS` on a synthetic 60 fps clock, so a screenshot is the same every time.
 const SHOTS_LIST: readonly Shot[] = [
   { name: "warm-up-zone-1", query: "", fromS: 0, toS: 5 },
@@ -40,13 +40,8 @@ const SHOTS_LIST: readonly Shot[] = [
   { name: "song-change-dim", query: "", fromS: 58, toS: 60.2 },
   { name: "no-moments-song-burst", query: "", fromS: 68, toS: 80.03 },
   { name: "breakdown", query: "", fromS: 112, toS: 122 },
-  // The deferred looks (#546): the lens flash at its peak, the colour cross half way, the position pattern on each side, the house looks.
-  { name: "interval-change-lens-flash", query: "", fromS: 18, toS: 20.03, flash: true },
-  { name: "interval-change-colour-cross", query: "", fromS: 18, toS: 20.35 },
-  { name: "pattern-up-side-accent", query: "", fromS: 122, toS: 124.65 },
-  { name: "pattern-down-side", query: "", fromS: 124, toS: 127.5 },
+  // The house look before the start (#546).
   { name: "before-the-start-house", query: "&stage=before", fromS: 0, toS: 5, minLit: 0.001 },
-  { name: "finished-house-lights-up", query: "&stage=finished", fromS: 150, toS: 156 },
   { name: "zone-7-peak", query: "", fromS: 100, toS: 106 },
   { name: "paused", query: "&state=paused", fromS: 30, toS: 36 },
   { name: "coasting-none-level", query: "&state=coasting", fromS: 30, toS: 38 },
@@ -62,7 +57,7 @@ function launch(): Promise<Browser> {
   return chromium.launch({ executablePath: found, args: ["--no-sandbox", "--force-color-profile=srgb", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 }
 
-interface Api { __scene: { advance(a: number, b: number, fps: number): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean; burst: number; flash: number } }
+interface Api { __scene: { advance(a: number, b: number, fps: number): void; log: { rows: LogRow[]; seen: Seen; failures: LogRow[]; csv(): string; peakOverall: number }; missingTokens: string[]; ended: boolean; burst: number } }
 
 async function open(browser: Browser, w: number, h: number, query: string): Promise<{ page: Page; problems: string[] }> {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
@@ -104,8 +99,6 @@ async function screenshots(browser: Browser): Promise<void> {
     const b = await brightness(page);
     const burst = await page.evaluate(() => (window as unknown as Api).__scene.burst);
     assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
-    const flash = await page.evaluate(() => (window as unknown as Api).__scene.flash);
-    assert.equal(flash > 0, shot.flash === true, `${shot.name}: lens flash ${flash}`);
     assert.equal(await settleTransitions(page), 0, `${shot.name}: a transition is still running, so the shot would be caught half way`);
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
@@ -162,7 +155,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await lightMeasurement(opener);
-  await flashSteps(opener, ARTIFACTS);
+  await reportS6(opener, ARTIFACTS);
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser);

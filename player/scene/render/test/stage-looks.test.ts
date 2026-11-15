@@ -1,11 +1,9 @@
 // The house looks and the holding look (scene.md "States"): before the start the lights are down to 6 % in
-// the first zone's colour with two slow beams, a dark wall and no beat; when finished the house lights
-// come up, the rig white and still at 40 %, the wall white; off the list the movement is halved.
+// the first zone's colour with two slow beams, a dark wall and no beat; off the list the movement is halved.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Color } from "three";
-import { QUALITY, advancePhase, angleBetween, phaseRate } from "../../model/src/index.ts";
-import { DEMO_CLASS, feedAt } from "../demo/scenario.ts";
+import { advancePhase, angleBetween, phaseRate } from "../../model/src/index.ts";
+import { feedAt } from "../demo/scenario.ts";
 import type { FeedOptions } from "../demo/scenario.ts";
 import type { Draw } from "../src/loop.ts";
 import { RigLoop } from "../src/loop.ts";
@@ -33,7 +31,7 @@ test("before the start: lights down to 6 % in the first zone's colour, two beams
     assert.equal(d.master, tokens.down);
     assert.equal(d.stage, "before");
     assert.equal(d.lit.filter(Boolean).length, 2);
-    assert.deepEqual([d.lift, d.chaseStep, d.burst, d.flash, d.frame.level], [0, null, 0, 0, "None"]);
+    assert.deepEqual([d.lift, d.chaseStep, d.burst, d.frame.level], [0, null, 0, "None"]);
     assert.equal(rig.wall.mesh.visible, false, "the wall is dark");
     assert.ok(rig.fixtures.every((f) => f.beamMaterial.uniforms.uColor!.value.getHex() === tokens.zones[1]), "the first zone's colour on every beam");
     assert.equal(rig.haze[0].material.uniforms.uColor!.value.getHex(), tokens.zones[1]);
@@ -58,43 +56,9 @@ test("before the start the beams move, slowly, on the first zone's row and not o
   assert.ok(travelled > 5 && travelled < phaseRate(1) * 10, `moves slowly: ${travelled} degrees in 10 s`);
 });
 
-test("finished: the house lights up, the rig white and still at 40 %, every fixture lit, the wall white and flat; no burst, no flash, no beat", () => {
-  const white = new Color().setHex(tokens.white);
-  for (const options of [{ stage: "finished" as const }, {}]) {
-    const from = options.stage ? 140_000 : DEMO_CLASS.endMs - 1000; // the class's own end on the clock is finished too
-    let [before, finishedFrames]: [string | null, number] = [null, 0];
-    play(options, from, DEMO_CLASS.endMs + 9000, (d, rig) => {
-      if (d.stage !== "finished") return;
-      finishedFrames++;
-      assert.equal(d.master, tokens.house);
-      assert.equal(tokens.house, 0.4);
-      assert.equal(d.lit.every(Boolean), true);
-      assert.deepEqual([d.lift, d.chaseStep, d.burst, d.flash, d.frame.level, d.reduced], [0, null, 0, 0, "None", true]);
-      assert.ok(rig.fixtures.every((f) => f.beamMaterial.uniforms.uColor!.value.getHex() === tokens.white && f.lensMaterial.color.getHex() === tokens.white));
-      assert.equal(rig.haze[0].material.uniforms.uColor!.value.getHex(), tokens.white);
-      const colours = rig.wall.mesh.instanceColor!.array;
-      for (let i = 0; i < colours.length; i += 3 * 41) {
-        const m = Math.max(colours[i]!, colours[i + 1]!, colours[i + 2]!);
-        assert.ok(m > 0 && [0, 1, 2].every((c) => Math.abs(colours[i + c]! / m - [white.r, white.g, white.b][c]! / Math.max(white.r, white.g, white.b)) < 1e-3), "the wall is white");
-      }
-      if (finishedFrames < 240) return; // coming to rest takes at most the 3.5 s a turn takes ('How a beam turns')
-      const shot = JSON.stringify([rig.measuredDirections(), rig.wall.mesh.instanceColor!.array.slice(0, 30)]);
-      before ??= shot;
-      assert.equal(shot, before, "and still: nothing moves or changes");
-    });
-    assert.notEqual(before, null);
-    assert.ok(finishedFrames > 400);
-  }
-  assert.equal(stageOf(DEMO_CLASS, DEMO_CLASS.endMs, undefined), "finished");
-  assert.equal(stageOf(DEMO_CLASS, 100, undefined), "running");
-  assert.equal(stageOf(DEMO_CLASS, 100, "before"), "before");
-});
-
-test("finished and before keep to the quality level: Medium lights 16 of 22 when finished", () => {
-  const [loop, rig] = [new RigLoop(tokens), new SceneRig(tokens)];
-  const d = loop.step(feedAt(30_000, { stage: "finished" }), 0, "Medium");
-  rig.apply(d, "Medium");
-  assert.equal(d.lit.filter(Boolean).length, QUALITY.Medium.fixtures);
+test("stageOf: before is what the shell says, anything else is running (the finished house is #577's)", () => {
+  assert.equal(stageOf("before"), "before");
+  assert.equal(stageOf(undefined), "running");
 });
 
 test("off the list the movement is halved: the phase advances at half the zone's row, and the beams travel half as far", () => {
@@ -117,4 +81,15 @@ test("off the list the movement is halved: the phase advances at half the zone's
   const ratio = travel({ link: { state: "Off the list" } }) / travel({ link: { state: "Coasting" } });
   assert.ok(ratio > 0.45 && ratio < 0.55, `off the list: ${ratio} of the coasting travel`);
   assert.equal(lensHexes(new SceneRig(tokens)).length, 22);
+});
+
+test("before the start nothing bursts or dims, even if the clock is moved over an interval or a song change", () => {
+  const [loop, rig] = [new RigLoop(tokens), new SceneRig(tokens)];
+  for (const ms of [0, 5_000, 19_900, 20_000, 39_900, 40_000, 59_900, 60_000, 79_900, 80_000, 99_900, 100_000, 119_900, 120_000, 130_000, 20_000]) {
+    for (let n = 0; n < 40; n++) {
+      const d = loop.step(feedAt(ms + n * 17, { stage: "before" }), 1 / 60, "High");
+      rig.apply(d, "High");
+      assert.deepEqual([d.burst, d.master], [0, tokens.down], `at ${ms} ms`);
+    }
+  }
 });

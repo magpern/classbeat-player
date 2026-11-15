@@ -2,8 +2,7 @@
 // back what it holds): a fixed camera, 22 fixtures, the wall, two haze layers and the white burst
 // plane. `apply` takes one `Draw` from the loop and sets every beam's direction to the model's drawn
 // direction, and brightness and colour from the model's frame. Colours are the zone tokens and white
-// only (S5, rule 7): at an interval change the front hue crosses from one token to the other inside
-// the shader, and every colour the rig holds is still a token; nothing here computes an angle.
+// only (S5, rule 7); nothing here computes an angle.
 
 import { assertNoRenderCallbacks } from "../guard/render-callbacks.ts"; // first: it captures three's defaults before any scene is built
 import { Color, Mesh, MeshBasicMaterial, PerspectiveCamera, PlaneGeometry, Scene } from "three";
@@ -17,15 +16,12 @@ import type { SceneTokens } from "./tokens.ts";
 import { TextMask } from "./text-mask.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
-import { hazeShares } from "./soft-calc.ts";
 import { wallPlays } from "./stage-calc.ts";
 import { lookup, nth } from "./lookup.ts";
 
 const BEAM_BASE = 0.3;
 const HAZE_GAIN = 1;
 const WALL_GAIN = 0.4; // the wall is a back layer, well under the beams (a deep, dark room)
-/** The lens flash: every lens at this brightness at its peak (white). */
-const FLASH_LENS = 0.95;
 
 export class SceneRig {
   readonly scene = new Scene();
@@ -67,25 +63,18 @@ export class SceneRig {
     const q = lookup(QUALITY, quality);
     // The anticipation wipe comes from the far side (right); the still rig changes colour at once.
     const reached = (t: number) => (draw.reduced ? colours.wipe > 0 : t >= 1 - colours.wipe);
-    const { from, to, k } = draw.cross;
-    const [front, past, back] = [this.hex(to), this.hex(from), this.hex(draw.back)];
-    // The side the class is on gives a brightness level and an accent on its first beat: brightness only.
-    const beam = BEAM_BASE * draw.master * (1 + 2 * draw.lift) * draw.sideLight.level * (1 + draw.sideLight.accent);
-    const flash = draw.flash * draw.master;
+    const [front, back] = [this.hex(draw.front), this.hex(draw.back)];
+    const beam = BEAM_BASE * draw.master * (1 + 2 * draw.lift);
     this.fixtures.forEach((fx, i) => {
       aimQuaternion(nth(draw.drawn, i) ?? { pan: 0, tilt: 0 }, fx.pivot.quaternion);
       const lit = nth(draw.lit, i) === true;
       const t = fx.model.count > 1 ? fx.model.index / (fx.model.count - 1) : 0.5;
-      const atBack = fx.model.layer === "back" && reached(t);
-      const [hue, was, over] = atBack ? [back, back, 1] : [front, past, k];
-      const base = (lit ? 0.9 * (1 + draw.lift) * draw.sideLight.level * (1 + draw.sideLight.accent) : 0.04) * draw.master;
-      // The lens flashes white once at an interval change, on every fixture, lit or not.
-      fx.light(hue, was, over, lit ? beam : 0, flash > 0 ? this.tokens.white : over < 0.5 ? was : hue, Math.max(base, flash * FLASH_LENS));
+      const hue = fx.model.layer === "back" && reached(t) ? back : front;
+      fx.light(hue, lit ? beam : 0, (lit ? 0.9 * (1 + draw.lift) : 0.04) * draw.master);
     });
-    const [near, far] = hazeShares(q.hazeLayers);
     const hazeLevel = energy.ambientGlow * HAZE_GAIN * (moments.gather ? 1.5 : 1) * draw.master;
-    this.haze[0].set(front, past, k, hazeLevel * near, draw.seconds, true);
-    this.haze[1].set(front, past, k, hazeLevel * far, draw.seconds * 0.7, q.hazeLayers === 2);
+    this.haze[0].set(front, hazeLevel, draw.seconds, true);
+    this.haze[1].set(front, hazeLevel * 0.7, draw.seconds * 0.7, q.hazeLayers === 2);
     this.wall.mesh.visible = q.wall && wallPlays(draw.stage);
     if (this.wall.mesh.visible) {
       this.wall.update((c) => (reached(c / (WALL_COLUMNS - 1)) ? back : front), energy.wall, draw.chaseStep, draw.seconds, draw.master * WALL_GAIN, draw.reduced);
