@@ -132,6 +132,12 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
     ["export const a = ({ x: { constructor: F } }: { x: object }): unknown => F;", "no-restricted-syntax", "src/probe.ts"],
     ["export const a = (r: Record<string, number>, k: string): unknown => { const { [k]: v } = r; return v; };", "no-restricted-syntax", "src/probe.ts"],
     ["export const a = (r: Record<string, number>): unknown => { const { 'a': v } = r; return v; };", "no-restricted-syntax", "src/probe.ts"],
+    // The options-object route (#556): the prototype of a three.js class, and a subclass method, are closed at lint.
+    ['import { MeshBasicMaterial } from "three";\nexport const a = (): unknown => MeshBasicMaterial.prototype;', "no-restricted-syntax", "src/probe.ts"],
+    ['import { MeshBasicMaterial } from "three";\nexport const a = (): unknown => MeshBasicMaterial["prototype"];', "no-restricted-syntax", "src/probe.ts"],
+    ['import { MeshBasicMaterial } from "three";\nexport const a = (): unknown => { const { prototype } = MeshBasicMaterial; return prototype; };', "no-restricted-syntax", "src/probe.ts"],
+    ['import { MeshBasicMaterial } from "three";\nexport class Sub extends MeshBasicMaterial { onBeforeCompile(): void {} }', "no-restricted-syntax", "src/probe.ts"],
+    ['import { Mesh } from "three";\nexport const Sub = class extends Mesh {};', "no-restricted-syntax", "src/probe.ts"],
     ["export const a = (): unknown => constructor;", "no-restricted-globals", "src/probe.ts"],
     ["export const a = (): unknown => Temporal;", "no-restricted-globals", "src/probe.ts"],
     ["export const a = (): unknown => valueOf;", "no-restricted-globals", "src/probe.ts"],

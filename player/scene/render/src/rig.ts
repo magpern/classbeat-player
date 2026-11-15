@@ -4,6 +4,7 @@
 // direction, and brightness and colour from the model's frame. Colours are the zone tokens and white
 // only (S5, rule 7); nothing here computes an angle.
 
+import { assertNoRenderCallbacks } from "../guard/render-callbacks.ts"; // first: it captures three's defaults before any scene is built
 import { Color, Mesh, MeshBasicMaterial, PerspectiveCamera, PlaneGeometry, Scene } from "three";
 import type { Direction, QualityLevel, RigHue } from "../../model/src/index.ts";
 import { QUALITY } from "../../model/src/index.ts";
@@ -15,7 +16,6 @@ import type { SceneTokens } from "./tokens.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
 import { lookup, nth } from "./lookup.ts";
-import { assertNoRenderCallbacks } from "./render-callbacks.ts";
 
 const BEAM_BASE = 0.3;
 const HAZE_GAIN = 1;
@@ -40,6 +40,7 @@ export class SceneRig {
     this.flash.renderOrder = 100;
     this.scene.add(this.wall.mesh, this.haze[0].mesh, this.haze[1].mesh, this.flash);
     this.flash.material.color.setHex(tokens.white);
+    // The scene is complete: nothing is added later. Anything that is, or gets a new material, needs this check too.
     assertNoRenderCallbacks(this.scene);
   }
 
