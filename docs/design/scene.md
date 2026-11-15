@@ -185,7 +185,7 @@ whole window behind everything; the gel plate and the score are opaque.
 | Gel plate | 0, 0, 24 vw, 68.4 vh; opaque zone colour | "Zone" label, numeral (32 vh, Big Shoulders 800, ink), name (at most min(7.6 vh, 4.4 vw), two lines; a name that cannot fit two lines steps to `--t-minor` as room-2d.md), targets (`--t-minor`) |
 | Rail | 27 vw, 5 vh, to 95 vw | Class time left and done, segment, link state (as room-2d.md) |
 | Metrics | 27 vw, 12 vh, stacked | Cadence, position, BPM: label `--t-label`, value 7.6 vh (Big Shoulders 800), unit `--t-minor` |
-| Clock | right-aligned to 95 vw, from 10.9 vh | Head line, 4.2 vh high, items centred: label (`--t-label`, or the compact "Paused" plate, 3.6 vh high) and bars line (4.1 vh, Big Shoulders 600, cap 3.3 %) side by side; 1.6 vh under it the countdown (26 vh, cap 21.1 %). The head line's ink keeps 1 vh from the rail above and the countdown below; see "Fitting" |
+| Clock | right-aligned to 95 vw, from 10.9 vh | Head line, 4.2 vh high, items centred: label (`--t-label`, or the compact "Paused" plate, 3.6 vh high) and bars line (3.8 vh, Big Shoulders 600, cap 3.1 %, label tier) side by side; 1.6 vh under it the countdown (26 vh, cap 21.1 %). The head line's ink keeps 1 vh from the rail above and the countdown below; see "Fitting" |
 | Pattern | from 46 vw, or 2 vw right of the widest metric value if that is further right, from 10.9 vh; only in an interval with a pattern | See "Intervals first: climbs and patterns" and "Fitting" |
 | Next | right-aligned to 95 vw, 1.2 vh under the countdown (about 38 to 54 vh) | Line 1: "Next", zone chip, name, length, cadence, position or pattern ("8 up, 8 down") (`--t-minor`, one line). Line 2: **the next interval's cue** (`--t-label`, at most 52 vw wide, at most 3 lines) |
 | Cue | 27 vw to 95 vw, ends at 68.4 vh | `--t-text`, two lines; over 60 characters `--t-text-min`, three lines |
@@ -196,16 +196,16 @@ whole window behind everything; the gel plate and the score are opaque.
 
 | Region | Box | Content |
 |---|---|---|
-| Gel plate | 0, 0, 30 vw, 48 vh | Numeral 28 vh (cap 22.8 %), name 7 vh (cap 5.7 %), targets |
+| Gel plate | 0, 0, 30 vw, 48 vh | Numeral 28 vh (cap 22.8 %), name 7.3 vh (cap 5.9 %), targets |
 | Rail | 33 vw, 5 vh, to 95 vw | As 16:9, without the segment name |
-| Metrics | one row **under the countdown**, 33 vw to 95 vw, from 39.4 vh (to about 52 vh with a folded count) | Cadence, position, BPM side by side, 2.4 vw apart, on one baseline; value and unit only, 7.2 vh (cap 5.85 %): the units ("rpm", "bpm") and the values ("Seated") carry the meaning. As room-2d's narrow layout, nothing stands beside the countdown, so a five-glyph countdown never meets a metric |
+| Metrics | one row **under the countdown**, 33 vw to 95 vw, from 39.3 vh (to about 52 vh with a folded count) | Cadence, position, BPM side by side, 2.4 vw apart, on one baseline; value and unit only, 7.2 vh (cap 5.85 %): the units ("rpm", "bpm") and the values ("Seated") carry the meaning. As room-2d's narrow layout, nothing stands beside the countdown, so a five-glyph countdown never meets a metric |
 | Clock | right-aligned to 95 vw, from 10.9 vh | As 16:9: head line, then the countdown at 26 vh (ink to about 38 vh, the estimated underline included) |
-| Next | 5 vw to 95 vw, from 52.4 vh (under the gel and the metrics row) | Line 1 as 16:9, left-aligned; 1 vh under it the next cue (`--t-label`, at most 2 lines) |
+| Next | 5 vw to 95 vw, from 52.5 vh (under the gel and the metrics row) | Line 1 as 16:9, left-aligned; 1 vh under it the next cue (`--t-label`, at most 2 lines) |
 | Cue | 5 vw to 95 vw, ends at 80.3 vh | `--t-text-min`, at most 3 lines |
-| Score | 0, 81 vh, to 95 vh | Intervals 6.6 vh (no second line: the next cue is in the next row), songs 6.4 vh; **6 minutes** wide; no minute labels under it (the band ends at the safe edge) |
+| Score | 0, 81 vh, to 95 vh | Intervals 6.6 vh (no second line: the next cue is in the next row), songs 6.4 vh; **6 minutes** wide; no minute labels under it: the band ends at the safe edge, and its right edge is always 6 minutes ahead (the window never changes in a class); the next interval is in the next row |
 
 In an interval with a pattern there is no room for the pattern block: the Position value becomes
-the side and the count (count 12.7 vh, cap 10.3 %), and the bars line stays. The row is set on
+the side and the count (count 13 vh, cap 10.4 %), and the bars line stays. The row is set on
 the count's baseline, so the count's top is the row's top and stays 1 vh under the countdown.
 Without a count the value reads "Count from the music" (`--t-label`, wrapping in the width the
 row leaves it, at most three lines, inside the row's height).
@@ -227,11 +227,16 @@ row leaves it, at most three lines, inside the row's height).
   fully labelled. "Now" is a fixed white line at 10 vw.
   It moves continuously (0.19 vw a second at 16:9), whole-second steps with reduced motion.
 - **Interval lane** (71.2 to 81.6 vh): each block is the zone colour with, in ink, its number
-  (5 vh, Big Shoulders 800), then its **length**, then its name (`--t-label`, 700) on the first
+  (Big Shoulders 800, min(5 vh, 2.8 vw); 5 vh at 3:2 and narrower), then its **length**
+  (Big Shoulders 800, min(3.72 vh, 2.1 vw); 3.72 vh at 3:2 and narrower: at least 2.6 % cap
+  height, the label tier), then its name (`--t-label`, 700) on the first
   line, and its **cue** on the second (`--t-label`), ending in an ellipsis at the block's end.
   The length comes before the name and is guaranteed: every interval of **40 s or more** shows
-  its number and its length at every supported size (40 s is 7.5 vw at 16:9 and 10 vw at 3:2 and narrower,
-  and number plus length need at most 5.5 vw at 16:10 and 7.5 vw at 5:4). The name shows only when it fits whole after
+  its number and its length at every supported size. A 40 s block is 7.5 vw wider than 3:2 and
+  10 vw at 3:2 and narrower; after the 0.25 vw gap and 0.6 vw padding on each side that leaves
+  6.05 vw and 8.55 vw. Number, gap and length measure at most 5.8 vw wider than 3:2 (the caps
+  by width hold it at 16:10 and down to 3:2: 5.65 vw at 16:9, 5.72 vw at 16:10, 5.80 vw at
+  1520 × 1000) and at most 7.9 vw at 5:4. The name shows only when it fits whole after
   them; the cue when at least 6 vw is left. Blocks wholly in the past are grey with nothing on
   them; a current block keeps its labels just right of "now".
 - **The zone colour never shows without its number** (as room-2d.md's edge rule): a block
@@ -337,7 +342,7 @@ straight on the scene.
   2 vw before the head line's ink (the paused plate, the bars line) and wraps. Where the block
   would get **less than 16 vw** between the cadence or BPM value and the countdown at its widest
   in that interval (five glyphs if the interval starts at 10:00 or more), it **folds into the
-  Position value** as at 3:2 and narrower (side and count, count 12.7 vh), decided once per
+  Position value** as at 3:2 and narrower (side and count, count 13 vh), decided once per
   interval; at 16:10 that happens with a five-glyph countdown next to "100–110 rpm".
 - **Next row**: line 1 is one line; the next cue wraps at 52 vw (3 lines at most at 16:9; 2 at
   3:2 and narrower), and its ink ends at least 1.5 vh above the cue's first line.
@@ -346,8 +351,10 @@ straight on the scene.
 - **Worst case** (checked in every state at every size): 120-character current and next cues,
   a five-glyph countdown, a pattern interval, cadence "100–110 rpm", the widest zone name
   (measured in the number face; the mock-up's `W` sets all of them). The mock-up's clearances
-  were measured from the rendered ink at 1280 × 1024, 1440 × 1080, 1680 × 1050, 1920 × 1080 and
-  1920 × 1200, running, paused, coasting, off the list and before the start: every pair meets S16.
+  were measured from the rendered ink at 1024 × 768, 1280 × 1024, 1366 × 768, 1440 × 900,
+  1440 × 1080, 1500 × 1000, 1680 × 1050, 1920 × 1080, 1920 × 1200 and 2560 × 1600, running,
+  paused, coasting, off the list and before the start: every pair meets S16. The pattern's side
+  and count start 1.2 vh under its label, so they stay clear of the head line too.
 
 ## States
 
@@ -411,7 +418,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 
 | Check | Requirement |
 |---|---|
-| S1. Text height (cap height / screen height) | As C1, **measured in the product's own browser** (cap heights about 2.3 % lower than the mock-up's), so the product's sizes carry that margin over the floors, which are not lowered. Countdown at least **20 %** (26 vh gives 21.1 %); zone numeral at least **25 %** wider than 3:2 (32 vh: 26.0 %) and **22 %** at 3:2 and narrower (28 vh: 22.8 %; a deliberate departure from C1's 25 %, so the clock, the metrics and a 6-minute score fit beside and under a 30 vw gel); metric values, zone name and pattern side at least **5.5 %** (narrow values 7.2 vh: 5.85 %; narrow name 7 vh: 5.69 %; a name stepped down by the fitting rules: 3 %); the pattern's beat count at least **10 %** (14.6 % at 16:9, 11.9 % stepped, 10.3 % folded); the cue, class time and next row's first line at least **3 %**; labels, the next cue, link state and score text at least **2 %** |
+| S1. Text height (cap height / screen height) | As C1, **measured in the product's own browser** (cap heights about 2.3 % lower than the mock-up's), so the product's sizes carry that margin over the floors, which are not lowered. Countdown at least **20 %** (26 vh gives 21.1 %); zone numeral at least **25 %** wider than 3:2 (32 vh: 26.0 %) and **22 %** at 3:2 and narrower (28 vh: 22.8 %; a deliberate departure from C1's 25 %, so the clock, the metrics and a 6-minute score fit beside and under a 30 vw gel); metric values, zone name and pattern side at least **5.5 %** (narrow values 7.2 vh: 5.85 %; narrow name 7.3 vh: 5.9 %; a name stepped down by the fitting rules: 3 %); the pattern's beat count at least **10 %** (14.6 % at 16:9, 11.9 % stepped, 10.4 % folded); the cue, class time and next row's first line at least **3 %**; labels, the next cue, link state and score text at least **2 %** |
 | S2. Contrast | **Only `--light-1` text over the scene.** Text against the worst pixel under its ink, over a sequence of at least 120 frames covering a beat, a build, a drop and an interval change: at least **7 : 1** for every text on the scene, labels included. The scene's relative luminance inside each text box (grown by 1.2 vh, faded over 3 vh) is at most **0.08** on every frame. Text on opaque fills as room-2d.md |
 | S3. Look-ahead | The score shows at least **5 minutes** ahead of "now" at every supported size (**8** at 16:9 and wider, **6** at 3:2 and narrower, to the screen's edge). Every interval of **40 s or more** starting within the labelled window (7 min at 16:9, 5 min narrower) shows its **number and its length**; any block that cannot show its number shows no zone colour. The **next interval's number, name, length, targets and cue are always on screen in the next row**, whatever the score shows |
 | S4. Visible at once | All nine content items in every running state, with the band hidden, at every supported size |

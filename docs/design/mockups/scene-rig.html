@@ -62,8 +62,8 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .clock .count { font: 800 26vh/0.82 var(--face-number); margin: 1.6vh 0 0 auto; width: fit-content; white-space: nowrap; }
 .clock .bars:empty { display: none; }
 .clock .count.est { border-bottom: 0.5vh dashed var(--light-1); }
-/* 4.1 vh (cap 3.3 %): the head line holds its ink 1 vh clear of the rail above and the countdown below */
-.clock .bars { font: 600 4.1vh/1 var(--face-number); }
+/* 3.8 vh (cap 3.1 %): the head line holds its ink 1 vh clear of the rail above and the countdown below */
+.clock .bars { font: 600 3.8vh/1 var(--face-number); }
 .clock .bars .w { font-family: var(--face-text); font-weight: 400; font-size: 0.8em; }
 /* Compact plates: the paused plate stays inside the 4.2 vh head line, at least 1 vh from the countdown and the rail */
 .pplate { display: inline-block; font-size: var(--t-label); line-height: 1; padding: 0.25vh 0.8vw; }
@@ -80,7 +80,7 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 /* ---- Beat-counted position pattern (format 1.1): word, big beat count, beats left ---- */
 .pat { position: absolute; left: 46vw; top: 10.9vh; display: none; }
 .pat.on { display: block; }
-.prow { display: flex; align-items: flex-end; gap: 1vw; margin-top: 0.8vh; }
+.prow { display: flex; align-items: flex-end; gap: 1vw; margin-top: 1.2vh; }
 .pat .pw { font: 800 9vh/0.82 var(--face-number); text-transform: uppercase; white-space: nowrap; }
 .pat .pc { font: 800 18vh/0.82 var(--face-number); }
 .pat .pc:empty, .pat .pw:empty { display: none; }
@@ -93,7 +93,7 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .pips .pn { flex-basis: 100%; white-space: normal; font: 400 var(--t-label)/1.1 var(--face-text); margin-top: 0.6vh; }
 .cfm { display: inline-block; white-space: normal; max-width: 24vw; font: 400 var(--t-minor)/1.05 var(--face-text); }
 .metric .v .pw2 { text-transform: uppercase; }
-.metric .v .pc2 { font-size: 12.7vh; margin-left: 0.5vw; }
+.metric .v .pc2 { font-size: 13vh; margin-left: 0.5vw; }
 
 /* ---- The score: opaque, flat, 8 minutes ahead ---- */
 .score { position: fixed; left: 0; right: 0; top: 70.4vh; bottom: 0; background: var(--stage); z-index: 2; overflow: hidden; border-top: 0.3vh solid var(--stage-line); }
@@ -104,10 +104,12 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 .blk.past > *, .blk.sliver > * { visibility: hidden; }
 .in { position: absolute; top: 0; padding: 0.9vh 0.6vw 0; white-space: nowrap; }
 .l1 { display: flex; align-items: baseline; gap: 0.6vw; }
-.l1 .num { font: 800 5vh/1 var(--face-number); }
+.l1 .num { font: 800 var(--sc-num)/1 var(--face-number); }
+:root { --sc-num: min(5vh, 2.8vw); --sc-len: min(3.72vh, 2.1vw); }
+@media (max-aspect-ratio: 3/2) { :root { --sc-num: 5vh; --sc-len: 3.72vh; } }
 .l1 .nm, .l1 .len { font-weight: 700; }
 .l1 .nm { order: 3; } .l1 .len { order: 2; }
-.l1 .len { font-family: var(--face-number); font-weight: 800; font-size: 1.2em; }
+.l1 .len { font-family: var(--face-number); font-weight: 800; font-size: var(--sc-len); }
 .l2 { margin-top: 0.6vh; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
 .l2 b { font-weight: 700; }
 .pst { position: absolute; left: 0; right: 0; bottom: 0; height: 1vh; }
@@ -134,11 +136,11 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
 @media (max-aspect-ratio: 3/2) {
   .gel { width: 30vw; height: 48vh; }
   .gel-num { font-size: 28vh; }
-  .gel-name { font-size: 7vh; }
+  .gel-name { font-size: 7.3vh; }
   .rail { left: 33vw; }
   .rail .seg { display: none; }
   /* Metrics: one row under the countdown (room-2d), so a five-glyph countdown never meets them */
-  .metrics { left: 33vw; right: var(--safe-x); top: 39.4vh; flex-direction: row; align-items: baseline; gap: 2.4vw; }
+  .metrics { left: 33vw; right: var(--safe-x); top: 39.3vh; flex-direction: row; align-items: baseline; gap: 2.4vw; }
   .metric { display: flex; align-items: baseline; }
   .metric .v { font-size: 7.2vh; }
   /* The units ("rpm", "bpm") and the values ("Seated") carry the meaning: no labels in the row */
@@ -146,7 +148,7 @@ canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bl
   .metric:nth-child(2) { flex: 1 1 0; min-width: 0; }
   .metric:nth-child(2) .v { white-space: normal; min-width: 0; }
   .cfm { display: block; max-width: none; font: 400 var(--t-label)/1.05 var(--face-text); }
-  .next { position: fixed; left: var(--safe-x); right: var(--safe-x); top: 52.4vh; margin: 0; text-align: left; }
+  .next { position: fixed; left: var(--safe-x); right: var(--safe-x); top: 52.5vh; margin: 0; text-align: left; }
   .nx1 { justify-content: flex-start; }
   .nxc { max-width: none; margin-left: 0; }
   .cue { left: var(--safe-x); bottom: 19.7vh; }
@@ -470,7 +472,8 @@ function tw(text, w, face, px) { mctx.font = `${w} ${px}px "${face}"`; return Ma
 function measureLabels() {
   widths = new Map();
   const vh = H / 100, BS = 'Big Shoulders Display', AT = 'Atkinson Hyperlegible', lab = 3.1 * vh;
-  for (const b of blocks) widths.set(b, { num: tw(String(b.iv.z), 800, BS, 5 * vh), nm: tw(ZONES[b.iv.z][0], 700, AT, lab), len: tw(mmss(b.iv.b - b.iv.a), 800, BS, 1.2 * lab) });
+  const vw = W / 100, scNum = narrow ? 5 * vh : Math.min(5 * vh, 2.8 * vw), scLen = narrow ? 3.72 * vh : Math.min(3.72 * vh, 2.1 * vw);
+  for (const b of blocks) widths.set(b, { num: tw(String(b.iv.z), 800, BS, scNum), nm: tw(ZONES[b.iv.z][0], 700, AT, lab), len: tw(mmss(b.iv.b - b.iv.a), 800, BS, scLen) });
   for (const c of clips) widths.set(c, { ti: tw(c.s.ti, 700, AT, lab), ar: tw(c.s.ar, 400, AT, lab), bp: tw(c.s.bpm + ' bpm', 400, AT, lab) });
   for (const m of moms) widths.set(m, tw(m.el.textContent, 700, AT, lab) + 0.4 * vh + 0.4 * W / 100);
   for (const m of minEls) widths.set(m, tw(m.e.textContent, 400, AT, lab));
