@@ -3,7 +3,7 @@
 import { zoneClass } from "../design/zones.ts";
 import { digits, el } from "./dom.ts";
 import type { Child } from "./dom.ts";
-import type { ClockModel, MetricModel, NextModel, RailModel } from "./model.ts";
+import type { ClockModel, MetricModel, NextModel, PatternValue, RailModel } from "./model.ts";
 
 export function renderRail(rail: RailModel): HTMLElement {
   const parts: Node[] = [];
@@ -31,19 +31,34 @@ function renderLine(line: NonNullable<ClockModel["line"]>): HTMLElement {
   return el("div", { class: "bars text", tier: "minor", text: line.text });
 }
 
+/** The Position value of a pattern interval: side and count on one baseline, or a note (room-2d.md, "A position pattern"). */
+function patternValueEl(p: PatternValue): HTMLElement {
+  if (p.kind === "note") return el("span", { class: "v note", tier: "label", lines: 3, text: p.text });
+  const kids: Node[] = [el("b", { class: "side", tier: "value", text: p.side })];
+  // Each figure sits in its own cell, so the count never shifts as it steps.
+  kids.push(p.kind === "count" ? el("b", { class: "cnt", tier: "count" }, digits(p.count)) : el("span", { class: "soon", tier: "label", lines: 2, text: p.text }));
+  return el("span", { class: "v n pv" }, kids);
+}
+
 export function renderMetrics(metrics: readonly MetricModel[], beat: HTMLElement | null): HTMLElement {
   const items = metrics.map((m, i) => {
+    const label = el("span", { class: "lbl", tier: "label", text: m.label });
+    if (m.pattern) return el("div", { class: "metric" }, [label, patternValueEl(m.pattern)]);
     const value: Child[] = [m.value];
     if (m.unit) value.push(el("small", { tier: "minor", text: m.unit }));
     // The beat dot follows the BPM, the last metric, inside its value.
     if (beat && i === metrics.length - 1) value.push(beat);
-    return el("div", { class: "metric" }, [el("span", { class: "lbl", tier: "label", text: m.label }), el("span", { class: "v n", tier: "value" }, value)]);
+    return el("div", { class: "metric" }, [label, el("span", { class: "v n", tier: "value" }, value)]);
   });
-  return el("section", { class: "metrics" }, items);
+  // A pattern's count closes the column's gap so the cue below keeps its place.
+  return el("section", { class: `metrics${metrics.some((m) => m.pattern) ? " fold" : ""}` }, items);
 }
 
 export function renderCue(cue: { text: string; long: boolean }): HTMLElement {
-  return el("p", { class: `cue${cue.long ? " long" : ""}`, tier: "text", lines: 4, text: cue.text });
+  // `data-by-length`: the model's choice by character count; fit-cue.ts measures the rest.
+  const p = el("p", { class: `cue${cue.long ? " long" : ""}`, tier: "text", lines: 4, text: cue.text });
+  if (cue.long) p.dataset.byLength = "1";
+  return p;
 }
 
 export function renderNext(next: NextModel): HTMLElement {
@@ -61,7 +76,10 @@ export function renderNext(next: NextModel): HTMLElement {
     if (next.position) more.push(el("span", { class: "v dim", tier: "minor", text: next.position }));
     if (more.length) kids.push(el("span", { class: "more" }, more));
   }
-  return el("div", { class: "next" }, kids);
+  // Line 1 is `.nline`; line 2 is the next interval's cue, as written, ending in an ellipsis (room-2d.md, "Next row").
+  const rows: Node[] = [el("div", { class: "nline" }, kids)];
+  if (next.cue) rows.push(el("span", { class: "ncue", tier: "label", clamp: 1, text: next.cue }));
+  return el("div", { class: "next" }, rows);
 }
 
 /**

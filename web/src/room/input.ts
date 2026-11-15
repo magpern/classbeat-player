@@ -41,6 +41,22 @@ export interface LinkInput {
 }
 
 /**
+ * The beat pattern as the player counts it now (`PatternSnapshot` in player/app/src/core/pattern-snapshot.ts):
+ * the side, the beat on it and the beats left. The player sends none when it cannot count; the
+ * room screen never guesses a count of its own.
+ */
+export interface PatternInput {
+  /** The side the rider is on now. */
+  readonly position: "seated" | "standing";
+  /** Beat within the current side, 1..n. */
+  readonly beat: number;
+  /** Beats left on this side, this one included. */
+  readonly beatsLeft: number;
+  /** The side after this one. */
+  readonly nextPosition: "seated" | "standing";
+}
+
+/**
  * A notice the web player page puts in the link slot (docs/design/play.md): fixed words only, white
  * with the square marker. Not part of the player's snapshot; only /play sets it.
  */
@@ -51,6 +67,8 @@ export interface RoomInput {
   readonly doc: Class | null;
   readonly view: ClockInput | null;
   readonly link: LinkInput | null;
+  /** The current beat pattern (side and count), or none; the screen shows it only while the music is followed (pattern-model.ts). */
+  readonly pattern?: PatternInput | null;
   /** The web player page's own notice for the link slot; absent in the player's window. */
   readonly notice?: PlayNotice | null;
   /** The web player page: the clock is not started and its starting point may be moved (Previous, Next); the screen stays the one before the start. */

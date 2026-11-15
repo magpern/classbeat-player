@@ -48,10 +48,21 @@ export interface ClockModel {
   readonly line: ClockLine | null;
 }
 
+/**
+ * The Position metric in a pattern interval (room-2d.md, "A position pattern"): the side with the
+ * beats left on it, the side with "Starts on the next bar", or a note when no count can be given.
+ */
+export type PatternValue =
+  | { readonly kind: "count"; readonly side: "UP" | "DOWN"; readonly count: string }
+  | { readonly kind: "soon"; readonly side: "UP" | "DOWN"; readonly text: string }
+  | { readonly kind: "note"; readonly text: string };
+
 export interface MetricModel {
   readonly label: string;
   readonly value: string;
   readonly unit: string | null;
+  /** Set on the Position metric of a pattern interval; `value` is then its plain text. */
+  readonly pattern?: PatternValue;
 }
 
 export interface NextModel {
@@ -60,7 +71,10 @@ export interface NextModel {
   readonly name: string;
   readonly length: string;
   readonly cadence: string | null;
+  /** "Seated", "Standing", or the pattern in words ("4 up, 4 down"). */
   readonly position: string | null;
+  /** The next interval's cue, as written: the row's second line; none when it has none. */
+  readonly cue: string | null;
 }
 
 export interface FactModel {

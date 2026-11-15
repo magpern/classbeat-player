@@ -111,9 +111,9 @@ describe("the score's scale on each layout", () => {
     assert.deepEqual([[1024, 768], [1280, 720], [844, 390], [640, 360], [719 + 800, 719], [390, 844], [768, 1024], [360, 640], [500, 500]].map(([w, h]) => layoutOf(w, h)), ["room", "room", "small-landscape", "small-landscape", "small-landscape", "portrait", "portrait", "portrait", "portrait"]);
   });
 
-  it("is six minutes across on the room and the small landscape, three in portrait", () => {
+  it("is 7.6 minutes across (0.22 vw a second) on the room and the small landscape, three in portrait", () => {
     assert.equal(scaleFor(1024, 768), LANDSCAPE_SCALE);
-    assert.ok(Math.abs(scaleFor(844, 390).vwPerS - 100 / 360) < 1e-9);
+    assert.ok(Math.abs(scaleFor(844, 390).vwPerS - 0.22) < 1e-9);
     const p = scaleFor(390, 844);
     assert.ok(Math.abs(p.vwPerS - 100 / 180) < 1e-9);
     // 45 s behind "now" and 2:15 ahead.
@@ -131,7 +131,7 @@ describe("the score's scale on each layout", () => {
     }
   });
 
-  it("lays out a 30-second interval wide enough for its number in portrait, where six minutes would not", () => {
+  it("lays out a 30-second interval wide enough for its number in portrait, where 7.6 minutes would not", () => {
     const doc = STATE_FIXTURES.running.doc as Class;
     const input = (scale?: ReturnType<typeof scaleFor>) => layoutScore({ classMs: 0, lengthMs: doc.class.length_ms, intervals: doc.intervals, songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false, scale });
     const portrait = input(scaleFor(390, 844));

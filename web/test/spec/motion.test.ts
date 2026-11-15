@@ -85,7 +85,7 @@ describe("the score", () => {
     }
     // Five samples over 0.6 s: at most one step, and every value is a whole number of seconds.
     assert.ok(new Set(samples).size <= 2, `moved in between steps: ${samples.join(", ")}`);
-    for (const v of samples) assert.ok(Math.abs(v / (100 / 360) - Math.round(v / (100 / 360))) < 1e-6, `${v} is not whole seconds`);
+    for (const v of samples) assert.ok(Math.abs(v / 0.22 - Math.round(v / 0.22)) < 1e-6, `${v} is not whole seconds`);
     await page.context().close();
   });
 
@@ -95,6 +95,25 @@ describe("the score", () => {
     assert.equal(await shift(page), 0);
     await page.context().close();
   });
+});
+
+describe("a pattern's count (room-2d.md: it is information, not decoration)", () => {
+  const count = (page: Page): Promise<string | null> => page.evaluate(() => document.querySelector(".pv .cnt")?.textContent ?? null);
+
+  for (const how of ["system", "setting", "none"] as const) {
+    it(`still steps with the beat (reduced motion: ${how})`, async () => {
+      const page = await open("pattern", how === "system" ? { media: true } : how === "setting" ? { setting: true } : {});
+      assert.equal(await count(page), "6");
+      // The next snapshot carries the next count: 5 beats left.
+      await page.evaluate(() => window.harness.show("pattern-tempo-only"));
+      assert.equal(await count(page), "5");
+      // Nothing about it animates or transitions, with or without reduced motion; the beat dot is off with it.
+      const moving = await page.evaluate(() => [...document.querySelectorAll(".pv, .pv *")].filter((e) => { const c = getComputedStyle(e); return parseFloat(c.transitionDuration) > 0 || (c.animationName !== "none" && parseFloat(c.animationDuration) > 0); }).length);
+      assert.equal(moving, 0);
+      if (how !== "none") assert.equal(await page.locator(".beat").count(), 0, "no beat dot");
+      await page.context().close();
+    });
+  }
 });
 
 describe("the beat dot", () => {

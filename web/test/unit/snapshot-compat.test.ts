@@ -41,6 +41,13 @@ describe("the room input follows the player's snapshot", () => {
     assertCovered(own("LinkInput"), player(join("link", "view.ts"), "LinkView"), "LinkInput");
   });
 
+  it("PatternInput is read from PatternSnapshot (the count the player sends the room window)", () => {
+    assertCovered(own("PatternInput"), player("pattern-snapshot.ts", "PatternSnapshot"), "PatternInput");
+    // The room frame carries it under `pattern`, as a closed copy of these four fields.
+    const frame = readFileSync(join(WEB, "..", "player", "app", "src", "core", "room", "frame.ts"), "utf8");
+    assert.match(frame, /readonly pattern: PatternSnapshot \| null;/);
+  });
+
   it("every top-level RoomInput field is in the player's RoomFrame, but the page-only ones", () => {
     // `notice` and `startingPoint` are set by the web player page (/play) only; the player's window never sends them.
     const WEB_ONLY = new Set(["notice", "startingPoint"]);

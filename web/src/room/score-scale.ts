@@ -1,14 +1,15 @@
 // The score's scale per layout (docs/design/play.md, "The score on small screens"). Pure: the
 // layout and the numbers that follow from it, from the size of the screen alone.
 //
-// The room window of the player only ever uses `LANDSCAPE_SCALE` (six minutes across). The web
-// player page chooses between three layouts by the viewport: the room's own, a phone on its side,
-// and portrait (three minutes across, so a 30-second interval is not 16 px wide at 390 px).
+// The room window of the player only ever uses `LANDSCAPE_SCALE` (7.6 minutes across, 5.7 ahead of
+// "now"). The web player page chooses between three layouts by the viewport: the room's own, a
+// phone on its side (the same scale), and portrait (three minutes across, so a 30-second interval
+// is not 16 px wide at 390 px).
 
 export type Layout = "room" | "small-landscape" | "portrait";
 
 export interface ScoreScale {
-  /** vw per second of class time: 0.28 across six minutes, 0.56 across three. */
+  /** vw per second of class time: 0.22 across 7.6 minutes (landscape), 0.56 across three (portrait). */
   readonly vwPerS: number;
   /** A block needs at least this much room ahead of "now" for its number (the sliver rule). */
   readonly minBlockW: number;
@@ -20,8 +21,11 @@ export interface ScoreScale {
   readonly momentUntil: number;
 }
 
-/** The room screen's own scale (room-2d.md): six minutes across, 90 s behind "now", 4:30 ahead. */
-export const LANDSCAPE_SCALE: ScoreScale = { vwPerS: 100 / 360, minBlockW: 3, numberFitsUntil: 91, safeRight: 95, momentUntil: 80 };
+/** 13.2 vw a minute (room-2d.md): 7.6 minutes across, with "now" at 25 vw. */
+export const LANDSCAPE_VW_PER_S = 0.22;
+
+/** The room screen's own scale (room-2d.md): 7.6 minutes across, 1.9 behind "now", 5.7 ahead. */
+export const LANDSCAPE_SCALE: ScoreScale = { vwPerS: LANDSCAPE_VW_PER_S, minBlockW: 3, numberFitsUntil: 91, safeRight: 95, momentUntil: 80 };
 
 /** The layout for a viewport (play.md, "Sizes"): chosen from the viewport alone. */
 export function layoutOf(width: number, height: number): Layout {
@@ -42,7 +46,7 @@ export function scaleFor(width: number, height: number): ScoreScale {
   const number = (1.1 * MINOR_VH[layout] * height) / width;
   const safeRight = 96;
   return {
-    vwPerS: layout === "portrait" ? 100 / 180 : 100 / 360,
+    vwPerS: layout === "portrait" ? 100 / 180 : LANDSCAPE_VW_PER_S,
     minBlockW: Math.max(3, Math.round(number * 100) / 100),
     numberFitsUntil: Math.round((safeRight - PAD - number) * 100) / 100,
     safeRight,

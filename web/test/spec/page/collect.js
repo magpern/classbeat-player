@@ -5,7 +5,7 @@
 // elements (C5), hue outside a zone (C6) and text no check sees (C8).
 //
 // Markup the checks rely on:
-//   data-tier="hero|gel|value|text|minor|label"  the type tier (C1, C2)
+//   data-tier="hero|gel|value|count|text|minor|label"  the type tier (C1, C2)
 //   data-lines="N"   the element may take up to N lines (default 1: any wrap fails)
 //   data-clamp="N"   the element ends in an ellipsis after N lines by design (not "cut off")
 //   data-fit="hide"  the element is shown only if it fits whole (wraps onto a hidden row
