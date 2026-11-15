@@ -88,8 +88,8 @@ clock. That is all it does in this version:
 - This is a backend change (login policy) and a screens change (the table). As in ADR 0006, they
   may merge in either order: until both have merged, `play` is simply never sent, or never put in
   a link.
-- (Amended by ADR 0010, section 6: for a classbeat sign-in, `play` and `play.<class id>` are kept
-  server-side for the round trip, in the closed table `classbeat_sign_ins`, never logged.)
+- (ADR 0010, section 6, as amended 2026-11-15: a classbeat sign-in carries no return entry,
+  `play` included, and stores none; it lands on `/classes`.)
 
 ### 4. The clock: a shared surface between two lanes
 
