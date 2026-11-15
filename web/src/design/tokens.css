@@ -72,6 +72,22 @@
   --m-change: 700ms cubic-bezier(0.2, 0.7, 0.2, 1); /* interval change */
   --m-flash: 160ms; /* white edge on the gel at a change */
   --m-state: 300ms ease-out; /* link state, pause */
+
+  /* Scene only (docs/design/scene.md, "Tokens"). The scene reads these; no screen uses them. */
+  --scene-text-cap: 0.08; /* highest relative luminance under text, --light-1 text only (S2) */
+  --scene-text-pad: 1.2vh 3vh; /* growth of each text box for the cap, then the fade */
+  --scene-down: 0.06; /* lights down (paused, before the start) */
+  --scene-house: 0.40; /* house lights (finished), white */
+  --scene-burst: 0.85 250ms; /* drop burst: peak share of white, decay */
+  --scene-anticipate: 10s; /* next colour comes in this long before a change */
+  --scene-turn-max: 30deg; /* per second: the fastest any beam turns (S7) */
+  --scene-reaim: 3.5s; /* the longest a re-aim, phrase flip, gather or fan may take */
+  --scene-lift-max: 3; /* per second: the beat lift's highest rate */
+  --scene-tempo-pulse: 0.12; /* tempo pulse depth without anchors */
+  --score-ahead: 8min; /* score look-ahead (6 at 3:2 and narrower) */
+  --score-now: 10vw; /* where "now" is */
+  --pattern-count: 18vh; /* pattern beat count (14.6vh when stepped) */
+  --pattern-down: 0.72; /* beam brightness on the "down" side of a pattern */
 }
 
 @media (prefers-reduced-motion: reduce) {

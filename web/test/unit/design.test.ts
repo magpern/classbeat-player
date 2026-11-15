@@ -9,6 +9,7 @@ import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
 import { checkPalette } from "../lib/palette.ts";
 import { impurities } from "../lib/core-purity.ts";
 import { remoteFontRefs } from "../lib/font-refs.ts";
+import { cssSceneTokens, sceneTokenProblems } from "../lib/scene-tokens-spec.ts";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokens = readFileSync(join(WEB, "src", "design", "tokens.css"), "utf8");
@@ -249,5 +250,37 @@ describe("the web lane stands alone", () => {
     for (const [src, problem] of caught) assert.ok(impurities("probe.ts", src).includes(problem), `${src} -> ${JSON.stringify(impurities("probe.ts", src))}`);
     // Names in member and key positions are not references to the globals.
     assert.deepEqual(impurities("probe.ts", 'import { a } from "./shape.ts";\nconst o = { fetch: 1, document: 2 };\nconst v = o.fetch + a.history;'), []);
+  });
+});
+
+describe("scene-only tokens (docs/design/scene.md, Tokens)", () => {
+  const spec = readFileSync(join(WEB, "..", "docs", "design", "scene.md"), "utf8");
+  const row = (name: string, value: string) => `| \`${name}\` | ${value} | use |`;
+  const table = (...rows: string[]) => `## Tokens\n\n| Token | Value | Use |\n|---|---|---|\n${rows.join("\n")}\n\n## Next\n`;
+  const css = (...lines: string[]) => `:root {\n${lines.map((l) => `  ${l};`).join("\n")}\n}`;
+
+  it("every scene token in tokens.css has a spec row with an equal value, and every built spec row is in tokens.css", () => {
+    assert.deepEqual(sceneTokenProblems(tokens, spec), []);
+    assert.equal(cssSceneTokens(tokens).size, 14);
+  });
+
+  it("a spec row marked 'to be built' is ignored when tokens.css lacks it, but a built row is not", () => {
+    const md = table(row("--scene-down", "0.06"), row("--scene-hold", "2 s (to be built in #577)"));
+    assert.deepEqual(sceneTokenProblems(css("--scene-down: 0.06"), md), []);
+    assert.deepEqual(sceneTokenProblems(css("--scene-down: 0.06"), table(row("--scene-down", "0.06"), row("--scene-house", "0.40"))), ["--scene-house is in the spec but not in tokens.css"]);
+  });
+
+  it("a token with no spec row, or a value that is only a prefix of the spec's, fails", () => {
+    assert.equal(sceneTokenProblems(css("--pattern-down: 0.7"), table(row("--pattern-down", "0.72"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-down: 0.0"), table(row("--scene-down", "0.06"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-reaim: 3.5s"), table(row("--scene-reaim", "35 s"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-turn-max: 30deg"), table(row("--scene-turn-max", "300 degrees a second"))).length, 1);
+    assert.deepEqual(sceneTokenProblems(css("--pattern-down: 0.72"), table(row("--pattern-down", "0.72"))), []);
+    assert.deepEqual(sceneTokenProblems(css("--scene-extra: 1"), table()), ["--scene-extra has no spec row"]);
+  });
+
+  it("copes with a row that names a later value beside the built one", () => {
+    const md = table(row("--scene-burst", "0.85, rise 40 ms (to be built in #577), decay 250 ms"));
+    assert.deepEqual(sceneTokenProblems(css("--scene-burst: 0.85 250ms"), md), []);
   });
 });
