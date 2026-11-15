@@ -3,6 +3,7 @@ import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import type { ClockView } from "./clock/view.ts";
 import type { ControlLabels } from "./link/while-following.ts";
 import type { LinkView } from "./link/view.ts";
+import type { PatternSnapshot } from "./pattern-snapshot.ts";
 import type { BandRoutes } from "./room/band-routes.ts";
 
 export interface FileError {
@@ -21,7 +22,9 @@ export interface Snapshot {
   readonly controls: ControlLabels | null;
   /** Where each of the room screen's band buttons sends its press, from the same routing. */
   readonly band: BandRoutes | null;
+  /** The current beat pattern (side and count); null outside a pattern and when the count is not known. */
+  readonly pattern: PatternSnapshot | null;
   readonly error: FileError | null;
 }
 
-export const EMPTY_SNAPSHOT: Snapshot = { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, band: null, error: null };
+export const EMPTY_SNAPSHOT: Snapshot = { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, band: null, pattern: null, error: null };
