@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from player_backend.app import create_app
+from player_backend.classbeat_api.events import server_only
 from player_backend.player_api.deps import app_only, device_token
 from player_backend.settings import Settings
 from player_backend.site.cookies import (
@@ -99,6 +100,9 @@ CONTROL_CODE_ROUTES = frozenset({("POST", "/api/live/control")})
 # Section 8, "Joining as a rider" (ADR 0007): the join code and a nickname in the body, from the
 # rider's page. No cookie and no other credential.
 JOIN_ROUTES = frozenset({("POST", "/api/live/join")})
+# ADR 0010, section 8: classbeat's events, from classbeat's server. One signed token in the body;
+# no cookie and no other credential, and a browser's request (`Sec-Fetch-Site`) is refused.
+CLASSBEAT_EVENT_ROUTES = frozenset({("POST", "/api/classbeat/events")})
 NO_CREDENTIAL_ROUTES = frozenset(
     {
         ("GET", "/healthz"),
@@ -242,6 +246,15 @@ def test_the_join_route_takes_no_cookie_and_no_bearer_token() -> None:
     assert all(path.startswith("/api/live/") for _, path in JOIN_ROUTES)
 
 
+def test_the_classbeat_event_route_takes_no_cookie_and_no_bearer_token() -> None:
+    bearer = _using(device_token) | _using(source_token) | _using(app_only)
+    cookie = _cookie_readers()
+    assert not CLASSBEAT_EVENT_ROUTES & (bearer | cookie | _using(same_origin))
+    # The browser check is on it, and on nothing else.
+    assert _using(server_only) == CLASSBEAT_EVENT_ROUTES
+    assert all(path.startswith("/api/classbeat/") for _, path in CLASSBEAT_EVENT_ROUTES)
+
+
 def test_every_route_is_on_one_of_the_lists() -> None:
     # A new route fails here until someone has said which credential it takes.
     listed = (
@@ -253,6 +266,7 @@ def test_every_route_is_on_one_of_the_lists() -> None:
         | LINK_CODE_ROUTES
         | CONTROL_CODE_ROUTES
         | JOIN_ROUTES
+        | CLASSBEAT_EVENT_ROUTES
     )
     assert {(r.method, r.path) for r in _routes()} == listed | NO_CREDENTIAL_ROUTES | PAGE_ROUTES
     assert not listed & NO_CREDENTIAL_ROUTES

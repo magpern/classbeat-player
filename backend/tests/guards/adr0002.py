@@ -62,6 +62,8 @@ SECURITY_DEFINER_FUNCTIONS = frozenset(
         "auth_take_classbeat",
         "auth_complete_classbeat",
         "auth_reauth_classbeat",
+        # ADR 0010, section 8 (#496).
+        "auth_classbeat_event",
     }
 )
 
@@ -99,13 +101,14 @@ AUTH_TABLE_GRANTS: TableGrants = {
     "source_link_codes": _ALL,
     "rate_limits": _ALL,
     "signup_allowlist": _g("SELECT"),
-    "accounts": _g("SELECT", "INSERT"),
+    # DELETE: ADR 0010, section 9, for classbeat's `account-deleted` event (#496).
+    "accounts": _g("SELECT", "INSERT", "DELETE"),
     "sessions": _g("SELECT", "INSERT", "DELETE"),
     "devices": _g("SELECT", "INSERT", "DELETE"),
     "source_links": _g("SELECT", "INSERT"),
     "passkeys": _g("SELECT"),
     "audit_events": _g("INSERT", "DELETE"),
-    # ADR 0010, section 9 (#481). DELETE on accounts comes with the events issue.
+    # ADR 0010, section 9 (#481).
     "classbeat_sign_ins": _ALL,
     "classbeat_event_ids": _ALL,
 }

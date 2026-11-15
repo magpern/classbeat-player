@@ -4,7 +4,8 @@
 - Exports are counted per account, 3 a day, in a fixed window by `rate_limit_hit`. The
   number bounds a client, not the backend's role (which reads the same rows with its grants),
   so it is passed in like the source API's request limit (principle 7).
-- Deleting the account also needs a typed confirmation: the account's email, as typed.
+- Deleting the account also needs a typed confirmation: the account's email, as typed, or for
+  an instructor with no email the words "your classbeat account" (ADR 0010, section 8).
 - What the export holds is chosen here, column by column: never a hash, a token, a key, the
   account's id or its passkey user handle.
 - The export is streamed (section 12): one JSON document written piece by piece, the small
@@ -29,6 +30,8 @@ EXPORTED: Final = "account.exported"
 # The version of the export's own layout, so a later change can be told apart.
 EXPORT_FORMAT: Final = 1
 CONFIRM_MAX: Final = 254
+# ADR 0010, section 8: shown where an instructor's email would be when it has none.
+NO_EMAIL: Final = "your classbeat account"
 # Classes read and held at a time while the export is streamed.
 EXPORT_PAGE: Final = 16
 
@@ -42,11 +45,17 @@ def export_limit_key(account_id: UUID) -> bytes:
     return hashlib.sha256(b"account.exports:" + account_id.bytes).digest()
 
 
-def confirmed(typed: str, email: str) -> bool:
-    """True when the user typed the account's email (case and surrounding spaces aside)."""
+def confirmation_of(email: str | None) -> str:
+    """What the user types to delete the account: its email, or for an instructor with no email
+    the words shown in its place (ADR 0010, section 8)."""
+    return NO_EMAIL if email is None else email
+
+
+def confirmed(typed: str, email: str | None) -> bool:
+    """True when the user typed the account's confirmation (case and surrounding spaces aside)."""
     if len(typed) > CONFIRM_MAX:
         return False
-    return typed.strip().lower() == email
+    return typed.strip().lower() == confirmation_of(email)
 
 
 def when(value: object) -> str | None:

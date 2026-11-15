@@ -119,6 +119,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0015_close_email_link_and_passkeys.sql") as pending:
         if pending:
             db.rows(q.M0015_CLOSE_EMAIL_LINK_AND_PASSKEYS)
+    with _step(db, done, "0016_classbeat_events.sql") as pending:
+        if pending:
+            db.rows(q.M0016_CLASSBEAT_EVENTS)
     return done
 
 

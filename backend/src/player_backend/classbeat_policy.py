@@ -44,11 +44,15 @@ def nonce_hash(nonce: str) -> bytes:
     return hashlib.sha256(nonce.encode("utf-8")).digest()
 
 
-def header_refusal(header: Json) -> str | None:
-    """The header first: `alg` exactly ES256, `typ` JWT when present, a `kid`."""
+def header_refusal(header: Json, required_type: str | None = None) -> str | None:
+    """The header first: `alg` exactly ES256, a `kid`, and `typ` JWT when present (an ID token)
+    or exactly `required_type` (an event token, section 8)."""
     if header.get("alg") != ALGORITHM:
         return "alg"
-    if "typ" in header and header.get("typ") != JWT_TYPE:
+    if required_type is not None:
+        if header.get("typ") != required_type:
+            return "typ"
+    elif "typ" in header and header.get("typ") != JWT_TYPE:
         return "typ"
     if "crit" in header:
         return "crit"
@@ -88,7 +92,8 @@ def _number(value: object) -> int | None:
     return int(value)
 
 
-def _audience_refusal(claims: Json, client_id: str) -> str | None:
+def audience_refusal(claims: Json, client_id: str) -> str | None:
+    """`aud` the client id or an array of it alone; `azp`, when present, the client id."""
     audience = claims.get("aud")
     if isinstance(audience, list):
         held: list[object] = list(audience)  # pyright: ignore[reportUnknownArgumentType]
@@ -101,13 +106,21 @@ def _audience_refusal(claims: Json, client_id: str) -> str | None:
     return None
 
 
-def _time_refusal(claims: Json, now: int) -> str | None:
+def issued_refusal(claims: Json, now: int) -> str | None:
+    """`exp` present and in the future, `iat` present and at most 5 minutes old."""
     expires = _number(claims.get("exp"))
     if expires is None or expires + CLOCK_SKEW <= now:
         return "exp"
     issued = _number(claims.get("iat"))
     if issued is None or issued < now - ISSUED_WITHIN - CLOCK_SKEW or issued > now + CLOCK_SKEW:
         return "iat"
+    return None
+
+
+def _time_refusal(claims: Json, now: int) -> str | None:
+    refusal = issued_refusal(claims, now)
+    if refusal is not None:
+        return refusal
     auth_time = _number(claims.get("auth_time"))
     if auth_time is None or auth_time > now + CLOCK_SKEW:
         return "auth_time"
@@ -120,7 +133,7 @@ def claims_refusal(
     """`iss` exact, `aud` and `azp` the client, the times, the nonce and the subject."""
     if claims.get("iss") != issuer:
         return "iss"
-    refusal = _audience_refusal(claims, client_id) or _time_refusal(claims, now)
+    refusal = audience_refusal(claims, client_id) or _time_refusal(claims, now)
     if refusal is not None:
         return refusal
     nonce = claims.get("nonce")

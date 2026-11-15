@@ -37,6 +37,7 @@ IMPLEMENTED = {
     "auth_take_classbeat",
     "auth_complete_classbeat",
     "auth_reauth_classbeat",
+    "auth_classbeat_event",
 }
 STUB_TEXT = "is not implemented"
 
