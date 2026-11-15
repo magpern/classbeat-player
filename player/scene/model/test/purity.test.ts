@@ -7,7 +7,7 @@ import { ESLint } from "eslint";
 
 const SRC = new URL("../src/", import.meta.url);
 const files = readdirSync(SRC).filter((f) => f.endsWith(".ts"));
-const BANNED = /\b(window|document|navigator|fetch|XMLHttpRequest|WebSocket|process|require|Buffer|setTimeout|setInterval|requestAnimationFrame|performance|localStorage|globalThis)\b|Math\.random|Date\.now|new Date\b/;
+const BANNED = /\b(window|document|navigator|fetch|XMLHttpRequest|WebSocket|process|require|Buffer|setTimeout|setInterval|requestAnimationFrame|performance|localStorage|globalThis)\b|Math\.random|\bDate\b|\bcrypto\b/;
 
 function stripComments(s: string): string {
   return s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
@@ -29,18 +29,20 @@ for (const f of files) {
 
 test("the lint rule rejects three.js, DOM, Node I/O and network use in src", async () => {
   const eslint = new ESLint({ cwd: new URL("../", import.meta.url).pathname });
-  const bad = [
-    'import * as THREE from "three";\nexport const a = THREE;',
-    'import { readFileSync } from "node:fs";\nexport const a = readFileSync;',
-    'import http from "http";\nexport const a = http;',
-    'export const a = document.title;',
-    'export const a = () => fetch("https://example.invalid");',
-    'export const a = Math.random();',
-    'import { x } from "../../app/src/x.ts";\nexport const a = x;',
+  const bad: [string, string][] = [
+    ['import * as THREE from "three";\nexport const a = THREE;', "no-restricted-imports"],
+    ['import { readFileSync } from "node:fs";\nexport const a = readFileSync;', "no-restricted-imports"],
+    ['import http from "http";\nexport const a = http;', "no-restricted-imports"],
+    ['import { x } from "../../app/src/x.ts";\nexport const a = x;', "no-restricted-imports"],
+    ["export const a = document.title;", "no-restricted-globals"],
+    ['export const a = () => fetch("https://example.invalid");', "no-restricted-globals"],
+    ["export const a = crypto;", "no-restricted-globals"],
+    ["export const a = new Date();", "no-restricted-globals"],
+    ["export const a = Math.random();", "no-restricted-properties"],
   ];
-  for (const src of bad) {
+  for (const [src, rule] of bad) {
     const [r] = await eslint.lintText(src, { filePath: new URL("../src/probe.ts", import.meta.url).pathname });
-    assert.ok(r!.errorCount > 0, `not rejected: ${src}`);
+    assert.ok(r!.messages.some((m) => m.ruleId === rule), `not rejected by ${rule}: ${src}`);
   }
   const [ok] = await eslint.lintText('import { a } from "./energy.ts";\nexport const b = a;', { filePath: new URL("../src/probe.ts", import.meta.url).pathname });
   assert.equal(ok!.messages.filter((m) => m.ruleId === "no-restricted-imports").length, 0);

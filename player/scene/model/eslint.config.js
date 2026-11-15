@@ -5,7 +5,7 @@ import tseslint from "typescript-eslint";
 // imported but sibling modules, and no I/O, DOM, clock or randomness global may be named.
 // tsconfig.src.json adds a second fence: it loads no DOM and no Node types.
 const banned = ["window", "document", "navigator", "fetch", "XMLHttpRequest", "WebSocket", "process",
-  "require", "Buffer", "setTimeout", "setInterval", "requestAnimationFrame", "performance", "localStorage", "globalThis"];
+  "require", "Buffer", "setTimeout", "setInterval", "requestAnimationFrame", "performance", "localStorage", "globalThis", "crypto", "Date"];
 
 export default tseslint.config(
   { ignores: ["node_modules/"] },

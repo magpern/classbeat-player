@@ -1,7 +1,7 @@
 // Looks and phrases (scope 2), beat levels (S8, scope 4) and colour (S5, scope 5).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { beatsAt, phraseAt, phraseOfIndex } from "../src/beat-grid.ts";
+import { FIRST_PHRASE, beatsAt, phraseAt, phraseOfIndex } from "../src/beat-grid.ts";
 import { ALLOWED, beatLevel, patternCountRuns } from "../src/beat-level.ts";
 import type { LinkStateName } from "../src/beat-level.ts";
 import { ANTICIPATION_MS, rigColours } from "../src/colour.ts";
@@ -63,6 +63,29 @@ test("S8: without the Beat level the frame has no phrase (mirroring) even deep i
   const f = sceneFrame({ cls, classMs: 20_000, songIndex: 0, songPosMs: 20_000, phaseDeg: 0, link: { state: "Locked" } });
   assert.equal(f.level, "Tempo only");
   assert.equal(f.phrase.mirrored, false);
+});
+
+test("S8: the frame's phrase runs only at the Beat level, even for a song with anchors deep in an odd phrase", () => {
+  const cls = { songs: [{ bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }] }], intervals: [{ startMs: 0, zone: 3 }], endMs: 120_000 };
+  const at = { cls, classMs: 20_000, songIndex: 0, songPosMs: 20_000, phaseDeg: 40 }; // phrase 1: mirrored
+  const locked = sceneFrame({ ...at, link: { state: "Locked" } });
+  assert.equal(locked.level, "Beat");
+  assert.equal(locked.phrase.mirrored, true);
+  assert.equal(sceneFrame({ ...at, songPosMs: 40_000, link: { state: "Locked" } }).phrase.leadHalf, 1); // phrase 2: lead half swaps
+  const links = [
+    { state: "Locked" as const, held: true },
+    ...(["Paused", "Coasting", "Off the list", "Ambiguous", "Manual"] as LinkStateName[]).map((state) => ({ state })),
+  ];
+  for (const link of links) {
+    const first = sceneFrame({ ...at, songPosMs: 0, link });
+    for (const songPosMs of [20_000, 40_000]) {
+      const f = sceneFrame({ ...at, songPosMs, link });
+      assert.equal(f.level, "None", link.state);
+      assert.deepEqual(f.phrase, FIRST_PHRASE, link.state);
+      assert.deepEqual(f.directions, first.directions); // no mirroring, no lead-half swap
+    }
+    assert.notDeepEqual(sceneFrame({ ...at, link }).directions, locked.directions);
+  }
 });
 
 test("S5: current zone, next zone in the last 10 s, white; never another hue", () => {

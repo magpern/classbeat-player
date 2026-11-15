@@ -4,7 +4,7 @@
 import type { BeatAnchor, Phrase } from "./beat-grid.ts";
 import { FIRST_PHRASE, phraseAt } from "./beat-grid.ts";
 import type { BeatLevel, LinkInput } from "./beat-level.ts";
-import { beatLevel } from "./beat-level.ts";
+import { allowanceFor, beatLevel } from "./beat-level.ts";
 import { FIXTURES, beamDirection } from "./beams.ts";
 import type { Direction } from "./beams.ts";
 import type { RigColours } from "./colour.ts";
@@ -66,7 +66,7 @@ export function sceneFrame(input: FrameInput): Frame {
   if (!iv) throw new RangeError("a class needs at least one interval");
   const next = cls.intervals[at + 1];
   const level = beatLevel(link, song ?? null);
-  const phrase = level === "Beat" ? phraseAt(song?.anchors, songPosMs) : FIRST_PHRASE;
+  const phrase = allowanceFor(level).phrase ? phraseAt(song?.anchors, songPosMs) : FIRST_PHRASE;
   const moments = momentsAt(song?.moments, song?.bpm, songPosMs);
   const look = lookForSong(songIndex);
   return {

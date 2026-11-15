@@ -11,7 +11,7 @@ export const ANTICIPATION_MS = 10_000;
 
 export interface RigColours {
   readonly front: RigHue;
-  /** Back truss, wall and haze glow: they turn first, as a wipe from the far side. */
+  /** Back truss and LED wall only: they turn first, as a wipe from the far side. */
   readonly back: RigHue;
   /** 0 outside the anticipation, then 0..1 over its 10 s (the wipe). */
   readonly wipe: number;
