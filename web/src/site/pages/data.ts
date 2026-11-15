@@ -1,9 +1,11 @@
 // Account: Your data (docs/design/site.md, "Your data"; ADR 0002, sections 10 and 11): the export,
 // handed to the browser to save and kept nowhere by the page, and deleting the account, which asks
 // in a panel that replaces the page: "Keep my account" first and focused, Esc keeps it, and the
-// typed address goes only in the body of `POST account/delete`. Both need a recent sign-in: a 403
+// typed address goes only in the body of `POST account/delete`. An account with no email (ADR 0010,
+// section 8) types "your classbeat account" instead. Both need a recent sign-in: a 403
 // shows "Confirm it is you" and nothing is sent again by itself.
-import { canDelete, CONFIRM_MAX, DATA_WORDS, deleteOutcomeOf, exportOutcomeOf } from "../core/data-model.ts";
+import { canDelete, CONFIRM_MAX, confirmWords, DATA_WORDS, deleteOutcomeOf, exportOutcomeOf } from "../core/data-model.ts";
+import type { Confirmation } from "../core/data-model.ts";
 import { call } from "../net/api.ts";
 import { exportAccount } from "../net/export.ts";
 import { el, t, uid } from "../ui/dom.ts";
@@ -23,8 +25,9 @@ interface Panel {
 
 const IDLE: ExportView = { kind: "idle" };
 
-/** Shows the Your data page in `box`. Its first request (`GET sessions`) only shows the person is signed in. */
-export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv): void {
+/** Shows the Your data page in `box`. `confirm`, from its first request (`GET me`), is what the deletion asks to be typed. */
+export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv, confirm: Confirmation): void {
+  const words = confirmWords(confirm);
   let exp: ExportView = IDLE;
   let panel: Panel | null = null;
   let messages: Messages = NO_MESSAGES;
@@ -117,8 +120,8 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
 
   function panelOf(v: Panel): HTMLElement {
     const head = el("h2", { id: uid("delete") }, [t("h2", DATA_WORDS.deleteAsk, 3)]);
-    const said = el("p", { id: uid("delete-said") }, [t("body", DATA_WORDS.deleteConsequence)]);
-    const f = field(DATA_WORDS.emailLabel, { type: "email", name: "confirm", value: v.typed, error: v.mismatch ? DATA_WORDS.mismatch : undefined });
+    const said = el("p", { id: uid("delete-said") }, [t("body", words.consequence)]);
+    const f = field(words.label, { type: words.type, name: "confirm", value: v.typed, error: v.mismatch ? words.mismatch : undefined });
     // Not remembered by the browser's form history: the address is used once and dropped.
     f.input.autocomplete = "off";
     f.input.maxLength = CONFIRM_MAX;

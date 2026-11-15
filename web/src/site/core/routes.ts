@@ -23,7 +23,7 @@ const ACCOUNT: Readonly<Record<string, readonly [string, string]>> = {
   sessions: ["Account", "sessions"],
   passkeys: ["Account", "passkeys"],
   links: ["Account", "source-links"],
-  data: ["Account", "sessions"],
+  data: ["Account", "me"],
 };
 
 const signedIn = (title: string, nav: Nav, load: string): SignedInPage => ({ kind: "signed-in", title, nav, load });

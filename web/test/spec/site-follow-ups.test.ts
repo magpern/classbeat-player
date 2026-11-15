@@ -178,7 +178,7 @@ describe("devices and pairing (#420)", () => {
 });
 
 describe("a refused first request (#419 r2, r3)", () => {
-  for (const [path, route] of [["/devices", "GET devices"], ["/pair", "GET sessions"], ["/account/data", "GET sessions"], [CONNECT_PATH, "GET sessions"]] as const) {
+  for (const [path, route] of [["/devices", "GET devices"], ["/pair", "GET sessions"], ["/account/data", "GET me"], [CONNECT_PATH, "GET sessions"]] as const) {
     for (const status of [403, 404]) {
       it(`${path.split("?")[0]} answers ${status} with the server fault, and nothing else is asked`, async () => {
         const site = await open(path, { [route]: { status, body: { error: status === 403 ? "forbidden" : "not_found" } } }, ".plate");

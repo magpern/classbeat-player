@@ -65,7 +65,7 @@ export function signedInPage(main: HTMLElement, page: SignedInPage, env: SignedI
           break;
         }
         // A page without a view: a refused first request (403, 404 and the like) is the server fault,
-        // also on a page that only reads `sessions` to know the person is signed in (/pair, Your data).
+        // also on a page that only reads `sessions` to know the person is signed in (/pair), and on Your data (`me`).
         serverFault(main, () => void load());
         break;
       default:

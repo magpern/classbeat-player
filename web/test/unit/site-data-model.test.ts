@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, it, mock } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Answer } from "../../src/site/core/answer.ts";
-import { canDelete, DATA_WORDS, deleteOutcomeOf, EXPORT_FILE, exportOutcomeOf, hoursWords } from "../../src/site/core/data-model.ts";
+import { canDelete, confirmationOf, confirmWords, DATA_WORDS, deleteOutcomeOf, EXPORT_FILE, exportOutcomeOf, hoursWords, NO_EMAIL } from "../../src/site/core/data-model.ts";
 import { exportAccount, REVOKE_AFTER_MS, saveFile } from "../../src/site/net/export.ts";
 import { impurities } from "../lib/core-purity.ts";
 
@@ -45,6 +45,34 @@ describe("the deletion's answer", () => {
     assert.equal(canDelete(""), false);
     assert.equal(canDelete("   "), false);
     assert.equal(canDelete("x"), true);
+  });
+});
+
+describe("what the deletion asks to be typed (#505; ADR 0010, section 8)", () => {
+  it("is the email when GET me has one, the words when it is null, and nothing for any other body", () => {
+    assert.equal(confirmationOf({ email: "ana@example.com" }), "email");
+    assert.equal(confirmationOf({ email: null }), "words");
+    for (const body of [{}, { email: "" }, { email: 5 }, { email: undefined }, { mail: null }, [], null, undefined, "ana@example.com", 0]) {
+      assert.equal(confirmationOf(body), null, JSON.stringify(body));
+    }
+    // An inherited `email` is not the answer's own field.
+    assert.equal(confirmationOf(Object.create({ email: null }) as unknown), null);
+  });
+
+  it("keeps today's words for an account with an email", () => {
+    assert.deepEqual(confirmWords("email"), { consequence: DATA_WORDS.deleteConsequence, label: DATA_WORDS.emailLabel, mismatch: DATA_WORDS.mismatch, type: "email" });
+    assert.match(DATA_WORDS.deleteConsequence, /Type your email address to confirm\.$/);
+  });
+
+  it("asks for the backend's words, never an email, for an account without one", () => {
+    // The backend's account_policy.NO_EMAIL: what it compares the typed text against.
+    assert.equal(NO_EMAIL, "your classbeat account");
+    const w = confirmWords("words");
+    assert.equal(w.type, "text");
+    assert.equal(w.consequence, "Everything in it is deleted at once: classes, devices, linked apps, passkeys and the activity log. Type “your classbeat account” to confirm.");
+    assert.equal(w.label, "Type “your classbeat account”");
+    assert.equal(w.mismatch, "That is not “your classbeat account”. Nothing was deleted.");
+    for (const text of [w.consequence, w.label, w.mismatch]) assert.ok(!/email/i.test(text), text);
   });
 });
 

@@ -24,6 +24,7 @@
 4 site-sign-in-flows.test.ts
 4 site-data-flows.test.ts
 4 site-data-secrecy.test.ts
+4 site-data-no-email.test.ts
 5 rider-checks.test.ts
 5 play-picker-checks.test.ts
 5 play-controls.test.ts

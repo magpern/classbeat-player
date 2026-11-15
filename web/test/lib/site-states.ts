@@ -8,6 +8,7 @@ import { DEVICE_STATES } from "./site-device-states.ts";
 import { ACCOUNT_STATES, SESSIONS_LISTED } from "./site-account-states.ts";
 import { LINK_STATES } from "./site-link-states.ts";
 import { DATA_STATES } from "./site-data-states.ts";
+import { NO_EMAIL_STATES } from "./site-no-email-states.ts";
 
 export const LINK_TOKEN = `cbp_ml_${"Ab3_-".repeat(8)}xyz`;
 export const CHALLENGE_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -98,4 +99,5 @@ export const STATES: readonly State[] = [
   ...ACCOUNT_STATES,
   ...LINK_STATES,
   ...DATA_STATES,
+  ...NO_EMAIL_STATES,
 ];
