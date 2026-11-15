@@ -69,7 +69,7 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.con
 androidComponents {
     onVariants { variant ->
         val cap = variant.name.replaceFirstChar { it.uppercase() }
-        val check = tasks.register<CheckManifest>("check${cap}Manifest") {
+        val check = tasks.register<CheckManifest>("verify${cap}ManifestPermissions") {
             manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
         }
         tasks.matching { it.name == "assemble$cap" }.configureEach { dependsOn(check) }
