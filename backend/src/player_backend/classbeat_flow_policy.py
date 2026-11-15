@@ -13,8 +13,6 @@ from collections.abc import Sequence
 from typing import Final, Literal
 from urllib.parse import urlencode
 
-from player_backend.login_policy import is_return_entry
-
 type Purpose = Literal["sign_in", "reauth"]
 
 # The browser's cookie, and the row it names, live 10 minutes (section 2, step 1).
@@ -23,7 +21,8 @@ CALLBACK_PATH: Final = "/api/site/sign-in/classbeat/callback"
 SCOPE: Final = "openid email"
 # Every refusal sends the browser here, with no reason in the address (section 2, step 2).
 ERROR_PATH: Final = "/sign-in#error=classbeat"
-DEFAULT_PATH: Final = "/classes"
+# A sign-in carries no return entry (section 6): every callback that signs in lands here.
+DONE_PATH: Final = "/classes"
 
 # `state` is 32 random bytes as base64url, as made here. classbeat's code is opaque: a bound on
 # its length and the characters an OAuth code uses (RFC 6749, appendix A.11).
@@ -87,12 +86,3 @@ def callback_values(items: Sequence[tuple[str, str]], issuer: str) -> tuple[str,
     if _CODE.fullmatch(code) is None or _STATE.fullmatch(state) is None:
         return None
     return code, state
-
-
-def return_path(entry: str | None) -> str:
-    """Where the callback's 303 goes (section 6): the page a return entry names, its class code
-    or class id in the fragment; `/classes` without an entry."""
-    if entry is None or not is_return_entry(entry):
-        return DEFAULT_PATH
-    page, _, rest = entry.partition(".")
-    return f"/{page}#{rest}" if rest else f"/{page}"

@@ -17,7 +17,7 @@ from tests.dbhelp import Conn, as_role, every_value
 CLIENT = "ROW('203.0.113.0/24'::cidr, 'Firefox')::player.client_info"
 START = "SELECT player.auth_start_classbeat(%s, %s, %s, %s, %s, %s, %s, %s)"
 TAKE = (
-    "SELECT purpose, return_to, nonce_hash, asking_session_hash, started_at "
+    "SELECT purpose, nonce_hash, asking_session_hash, started_at "
     "FROM player.auth_take_classbeat(%s, %s, %s)"
 )
 COMPLETE = f"SELECT player.auth_complete_classbeat(%s, %s, %s, %s, now(), %s, %s, {CLIENT})"
@@ -53,7 +53,7 @@ def _start(
     asking: bytes | None = None,
     held: bytes | None = None,
     address: bytes | None = None,
-    return_to: str | None = None,
+    entry: bool = False,
 ) -> object:
     return _one(
         su,
@@ -63,10 +63,10 @@ def _start(
             state or _h(),
             _h(),
             purpose,
-            return_to,
             asking,
             held,
             address or _sha("address"),
+            entry,
         ),
     )
 
@@ -137,10 +137,10 @@ def test_a_start_keeps_only_hashes_and_the_take_hands_them_back(su: Conn) -> Non
                 _sha(state),
                 _sha(nonce),
                 "sign_in",
-                "control",
                 None,
                 None,
                 _sha("address"),
+                False,
             ),
         )
         == "started"
@@ -161,7 +161,7 @@ def test_a_start_keeps_only_hashes_and_the_take_hands_them_back(su: Conn) -> Non
     assert str(row[3]) == "0:10:00"
     as_role(su, "player_app")
     taken = su.execute(TAKE, (_sha(binding), _sha(state), _sha("address"))).fetchall()
-    assert [(r[0], r[1], r[2], r[3]) for r in taken] == [("sign_in", "control", _sha(nonce), None)]
+    assert [(r[0], r[1], r[2]) for r in taken] == [("sign_in", _sha(nonce), None)]
     # Single use.
     assert su.execute(TAKE, (_sha(binding), _sha(state), _sha("address"))).fetchall() == []
 
@@ -248,12 +248,13 @@ def test_a_re_authentication_start_needs_a_live_session_and_is_limited_per_sessi
 @pytest.mark.parametrize(
     "params",
     [
-        (None, b"s" * 32, b"n" * 32, "sign_in", None, None, None, b"a" * 32),
-        (b"b" * 32, b"s" * 31, b"n" * 32, "sign_in", None, None, None, b"a" * 32),
-        (b"b" * 32, b"s" * 32, b"n" * 32, "other", None, None, None, b"a" * 32),
-        (b"b" * 32, b"s" * 32, b"n" * 32, "reauth", None, None, None, b"a" * 32),
-        (b"b" * 32, b"s" * 32, b"n" * 32, "sign_in", None, b"q" * 32, None, b"a" * 32),
-        (b"b" * 32, b"s" * 32, b"n" * 32, "sign_in", None, None, None, None),
+        (None, b"s" * 32, b"n" * 32, "sign_in", None, None, b"a" * 32, False),
+        (b"b" * 32, b"s" * 31, b"n" * 32, "sign_in", None, None, b"a" * 32, False),
+        (b"b" * 32, b"s" * 32, b"n" * 32, "other", None, None, b"a" * 32, False),
+        (b"b" * 32, b"s" * 32, b"n" * 32, "reauth", None, None, b"a" * 32, False),
+        (b"b" * 32, b"s" * 32, b"n" * 32, "sign_in", b"q" * 32, None, b"a" * 32, False),
+        (b"b" * 32, b"s" * 32, b"n" * 32, "sign_in", None, None, None, False),
+        (b"b" * 32, b"s" * 32, b"n" * 32, "sign_in", None, None, b"a" * 32, None),
     ],
 )
 def test_a_start_with_bad_arguments_raises(su: Conn, params: tuple[object, ...]) -> None:
@@ -262,10 +263,63 @@ def test_a_start_with_bad_arguments_raises(su: Conn, params: tuple[object, ...])
         su.execute(START, params)
 
 
-def test_a_return_entry_that_is_not_one_is_refused_by_the_table(su: Conn) -> None:
+def test_the_flow_keeps_no_return_entry(su: Conn) -> None:
+    # ADR 0010, section 6 (as revised): the start takes no return entry and the row has none.
+    su.execute("RESET ROLE")
+    columns = su.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'player' AND table_name = 'classbeat_sign_ins'"
+    ).fetchall()
+    assert {c for (c,) in columns} == {
+        "binding_hash",
+        "state_hash",
+        "nonce_hash",
+        "purpose",
+        "asking_session_hash",
+        "created_at",
+        "expires_at",
+    }
+    arguments = su.execute(
+        "SELECT pg_get_function_identity_arguments('player.auth_start_classbeat'::regproc)"
+    ).fetchone()
+    # Only whether the body carried an entry reaches the database, never its value.
+    assert arguments == (
+        "binding_hash bytea, state_hash bytea, nonce_hash bytea, purpose text, "
+        "asking_session_hash bytea, held_binding_hash bytea, address_hash bytea, "
+        "entry_given boolean",
+    )
+
+
+def test_a_start_carrying_an_entry_is_counted_then_refused_with_nothing_made(su: Conn) -> None:
     as_role(su, "player_app")
-    with pytest.raises(errors.CheckViolation):
-        _start(su, return_to="https://evil.test")
+    held = _h()
+    _start(su, binding=held)
+    address = _h()
+    answers = [_start(su, address=address, held=held, entry=True) for _ in range(20)]
+    assert answers == ["invalid_return"] * 20
+    # No row was made, and the browser's earlier flow was not dropped.
+    assert _rows(su) == 1
+    # The refused starts were counted: the address is now over its limit, entry or not.
+    assert _start(su, address=address, entry=True) == "limited"
+    assert _start(su, address=address) == "limited"
+    assert _rows(su) == 1
+
+
+def test_a_re_authentication_start_carrying_an_entry_is_checked_and_counted_first(
+    su: Conn,
+) -> None:
+    as_role(su, "player_app")
+    # The session check comes first ...
+    assert _start(su, purpose="reauth", asking=_h(), entry=True) == "not_signed_in"
+    _, session = _live_session(su)
+    # ... then the per-session limit counts the refused starts ...
+    answers = [
+        _start(su, purpose="reauth", asking=session, address=_h(), entry=True) for _ in range(10)
+    ]
+    assert answers == ["invalid_return"] * 10
+    # ... so the next start of that session is over it.
+    assert _start(su, purpose="reauth", asking=session, address=_h()) == "limited"
+    assert _rows(su) == 0
 
 
 # --- sign-in and sign-up -----------------------------------------------------------------

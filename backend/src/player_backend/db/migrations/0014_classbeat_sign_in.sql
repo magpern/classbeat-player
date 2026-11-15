@@ -49,8 +49,6 @@ CREATE TABLE player.classbeat_sign_ins (
   state_hash          bytea NOT NULL CHECK (octet_length(state_hash) = 32),
   nonce_hash          bytea NOT NULL CHECK (octet_length(nonce_hash) = 32),
   purpose             text NOT NULL CHECK (purpose IN ('sign_in', 'reauth')),
-  return_to           text CHECK (length(return_to) <= 64
-                      AND return_to ~ '^(control|play)(\.[A-Za-z0-9-]{9,36})?$'),
   asking_session_hash bytea CHECK (octet_length(asking_session_hash) = 32),
   created_at          timestamptz NOT NULL DEFAULT now(),
   expires_at          timestamptz NOT NULL,
@@ -78,10 +76,13 @@ GRANT UPDATE (bound_issuer, bound_subject) ON player.signup_allowlist TO player_
 -- ---------------------------------------------------------------------------------------------
 
 -- Returns `started`, `limited` (429: no row) or `not_signed_in` (a re-authentication without a
--- live session). A start from a browser that held a binding drops that binding's row first.
+-- live session), or `invalid_return` when the body carried a return entry (`entry_given`; ADR
+-- 0010, section 6 as amended): counted by the limits, then refused before anything else, with
+-- no row made and no earlier row dropped. Its value never reaches the database. A start from a
+-- browser that held a binding drops that binding's row first.
 CREATE FUNCTION player.auth_start_classbeat(
-  binding_hash bytea, state_hash bytea, nonce_hash bytea, purpose text, return_to text,
-  asking_session_hash bytea, held_binding_hash bytea, address_hash bytea)
+  binding_hash bytea, state_hash bytea, nonce_hash bytea, purpose text,
+  asking_session_hash bytea, held_binding_hash bytea, address_hash bytea, entry_given boolean)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, player, pg_temp
 AS $$
@@ -90,10 +91,10 @@ DECLARE
   v_state   bytea := auth_start_classbeat.state_hash;
   v_nonce   bytea := auth_start_classbeat.nonce_hash;
   v_purpose text  := auth_start_classbeat.purpose;
-  v_return  text  := auth_start_classbeat.return_to;
   v_asking  bytea := auth_start_classbeat.asking_session_hash;
   v_held    bytea := auth_start_classbeat.held_binding_hash;
   v_address bytea := auth_start_classbeat.address_hash;
+  v_entry   boolean := auth_start_classbeat.entry_given;
 BEGIN
   IF v_binding IS NULL OR octet_length(v_binding) <> 32
      OR v_state IS NULL OR octet_length(v_state) <> 32
@@ -102,7 +103,8 @@ BEGIN
      OR (v_asking IS NOT NULL AND octet_length(v_asking) <> 32)
      OR (v_purpose = 'reauth') <> (v_asking IS NOT NULL)
      OR (v_held IS NOT NULL AND octet_length(v_held) <> 32)
-     OR v_address IS NULL OR octet_length(v_address) <> 32 THEN
+     OR v_address IS NULL OR octet_length(v_address) <> 32
+     OR v_entry IS NULL THEN
     RAISE EXCEPTION 'auth_start_classbeat: bad arguments'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
@@ -124,12 +126,15 @@ BEGIN
       RETURN 'limited';
     END IF;
   END IF;
+  IF v_entry THEN
+    RETURN 'invalid_return';
+  END IF;
 
   -- At most one flow open per browser.
   DELETE FROM player.classbeat_sign_ins c WHERE c.binding_hash = v_held;
   INSERT INTO player.classbeat_sign_ins
-    (binding_hash, state_hash, nonce_hash, purpose, return_to, asking_session_hash, expires_at)
-  VALUES (v_binding, v_state, v_nonce, v_purpose, v_return, v_asking,
+    (binding_hash, state_hash, nonce_hash, purpose, asking_session_hash, expires_at)
+  VALUES (v_binding, v_state, v_nonce, v_purpose, v_asking,
           now() + interval '600 seconds');
   RETURN 'started';
 END
@@ -140,7 +145,7 @@ $$;
 -- or a row older than 10 minutes (used up all the same).
 CREATE FUNCTION player.auth_take_classbeat(
   binding_hash bytea, state_hash bytea, address_hash bytea)
-RETURNS TABLE (purpose text, return_to text, nonce_hash bytea, asking_session_hash bytea,
+RETURNS TABLE (purpose text, nonce_hash bytea, asking_session_hash bytea,
                started_at timestamptz)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, player, pg_temp
 AS $$
@@ -149,7 +154,6 @@ DECLARE
   v_state   bytea := auth_take_classbeat.state_hash;
   v_address bytea := auth_take_classbeat.address_hash;
   v_purpose text;
-  v_return  text;
   v_nonce   bytea;
   v_asking  bytea;
   v_created timestamptz;
@@ -169,14 +173,13 @@ BEGIN
   -- Single use: a second caller waits on the row and then finds none.
   DELETE FROM player.classbeat_sign_ins c
   WHERE c.binding_hash = v_binding AND c.state_hash = v_state
-  RETURNING c.purpose, c.return_to, c.nonce_hash, c.asking_session_hash, c.created_at,
+  RETURNING c.purpose, c.nonce_hash, c.asking_session_hash, c.created_at,
             c.expires_at
-    INTO v_purpose, v_return, v_nonce, v_asking, v_created, v_expires;
+    INTO v_purpose, v_nonce, v_asking, v_created, v_expires;
   IF v_purpose IS NULL OR v_expires <= now() THEN
     RETURN;
   END IF;
   purpose := v_purpose;
-  return_to := v_return;
   nonce_hash := v_nonce;
   asking_session_hash := v_asking;
   started_at := v_created;
@@ -386,7 +389,7 @@ $$;
 
 -- Owner, PUBLIC and player_app for the four new functions, as 0003 does for its list.
 GRANT CREATE ON SCHEMA player TO player_auth;
-ALTER FUNCTION player.auth_start_classbeat(bytea, bytea, bytea, text, text, bytea, bytea, bytea)
+ALTER FUNCTION player.auth_start_classbeat(bytea, bytea, bytea, text, bytea, bytea, bytea, boolean)
   OWNER TO player_auth;
 ALTER FUNCTION player.auth_take_classbeat(bytea, bytea, bytea) OWNER TO player_auth;
 ALTER FUNCTION player.auth_complete_classbeat(
@@ -395,7 +398,7 @@ ALTER FUNCTION player.auth_reauth_classbeat(
   bytea, text, text, timestamptz, timestamptz, bytea, player.client_info) OWNER TO player_auth;
 REVOKE CREATE ON SCHEMA player FROM player_auth;
 REVOKE ALL ON FUNCTION
-  player.auth_start_classbeat(bytea, bytea, bytea, text, text, bytea, bytea, bytea),
+  player.auth_start_classbeat(bytea, bytea, bytea, text, bytea, bytea, bytea, boolean),
   player.auth_take_classbeat(bytea, bytea, bytea),
   player.auth_complete_classbeat(
     text, text, text, boolean, timestamptz, bytea, bytea, player.client_info),
@@ -403,7 +406,7 @@ REVOKE ALL ON FUNCTION
     bytea, text, text, timestamptz, timestamptz, bytea, player.client_info)
   FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
-  player.auth_start_classbeat(bytea, bytea, bytea, text, text, bytea, bytea, bytea),
+  player.auth_start_classbeat(bytea, bytea, bytea, text, bytea, bytea, bytea, boolean),
   player.auth_take_classbeat(bytea, bytea, bytea),
   player.auth_complete_classbeat(
     text, text, text, boolean, timestamptz, bytea, bytea, player.client_info),

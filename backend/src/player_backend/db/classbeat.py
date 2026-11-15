@@ -18,7 +18,7 @@ from player_backend.db.executor import DatabaseError, Pool
 from player_backend.db.lock_wait import ran_out
 from player_backend.db.queries import classbeat as q
 
-type StartOutcome = Literal["started", "limited", "not_signed_in"]
+type StartOutcome = Literal["started", "limited", "not_signed_in", "invalid_return"]
 type SignInOutcome = Literal["signed_in", "refused", "busy"]
 type ReauthOutcome = Literal["reauthenticated", "refused", "busy"]
 
@@ -28,7 +28,6 @@ class Flow:
     """A flow's row, used up by its callback."""
 
     purpose: Purpose
-    return_to: str | None
     nonce_hash: bytes
     asking_session_hash: bytes | None
     started_at: datetime
@@ -41,10 +40,10 @@ def start(
     state_hash: bytes,
     nonce_hash: bytes,
     purpose: Purpose,
-    return_to: str | None,
     asking_session_hash: bytes | None,
     held_binding_hash: bytes | None,
     address_hash: bytes,
+    entry_given: bool,
 ) -> StartOutcome:
     with pool.handle() as db, db.transaction():
         rows = db.rows(
@@ -54,14 +53,14 @@ def start(
                 state_hash,
                 nonce_hash,
                 purpose,
-                return_to,
                 asking_session_hash,
                 held_binding_hash,
                 address_hash,
+                entry_given,
             ),
         )
     outcome = rows[0][0]
-    if outcome in ("started", "limited", "not_signed_in"):
+    if outcome in ("started", "limited", "not_signed_in", "invalid_return"):
         return outcome
     raise ValueError("unexpected answer of auth_start_classbeat")
 
@@ -72,12 +71,11 @@ def take(pool: Pool, *, binding_hash: bytes, state_hash: bytes, address_hash: by
         rows = db.rows(q.TAKE_CLASSBEAT, (binding_hash, state_hash, address_hash))
     if not rows:
         return None
-    purpose, return_to, nonce_hash, asking, started_at = rows[0]
+    purpose, nonce_hash, asking, started_at = rows[0]
     if purpose not in ("sign_in", "reauth"):
         raise ValueError("unexpected purpose of a classbeat flow")
     return Flow(
         purpose=purpose,
-        return_to=cast(str | None, return_to),
         nonce_hash=bytes(cast(bytes, nonce_hash)),
         asking_session_hash=None if asking is None else bytes(cast(bytes, asking)),
         started_at=cast(datetime, started_at),

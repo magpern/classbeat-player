@@ -10,7 +10,7 @@ START_CLASSBEAT: Final[Query] = Query(
 )
 
 TAKE_CLASSBEAT: Final[Query] = Query(
-    "SELECT purpose, return_to, nonce_hash, asking_session_hash, started_at"
+    "SELECT purpose, nonce_hash, asking_session_hash, started_at"
     " FROM player.auth_take_classbeat(%s, %s, %s)"
 )
 

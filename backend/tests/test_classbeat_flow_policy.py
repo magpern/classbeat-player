@@ -14,7 +14,6 @@ from player_backend.classbeat_flow_policy import (
     callback_values,
     code_challenge,
     is_navigation,
-    return_path,
 )
 from player_backend.token_issue import new_token
 
@@ -118,21 +117,3 @@ def test_a_callback_query_gives_its_code_and_state(items: list[tuple[str, str]])
 )
 def test_any_other_callback_query_is_refused(items: list[tuple[str, str]]) -> None:
     assert callback_values(items, ISSUER) is None
-
-
-@pytest.mark.parametrize(
-    ("entry", "path"),
-    [
-        (None, "/classes"),
-        ("control", "/control"),
-        ("control.BCDF-GHJK", "/control#BCDF-GHJK"),
-        ("play", "/play"),
-        ("play.0b6f4c2e-1a2b-4c3d-8e9f-0123456789ab", "/play#0b6f4c2e-1a2b-4c3d-8e9f-0123456789ab"),
-        ("elsewhere", "/classes"),
-        ("//evil.test", "/classes"),
-    ],
-)
-def test_the_way_back_is_the_return_entrys_page_with_the_rest_in_the_fragment(
-    entry: str | None, path: str
-) -> None:
-    assert return_path(entry) == path

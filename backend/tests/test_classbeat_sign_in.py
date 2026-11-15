@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
+from player_backend.logging_setup import configure_logging
 from player_backend.token_policy import token_hash
 from tests.classbeathelp import ISSUER, FakeClassbeat, client
 from tests.dbhelp import every_value
@@ -44,11 +45,8 @@ def site(app_url: str, db_url: str, fake: FakeClassbeat) -> Iterator[Site]:
         yield running
 
 
-def start(browser: Browser, purpose: str = "sign_in", return_to: str | None = None) -> str:
-    body: dict[str, object] = {"purpose": purpose}
-    if return_to is not None:
-        body["return_to"] = return_to
-    response = browser.post(START, json=body)
+def start(browser: Browser, purpose: str = "sign_in") -> str:
+    response = browser.post(START, json={"purpose": purpose})
     assert response.status_code == 200, response.text
     assert browser.cookies.get(BINDING_COOKIE) is not None
     address = response.json()["authorize"]
@@ -113,20 +111,72 @@ def test_a_first_sign_in_creates_the_instructor_and_later_ones_find_it_by_identi
     assert answer.headers["location"] == ERROR and len(_accounts(site)) == 1
 
 
-def test_a_sign_in_carries_the_return_entry_server_side(site: Site, fake: FakeClassbeat) -> None:
+# --- section 6 (as revised): no return entry ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "return_to",
+    # `null`, valid entries, malformed strings, and values that are not strings.
+    [None, "control", "control.BCDF-GHJK", "play", "https://evil.test", "", 1, ["play"], {}],
+)
+@pytest.mark.parametrize("purpose", ["sign_in", "reauth"])
+def test_a_start_carrying_a_return_entry_is_refused_and_makes_nothing(
+    site: Site,
+    fake: FakeClassbeat,
+    capsys: pytest.CaptureFixture[str],
+    purpose: str,
+    return_to: object,
+) -> None:
     site.allow(EMAIL)
-    browser = site.browser()
-    address = start(browser, return_to="control.BCDF-GHJK")
-    assert "BCDF" not in address and "control" not in address
-    answer = back(browser, fake.authorize(address))
-    assert answer.status_code == 303 and answer.headers["location"] == "/control#BCDF-GHJK"
+    browser = sign_in(site, fake) if purpose == "reauth" else site.browser()
+    held = start(browser)  # an earlier flow of this browser, which the refusal leaves alone
+    binding = browser.cookies.get(BINDING_COOKIE)
+    events = _count(site, "SELECT count(*) FROM player.audit_events")
+    configure_logging("DEBUG")
+    capsys.readouterr()
+    response = browser.post(START, json={"purpose": purpose, "return_to": return_to})
+    assert response.status_code == 422 and response.json() == {"error": "invalid_return"}
+    assert "set-cookie" not in response.headers
+    assert browser.cookies.get(BINDING_COOKIE) == binding
+    assert _count(site, "SELECT count(*) FROM player.classbeat_sign_ins") == 1
+    assert _count(site, "SELECT count(*) FROM player.audit_events") == events
+    logged = capsys.readouterr()
+    if isinstance(return_to, str) and return_to:
+        assert return_to not in every_value(site.su)
+    # Not in a log line: the parts that are not words of every line ("play" is in "player").
+    for needle in ("BCDF-GHJK", "evil.test"):
+        if needle in str(return_to):
+            assert needle not in logged.out + logged.err
+    # The earlier flow still completes, and lands on the classes page.
+    answer = back(browser, fake.authorize(held))
+    assert answer.status_code == 303 and answer.headers["location"] == "/classes"
 
 
-def test_a_start_with_a_bad_return_entry_is_refused_with_no_cookie(site: Site) -> None:
+def test_a_refused_start_is_counted_by_the_limit_first(site: Site) -> None:
     browser = site.browser()
-    response = browser.post(START, json={"return_to": "https://evil.test"})
-    assert response.status_code == 422 and response.json()["error"] == "invalid_return"
-    assert browser.cookies.get(BINDING_COOKIE) is None
+    for _ in range(20):
+        refused = browser.post(START, json={"return_to": "play"})
+        assert refused.status_code == 422 and refused.json() == {"error": "invalid_return"}
+    over = browser.post(START, json={"return_to": "play"})
+    assert over.status_code == 429 and over.json() == {"error": "too_many_requests"}
+    assert browser.post(START, json={}).status_code == 429
+    assert _count(site, "SELECT count(*) FROM player.classbeat_sign_ins") == 0
+
+
+def test_a_re_authentication_start_checks_the_session_before_the_entry(site: Site) -> None:
+    response = site.browser().post(START, json={"purpose": "reauth", "return_to": None})
+    assert response.status_code == 401 and response.json() == {"error": "not_signed_in"}
+
+
+@pytest.mark.parametrize("purpose", ["sign_in", "reauth"])
+def test_every_callback_that_signs_in_lands_on_the_classes_page(
+    site: Site, fake: FakeClassbeat, purpose: str
+) -> None:
+    site.allow(EMAIL)
+    browser = sign_in(site, fake) if purpose == "reauth" else site.browser()
+    answer = back(browser, fake.authorize(start(browser, purpose)))
+    assert answer.status_code == 303 and answer.headers["location"] == "/classes"
+    assert "#" not in answer.headers["location"]
 
 
 def test_the_start_asks_for_openid_email_with_pkce_and_no_prompt(
@@ -277,7 +327,7 @@ def test_an_email_that_is_not_allowed_signs_nobody_up(site: Site, fake: FakeClas
 
 def test_state_nonce_and_binding_are_kept_only_as_hashes(site: Site, fake: FakeClassbeat) -> None:
     browser = site.browser()
-    address = start(browser, return_to="play")
+    address = start(browser)
     query = {k: v[0] for k, v in parse_qs(urlsplit(address).query).items()}
     binding = browser.cookies.get(BINDING_COOKIE)
     assert binding is not None
@@ -285,11 +335,11 @@ def test_state_nonce_and_binding_are_kept_only_as_hashes(site: Site, fake: FakeC
     for clear in (query["state"], query["nonce"], binding, query["code_challenge"]):
         assert clear not in stored
     row = site.su.execute(
-        "SELECT binding_hash, state_hash, purpose, return_to FROM player.classbeat_sign_ins"
+        "SELECT binding_hash, state_hash, purpose FROM player.classbeat_sign_ins"
     ).fetchone()
     assert row is not None
     assert row[0] == token_hash(binding) and row[1] == token_hash(query["state"])
-    assert row[2:] == ("sign_in", "play")
+    assert row[2] == "sign_in"
 
 
 def test_a_new_start_in_the_same_browser_ends_its_earlier_flow(

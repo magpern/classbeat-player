@@ -16,14 +16,14 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel, BeforeValidator
+from pydantic import BaseModel
 
 from player_backend.classbeat_client import ClassbeatClient
 from player_backend.classbeat_flow_policy import (
+    DONE_PATH,
     ERROR_PATH,
     callback_values,
     is_navigation,
-    return_path,
 )
 from player_backend.classbeat_http import ClassbeatUnreachable
 from player_backend.classbeat_policy import Identity, nonce_hash
@@ -32,7 +32,6 @@ from player_backend.db import classbeat, site_sessions
 from player_backend.db.classbeat import Flow
 from player_backend.db.executor import Pool
 from player_backend.http_errors import ApiError
-from player_backend.login_policy import bounded_return, is_return_entry
 from player_backend.site.cookies import (
     classbeat_cookie_token,
     clear_classbeat_cookie,
@@ -55,8 +54,11 @@ _LIMITED_RETRY = "60"
 
 class StartRequest(BaseModel):
     purpose: Literal["sign_in", "reauth"] = "sign_in"
-    # As the email link's: any string, checked by `is_return_entry`, held cut to its bound.
-    return_to: Annotated[str | None, BeforeValidator(bounded_return)] = None
+    # A classbeat sign-in carries no return entry and stores none (section 6, as amended). The
+    # field is declared only so that its presence is seen (`model_fields_set`): a body that has
+    # it, with any value, is refused after the session check and the limits, and the value is
+    # never used, stored, echoed or logged.
+    return_to: object = None
 
 
 def _client(request: Request) -> ClassbeatClient | None:
@@ -75,8 +77,6 @@ def start(
     client = _client(request)
     if client is None:
         raise ApiError(404, "not_found")
-    if body.return_to is not None and not is_return_entry(body.return_to):
-        raise ApiError(422, "invalid_return")
     reauth = body.purpose == "reauth"
     if reauth and asking is None:
         raise ApiError(401, "not_signed_in")
@@ -89,15 +89,17 @@ def start(
         state_hash=token_hash(state),
         nonce_hash=nonce_hash(nonce),
         purpose=body.purpose,
-        return_to=body.return_to,
         asking_session_hash=asking if reauth else None,
         held_binding_hash=None if held is None else token_hash(held),
         address_hash=who.address_hash,
+        entry_given="return_to" in body.model_fields_set,
     )
     if outcome == "limited":
         raise ApiError(429, "too_many_requests", {"Retry-After": _LIMITED_RETRY})
     if outcome == "not_signed_in":
         raise ApiError(401, "not_signed_in")
+    if outcome == "invalid_return":
+        raise ApiError(422, "invalid_return")
     address = client.authorize(state=state, nonce=nonce, verifier=binding, purpose=body.purpose)
     response = JSONResponse({"authorize": address})
     put_classbeat_cookie(response, binding)
@@ -147,7 +149,7 @@ def callback(
     if asking is not None:
         # ADR 0002, section 5: the session the browser held is ended, as signing out ends it.
         site_sessions.end_asking_session(pool, asking, who.info)
-    response = RedirectResponse(return_path(flow.return_to), status_code=303)
+    response = RedirectResponse(DONE_PATH, status_code=303)
     clear_classbeat_cookie(response)
     put_session_cookie(response, session_token)
     return response
