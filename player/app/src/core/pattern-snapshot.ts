@@ -16,6 +16,6 @@ export interface PatternSnapshot {
 /** The pattern at class time `classMs`, or null outside a pattern or whenever the count is not known. */
 export function patternSnapshotAt(plan: ClockPlan, classMs: number): PatternSnapshot | null {
   const p = patternAt(plan, classMs);
-  if (!p || !p.counted || p.holding || p.beat === null || p.beatsLeft === null || p.nextPosition === null) return null;
+  if (!p || !p.counted || p.beat === null || p.beatsLeft === null || p.nextPosition === null) return null;
   return { position: p.position, beat: p.beat, beatsLeft: p.beatsLeft, nextPosition: p.nextPosition };
 }
