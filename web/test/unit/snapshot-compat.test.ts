@@ -41,6 +41,13 @@ describe("the room input follows the player's snapshot", () => {
     assertCovered(own("LinkInput"), player(join("link", "view.ts"), "LinkView"), "LinkInput");
   });
 
+  it("PatternInput is read from PatternSnapshot (the count the player sends the room window)", () => {
+    assertCovered(own("PatternInput"), player("pattern-snapshot.ts", "PatternSnapshot"), "PatternInput");
+    // The room frame carries it under `pattern`, as a closed copy of these four fields.
+    const frame = readFileSync(join(WEB, "..", "player", "app", "src", "core", "room", "frame.ts"), "utf8");
+    assert.match(frame, /readonly pattern: PatternSnapshot \| null;/);
+  });
+
   it("the link states are the player's", () => {
     const states = readFileSync(join(WEB, "..", "player", "app", "src", "core", "link", "types.ts"), "utf8").match(/export type LinkStateName =([^;]+);/)?.[1] ?? "";
     const theirs = [...states.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();

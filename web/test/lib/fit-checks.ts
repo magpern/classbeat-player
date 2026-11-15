@@ -65,6 +65,29 @@ export function zoneWordsBroken(page: Page): Promise<string[]> {
   }, FITTABLE_WORD);
 }
 
+/** Clear space (share of the screen height) between the ink of two pieces of text one above the other: the next row under the cue, and the cue under the metrics (room-2d.md, "Measured"; scene.md S16 keeps 1 vh). */
+export const MIN_PAIR_GAP = 0.01;
+
+/** The indexes (data-mi) of the text elements of the cue, of the metrics and of the next row's lines. */
+export function regionItems(page: Page): Promise<{ readonly cue: number[]; readonly metrics: number[]; readonly next: number[] }> {
+  return page.evaluate(() => {
+    const ids = (sel: string): number[] => [...document.querySelectorAll<HTMLElement>(sel)].filter((e) => e.dataset.mi !== undefined).map((e) => Number(e.dataset.mi));
+    return { cue: ids(".cue"), metrics: ids(".metrics [data-mi]"), next: ids(".next [data-mi]") };
+  });
+}
+
+interface InkBox {
+  readonly y0: number;
+  readonly y1: number;
+}
+
+/** The vertical gap between two groups of ink, the first above the second; null when they are not stacked that way (the next row beside the gel's foot; an overlap is C4's finding). */
+export function stackedGap(upper: readonly InkBox[], lower: readonly InkBox[]): number | null {
+  if (!upper.length || !lower.length) return null;
+  const gap = Math.min(...lower.map((b) => b.y0)) - Math.max(...upper.map((b) => b.y1));
+  return gap >= 0 ? gap : null;
+}
+
 /** The indexes (data-mi) of the text elements of the next row, and the top of the score, in pixels. */
 export function nextRowAndScore(page: Page): Promise<{ readonly items: number[]; readonly scoreTop: number | null }> {
   return page.evaluate(() => ({

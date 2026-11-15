@@ -3,7 +3,7 @@
 // at all. Whether a name fits whole beside its number is the browser's to say (the markup lets
 // it wrap onto a hidden row); this module only decides what is offered.
 import type { Class } from "./input.ts";
-import { LANDSCAPE_SCALE } from "./score-scale.ts";
+import { LANDSCAPE_SCALE, LANDSCAPE_VW_PER_S } from "./score-scale.ts";
 import type { ScoreScale } from "./score-scale.ts";
 
 type Interval = Class["intervals"][number];
@@ -11,10 +11,11 @@ type Song = Class["songs"][number];
 
 /** Where "now" is, as a share of the width. */
 export const NOW_X = 25;
-/** The score is six minutes wide: 1.5 behind "now", 4.5 ahead. */
-export const SPAN_S = 360;
-/** vw per second: 0.2778, the 0.28 vw per second of system.md, Motion. */
-export const VW_PER_S = 100 / SPAN_S;
+/**
+ * vw per second: 13.2 vw a minute (room-2d.md, "The score: at least 5 minutes ahead"). The score is
+ * 7.6 minutes wide with "now" at 25 vw: 1.9 minutes behind it and 5.7 ahead, to the screen's edge.
+ */
+export const VW_PER_S = LANDSCAPE_VW_PER_S;
 const PAD = 0.8;
 /**
  * The part of an interval block that is still ahead of "now" (or the whole block, when it has not
@@ -85,7 +86,7 @@ export interface ScoreInput {
   readonly zoneName: (zone: number) => string;
   /** The recording is in the class more than once: the song indexes it could be, in order. */
   readonly ambiguity: readonly number[] | null;
-  /** The layout's scale; the room's own (six minutes across) when absent. */
+  /** The layout's scale; the room's own (7.6 minutes across) when absent. */
   readonly scale?: ScoreScale;
   readonly unsure: boolean;
 }

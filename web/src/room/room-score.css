@@ -1,0 +1,47 @@
+/* The score (docs/design/room-2d.md, "Layout", "The score: at least 5 minutes ahead"). Imported by room.css, which
+   follows it with the narrow-screen sizes, the strip element and the sliver. */
+.score { position: absolute; left: 0; right: 0; top: 79.5vh; height: 15.5vh; }
+.track { position: absolute; left: 0; right: 0; }
+.track.iv { top: 0; height: 6.6vh; }
+.track.songs { top: 7.5vh; height: 8vh; }
+.block {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--zone); color: var(--ink);
+  border-right: 0.3vh solid var(--stage);
+  /* The name is shown only if it fits whole: a name too wide wraps, as one unit, onto a second
+     row that lies outside the block, so it is never drawn cut. */
+  padding: 0.8vh 0.8vw 0; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center;
+  column-gap: 0.8vw; row-gap: 4vh; overflow: hidden; white-space: nowrap;
+}
+.block .n { font-size: 5vh; line-height: 1; }
+.block .t { font-size: var(--t-label); font-weight: 700; }
+/* Blocks wholly in the past are history: grey, no number, no zone colour (rule 7). */
+.block.gone { background: var(--stage-raised); }
+.clip {
+  position: absolute; top: 0; bottom: 0;
+  background-color: var(--stage-raised);
+  /* phrase ticks: every 4 bars */
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(var(--phrase) - 2px), var(--stage-line) calc(var(--phrase) - 2px) var(--phrase));
+  background-size: 100% 1.2vh; background-repeat: no-repeat; background-position: 0 100%;
+  border-right: 0.3vh solid var(--stage);
+  /* Title first, ending in an ellipsis if it is longer than the clip; the artist and the BPM
+     only if they fit whole: one that does not wraps onto a hidden second row. */
+  padding: 0.9vh 0.8vw; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start;
+  column-gap: 1vw; row-gap: 5vh; overflow: hidden; white-space: nowrap;
+  font-size: var(--t-label); line-height: 1.1;
+}
+/* The title and the occurrence marker ("1st of 2", the ambiguous state) form one unit on the first
+   row: the title gives up width to its ellipsis, the marker never does. */
+.clip .head { display: flex; min-width: 0; column-gap: 0.6vw; }
+.clip .occ { flex: none; font-weight: 700; }
+.clip b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.clip .a { color: var(--light-2); }
+.clip .bpm { margin-left: 1vw; color: var(--light-2); }
+.moment { position: absolute; top: 4.2vh; bottom: 0; width: 0.35vw; background: var(--light-1); }
+.moment span { position: absolute; left: 0.8vw; bottom: 0.4vh; font-size: var(--t-label); font-weight: 700; color: var(--light-1); white-space: nowrap; }
+.past { position: absolute; left: 0; top: 0; bottom: 0; width: 25vw; background: rgb(0 0 0 / 0.62); }
+.now { position: absolute; left: 25vw; top: 0; bottom: 0; width: 0.5vh; margin-left: -0.25vh; background: var(--light-1); }
+.now::before { content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%); border: 1.2vh solid transparent; border-top-color: var(--light-1); border-bottom: 0; }
+.unsure .now { background: repeating-linear-gradient(180deg, var(--light-1) 0 1.4vh, transparent 1.4vh 2.4vh); }
+.end { position: absolute; top: 0; bottom: 0; width: 0.5vh; background: var(--light-1); }
+.end span { position: absolute; left: 1vw; top: 2.2vh; font-size: var(--t-label); font-weight: 700; color: var(--light-1); }

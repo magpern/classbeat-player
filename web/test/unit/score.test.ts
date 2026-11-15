@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STATE_FIXTURES } from "../../src/fixtures/states.ts";
 import type { Class } from "../../src/room/input.ts";
-import { MIN_BLOCK_W, NOW_X, NUMBER_FITS_UNTIL, layoutScore, ordinalText, scoreShiftVw, xAt } from "../../src/room/score.ts";
+import { MIN_BLOCK_W, NOW_X, NUMBER_FITS_UNTIL, VW_PER_S, layoutScore, ordinalText, scoreShiftVw, xAt } from "../../src/room/score.ts";
 import type { ScoreInput } from "../../src/room/score.ts";
 
 function scoreOf(name: string, patch: Partial<ScoreInput> = {}) {
@@ -14,30 +14,43 @@ function scoreOf(name: string, patch: Partial<ScoreInput> = {}) {
 describe("score layout (the running mock-up at 18:19)", () => {
   const s = scoreOf("running");
 
-  it("is six minutes wide with 'now' at 25 %", () => {
+  it("is 7.6 minutes wide with 'now' at 25 %: 13.2 vw a minute, 1.9 minutes behind and 5.7 ahead", () => {
     assert.equal(xAt(1_099_000, 1_099_000), NOW_X);
-    assert.equal(xAt(1_099_000 + 90_000, 1_099_000), 50); // 90 s is 25 vw
+    assert.equal(Math.round(xAt(1_099_000 + 60_000, 1_099_000) * 1e6) / 1e6, 38.2); // a minute is 13.2 vw
+    assert.ok(Math.abs((NOW_X / VW_PER_S) / 60 - 1.894) < 0.001, "behind");
+    assert.ok(Math.abs(((100 - NOW_X) / VW_PER_S) / 60 - 5.682) < 0.001, "ahead, to the screen's edge");
+    // The last block that is drawn with its number begins 5.0 minutes ahead (91 vw).
+    assert.ok(Math.abs(((NUMBER_FITS_UNTIL - NOW_X) / VW_PER_S) / 60 - 5) < 0.001);
+  });
+
+  it("draws every interval that begins within five minutes of 'now', with its number", () => {
+    const at = 1_099_000;
+    const doc = STATE_FIXTURES.running.doc as Class;
+    const mk = (offsetS: number): Class["intervals"][number] => ({ start_ms: at + offsetS * 1000, length_ms: 60_000, zone: 5, cue: "x" });
+    const s = layoutScore({ classMs: at, lengthMs: at + 600_000, intervals: [mk(299), mk(301)], songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false });
+    assert.deepEqual(s.blocks.map((b) => b.left), [90.78]);
   });
 
   it("places the intervals and keeps a begun block's label just right of 'now'", () => {
-    const [z4, z2, z5, z3] = s.blocks;
-    assert.deepEqual([z4.zone, z4.left, z4.width, z4.padLeft], [4, 19.44, 25, 6.36]);
-    assert.deepEqual([z2.zone, z2.left, z2.width, z2.padLeft, z2.padRight], [2, 44.44, 12.5, null, null]);
-    assert.deepEqual([z5.zone, z5.left, z5.width], [5, 56.94, 25]);
+    const [z4, z2, z5, z3, last] = s.blocks;
+    assert.deepEqual([z4.zone, z4.left, z4.width, z4.padLeft], [4, 20.6, 19.8, 5.2]);
+    assert.deepEqual([z2.zone, z2.left, z2.width, z2.padLeft, z2.padRight], [2, 40.4, 9.9, null, null]);
+    assert.deepEqual([z5.zone, z5.left, z5.width], [5, 50.3, 19.8]);
+    assert.deepEqual([z3.zone, z3.left, z3.width, z3.padRight], [3, 70.1, 19.8, null]);
     // The block that crosses the safe edge keeps its label inside it.
-    assert.deepEqual([z3.zone, z3.left, z3.padRight], [3, 81.94, 11.94]);
+    assert.deepEqual([last.zone, last.left, last.padRight], [4, 89.9, 60.9]);
   });
 
   it("draws everything wholly in the past as one grey block, with no zone", () => {
     assert.ok(s.gone);
-    assert.equal(Math.round((s.gone.left + s.gone.width) * 100) / 100, 19.44);
+    assert.equal(Math.round((s.gone.left + s.gone.width) * 100) / 100, 20.6);
   });
 
   it("places the songs, their phrase ticks and a moment", () => {
-    const [neon, pulse] = s.clips.slice(-2);
-    assert.deepEqual([neon.title, neon.artist, neon.bpm, neon.left, neon.padLeft, neon.phrase], ["Neon Avenue", "The Midnight Riders", 128, -15.83, 41.63, 2.083]);
-    assert.deepEqual([pulse.title, pulse.left, pulse.padRight], ["Pulse Theory", 44.44, 18.61]);
-    assert.deepEqual(s.moments, [{ left: 56.94, label: "Drop" }]);
+    const [neon, pulse] = s.clips.slice(-3, -1);
+    assert.deepEqual([neon.title, neon.artist, neon.bpm, neon.left, neon.padLeft, neon.phrase], ["Neon Avenue", "The Midnight Riders", 128, -7.34, 33.14, 1.65]);
+    assert.deepEqual([pulse.title, pulse.left, pulse.padRight], ["Pulse Theory", 40.4, 0.18]);
+    assert.deepEqual(s.moments, [{ left: 50.3, label: "Drop" }]);
   });
 
   it("clips wholly in the past carry no label", () => {
@@ -47,10 +60,11 @@ describe("score layout (the running mock-up at 18:19)", () => {
   });
 
   it("a song that begins too near the safe edge for a title carries none", () => {
-    const before = scoreOf("before-start");
-    const second = before.clips.find((c) => Math.abs(c.left - 89.44) < 0.01);
-    assert.ok(second);
-    assert.equal(second.title, null);
+    // At 3:04 the third song begins at 90 vw: 3.4 vw are left inside the safe edge, 8 are needed.
+    const before = scoreOf("before-start", { classMs: 184_550 });
+    const third = before.clips.find((c) => Math.abs(c.left - 90) < 0.02);
+    assert.ok(third);
+    assert.equal(third.title, null);
   });
 });
 
@@ -73,13 +87,13 @@ describe("score rules", () => {
     const doc = STATE_FIXTURES.running.doc as Class;
     const at = 1_099_000;
     const mk = (offsetS: number, lengthS: number): Class["intervals"][number] => ({ start_ms: at + offsetS * 1000, length_ms: lengthS * 1000, zone: 5, cue: "x" });
-    const input: ScoreInput = { classMs: at, lengthMs: at + 600_000, intervals: [mk(-10, 10), mk(0, 6), mk(6, 90), mk(250, 90)], songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false };
+    const input: ScoreInput = { classMs: at, lengthMs: at + 600_000, intervals: [mk(-10, 10), mk(0, 6), mk(6, 90), mk(310, 90)], songs: doc.songs, zoneName: () => "n", ambiguity: null, unsure: false };
     const s = layoutScore(input);
     // 6 s is 1.67 vw: too narrow for a number, so it is a neutral sliver, not a colour.
     assert.equal(s.slivers.length, 1);
     assert.ok(s.slivers[0].width < MIN_BLOCK_W);
-    // The 250 s interval begins at 94 vw: no room for its number inside the safe area.
-    assert.ok(xAt(at + 250_000, at) > NUMBER_FITS_UNTIL);
+    // The 250 s interval begins at 80 vw, inside; one 310 s ahead (93 vw) has no room for its number inside the safe area.
+    assert.ok(xAt(at + 310_000, at) > NUMBER_FITS_UNTIL);
     assert.deepEqual(s.blocks.map((b) => b.left), [xAt(at + 6000, at)].map((v) => Math.round(v * 100) / 100));
   });
 
@@ -100,13 +114,15 @@ describe("score rules", () => {
   });
 
   it("the End mark appears when the end of the class is on the score, inside the safe area", () => {
-    assert.equal(scoreOf("last-interval").endLeft, 66.67);
+    assert.equal(scoreOf("last-interval").endLeft, 58);
     assert.equal(scoreOf("finished").endLeft, 25);
     assert.equal(scoreOf("running").endLeft, null);
   });
 
-  it("the strip moves 0.28 vw a second, in whole-second steps with reduced motion", () => {
-    assert.ok(Math.abs(scoreShiftVw(1000, false) - 0.2778) < 0.001);
+  it("the strip moves 0.22 vw a second, in whole-second steps with reduced motion", () => {
+    assert.equal(VW_PER_S, 0.22);
+    assert.ok(Math.abs(scoreShiftVw(1000, false) - 0.22) < 1e-9);
+    assert.ok(Math.abs(scoreShiftVw(60_000, false) - 13.2) < 1e-9, "13.2 vw a minute");
     assert.equal(scoreShiftVw(1500, true), scoreShiftVw(1000, true));
     assert.equal(scoreShiftVw(999, true), 0);
     assert.equal(scoreShiftVw(-5, false), 0);

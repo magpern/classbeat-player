@@ -17,7 +17,7 @@ describe("adapter: the states of room-2d.md", () => {
     assert.deepEqual([m.clock?.label, m.clock?.count, m.clock?.wide, m.clock?.estimated, m.clock?.pill], ["Interval left", "1:10", false, false, false]);
     assert.deepEqual(m.clock?.line, { kind: "bars", count: 37, tail: "bars to the change" });
     assert.deepEqual(m.metrics.map((x) => [x.label, x.value, x.unit]), [["Cadence", "90–100", "rpm"], ["Position", "Seated", null], ["Song", "128", "bpm"]]);
-    assert.deepEqual(m.next, { end: false, zone: 2, name: "Endurance", length: "0:45", cadence: "85–95 rpm", position: "Seated" });
+    assert.deepEqual(m.next, { end: false, zone: 2, name: "Endurance", length: "0:45", cadence: "85–95 rpm", position: "Seated", cue: "Hold the pace." });
     assert.equal(m.cue?.text, "Find the beat and hold it. Breathe out on every second bar.");
     assert.equal(m.cue?.long, false);
     assert.ok(m.beat, "locked, with beat anchors: the dot");
@@ -87,7 +87,7 @@ describe("adapter: the states of room-2d.md", () => {
     const m = model("last-interval");
     assert.equal(m.clock?.label, "Last interval");
     assert.deepEqual(m.clock?.line, { kind: "bars", count: 60, tail: "bars to the end" });
-    assert.deepEqual(m.next, { end: true, zone: 0, name: "", length: "", cadence: null, position: null });
+    assert.deepEqual(m.next, { end: true, zone: 0, name: "", length: "", cadence: null, position: null, cue: null });
     assert.equal(m.metrics[0].value, "On the beat");
     assert.equal(m.rail.segment, "Cool-down");
     assert.notEqual(m.score?.endLeft, null);

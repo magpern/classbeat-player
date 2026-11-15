@@ -1,0 +1,42 @@
+/* The position pattern folded into the Position metric (docs/design/room-2d.md, "A position pattern,
+   folded into the Position metric"). Imported by room.css. Every selector here is more specific than
+   the metric rules of room.css (.metric .v), so where it stands in the cascade changes nothing. */
+
+/* Side (UP or DOWN, the value tier) and the beats left on it (the count: 13 vh, cap 10.4 %), on one
+   baseline. The digits sit in cells, so the count never shifts as it steps. */
+.metric .v.pv { display: flex; align-items: baseline; column-gap: 1.2vw; line-height: 0.8; }
+.pv b { font-weight: 800; }
+.pv .side { font-size: var(--t-value); line-height: 0.92; }
+.pv .cnt { font-size: 13vh; line-height: 0.8; white-space: nowrap; }
+
+/* No count (never guessed): the note, at the label tier in the white of a value, at most three
+   lines in the column. */
+.metric .v.note {
+  font-family: var(--face-text); font-weight: 700; font-size: var(--t-label); line-height: 1.12;
+  white-space: normal; color: var(--light-1); margin-top: 0.8vh; max-width: 38vh;
+}
+
+/* A pattern that starts on the next downbeat: the side of the first entry, and in the count's
+   place the note, at the label tier, two lines at most, in the width the side leaves. */
+.pv .soon {
+  font-family: var(--face-text); font-weight: 700; font-size: var(--t-label); line-height: 1.12; color: var(--light-1);
+  align-self: center; max-width: 18vh; white-space: normal;
+}
+
+/* The column gives back what the count adds, so the cue below keeps its place. */
+.metrics.fold { gap: 1.1vh; }
+
+@media (max-aspect-ratio: 3/2) {
+  /* The row holds the widest case (100-110 rpm, DOWN with two digits, 200 bpm and its dot) down to
+     5:4 inside the safe edge. The spec's gaps (1.1 vw between the cells, 0.8 vw side to count, 0.3 vw
+     before a unit, 0.18 em before the dot) were drawn for values 2.7 % smaller than the product's
+     (room.css keeps that margin over the cap-height floor), which leaves the dot 6 px outside the
+     safe edge at 5:4; the gaps give that back and stay at 1 vw between two pieces of text. */
+  .metrics.fold { gap: 1vw; }
+  .metrics.fold .v small { margin-left: 0.2vw; }
+  .metrics.fold .beat { margin-left: 0.12em; }
+  .metric .v.pv { column-gap: 0.7vw; }
+  .metric .v.note { max-width: 19vw; }
+  .pv .side { font-size: min(7.55vh, 5.7vw); } /* as the other values of this layout (room.css) */
+  .pv .soon { max-width: 16vw; }
+}

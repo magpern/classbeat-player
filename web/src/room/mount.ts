@@ -6,6 +6,7 @@ import { lastLightStart, nextSchedule } from "./beat-schedule.ts";
 import type { BeatSchedule } from "./beat-schedule.ts";
 import type { RoomInput } from "./input.ts";
 import type { BeatModel } from "./model.ts";
+import { fitCue } from "./fit-cue.ts";
 import { createGel } from "./render-gel.ts";
 import { clampTitle, fitTitle, renderIntro } from "./render-intro.ts";
 import { allowTwoLines, renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
@@ -62,25 +63,6 @@ function createBeatDots(reduced: boolean, animate: boolean): (beat: BeatModel | 
   };
 }
 
-/**
- * A cue that needs a fourth line at 3:2 and narrower takes the next row's place for that interval
- * (room-2d.md); the product measures it: the cue box clips at three lines until `.four` is set.
- */
-function fitCue(cue: HTMLElement | null, allowed: boolean): void {
-  if (!cue) return;
-  cue.classList.remove("four");
-  // The web player page's phone layouts give the cue all the height left, up to 120 characters with
-  // long words (play.md, "Fitting text"): never cut, at most eight lines.
-  if (!allowed) {
-    cue.dataset.lines = "8";
-    return;
-  }
-  cue.dataset.lines = "4";
-  const narrow = typeof matchMedia === "function" && matchMedia("(max-aspect-ratio: 3/2)").matches;
-  const lineHeight = parseFloat(getComputedStyle(cue).lineHeight);
-  if (narrow && cue.scrollHeight > lineHeight * 3.5) cue.classList.add("four");
-}
-
 export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen {
   const reduced = opts.reducedMotion ?? (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const animate = opts.animate ?? true;
@@ -114,7 +96,7 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       if (!roomLayout()) clampTitle(h1);
     }
     allowTwoLines(dyn, !roomLayout());
-    fitCue(dyn.querySelector<HTMLElement>(".cue"), roomLayout());
+    fitCue(dyn.querySelector<HTMLElement>(".cue"), !roomLayout());
     gel.fit();
   };
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;

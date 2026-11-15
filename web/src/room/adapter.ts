@@ -3,10 +3,11 @@
 // is a function of its input and is tested as one.
 import { beatPeriodMs, canShowBeat, cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
-import type { Class, LinkInput, PlayNotice, RoomInput } from "./input.ts";
+import type { Class, LinkInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
 import { countLabel, linkPlate, pauseLine } from "./link-text.ts";
-import type { BeatModel, ClockLine, ClockModel, GelModel, MetricModel, NextModel, RoomModel } from "./model.ts";
+import { isNoTempo, patternText, patternValue, patternWords } from "./pattern-model.ts";
+import type { BeatModel, ClockLine, ClockModel, GelModel, MetricModel, NextModel, PatternValue, RoomModel } from "./model.ts";
 import { layoutScore, songBpm } from "./score.ts";
 import { LANDSCAPE_SCALE } from "./score-scale.ts";
 import type { ScoreScale } from "./score-scale.ts";
@@ -38,7 +39,7 @@ export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCAL
   const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
   if (finished) return outside("finished", doc, view, link, notice, scale);
   if (before) return outside("before-start", doc, view, link, notice, scale);
-  return running(doc, view, link, notice, scale);
+  return running(doc, view, link, notice, scale, input.pattern ?? null);
 }
 
 function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreScale) {
@@ -69,7 +70,7 @@ function outside(kind: "finished" | "before-start", doc: Class, view: View, link
   };
 }
 
-function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale): RoomModel {
+function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, pattern: PatternInput | null): RoomModel {
   const iv = doc.intervals[Math.min(view.intervalIndex, doc.intervals.length - 1)];
   const paused = link?.state === "Paused" || view.status === "paused";
   const song = songOf(doc, view, link);
@@ -79,12 +80,13 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
   const segment = doc.segments?.find((s) => view.classMs >= s.start_ms && view.classMs < s.end_ms)?.name ?? null;
   const following = link?.mode === "following";
   const left = following ? link.classRemainingMs : view.classRemainingMs;
+  const position = patternValue(iv, song, link, pattern);
   return {
     kind: "running",
     gel,
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice) },
-    clock: clockFor(doc, view, link, paused, song),
-    metrics: metricsFor(iv, song, link),
+    clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
+    metrics: metricsFor(iv, song, link, position),
     beat: beatFor(view, link, song),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
@@ -101,7 +103,7 @@ function songOf(doc: Class, view: View, link: LinkInput | null): Song | null {
   return i === null ? null : (doc.songs[i] ?? null);
 }
 
-function clockFor(doc: Class, view: View, link: LinkInput | null, paused: boolean, song: Song | null): ClockModel {
+function clockFor(doc: Class, view: View, link: LinkInput | null, paused: boolean, song: Song | null, noTempo: boolean): ClockModel {
   const iv = doc.intervals[Math.min(view.intervalIndex, doc.intervals.length - 1)];
   const held = link?.held === true && link.holdRemainingMs !== null;
   const remaining = held && link?.holdRemainingMs != null ? link.holdRemainingMs : view.intervalRemainingMs;
@@ -115,7 +117,8 @@ function clockFor(doc: Class, view: View, link: LinkInput | null, paused: boolea
     count: countdownText(remaining),
     wide: countdownIsWide(iv.length_ms),
     estimated: guessing,
-    line: paused ? { kind: "text", text: pauseLine(link) } : held ? null : lineFor(view, link, song, last),
+    // A pattern on a song with no tempo has no bars line (room-2d.md, "No tempo").
+    line: paused ? { kind: "text", text: pauseLine(link) } : held || noTempo ? null : lineFor(view, link, song, last),
   };
 }
 
@@ -132,13 +135,14 @@ function lineFor(view: View, link: LinkInput | null, song: Song | null, last: bo
   return { kind: "song", time: clockText(song.end_ms - view.classMs) };
 }
 
-function metricsFor(iv: Class["intervals"][number], song: Song | null, link: LinkInput | null): MetricModel[] {
+function metricsFor(iv: Class["intervals"][number], song: Song | null, link: LinkInput | null, position: PatternValue | null): MetricModel[] {
   const cadence = cadenceText(iv);
   const bpm = song ? songBpm(song) : null;
+  const songLabel = isNoTempo(position) ? "Song, no tempo" : link?.state === "Off the list" ? "Song, planned" : "Song";
   return [
     { label: "Cadence", value: cadence?.value ?? "–", unit: cadence?.unit ?? null },
-    { label: "Position", value: positionText(iv) ?? "–", unit: null },
-    { label: link?.state === "Off the list" ? "Song, planned" : "Song", value: bpm ? String(Math.round(bpm)) : "–", unit: bpm ? "bpm" : null },
+    position ? { label: "Position", value: patternText(position), unit: null, pattern: position } : { label: "Position", value: positionText(iv) ?? "–", unit: null },
+    { label: songLabel, value: bpm ? String(Math.round(bpm)) : "–", unit: bpm ? "bpm" : null },
   ];
 }
 
@@ -159,7 +163,7 @@ function beatFor(view: View, link: LinkInput | null, song: Song | null): BeatMod
 }
 
 function nextFor(doc: Class, view: View): NextModel {
-  if (view.nextIntervalIndex === null) return { end: true, zone: 0, name: "", length: "", cadence: null, position: null };
+  if (view.nextIntervalIndex === null) return { end: true, zone: 0, name: "", length: "", cadence: null, position: null, cue: null };
   const nx = doc.intervals[view.nextIntervalIndex];
   const cadence = cadenceText(nx);
   return {
@@ -168,6 +172,7 @@ function nextFor(doc: Class, view: View): NextModel {
     name: zoneDef(doc, nx.zone)?.name ?? "",
     length: clockText(nx.length_ms),
     cadence: cadence ? [cadence.value, cadence.unit].filter(Boolean).join(" ") : null,
-    position: positionText(nx),
+    position: nx.pattern ? patternWords(nx.pattern) : positionText(nx),
+    cue: nx.cue.trim() ? nx.cue : null,
   };
 }

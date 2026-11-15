@@ -1,7 +1,7 @@
 // Types of collect.js. Borders and outlines are not collected here: lib/border-walk.ts reads them.
 export interface Item {
   i: number;
-  tier: "hero" | "gel" | "value" | "text" | "minor" | "label";
+  tier: "hero" | "gel" | "value" | "count" | "text" | "minor" | "label";
   text: string;
   cap: number;
   colors: number[][];

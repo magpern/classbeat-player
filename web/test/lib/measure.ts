@@ -15,13 +15,14 @@ import type { Item } from "../spec/page/collect.js";
 import ink, { INK } from "../spec/page/ink.js";
 import { borderHues } from "./border-walk.ts";
 import { harnessUrl, newPage, settle } from "./browser.ts";
-import { MIN_NEXT_GAP, nameDrawnSmaller, nextRowAndScore, zoneWordsBroken } from "./fit-checks.ts";
+import { MIN_NEXT_GAP, MIN_PAIR_GAP, nameDrawnSmaller, nextRowAndScore, regionItems, stackedGap, zoneWordsBroken } from "./fit-checks.ts";
 
 /** Minimum cap height (share of the screen height) and contrast per type tier (room-2d.md, C1, C2). */
 export const TIERS = {
   hero: { cap: 0.2, contrast: 7 },
   gel: { cap: 0.25, contrast: 7 },
   value: { cap: 0.055, contrast: 7 },
+  count: { cap: 0.1, contrast: 7 }, // a pattern's beat count (room-2d.md, C1)
   text: { cap: 0.03, contrast: 7 },
   minor: { cap: 0.03, contrast: 7 },
   label: { cap: 0.02, contrast: 4.5 },
@@ -198,6 +199,19 @@ export async function checkShot(browser: Browser, probe: Page, s: Shot): Promise
   if (s.room && next.scoreTop !== null && nextInk.length) {
     const gap = next.scoreTop - Math.max(...nextInk.map((it) => it.ink!.y1));
     rows.push({ tier: "text", text: "next row above the score", result: gap < s.height * MIN_NEXT_GAP - 0.5 ? `FAIL next row ends ${(gap / s.height * 100).toFixed(2)} vh above the score, at least ${(MIN_NEXT_GAP * 100).toFixed(1)} vh` : "ok" });
+  }
+  // The next row, its cue and the metrics keep 1 vh of clear space from the cue (room-2d.md, "Measured").
+  const regions = await regionItems(page);
+  const inkBoxes = (ids: readonly number[]) => items.filter((it) => ids.includes(it.i) && it.ink).map((it) => it.ink!);
+  const pairs: [string, number | null][] = [
+    ["next row under the cue", stackedGap(inkBoxes(regions.cue), inkBoxes(regions.next))],
+    ["next row above the cue", stackedGap(inkBoxes(regions.next), inkBoxes(regions.cue))],
+    ["cue under the metrics", stackedGap(inkBoxes(regions.metrics), inkBoxes(regions.cue))],
+  ];
+  if (process.env.SPEC_GAPS) console.log(`GAPS ${shotName(s)} ${pairs.map(([n, g]) => `${n}: ${g === null ? "-" : ((g / s.height) * 100).toFixed(2)}`).join(" | ")}`);
+  for (const [name, gap] of pairs) {
+    if (!s.room || gap === null) continue;
+    if (gap < s.height * MIN_PAIR_GAP - 0.5) rows.push({ tier: "text", text: name, result: `FAIL ${name}: ${(gap / s.height * 100).toFixed(2)} vh of clear space, at least ${(MIN_PAIR_GAP * 100).toFixed(0)} vh` });
   }
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (C8)" });
   for (const h of [...hues, ...(await shadowHues(page)), ...(await borderHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (C6)" });

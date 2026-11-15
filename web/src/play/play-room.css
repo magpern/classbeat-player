@@ -103,8 +103,17 @@ body[data-band="hidden"], body[data-band="fading"] { cursor: none; }
   .play .metric .v small { font-size: var(--l-minor); }
   .play .cue { left: 4vw; right: 4vw; top: calc(50.4 * var(--dh)); font-size: var(--l-text); line-height: 1.1; max-height: calc(var(--score-top) - calc(7 * var(--dh)) - calc(50.4 * var(--dh))); }
   .play .cue.long { font-size: var(--l-textmin); line-height: 1.04; --tier: textmin; }
-  .play .next { left: 4vw; right: 4vw; top: calc(var(--score-top) - calc(6.6 * var(--dh))); gap: 1.6vw; }
+  .play .next { left: 4vw; right: 4vw; top: calc(var(--score-top) - calc(6.6 * var(--dh))); display: flex; align-items: center; gap: 1.6vw; white-space: nowrap; }
   .play .next .chip, .play .next .v { font-size: var(--l-minor); }
+  /* The next cue is the room's second line (room-2d.md); the phone layouts have no room for it. */
+  .play .next .nline { display: contents; }
+  .play .next .ncue { display: none; }
+  /* A position pattern (room-2d.md): the side and its count, or a note, in the metrics column. */
+  .play .metrics.fold { gap: calc(1.6 * var(--dh)); }
+  .play .metric .v.pv { column-gap: 1vw; }
+  .play .pv .side { font-size: var(--l-value); }
+  .play .pv .cnt { font-size: calc(1.5 * var(--l-value)); }
+  .play .metric .v.note, .play .pv .soon { font-size: var(--l-label); max-width: 24vw; }
   .play .score { top: var(--score-top); height: var(--score-h); }
   .play .track.iv { height: 36%; }
   .play .track.songs { top: 40%; height: 60%; }
@@ -178,6 +187,15 @@ body[data-band="hidden"], body[data-band="fading"] { cursor: none; }
   .play .next { grid-area: next; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; column-gap: 2.4vw; row-gap: calc(0.6 * var(--dh)); padding: calc(0.8 * var(--dh)) 4vw calc(0.9 * var(--dh)); white-space: nowrap; }
   .play .next .chip, .play .next .v { font-size: var(--p-minor); }
   .play .next .more { grid-column: 3 / -1; display: flex; gap: 3vw; }
+  /* The next cue is the room's second line (room-2d.md); the phone layouts have no room for it. */
+  .play .next .nline { display: contents; }
+  .play .next .ncue { display: none; }
+  /* A position pattern (room-2d.md): the side and its count, or a note, in the metrics column. */
+  .play .metrics.fold { gap: calc(1.2 * var(--dh)); }
+  .play .metric .v.pv { column-gap: 2vw; }
+  .play .pv .side { font-size: var(--p-value); }
+  .play .pv .cnt { font-size: calc(1.5 * var(--p-value)); }
+  .play .metric .v.note, .play .pv .soon { font-size: var(--p-label); max-width: 40vw; }
   .play .score { grid-area: score; }
   .play .track.iv { height: 38%; }
   .play .track.songs { top: 43%; height: 57%; }
