@@ -49,6 +49,9 @@ done
 
 # The site's answers for a site session (ADR 0002, section 4). One module per schema:
 # schema/site-api/v1/<name>.schema.json -> site_api_<name>.py and site-api-<name>.d.ts.
+# Booleans are strict: the models refuse "true" or 1 where the schema says boolean. A bounded
+# list stays a plain array in TypeScript (`--maxItems -1`), not a union of tuples; the schema
+# and the Python model keep the bound.
 site="$here/site-api/v1"
 for path in "$site"/*.schema.json; do
   name="$(basename "$path" .schema.json)"
@@ -57,10 +60,11 @@ for path in "$site"/*.schema.json; do
     --output "$out/python/site_api_${name//-/_}.py" \
     --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 \
     --use-standard-collections --use-union-operator --use-annotated --field-constraints \
-    --disable-timestamp --use-title-as-name --extra-fields forbid --formatters black isort
+    --disable-timestamp --use-title-as-name --extra-fields forbid --formatters black isort \
+    --strict-types bool
   npm --prefix "$here/ts" exec --no -- json2ts \
     --input "$path" --output "$out/ts/site-api-$name.d.ts" \
-    --cwd "$site" --no-additionalProperties
+    --cwd "$site" --no-additionalProperties --maxItems -1
 done
 
 # The live sessions' HTTP bodies and WebSocket messages (ADR 0005, section 4). One module per

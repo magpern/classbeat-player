@@ -1,6 +1,7 @@
 // The site's answers (schema/site-api/v1): every example gets its verdict from the JSON Schema,
 // the /me answer allows the email (a string, or null for an account with none, ADR 0010) and
 // nothing else, and a typed literal checks the generated TypeScript type (npm run typecheck).
+// The passkeys answer's own rules are in site-api-passkeys.test.ts.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -11,7 +12,7 @@ import type { MeAnswer } from "../../generated/ts/site-api-me.d.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const API = join(ROOT, "site-api", "v1");
-const NAMES = ["me"];
+const NAMES = ["me", "passkeys"];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const load = (path: string): any => JSON.parse(readFileSync(path, "utf8"));
 const names = (dir: string): string[] => readdirSync(dir).filter((n) => n.endsWith(".json")).sort();
