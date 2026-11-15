@@ -15,6 +15,7 @@ import type { SceneTokens } from "./tokens.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
 import { lookup, nth } from "./lookup.ts";
+import { assertNoRenderCallbacks } from "./render-callbacks.ts";
 
 const BEAM_BASE = 0.3;
 const HAZE_GAIN = 1;
@@ -39,6 +40,7 @@ export class SceneRig {
     this.flash.renderOrder = 100;
     this.scene.add(this.wall.mesh, this.haze[0].mesh, this.haze[1].mesh, this.flash);
     this.flash.material.color.setHex(tokens.white);
+    assertNoRenderCallbacks(this.scene);
   }
 
   setAspect(aspect: number): void {
