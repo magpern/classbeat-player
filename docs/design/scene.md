@@ -119,7 +119,7 @@ slope is taken from an interval's values, and nothing aims at an interval's timi
 | Moments (`build`, `drop`, `breakdown`) | Build: the 8 beats before a drop (or the `build` moment) gather every beam to one point, the haze brightens, the lift deepens. Drop: one white burst, then every fixture on and fanned wide for 4 bars. Breakdown: one slow beam and the wall, for 8 bars | |
 | No moments in the song | Bursts follow the interval changes inside the song (plan section 4), at least 10 s apart: **light only**, no gather and no fan, so no direction follows an interval's timing | Any angle |
 | The next interval | **Anticipation**: in the last 10 s before an interval change the back truss and the LED wall turn to the next zone's colour, as a wipe from the far side, at constant luminance; the front truss, the floor uplights and the haze cross in the 700 ms that **end** at the change ("Colour: two hues, never a mix") | |
-| A position pattern (format 1.1, beat known) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side (a 150 ms step, at most one in any 1 s), and a 7 % accent on the first beat of each side, under the flash threshold. At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
+| A position pattern (format 1.1, beat known) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side (a 150 ms step, at most one in any 1 s), and a 7 % accent on the first beat of each side, under the flash threshold (to be built in #577; 25 % as built). At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
 | Link state | Without a lock, no beat and no tempo pulse (as the 2D beat dot); see the states | |
 
 ### How much of the music is known
@@ -130,7 +130,7 @@ Nothing beat-like is ever guessed: a downbeat that is not known is not drawn.
 | Level | When | What runs |
 |---|---|---|
 | **Beat** | Link locked, the song has `bpm` and `beat_anchors` | Everything: beat lift, wall chase, phrase mirroring, the bars line, the pattern count (both `start_on` values), the pattern accent |
-| **Tempo only** | Link locked, `bpm` but no anchors | A shallow **tempo pulse** of the lit beams (5 %, its own phase, not claimed to be on the beat); no wall chase, no phrase, no bars line, no pattern accent. The pattern count runs only for `start_on: "interval_start"` (the default), counted at the bpm from the interval's start; a `next_downbeat` pattern shows "count from the music" |
+| **Tempo only** | Link locked, `bpm` but no anchors | A shallow **tempo pulse** of the lit beams (5 %, to be built in #577, 12 % as built; its own phase, not claimed to be on the beat); no wall chase, no phrase, no bars line, no pattern accent. The pattern count runs only for `start_on: "interval_start"` (the default), counted at the bpm from the interval's start; a `next_downbeat` pattern shows "count from the music" |
 | **None** | No lock (coasting, off the list, paused, manual clock, hold), or the song has no `bpm` (`pattern_without_bpm`, ADR 0003) | No lift, no pulse, no accent, no count; the zone's colour and energy and the motion stay |
 
 Moments are independent: a song without marked moments gets bursts on its interval changes
@@ -263,25 +263,30 @@ coral. Energy rises with the zone:
 
 | Zone | Ambient glow | Fixtures lit (of 22) | Movement (deg/s, at most) | Beat lift | Wall |
 |---|---|---|---|---|---|
-| 1 | 0.045 | 8 | 6 | 3.5 % | Slow wave |
-| 2 | 0.055 | 10 | 8 | 4.0 % | Slow wave |
-| 3 | 0.065 | 12 | 11 | 4.5 % | Wave and beat |
-| 4 | 0.075 | 15 | 15 | 5.0 % | Beat chase |
-| 5 | 0.085 | 17 | 19 | 5.5 % | Beat chase |
-| 6 | 0.095 | 20 | 24 | 6.0 % | Beat chase, both ways |
-| 7 | 0.11 | 22 | 30 | 6.5 % | Beat chase, both ways |
+| 1 | 0.045 | 8 | 6 | 15 % | Slow wave |
+| 2 | 0.055 | 10 | 8 | 18 % | Slow wave |
+| 3 | 0.065 | 12 | 11 | 22 % | Wave and beat |
+| 4 | 0.075 | 15 | 15 | 27 % | Beat chase |
+| 5 | 0.085 | 17 | 19 | 32 % | Beat chase |
+| 6 | 0.095 | 20 | 24 | 38 % | Beat chase, both ways |
+| 7 | 0.11 | 22 | 30 | 45 % | Beat chase, both ways |
 
 "Ambient glow" is the linear-light level of the zone colour lighting the haze and the room, before
 the beams and before the text rule below; it is kept low so the beams carry the light. A class with
 fewer than seven zones uses the rows of its own zone numbers.
 
-The beat lift was 15 to 45 % (55 % in a build) in earlier revisions. Measured strictly, a lift
-and its fall are two changes in every region a lit beam crosses, so at 120 bpm the beat alone
-made 5 changes a second (#569). It is now **under the flash threshold** in every region (S6,
-"The flash budget"): the energy of a zone shows in how many fixtures are lit, how bright and how
+The "Beat lift" column is the lift **as built today** (15 to 45 %, 55 % in a build), and a test
+holds the code to this table. Measured strictly, a lift and its fall are two changes in every
+region a lit beam crosses, so at 120 bpm the beat alone made 5 changes a second (#569). **To be
+built in #577:** the lift goes **under the flash threshold** in every region, 3.5, 4.0, 4.5,
+5.0, 5.5, 6.0 and 6.5 % for zones 1 to 7 (7 % in a build; "The flash budget"), and #577 puts
+these values in this column together with the code: the energy of a zone shows in how many fixtures are lit, how bright and how
 fast they are and how dense the haze is, and the beat is a sparkle on top, not a flash.
 
 ### Colour: two hues, never a mix (S5, decided, #569 review)
+
+**To be built in #576** (the linear-light renderer and the cross). Until then the renderer
+blends the two tokens and does not meet this section.
 
 A straight mix of two zone tokens is a third hue (sky into teal gives a blue-cyan that is
 neither; ultraviolet into grass a lavender grey). So the rig never mixes two tokens: not in a
@@ -363,6 +368,10 @@ second test feeds the check a two-token mix and a per-channel tone map and sees 
 
 ### The flash budget (S6, decided, #569 review)
 
+**To be built in #577** (the budget and the S6 gate). The numbers here replace the built ones
+(the lift column of "Energy by zone", the 12 % tempo pulse, the 25 % accent) when #577 lands;
+#577 moves them into the tables the tests read, together with the code.
+
 **The measure** (the Orchestrator's, #569; the scene is held to it on every moment):
 
 - **Regions:** every area of at least 10 % of the screen, measured at least as the whole screen,
@@ -394,7 +403,7 @@ So no window can hold more than 1 + 2 = 3, whatever falls together.
 
 | Effect | Amplitude | Shape |
 |---|---|---|
-| Beat lift (Beat level), on the lit beams only | 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5 % for zones 1 to 7 (the energy table); **7 %** in a build | Rise 40 ms, fall 200 ms, back at rest before the next lift; at most 3 a second (above 180 bpm on every second beat) |
+| Beat lift (Beat level), on the lit beams only | 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5 % for zones 1 to 7 (they replace the energy table's column in #577); **7 %** in a build | Rise 40 ms, fall 200 ms, back at rest before the next lift; at most 3 a second (above 180 bpm on every second beat) |
 | Tempo pulse (Tempo only) | 5 % (`--scene-tempo-pulse`) | Its own phase, at the bpm, as before |
 | Pattern accent (Beat level) | 7 %, on the first beat of each side | As the lift |
 | Wall chase step | Whatever keeps each region within 8 %: the chase is a moving pattern with the same number of lit dots in any region, so it travels rather than flashes | One step a beat, at most 3 a second |
@@ -671,9 +680,9 @@ straight on the scene.
 | Warm-up (zones 1 and 2) | Calm: few beams, slow sweep, a slow wave on the wall, shallow lift on the beat; the haze clearly blue or teal | Running layout |
 | Each zone, 1 to 7 | Colour and energy from the table above | Running layout |
 | Interval change coming (last 10 s) | Back truss and wall wipe to the next zone's colour from the far side; the front truss stays | Label "Change in" in the last 5 s (room-2d.md); the next row is the next zone with its number and name, so the second colour on screen always has its number beside it |
-| Interval change | The front truss, the floor uplights and the haze cross to the new colour in the 700 ms that end at the change, a wipe from the far side toward the gel, each light switching hue at constant luminance, never a mix; the new zone's energy arrives in one 700 ms ramp ending at the change ("Colour: two hues, never a mix"); every lens flashes toward white once at the change (160 ms, `--m-flash`, under the flash threshold), unless a burst or a dim falls on the same moment, which then replaces it ("The flash budget", collisions) | New values; on the scene the gel **cuts** to the new colour at the change (one frame, never a mix); one white line down the gel's edge |
+| Interval change | (To be built in #576 and #577.) The front truss, the floor uplights and the haze cross to the new colour in the 700 ms that end at the change, a wipe from the far side toward the gel, each light switching hue at constant luminance, never a mix; the new zone's energy arrives in one 700 ms ramp ending at the change ("Colour: two hues, never a mix"); every lens flashes toward white once at the change (160 ms, `--m-flash`, under the flash threshold), unless a burst or a dim falls on the same moment, which then replaces it ("The flash budget", collisions) | New values; on the scene the gel **cuts** to the new colour at the change (one frame, never a mix); one white line down the gel's edge |
 | Song change | Rig dims to 25 % for one beat (down in 120 ms, up in 120 ms), back on the first beat of the new song; no dim when a burst falls within 1 s; the beams turn to the new song's look at no more than 30 degrees a second, so the turn is done within 3.5 s ("How a beam turns") | Score moves on; song clip and BPM change |
-| Build (8 beats before a drop, or a `build` moment) | Beams turn, at the turn limit, to gather at one point in the middle of the room (complete in time up to about 170 bpm), the haze brightens to 1.5 ×, the lift deepens to 7 %; for the last 1 s before the drop the haze has finished rising and the beams hold still where they are ("The flash budget") | Nothing new (the score shows the "Drop" tick) |
+| Build (8 beats before a drop, or a `build` moment) | Beams turn, at the turn limit, to gather at one point in the middle of the room (complete in time up to about 170 bpm), the haze brightens to 1.5 ×, the lift deepens to 7 % (55 % as built; #577); for the last 1 s before the drop the haze has finished rising and the beams hold still where they are ("The flash budget") | Nothing new (the score shows the "Drop" tick) |
 | Drop | One white burst over the whole scene (also at the None level, except paused, holding and off the list) (rise 40 ms to a peak of 0.85 of white at the drop, 250 ms decay; the only full-screen flash; the fan's extra fixtures come on inside the decay), then every fixture on and turning, at the turn limit, to the wide fan for 4 bars (the fan is open within 3.5 s and 4 bars last 5.3 s even at 180 bpm), then the zone's own energy | Unchanged; the text is never flashed (dark-under-text holds during the burst) |
 | Breakdown | One slow beam on the front truss and the wall's wave for 8 bars | Unchanged |
 | Paused | Lights down: everything to 6 %, frozen where it was | As 2D: gel lights down, "Paused" plate, link plate "Music paused" |
@@ -685,7 +694,7 @@ straight on the scene.
 | Position pattern before its first downbeat (`next_downbeat`) | As the zone | Side of the first entry and "starts on the next bar"; no count until the downbeat |
 | Position pattern, no lock | No beat, no pattern accent | Pattern block: label and "Count from the music"; no side, no count |
 | `pattern_without_bpm` (a pattern in a song with no `bpm`) | No beat, no pulse, no accent | Pattern block: label and "No tempo: count from the music"; the Song metric reads "Song, no tempo" and "–"; the score's strip is left out |
-| No beat anchors (tempo only) | Tempo pulse of 5 %, no wall chase, no phrase mirroring | No bars line; no phrase ticks in the score |
+| No beat anchors (tempo only) | Tempo pulse of 5 % (12 % as built; #577), no wall chase, no phrase mirroring | No bars line; no phrase ticks in the score |
 | No marked moments | Light-only bursts on the song's interval changes, at least 10 s apart | No moment ticks in the score |
 | Ambiguous, manual clock, hold at a song change | Ambiguous as running; manual clock and hold: no beat, movement at the zone's energy | As 2D |
 | Last interval | As its zone | As 2D ("End" mark in the score) |
@@ -698,7 +707,7 @@ straight on the scene.
   180 BPM the lift is on every second beat, as the 2D beat dot); a beam turns at most 30 degrees
   a second on every frame, steps in the model included ("How a beam turns"); the white drop burst is the only full-screen flash, at most once per drop moment and
   never within 10 s of another, and counted within the 3-a-second limit; the lens flash at an
-  interval change is the other orchestrated moment (a burst on the same moment replaces it). The beat lift is a brightness change of at most 6.5 % (7 % in a build) on the beams
+  interval change is the other orchestrated moment (a burst on the same moment replaces it). The beat lift is a brightness change of at most 6.5 % (7 % in a build; to be built in #577, 45 % and 55 % as built) on the beams
   only, never on the gel or the text, so that no region moves more than 8 % on the beat; every
   light event fits the budget of "The flash budget" (S6).
 - **Colour, always:** two hues and white, never a mix ("Colour: two hues, never a mix", S5).
@@ -737,7 +746,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 | S5. Zone | The zone is a number and a name as well as a colour on the gel, the next row and the score (as C5); a score block never shows its colour without its number. The rig shows only the current zone's colour, the next zone's colour during the 10 s anticipation (while its number and name are in the next row), and white. Never another hue, never a measured heart-rate zone (rule 7). A token keeps its hue at any lightness and any share of white: in linear light every rig pixel is `a × T + w × white` for one allowed token `T`. Tested on the rendered pixels of every frame of the S6 runs, 0 failing pixels ("Colour: two hues, never a mix", the test) |
 | S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. One full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart. Measured as "The flash budget" says (every region of at least 10 %, each direction a change, no duration gate, any sliding 1 s), locked with the beat and in every other state; beat-like light at most 8 % per run in every region, steady light at most 1 change and counted events at most 2 in any 1 s |
 | S7. Movement | The camera never moves. No beam turns faster than 30 degrees a second **on any frame**, a re-aim, a phrase flip and a moment included: the drawn direction follows the model's target through a turn-rate limiter ("How a beam turns"). Rule 4: a beam's direction is a function of the song's look, the fixture, the motion phase, the phrase and the song's moments only. Test (scene model): two classes that differ only in their intervals (zones, targets, positions, patterns, cues), evaluated at the same song, look, phrase, moments and **motion phase**, give every beam the same direction; and the motion phase's rate depends only on the zone's row, at most 30 degrees a second. Light-only bursts on interval changes change no direction |
-| S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 5 % and the pattern count of S14 (at the `bpm` from the interval start, `start_on: "interval_start"` only), and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
+| S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 5 % (to be built in #577; 12 % as built) and the pattern count of S14 (at the `bpm` from the interval start, `start_on: "interval_start"` only), and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
 | S9. Frame rate | ADR 0009's re-check: at the **default quality level (High)**, on a studio-class computer at 1920 × 1080, a **median of at least 58 fps over a full class** and **no second under 30 fps**, from the frame-rate log (once a second, with the quality level). A class that steps down from High misses this criterion; the steps of the table above only keep the room usable on a weaker computer |
 | S10. Fallback | Scene killed: the plain 2D screen within 2 s, the clock continuous (plan section 9) |
 | S11. Reduced motion | With reduced motion the room shows the plain screen; a still-rig screenshot shows no change between two frames 1 s apart except the score's one-second step, the countdown and the pattern count |
@@ -759,15 +768,15 @@ pull request:
 | `--scene-text-pad` | 1.2 vh, fade 3 vh | Growth of each text box for the cap |
 | `--scene-down` | 0.06 | Lights down (paused, before the start), as the 2D gel |
 | `--scene-house` | 0.40 | House lights (finished), white |
-| `--scene-burst` | 0.85, rise 40 ms, decay 250 ms | The burst's peak share of white (peaking at the moment), its rise and its decay |
+| `--scene-burst` | 0.85, rise 40 ms (to be built in #577), decay 250 ms | The burst's peak share of white (peaking at the moment), its rise and its decay |
 | `--scene-anticipate` | 10 s | How long before an interval change the next colour comes in |
 | `--scene-turn-max` | 30 degrees a second | The fastest any beam turns; the limiter's rate (S7) |
 | `--scene-reaim` | 3.5 s at most | The longest a re-aim, phrase flip, gather or fan may take: the largest target step of 105 degrees at the turn limit. Replaces the 1.2 s of earlier revisions, which names nothing now (the song-change dim is one beat) |
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
-| `--scene-lift-cap` | 0.08 | The largest run any beat-like light (lift, pulse, accent, wall chase, lens flash) may make in any region, as a share of its larger end (S6) |
-| `--scene-hold` | 150 ms before, 300 ms after | Beat-like light held at rest around a counted event (S6) |
-| `--scene-lens-flash` | 0.5 | The lens flash's peak share of white, lowered if a region would pass `--scene-lift-cap` |
-| `--scene-tempo-pulse` | 0.05 | The tempo pulse's depth when there are no anchors |
+| `--scene-lift-cap` | 0.08 (to be built in #577) | The largest run any beat-like light (lift, pulse, accent, wall chase, lens flash) may make in any region, as a share of its larger end (S6) |
+| `--scene-hold` | 150 ms before, 300 ms after (to be built in #577) | Beat-like light held at rest around a counted event (S6) |
+| `--scene-lens-flash` | 0.5 (to be built in #577) | The lens flash's peak share of white, lowered if a region would pass `--scene-lift-cap` |
+| `--scene-tempo-pulse` | 0.05 (to be built in #577; 0.12 as built) | The tempo pulse's depth when there are no anchors |
 | `--score-ahead` | 8 min (6 at 3:2 and narrower) | The score's look-ahead |
 | `--score-now` | 10 vw | Where "now" is |
 | `--pattern-count` | 18 vh (16:9), 14.6 vh stepped | The pattern's beat count |
