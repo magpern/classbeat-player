@@ -75,6 +75,30 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["a listener declared without the bind permission", "listener", () => mutate(MANIFEST, /android:permission="android\.permission\.BIND_NOTIFICATION_LISTENER_SERVICE"/, "")],
   ["sessions not filtered to Spotify", "filter", () => mutate(READER, "spotifyOnly(sessions) { it.packageName }.firstOrNull()", "sessions.firstOrNull()")],
   ["metadata read before the filter", "filter", () => mutate(READER, "manager.getActiveSessions(listener)", "manager.getActiveSessions(listener).also { it.firstOrNull()?.metadata }")],
+  // #559 N1: any read of the session list other than spotifyOnly(list) { it.packageName }.
+  ["a fallback to an unfiltered session", "filter", () => mutate(READER, "?: return Poll(polledAt, null, null)", "?: sessions.first()")],
+  ["a package lambda that returns a constant", "filter", () => mutate(READER, "spotifyOnly(sessions) { it.packageName }", 'spotifyOnly(sessions) { "com.spotify.music" }')],
+  ["the session list read through another path", "filter", () => mutate(READER, "val metadata = spotify.metadata", "val metadata = sessions.last().metadata")],
+  // #559 N2: any assignment of blockNetworkLoads other than true.
+  ["a second blockNetworkLoads = false", "webview", () => mutate(SCENE, "web.webViewClient =", "web.settings.blockNetworkLoads = false\n        web.webViewClient =")],
+  ["setBlockNetworkLoads(false)", "webview", () => mutate(SCENE, "web.webViewClient =", "web.settings.setBlockNetworkLoads(false)\n        web.webViewClient =")],
+  ["blockNetworkLoads set from a variable", "webview", () => mutate(SCENE, "web.webViewClient =", "web.settings.blockNetworkLoads = flag\n        web.webViewClient =")],
+  // #559 N3: the listener's body is the two empty callbacks and nothing else.
+  ["an init block in the listener", "listener", () => mutate(LISTENER, "NotificationListenerService() {", 'NotificationListenerService() {\n    init { println("x") }')],
+  ["a field initializer in the listener", "listener", () => mutate(LISTENER, "NotificationListenerService() {", "NotificationListenerService() {\n    val seen = ArrayList<Any>()")],
+  ["an expression-bodied property in the listener", "listener", () => mutate(LISTENER, "NotificationListenerService() {", "NotificationListenerService() {\n    override val activeNotifications get() = emptyArray<StatusBarNotification>()")],
+  ["a top-level initializer beside the listener", "listener", () => mutate(LISTENER, "/**", 'val boot = println("x")\n\n/**')],
+  // #559 N4: audio and codec classes that rule 3 forbids.
+  ["MediaCodec", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.MediaCodec::class\nclass SpotifyReader")],
+  ["MediaExtractor", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.MediaExtractor()\nclass SpotifyReader")],
+  ["SoundPool", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.SoundPool::class\nclass SpotifyReader")],
+  ["MediaRecorder", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.MediaRecorder::class\nclass SpotifyReader")],
+  ["Visualizer", "audio", () => mutate(READER, "class SpotifyReader", "val c = android.media.audiofx.Visualizer::class\nclass SpotifyReader")],
+  // #559 N5: a char literal holding a quote must not hide real code behind a fake string.
+  ["a network class after a quote char literal", "network", () => mutate(READER, "class SpotifyReader", "val q = '\"'\nval u = java.net.URL(\"x\")\nclass SpotifyReader")],
+  // #559 N6: the manifest check runs on every build and install path.
+  ["the manifest check not wired to install", "manifest", () => mutate(APP_GRADLE, '"install$cap", ', "")],
+  ["the manifest check not wired to package", "manifest", () => mutate(APP_GRADLE, '"package$cap", ', "")],
   ["a transport command", "transport", () => mutate(READER, "val metadata = spotify.metadata", "spotify.transportControls.pause()\n        val metadata = spotify.metadata")],
   ["a media key", "transport", () => mutate(READER, "class SpotifyReader", "val key = android.view.KeyEvent.KEYCODE_MEDIA_NEXT\nclass SpotifyReader")],
   ["MediaPlayer", "audio", () => mutate(READER, "class SpotifyReader", "val p = android.media.MediaPlayer()\nclass SpotifyReader")],
@@ -110,6 +134,17 @@ describe("each hard limit fails when broken", () => {
 });
 
 describe("stripComments", () => {
+  it("handles a char literal holding a quote, so later strings and comments are read right", () => {
+    const out = stripComments("val q = '\"' // gone INTERNET\nval s = \"a // kept\"\nval t = MediaCodec");
+    assert.match(out, /a \/\/ kept/);
+    assert.match(out, /MediaCodec/);
+    assert.doesNotMatch(out, /gone|INTERNET/);
+  });
+
+  it("keeps escaped char literals whole", () => {
+    assert.match(stripComments("val a = '\\'' /* x */ val b = '\\u0041'"), /'\\''\s+val b = '\\u0041'/);
+  });
+
   it("drops comments and keeps a URL inside a string", () => {
     const out = stripComments('val a = "https://x.y/z" // note about INTERNET\n/* MediaPlayer */ val b = 1');
     assert.match(out, /https:\/\/x\.y\/z/);

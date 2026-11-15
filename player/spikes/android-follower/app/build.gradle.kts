@@ -72,6 +72,9 @@ androidComponents {
         val check = tasks.register<CheckManifest>("verify${cap}ManifestPermissions") {
             manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
         }
-        tasks.matching { it.name == "assemble$cap" }.configureEach { dependsOn(check) }
+        // Every path to a built or installed app runs the check: compile, package (APK), bundle, install and
+        // assemble. Not preBuild: the merged manifest needs pre<Variant>Build, so that would be a cycle.
+        val guarded = listOf("compile${cap}Kotlin", "compile${cap}JavaWithJavac", "package$cap", "package${cap}Bundle", "bundle$cap", "install$cap", "assemble$cap")
+        tasks.matching { it.name in guarded }.configureEach { dependsOn(check) }
     }
 }
