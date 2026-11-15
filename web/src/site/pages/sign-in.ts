@@ -1,9 +1,13 @@
-// The sign-in page (docs/design/site.md, "Sign in"): the email link, a passkey, and the pages
-// around them. The link token lives only in this closure: it is sent in the body of one POST
-// and dropped once used. Nothing is written to storage and nothing is logged.
-import { afterLinkAsked, afterLinkUsed, afterPasskey, NOTICE_WORDS, plateWords } from "../core/sign-in-model.ts";
+// The sign-in page (docs/design/site.md, "Sign in"): "Sign in with classbeat" first, the one
+// filled button, then the follower group (the email link and a passkey), and the pages around
+// them. The classbeat start carries the purpose only and no return entry (ADR 0010, section 6).
+// The link token lives only in this closure: it is sent in the body of one POST and dropped once
+// used. Nothing is written to storage and nothing is logged.
+import { afterLinkAsked, afterLinkUsed, afterPasskey, classbeatLine, FOLLOWER_WORDS, NOTICE_WORDS, plateWords } from "../core/sign-in-model.ts";
 import type { Next, PasskeyOutcome, Plate, SignInView } from "../core/sign-in-model.ts";
+import { CONFIRM_WORDS } from "../core/account-model.ts";
 import { call } from "../net/api.ts";
+import { startSignIn } from "../net/classbeat-reauth.ts";
 import { passkeySignIn } from "../net/passkey.ts";
 import { el } from "../ui/dom.ts";
 import { button, buttons, field, h1, h2, note, or, p, plate, small, working } from "../ui/kit.ts";
@@ -39,6 +43,18 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
     const w = plateWords(pl);
     const retry = pl.kind === "passkey-failed" ? usePasskey : pl.kind === "offline" || pl.kind === "server" || pl.kind === "too-many" ? again : null;
     return plate(w.head, w.detail, retry && button("Try again", { quiet: true, onPress: retry }));
+  }
+
+  /** "Sign in with classbeat": the start, then classbeat's address. A plate that follows offers this button again, never "Try again". */
+  async function useClassbeat(): Promise<void> {
+    if (view.screen !== "form" || view.busy) return;
+    const email = currentEmail();
+    again = null;
+    show({ screen: "form", email, busy: "classbeat" });
+    const next = await startSignIn();
+    // The line "Opening classbeat…" stays while the browser leaves.
+    if (next.kind === "go") return location.assign(next.to);
+    show({ screen: "form", email, plate: next.kind === "plate" ? next.plate : { kind: "server" } });
   }
 
   async function askLink(raw: string): Promise<void> {
@@ -77,12 +93,8 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
     return input ? input.value : view.screen === "link" ? "" : view.email;
   }
 
-  function form(v: Form): Node[] {
-    const out: Node[] = [h1("Sign in")];
-    if (v.plate) out.push(plateFor(v.plate));
-    else if (v.notice) out.push(note(NOTICE_WORDS[v.notice].head, NOTICE_WORDS[v.notice].detail));
-    if (v.plate?.kind === "link-refused") out.push(h2("Get a new link"), p("Ask for it in the browser you want to sign in with."));
-    if (v.busy === "passkey") out.push(working("Waiting for your passkey. Follow the prompt from your browser or device."));
+  /** The follower group: a fixed block under the classbeat one, so it can be dropped without touching it. */
+  function followers(v: Form): HTMLDivElement {
     const plain = !v.plate && !v.notice && !v.emailError;
     const f = field("Email address", {
       type: "email",
@@ -93,7 +105,7 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
       hint: plain ? "We send you a link. There is no password." : undefined,
       error: v.emailError ? INVALID_EMAIL : undefined,
     });
-    const submit = button("Email me a sign-in link", { primary: true, full: true, submit: true, disabled: !!v.busy });
+    const submit = button("Email me a sign-in link", { full: true, submit: true, disabled: !!v.busy });
     const formEl = el("form", { class: "signin" }, [f.root, buttons(submit)]);
     formEl.noValidate = true;
     formEl.addEventListener("submit", (e) => {
@@ -101,11 +113,27 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
       if (submit.disabled) return;
       void askLink(f.input.value);
     });
-    out.push(formEl);
+    const out: Node[] = [h2(FOLLOWER_WORDS.heading), p(env.passkey ? FOLLOWER_WORDS.sentence : FOLLOWER_WORDS.sentenceNoPasskey), formEl];
     if (env.passkey) {
       const waiting = v.busy === "passkey";
       out.push(or(), button(waiting ? "Waiting for your passkey…" : "Sign in with a passkey", { full: true, disabled: !!v.busy, onPress: () => void usePasskey() }), small("A passkey uses this device's fingerprint, face or screen lock."));
     }
+    return el("div", { class: "group" }, out);
+  }
+
+  function form(v: Form): Node[] {
+    const out: Node[] = [h1("Sign in")];
+    if (v.plate) out.push(plateFor(v.plate));
+    else if (v.notice) out.push(note(NOTICE_WORDS[v.notice].head, NOTICE_WORDS[v.notice].detail));
+    if (v.plate?.kind === "link-refused") out.push(h2("Get a new link"), p("Ask for it in the browser you want to sign in with."));
+    if (v.busy === "passkey") out.push(working("Waiting for your passkey. Follow the prompt from your browser or device."));
+    if (v.busy === "classbeat") out.push(working(CONFIRM_WORDS.waiting));
+    const fromCompanion = env.returnEntry()?.startsWith("control") ?? false;
+    out.push(
+      buttons(button("Sign in with classbeat", { primary: true, full: true, disabled: !!v.busy, onPress: () => void useClassbeat() })),
+      small(classbeatLine(v.notice, fromCompanion)),
+      followers(v),
+    );
     return out;
   }
 
@@ -115,6 +143,7 @@ export function signInPage(main: HTMLElement, start: SignInView, env: SignInEnv,
       note(`A link is on its way if ${v.email} can sign in`),
       p("The link works once, for 15 minutes, and only in this browser. Open it here."),
       small("Nothing arrived in a few minutes? Check the spam folder and the spelling of the address. Only addresses that have been let in can sign in."),
+      small(FOLLOWER_WORDS.sentLine),
       buttons(
         button("Send the link again", { onPress: () => void askLink(v.email) }),
         button("Use a different address", { onPress: () => show({ screen: "form", email: "" }) }),

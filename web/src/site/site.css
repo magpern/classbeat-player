@@ -93,6 +93,9 @@ p.small { margin-bottom: 0.75rem; }
 .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--stage-line); }
 .btns + p, .btns + .small, .btns + h2 { margin-top: 1.5rem; }
 .or + .btn + .small { margin-top: 0.75rem; }
+/* The sign-in page's follower group: a rule 32 px under the classbeat block, its heading 24 px under the rule. */
+.group { border-top: 1px solid var(--stage-line); margin-top: 2rem; }
+.group > h2 { margin-top: 1.5rem; }
 
 /* ---------- Tablet ---------- */
 @media (min-width: 37.5em) {

@@ -1,7 +1,7 @@
 // The sign-in page's states (docs/design/site.md, "Sign in"; ADR 0002, sections 4 and 10).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { afterLinkAsked, afterLinkUsed, afterPasskey, busyResendAfter, plateWords } from "../../src/site/core/sign-in-model.ts";
+import { afterLinkAsked, afterLinkUsed, afterPasskey, busyResendAfter, classbeatLine, FOLLOWER_WORDS, NOTICE_WORDS, plateWords } from "../../src/site/core/sign-in-model.ts";
 import { fragmentOf } from "../../src/site/core/link-token.ts";
 import type { Answer } from "../../src/site/core/answer.ts";
 
@@ -97,5 +97,30 @@ describe("the one resend of a busy passkey answer (ADR 0002, section 10)", () =>
     ] satisfies Answer[]) {
       assert.equal(busyResendAfter(a), null, JSON.stringify(a));
     }
+  });
+});
+
+describe("signing in with classbeat (#511; ADR 0010)", () => {
+  it("says under the button that the sign-in comes back to the classes, and what to open again", () => {
+    const base = "You sign in at classbeat, then come back to your classes.";
+    assert.equal(classbeatLine(undefined, false), base);
+    assert.equal(classbeatLine(undefined, true), `${base} Then open the companion again.`);
+    assert.equal(classbeatLine("ended", false), `${base} Open the page you were on again.`);
+  });
+
+  it("has its own limit and its own refusal, with the words of the spec", () => {
+    assert.deepEqual(plateWords({ kind: "classbeat-limited", retryAfter: 480 }), {
+      head: "Too many sign-in requests",
+      detail: "Please try again in about 8 minutes. One network connection can start 20 sign-ins with classbeat in 10 minutes.",
+    });
+    const refused = plateWords({ kind: "classbeat-unfinished" });
+    assert.equal(refused.head, "The sign-in with classbeat did not finish");
+    assert.match(refused.detail, /a sign-in works for 10 minutes.*Nothing was changed\.$/);
+  });
+
+  it("no longer says an email link always works, or that the person carries on where they were", () => {
+    assert.equal(NOTICE_WORDS.ended.detail, "Sign in again. You come back to your classes, so open the page you were on again.");
+    assert.match(plateWords({ kind: "passkey-failed" }).detail, /ask for an email link below\.$/);
+    assert.equal(FOLLOWER_WORDS.sentLine, "If you run classes, an email link does not work for you. Go back and sign in with classbeat.");
   });
 });
