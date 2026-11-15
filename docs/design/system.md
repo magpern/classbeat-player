@@ -149,19 +149,32 @@ the 2 % tier is kept for labels, link states and the score's song titles.
 
 ## Motion
 
-| Token | Value | Where | With reduced motion |
-|---|---|---|---|
-| `--m-change` | 700 ms, ease out | The gel's colour at an interval change | 0: the new colour is there at once |
-| `--m-flash` | 160 ms | A white line, 1 vh wide, down the gel's right edge at an interval change | 0: no flash |
-| `--m-state` | 300 ms, ease out | A link-state plate appearing or leaving; lights down and up | 0 |
-| (score) | continuous, 0.22 vw per second (changed from 0.28 by room-2d.md, "The follow-up to the scene", #483; `web/src/room/score.ts` still uses 0.28 until the build follows) | The score moving under "now" | Moves in whole-second steps |
-| (beat) | 120 ms | A dot after the BPM on the beats from the song's beat anchors (not its listed BPM), two lights at least 1/3 s apart (in steady time, every beat up to 180 BPM and every second beat above), only when the link is locked and the song has beat anchors | Off (not shown) |
+**The strict S6 measure holds for every screen that shows a room** (decided in #582 for the plain
+screen, by reference to [scene.md](scene.md), "The flash budget"; built in #583): a change is any
+monotone run of more than 10 % of the larger end of a region's luminance, and more than 3 in any
+1 s fails. On the plain screen **nothing runs and nothing flashes**: every change is a **step**, one
+frame, on a frame mark (a tick, the change frame, a user action's frame), any two marks at least
+500 ms apart ([room-2d.md](room-2d.md), "Motion and reduced motion", with the cap arithmetic of
+each state). So the transitions below are **cut**.
 
-The single orchestrated moment is the interval change, and its white edge line is the one large
-flash the screen makes, once per change. Apart from that line and the beat dot, nothing flashes,
-and nothing, the beat dot included, flashes more than three times a second: two lights of the dot
-start at least 1/3 s apart, and a beat that comes sooner is skipped. The 3D scene may add its own light show, but
-the text and the zone rules above stay as they are over it.
+The tokens keep their **built** values in `tokens.css` (and its copy in `mockups/tokens.css`,
+which a test compares) until #583 changes both files together; the middle column is what #583
+builds.
+
+| Token | Built (tokens.css) | Decided, **to be built in #583** | Where | With reduced motion |
+|---|---|---|---|---|
+| `--m-change` | 700 ms, ease out | 0: the colour is cut in the change frame | The gel's colour at an interval change | 0: the new colour is there at once (the same, now with or without the setting) |
+| `--m-flash` | 160 ms | Removed: no white line is drawn (it was two changes) | A white line, 1 vh wide, down the gel's right edge at an interval change | 0: no flash |
+| `--m-state` | 300 ms, ease out | 0: a plate, the control band and lights down and up appear and go in one frame, on a tick or in the user action's frame | A link-state plate appearing or leaving; lights down and up; the control band | 0 |
+| (score) | continuous, 0.22 vw per second (changed from 0.28 by room-2d.md, "The follow-up to the scene", #483; `web/src/room/score.ts` still uses 0.28 until the build follows) | Steps in the countdown's tick, by the distance since the last step (0.22 vw a second at one tick a second) | The score moving under "now" | The same steps, at most once a second |
+| (beat) | 120 ms | **Removed**: no beat dot (measured 4.1 to 14.4 % of a region, over the 5 % allowed beat-like light, and above 10 % at 3:2 and narrower) | A dot after the BPM on the beats from the song's beat anchors, two lights at least 1/3 s apart (in steady time, every beat up to 180 BPM and every second beat above), only when the link is locked and the song has beat anchors | Off (not shown) |
+
+As built, the single orchestrated moment is the interval change, and its white edge line is the one
+large flash the screen makes, once per change; apart from that line and the beat dot nothing
+flashes, and nothing flashes more than three times a second. **To be built in #583:** no line, no
+dot and no run; the interval change is one frame, and the pattern's count steps on ticks at least
+500 ms apart. The 3D scene may add its own light show, but the text and the zone rules above stay
+as they are over it, and its text steps on the same ticks.
 
 ## Shipping the tokens
 
