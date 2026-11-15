@@ -99,6 +99,8 @@ export const ACCOUNT_STATES: readonly State[] = [
   p({ name: "recent-sign-in", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
   p({ name: "recent-sign-in-register", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, ...regOptions, "POST passkeys": RECENT }, steps: addAs("Tablet"), ready: ".plate[data-confirm=ask]" }),
   p({ name: "recent-sign-in-opening", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 200, hold: true } }, steps: confirmByClassbeat, ready: ".status" }),
+  // The one account state that goes to classbeat, and declares it (#508 B1).
+  p({ name: "recent-sign-in-left", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 200, body: { authorize: AUTHORIZE } } }, steps: confirmByClassbeat, ready: ".plate[data-confirm=waiting]", toClassbeat: AUTHORIZE }),
   p({ name: "recent-sign-in-failed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": RECENT, [START]: { status: 0, fail: true } }, steps: confirmByClassbeat, ready: ".plate[data-confirm=failed]" }),
   // ADR 0010, section 7: adding is closed, at either step; the list stays, to rename and remove.
   p({ name: "passkey-add-closed", path: "/account/passkeys", script: { ...PASSKEYS_LISTED, "POST passkeys/options": CLOSED }, steps: addAs("Tablet"), ready: ".plate" }),
@@ -146,6 +148,7 @@ export const ACCOUNT_SECRETS: Readonly<Record<string, readonly Secret[]>> = {
   "recent-sign-in": [],
   "recent-sign-in-register": [...REG, ...CREDENTIAL],
   "recent-sign-in-opening": [],
+  "recent-sign-in-left": [],
   "recent-sign-in-failed": [],
   "passkey-add-closed": [],
   "passkey-add-closed-register": [...REG, ...CREDENTIAL],

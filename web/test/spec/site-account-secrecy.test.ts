@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { launchOffline, settled, traps } from "../lib/site-fake.ts";
 import { reach } from "../lib/site-measure.ts";
+import { navigationProblems } from "../lib/site-navigations.ts";
 import { ACCOUNT_SECRETS, ACCOUNT_STATES, NEW_CREDENTIAL } from "../lib/site-account-states.ts";
 import type { Reply } from "../lib/site-fake.ts";
 import { STATES } from "../lib/site-states.ts";
@@ -23,7 +24,8 @@ after(async () => {
   await browser.close();
 });
 
-const OPTION_ROUTES = ["POST passkeys/options", "POST sign-in/passkey/options"];
+const START = "POST sign-in/classbeat/start";
+const OPTION_ROUTES =["POST passkeys/options", "POST sign-in/passkey/options"];
 /** The player's own sign-in, closed for every account kind there is today (ADR 0010, section 7). */
 const OWN_SIGN_IN = ["POST sign-in/passkey/options", "POST sign-in/passkey", "POST sign-in/link", "POST sign-in/complete"];
 const answers = (r: Reply | readonly Reply[] | undefined): readonly Reply[] => (r === undefined ? [] : Array.isArray(r) ? r : [r as Reply]);
@@ -46,6 +48,12 @@ describe("the secrets map and the account states", () => {
   // id and rawId), so the value alone would let one stand in for the other.
   it("script no passkey sign-in and no email link: 'Confirm it is you' goes to classbeat only (ADR 0010, sections 5 and 7)", () => {
     for (const s of ACCOUNT_STATES) for (const r of Object.keys(s.script ?? {})) assert.ok(!OWN_SIGN_IN.includes(r), `${s.name} scripts ${r}`);
+  });
+
+  // So the start-body check below always has something to check (#508 N1).
+  it("include a state that sends the classbeat start and one that goes to classbeat", () => {
+    assert.ok(ACCOUNT_STATES.filter((s) => answers(s.script?.[START]).length > 0).length >= 2, "no account state answers the classbeat start");
+    assert.ok(ACCOUNT_STATES.some((s) => s.toClassbeat !== undefined), "no account state goes to classbeat");
   });
 
   for (const [route, what, parts] of [["POST passkeys", "credential", NEW_CREDENTIAL]] as const) {
@@ -90,7 +98,10 @@ describe("no account secret is in an address, history entry, store or log", () =
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
       for (const a of site.api) assert.equal(new URL(a.url).search, "", `a query on ${a.route}`);
       // A classbeat start carries the purpose only: no return entry (ADR 0010, section 6).
-      for (const a of site.api) if (a.route === "POST sign-in/classbeat/start") assert.deepEqual(JSON.parse(a.body ?? "null"), { purpose: "reauth" });
+      const starts = site.api.filter((a) => a.route === START);
+      for (const a of starts) assert.deepEqual(JSON.parse(a.body ?? "null"), { purpose: "reauth" });
+      if (answers(state.script?.[START]).length > 0) assert.equal(starts.length, 1, `${state.name} did not send the classbeat start`);
+      assert.deepEqual(navigationProblems(state, site), [], "a navigation the state does not declare");
       assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
       await site.context.close();
     });

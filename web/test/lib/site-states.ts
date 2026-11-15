@@ -29,6 +29,8 @@ export interface State {
   readonly clock?: "day";
   /** The one address of the linked app's site the page goes to in this state (site-fake.ts, `left`); none when absent. */
   readonly leaves?: string;
+  /** The one classbeat address the page goes to in this state (site-fake.ts, `toClassbeat`); none when absent. */
+  readonly toClassbeat?: string;
 }
 
 export const CLASS_DETAILS_ID = "3f6d2c1a-8b4e-4f7a-9c2d-1e5a7b9c0d3f";

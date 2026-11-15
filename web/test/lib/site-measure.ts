@@ -143,6 +143,9 @@ export async function checkSiteShot(browser: Browser, probe: Page, s: SiteShot):
   // Exactly the one navigation the state names, or none, as site-page-security checks (#422 N3).
   const leaves = s.state.leaves === undefined ? [] : [s.state.leaves];
   if (site.left.length !== leaves.length || site.left.some((u, i) => u !== leaves[i])) add("CSP", site.left.join(" ").slice(0, 40) || "(none)", [`navigations ${JSON.stringify(site.left)}, not ${JSON.stringify(leaves)}`]);
+  // And classbeat the same way: exactly the one address the state names, or none (#508 B1).
+  const classbeat = s.state.toClassbeat === undefined ? [] : [s.state.toClassbeat];
+  if (site.toClassbeat.length !== classbeat.length || site.toClassbeat.some((u, i) => u !== classbeat[i])) add("CSP", site.toClassbeat.join(" ").slice(0, 40) || "(none)", [`navigations to classbeat ${JSON.stringify(site.toClassbeat)}, not ${JSON.stringify(classbeat)}`]);
   for (const v of (await traps(page)).filter((x) => x.kind === "csp")) add("CSP", v.detail.slice(0, 40), ["CSP violation"]);
   for (const c of site.console.filter((x) => !x.includes("Failed to load resource"))) add("console", c.slice(0, 40), ["console output"]);
   await site.context.close();
