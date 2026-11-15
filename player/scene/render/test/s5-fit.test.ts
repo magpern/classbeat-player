@@ -30,14 +30,21 @@ test("only the allowed tokens pass: another zone's token fails, and the next zon
   assert.ok(ok(px, [T(2), T(4)]));
 });
 
-test("a mix of two tokens fails, on the closest pair (zones 5 and 6) and on the pair that gives a lavender grey", () => {
-  for (const [a, b] of [[5, 6], [6, 5], [7, 3], [1, 2]] as const) {
-    for (const k of [0.25, 0.5, 0.75]) {
-      const mixed = T(a).map((v, i) => v * (1 - k) + T(b)[i]! * k).map((v) => v * 0.3);
-      // The mix of linear colours is what a straight blend of the two tokens draws; it is neither token, so neither allows it.
-      assert.ok(!ok(pixel(mixed), [T(a), T(b)]), `zones ${a} and ${b} mixed ${k}`);
-    }
+/** A colour of the given relative luminance in the direction of `c`. */
+const atLuminance = (c: readonly number[], lum: number) => { const y = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!; return c.map((v) => (v * lum) / y); };
+
+test("a mix of two tokens fails: zones 5 and 6 and zones 1 and 2, every ratio at relative luminance 0.2 and 17 of 19 at 0.1 (the end ratios, 5 % and 95 %, are within 1 code of a token itself)", () => {
+  for (const [a, b] of [[5, 6], [1, 2]] as const) for (const lum of [0.1, 0.2]) for (let i = lum === 0.1 ? 2 : 1; i <= (lum === 0.1 ? 18 : 19); i++) {
+    const k = i / 20;
+    // The straight blend of the two tokens' linear colours is what a blend draws; it is neither token, so neither allows it.
+    const mixed = atLuminance(T(a).map((v, j) => v * (1 - k) + T(b)[j]! * k), lum);
+    assert.ok(!ok(pixel(mixed), [T(a), T(b)]), `zones ${a} and ${b} mixed ${k} at ${lum}`);
   }
+});
+
+test("what the check cannot see is said, not hidden: a mix of complementary tokens lies near the white axis and can pass (zones 1 and 4)", () => {
+  const passing = Array.from({ length: 19 }, (_, i) => (i + 1) / 20).filter((k) => ok(pixel(atLuminance(T(1).map((v, j) => v * (1 - k) + T(4)[j]! * k), 0.2)), [T(1), T(4)]));
+  assert.ok(passing.length > 0, "the spec records this: the rules, not the check, keep the rig to two tokens");
 });
 
 test("a per-channel tone map fails: the token's hue drifts when each channel is curved on its own, on zones 5 and 6", () => {

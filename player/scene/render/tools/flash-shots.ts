@@ -64,14 +64,21 @@ const setup = `(() => {
   full.width = shown.width; full.height = shown.height;
   const fctx = full.getContext("2d", { willReadFrequently: true });
   window.__steps = {
-    t: [], regions: [], burst: [], s5: { frames: 0, pixels: 0, bad: 0, worst: "" },
+    t: [], regions: [], burst: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" },
     check(ms) {
       fctx.drawImage(shown, 0, 0);
       const px = fctx.getImageData(0, 0, full.width, full.height).data;
       const t = window.__scene.tokens;
       const allowed = [S5.linear(t.current)].concat(t.next === null ? [] : [S5.linear(t.next)]);
+      const key = t.current + "/" + t.next;
+      if (this.cacheKey !== key) { this.cacheKey = key; this.cache = new Map(); }
       let bad = 0;
-      for (let i = 0; i < px.length; i += 4) if (!S5.fits(px[i], px[i + 1], px[i + 2], allowed, ${TOLERANCE})) { bad++; if (this.s5.worst === "") this.s5.worst = "rgb " + px[i] + " " + px[i + 1] + " " + px[i + 2] + " at " + (ms / 1000).toFixed(2) + " s"; }
+      for (let i = 0; i < px.length; i += 4) {
+        const code = px[i] << 16 | px[i + 1] << 8 | px[i + 2];
+        let good = this.cache.get(code);
+        if (good === undefined) { good = S5.fits(px[i], px[i + 1], px[i + 2], allowed, ${TOLERANCE}); this.cache.set(code, good); }
+        if (good) continue; bad++; if (this.s5.worst === "") this.s5.worst = "rgb " + px[i] + " " + px[i + 1] + " " + px[i + 2] + " at " + (ms / 1000).toFixed(2) + " s";
+      }
       this.s5.frames++; this.s5.pixels += px.length / 4; this.s5.bad += bad;
     },
     run(from, to) {
@@ -112,7 +119,7 @@ export interface Run {
 export interface Counted { readonly moment: string; readonly state: string; readonly run: Run }
 
 async function play(open: Open, m: Moment, query: string): Promise<Run> {
-  const { page, problems } = await open(640, 360, query);
+  const { page, problems } = await open(480, 270, query);
   await page.evaluate(setup);
   await page.evaluate(`window.__steps.run(${m.fromS}, ${m.toS})`);
   const out = await page.evaluate(() => (window as unknown as { __steps: Series }).__steps);

@@ -115,7 +115,7 @@ async function screenshots(browser: Browser): Promise<void> {
 
 async function browserFrameLog(browser: Browser): Promise<void> {
   mkdirSync(ARTIFACTS, { recursive: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const page = await browser.newPage({ viewport: { width: 640, height: 360 } }); // the beams' speed does not depend on the size; software GL draws the fullscreen shader slowly
   await install(page);
   await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=6`);
   await page.waitForFunction(() => (window as unknown as Api).__scene?.ended === true, undefined, { timeout: 120_000, polling: 250 });
