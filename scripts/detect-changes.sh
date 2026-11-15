@@ -52,6 +52,8 @@ flag() { # flag <name> <extended regex>
 flag backend '^(backend/|schema/|\.github/workflows/)'
 flag schema '^(schema/|\.github/workflows/)'
 flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
+# The Android spike's APK bundles the scene demo (player/scene/render), so a change there rebuilds it too (#558).
+flag android '^(player/spikes/android-follower/|player/scene/render/|\.github/workflows/)'
 # The web tests also read files outside web/: the design specs and mock-ups under docs/design/
 # (docs/design/mockups/tokens.css is compared with web/src/design/tokens.css, the checks are ported
 # from docs/design/mockups/*.js), the live-session schema and examples under schema/live/, and
