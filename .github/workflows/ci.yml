@@ -117,6 +117,7 @@ jobs:
     if: needs.changes.outputs.player == 'true'
     name: desktop-app (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -148,9 +149,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
       - name: e2e (Linux, under xvfb)
         if: matrix.label == 'linux'
+        timeout-minutes: 10
         run: xvfb-run -a npm run test:e2e
       - name: e2e (macOS and Windows)
         if: matrix.label != 'linux'
+        timeout-minutes: 10
         run: npm run test:e2e
       - name: Package (unsigned)
         run: bash ../../scripts/package-desktop.sh . "$RUNNER_TEMP/package" ${{ matrix.label }}
