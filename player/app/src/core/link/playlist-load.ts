@@ -68,8 +68,13 @@ export function loadAnswered(load: PlaylistLoad, outcome: LoadOutcome, now: numb
   return outcome === "asked" ? { kind: "confirming", from: now, until: now + PLAYLIST_CONFIRM_MS } : NOT_LOADED;
 }
 
-/** True when an answer means Start must press play as before (the load did not go). */
-export const fallsBack = (before: PlaylistLoad, outcome: LoadOutcome): boolean => before.kind === "asking" && outcome !== "asked";
+/**
+ * True when an answer means Start must press play as before (the load did not go). That holds for
+ * a late answer too (after the 3 s window `before` is `not-loaded`): Start's job is to start the
+ * music and nothing else did. A late `asked` does not: Spotify is loading the playlist. The shell
+ * still sends nothing when a newer command or another class has come since.
+ */
+export const fallsBack = (before: PlaylistLoad, outcome: LoadOutcome): boolean => (before.kind === "asking" || before.kind === "not-loaded") && outcome !== "asked";
 
 /** One tick: the first fresh reading decides, and no answer or reading in time means not loaded. */
 export function confirmLoad(load: PlaylistLoad, plan: LinkPlan, obs: Observation | null, now: number, cfg: LinkConfig = DEFAULT_LINK_CONFIG): PlaylistLoad {
