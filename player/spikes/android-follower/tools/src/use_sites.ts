@@ -24,6 +24,9 @@ export function statements(text: string): string[] {
     const continues = cur !== "" && (depth > 0 || ENDS_OPEN.test(cur) || STARTS_CONTINUED.test(line));
     if (!continues && cur !== "") { out.push(collapse(cur)); cur = ""; depth = 0; }
     cur = cur === "" ? line : `${cur} ${line}`;
+    // Brackets are counted inside string and char literals too (#570, N9). That fails closed: a lone "(" in a
+    // string keeps the statement open, so the next lines join it, the joined text is no longer a pinned
+    // statement, and it is refused. A miscount can only add refusals, never hide a use site.
     for (const c of line) depth += c === "(" || c === "[" ? 1 : c === ")" || c === "]" ? -1 : 0;
     depth = Math.max(0, depth);
   }

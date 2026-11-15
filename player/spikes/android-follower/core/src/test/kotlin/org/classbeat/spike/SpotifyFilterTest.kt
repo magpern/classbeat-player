@@ -11,7 +11,7 @@ class SpotifyFilterTest {
     @Test
     fun onlyTheSpotifyPackageMatches() {
         assertTrue(isSpotify("com.spotify.music"))
-        for (other in listOf(null, "", "com.spotify.musicx", "com.spotify.lite", "COM.SPOTIFY.MUSIC", "com.google.android.youtube", "org.example.com.spotify.music")) {
+        for (other in listOf(null, "", SPOTIFY_PACKAGE + "x", SPOTIFY_PACKAGE.replace("music", "lite"), "COM.SPOTIFY.MUSIC", "com.google.android.youtube", "org.example.com.spotify.music")) {
             assertFalse(isSpotify(other), "$other")
         }
     }
