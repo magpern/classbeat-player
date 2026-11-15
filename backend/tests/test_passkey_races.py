@@ -117,8 +117,8 @@ def _account(site: Site) -> uuid.UUID:
 def test_a_passkey_and_a_link_sign_in_at_once_leave_20_sessions(
     site: Site, two: tuple[Conn, Conn]
 ) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     account = _account(site)
     site.su.execute("UPDATE player.sessions SET created_at = now() - interval '30 days'")
     for day in range(1, 20):
@@ -167,8 +167,8 @@ def test_a_passkey_and_a_link_sign_in_at_once_leave_20_sessions(
 
 
 def test_two_additions_at_once_leave_10_passkeys(site: Site, two: tuple[Conn, Conn]) -> None:
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     account = _account(site)
     for n in range(9):
         site.su.execute(
@@ -252,9 +252,9 @@ def test_parallel_failed_sign_ins_pass_the_check_one_at_a_time(
     The holder also locks the counter's row, as the first attempt's count does. So an attempt
     that read the counter before taking the address's lock (a stale check) would wait for that
     row, and fail the test, instead of passing unseen."""
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     authenticator = Authenticator()
-    assert register(site.sign_in(EMAIL), authenticator).status_code == 201
+    assert register(site.link_sign_in(EMAIL), authenticator).status_code == 201
     address = "198.51.100.40"
     browser = site.browser(address)
     for _ in range(9):

@@ -1,5 +1,10 @@
 """Email link sign-in through the site's API (ADR 0002, section 4): success, expiry, reuse, the
-wrong browser, the allowlist, and what the answer tells (nothing)."""
+wrong browser, and what the answer tells (nothing).
+
+The email link is open only for a follower (ADR 0010, section 7), a kind no function makes yet:
+the tests' superuser makes one (`Site.follower`), so the code behind the refusal stays tested.
+Its refusal for every other kind and for the allowlist is in tests/test_own_sign_in_closed.py.
+"""
 
 from __future__ import annotations
 
@@ -26,8 +31,8 @@ def _cookie(response_headers: list[str], name: str) -> dict[str, str]:
     return attributes
 
 
-def test_a_first_sign_in_creates_the_account_and_a_session(site: Site) -> None:
-    site.allow(EMAIL)
+def test_a_follower_signs_in_with_a_link_and_gets_a_session(site: Site) -> None:
+    site.follower(EMAIL)
     browser = site.first
     asked = browser.post(LINK, json={"email": "  Rider@Example.Test "})
     assert asked.status_code == 200 and asked.json() == {"status": "accepted"}
@@ -57,32 +62,36 @@ def test_a_first_sign_in_creates_the_account_and_a_session(site: Site) -> None:
     assert [(s["current"], s["browser"]) for s in listed] == [(True, "Firefox")]
     assert site.su.execute("SELECT email FROM player.accounts").fetchall() == [(EMAIL,)]
     assert site.su.execute("SELECT count(*) FROM player.login_links").fetchone() == (0,)
-    assert site.events(EMAIL) == [("login.signed_in", {"method": "link", "account_created": True})]
+    assert site.events(EMAIL) == [
+        ("login.link_requested", {"mail": True}),
+        ("login.signed_in", {"method": "link", "account_created": False}),
+    ]
 
 
 def test_a_later_sign_in_uses_the_account_and_issues_a_new_token(site: Site) -> None:
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     before = browser.cookies.get(SESSION_COOKIE)
-    site.sign_in(EMAIL, browser)
+    site.link_sign_in(EMAIL, browser)
     assert browser.cookies.get(SESSION_COOKIE) != before
     assert site.su.execute("SELECT count(*) FROM player.accounts").fetchone() == (1,)
     # A new row, never the old one upgraded; the old one is ended, as signing out ends it (#427).
     assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (1,)
     assert [event for event, _ in site.events(EMAIL)] == [
+        "login.link_requested",
         "login.signed_in",
         "login.link_requested",
         "login.signed_in",
         "session.signed_out",
     ]
-    assert site.events(EMAIL)[2] == (
+    assert site.events(EMAIL)[3] == (
         "login.signed_in",
         {"method": "link", "account_created": False},
     )
 
 
 def test_a_link_works_once(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     token = site.ask(site.first, EMAIL)
     assert site.first.post(COMPLETE, json={"token": token}).status_code == 200
     again = site.first.post(COMPLETE, json={"token": token})
@@ -91,8 +100,8 @@ def test_a_link_works_once(site: Site) -> None:
 
 
 def test_a_link_is_refused_after_15_minutes(site: Site) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)  # the account exists, so the refusal is an event
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)  # the account exists, so the refusal is an event
     browser = site.browser()
     token = site.ask(browser, EMAIL)
     lifetime = site.su.execute(
@@ -109,8 +118,8 @@ def test_a_link_is_refused_after_15_minutes(site: Site) -> None:
 
 
 def test_a_link_works_only_in_the_browser_that_asked(site: Site) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     asking, other, bare = site.browser(), site.browser(), site.browser()
     token = site.ask(asking, EMAIL)
     site.ask(other, "someone@example.test")  # another browser, with a browser token of its own
@@ -124,7 +133,7 @@ def test_a_link_works_only_in_the_browser_that_asked(site: Site) -> None:
 
 
 def test_a_newer_link_cancels_older_ones_from_the_same_browser_only(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     mine, theirs = site.browser(), site.browser("198.51.100.4")
     first = site.ask(mine, EMAIL)
     elsewhere = site.ask(theirs, EMAIL)
@@ -134,8 +143,8 @@ def test_a_newer_link_cancels_older_ones_from_the_same_browser_only(site: Site) 
     assert mine.post(COMPLETE, json={"token": second}).status_code == 200
 
 
-def test_an_address_not_on_the_allowlist_gets_the_same_answer_and_no_mail(site: Site) -> None:
-    site.allow(EMAIL)
+def test_an_address_with_no_follower_gets_the_same_answer_and_no_mail(site: Site) -> None:
+    site.follower(EMAIL)
     allowed = site.first.post(LINK, json={"email": EMAIL})
     unknown = site.browser().post(LINK, json={"email": "stranger@example.test"})
     assert (unknown.status_code, unknown.json()) == (allowed.status_code, allowed.json())
@@ -144,27 +153,29 @@ def test_an_address_not_on_the_allowlist_gets_the_same_answer_and_no_mail(site: 
     # The same one call ran: a link row exists, marked unusable, and counters are kept.
     rows = site.su.execute("SELECT email, usable FROM player.login_links ORDER BY email").fetchall()
     assert rows == [(EMAIL, True), ("stranger@example.test", False)]
-    assert site.su.execute("SELECT count(*) FROM player.accounts").fetchone() == (0,)
-    assert site.su.execute("SELECT count(*) FROM player.audit_events").fetchone() == (0,)
+    assert site.su.execute("SELECT count(*) FROM player.accounts").fetchone() == (1,)
+    assert site.events(EMAIL) == [("login.link_requested", {"mail": True})]
+    assert site.su.execute("SELECT count(*) FROM player.audit_events").fetchone() == (1,)
 
 
-def test_an_address_taken_off_the_allowlist_cannot_finish_a_first_sign_in(site: Site) -> None:
-    site.allow(EMAIL)
+def test_a_follower_deleted_after_asking_cannot_finish_with_its_link(site: Site) -> None:
+    site.follower(EMAIL)
     token = site.ask(site.first, EMAIL)
-    site.su.execute("DELETE FROM player.signup_allowlist")
+    site.su.execute("DELETE FROM player.accounts")
     assert site.first.post(COMPLETE, json={"token": token}).status_code == 401
+    # The email link signs no one up (ADR 0010, section 7).
     assert site.su.execute("SELECT count(*) FROM player.accounts").fetchone() == (0,)
+    assert site.su.execute("SELECT count(*) FROM player.sessions").fetchone() == (0,)
 
 
-def test_an_account_signs_in_without_being_on_the_allowlist(site: Site) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
-    site.su.execute("DELETE FROM player.signup_allowlist")
-    site.sign_in(EMAIL, site.browser())
+def test_a_follower_signs_in_without_being_on_the_allowlist(site: Site) -> None:
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
+    site.link_sign_in(EMAIL, site.browser())
 
 
 def test_a_valid_browser_token_is_reused(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     site.ask(site.first, EMAIL)
     token = site.first.cookies.get(LOGIN_COOKIE)
     again = site.first.post(LINK, json={"email": EMAIL})
@@ -175,8 +186,8 @@ def test_a_valid_browser_token_is_reused(site: Site) -> None:
 def test_what_is_not_a_link_token_is_refused_by_its_shape(
     site: Site, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     session = browser.cookies.get(SESSION_COOKIE)
     assert session is not None
 

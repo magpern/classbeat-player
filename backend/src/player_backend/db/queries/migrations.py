@@ -18,6 +18,9 @@ M0011_PASSKEYS: Final[Query] = Query.from_file("0011_passkeys.sql")
 M0012_BOUNDED_LOCK_WAITS: Final[Query] = Query.from_file("0012_bounded_lock_waits.sql")
 M0013_LIVE_CHECKS: Final[Query] = Query.from_file("0013_live_checks.sql")
 M0014_CLASSBEAT_SIGN_IN: Final[Query] = Query.from_file("0014_classbeat_sign_in.sql")
+M0015_CLOSE_EMAIL_LINK_AND_PASSKEYS: Final[Query] = Query.from_file(
+    "0015_close_email_link_and_passkeys.sql"
+)
 
 # The ledger lives in its own schema, with row-level security forced like every table, and one
 # policy for player_owner alone. No other role has any right on it.

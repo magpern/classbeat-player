@@ -108,7 +108,7 @@ def _wait_until_blocked(site: Site, conn: Conn) -> None:
 def test_two_requests_at_once_from_one_browser_leave_one_usable_link(
     site: Site, two: tuple[Conn, Conn]
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     first, second = two
     browser, link_one, link_two = _h(), _h(), _h()
     # The two requests come from different addresses, so they share no per-pair counter.
@@ -134,7 +134,7 @@ def test_a_request_waits_for_the_lock_of_its_email_and_browser(
     site: Site, two: tuple[Conn, Conn]
 ) -> None:
     """The lock alone holds a request back, whatever the counters do: its key and its mode."""
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     holder, second = two
     browser, link = _h(), _h()
     key = _link_key(EMAIL, browser)
@@ -160,10 +160,10 @@ def test_a_request_waits_for_the_lock_of_its_email_and_browser(
 def test_a_request_for_another_email_does_not_wait_and_cancels_nothing(
     site: Site, two: tuple[Conn, Conn]
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     first, second = two
     other = "other@example.test"
-    site.allow(other)
+    site.follower(other)
     assert first.execute(REQUEST.encode(), (EMAIL, _h(), _h(), _h())).fetchone() == (True,)
     # Another email is not held up by the open request (same browser or not).
     assert second.execute(REQUEST.encode(), (other, _h(), _h(), _h())).fetchone() == (True,)
@@ -174,8 +174,8 @@ def test_a_request_for_another_email_does_not_wait_and_cancels_nothing(
 
 
 def test_two_sign_ins_at_once_leave_20_sessions(site: Site, two: tuple[Conn, Conn]) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     account = site.su.execute("SELECT id FROM player.accounts").fetchone()
     assert account is not None
     site.su.execute("UPDATE player.sessions SET created_at = now() - interval '30 days'")

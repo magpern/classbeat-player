@@ -24,9 +24,9 @@ from cryptography.hazmat.primitives.hashes import SHA256
 from player_backend.classbeat_client import ClassbeatClient
 from player_backend.classbeat_keys import KeySet
 from player_backend.classbeat_settings import ClassbeatSettings
+from tests.sitehelp import ISSUER as ISSUER
 from tests.sitehelp import ORIGIN
 
-ISSUER = "https://classbeat.test"
 CLIENT_ID = "player-test-client"
 # A made-up value, never a real secret: the fake transport ignores it.
 CLIENT_SECRET = "fake-client-secret-for-tests"  # noqa: S105

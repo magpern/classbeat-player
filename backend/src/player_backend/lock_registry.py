@@ -56,6 +56,8 @@ SITES: Final[dict[int | str, tuple[str, ...]]] = {
         _MIGRATION_DIR + "0005_sign_in_hardening.sql",
         # Its body replaced: the email link never finds an instructor (#481).
         _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
+        # Replaced again: the email link finds only a follower (ADR 0010, section 7; #495).
+        _MIGRATION_DIR + "0015_close_email_link_and_passkeys.sql",
     ),
     ACCOUNT_SESSIONS: (
         _MIGRATION_DIR + "0005_sign_in_hardening.sql",
@@ -67,6 +69,9 @@ SITES: Final[dict[int | str, tuple[str, ...]]] = {
         _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
         _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
         _MIGRATION_DIR + "0014_classbeat_sign_in.sql",
+        # The email link and passkey sign-in replaced, for a follower alone (#495).
+        _MIGRATION_DIR + "0015_close_email_link_and_passkeys.sql",
+        _MIGRATION_DIR + "0015_close_email_link_and_passkeys.sql",
     ),
     PASSKEY_ADDITIONS: ("db/queries/passkeys.py",),
     PAIRING_CODES: (

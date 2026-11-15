@@ -62,7 +62,7 @@ def _mailed_fragment(site: Site) -> str:
 
 @pytest.mark.parametrize("body", [{}, {"return_to": None}])
 def test_no_return_entry_gives_the_link_as_before(site: Site, body: dict[str, object]) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     asked = site.first.post(LINK, json={"email": EMAIL, **body})
     assert asked.status_code == 200 and asked.json() == {"status": "accepted"}
     fragment = _mailed_fragment(site)
@@ -71,7 +71,7 @@ def test_no_return_entry_gives_the_link_as_before(site: Site, body: dict[str, ob
 
 @pytest.mark.parametrize("value", ["control", "control." + CODE])
 def test_a_return_entry_follows_the_token_in_the_mailed_link(site: Site, value: str) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     asked = site.first.post(LINK, json={"email": EMAIL, "return_to": value})
     assert asked.status_code == 200 and asked.json() == {"status": "accepted"}
     token, sep, rest = _mailed_fragment(site).partition("&return=")
@@ -82,7 +82,7 @@ def test_a_return_entry_follows_the_token_in_the_mailed_link(site: Site, value: 
 
 
 def test_an_unknown_address_gets_the_same_answer_with_a_return_entry(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     body = {"return_to": "control." + CODE}
     allowed = site.first.post(LINK, json={"email": EMAIL, **body})
     unknown = site.browser().post(LINK, json={"email": "stranger@example.test", **body})
@@ -94,7 +94,7 @@ def test_an_unknown_address_gets_the_same_answer_with_a_return_entry(site: Site)
 def test_a_string_that_is_not_a_return_entry_is_invalid_return(
     site: Site, value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     calls = _no_sign_in_call(monkeypatch)
     refused = site.first.post(LINK, json={"email": EMAIL, "return_to": value})
     assert refused.status_code == 422 and refused.json() == INVALID_RETURN
@@ -108,7 +108,7 @@ def test_a_string_that_is_not_a_return_entry_is_invalid_return(
 def test_a_value_that_is_not_a_string_gets_the_framework_answer(
     site: Site, value: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     calls = _no_sign_in_call(monkeypatch)
     refused = site.first.post(LINK, json={"email": EMAIL, "return_to": value})
     assert refused.status_code == 422 and refused.json() == {"error": "invalid_request"}
@@ -126,7 +126,7 @@ def test_a_value_over_the_bound_is_invalid_return_in_its_order(
     site: Site, value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     assert len(value) > RETURN_MAX
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     spy = Spy()
     monkeypatch.setattr(login_policy, "RETURN_ENTRY", spy)
     calls = _no_sign_in_call(monkeypatch)
@@ -158,7 +158,7 @@ def test_a_bad_email_is_answered_before_a_bad_return_entry(site: Site) -> None:
 
 
 def test_the_address_limit_is_answered_before_either_422(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser()
     # Ten refused requests count toward the requester's own limit like any other.
     for n in range(10):
@@ -177,7 +177,7 @@ def test_the_address_limit_is_answered_before_either_422(site: Site) -> None:
 
 
 def test_neither_422_counts_toward_the_limits_of_the_email(site: Site) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     here = site.browser()
     for value in ("Control", "control.BCDFGHJK", ""):
         assert here.post(LINK, json={"email": EMAIL, "return_to": value}).status_code == 422
@@ -191,8 +191,8 @@ def test_neither_422_counts_toward_the_limits_of_the_email(site: Site) -> None:
 
 
 def test_the_return_entry_is_kept_in_no_column_and_no_row(site: Site) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)  # the account exists, so the request writes an audit event too
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)  # the account exists, so the request writes an audit event too
     browser = site.browser()
     asked = browser.post(LINK, json={"email": EMAIL, "return_to": "control." + CODE})
     assert asked.status_code == 200 and len(site.mailer.sent) == 2
@@ -211,7 +211,7 @@ def test_the_return_entry_is_kept_in_no_column_and_no_row(site: Site) -> None:
 def test_no_log_line_for_the_request_holds_the_class_code(
     site: Site, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     configure_logging("DEBUG")
     caplog.set_level(logging.DEBUG)
     capsys.readouterr()
