@@ -326,6 +326,7 @@ describe("closed from the start: GET passkeys says can_add (ADR 0010, section 7)
   const noAdd = async (site: FakeSite): Promise<void> => {
     assert.equal(await site.page.locator("[data-add], form[data-add]").count(), 0, "no add action");
     assert.equal(await site.page.getByRole("button", { name: "Add a passkey" }).count(), 0);
+    assert.equal(await site.page.getByRole("button", { name: "Try again" }).count(), 0, "no way back into the add form");
   };
   /** The reason line: the hollow square and the two sentences, no box and no role, above the count. */
   const reasonLine = async (site: FakeSite): Promise<void> => {
@@ -401,6 +402,33 @@ describe("closed from the start: GET passkeys says can_add (ADR 0010, section 7)
       assert.equal(await site.page.locator(".ac-item").count(), 3);
       await settled(site, 600);
       assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys"]);
+      await site.context.close();
+    });
+  }
+
+  for (const [how, first, steps] of [
+    ["from the start", { passkeys: PASSKEYS, can_add: false }, async (): Promise<void> => {}],
+    ["by a 403 passkeys_closed", { passkeys: PASSKEYS, can_add: true }, async (site: FakeSite): Promise<void> => {
+      await addAs(site, "Tablet");
+      await site.page.waitForSelector(".plate");
+    }],
+  ] as const) {
+    it(`closed ${how}, a list read again that says can_add true does not reopen adding`, async () => {
+      const rename = `PATCH passkeys/${FIRST.id}`;
+      const again = { status: 200, body: { passkeys: PASSKEYS, can_add: true } };
+      const site = await open({ "GET passkeys": [{ status: 200, body: first }, again], "POST passkeys/options": CLOSED, [rename]: { status: 404, body: { error: "not_found" } } });
+      await steps(site);
+      const options = sent(site, "POST passkeys/options");
+      await press(site.page, "Rename");
+      await site.page.fill("input[name=name]", "Old laptop");
+      await site.page.keyboard.press("Enter");
+      // The rename found the passkey gone (404), so the list is read again; that answer says can_add true.
+      await site.page.waitForFunction(() => document.querySelector("input[name=name]") === null);
+      await settled(site, 600);
+      assert.equal(sent(site, "GET passkeys"), 2);
+      await noAdd(site);
+      await reasonLine(site);
+      assert.equal(sent(site, "POST passkeys/options"), options, "no POST passkeys/options after the list is read again");
       await site.context.close();
     });
   }
