@@ -62,6 +62,29 @@ is a later phase with its own ADR (plan section 12, PL11).
   Spotify developer interface, so following needs no Spotify token. Where a token would live if
   option B is ever added is left to a later ADR.
 - Start, pause and next go through the same local interface and the media keys.
+- **Start loads the class playlist (amendment, 2026-11-15, #486).** A class in format 1.2 or
+  later may carry `music.spotify_playlist`, a 22-character playlist id (ADR 0003, #482). When it
+  does, Start asks the Spotify desktop app, through the same local interface, to play that
+  playlist from its first track, and then follows as before. Per follower:
+  - *macOS:* Spotify's AppleScript interface, `play track "spotify:playlist:<id>"`.
+  - *Linux:* MPRIS `OpenUri` with `spotify:playlist:<id>`, best effort like the rest of Linux
+    following.
+  - *Windows:* the system media session cannot load a playlist. The follower may open the
+    `spotify:playlist:<id>` link through the operating system's link handler and then press
+    play through the media session, if spike evidence shows that works; until then Start
+    behaves as without a playlist.
+  - *Manual and fake:* no playlist is loaded; the fake records the request so tests can check it.
+  - Without the field, or when loading fails or is not supported, Start behaves as before
+    (presses play on whatever Spotify has loaded) and the screen says the playlist was not
+    loaded. Loading never blocks the class clock.
+  - The player only sends the link to the local Spotify app. It never downloads, stores or
+    plays audio (rule 3), uses no Spotify Web API and needs no Spotify token. It does not change
+    the user's Spotify settings (shuffle, repeat, volume).
+  - The playlist is a convenience, not the truth: songs are still matched by title, artist and
+    length in the class's order. If Spotify plays something the class does not expect (shuffle
+    on, an edited playlist), the existing matching and link states apply.
+  - Only Start loads the playlist. Pause, next and a nudge never reload it; a second Start
+    after a pause resumes.
 - Songs are matched by title, artist and length, in the class's order; Spotify ids are used only
   where the operating system gives them.
 - **One interface, one module per follower** (macOS, Windows, Linux, manual, fake), so replacing
