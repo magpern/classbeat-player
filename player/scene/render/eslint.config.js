@@ -17,6 +17,19 @@ export const WINDOW_ALLOWED = ["innerWidth", "innerHeight", "devicePixelRatio", 
 export const DEMO_WINDOW_ALLOWED = [...WINDOW_ALLOWED, "__scene"];
 export const DEMO_DOCUMENT_ALLOWED = ["getElementById", "documentElement"];
 
+// 3. src/ is handed everything it touches (src/host.ts) and reads no browser global at all: `no-undef`
+//    with exactly these names, ECMAScript built-ins and TypeScript's utility types. No `window`,
+//    `document`, `navigator`, `fetch`, `Image`, `Audio`, `Range`, `FontFace`, `speechSynthesis`,
+//    `globalThis` or `self` is defined there, so any use is an error, whatever its name. Widening
+//    this list is a reviewed change; `test/source-fences.test.ts` holds its own copy.
+export const SRC_GLOBALS = [
+  "Object", "Function", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
+  "Map", "Set", "WeakMap", "WeakSet", "Promise", "RegExp", "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array",
+  "Int32Array", "Uint8Array", "Uint16Array", "Uint32Array", "parseFloat", "parseInt", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
+  "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "Pick", "Omit", "Partial", "Required", "ReturnType", "Parameters",
+  "NonNullable", "Exclude", "Extract", "Awaited", "Iterable", "Iterator", "ArrayLike",
+];
+
 const alt = (names) => names.join("|");
 // Globals the scene never needs: network, storage, workers, audio, images, randomness, the global
 // object and every other way to the window or the document.
@@ -63,8 +76,10 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ["src/**/*.ts"],
+    languageOptions: { globals: Object.fromEntries(SRC_GLOBALS.map((name) => [name, "readonly"])) },
     rules: {
       ...base,
+      "no-undef": "error",
       "no-restricted-imports": threeImports,
       "no-restricted-globals": globals([...BANNED_GLOBALS, "document", "location", "history", "screen", "name"], "The scene draws what the model says: no network, storage, worker, audio, image or document."),
       "no-restricted-syntax": srcSyntax,

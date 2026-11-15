@@ -4,6 +4,7 @@
 export * from "./aim.ts";
 export * from "./bursts.ts";
 export * from "./light-calc.ts";
+export * from "./host.ts";
 export * from "./loop.ts";
 export * from "./renderer.ts";
 export * from "./rig.ts";

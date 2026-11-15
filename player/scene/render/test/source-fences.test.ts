@@ -22,7 +22,7 @@ test("three.js is imported by allowlisted names only, no subpath, no namespace o
   const used = sources.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));
   assert.ok(used.length > 10);
   assert.deepEqual(used.filter((n) => !ALLOWED.includes(n)), []);
-  assert.deepEqual(sources.filter((s) => /from\s*["']three\//.test(s.text) || /import\s+(\*|\w+)[^;]*from\s*"three"/.test(s.text)).map((s) => s.name), []);
+  assert.deepEqual(sources.filter((s) => /from\s*["']three\//.test(s.text) || /import\s+(?!type\b)(\*|\w+)[^;]*from\s*"three"/.test(s.text)).map((s) => s.name), []);
 });
 
 test("the ESLint config carries the same allowlist", async () => {

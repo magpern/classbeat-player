@@ -133,7 +133,7 @@ async function trapSelfTest(browser: Browser): Promise<void> {
   await page.waitForFunction(() => "__scene" in window);
   assert.deepEqual(await violations(page), [], "a clean page has no violation");
   const seen = await selfTest(page);
-  for (const want of ["createElement(audio)", "setAttribute(autoplay)", "new Audio", "new Image", "fetch", "navigator.sendBeacon", "WebSocket", "XMLHttpRequest.open", "createElement(script)", "createElement(iframe)", "csp: img-src"]) {
+  for (const want of ["createElement(audio)", "setAttribute(autoplay)", "new Audio", "new Image", "fetch", "navigator.sendBeacon", "WebSocket", "XMLHttpRequest.open", "createElement(script)", "createElement(iframe)", "new SpeechSynthesisUtterance", "new FontFace", "Range.createContextualFragment", "csp: img-src https://example.invalid/parsed.png", "csp: img-src https://example.invalid/bg.png"]) {
     assert.ok(seen.some((s) => s.startsWith(want)), `the trap missed ${want}; it recorded ${JSON.stringify(seen)}`);
   }
   assert.deepEqual(requests, [], "nothing was answered from outside the file system, not even the bypass");

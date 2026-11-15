@@ -1,11 +1,13 @@
-// The WebGL renderer: owns the canvas, the animation frame and the quality level's render scale, and
-// each frame calls the rig loop and draws the rig. The shell gives it a `getFeed` (the class clock's
-// state); the beams' directions are the model's drawn directions and nothing else (ADR 0009).
-// The text layer is ordinary HTML over the canvas and is not here.
+// The scene renderer: owns the rig loop, the quality level's render scale and the frame schedule,
+// and each frame calls the loop and has the host's painter draw the rig. The host (the demo page
+// now, the shell's room window later) hands it a `Host` and a `getFeed` (the class clock's state);
+// it never sees the canvas, `window` or `document`. The beams' directions are the model's drawn
+// directions and nothing else (ADR 0009). The text layer is ordinary HTML over the canvas and is
+// not here.
 
-import { WebGLRenderer } from "three";
 import type { QualityLevel } from "../../model/src/index.ts";
 import { QUALITY } from "../../model/src/index.ts";
+import type { Host } from "./host.ts";
 import { RigLoop } from "./loop.ts";
 import type { Draw, Feed } from "./loop.ts";
 import { SceneRig } from "./rig.ts";
@@ -16,39 +18,35 @@ export interface RendererOptions {
   readonly quality?: QualityLevel;
   /** Called after each frame with what was drawn and the rig's measured beam directions. */
   readonly onFrame?: (draw: Draw, measured: ReturnType<SceneRig["measuredDirections"]>, nowMs: number) => void;
-  /** Keeps the drawing buffer for screenshots; slightly slower. */
-  readonly preserveDrawingBuffer?: boolean;
 }
 
 export class SceneRenderer {
   readonly rig: SceneRig;
-  private readonly gl: WebGLRenderer;
+  private readonly host: Host;
   private readonly loop: RigLoop;
+  private readonly options: RendererOptions;
+  private readonly unsubscribe: () => void;
   private quality: QualityLevel;
   private last: number | null = null;
-  private handle = 0;
+  private cancel: (() => void) | null = null;
   private running = false;
 
-  readonly canvas: HTMLCanvasElement;
-  private readonly options: RendererOptions;
-
-  constructor(canvas: HTMLCanvasElement, options: RendererOptions) {
-    this.canvas = canvas;
+  constructor(host: Host, options: RendererOptions) {
+    this.host = host;
     this.options = options;
     this.quality = options.quality ?? "High";
-    this.gl = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
-    this.gl.setClearColor(0x000000, 1);
     this.rig = new SceneRig(options.tokens);
     this.loop = new RigLoop(options.tokens);
+    this.unsubscribe = host.onResize(() => this.resize());
     this.resize();
   }
 
   /** The render scale is a share of the window (the text layer stays at full resolution). */
   resize(): void {
-    const w = Math.max(1, this.canvas.clientWidth || window.innerWidth);
-    const h = Math.max(1, this.canvas.clientHeight || window.innerHeight);
-    this.gl.setPixelRatio(QUALITY[this.quality].renderScale * (window.devicePixelRatio || 1));
-    this.gl.setSize(w, h, false);
+    const { width, height, pixelRatio } = this.host.size();
+    const [w, h] = [Math.max(1, width), Math.max(1, height)];
+    this.host.painter.setPixelRatio(QUALITY[this.quality].renderScale * (pixelRatio || 1));
+    this.host.painter.setSize(w, h);
     this.rig.setAspect(w / h);
   }
 
@@ -57,13 +55,13 @@ export class SceneRenderer {
     this.resize();
   }
 
-  /** One frame at `nowMs` (a monotonic clock, as `requestAnimationFrame` gives). `draw3d` false steps the rig without the GL draw (a test driver). Returns what was drawn. */
+  /** One frame at `nowMs` (a monotonic clock, as the frame scheduler gives). `draw3d` false steps the rig without the draw (a test driver). Returns what was drawn. */
   frame(feed: Feed, nowMs: number, draw3d = true): Draw {
     const raw = this.last === null ? 0 : (nowMs - this.last) / 1000;
     this.last = nowMs;
     const draw = this.loop.step(feed, raw, this.quality);
     this.rig.apply(draw, this.quality);
-    if (draw3d) this.gl.render(this.rig.scene, this.rig.camera);
+    if (draw3d) this.host.painter.render(this.rig.scene, this.rig.camera);
     this.options.onFrame?.(draw, this.rig.measuredDirections(), nowMs);
     return draw;
   }
@@ -74,19 +72,21 @@ export class SceneRenderer {
     const tick = (now: number) => {
       if (!this.running) return;
       this.frame(getFeed(), now);
-      this.handle = requestAnimationFrame(tick);
+      this.cancel = this.host.schedule(tick);
     };
-    this.handle = requestAnimationFrame(tick);
+    this.cancel = this.host.schedule(tick);
   }
 
   stop(): void {
     this.running = false;
-    cancelAnimationFrame(this.handle);
+    this.cancel?.();
+    this.cancel = null;
   }
 
   dispose(): void {
     this.stop();
+    this.unsubscribe();
     this.rig.dispose();
-    this.gl.dispose();
+    this.host.painter.dispose();
   }
 }

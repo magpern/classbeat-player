@@ -5,7 +5,9 @@
 // (`?auto=1&t=10&speed=6`): requestAnimationFrame at the page's real frame times, the class clock
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low).
+import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel } from "../../model/src/index.ts";
+import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
 import { readSceneTokens } from "../src/tokens.ts";
 import { FrameLog } from "../tools/frame-log.ts";
@@ -23,8 +25,17 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
-const renderer = new SceneRenderer(canvas, {
-  tokens, quality: state.quality, preserveDrawingBuffer: true,
+// The host: it builds the three.js renderer from its own canvas and hands the scene only this.
+const gl = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
+gl.setClearColor(0x000000, 1);
+const host: Host = {
+  painter: { setPixelRatio: (r) => gl.setPixelRatio(r), setSize: (w, h) => gl.setSize(w, h, false), render: (scene, camera) => gl.render(scene, camera), dispose: () => gl.dispose() },
+  size: () => ({ width: canvas.clientWidth || window.innerWidth, height: canvas.clientHeight || window.innerHeight, pixelRatio: window.devicePixelRatio || 1 }),
+  onResize: (listener) => { window.addEventListener("resize", listener); return () => window.removeEventListener("resize", listener); },
+  schedule: (callback) => { const id = window.requestAnimationFrame(callback); return () => window.cancelAnimationFrame(id); },
+};
+const renderer = new SceneRenderer(host, {
+  tokens, quality: state.quality,
   onFrame: (draw, measured) => { lastBurst = draw.burst; log.add(draw, measured, song); },
 });
 
@@ -85,4 +96,3 @@ if (params.get("auto") === "1") {
 } else {
   renderer.frame(feed(), 0); // the first frame: the beams start on their targets
 }
-window.addEventListener("resize", () => renderer.resize());

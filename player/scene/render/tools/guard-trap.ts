@@ -20,6 +20,11 @@ export const TRAP = `(() => {
   window.EventSource = function () { block("EventSource")(); };
   window.Image = function () { block("new Image")(); };
   window.Audio = function () { block("new Audio")(); };
+  window.FontFace = function () { block("new FontFace")(); };
+  window.SpeechSynthesisUtterance = function () { block("new SpeechSynthesisUtterance")(); };
+  if (window.SpeechSynthesis) SpeechSynthesis.prototype.speak = block("speechSynthesis.speak");
+  Range.prototype.createContextualFragment = block("Range.createContextualFragment");
+  DOMParser.prototype.parseFromString = block("DOMParser.parseFromString");
   const create = Document.prototype.createElement;
   Document.prototype.createElement = function (tag, ...rest) { if (TAGS.test(String(tag))) block("createElement(" + tag + ")")(); return create.call(this, tag, ...rest); };
   const createNS = Document.prototype.createElementNS;
@@ -58,12 +63,16 @@ export async function selfTest(page: Page): Promise<string[]> {
       () => navigator.sendBeacon("https://example.invalid", "x"),
       () => new WebSocket("wss://example.invalid"),
       () => new XMLHttpRequest().open("GET", "https://example.invalid"),
+      () => speechSynthesis.speak(new SpeechSynthesisUtterance("go")),
+      () => new FontFace("f", "url(https://example.invalid/f.woff2)").load(),
+      () => new Range().createContextualFragment("<img src=https://example.invalid/x.png>"),
       () => document.createElement("script"),
       () => document.createElement("iframe"),
     ];
     for (const t of tries) { try { t(); } catch { /* the trap throws; the record is what counts */ } }
     // The parser, not a script, makes this image: only the content-security policy can stop it.
     const div = document.body.appendChild(document.createElement("div"));
+    div.style.backgroundImage = "url(https://example.invalid/bg.png)"; // a style, not a script: only the policy can stop it
     div.innerHTML = '<img src="https://example.invalid/parsed.png">';
   });
   await page.waitForTimeout(300);
