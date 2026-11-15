@@ -119,7 +119,7 @@ slope is taken from an interval's values, and nothing aims at an interval's timi
 | Moments (`build`, `drop`, `breakdown`) | Build: the 8 beats before a drop (or the `build` moment) gather every beam to one point and the haze brightens (to be built in #577: a step up on each beat, about 1.25 ×; as built, 1.5 × and a deeper lift). Drop: one white burst, then every fixture on and fanned wide for 4 bars. Breakdown: one slow beam and the wall, for 8 bars | |
 | No moments in the song | Bursts follow the interval changes inside the song (plan section 4), at least 10 s apart from any burst (to be built in #577; as built, from each other): **light only**, no gather and no fan, so no direction follows an interval's timing | Any angle |
 | The next interval | **Anticipation**: in the last 10 s before an interval change the back truss and the LED wall turn to the next zone's colour, as a wipe from the far side, at constant luminance; the front truss, the floor uplights and the haze cross in the 700 ms that **end** at the change ("Colour: two hues, never a mix") | |
-| A position pattern (format 1.1, beat known) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side, and an accent on the first beat of each side. To be built in #577: the step is one frame on the switch beat's count tick, and the accent is 5 %, **in place of** that beat's lift, never added to it ("The flash budget"); as built, a 25 % accent. At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
+| A position pattern (format 1.1, beat known) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side, and an accent on the first beat of each side. To be built in #577: the step is one frame on the count tick that shows the switch, and the accent is 5 %, **in place of** that beat's lift, never added to it ("The flash budget"); as built, a 25 % accent. At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
 | Link state | Without a lock, no beat and no tempo pulse (as the 2D beat dot); see the states | |
 
 ### How much of the music is known
@@ -422,7 +422,7 @@ added to anything else that is not scheduled, it still cannot make a run of 10 %
 | Kind | What | Bound |
 |---|---|---|
 | **Beat-like light** | The beat lift, the tempo pulse, the pattern accent, the wall chase's step, the build's haze step, the lens flash | Every run it makes, alone, is at most **5 %** of its larger end in every region (`--scene-lift-cap`) |
-| **Steady light** | Motion (the looks, re-aims, phrase flips, the gather, the fan's turn), the haze's drift, the wall's slow wave, the score's travel | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`) |
+| **Steady light** | Motion (the looks, re-aims, phrase flips, the gather, the fan's turn), the haze's drift, the wall's slow wave (the score's travel is not: it steps on the ticks) | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`) |
 | **Scheduled changes** | Every text step, and the rig's bursts, ramps, steps and dims (the tables below) | Placed by the scheduler: at most **3** in any 1 s with the beat-like light running, at most **2** without it, **counted as if each changed every region** |
 
 **Why that adds up, on the combined signal.**
@@ -436,21 +436,43 @@ added to anything else that is not scheduled, it still cannot make a run of 10 %
 - **Without the beat** (None level: coasting, off the list, paused, manual clock, hold, no
   `bpm`), nothing breaks a steady run. A steady run passes 10 % only after at least 3.3 s one way,
   so steady light makes at most 1 change in any 1 s, and the scheduler uses at most 2.
-- **Around a scheduled run** (a ramp, a burst's decay, a dim's edge), all beat-like light is held
-  at rest (the hold, below), so no lift splits it. Steady light cannot split it either: it can only
-  reverse a region where the scheduled run is slower than 3 % a second, and there the scheduled
-  run moves that region by less than 2.1 % in its 700 ms. The longest hold is 1.25 s (an interval
-  change), in which steady light moves at most 3.75 %; with the fall of the last lift before the
-  hold, 4.8 %, that is **8.55 %**, still under 10 %.
-- **Where a region holds no rig light** (inside the score or the gel, which are opaque and never
-  lifted), nothing breaks a run, but nothing in it moves except the score's slow travel and the
-  ticks; the gated runs decide there as everywhere.
+- **Nothing steps inside a ramp.** A ramp is one change only while it is one monotone run, so
+  from its first frame to its last nothing else steps: beat-like light is held (the hold, below;
+  the accent with it), no text tick falls inside it and so no side step either (ramps are placed
+  between ticks, "Ramps and ticks" below), and no other scheduled event starts or ends in it (the
+  scheduler, f). Steady light cannot split it: it can only reverse a region where the scheduled
+  run is slower than 3 % a second, and there the scheduled run moves that region by less than
+  2.1 % in its 700 ms.
+- **Around a scheduled run**, the stretches with no lift and no scheduled run are bounded too,
+  the drift on either side of the hold included:
+  - *before it:* from the peak of the last lift before the hold to the run's start is at most one
+    beat plus the 250 ms lead, and at most 1.25 s at an interval change (the run starts at
+    `t0 - 700 ms`, the hold at `t0 - 950 ms`); steady light moves at most 3.75 % in it (below
+    60 bpm, 3 % a beat over at most 1.25 beats, the same), and with the fall of that lift,
+    4.8 %, a run there is at most **8.55 %**;
+  - *inside a dim:* the dim's low stretch, from the end of its fall to the new song's first beat,
+    is at most one beat plus 0.79 s (**1.79 s at 60 bpm**), with steady light alone: at most
+    **5.4 %** (below 60 bpm at most two beats, 6 %); a steady run there that runs the way of the
+    dim's fall or rise joins that run and adds no change;
+  - *after it:* the 300 ms tail and at most one beat to the next lift's rise, at most 3.9 %.
+  None reaches 10 %.
+- **Where the rig gives a region little light.** A lift ends a falling run only if its rise
+  outpaces steady light during its 40 ms. Where the rig gives at least **8 %** of a region's
+  light it always does (8 % of the smallest lift, 1.5 %, is 0.12 %, as much as 3 % a second moves
+  in 40 ms). Where it gives less (mostly inside the score or the gel, which are opaque and never
+  lifted), two rules cover it: (1) **the score's travel steps on the ticks** (in the countdown's
+  tick, one frame, the distance since the last; about 0.2 vw a second at 8 minutes a screen), so
+  nothing outside the rig moves between ticks; (2) in such a region steady light is held to **3 %
+  a second of the rig's own light there**, so the lift, which lifts all the rig's light by the
+  same share, outpaces it whatever the rig's share. A region with no rig light at all then has no
+  steady light: only its ticks move it.
 - **A one-frame step is one change at most**, however many things move in it. So text steps and
   the rig's own steps share frames wherever they can (the ticks, below).
 
 The reviewer's pairings on #569 now give: a 4.5 % lift (zone 7) with 3 % a second of steady
 light at 90 bpm, a falling run of at most 4.3 + 2.0 = 6.3 %; a build at 120 bpm, at most
-4.8 + 1.5 = 6.3 %; a steady reversal inside a ramp, at most 2.1 % per part. None is a change.
+4.8 + 1.5 = 6.3 %; a steady reversal inside a ramp, at most 2.1 % per part; the longest stretch
+in a hold, a dim's low stretch at 60 bpm, at most 5.4 %. None is a change.
 
 **Beat-like light, the numbers.**
 
@@ -472,10 +494,10 @@ marks each side, and the text layer's count, beat dot and bars line are unchange
 **The hold.** All beat-like light is **held at rest** from **250 ms before** a scheduled run
 starts until **300 ms after** it ends (`--scene-hold`). The lead is longer than a whole lift
 (40 + 200 ms), so no lift is rising or falling when the run starts: a lift that would start in
-the hold is skipped, and none is ever cut. The pattern accent and the lens flash are not held:
-the accent replaces a lift where the side step is a one-frame step (one frame needs no hold), and
-the lens flash is the interval change's own. At an interval change the hold runs from
-`t0 - 950 ms` to `t0 + 300 ms`.
+the hold is skipped, and none is ever cut. The pattern accent is a lift and is held with it (the
+side step still goes, in its tick's frame, which is never inside a ramp). Only the lens flash is
+not held: it starts on the change frame, after the energy ramp's last frame, and is the interval
+change's own. At an interval change the hold runs from `t0 - 950 ms` to `t0 + 300 ms`.
 
 **Text in the budget.** The text layer is part of the frame, so its steps count. Measured for
 this spec (headless Chromium, 1920 × 1080, the room's own face, `--light-1` on a dark room of
@@ -486,25 +508,58 @@ step of the countdown (26 vh), by up to **30 %** and **78 %**. Some steps are sm
 
 1. **Ticks.** Every text step of the running layout falls on a **tick**: one frame in which all
    the text that changes, changes. The countdown's seconds are ticks. At the Beat level the
-   bars line steps on the first countdown tick at or after its downbeat. When a count runs, the
-   count, its side word and its squares step on the beat; the countdown's seconds and the bars
-   line join the first count tick at or after them (at most one tick late, never early).
-2. **At most 2 text ticks in any 1 s,** and 1 when no count runs. So the count steps **on every
-   beat below 120 bpm and on every second beat from 120 bpm** ("8, 6, 4, 2", always on the switch
-   beat; every fourth from 240 bpm), and its squares step with it. A text step that would make
-   a third tick joins the next tick: the latest value wins.
+   bars line steps on the first countdown tick at or after its downbeat, and the score steps in
+   the countdown's ticks. When a count runs, the count, its side word and its squares step on the
+   count's ticks; the countdown's seconds, the bars line and the score's step join the first count
+   tick at or after them, never early.
+2. **At most 2 text ticks in any 1 s** (a 1 s window is 60 frames), and 1 when no count runs.
+   This cap is the budget, and the count's cadence gives way to it, never the cap. **The count's
+   ticks are always at least 500 ms (30 frames) apart.** On each beat of a pattern the count
+   ticks if:
+   - it is a **switch beat** (the first beat of a side) at least 500 ms after the count's last
+     tick; when a side is shorter than 500 ms (one-beat sides above 120 bpm, two-beat sides above
+     240 bpm), only a switch beat whose side differs from the side on screen; or
+   - it is **any other beat** at least 500 ms after the count's last tick **and** at least 500 ms
+     before the next switch beat, so it never takes a switch beat's place.
+
+   Every other beat is **dropped**: its value shows on the next tick (the latest value wins).
+   So up to 120 bpm the count steps on every beat; at 180 bpm with 4-beat sides it shows "4, 2,
+   then 4" of each side, with 3-beat sides only the switch beat, once a second; with sides of
+   500 ms or more the switch beat always shows on its beat. With one-beat sides above 120 bpm the
+   side word lags the riders by up to two sides between its ticks; the side step and the squares
+   follow the side word, so the rig and the text never disagree.
+   A countdown second, the bars line, a label or the score's step that joins a count tick is late
+   by less than the longest gap between count ticks: one beat below 120 bpm (**about 1.2 s at
+   50 bpm, up to 2 s at 30 bpm**), and under 1.5 s from 120 bpm; a countdown value may then be
+   skipped. **This is accepted**: in a pattern the count is the cue riders follow, the countdown
+   is right on every tick it shows, and the change frame at `t0` is never late.
 3. **The change frame.** At an interval change the gel's cut, its numeral and name, the new values,
    the next row and the countdown's reset are **one frame**, at `t0`. On the scene the white line
    down the gel's edge (`--m-flash` in room-2d.md) is **not drawn**: the lens flash marks the
    change, and the line alone was two changes.
 4. **Labels and plates** ("Change in", "estimated", the link plates, "Paused") appear and go on a
    tick, as any other text step.
-5. **What is not a tick.** The score's travel (0.2 vw a second at 8 minutes a screen) is steady
-   light and keeps its bound. The beat dot is not on the scene (the lift carries the beat).
+5. **What is not a tick.** The beat dot is not on the scene (the lift carries the beat). The
+   score's travel is a tick's step (rule 1), not steady light.
 
-The count's step every second beat from 120 bpm is a change to the pattern block, decided here
-for the scene; the plain screen keeps room-2d.md until its own pull request takes it up (the
+The count's cadence (rule 2) and the score's steps on the ticks are changes to the pattern block
+and the score, decided here for the scene; the plain screen keeps room-2d.md until its own pull request takes it up (the
 PR's notes name it for the Orchestrator).
+
+**Ramps and ticks.** No tick, and so no side step, falls inside a ramp, from its first frame to
+its last:
+
+- **A 700 ms ramp** (an interval change's energy, a breakdown, the fan's end, the class's end,
+  the house looks, a quality step) runs only in a gap between ticks that holds it. Without a
+  count the ticks are the countdown's seconds, 1 s apart, so the gap is always there: the energy
+  ramp ends at `t0`, after the tick at `t0 - 1 s`; any other ramp starts at its time if no tick
+  falls in its 700 ms, otherwise on the frame after that tick (at most 1 s late). **With a count
+  running a ramp is not run**: its change is a **one-frame step in the frame of the first count
+  tick at or after its time**, which it shares (0 changes of its own). At an interval change
+  that is rule a: the energy goes in the change frame.
+- **The pause and resume ramp** (250 ms) starts on the action's frame. A pause stops the clock,
+  so no tick follows; on a resume, any tick that would fall inside the ramp moves to the frame
+  after its last (at most 250 ms late).
 
 **The scheduled changes, their shapes and how many each makes.**
 
@@ -512,12 +567,12 @@ PR's notes name it for the Orchestrator).
 |---|---|---|
 | A text tick | 1 | One frame |
 | The change frame at an interval change | 1 | One frame at `t0`: the gel, the text, and with no ramp the new energy |
-| Energy ramp at an interval change | 1 | 700 ms, linear, ending at `t0`; only when there is room (below), otherwise the energy is in the change frame |
+| Energy ramp at an interval change | 1 | 700 ms, linear, ending at `t0`; only when no tick falls inside it and there is room (below), otherwise the energy is in the change frame |
 | Drop burst; light-only burst (a song without moments) | 2 | Up in **one frame** to 0.85 of white at the moment; decay 250 ms to the level after it (the new zone's, or the drop's fan with every fixture on) |
 | Song-change dim | 2 | Down in 120 ms to 25 %, held, up in 120 ms on the new song's first beat |
-| Pattern side step (100 % and 72 %) | 0 | **One frame on the switch beat's count tick**: it shares the tick's frame |
-| End of the drop's fan, start and end of a breakdown, the house looks in and out, a quality step (High to Medium drops 6 fixtures and a haze layer; Medium to Low 6 more and the wall) | 1 | 700 ms, linear; a fixture or layer that goes fades to 0 in it |
-| Pause and resume | 1 each | 250 ms, linear, to 6 % and back; the text changes on the same frame the ramp starts |
+| Pattern side step (100 % and 72 %) | 0 | **One frame on the count tick that shows the switch** (text rule 2): it shares the tick's frame |
+| End of the drop's fan, start and end of a breakdown, the house looks in and out, a quality step (High to Medium drops 6 fixtures and a haze layer; Medium to Low 6 more and the wall) | 1 (0 with a count) | 700 ms, linear, between ticks; a fixture or layer that goes fades to 0 in it. With a count running, one frame in a count tick's frame |
+| Pause and resume | 1 each | 250 ms, linear, to 6 % and back; the text changes on the same frame the ramp starts, and no tick falls inside it |
 | A seek, a 15 s jump, a reload | 1 | One frame: every light and every text at the new position |
 
 **The scheduler.** Before it places an event, the scheduler counts every scheduled change
@@ -528,10 +583,10 @@ fourth (a third without the beat), these apply in this order, again and again, u
 |---|---|---|
 | a | The energy ramp of an interval change | No ramp: the energy is in the change frame |
 | b | A light-only burst | Skipped: the interval change is a plain one. A skipped burst does not start a new 10 s spacing |
-| c | A step of the countdown or the bars line | It joins the next tick or the next frame the rig steps in, never more than 1 s late (latest value wins). The count never waits |
+| c | A step of the countdown, the bars line, a label or the score | It joins the next tick or the next frame the rig steps in (latest value wins), as late as text rule 2 allows. The count's own ticks are placed by rule 2 and do not move here |
 | d | A drop burst | Skipped: the fan's fixtures come on in the drop's frame, which takes the burst's place (1 change) |
 | e | A song-change dim | Skipped: the re-aim marks the song |
-| f | A single ramp, a quality step | It waits until it fits |
+| f | A single ramp, a quality step | It waits until it fits, and until no other scheduled event starts or ends inside it; with a count running it is a step in a count tick's frame |
 | g | A further user action (pause, resume, seek, jump) within 1 s of the last | Shown at the first frame it fits, at most 1 s later; the latest state wins. A user's action never waits for the rig: the rig's event in progress ends at once in the action's frame |
 
 Fixed timing never moves: `t0`, a drop's moment and a beat. **Colour is never late**: the hue
@@ -579,7 +634,7 @@ make none with the beat running):
 | Song change, count running | 2 | 0 (no dim, e) | 0 | 2 |
 | Song change and interval change | 1 | ramp 1 + change frame 1 (no dim) | 0 | 3 |
 | Build | 1 (2 with a count) | 0 (the haze step is beat-like) | 0 | 2 |
-| Breakdown, the fan's end, the class's end, a quality step | 1 (2 with a count) | 1 | 0 | 3 |
+| Breakdown, the fan's end, the class's end, a quality step | 1 (2 with a count) | 1 (0 with a count: a step in a count tick's frame) | 0 | 2 |
 | Anticipation | 1 | 0 (constant luminance) | 0 | 1 |
 | Without the beat (coasting, off the list, manual clock, hold, no `bpm`): beats, an interval change, a drop, a song change | 1 | at most 1 (the change frame, the drop's frame, a single ramp) | 1 | 3 |
 | Pause, resume, a seek, a jump | 1 (in the action's frame) | 1 (the action's ramp) | 1 | 3 |
@@ -808,7 +863,7 @@ straight on the scene.
 | Coasting (readings stopped or stale) | No beat at all (the beat cannot be measured); the rig keeps the zone's colour and moves at its energy | As 2D: "estimated", dimmed dashed countdown, link plate "Music not heard" |
 | Playlist not loaded | The rig is as in the state the class is in: nothing in it changes for this notice, and no light or beam is used to say it | As 2D (room-2d.md "Playlist not loaded", #486, #520): in the link state's place, a white plate "Playlist not loaded" with the square marker, for 30 s after the first Start of the class, only when Start asked the music app to play, and never in place of a link fault ("Music not heard", "Not a class song", "Song is in twice", "Music paused"); the segment name is hidden while it shows; no motion, so reduced motion changes nothing. It takes the place of "Following Spotify" and "Waiting for the first song"; the presenter's own line is in presenter.md |
 | Off the list | "Holding" look: no beat, movement halved, brightness 60 %, the song look of the interval's planned song, no moments (a gather, a fan or a breakdown does not run) | As 2D: link plate "Not a class song", BPM "Song, planned" |
-| Position pattern, beat known | The zone's look, beams at full on "up" and 72 % on "down", an accent on each switch (to be built in #577: the step in one frame on the switch beat's count tick, the accent 5 % in place of that beat's lift; 25 % as built) | Pattern block: side, beat count, beat squares, "then …"; the count steps on every beat below 120 bpm and on every second beat from 120 bpm (#577, "The flash budget") |
+| Position pattern, beat known | The zone's look, beams at full on "up" and 72 % on "down", an accent on each switch (to be built in #577: the step in one frame on the count tick that shows the switch, the accent 5 % in place of that beat's lift; 25 % as built) | Pattern block: side, beat count, beat squares, "then …"; the count steps on every beat below 120 bpm and on every second beat from 120 bpm (#577, "The flash budget") |
 | Position pattern, tempo only (no anchors) | Tempo pulse, no accent | `interval_start`: side and count at the bpm from the interval's start. `next_downbeat`: label and "Count from the music" |
 | Position pattern before its first downbeat (`next_downbeat`) | As the zone | Side of the first entry and "starts on the next bar"; no count until the downbeat |
 | Position pattern, no lock | No beat, no pattern accent | Pattern block: label and "Count from the music"; no side, no count |
@@ -874,7 +929,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 | S11. Reduced motion | With reduced motion the room shows the plain screen; a still-rig screenshot shows no change between two frames 1 s apart except the score's one-second step, the countdown and the pattern count |
 | S12. Hue in the text layer | As C6: hue only on elements that stand for a zone |
 | S13. Intervals first | Every interval is its own block in the score: a test class with three intervals inside one song shows three blocks, each with its number, in the look-ahead window. A song clip never hides, merges or reorders interval blocks |
-| S14. Pattern count | In an interval with a pattern and a known count (Beat level; or Tempo only with `start_on: "interval_start"`), the side and the count are on screen at all times; at the Beat level the count steps within **50 ms** of the anchor beat (as S8), on every beat below 120 bpm and on every second beat from 120 bpm (to be built in #577; "The flash budget"); the count reaches the next side exactly on the switch beat; the next side is named (also for three- and four-entry patterns). Otherwise no side and no count is shown and the block says why. Every pattern starting in the look-ahead window shows its words in the score or the next row |
+| S14. Pattern count | In an interval with a pattern and a known count (Beat level; or Tempo only with `start_on: "interval_start"`), the side and the count are on screen at all times; at the Beat level the count steps within **50 ms** of the anchor beat (as S8), on the count's ticks, which are at least 500 ms apart (to be built in #577; "The flash budget", text rule 2): every beat up to 120 bpm; above it the switch beat and the beats at least 500 ms from the last tick and from the next switch beat, the rest dropped (latest value wins); the count reaches the next side exactly on the switch beat whenever sides are at least 500 ms long, and with shorter sides on the first switch beat at least 500 ms after the last tick whose side differs from the one shown; the next side is named (also for three- and four-entry patterns). Otherwise no side and no count is shown and the block says why. Every pattern starting in the look-ahead window shows its words in the score or the next row |
 | S15. Safe area | As C3: all text ink within 5 % of every edge, at every size and in every state |
 | S16. No collisions | As C4, in every state at every supported size **and in the worst case** of "Fitting": no two pieces of text overlap and at least 1 vw (horizontal) or 1 vh (vertical) of clear space between separate pieces (the pattern block 2 vw from the countdown); no text covered by a fill; no text over more lines than its slot allows; the next row's ink ends at least 1.5 vh above the cue, and the cue's box at least 0.7 vh above the score (2 vh at 16:9; as C4) |
 
@@ -890,16 +945,18 @@ pull request:
 | `--scene-text-pad` | 1.2 vh, fade 3 vh | Growth of each text box for the cap |
 | `--scene-down` | 0.06 | Lights down (paused, before the start), as the 2D gel |
 | `--scene-house` | 0.40 | House lights (finished), white |
-| `--scene-burst` | 0.85, up in one frame (to be built in #577), decay 250 ms | The burst's peak share of white (peaking at the moment) and its decay |
+| `--scene-burst` | 0.85, decay 250 ms | The burst's peak share of white (peaking at the moment) and its decay, as built |
+| `--scene-burst` rise | One frame (to be built in #577) | The burst goes up to its peak in one frame |
 | `--scene-anticipate` | 10 s | How long before an interval change the next colour comes in |
 | `--scene-turn-max` | 30 degrees a second | The fastest any beam turns; the limiter's rate (S7) |
 | `--scene-reaim` | 3.5 s at most | The longest a re-aim, phrase flip, gather or fan may take: the largest target step of 105 degrees at the turn limit. Replaces the 1.2 s of earlier revisions, which names nothing now (the song-change dim is one beat) |
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
 | `--scene-lift-cap` | 0.05 (to be built in #577) | The largest run any beat-like light (lift, pulse, accent, wall chase, the build's haze step, lens flash) may make alone in any region, as a share of its larger end (S6) |
-| `--scene-steady-max` | 3 % a second (to be built in #577) | The most steady light may move any region in 1 s, and in one beat below 60 bpm (S6) |
+| `--scene-steady-max` | 3 % a second (to be built in #577) | The most steady light may move any region in 1 s, and in one beat below 60 bpm; where the rig gives a region less than 8 % of its light, 3 % of the rig's own light there (S6) |
 | `--scene-hold` | 250 ms before, 300 ms after (to be built in #577) | Beat-like light held at rest around a scheduled run (S6) |
 | `--scene-lens-flash` | 0.25 over 0.5 at rest (to be built in #577) | The white share the lens flash adds to a lens, which is 0.5 white at rest; lowered if a region would pass `--scene-lift-cap` |
-| `--scene-tempo-pulse` | 0.04 (to be built in #577; 0.12 as built) | The tempo pulse's depth when there are no anchors |
+| `--scene-tempo-pulse` | 0.12 | The tempo pulse's depth when there are no anchors, as built |
+| `--scene-tempo-pulse` (to be built) | 0.04 (to be built in #577) | Its depth within the flash budget; replaces 0.12 |
 | `--score-ahead` | 8 min (6 at 3:2 and narrower) | The score's look-ahead |
 | `--score-now` | 10 vw | Where "now" is |
 | `--pattern-count` | 18 vh (16:9), 14.6 vh stepped | The pattern's beat count |
