@@ -9,6 +9,7 @@ import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
 import { checkPalette } from "../lib/palette.ts";
 import { impurities } from "../lib/core-purity.ts";
 import { remoteFontRefs } from "../lib/font-refs.ts";
+import { tokensFromFile } from "../../../player/scene/render/tools/tokens-file.ts";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokens = readFileSync(join(WEB, "src", "design", "tokens.css"), "utf8");
@@ -249,5 +250,47 @@ describe("the web lane stands alone", () => {
     for (const [src, problem] of caught) assert.ok(impurities("probe.ts", src).includes(problem), `${src} -> ${JSON.stringify(impurities("probe.ts", src))}`);
     // Names in member and key positions are not references to the globals.
     assert.deepEqual(impurities("probe.ts", 'import { a } from "./shape.ts";\nconst o = { fetch: 1, document: 2 };\nconst v = o.fetch + a.history;'), []);
+  });
+});
+
+describe("scene-only tokens (docs/design/scene.md, Tokens)", () => {
+  // What tokens.css holds today. Where the spec gives a second value for a narrow or stepped case
+  // (--score-ahead, --pattern-count) the token holds the first.
+  const SCENE: Record<string, string> = {
+    "--scene-text-cap": "0.08", "--scene-text-pad": "1.2vh 3vh", "--scene-down": "0.06", "--scene-house": "0.4",
+    "--scene-burst": "0.85 250ms", "--scene-anticipate": "10s", "--scene-turn-max": "30deg", "--scene-reaim": "3.5s",
+    "--scene-lift-max": "3", "--scene-tempo-pulse": "0.12", "--score-ahead": "8min", "--score-now": "10vw",
+    "--pattern-count": "18vh", "--pattern-down": "0.72",
+  };
+  const spec = readFileSync(join(WEB, "..", "docs", "design", "scene.md"), "utf8");
+  const rows = [...spec.split(/^## Tokens$/m)[1]!.split(/^## /m)[0]!.matchAll(/^\| (`[^|]+`) \| ([^|]+) \|/gm)].map((m) => ({
+    names: [...m[1]!.matchAll(/`(--[\w-]+)`/g)].map((n) => n[1]!), value: m[2]!.trim(),
+  }));
+  const specNames = rows.flatMap((r) => r.names);
+
+  it("tokens.css holds every scene-only token of the spec table, and the spec table holds no other", () => {
+    const own = specNames.filter((n) => !["--m-change", "--m-flash"].includes(n));
+    assert.deepEqual([...own].sort(), Object.keys(SCENE).sort());
+  });
+
+  it("every value equals the spec's", () => {
+    for (const [name, value] of Object.entries(SCENE)) {
+      const m = new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m").exec(tokens);
+      assert.equal(m?.[1]?.trim(), value, name);
+      const row = rows.find((r) => r.names.includes(name))!;
+      const spaced = row.value.replace(/(\d)(vh|vw|ms|s|min|deg)\b/g, "$1 $2");
+      for (const n of value.matchAll(/\d*\.?\d+\s*[a-z]*/g)) {
+        const unit = n[0].replace(/^[\d.]+/, "").trim();
+        const num = n[0].match(/^[\d.]+/)![0];
+        const words = unit === "deg" ? "degrees" : unit;
+        assert.ok(new RegExp(`(^|[^\\d.])${num.replace(".", "\\.")}\\s*${words}`).test(spaced), `${name}: ${n[0]} is not in the spec's "${row.value}"`);
+      }
+    }
+  });
+
+  it("the scene's own reader finds every token it reads in the real tokens.css (nothing falls back to the spec's value)", () => {
+    const t = tokensFromFile();
+    assert.deepEqual(t.missing, []);
+    assert.deepEqual([t.down, t.burstPeak, t.burstMs, t.textCap], [0.06, 0.85, 250, 0.08]);
   });
 });
