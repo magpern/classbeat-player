@@ -19,18 +19,20 @@ with other work; nothing in the development loop waits for an answer.
   Store, the company's IT has to make an exception for the app in its device management. Until then the unsigned CI build
   (`classbeat-player-macos-unsigned`) runs only on a Mac that is not managed.
 
-- **Phone and tablet apps** (before PL12, owner, 2026-11-15): a Google Play developer account
-  (a one-time fee) for the Android app, and the Apple Developer membership above for the iOS
-  app. For spike 3, an Android phone with Spotify on it, and later an iPhone.
+- **Phone and tablet apps** (PL12, owner, 2026-11-15): Android first, as a self-signed APK
+  installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
+  with Spotify on it. Before the first APK that studios keep: an Android signing key, made once
+  and added as a repository secret (agents never hold it; the runbook will give the commands).
+  Losing it means users must uninstall to update. iOS later: an iPhone or iPad and the Apple
+  Developer membership above.
 
 ## Decisions waiting
 
-- **The phone and tablet apps (plan, section 13, decision 15).** Whether to publish through Google
-  Play and the App Store or hand out the files directly; and whether a music follower on iOS may
-  use Spotify's own iOS SDK (iOS gives no app another app's playback). Until you decide, the iOS
-  app runs on the manual clock, Android builds are handed out directly, and iOS builds go only to
-  test devices (how far an iOS build can reach without the App Store is not verified, plan
-  section 14).
+- **The phone and tablet apps (plan, section 13, decision 15).** Decided: Android first, as a
+  self-signed APK with no store. Open, for later: whether to publish through Google Play; and,
+  when iOS starts, whether a music follower on iOS may use Spotify's own iOS SDK (iOS gives no
+  app another app's playback). Until then the iOS app runs on the manual clock, and how far an iOS
+  build can reach without the App Store is not verified (plan, section 14).
 
 - **Defaults agents picked that you may want to change** (ADR 0002, once merged, lists them all):
   sign-up by allowlist only; sign-in links work only in the browser that asked for them; no

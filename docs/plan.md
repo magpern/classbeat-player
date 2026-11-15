@@ -675,7 +675,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy; the instructor's own phone app reads them natively from PL12) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
-| **PL12** | Installed phone and tablet apps (owner, 2026-11-15). First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. Then an ADR for the native shell, an Android app (the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected), then an iOS app (the same, with the manual clock unless decision 15 clears a follower), store builds in CI | About 8 to 10, 1 spike | A Google Play developer account; the Apple Developer membership (decision 9); an Android phone and an iPhone with Spotify for spike 3 and one live check each; decision 15 |
+| **PL12** | Installed phone and tablet apps (owner, 2026-11-15). **Android first**, as an APK built in CI and signed with the project's own key, installed by hand outside any store (owner, 2026-11-15). Android installs an update only when it is signed with the same key, so the key never changes; the owner adds it as a CI secret, and until then CI signs with a throwaway debug key whose builds are for testing only. First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. Then an ADR for the native shell, then the Android app: the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected. **iOS later**, once the owner has an iPhone or iPad: the same app, with the manual clock unless decision 15 clears a follower | About 8 to 10, 1 spike | An Android phone with Spotify for spike 3 and one live check; later an iOS device, the Apple Developer membership (decision 9) and decision 15 |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
 
 **Spike 1 pass criteria** (proposed; fixed in the timing ADR before the spike runs). A throwaway
@@ -738,9 +738,10 @@ reversible defaults.
 13. **Repository and openness:** public or private, and the licence. Recommended: the class
     format under a permissive open licence, and the player as open source.
 14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
-15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Open: whether to
-    publish through Google Play and the App Store or hand out the files directly, and whether a
-    follower on iOS may use Spotify's own iOS SDK. Until then the iOS app uses the manual clock.
+15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Android first,
+    as a self-signed APK installed by hand, with no store. iOS comes later, once the owner has an
+    iOS device. Open: whether to publish through Google Play later; whether a follower on iOS may
+    use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
 
 ## 14. Not verified
 
