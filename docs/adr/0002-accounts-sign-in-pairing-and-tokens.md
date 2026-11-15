@@ -45,7 +45,8 @@ live sessions.
    code in the redirect back to the source (section 7), as the authorization-code flow requires.
    It lives 60 seconds, works once and is useless without the PKCE verifier. Where a link must
    carry a token or a code (the sign-in mail, the join QR code, the control QR code), it is in
-   the URL fragment, which is never sent to a server.
+   the URL fragment, which is never sent to a server. (Amended by ADR 0010, section 9: a second
+   exception, the `code` and `state` of the classbeat sign-in callback.)
 4. No token, code or hash is written to a log line, an audit event or an error message. That
    holds for the database's log too (section 11).
 5. Tenant isolation is done twice: in the code and in the database.
@@ -59,7 +60,7 @@ live sessions.
    migration (amended 2026-11-12). The per-address limit on link requests (`login_policy.py`)
    and the passkey limits (`passkey_policy.py`) are not settings either: they are constants in
    the backend's sign-in rules and change only in a security-critical pull request (amended
-   2026-11-13, #145 review).
+   2026-11-13, #145 review). (ADR 0010 adds `classbeat_policy.py` to these.)
 
 ### 2. Token format and hashing
 
@@ -68,7 +69,7 @@ live sessions.
 - `<secret>` is 32 bytes from the operating system's random source (`secrets.token_bytes(32)`),
   written as base64url without padding: 43 characters, 256 bits.
 - `<type>` is one of `lgn`, `ml`, `ses`, `dc`, `dev`, `lc`, `src`, `hst`, `ctl`, `rdr` (table in
-  section 3).
+  section 3), and `cbs` (ADR 0010).
 - The pattern `cbp_[a-z]{2,3}_[A-Za-z0-9_-]{43}` recognises a leaked token. CI searches the
   repository for it and fails on a match. Tests build their tokens at run time.
 - `cbp` comes from the working name. If the name changes (decision 12), new tokens get a new
@@ -108,7 +109,14 @@ every code. That is accepted, because the pairing code alone collects nothing (s
 
 Passkeys are not tokens. The server stores only the public key (section 4).
 
+ADR 0010 adds the classbeat binding token `cbp_cbs_` and a second issuer of session tokens, the
+classbeat callback (ADR 0010, section 9).
+
 ### 4. Accounts and sign-in
+
+(Amended by ADR 0010: instructors sign up and sign in through classbeat, and the email link and
+passkeys below are closed for every account kind there is today. The email column changes as
+ADR 0010, section 8, says.)
 
 **Account.** One row in `accounts`: a UUID, the email (trimmed and lower-cased, unique, at most
 254 characters), a random 32-byte passkey user handle, and dates. The account id is the tenant
@@ -240,6 +248,9 @@ Changing the email address is not part of PL2. When it is added it gets its own 
   frame-ancestors 'none'; base-uri 'none'; form-action 'self'` and `Referrer-Policy: no-referrer`.
   PL2 may add to the policy what the site's own scripts need, never a third-party origin. No
   form of the site posts to, or is redirected to, another origin (section 7, step 4).
+- (Amended by ADR 0010, section 9: the classbeat callback is the one state-changing GET, the
+  routes that read the session cookie gain the classbeat start and callback, and
+  `POST /api/classbeat/events` is a server route outside the site's API.)
 
 ### 6. Pairing a device
 
@@ -317,7 +328,8 @@ direction is enough, and the plan describes this one.
   The app never deletes a cache on a network error or a 5xx answer.
 - A paired device sends the user a mail ("a new device was paired"), to the address that
   `auth_collect_pairing` returns. A new passkey and an approved source link send one too, from
-  the signed-in request that added the passkey or approved the link.
+  the signed-in request that added the passkey or approved the link. (Amended by ADR 0010,
+  section 7: sent to the account's verified display email, and shown on the account page.)
 - The token is not rotated (see Alternatives).
 
 ### 7. The source API
@@ -340,6 +352,10 @@ direction is enough, and the plan describes this one.
    account, the source id, the redirect address and the challenge, and is good only for those.
 5. The source's server calls `POST /api/source/token` with the code, the `redirect_uri` and the
    `code_verifier` in the body. All four bindings are checked. It gets the source token once.
+
+(Amended by ADR 0010, section 10, for source `classbeat`: step 2 needs a `login_hint`; step 3
+approves only for the instructor it names, else `403 wrong_account`; the answer of step 5 also
+holds `account_subject`, which classbeat checks.)
 
 At most 5 links per account; a link idle for 365 days is neither listed nor counted, and its row
 stays until it is revoked. The site lists them (source, linked date, last used) and can revoke
@@ -590,7 +606,8 @@ CREATE POLICY tenant ON <table>
   freely: `login_links`, `login_challenges`, `pairings`, `source_link_codes`, `rate_limits`,
   `signup_allowlist`. `player_app` has **no grant** on them and they have no policy for it. They
   are reached only through the functions below. `pairings.account_id` is null until approval.
-  This list is the written allowlist of tables without the tenant policy.
+  This list is the written allowlist of tables without the tenant policy. (Amended by ADR 0010,
+  section 9: `classbeat_sign_ins` and `classbeat_event_ids`, with their functions and grants.)
 - `signup_allowlist` has one policy, for `player_owner` alone, allowing everything. The operator
   edits the list with a command of the backend (`allowlist add`, `remove`, `list`) that is run
   on the server and connects as `player_owner`, like a migration. No running role can write it.
@@ -667,9 +684,9 @@ Adding one is a security-critical change.
 | `auth_start_pairing(device_code_hash, user_code_hash, platform, version)` | Writes a pending pairing | Nothing |
 | `auth_find_pairing(user_code_hash)` | For the account already set only: looks up a pending pairing that has not expired. Changes nothing about it. A code that matches none counts as a wrong code for the account; while the form is closed it finds nothing | The pairing's platform and version, or nothing |
 | `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices (approved and not yet collected count) | True when decided, false for a wrong code, nothing (`NULL`) when refused at the cap |
-| `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email |
-| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused` | Nothing |
-| `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false |
+| `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email, or null when it has none (amended by ADR 0010, section 8) |
+| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused`. (Amended by ADR 0010, section 10: it takes `client`, `login_hint` and `issuer`; for a `classbeat` link to any account but the one named it writes `source.link_refused` (`wrong_account`) and returns `wrong_account`, storing no code; it stores the set account's `(issuer, subject)`.) | Nothing (amended by ADR 0010: null, or `wrong_account`) |
+| `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false. (Amended by ADR 0010, section 10: `NULL` on a refusal, else the link's `(issuer, subject)`.) |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
 | `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
 
@@ -720,6 +737,7 @@ whatever the caller does next. Two limits, stated so that nobody builds on more:
     add audit events, delete the account;
   - it can test one address at a time for whether it can sign in, because
     `auth_request_login` returns whether a mail is to be sent. It cannot list addresses.
+- (Amended by ADR 0010, section 9: what it can do with the classbeat functions.)
 - It cannot create an account outside the sign-in function and its allowlist, change an
   account's email, make a session, device or source link except through the functions, or
   change or delete an audit event.
@@ -873,6 +891,7 @@ valid, so the framework's `422` there counts nothing and reaches nothing (#96, #
 | Control codes made | 30 per session per hour | 429 to the host |
 | WebSocket connections | 300 per address per minute; 100 waiting for `hello` per address; one per token; 63 per session (60 riders, 2 controllers, the host) | Refused |
 | Account exports | 3 per account per day | 429 |
+| The classbeat sign-in (ADR 0010, section 9) | Its own table there | |
 
 Passkey limits (amended 2026-11-13, #136). A sign-in challenge start needs no sign-in, and
 without a browser token each one stores a row until the purge, so starts are counted per
@@ -922,7 +941,8 @@ started or ended; controller added; control code cancelled after wrong tries; ex
 
 Not events, because no account is set when they happen: a passkey sign-in whose signature
 fails, and a request with a revoked device token. Both are counted in the limits (section 10).
-A new source link code writes no event either (section 9).
+A new source link code writes no event either (section 9); amended by ADR 0010, section 10: a refused `classbeat` link writes `source.link_refused`. ADR 0010, section 9, adds the
+classbeat sign-in's events.
 Deleting the account writes no event either: its events go with it.
 
 Events about sign-in, pairing and linking are written inside the `auth_*` functions (section
@@ -952,7 +972,8 @@ the database's log is covered too:
   account, the class documents, devices, source links, passkey names, sessions and audit events.
   No hash, token or key is in it. Nothing is stored on the server and there is no download link.
 - **Deleting a class** removes its document at once and leaves the marker of section 7.
-- **Deleting the account** needs a recent sign-in and a typed confirmation. One transaction
+- **Deleting the account** needs a recent sign-in and a typed confirmation (or classbeat's
+  `account-deleted` event, ADR 0010, section 8). One transaction
   deletes the account row and, by cascade, everything owned by it: classes, markers, the sync
   cursor, devices, source links, sessions, passkeys, pending pairings, link codes and audit
   events. The cascade runs as the tables' owner, so the backend's role needs no `DELETE` on
@@ -1000,6 +1021,7 @@ the database's log is covered too:
 | An instructor opening another instructor's classes on a shared studio computer | Not prevented in this design. Each paired account's token and cache are separate, but switching account in the app needs no credential, so anyone at that computer can open the classes of every instructor paired on it. The tokens there are read-only. Removing an account from the app or revoking the device on the site ends it. A local lock is a later, owner-decided feature |
 | Hostile text in a nickname or a device name | Length limits, control characters removed, always rendered as text. The site's content security policy allows no foreign script |
 | The site shown inside another site's frame | `frame-ancestors 'none'` |
+| The classbeat sign-in | The threat rows of ADR 0010, section 9 |
 | A flood of requests or connections | The limits of section 10 and the message limits of section 8. A studio behind one address is not locked out by one bad token |
 
 ## Alternatives

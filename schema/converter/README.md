@@ -24,7 +24,7 @@ dropped and a 20 minute FTP test that is kept).
 ```
 { name, description?, sport?: "cycling" | "running",
   segments: [ { name, kind, intervals: [ { sec, zone, rpm | gradient, standing?, game?, ftp_test?, cue? } ] } ],
-  music?: { crossfade_sec, songs: [ { spotify_id, title, artist, bpm?, length_sec } ] } }
+  music?: { crossfade_sec, spotify_playlist?, songs: [ { spotify_id, title, artist, bpm?, length_sec } ] } }
 ```
 
 ## Mapping: each classbeat field and what happens to it
@@ -47,6 +47,7 @@ dropped and a 20 minute FTP test that is kept).
 | class `sport` (absent = cycling) | `class.sport` | s3 |
 | sum of interval lengths | `class.length_ms` and `totals.length_ms` | s4 |
 | `music.crossfade_sec` | `music.design_crossfade_ms`, seconds x 1000 | s3, ADR 0001 |
+| `music.spotify_playlist` | `music.spotify_playlist` (22-character id), only with songs; the document is then format `"1.2"` (without it, `"1.0"`) | s3, s7 |
 | song `spotify_id` | `songs[].ids.spotify_track` | s3 |
 | song `title`, `artist` | same, whitespace collapsed | s3 |
 | song `length_sec` | `length_ms` | s2 |
@@ -57,6 +58,6 @@ dropped and a 20 minute FTP test that is kept).
 | (no field in classbeat) | `zone_scale` names and ranges come from a default table in the converter; classbeat's data carries none | s3 (a converter choice, not data) |
 | (no field in classbeat) | no `beat_anchors`, `moments`, `planned_load` | s3 optional fields; s5 |
 
-Not in the fixture shape, so not mapped: MOWL ids and links, playlists, cover images, roles and
+Not in the fixture shape, so not mapped: MOWL ids and links, cover images, roles and
 anything else of classbeat's that the format has no field for (strict schema: such a field
 cannot be carried).

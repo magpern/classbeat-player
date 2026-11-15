@@ -10,8 +10,9 @@ with other work; nothing in the development loop waits for an answer.
   no "branch must be up to date". Agents never change repository settings.
 - **Milestones:** the agents' tools cannot create GitHub milestones, so phases are labels
   (`PL0`, …). Create milestones PL0 to PL11 if you want them; agents will use them.
-- **A mail service** (before the first deploy): sign-in links and security notices are sent by
-  mail (ADR 0002). Which service, and the sending domain.
+- **A mail service** (before the first deploy): security notices (a paired device, an approved
+  source link) are sent by mail (ADR 0002). Instructors sign in through classbeat (ADR 0010), so
+  no sign-in mail is sent. Which service, and the sending domain.
 - **Signing accounts** (before PL7): an Apple Developer membership and a Windows signing identity.
   On a company-managed Mac that blocks apps from unknown sources, a signed and notarised build is
   enough only if the policy allows apps from identified developers; if it allows only the App

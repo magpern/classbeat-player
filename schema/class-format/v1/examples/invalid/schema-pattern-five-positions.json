@@ -1,7 +1,8 @@
 {
   "format_version": "1.1",
   "class": {
-    "title": "Beat test",
+    "title": "Climb and jumps",
+    "description": "A three-step climb inside one song, then 8 up and 8 down on the beat.",
     "sport": "cycling",
     "length_ms": 600000
   },
@@ -79,11 +80,11 @@
   "totals": {
     "length_ms": 600000,
     "time_in_zone_ms": {
-      "1": 240000,
-      "2": 0,
-      "3": 180000,
-      "4": 0,
-      "5": 180000
+      "1": 180000,
+      "2": 180000,
+      "3": 60000,
+      "4": 60000,
+      "5": 120000
     }
   },
   "segments": [
@@ -91,18 +92,18 @@
       "name": "Warm up",
       "kind": "warmup",
       "start_ms": 0,
-      "end_ms": 120000
+      "end_ms": 300000
     },
     {
-      "name": "Main set",
+      "name": "Climb and jumps",
       "kind": "main",
-      "start_ms": 120000,
-      "end_ms": 480000
+      "start_ms": 300000,
+      "end_ms": 540000
     },
     {
       "name": "Cool down",
       "kind": "cooldown",
-      "start_ms": 480000,
+      "start_ms": 540000,
       "end_ms": 600000
     }
   ],
@@ -121,25 +122,79 @@
     {
       "start_ms": 120000,
       "length_ms": 180000,
-      "zone": 3,
+      "zone": 2,
       "cadence": {
-        "from": 90,
-        "to": 100
+        "from": 85,
+        "to": 95
       },
       "position": "seated",
       "cue": "Steady"
     },
     {
       "start_ms": 300000,
-      "length_ms": 180000,
+      "length_ms": 60000,
+      "zone": 3,
+      "cadence": {
+        "from": 70,
+        "to": 80
+      },
+      "position": "seated",
+      "cue": "Climb, first step"
+    },
+    {
+      "start_ms": 360000,
+      "length_ms": 60000,
+      "zone": 4,
+      "cadence": {
+        "from": 65,
+        "to": 75
+      },
+      "position": "seated",
+      "cue": "Climb, add load"
+    },
+    {
+      "start_ms": 420000,
+      "length_ms": 60000,
       "zone": 5,
-      "cadence": "beat",
-      "position": "standing",
-      "cue": "Ride on the beat"
+      "cadence": {
+        "from": 60,
+        "to": 70
+      },
+      "position": "seated",
+      "cue": "Climb, top of the hill"
     },
     {
       "start_ms": 480000,
-      "length_ms": 120000,
+      "length_ms": 60000,
+      "zone": 5,
+      "cadence": {
+        "from": 60,
+        "to": 70
+      },
+      "position": "seated",
+      "cue": "Jumps, eight up and eight down",
+      "pattern": {
+        "kind": "alternate",
+        "positions": [
+          "seated",
+          "standing",
+          "seated",
+          "standing",
+          "seated"
+        ],
+        "beats": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "start_on": "next_downbeat"
+      }
+    },
+    {
+      "start_ms": 540000,
+      "length_ms": 60000,
       "zone": 1,
       "cadence": {
         "from": 70,
@@ -155,67 +210,16 @@
       "artist": "The Firsts",
       "length_ms": 300000,
       "start_ms": 0,
-      "end_ms": 291000,
-      "bpm": 120,
-      "ids": {
-        "spotify_track": "4uLU6hMCjMI75M1A2tKUQC",
-        "isrc": "USRC17607839"
-      },
-      "beat_anchors": {
-        "quality": "measured",
-        "anchors": [
-          {
-            "at_ms": 0,
-            "bpm": 120
-          },
-          {
-            "at_ms": 60000,
-            "bpm": 121
-          }
-        ]
-      },
-      "moments": {
-        "quality": "measured",
-        "items": [
-          {
-            "at_ms": 100000,
-            "kind": "build"
-          },
-          {
-            "at_ms": 150000,
-            "kind": "drop"
-          },
-          {
-            "at_ms": 200000,
-            "kind": "breakdown"
-          },
-          {
-            "at_ms": 250000,
-            "kind": "other"
-          }
-        ]
-      }
+      "end_ms": 300000,
+      "bpm": 120
     },
     {
       "title": "Beta",
       "artist": "Second Wind",
-      "length_ms": 318000,
-      "start_ms": 291000,
+      "length_ms": 300000,
+      "start_ms": 300000,
       "end_ms": 600000,
-      "bpm": 128,
-      "beat_anchors": {
-        "quality": "estimated",
-        "anchors": [
-          {
-            "at_ms": 1000,
-            "bpm": 128
-          }
-        ]
-      },
-      "moments": {
-        "quality": "missing",
-        "items": []
-      }
+      "bpm": 128
     }
   ]
 }

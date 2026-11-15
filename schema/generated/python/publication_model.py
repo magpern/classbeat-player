@@ -9,6 +9,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 
+class FormatVersion(Enum):
+    field_1_0 = '1.0'
+    field_1_1 = '1.1'
+    field_1_2 = '1.2'
+
+
 class Ms(RootModel[int]):
     root: Annotated[int, Field(ge=0)]
 
@@ -63,6 +69,15 @@ class Music(BaseModel):
     source: Source
     design_crossfade_ms: Annotated[int, Field(ge=0, le=30000)]
     song_timing: Quality
+    spotify_playlist: Annotated[
+        str | None,
+        Field(
+            description="Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
+            max_length=22,
+            min_length=22,
+            pattern='^[A-Za-z0-9]{22}$',
+        ),
+    ] = None
 
 
 class ZoneDef(BaseModel):
@@ -119,6 +134,25 @@ class Position(Enum):
     standing = 'standing'
 
 
+class Beat(RootModel[int]):
+    root: Annotated[int, Field(ge=1, le=64)]
+
+
+class StartOn(Enum):
+    interval_start = 'interval_start'
+    next_downbeat = 'next_downbeat'
+
+
+class PositionPattern(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['alternate']
+    positions: Annotated[list[Position], Field(max_length=4, min_length=2)]
+    beats: Annotated[list[Beat], Field(max_length=4, min_length=2)]
+    start_on: StartOn | None = None
+
+
 class Incline(Enum):
     flat = 'flat'
     raised = 'raised'
@@ -147,6 +181,7 @@ class Interval(BaseModel):
     zone: Annotated[int, Field(ge=1, le=7)]
     cadence: Cadence | None = None
     position: Position | None = None
+    pattern: PositionPattern | None = None
     incline: Incline | None = None
     cue: Annotated[str, Field(max_length=120)]
     test: Test | None = None
@@ -219,7 +254,7 @@ class Class(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    format_version: Literal['1.0']
+    format_version: FormatVersion
     class_: Annotated[ClassInfo, Field(alias='class')]
     music: Music
     zone_scale: Annotated[list[ZoneDef], Field(max_length=7, min_length=1)]

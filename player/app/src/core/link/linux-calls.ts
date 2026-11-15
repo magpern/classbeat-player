@@ -5,7 +5,9 @@
 // player, in the read-only call that asks whether it is playing (ADR 0001: "another app playing"
 // is off the list); it must be a well-formed MPRIS name the bus itself listed. Every call says the
 // bus must not start a service, so none of them ever starts Spotify or anything else. No call
-// reads or sends audio, and none needs a Spotify token (plan section 3, rule 3).
+// reads or sends audio, and none needs a Spotify token (plan section 3, rule 3). Start's playlist
+// load is the one other argument that is not a constant: the checked playlist link (playlist.ts).
+import { playlistUri } from "./playlist.ts";
 
 /** systemd's own bus client, by absolute path: never looked up through PATH. */
 export const BUSCTL = "/usr/bin/busctl";
@@ -52,4 +54,15 @@ export const isOtherPlayer = (name: unknown): name is string => typeof name === 
  */
 export function otherPlayerArgs(name: string): readonly string[] | null {
   return isOtherPlayer(name) ? Object.freeze([...CALL, name, PATH, ...GET_ALL]) : null;
+}
+
+/**
+ * Start's playlist load (ADR 0001, "Start loads the class playlist", best effort): MPRIS
+ * `OpenUri` on Spotify's own name only, which starts nothing (`--auto-start=no`). The id is
+ * checked again here, immediately before the call is built: null for anything but 22 letters or
+ * digits, and then nothing is run. The one string argument is the fixed prefix plus that id.
+ */
+export function linuxOpenUriArgs(id: unknown): readonly string[] | null {
+  const uri = playlistUri(id);
+  return uri === null ? null : Object.freeze([...BASE, PLAYER, "OpenUri", "s", uri]);
 }

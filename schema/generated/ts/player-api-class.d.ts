@@ -11,7 +11,7 @@
 export type Class = {
   [k: string]: unknown;
 } & {
-  format_version: "1.0";
+  format_version: "1.0" | "1.1" | "1.2";
   class: ClassInfo;
   music: Music;
   /**
@@ -62,6 +62,10 @@ export interface Music {
   source: "spotify" | "swedebeat" | "none";
   design_crossfade_ms: number;
   song_timing: "measured" | "estimated" | "missing";
+  /**
+   * Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).
+   */
+  spotify_playlist?: string;
 }
 export interface ZoneDef {
   zone: number;
@@ -94,12 +98,33 @@ export interface Interval {
         to: number;
       };
   position?: "seated" | "standing";
+  pattern?: PositionPattern;
   incline?: "flat" | "raised";
   cue: string;
   test?: {
     kind: "ftp";
     minutes: 3 | 5 | 20;
   };
+}
+/**
+ * Format 1.1. Position changes counted in beats, repeated over the interval. positions and beats have the same length (semantic rule pattern_length_mismatch).
+ */
+export interface PositionPattern {
+  kind: "alternate";
+  /**
+   * @minItems 2
+   * @maxItems 4
+   */
+  positions:
+    | ["seated" | "standing", "seated" | "standing"]
+    | ["seated" | "standing", "seated" | "standing", "seated" | "standing"]
+    | ["seated" | "standing", "seated" | "standing", "seated" | "standing", "seated" | "standing"];
+  /**
+   * @minItems 2
+   * @maxItems 4
+   */
+  beats: [number, number] | [number, number, number] | [number, number, number, number];
+  start_on?: "interval_start" | "next_downbeat";
 }
 export interface Song {
   title: string;
