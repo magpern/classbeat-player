@@ -37,82 +37,139 @@ native plugins**, written in Kotlin on Android. One web code base serves the des
 
 ### 2. What runs where
 
-| In the web view (TypeScript, shared with the desktop) | In native plugins (Kotlin, the app only) |
+| In the web view (TypeScript, shared with the desktop) | In native code (Kotlin, the app only) |
 |---|---|
-| The room screen, the 3D scene, the presenter controls | The device token, in the Android Keystore |
-| The class clock and the music-link state machine (`player/app/src/core/`) | Every request that carries the device token, and the live connection |
-| Opening a class from the cache the native side returns | The class cache on the device, in the app's own storage |
-| | The Android music follower (section 5) |
+| The room screen, the 3D scene, the presenter controls | Pairing, the device token and its storage (section 4) |
+| The class clock and the music-link state machine (`player/app/src/core/`) | Sync with the backend and the class cache on the device |
+| Opening a class the native side returns | The live connection, as transport only (below) |
+| What the live session sends and receives, built and checked by the shared TypeScript | The Android music follower (section 5) |
 | | Bluetooth sensors (section 6), keep-awake, an external display |
 
-The web view gets the same narrow, typed interface the desktop's preload gives the renderer: named
-calls with checked arguments and answers, never a general channel.
+This is more than a thin shell: on the desktop about 1,950 lines of the main process do pairing,
+sync and the live host. What moves to Kotlin is the part that holds a secret or needs the
+system: pairing, the token, the authenticated requests, the cache and the socket. The live
+session's messages stay in the shared TypeScript, so the rule guards for live sessions (rules 13
+and 14) keep covering them; the native socket carries them as opaque text and adds nothing.
 
-### 3. The web view is locked down
+### 3. The bridge: named intents only
 
-- It loads **only the files bundled in the APK**. Capacitor's `server.url` is never set, and no
-  remote page, script, style or font is ever loaded. Navigation away from the bundle is refused.
-  Links meant for a browser open in the system browser.
-- A Content Security Policy as strict as the desktop room window's: scripts only from the bundle,
-  no `unsafe-eval`, no `unsafe-inline` script.
-- Only our own plugins are registered. Capacitor's generic plugins that reach the network, files
-  or other apps (its HTTP, filesystem, preferences and browser plugins, and any third-party plugin)
-  are not installed. A test lists the plugins the app registers and fails on any other.
-- Web view debugging is on only in the debug build.
+The web view gets the same kind of interface the desktop's preload gives the renderer: **named
+intents** with checked arguments and answers, never a general channel. In particular:
 
-### 4. The device token and sign-in
+- The web view never passes a URL, path, method, header or host. Each intent maps to one fixed
+  backend call chosen in native code, for example "list my classes", "get class *id*", "start the
+  live session for class *id*".
+- The backend origin is fixed in the native build: HTTPS only in release builds, loopback in a
+  debug build, as on the desktop (ADR 0002).
+- No answer to the web view ever contains the device token, a pairing device code, a host token or
+  a controller token. The device code and the host token live in native memory only.
+- Every intent has a test that rejects unexpected arguments.
+
+### 4. The web view is locked down
+
+- It loads **only the files bundled in the APK**. Capacitor's `server.url` is never set, there is
+  no `allowNavigation` entry, and `cleartext` is off. No remote page, script, style or font is
+  ever loaded. Navigation away from the bundle is refused; links meant for a browser open in the
+  system browser.
+- The Content Security Policy is the desktop room window's, unchanged: `default-src 'none';
+  script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; connect-src 'none';
+  media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none';
+  base-uri 'none'; form-action 'none'`, widened only as the desktop room window is when the 3D
+  scene mounts, and never with `unsafe-eval` or a script source from outside the bundle.
+- **Plugins: an allowlist, including the core ones.** Only our own plugins are installed.
+  Capacitor's Android bridge registers some core plugins by itself (in recent versions
+  `CapacitorHttp`, `CapacitorCookies` and `WebView`; the first pull request confirms the list for
+  the pinned version). Each of them is disabled or removed at the bridge, so that none is callable
+  from the page: `CapacitorHttp` in particular would give page script a network channel outside
+  the CSP. A test lists every plugin the bridge registers and fails on any name not on the
+  allowlist.
+- Release builds are not debuggable, and web view debugging is on only in debug builds. CI checks
+  both on the built APK.
+- **Permissions: an allowlist.** A test reads the merged manifest and fails on any permission not
+  on the list. Never `CAMERA` (rule 12), `RECORD_AUDIO`, or any location permission;
+  `BLUETOOTH_SCAN` is declared with `neverForLocation`.
+- Backup is off for the app, so neither the token's store nor the class cache leaves the device in
+  a backup.
+
+### 5. The device token and sign-in
 
 - Pairing is the desktop's (ADR 0002, pairing): the app shows a code, the instructor approves it
-  on the site while signed in with classbeat (ADR 0010). The sign-in itself happens on the site,
-  in the system browser, never inside the app's web view.
+  on the site while signed in with classbeat (ADR 0010). That sign-in happens in the system
+  browser or a Custom Tab, never in the app's own web view.
 - The device token **never enters the web view's JavaScript**. The native side receives it from
-  the pairing poll, keeps it with the Android Keystore, and adds it to the requests it makes on the
-  web view's behalf. The web view sees only results.
-- If the Keystore is not available the app does not pair. There is no plain-text fallback, as on
-  the desktop.
+  the pairing poll and stores it encrypted under a key held in the Android Keystore; the key never
+  leaves the Keystore. It adds the token only to the fixed calls of section 3.
+- If the Keystore cannot hold the key, the app does not pair. There is no plain-text fallback, as
+  on the desktop.
+- ADR 0002 applies unchanged: the 401 answers and what the app does on each, and the requests
+  carry no `Sec-Fetch-Site` header, as the desktop's main process sends none.
 - The app can revoke its own token, as the desktop can. Uninstalling the app removes it from the
   device; the instructor removes the device on the site, as for any device.
 
-### 5. Following the music on Android
+### 6. Following the music on Android
 
-- One native plugin reads Android's **media sessions** (`MediaSessionManager`), which needs the
-  user to grant the app notification access in the system settings. The app explains why and
-  links to the setting. Without it, the app runs on the manual clock.
+- One native plugin reads Android's **media sessions** (`MediaSessionManager`). Android grants
+  that only to an app with a notification listener the user has enabled in the system settings.
+  The app asks for it only when the instructor turns following on, explains why and links to the
+  setting. Without it, the app runs on the manual clock.
+- **The notification listener is empty.** Its callbacks do nothing, and the app never reads
+  notifications (no `getActiveNotifications`, no notification contents). The plugin filters the
+  active sessions to Spotify's package before reading anything. A guard test checks the listener's
+  source for both.
 - It reads **only** Spotify's session: track identity, playing or paused, position and the time
-  the position was taken. It never reads audio, never records, never reads other apps' sessions or
-  notifications, and keeps nothing it reads beyond the class.
-- It sends play and pause only through the same media session, like the desktop's transport
-  control, and only when the instructor presses a control.
+  the position was taken. It never reads audio, never records and keeps nothing it reads beyond the
+  class.
+- **Transport is ADR 0001's.** Start, pause and next go through Spotify's media session, and only
+  when the instructor presses a control (or the companion sends one, ADR 0005). **Start with a
+  playlist** (ADR 0001, #486), per this follower: the follower may open the
+  `spotify:playlist:<id>` link through Android's link handler and then press play through the media
+  session, if spike 3 shows that works. Until then Start behaves as without a playlist and the
+  screen says the playlist was not loaded, as on Windows.
 - It delivers readings to the shared music-link state machine through the same interface as the
   desktop followers, so lock, re-lock, coasting and undo are the desktop's code. A fake follower
   tests it in CI.
 
-### 6. Bluetooth
+### 7. Bluetooth
 
 Sensors are read through our own plugin with Android's Bluetooth LE API: connect, read, and switch
-on measurement notifications. **No write that controls equipment** (no resistance, speed, incline
-or brake), as on the desktop. The rule guard that checks this for the desktop is extended to the
-plugin's Kotlin source in the same pull request that adds the plugin.
+on measurement notifications. On Android, switching notifications on takes
+`setCharacteristicNotification` and **one write: the Client Characteristic Configuration
+descriptor (0x2902), with the notification or indication enable value**. That is the only write
+the plugin may make. It never calls `writeCharacteristic`, and never writes to the FTMS Control
+Point (0x2AD9) or any other characteristic that sets resistance, speed, incline or a brake (rule
+2).
 
-### 7. Building and signing
+### 8. The rule guards cover all of `player/mobile/`
+
+The checks of `player/app/test/unit/rules.test.ts` (no audio playback, no Spotify interfaces, no
+equipment control, no stray network use) are extended to all of `player/mobile/`, its TypeScript
+and its Kotlin, in the first pull request that adds code there. For Kotlin they also forbid
+`MediaPlayer`, ExoPlayer and Media3 players, `AudioTrack`, `AudioRecord` and any Spotify SDK
+(rule 3). The Bluetooth check allows exactly the one descriptor write of section 7. These are
+additions; no existing guard is changed, and `rules.test.ts` itself is the owner's.
+
+### 9. Building and signing
 
 - Lane: **player**, under `player/mobile/`. It imports the room screen and the core the way the
-  desktop does; the web lane never imports from it.
+  desktop does; the web lane never imports from it. The CI job for it is an infra pull request.
 - CI builds a debug APK on Linux for every change to `player/mobile/` and runs the plugins' JVM
   unit tests and the web view's tests with fakes. No test touches the network, a device or a real
   account.
 - A release APK is signed with the project's own key, which the owner adds as a repository secret
-  (plan, PL12). Agents never hold it. Until it exists, release builds use a throwaway debug key and
-  are for testing only.
+  (plan, PL12). Agents never hold it. Until it exists, APKs are signed with a throwaway key and are
+  published only as test builds (a CI artifact or a pre-release marked as such), never as a
+  regular release: Android cannot update an app across signing keys.
 - Releases go to GitHub Releases beside the desktop builds. No store, for now (decision 15).
 
-### 8. Spike 3 comes first
+### 10. Spike 3 comes first
 
 Before the app is built, a throwaway Android follower (`player/spikes/`) logs Spotify's media
 session readings against a reference recording on a real phone, with spike 1's pass criteria
 (plan section 12). The same spike logs the 3D scene's frame rate in the web view on that phone, at
-the scene's lowest quality level. If following fails, the app ships on the manual clock and the
-rest of this ADR stands. If the 3D scene is too slow, the app shows the plain 2D screen.
+the scene's lowest quality level. Agents build the spike; running it uses a real phone and a real
+Spotify account, so it runs only with the owner's authorization, on the owner's device. If
+following fails, the app ships on the manual clock and the rest of this ADR stands. If the 3D scene
+is too slow, the app shows the plain 2D screen.
 
 ## Alternatives
 
@@ -128,12 +185,13 @@ rest of this ADR stands. If the 3D scene is too slow, the app shows the plain 2D
 
 ## Consequences
 
-- The room screen, the scene and the core are shared; the app adds only native plugins and a thin
-  shell.
+- The room screen, the scene, the core and the live-session messages are shared.
 - The Kotlin plugins are new code in a new language for the project, each with its own tests.
 - Android's web view is updated by the system, not by us, so the scene runs on whatever version
   the phone has. The app states the minimum version it needs.
 - Notification access is a broad permission. The app asks for it only when the instructor turns
-  following on, and keeps working without it.
+  following on, keeps working without it, and never reads a notification (section 6).
+- The Kotlin side is real work, not a thin wrapper: pairing, sync, the cache and the socket are
+  written again for Android, with their own tests.
 - iOS follows later with the same web code and its own plugins; following there depends on
   decision 15.
