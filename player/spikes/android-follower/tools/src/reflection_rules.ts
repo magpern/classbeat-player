@@ -16,6 +16,6 @@ const ALLOWED_USES = [
 export function reflectionProblem(text: string): string | null {
   if (NAMES.test(text)) return "uses reflection or class loading";
   const rest = ALLOWED_USES.reduce((t, re) => t.replace(re, " "), text);
-  if (/::\s*class\b|\bjavaClass\b|\bfun\s+(?:[\w.<>]+\.)?(?:Intent|ComponentName|getSystemService)\b/.test(rest)) return "reads a class object other than for its name, getSystemService(X::class.java) or Intent(c, X::class.java)";
+  if (/::\s*class\b|\bjavaClass\b|\bfun\s+(?:[\w.<>]+\.)?(?:Intent|ComponentName|getSystemService)\b|\b(?:class|interface|object|typealias|as)\s+(?:Intent|ComponentName|getSystemService)\b/.test(rest)) return "reads a class object other than for its name, getSystemService(X::class.java) or Intent(c, X::class.java)";
   return null;
 }

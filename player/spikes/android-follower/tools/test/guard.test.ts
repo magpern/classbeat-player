@@ -213,6 +213,21 @@ const mutations: [name: string, rule: string, tree: () => Tree][] = [
   ["B3: .filter { false } on the guarded list", "manifest", () => mutate(APP_GRADLE, '"assemble$cap")', '"assemble$cap").filter { false }')],
   ["B3: a decoy list declared earlier, real list without install", "manifest", () => gradle(['"install$cap", "assemble$cap")', '"assemble$cap")'], ["    onVariants { variant ->", '    val guarded = listOf("compile${cap}Kotlin", "install$cap")\n    onVariants { variant ->'])],
   ["B3: a second wiring statement", "manifest", () => mutate(APP_GRADLE, "tasks.matching { it.name in guarded }", "tasks.matching { it.name in guarded }.configureEach { dependsOn(check) }\n        tasks.matching { it.name in guarded }")],
+  // #567 NB-B: the manifest check task cannot be switched off.
+  ["NB-B: check.configure { enabled = false }", "manifest", () => mutate(APP_GRADLE, "        tasks.matching { it.name in guarded }", "        check.configure { enabled = false }\n        tasks.matching { it.name in guarded }")],
+  ["NB-B: check.configure { onlyIf { false } }", "manifest", () => mutate(APP_GRADLE, "        tasks.matching { it.name in guarded }", "        check.configure { onlyIf { false } }\n        tasks.matching { it.name in guarded }")],
+  // #567 NB-A: other declaration kinds that shadow Intent, ComponentName or getSystemService.
+  ["NB-A: class Intent", "reflection", () => mutate(READER, "class SpotifyReader", "class Intent(a: Any, val c: Class<*>)\nclass SpotifyReader")],
+  ["NB-A: object ComponentName", "reflection", () => mutate(READER, "class SpotifyReader", "object ComponentName\nclass SpotifyReader")],
+  ["NB-A: typealias Intent", "reflection", () => mutate(READER, "class SpotifyReader", "typealias Intent = Pair<Any, Class<*>>\nclass SpotifyReader")],
+  ["NB-A: import alias named getSystemService", "reflection", () => mutate(READER, "class SpotifyReader", "import a.b.c as getSystemService\nclass SpotifyReader")],
+  ["NB-A: interface ComponentName", "reflection", () => mutate(READER, "class SpotifyReader", "interface ComponentName\nclass SpotifyReader")],
+  // #567 NB-C: the checks that read only the stripped text run on the second view too (a block comment
+  // is gone from the stripped text but still in the raw text minus `//` lines).
+  ["NB-C: StatusBarNotification outside the listener, in a block comment", "notifications", () => mutate(READER, "class SpotifyReader", "/* StatusBarNotification */\nclass SpotifyReader")],
+  ["NB-C: a second listener in a block comment", "listener", () => mutate(READER, "class SpotifyReader", "/* class Other : NotificationListenerService() */\nclass SpotifyReader")],
+  ["NB-C: a non-empty listener function in a block comment", "listener", () => mutate(LISTENER, "NotificationListenerService() {", "NotificationListenerService() {\n    /* fun x() { 1 } */")],
+  ["NB-C: a second wiring statement in a block comment", "manifest", () => mutate(APP_GRADLE, "        tasks.matching { it.name in guarded }", "        /* tasks.matching { it.name in guarded }.configureEach { dependsOn(check) } */\n        tasks.matching { it.name in guarded }")],
 ];
 
 describe("each hard limit fails when broken", () => {

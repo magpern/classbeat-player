@@ -52,15 +52,19 @@ export function checkTree(tree: Tree): string[] {
   if (!service || !/android:permission="android\.permission\.BIND_NOTIFICATION_LISTENER_SERVICE"/.test(service[0])) add("listener", manifestPath, "SpikeListener must be declared with the BIND_NOTIFICATION_LISTENER_SERVICE permission");
 
   // The notification listener is empty, and the only one.
-  const listeners = kt.filter(([, t]) => /\bNotificationListenerService\b/.test(t));
+  const isListener = (p: string, t: string) => [t, liteText(tree.files[p]!)].some((x) => /\bNotificationListenerService\b/.test(x));
+  const listeners = kt.filter(([p, t]) => isListener(p, t));
   if (listeners.length !== 1 || !listeners[0]![0].endsWith("/SpikeListener.kt")) add("listener", "app", "exactly one listener, SpikeListener.kt, may exist");
   for (const [p, t] of listeners) {
     const shape = listenerShapeProblem(t);
     if (shape) add("listener", p, shape);
-    const funs = [...t.matchAll(/\bfun\s+\w+/g)].length;
-    const empty = [...t.matchAll(/\bfun\s+\w+\s*\([^)]*\)\s*(?::\s*[\w.?]+)?\s*\{\s*\}/g)].length;
-    if (funs !== empty) add("listener", p, "every function of the notification listener must have an empty body");
-    if (funs === 0) add("listener", p, "no callbacks found: the check cannot see the listener");
+    // The two-views rule: the stripped text and the raw text minus `//` lines must both say the same.
+    for (const x of [t, liteText(tree.files[p]!)]) {
+      const funs = [...x.matchAll(/\bfun\s+\w+/g)].length;
+      const empty = [...x.matchAll(/\bfun\s+\w+\s*\([^)]*\)\s*(?::\s*[\w.?]+)?\s*\{\s*\}/g)].length;
+      if (funs !== empty) { add("listener", p, "every function of the notification listener must have an empty body"); break; }
+      if (funs === 0) { add("listener", p, "no callbacks found: the check cannot see the listener"); break; }
+    }
   }
   // Name lists run on the stripped text and on the raw text: a name inside a comment or string fails too,
   // so a parser slip can only cause a false positive, never hide code.
@@ -69,7 +73,7 @@ export function checkTree(tree: Tree): string[] {
     // Imports are left out: `android.service.notification.X` is a package, not a read.
     const noImports = (x: string) => x.replace(/^\s*(?:import|package)\s.*$/gm, "");
     if (both(NOTIFICATION_READ, noImports(t), noImports(tree.files[p]!))) add("notifications", p, "reads notifications");
-    if (!p.endsWith("/SpikeListener.kt") && /StatusBarNotification/.test(t)) add("notifications", p, "touches StatusBarNotification outside the listener");
+    if (!p.endsWith("/SpikeListener.kt") && [t, liteText(tree.files[p]!)].some((x) => /StatusBarNotification/.test(x))) add("notifications", p, "touches StatusBarNotification outside the listener");
   }
 
   for (const [p, t] of kt) {
@@ -139,7 +143,12 @@ export function checkTree(tree: Tree): string[] {
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
 
   // The check is wired to every path to a built or installed app, not only `assemble` (#559, N6).
-  if (app) for (const what of gradleWiringProblems(app[1], GUARDED_TASKS)) add("manifest", "app/build.gradle.kts", what);
+  if (app) {
+    const wiring = [app[1], liteText(tree.files[app[0]]!)].flatMap((x) => gradleWiringProblems(x, GUARDED_TASKS));
+    for (const what of new Set(wiring)) add("manifest", "app/build.gradle.kts", what);
+    // The check task must not be switched off or made conditional: `check.configure { enabled = false }`.
+    if ([app[1], liteText(tree.files[app[0]]!)].some((x) => /\b(?:enabled|isEnabled|setEnabled|onlyIf|setOnlyIf)\b/.test(x))) add("manifest", "app/build.gradle.kts", "enabled and onlyIf are not allowed: they can switch the merged-manifest check off");
+  }
 
   // The pure module imports no Android class and no I/O.
   for (const [p, t] of kt) {
