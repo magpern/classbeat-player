@@ -121,51 +121,64 @@ export const LAYER_GLOBALS = [...SRC_GLOBALS, "document", "window", "HTMLElement
 // Allowlist of every member name the layer's code reads, calls or sets: the DOM members it uses on its own nodes, and the names of
 // the view it is handed. A member not on it (setHTMLUnsafe, attachShadow, replaceChildren, cssText, createContextualFragment,
 // parseHTMLUnsafe, construct ...) is refused; adding one is a reviewed change, and test/layer-fences.test.ts holds its own copy.
-export const LAYER_STYLE_PROPS = ["left", "width", "fontSize", "backgroundImage", "backgroundSize", "backgroundPosition"];
-export const LAYER_STYLE_BUILDERS = ["vw", "vw2", "vh", "bgSize", "bgPos", "stripGradient"];
 // `value` is there for the view's own field (MetricView.value); no DOM node that has one (an Attr, an input) is reachable, because
 // `attributes`, `children`, `parent*`, `*Sibling`, `firstChild`, `ownerDocument` and `getRootNode` are not on this list.
 export const LAYER_MEMBERS_ALLOWED = [
-  "alert", "appendChild", "at", "backgroundImage", "backgroundPosition", "backgroundSize", "bars", "block", "blocks", "bottom", "boxes", "build", "cached",
+  "alert", "appendChild", "at", "bars", "block", "blocks", "bottom", "boxes", "build", "cached",
   "chip", "className", "clip", "clips", "clock", "compact", "count", "createElement", "cue", "cueLines", "cycleVw", "detail", "done", "end", "endX",
-  "estimated", "flatMap", "fold", "folded", "fontSize", "forEach", "from", "gel", "getBoundingClientRect", "getElementById", "height", "hidden", "ink",
+  "estimated", "flatMap", "fold", "folded", "forEach", "from", "gel", "getBoundingClientRect", "getElementById", "height", "hidden", "ink",
   "innerHeight", "innerWidth", "intervals", "join", "kind", "label", "layout", "left", "leftVw", "len", "length", "line", "link", "look", "map", "marks",
-  "max", "metrics", "moments", "name", "nameSmall", "next", "note", "now", "nowX", "num", "number", "numeral", "offsetVw", "parts", "pattern", "pause",
+  "max", "metrics", "moments", "name", "nameSmall", "next", "nextKey", "note", "now", "nowX", "num", "number", "numeral", "offsetVw", "parts", "pattern", "pause",
   "pauseLine", "paused", "phrases", "push", "rail", "reduced", "right", "root", "row", "score", "seg", "segment", "side", "signature", "sizeVh", "slice",
-  "small", "songs", "spec", "squares", "state", "strip", "style", "targets", "text", "textContent", "textLeft", "textRight", "then", "ticks", "time", "title", "to",
-  "toFixed", "top", "total", "ts", "txt", "unit", "up", "update", "updateClock", "updateGel", "updateMetrics", "updateNext", "updatePattern", "updateRail",
+  "small", "songs", "spec", "squares", "state", "strip", "targets", "text", "textContent", "textLeft", "textRight", "then", "ticks", "time", "title", "to",
+  "top", "total", "ts", "txt", "unit", "up", "update", "updateClock", "updateGel", "updateMetrics", "updateNext", "updatePattern", "updateRail",
   "use", "val", "value", "width", "word", "x", "x0", "x1", "zone", "zoneName", "invalidate",
 ];
+// What dom-kit.ts alone may also use: the style properties it sets and the number methods it builds values with.
+export const DOMKIT_MEMBERS_ALLOWED = [...LAYER_MEMBERS_ALLOWED, "style", "fontSize", "backgroundImage", "backgroundSize", "backgroundPosition", "toFixed", "isFinite", "isInteger", "concat"];
+// The only words a string literal in dom-kit.ts may be (an import path apart): the units, the gradient's fixed words and two messages.
+// A word that is not here, "ur", "l(" ..., is refused, so no url can be spelled even in pieces.
+export const DOMKIT_WORDS = ["", "vw", "vh", "%", "% ", ", ", " 100%", " 0", ")", "var(--ink) ", "transparent ", "linear-gradient(90deg, ", "not a finite number", "digits out of range"];
+const reEscape = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const LAYER_BAD_PROPS = BAD_PROPS.split("|").filter((p) => p !== "createElement" && p !== "appendChild").join("|");
-const layerSyntax = ["error",
+const layerSyntaxFor = (members, extra) => ["error",
   ...common.filter((rule) => !rule.selector.includes(BAD_PROPS) && !rule.selector.startsWith("ImportDeclaration[source.value='three']")),
   { selector: `MemberExpression[computed=false][property.name=/^(${LAYER_BAD_PROPS})$/]`, message: "No beacon, playback, markup, src, href, cookie, attribute setting or crypto randomness in the text layer." },
-  { selector: `MemberExpression[computed=true][property.type='Literal'][property.value=/^(${LAYER_BAD_PROPS})$/]`, message: "No beacon, playback, markup, src, href, cookie, attribute setting or crypto randomness in the text layer." },
   { selector: `CallExpression[callee.property.name='createElement']:not([arguments.0.value=/^(${alt(LAYER_TAGS)})$/])`, message: `The text layer makes only ${LAYER_TAGS.join(" and ")} nodes (a literal tag).` },
-  { selector: "MemberExpression[computed=true][property.value='createElement']", message: "Call createElement by name, with a literal tag." },
   { selector: `MemberExpression[computed=false][property.name=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in the text layer." },
-  { selector: `MemberExpression[computed=true][property.type='Literal'][property.value=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in the text layer." },
   { selector: "MemberExpression[computed=false][property.name='constructor']", message: "No `constructor` member in the text layer." },
-  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only (use .at(i) or a lookup)." },
   { selector: "ImportDeclaration[source.value=/^three/]", message: "The text layer draws no three.js." },
-  { selector: `MemberExpression[computed=false]:not([property.name=/^(${alt(LAYER_MEMBERS_ALLOWED)})$/])`, message: "That member is not on the text layer's allowlist of members (eslint.config.js LAYER_MEMBERS_ALLOWED)." },
+  { selector: `MemberExpression[computed=false]:not([property.name=/^(${alt(members)})$/])`, message: "That member is not on the text layer's allowlist of members (eslint.config.js LAYER_MEMBERS_ALLOWED)." },
   // One syntax only: dot access. No computed key, literal or not; no destructuring (it reads members by key without a dot).
   { selector: "MemberExpression[computed=true]", message: "The text layer reads members by dot access only (no computed key, literal or not)." },
   { selector: ":matches(ObjectPattern, ArrayPattern)", message: "The text layer does not destructure: read members by dot access, so each one is checked." },
-  // Style: only these properties, each assigned only a direct call of the layer's own builders (layer/dom-kit.ts), so no string can reach a style.
-  { selector: `MemberExpression[object.property.name='style']:not([property.name=/^(${alt(LAYER_STYLE_PROPS)})$/])`, message: `The text layer sets only these style properties: ${LAYER_STYLE_PROPS.join(", ")}.` },
-  { selector: `AssignmentExpression[left.object.property.name='style']:not([right.type='CallExpression'][right.callee.name=/^(${alt(LAYER_STYLE_BUILDERS)})$/])`, message: `A style is assigned only a direct call of ${LAYER_STYLE_BUILDERS.join(", ")}.` },
-  { selector: "AssignmentExpression[left.property.name='backgroundImage']:not([right.type='CallExpression'][right.callee.name='stripGradient'])", message: "backgroundImage is assigned only stripGradient(...)." },
-  { selector: "AssignmentExpression[left.property.name='style']", message: "A node's style object is never replaced." },
-  { selector: "MemberExpression[property.name='style']:not(MemberExpression[object.property.name='style'] > MemberExpression.object)", message: "`style` is used only to set one of its listed properties." },
-  { selector: "BinaryExpression[operator='+']:matches([left.raw=/^[\"']/], [right.raw=/^[\"']/], [left.type='TemplateLiteral'], [right.type='TemplateLiteral'])", message: "No string concatenation in the text layer (a url( could be spelled in pieces); use a template in a builder." },
   { selector: `CallExpression[callee.property.name='getElementById']:not([arguments.0.value='${LAYER_ROOT_ID}'])`, message: `The text layer finds only its own root, #${LAYER_ROOT_ID}.` },
   { selector: "Literal[value=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },
   { selector: "TemplateElement[value.raw=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },
   { selector: identifierAllowedAsObject("Object", OBJECT_MEMBERS_ALLOWED), message: "The text layer uses Object only by its listed members." },
   { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `The text layer reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
   { selector: identifierAllowedAsObject("document", LAYER_DOCUMENT_ALLOWED), message: `The text layer reaches the document only by ${LAYER_DOCUMENT_ALLOWED.join(", ")}.` },
+  ...extra,
 ];
+// Every file of layer/ but dom-kit.ts: no `.style` at all (it calls dom-kit's functions), and no style method.
+const layerSyntax = layerSyntaxFor(LAYER_MEMBERS_ALLOWED, [
+  { selector: "MemberExpression[property.name='style']", message: "`.style` is touched only in layer/dom-kit.ts: call its functions." },
+  { selector: "MemberExpression[property.name=/^(setProperty|cssText|removeProperty|getPropertyValue)$/]", message: "No setProperty or cssText in the text layer: call dom-kit's functions." },
+]);
+// layer/dom-kit.ts, the one file that sets a style, and from numbers only: no string literal but its few words, no `+`, no template
+// with an expression, no join, no String.raw, and nothing typed string (or any or unknown). Short enough to read whole.
+const domKitSyntax = layerSyntaxFor(DOMKIT_MEMBERS_ALLOWED, [
+  { selector: `Literal[value=/./]:not(ImportDeclaration > Literal):not([value=/^(${DOMKIT_WORDS.filter((w) => w !== "").map(reEscape).join("|")})$/])`, message: "dom-kit.ts holds no string literal but its listed words (DOMKIT_WORDS)." },
+  { selector: "BinaryExpression[operator='+'], AssignmentExpression[operator='+=']", message: "dom-kit.ts builds no string with `+` (use .concat of its listed words and toFixed output)." },
+  { selector: "TemplateLiteral", message: "dom-kit.ts uses no template literal." },
+  { selector: "CallExpression[callee.property.name='join']", message: "dom-kit.ts does not .join." },
+  { selector: "MemberExpression[object.name='String']", message: "dom-kit.ts does not use String.raw or any String member." },
+  { selector: ":matches(TSStringKeyword, TSAnyKeyword, TSUnknownKeyword, TSTemplateLiteralType)", message: "dom-kit.ts takes and returns numbers only: no string, any or unknown type." },
+]);
+// A comment is text too: no url( in dom-kit.ts, comments included.
+const localPlugin = { rules: { "no-url-text": { create: (context) => ({
+  Program: () => { for (const c of context.sourceCode.getAllComments()) if (/url\(/i.test(c.value)) context.report({ loc: c.loc, message: "No url( in dom-kit.ts, comments included." }); },
+}) } } };
 
 const properties = ["error",
   { object: "Math", property: "random", message: "The rig is deterministic." },
@@ -227,7 +240,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["layer/**/*.{ts,mts,cts,js,mjs,cjs}"],
+    files: ["layer/**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"],
     languageOptions: { globals: Object.fromEntries(LAYER_GLOBALS.map((name) => [name, "readonly"])) },
     rules: {
       ...base,
@@ -236,6 +249,11 @@ export default tseslint.config(
       "no-restricted-globals": globals([...new Set([...BANNED_GLOBALS, ...SRC_BUILTINS_RESTRICTED]), "location", "history"], "The text layer draws what the view says: no network, storage, worker, audio or image."),
       "no-restricted-syntax": layerSyntax,
     },
+  },
+  {
+    files: ["layer/dom-kit.ts"],
+    plugins: { local: localPlugin },
+    rules: { "no-restricted-syntax": domKitSyntax, "local/no-url-text": "error" },
   },
   {
     files: pure,

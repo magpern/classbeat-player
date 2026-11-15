@@ -74,17 +74,17 @@ for (const [what, src, rule] of BAD) {
 
 test("what the text layer does still passes: div and span nodes set by text, class and style, found by id, and src/ imports", async () => {
   const m = await lint(`import type { TextView } from "../src/text-view.ts";
-import { make, vw } from "./dom-kit.ts";
+import { make } from "./nodes.ts";
+import { setLeft, setStrip } from "./dom-kit.ts";
 export function ok(view: TextView, parent: HTMLElement): HTMLElement | null {
   const d = document.createElement("div");
   const s = document.createElement("span");
-  d.className = "a"; d.textContent = view.layout; d.style.left = vw(1); d.hidden = false;
+  d.className = "a"; d.textContent = view.layout; setLeft(d, 1, 3); d.hidden = false;
   parent.appendChild(d); d.appendChild(s);
   make(parent, "span", "x");
   return document.getElementById("text");
 }
-import { stripGradient } from "./score-layer.ts";
-export const grad = (e: HTMLElement) => { e.style.backgroundImage = stripGradient({ cycleVw: 1, offsetVw: 0, parts: [] }); };`);
+export const grad = (e: HTMLElement) => { setStrip(e, 1, 0, []); };`);
   assert.deepEqual(m.map((x) => `${x.ruleId}: ${x.message}`), []);
 });
 

@@ -98,7 +98,14 @@ export interface Strip {
   readonly cycleVw: number;
   readonly offsetVw: number;
   /** Fractions of a cycle, `up` where the room is standing. */
-  readonly parts: readonly { readonly from: number; readonly to: number; readonly up: boolean }[];
+  readonly parts: readonly StripPart[];
+}
+
+/** A stretch of one cycle of the strip, as fractions of the cycle. */
+export interface StripPart {
+  readonly from: number;
+  readonly to: number;
+  readonly up: boolean;
 }
 
 export interface SongClip {

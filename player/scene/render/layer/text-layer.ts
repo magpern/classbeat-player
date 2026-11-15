@@ -6,7 +6,8 @@
 
 import type { TextBox } from "../src/text-box.ts";
 import type { TextView } from "../src/text-view.ts";
-import { Pool, make, setClass, setText, show, vh, vw2 } from "./dom-kit.ts";
+import { setFontSize, setLeft } from "./dom-kit.ts";
+import { Pool, make, setClass, setText, show } from "./nodes.ts";
 import { ScoreLayer } from "./score-layer.ts";
 
 /** Mask boxes grow by this share of the window height above and below each line box (descenders on the tight line-height tiers). */
@@ -17,6 +18,8 @@ export class TextLayer {
   private readonly ink: HTMLElement[] = [];
   /** What the lines looked like when they were last measured: a frame that changed none of it measures nothing (a measure forces a layout). */
   private signature = "";
+  /** The next row's left and size from the last view, for the cache signature (the layer never reads a style back). */
+  private nextKey = "";
   private cached: TextBox[] = [];
   private readonly score: ScoreLayer;
   private readonly gel: { root: HTMLElement; num: HTMLElement; name: HTMLElement; targets: Pool<{ root: HTMLElement }> };
@@ -187,8 +190,9 @@ export class TextLayer {
     show(this.next.length, !next.end);
     setText(this.next.spec, next.spec ?? "");
     show(this.next.spec, next.spec !== null);
-    this.next.root.style.left = vw2(next.leftVw);
-    this.next.line.style.fontSize = vh(next.sizeVh);
+    setLeft(this.next.root, next.leftVw, 2);
+    setFontSize(this.next.line, next.sizeVh, 1);
+    this.nextKey = `${next.leftVw}|${next.sizeVh}`;
     setText(this.next.cue, next.cue ?? "");
     show(this.next.cue, next.cue !== null && next.cueLines > 0);
     setClass(this.next.cue, `n-cue ink l${next.cueLines}`);
@@ -205,7 +209,7 @@ export class TextLayer {
    */
   boxes(): TextBox[] {
     const lines = this.ink.map((el) => `${el.hidden ? "-" : el.className}:${el.textContent}`).join("|");
-    const signature = `${window.innerWidth}x${window.innerHeight}|${this.root.className}|${this.pattern.root.hidden}|${this.pattern.root.className}|${this.next.root.style.left}|${this.next.line.style.fontSize}|${lines}`;
+    const signature = `${window.innerWidth}x${window.innerHeight}|${this.root.className}|${this.pattern.root.hidden}|${this.pattern.root.className}|${this.nextKey}|${lines}`;
     if (signature === this.signature) return this.cached;
     this.signature = signature;
     this.cached = this.ink.flatMap((el) => {

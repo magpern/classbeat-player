@@ -1,50 +1,56 @@
-// The only way the text layer makes a node: a `div` or a `span`, set by text, class and style, never
-// by markup, source or link (eslint.config.js fences this directory: `createElement` takes only
-// those two literals, and no `innerHTML`, `setAttribute`, `src` or `href` is reachable).
+// The only file in layer/ that touches a node's `.style`, and it takes numbers only. Each function is
+// `(el, ...numbers)`, checks every number is finite and throws otherwise, and builds its CSS value here
+// from a short list of fixed words and `toFixed` output. No function takes or returns a string, so
+// nothing the layer is handed can become a style value (a link included). eslint.config.js holds this
+// file to that: no link text anywhere, comments too, no `+`, no template with an expression, no `.join`,
+// no `String.raw`, no string-typed anything, and no string literal outside the list of words below.
+// test/layer-fences.test.ts and test/dom-kit.test.ts show each fence and each throw.
 
-export type Tag = "div" | "span";
+import type { StripPart } from "../src/text-view.ts";
 
-export function make(parent: HTMLElement, tag: Tag, className: string): HTMLElement {
-  const el = tag === "div" ? document.createElement("div") : document.createElement("span");
-  el.className = className;
-  parent.appendChild(el);
-  return el;
+const MAX_DIGITS = 6;
+
+function check(...numbers: number[]): void {
+  for (const n of numbers) if (!Number.isFinite(n)) throw new RangeError("not a finite number");
 }
 
-/** Sets the text only when it changed, so a frame that changes nothing touches nothing. */
-export function setText(el: HTMLElement, text: string): void {
-  if (el.textContent !== text) el.textContent = text;
+function digitsOk(digits: number): void {
+  check(digits);
+  if (!Number.isInteger(digits) || digits < 0 || digits > MAX_DIGITS) throw new RangeError("digits out of range");
 }
 
-export function setClass(el: HTMLElement, className: string): void {
-  if (el.className !== className) el.className = className;
+/** `left`, in shares of the window width. */
+export function setLeft(el: HTMLElement, vw: number, digits: number): void {
+  check(vw);
+  digitsOk(digits);
+  el.style.left = vw.toFixed(digits).concat("vw");
 }
 
-export function show(el: HTMLElement, on: boolean): void {
-  if (el.hidden === on) el.hidden = !on;
+export function setWidth(el: HTMLElement, vw: number, digits: number): void {
+  check(vw);
+  digitsOk(digits);
+  el.style.width = vw.toFixed(digits).concat("vw");
 }
 
-/** Parts of one kind, built when first needed and reused: `use(n)` shows the first n and hides the rest. */
-export class Pool<T extends { readonly root: HTMLElement }> {
-  private readonly parts: T[] = [];
-  private readonly build: () => T;
-
-  constructor(build: () => T) {
-    this.build = build;
-  }
-
-  use(count: number): T[] {
-    while (this.parts.length < count) this.parts.push(this.build());
-    this.parts.forEach((p, i) => show(p.root, i < count));
-    return this.parts.slice(0, count);
-  }
+/** `font-size`, in shares of the window height. */
+export function setFontSize(el: HTMLElement, vh: number, digits: number): void {
+  check(vh);
+  digitsOk(digits);
+  el.style.fontSize = vh.toFixed(digits).concat("vh");
 }
 
-// The only values the layer writes to a node's style, each built here from a number: a share of the
-// window, a size, a gradient. eslint.config.js lets `style.<property>` be assigned only a direct call
-// of one of these, so no other string can reach a style (and none can spell a url).
-export const vw = (n: number): string => `${n.toFixed(3)}vw`;
-export const vw2 = (n: number): string => `${n.toFixed(2)}vw`;
-export const vh = (n: number): string => `${n}vh`;
-export const bgSize = (n: number): string => `${vw(n)} 100%`;
-export const bgPos = (n: number): string => `${vw(n)} 0`;
+/**
+ * The pattern's beat strip: dark on the "up" beats, clear on the "down" beats, one cycle `cycleVw`
+ * wide and starting `offsetVw` from the block's left edge. The parts are fractions of one cycle.
+ */
+export function setStrip(el: HTMLElement, cycleVw: number, offsetVw: number, parts: readonly StripPart[]): void {
+  check(cycleVw, offsetVw);
+  let stops = "";
+  parts.forEach((p, i) => {
+    check(p.from, p.to);
+    stops = stops.concat(i === 0 ? "" : ", ", p.up ? "var(--ink) " : "transparent ", (p.from * 100).toFixed(2), "% ", (p.to * 100).toFixed(2), "%");
+  });
+  el.style.backgroundImage = "linear-gradient(90deg, ".concat(stops, ")");
+  el.style.backgroundSize = cycleVw.toFixed(3).concat("vw", " 100%");
+  el.style.backgroundPosition = offsetVw.toFixed(3).concat("vw", " 0");
+}
