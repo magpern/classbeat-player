@@ -22,7 +22,7 @@ export const plateOnly = (p: AccountPlate): Messages => (p.kind === "confirm" ? 
 export const hasMessage = (m: Messages): boolean => m.plate !== null || m.confirm !== null;
 
 export interface MessageHost {
-  readonly env: SignedInEnv;
+  readonly env: Pick<SignedInEnv, "current" | "sessionEnded">;
   /** The messages now shown. */
   readonly get: () => Messages;
   /** Shows these messages and moves focus to them. */
@@ -39,14 +39,14 @@ export function messageNodes(host: MessageHost, retry?: { readonly text: string;
 }
 
 /** "Confirm with classbeat": starts the flow and leaves for classbeat; the change is not made. */
-async function confirmWithClassbeat(host: MessageHost): Promise<void> {
+export async function confirmWithClassbeat(host: MessageHost): Promise<void> {
   if (host.get().confirm?.kind === "waiting") return;
   host.set({ ...NO_MESSAGES, confirm: { kind: "waiting" } });
   const next = await startReauth();
   if (!host.env.current()) return;
   if (next.kind === "ended") return host.env.sessionEnded();
   if (next.kind === "plate") return host.set({ ...NO_MESSAGES, confirm: { kind: "failed", plate: next.plate } });
-  // The plate stays "Opening classbeat…" while the browser leaves.
+  // The one line "Opening classbeat…" stays while the browser leaves.
   location.assign(next.to);
 }
 
@@ -58,7 +58,7 @@ export function idOfPlate(nodes: readonly Node[], stem: string): string | null {
   return found.id;
 }
 
-/** Where focus goes when messages are shown: the plate, else the note, else the page heading. */
+/** Where focus goes when messages are shown: the plate, else the note, else the line "Opening classbeat…", else the page heading. */
 export function focusMessage(main: HTMLElement, box: HTMLElement): void {
-  (box.querySelector<HTMLElement>(".plate") ?? box.querySelector<HTMLElement>(".note") ?? main.querySelector<HTMLElement>("h1"))?.focus();
+  (box.querySelector<HTMLElement>(".plate") ?? box.querySelector<HTMLElement>(".note") ?? box.querySelector<HTMLElement>("[data-confirm=waiting]") ?? main.querySelector<HTMLElement>("h1"))?.focus();
 }

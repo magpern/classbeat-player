@@ -62,8 +62,9 @@ export const CONFIRM_WORDS = {
   head: "Confirm it is you",
   detail: "For this change you need to have signed in within the last 10 minutes. Sign in again with classbeat, which takes you to your classes, then come back here and make the change again.",
   classbeat: "Confirm with classbeat",
+  /** The one message while classbeat opens, at the head of the page, in place of the plate. */
   waiting: "Opening classbeat…",
-  waitingLine: "Opening classbeat. Nothing was changed here.",
+  waitingDetail: "Nothing was changed here.",
 } as const;
 
 export function accountPlateWords(p: AccountPlate): Words {

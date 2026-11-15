@@ -6,13 +6,16 @@ import { entryBackOf, PLAY_PATH, pageOf, returnPathOf } from "./core/routes.ts";
 import { NOTICES } from "./core/sign-in-model.ts";
 import type { Notice, SignInView } from "./core/sign-in-model.ts";
 import { fragmentOf } from "./core/link-token.ts";
+import { isClassbeatError } from "./core/classbeat-start-model.ts";
 import { call } from "./net/api.ts";
 import { passkeySupported } from "./net/passkey.ts";
 import { notFound, offlinePlate, serverPlate, tooManyPlate } from "./pages/errors.ts";
 import { viewOf } from "./pages/class-views.ts";
+import { classbeatErrorPage } from "./pages/classbeat-error.ts";
 import { signedInPage } from "./pages/signed-in.ts";
 import type { SignedInEnv } from "./pages/signed-in.ts";
 import { signInPage } from "./pages/sign-in.ts";
+import type { SignInEnv } from "./pages/sign-in.ts";
 import { frame, PRODUCT } from "./ui/shell.ts";
 
 /**
@@ -56,31 +59,7 @@ function render(focus: "heading" | "none"): void {
     history.replaceState(history.state, "", page.to);
     return render(focus);
   }
-  if (page.kind === "sign-in") {
-    // The token leaves the address bar before anything else happens (ADR 0002, section 4, step 5).
-    // The fragment may name an entry to return to (/control), after a token or alone (ADR 0006,
-    // decision 4): kept in memory, also after a refused link.
-    const fragment = fragmentOf(location.hash);
-    let entry: ReturnType<typeof entryBackOf> = null;
-    if (fragment.kind === "token") entry = fragment.back ?? null;
-    else if (fragment.kind === "none") entry = entryBackOf(location.hash);
-    if (entry !== null) returnTo = { to: entry.path, load: true, entry: entry.field };
-    if (location.hash || location.search) history.replaceState(history.state, "", "/sign-in");
-    document.title = `Sign in · ${PRODUCT}`;
-    const main = frame({ narrow: true });
-    const start: SignInView =
-      fragment.kind === "token" ? { screen: "link", busy: false } : fragment.kind === "broken" ? { screen: "form", email: "", plate: { kind: "link-refused" } } : { screen: "form", email: "", notice: noticeOf(history.state) };
-    const signedIn = (): void => {
-      const back = returnTo ?? { to: "/classes", load: false };
-      returnTo = null;
-      if (back.load) location.assign(back.to);
-      else go(back.to);
-    };
-    // Only an entry read from a sign-in fragment goes with a link request, never a path (ADR 0006, decision 5).
-    const returnEntry = (): string | null => returnTo?.entry ?? null;
-    signInPage(main, start, { passkey: passkeySupported(), signedIn, returnEntry }, fragment.kind === "token" ? fragment.token : null, fragment.kind === "token" ? "auto" : focus);
-    return;
-  }
+  if (page.kind === "sign-in") return signIn(ticket, focus);
   if (page.kind === "not-found") {
     document.title = `Page not found · ${PRODUCT}`;
     const main = frame({ nav: null, onSignOut: () => void signOut(main) });
@@ -109,6 +88,48 @@ function render(focus: "heading" | "none"): void {
     signedInPage(main, page, env, viewOf(page, env));
   }
   if (focus === "heading") document.querySelector<HTMLElement>("main h1")?.focus();
+}
+
+/** The sign-in page, or what classbeat's refusal (`#error=classbeat`) means once `GET me` answered. */
+function signIn(ticket: number, focus: "heading" | "none"): void {
+  // The token leaves the address bar before anything else happens (ADR 0002, section 4, step 5).
+  // The fragment may name an entry to return to (/control), after a token or alone (ADR 0006,
+  // decision 4): kept in memory, also after a refused link. Only the exact `#error=classbeat` is
+  // read as classbeat's refusal (ADR 0010, section 2); any other `#error=` is ignored.
+  const fragment = fragmentOf(location.hash);
+  const classbeatError = isClassbeatError(location.hash);
+  let entry: ReturnType<typeof entryBackOf> = null;
+  if (fragment.kind === "token") entry = fragment.back ?? null;
+  else if (fragment.kind === "none") entry = entryBackOf(location.hash);
+  if (entry !== null) returnTo = { to: entry.path, load: true, entry: entry.field };
+  if (location.hash || location.search) history.replaceState(history.state, "", "/sign-in");
+  document.title = `Sign in · ${PRODUCT}`;
+  const main = frame({ narrow: true });
+  const signedIn = (): void => {
+    const back = returnTo ?? { to: "/classes", load: false };
+    returnTo = null;
+    if (back.load) location.assign(back.to);
+    else go(back.to);
+  };
+  // Only an entry read from a sign-in fragment goes with a link request, never a path (ADR 0006, decision 5).
+  const returnEntry = (): string | null => returnTo?.entry ?? null;
+  const env: SignInEnv = { passkey: passkeySupported(), signedIn, returnEntry };
+  if (classbeatError) {
+    classbeatErrorPage(main, {
+      current: () => ticket === shown,
+      signIn: (plate) => signInPage(main, { screen: "form", email: "", plate }, env, null, "auto"),
+      signedInFrame: () => {
+        document.title = `Confirm it is you · ${PRODUCT}`;
+        const inner = frame({ nav: null, onSignOut: () => void signOut(inner) });
+        return inner;
+      },
+      sessionEnded: () => go("/sign-in", "ended"),
+    });
+    return;
+  }
+  const start: SignInView =
+    fragment.kind === "token" ? { screen: "link", busy: false } : fragment.kind === "broken" ? { screen: "form", email: "", plate: { kind: "link-refused" } } : { screen: "form", email: "", notice: noticeOf(history.state) };
+  signInPage(main, start, env, fragment.kind === "token" ? fragment.token : null, fragment.kind === "token" ? "auto" : focus);
 }
 
 function onClick(e: MouseEvent): void {

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { afterReauthStart, authorizeOf, REAUTH_BODY } from "../../src/site/core/classbeat-start-model.ts";
+import { afterErrorCheck, afterReauthStart, afterSignInStart, authorizeOf, isClassbeatError, NOT_CONFIRMED_WORDS, REAUTH_BODY, SIGN_IN_BODY } from "../../src/site/core/classbeat-start-model.ts";
 import { impurities } from "../lib/core-purity.ts";
 
 const AUTHORIZE = "https://classbeat.test/oauth/authorize?response_type=code&client_id=player&state=s&prompt=login";
@@ -50,6 +50,46 @@ describe("after the start", () => {
     assert.deepEqual(afterReauthStart({ kind: "refused", status: 404, code: "not_found" }), { kind: "plate", plate: { kind: "server" } });
     assert.deepEqual(afterReauthStart({ kind: "refused", status: 422, code: "invalid_return" }), { kind: "plate", plate: { kind: "server" } });
     assert.deepEqual(afterReauthStart({ kind: "server" }), { kind: "plate", plate: { kind: "server" } });
+  });
+});
+
+describe("signing in with classbeat (#511)", () => {
+  it("sends the purpose only: sign_in, no return entry", () => {
+    assert.equal(JSON.stringify(SIGN_IN_BODY), '{"purpose":"sign_in"}');
+  });
+
+  it("goes to classbeat, or shows a plate, never 'ended' (no session is asked for)", () => {
+    assert.deepEqual(afterSignInStart({ kind: "ok", status: 200, body: { authorize: AUTHORIZE } }), { kind: "go", to: AUTHORIZE });
+    assert.deepEqual(afterSignInStart({ kind: "ok", status: 200, body: { authorize: "javascript:alert(1)" } }), { kind: "plate", plate: { kind: "server" } });
+    assert.deepEqual(afterSignInStart({ kind: "too_many", retryAfter: 480 }), { kind: "plate", plate: { kind: "classbeat-limited", retryAfter: 480 } });
+    assert.deepEqual(afterSignInStart({ kind: "offline" }), { kind: "plate", plate: { kind: "offline" } });
+    assert.deepEqual(afterSignInStart({ kind: "not_signed_in" }), { kind: "plate", plate: { kind: "server" } });
+    assert.deepEqual(afterSignInStart({ kind: "refused", status: 422, code: "invalid_purpose" }), { kind: "plate", plate: { kind: "server" } });
+    assert.deepEqual(afterSignInStart({ kind: "server" }), { kind: "plate", plate: { kind: "server" } });
+  });
+});
+
+describe("#error=classbeat", () => {
+  it("is read only as that exact fragment", () => {
+    assert.equal(isClassbeatError("#error=classbeat"), true);
+    for (const other of ["", "#", "#error=classbeatx", "#error=CLASSBEAT", "#error=other", "#error=classbeat&x", "#error=classbeat ", "#x&error=classbeat", "error=classbeat"]) {
+      assert.equal(isClassbeatError(other), false, other);
+    }
+  });
+
+  it("asks GET me: 401 did not finish, 200 still signed in, anything else a failed check", () => {
+    assert.deepEqual(afterErrorCheck({ kind: "not_signed_in" }), { kind: "unfinished" });
+    assert.deepEqual(afterErrorCheck({ kind: "ok", status: 200, body: {} }), { kind: "still-signed-in" });
+    assert.deepEqual(afterErrorCheck({ kind: "too_many", retryAfter: 300 }), { kind: "failed", why: "too-many", retryAfter: 300 });
+    assert.deepEqual(afterErrorCheck({ kind: "offline" }), { kind: "failed", why: "offline" });
+    assert.deepEqual(afterErrorCheck({ kind: "server" }), { kind: "failed", why: "server" });
+    assert.deepEqual(afterErrorCheck({ kind: "refused", status: 404, code: "not_found" }), { kind: "failed", why: "server" });
+  });
+
+  it("still signed in, it offers only a re-authentication, whose body is reauth", () => {
+    assert.equal(JSON.stringify(REAUTH_BODY), '{"purpose":"reauth"}');
+    assert.equal(NOT_CONFIRMED_WORDS.head, "classbeat did not confirm it is you");
+    assert.match(NOT_CONFIRMED_WORDS.detail, /You are still signed in here, and nothing was changed\./);
   });
 });
 
