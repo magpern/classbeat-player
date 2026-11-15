@@ -15,7 +15,7 @@ import type { DisplayFacts } from "../../src/core/room/placement.ts";
 import { ROOM_CSP, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { converterExamples } from "../unit/fixtures.ts";
 import { document as classDocument, ID_A } from "../unit/sync-fixtures.ts";
-import { APP_DIR, launch, sleep } from "./launch.ts";
+import { APP_DIR, closeApp, launch, sleep } from "./launch.ts";
 import { startBackend } from "./room-backend.ts";
 
 const TITLE = "Room window spin";
@@ -39,7 +39,7 @@ before(async () => {
   });
 });
 after(async () => {
-  if (!closed) await app?.close();
+  if (!closed) await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 });
@@ -146,7 +146,7 @@ test("the room page's channel answers only the room window: the same preload and
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());
   assert.equal(own?.doc.class.title, TITLE);
-  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "pattern", "view"], "a frame, not the presenter's snapshot");
+  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "pattern", "playlistNotLoaded", "view"], "a frame, not the presenter's snapshot");
 });
 
 test("the room window is on the display the rule picks, and the presenter keeps its window", async () => {

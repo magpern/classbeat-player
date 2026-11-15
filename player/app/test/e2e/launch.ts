@@ -25,25 +25,68 @@ export interface LaunchOptions {
   readonly page?: "presenter" | "list";
 }
 
+/** Rejects with a clear message when `work` does not settle in time (a start that hangs must fail, never wait). */
+function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`e2e: ${what} did not happen within ${ms} ms`)), ms);
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Closes the app and makes sure its process is gone: a polite close first, the kill after a limit.
+ * A process left behind keeps the test runner alive, which is what turned one failed start into a
+ * hang that only a manual cancel ended.
+ */
+export async function closeApp(app: ElectronApplication | undefined): Promise<void> {
+  if (!app) return;
+  const child = app.process();
+  try {
+    await within(app.close(), 15_000, "the app closing");
+  } catch {
+    // Fall through to the kill.
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }
+}
+
 export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = opts.userData ?? mkdtempSync(join(tmpdir(), "player-e2e-"));
-  const app = await _electron.launch({
-    executablePath: electronPath as unknown as string,
-    // CI runs as a user without the Chromium sandbox helper; software GL under xvfb.
-    args: ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", `--user-data-dir=${userData}`, ...(opts.args ?? []), APP_DIR],
-    cwd: APP_DIR,
-    ...(opts.env ? { env: { ...process.env, ...opts.env } as Record<string, string> } : {}),
-  });
-  const page = await app.firstWindow();
-  await page.waitForLoadState("domcontentloaded");
-  if ((opts.page ?? "presenter") === "presenter") {
-    await app.evaluate(async ({ app: electron, BrowserWindow }) => {
-      await BrowserWindow.getAllWindows()[0]!.loadFile(`${electron.getAppPath()}/dist/presenter.html`);
-    });
-    await page.waitForFunction(() => location.pathname.endsWith("/presenter.html"));
-    await page.waitForLoadState("domcontentloaded");
+  let app: ElectronApplication | undefined;
+  try {
+    app = await within(
+      _electron.launch({
+        executablePath: electronPath as unknown as string,
+        // CI runs as a user without the Chromium sandbox helper; software GL under xvfb.
+        args: ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", `--user-data-dir=${userData}`, ...(opts.args ?? []), APP_DIR],
+        cwd: APP_DIR,
+        ...(opts.env ? { env: { ...process.env, ...opts.env } as Record<string, string> } : {}),
+      }),
+      60_000,
+      "the app starting",
+    );
+    // A live window: it exists and its page has loaded before any test looks at it.
+    const page = await within(app.firstWindow(), 60_000, "the first window opening");
+    await within(page.waitForLoadState("domcontentloaded"), 30_000, "the first window loading");
+    if (page.isClosed()) throw new Error("e2e: the first window closed before the test started");
+    if ((opts.page ?? "presenter") === "presenter") {
+      await within(
+        app.evaluate(async ({ app: electron, BrowserWindow }) => {
+          await BrowserWindow.getAllWindows()[0]!.loadFile(`${electron.getAppPath()}/dist/presenter.html`);
+        }),
+        30_000,
+        "the presenter page loading",
+      );
+      await within(page.waitForFunction(() => location.pathname.endsWith("/presenter.html")), 30_000, "the presenter page showing");
+      await page.waitForLoadState("domcontentloaded");
+    }
+    return { app, page };
+  } catch (error) {
+    // Never leave a half-started app behind: it would keep the process alive after the failure.
+    await closeApp(app);
+    throw new Error(`e2e: the app did not start with a live window: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
-  return { app, page };
 }
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

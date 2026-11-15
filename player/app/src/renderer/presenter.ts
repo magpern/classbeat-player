@@ -1,5 +1,6 @@
 // The minimal presenter: the class's intervals and the clock state, unstyled (the real screens
 // wait for the design spec). Text only through textContent; nothing from a file becomes markup.
+import { describeReason } from "../core/link/macos-reason.ts";
 import { clockText, targetText, zoneText } from "../core/format.ts";
 import type { PairingView } from "../core/pairing/view.ts";
 import type { Snapshot } from "../core/snapshot.ts";
@@ -69,11 +70,17 @@ function renderLink(s: Snapshot): void {
   if (!k) return;
   setText("link-state", k.state);
   hide("link-unavailable", !k.unavailable);
+  hide("link-reason", k.noReading === null);
+  setText("link-reason", k.noReading === null ? "" : describeReason(k.noReading));
   hide("link-guess", !k.guessing);
   hide("link-hold", !k.held);
   hide("link-announcement", k.announcement === null);
   setText("link-announcement", k.announcement ?? "");
   hide("link-playlist", !k.playlistNotLoaded);
+  // The notice takes the link state's place (presenter.md); it shows only while following in a quiet state,
+  // so the unavailable and no-reading reasons of the manual clock never share the line with it.
+  const stateLine = $("link-state").parentElement;
+  if (stateLine) stateLine.hidden = k.playlistNotLoaded;
   hide("undo", !k.canUndo);
   hide("follow", k.mode === "following" || !k.available);
   hide("manual", k.mode === "manual" || !k.available);

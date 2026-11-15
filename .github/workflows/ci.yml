@@ -28,6 +28,7 @@ jobs:
       web: ${{ steps.detect.outputs.web }}
       desktop: ${{ steps.detect.outputs.desktop }}
       code: ${{ steps.detect.outputs.code }}
+      scene_spec: ${{ steps.detect.outputs.scene_spec }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -72,9 +73,10 @@ jobs:
 
   # Runs `npm ci && npm test` in every package under player/ that has a package.json and a
   # package-lock.json (found by scripts/list-node-packages.sh, never listed by hand).
+  # Also runs for a change to docs/design/scene.md, whose tables player/scene/model tests parse (#527).
   node-packages:
     needs: changes
-    if: needs.changes.outputs.player == 'true'
+    if: needs.changes.outputs.player == 'true' || needs.changes.outputs.scene_spec == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -115,6 +117,7 @@ jobs:
     if: needs.changes.outputs.player == 'true'
     name: desktop-app (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -146,9 +149,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
       - name: e2e (Linux, under xvfb)
         if: matrix.label == 'linux'
+        timeout-minutes: 10
         run: xvfb-run -a npm run test:e2e
       - name: e2e (macOS and Windows)
         if: matrix.label != 'linux'
+        timeout-minutes: 10
         run: npm run test:e2e
       - name: Package (unsigned)
         run: bash ../../scripts/package-desktop.sh . "$RUNNER_TEMP/package" ${{ matrix.label }}

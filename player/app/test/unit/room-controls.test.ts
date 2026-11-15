@@ -199,7 +199,7 @@ test("no control code, token or controller detail reaches the room window on any
   for (const s of SECRETS) assert.ok(!sent.includes(s), s);
   assert.deepEqual(remoteViewOf(HOSTILE), { slot: "on", joinCode: "BCDF-GHJK", phones: 1, reconnecting: false });
   const clock = { start: "clock", pause: "clock", resume: "clock", next: "clock", previous: "clock" };
-  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock, pattern: null });
+  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock, pattern: null, playlistNotLoaded: false });
 });
 
 const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts", "core/live/room-slot.ts", "main/live/room-remote.ts"];

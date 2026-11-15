@@ -6,16 +6,19 @@
 // - Only Start loads it, and only at class time 0 (no jump or chosen start before Start). A Start
 //   anywhere else, pause, next, a nudge and resume never load it and say nothing new.
 // - A class without a playlist says nothing new.
-// - The notice "playlist not loaded" shows only when the class has a playlist and the load failed,
-//   was not supported, or was not confirmed: the first fresh reading after the music app took the
-//   request must match song 1 within PLAYLIST_CONFIRM_MS. Otherwise the existing matching and link
-//   states take over, as for any song the class does not expect.
+// - "Not loaded" is decided only when Start asked the music app to play (it goes to the music):
+//   the class has no playlist, or loading failed or is not supported, or the load was not confirmed
+//   (the first fresh reading after the music app took the request must match song 1 within
+//   PLAYLIST_CONFIRM_MS). On the manual clock nothing was asked of the music app: nothing is said.
+// - The notice (docs/design/presenter.md "Music link line", room-2d.md "Playlist not loaded") shows
+//   for 30 s after that Start (`undoWindowMs`), only while following, in the place of the quiet
+//   link states, never over a fault state. `playlistNoticeAt` decides it.
 import { isCurrent } from "./follower.ts";
 import { matchCandidates } from "./match.ts";
 import { isPlaylistId } from "./playlist.ts";
 import type { LoadOutcome } from "./playlist.ts";
 import { DEFAULT_LINK_CONFIG } from "./types.ts";
-import type { LinkConfig, LinkPlan, Observation } from "./types.ts";
+import type { LinkConfig, LinkModel, LinkPlan, Observation } from "./types.ts";
 
 /**
  * How long a load may take to show: a fresh reading of song 1 within 3 s of the music app taking
@@ -28,14 +31,15 @@ export type PlaylistLoad =
   /** Nothing was asked: no playlist, not a Start at class time 0, or no class. */
   | { readonly kind: "none" }
   /** Asked at Start; the follower has not answered yet. */
-  | { readonly kind: "asking"; readonly until: number }
+  | { readonly kind: "asking"; readonly until: number; readonly startedAt: number }
   /** The music app took it at `from`; the first reading dated from then decides. */
-  | { readonly kind: "confirming"; readonly from: number; readonly until: number }
+  | { readonly kind: "confirming"; readonly from: number; readonly until: number; readonly startedAt: number }
   | { readonly kind: "confirmed" }
-  | { readonly kind: "not-loaded" };
+  /** Decided not loaded; `startedAt` is the Start it belongs to (the notice's 30 s run from it). */
+  | { readonly kind: "not-loaded"; readonly startedAt: number };
 
 export const NO_LOAD: PlaylistLoad = Object.freeze({ kind: "none" });
-const NOT_LOADED: PlaylistLoad = Object.freeze({ kind: "not-loaded" });
+const notLoaded = (startedAt: number): PlaylistLoad => Object.freeze({ kind: "not-loaded", startedAt });
 
 export interface StartFacts {
   /** The command is Start. */
@@ -57,15 +61,17 @@ export interface StartLoad {
 }
 
 export function loadAtStart(current: PlaylistLoad, f: StartFacts, now: number): StartLoad {
-  if (!f.isStart || !f.atZero || f.playlist === undefined) return { load: current, ask: null };
-  if (!isPlaylistId(f.playlist) || !f.toMusic || !f.canLoad) return { load: NOT_LOADED, ask: null };
-  return { load: { kind: "asking", until: now + PLAYLIST_CONFIRM_MS }, ask: f.playlist };
+  if (!f.isStart || !f.atZero) return { load: current, ask: null };
+  // Start did not go to the music app (the manual clock): nothing was asked of it, nothing is said.
+  if (!f.toMusic) return { load: NO_LOAD, ask: null };
+  if (!isPlaylistId(f.playlist) || !f.canLoad) return { load: notLoaded(now), ask: null };
+  return { load: { kind: "asking", until: now + PLAYLIST_CONFIRM_MS, startedAt: now }, ask: f.playlist };
 }
 
 /** The follower's answer. One that comes after the load was decided changes nothing. */
 export function loadAnswered(load: PlaylistLoad, outcome: LoadOutcome, now: number): PlaylistLoad {
   if (load.kind !== "asking") return load;
-  return outcome === "asked" ? { kind: "confirming", from: now, until: now + PLAYLIST_CONFIRM_MS } : NOT_LOADED;
+  return outcome === "asked" ? { kind: "confirming", from: now, until: now + PLAYLIST_CONFIRM_MS, startedAt: load.startedAt } : notLoaded(load.startedAt);
 }
 
 /**
@@ -78,12 +84,24 @@ export const fallsBack = (before: PlaylistLoad, outcome: LoadOutcome): boolean =
 
 /** One tick: the first fresh reading decides, and no answer or reading in time means not loaded. */
 export function confirmLoad(load: PlaylistLoad, plan: LinkPlan, obs: Observation | null, now: number, cfg: LinkConfig = DEFAULT_LINK_CONFIG): PlaylistLoad {
-  if (load.kind === "asking") return now > load.until ? NOT_LOADED : load;
+  if (load.kind === "asking") return now > load.until ? notLoaded(load.startedAt) : load;
   if (load.kind !== "confirming") return load;
   const fresh = obs !== null && obs.at >= load.from && obs.seenAt <= load.until && isCurrent(obs, now, cfg.staleMs);
-  if (fresh) return matchCandidates(plan, obs, cfg).includes(0) ? { kind: "confirmed" } : NOT_LOADED;
-  return now > load.until ? NOT_LOADED : load;
+  if (fresh) return matchCandidates(plan, obs, cfg).includes(0) ? { kind: "confirmed" } : notLoaded(load.startedAt);
+  return now > load.until ? notLoaded(load.startedAt) : load;
 }
 
-/** The screen says the playlist was not loaded. */
+/** Start asked the music app and the class playlist was not loaded (decided; the screen's window is `playlistNoticeAt`). */
 export const playlistNotLoaded = (load: PlaylistLoad): boolean => load.kind === "not-loaded";
+
+/** The quiet link states, the only ones the notice takes the place of: following and locked, or before the first lock. */
+const isQuiet = (l: Pick<LinkModel, "mode" | "state">): boolean => l.mode === "following" && (l.state === "Locked" || l.state === "Manual");
+
+/**
+ * Whether the screens say "Playlist not loaded" now: Start asked the music app and the playlist was
+ * not loaded, within `undoWindowMs` (30 s) of that Start, while following and in a quiet link state.
+ * A fault state ("Music not heard", "Not a class song", "Song is in twice", "Music paused") and the
+ * manual clock never show it. The first Start only: a later resume does not make a new window.
+ */
+export const playlistNoticeAt = (load: PlaylistLoad, link: Pick<LinkModel, "mode" | "state">, now: number, cfg: LinkConfig = DEFAULT_LINK_CONFIG): boolean =>
+  load.kind === "not-loaded" && now >= load.startedAt && now - load.startedAt < cfg.undoWindowMs && isQuiet(link);

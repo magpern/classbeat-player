@@ -7,7 +7,7 @@
 import type { Observation } from "./types.ts";
 
 /** Why a reader has no reading, for the player's status. */
-export type NoReadingReason = "not-running" | "not-permitted" | "not-answering" | "script-failed";
+export type NoReadingReason = "not-running" | "not-permitted" | "waiting-for-permission" | "not-answering" | "script-failed";
 
 export interface MusicReader {
   readonly kind: "manual" | "macos" | "windows" | "linux" | "fake";

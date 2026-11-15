@@ -7,7 +7,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 import type { ElectronApplication, Page } from "playwright-core";
-import { launch, sleep } from "./launch.ts";
+import { closeApp, launch, sleep } from "./launch.ts";
 
 let app: ElectronApplication;
 let page: Page;
@@ -24,7 +24,7 @@ before(async () => {
   ({ app, page } = await launch({ env: { PLAYER_BACKEND_ORIGIN: origin } }));
 });
 after(async () => {
-  await app?.close();
+  await closeApp(app);
   server?.closeAllConnections();
   server?.close();
 });

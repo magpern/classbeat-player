@@ -13,11 +13,12 @@ import { goManual, handOver, pickOccurrence, relink, undo } from "./link/command
 import type { CommandResult } from "./link/commands.ts";
 import { step } from "./link/follower.ts";
 import { linkPlanFrom } from "./link/plan.ts";
-import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNotLoaded } from "./link/playlist-load.ts";
+import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNoticeAt } from "./link/playlist-load.ts";
 import type { PlaylistLoad } from "./link/playlist-load.ts";
 import type { LoadOutcome } from "./link/playlist.ts";
 import { initialLink } from "./link/types.ts";
 import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
+import type { NoReadingReason } from "./link/reader.ts";
 import { linkViewAt } from "./link/view.ts";
 import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
 import { patternSnapshotAt } from "./pattern-snapshot.ts";
@@ -172,7 +173,7 @@ export function isFollowing(s: PlayerState): boolean {
   return l !== null && canFollow(l) && l.link.mode === "following";
 }
 
-export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapshot {
+export function snapshotOf(s: PlayerState, now: number, canSend = false, noReading: NoReadingReason | null = null): Snapshot {
   const l = s.loaded;
   const view = l ? viewAt(l.clock, l.plan, now) : null;
   return {
@@ -180,7 +181,7 @@ export function snapshotOf(s: PlayerState, now: number, canSend = false): Snapsh
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
     view,
-    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNotLoaded(l.playlist)) : null,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNoticeAt(l.playlist, l.link, now), noReading) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
     pattern: l && view ? patternSnapshotAt(l.plan, view.classMs) : null,

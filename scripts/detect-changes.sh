@@ -78,3 +78,12 @@ if [ -z "$files" ]; then echo "code=true" >>"$out"; else flag code '.'; fi
 # Plan section 10: player, web, schema, build and packaging scripts, workflow files,
 # dependency manifests and lockfiles.
 flag desktop '^(player/|web/|schema/|scripts/(build|package|release)[^/]*|\.github/workflows/|(.*/)?(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml|Cargo\.lock|pyproject\.toml|uv\.lock|requirements[^/]*\.txt))'
+# docs/design/scene.md is the one documentation file with a test: player/scene/model/test/spec-tables.test.ts
+# parses its energy and quality tables (#527). A change to it runs the node-packages job even when it is
+# the only thing that changed. This is not part of the docs-only rule above, so it is set apart from flag():
+# every other documentation change still runs no tests (#437). An unknown base counts as everything.
+if [ "$all" -eq 1 ] || printf '%s\n' "$files" | grep -Fxq 'docs/design/scene.md'; then
+  echo "scene_spec=true" >>"$out"
+else
+  echo "scene_spec=false" >>"$out"
+fi

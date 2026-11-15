@@ -60,8 +60,8 @@ const SNAP = {
 } as unknown as Snapshot;
 
 test("a frame carries the class, the clock view, the link view and the band's routes, and nothing else of the snapshot", () => {
-  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "pattern", "view"]);
-  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null, pattern: null });
+  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "pattern", "playlistNotLoaded", "view"]);
+  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null, pattern: null, playlistNotLoaded: false });
   // The routes are rebuilt from closed values: nothing else the snapshot holds there goes along.
   const pattern = { position: "standing", beat: 3, beatsLeft: 6, nextPosition: "seated", secret: "QQQQ-QQQQ" };
   assert.deepEqual(roomFrameOf({ ...SNAP, pattern } as unknown as Snapshot).pattern, { position: "standing", beat: 3, beatsLeft: 6, nextPosition: "seated" });
