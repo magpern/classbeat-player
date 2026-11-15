@@ -77,8 +77,8 @@ by ADR 0006" notes mark each place there. Every other part of ADR 0002 stands.
 6. **What stays the same.** The browser binding, the 15 minutes, single use, the answers of
    step 6, the limits of section 10, and the guards that keep the site from using storage.
 
-(Amended by ADR 0010, section 6: for a classbeat sign-in the return entry is kept server-side
-in the closed table `classbeat_sign_ins` for the round trip, and is never logged.)
+(ADR 0010, section 6, as amended 2026-11-15: a classbeat sign-in carries no return entry and
+stores none; it lands on `/classes`.)
 
 Lanes: the backend lane builds steps 1–3, and the screens lane builds steps 4–5 against its
 fake site. `schema/site-api/v1` describes only `/me` today, and the sign-in requests have never
@@ -99,6 +99,9 @@ never put in a link.
   have to carry it back.
 - **Accepting the gap.** Rejected: an instructor who signs in by mail on the handlebar loses
   the companion, which is the case the return entry exists for.
+  (ADR 0010, section 6, as amended 2026-11-15: for the classbeat sign-in, the only open
+  instructor path today, this gap is accepted, because storing the entry would break the
+  backend return-entry guard.)
 
 ## Consequences
 
