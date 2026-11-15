@@ -69,7 +69,7 @@ const common = [
   { selector: "ImportDeclaration[source.value='three'] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)", message: "Import named three.js classes from the allowlist only." },
   { selector: "CallExpression[callee.property.name=/^(add|remove)EventListener$/][callee.object.name='window']:not([arguments.0.value='resize'])", message: "The window's only listener is for resize." },
 ];
-const REFLECTION_PROPS = "__proto__|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__|onBeforeRender|onAfterRender|onBeforeCompile|onBeforeShadow|onAfterShadow|getRootNode|ownerDocument|defaultView|parentNode|domElement";
+const REFLECTION_PROPS = "__proto__|prototype|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__|onBeforeRender|onAfterRender|onBeforeCompile|onBeforeShadow|onAfterShadow|getRootNode|ownerDocument|defaultView|parentNode|domElement";
 const srcSyntax = ["error", ...common,
   // src/ is handed the host's painter (src/host.ts) and never reaches for the renderer's element or the page through it or through three.js callbacks.
   { selector: `MemberExpression[computed=false][property.name=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in src/." },
@@ -82,7 +82,9 @@ const srcSyntax = ["error", ...common,
   // Every destructuring key (nested patterns and parameters too) is a plain identifier, and its name faces the same bans as a member access.
   { selector: "ObjectPattern > Property:not([computed=false][key.type='Identifier'])", message: "src/ destructures by a plain identifier key only (no string or computed key)." },
   { selector: `ObjectPattern > Property[key.name=/^(constructor|${REFLECTION_PROPS})$/]`, message: "No `constructor`, prototype, render callback, element or page member in src/, destructured or not." },
-  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "src/ reads members by a literal key only: a key built at run time can name any member (use .at(i), a destructure or a lookup helper)." },
+  // A subclass of a three.js class can declare a render callback as a method, which no member access shows.
+  { selector: ":matches(ClassDeclaration, ClassExpression)[superClass]", message: "src/ declares no class with a superclass (a subclass method can be a three.js render callback)." },
+  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])",message: "src/ reads members by a literal key only: a key built at run time can name any member (use .at(i), a destructure or a lookup helper)." },
   { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `src/ reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
 ];
 const demoSyntax = ["error", ...common,
