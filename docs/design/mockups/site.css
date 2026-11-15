@@ -162,3 +162,7 @@ ul.plain li::before { content: ""; position: absolute; left: 4px; top: 15px; wid
 
 .btns + p, .btns + .small, .btns + h2 { margin-top: 24px; }
 .or + .btn + .small { margin-top: 12px; }
+.nw { white-space: nowrap; }
+.group { border-top: 1px solid var(--stage-line); margin-top: 32px; padding-top: 0; }
+.group > h2 { margin-top: 24px; }
+.reason { display: flex; gap: 10px; align-items: baseline; margin: 16px 0; max-width: 38em; font-size: 18px; }
