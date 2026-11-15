@@ -37,7 +37,7 @@ export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCAL
   const finished = view.status === "ended" || view.classMs >= view.lengthMs;
   const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
   if (finished) return outside("finished", doc, view, link, notice, scale);
-  if (before) return outside("before-start", doc, view, link, notice, scale);
+  if (before) return outside("before-start", doc, view, link, notice, scale, input.playlistNotLoaded === true);
   return running(doc, view, link, notice, scale, input.playlistNotLoaded === true);
 }
 
@@ -55,13 +55,13 @@ function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreSc
   });
 }
 
-function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale): RoomModel {
+function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded = false): RoomModel {
   const finished = kind === "finished";
   return {
     ...EMPTY,
     kind,
     gel: finished ? completeGel(doc) : firstZoneGel(doc, view.intervalIndex),
-    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished, notice) },
+    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished, notice, playlistNotLoaded && !finished) },
     intro: finished ? finishedIntro(doc) : beforeStartIntro(doc),
     score: scoreFor(doc, view, link, scale),
     intervalKey: kind,

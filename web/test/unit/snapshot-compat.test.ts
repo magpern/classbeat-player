@@ -15,7 +15,7 @@ function fields(file: string, name: string): Map<string, string> {
   const body = src.match(new RegExp(`export interface ${name}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1];
   assert.ok(body, `${name} not found in ${file}`);
   const out = new Map<string, string>();
-  for (const m of body.matchAll(/readonly (\w+)\??:\s*([^;]+);/g)) out.set(m[1], m[2].trim());
+  for (const m of body.matchAll(/^\s*(?:readonly )?(\w+)\??:\s*([^;]+);/gm)) out.set(m[1], m[2].trim());
   return out;
 }
 

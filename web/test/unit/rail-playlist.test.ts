@@ -4,11 +4,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { toRoomModel } from "../../src/room/adapter.ts";
-import { linkAt } from "../../src/fixtures/build.ts";
+import { clockAt, linkAt } from "../../src/fixtures/build.ts";
 import { STATE_FIXTURES } from "../../src/fixtures/states.ts";
 import type { LinkStateName, RoomInput } from "../../src/room/input.ts";
 
 const running = STATE_FIXTURES.running;
+const doc = running.doc as NonNullable<RoomInput["doc"]>;
 const view = running.view;
 if (!view) throw new Error("no view");
 
@@ -35,6 +36,24 @@ describe("the playlist-not-loaded plate", () => {
   it("takes the place of the quiet state only: a link fault stays", () => {
     const faults: readonly (readonly [LinkStateName, string])[] = [["Paused", "Music paused"], ["Coasting", "Music not heard"], ["Off the list", "Not a class song"], ["Ambiguous", "Song is in twice"]];
     for (const [state, text] of faults) assert.deepEqual(rail(frame(true, state)), { text, look: "alert" }, state);
+  });
+
+  it("shows while following before the first lock (state Manual, mode following), running and before the start", () => {
+    const early = (status: "running" | "ready") => {
+      const v = status === "ready" ? clockAt(doc, 0, "ready") : view;
+      return rail({ ...running, view: v, link: linkAt(v, "Manual", { mode: "following", available: true }), playlistNotLoaded: true });
+    };
+    assert.deepEqual(early("running"), PLATE);
+    assert.deepEqual(early("ready"), PLATE);
+  });
+
+  it("never shows on the real manual clock (mode manual)", () => {
+    const manual = (status: "running" | "ready") => {
+      const v = status === "ready" ? clockAt(doc, 0, "ready") : view;
+      return rail({ ...running, view: v, link: linkAt(v, "Manual"), playlistNotLoaded: true });
+    };
+    assert.equal(manual("running")?.text, "Manual clock");
+    assert.equal(manual("ready")?.text, "Press Start");
   });
 
   it("reads the top-level field, never a field of the link", () => {
