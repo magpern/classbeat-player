@@ -139,7 +139,13 @@ commit web/src/design/fonts/x.woff2
 check "a web design font alone runs player and android too (#579)" "player android web desktop" "$(flags push "$before_tok" HEAD)"
 before_tok="$(git rev-parse HEAD)"
 commit web/src/design/other.css
-check "another web design file does not run player or android (#579)" "web desktop" "$(flags push "$before_tok" HEAD)"
+check "another web/src file runs player (the room window bundles it) but not android (#579)" "player web desktop" "$(flags push "$before_tok" HEAD)"
+before_tok="$(git rev-parse HEAD)"
+commit web/test/spec/page/ink.js
+check "web/test/spec/page (read by the player's shots) runs player (#579)" "player web desktop" "$(flags push "$before_tok" HEAD)"
+before_tok="$(git rev-parse HEAD)"
+commit web/test/spec/other/x.js
+check "other web test files do not run player (#579)" "web desktop" "$(flags push "$before_tok" HEAD)"
 
 before_scene="$(git rev-parse HEAD)"
 commit docs/design/scene.md
