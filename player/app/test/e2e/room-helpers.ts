@@ -45,13 +45,44 @@ export async function theRoom(app: ElectronApplication): Promise<Page> {
 export const menu = (app: ElectronApplication, id: string): Promise<void> =>
   within(STEP_MS, `the menu item ${id}`, app.evaluate(({ Menu }, i) => Menu.getApplicationMenu()?.getMenuItemById(i)?.click(), id));
 export const onPage = (page: Page, name: string): Promise<unknown> => page.waitForFunction((n) => location.pathname.endsWith(`/${n}`), name);
+/**
+ * On macOS the room window enters full screen with the system's animation (or, when the
+ * application is not the active one, does not enter it at all), and closing it while that
+ * transition runs wedges the main process (#571). A person cannot close it that fast, so the test
+ * waits until the window's full-screen state and bounds have stopped changing for a while. Other
+ * systems have no such animation to wait for.
+ */
+async function settled(app: ElectronApplication): Promise<void> {
+  if (process.platform !== "darwin") return;
+  await within(
+    20_000,
+    "the room window to stop changing",
+    app.evaluate(async ({ BrowserWindow }) => {
+      // No named helper inside: the test loader would wrap it in a function the app cannot see.
+      let last = "";
+      let since = Date.now();
+      while (Date.now() - since < 1500) {
+        const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"));
+        const now = w ? `${w.isFullScreen()} ${JSON.stringify(w.getBounds())}` : "none";
+        if (now !== last) {
+          last = now;
+          since = Date.now();
+        }
+        await new Promise<void>((resolve) => setTimeout(() => resolve(), 100));
+      }
+    }),
+  );
+}
+
 /** Closes the room window the way the instructor's window manager does. */
-export const closeRoomByHand = (app: ElectronApplication): Promise<void> =>
-  within(
+export async function closeRoomByHand(app: ElectronApplication): Promise<void> {
+  await settled(app);
+  await within(
     STEP_MS,
     "close the room window by hand",
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith("/dist/room.html"))?.close()),
   );
+}
 
 /** File > Open a class file, with the dialog answering the first converter example. Returns its title. */
 export async function openClassFile(app: ElectronApplication): Promise<string> {

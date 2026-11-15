@@ -70,6 +70,23 @@ export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronA
     const page = await within(app.firstWindow(), 60_000, "the first window opening");
     await within(page.waitForLoadState("domcontentloaded"), 30_000, "the first window loading");
     if (page.isClosed()) throw new Error("e2e: the first window closed before the test started");
+    // The app's own first load (the class list, started by the shell with loadFile) must be over:
+    // Playwright's firstWindow and "domcontentloaded" can be answered by the window's blank first
+    // page, and a loadFile started now would abort the shell's, which Electron reports as the
+    // rejection (-3, ERR_ABORTED) of the NEW load. Seen on Windows CI (#571).
+    await within(
+      app.evaluate(async ({ BrowserWindow }) => {
+        const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+        while (wc.isLoading() || !wc.getURL().endsWith("/dist/classlist.html")) {
+          await new Promise<void>((resolve) => {
+            wc.once("did-stop-loading", () => resolve());
+            setTimeout(() => resolve(), 200);
+          });
+        }
+      }),
+      30_000,
+      "the class list's first load finishing",
+    );
     if ((opts.page ?? "presenter") === "presenter") {
       await within(
         app.evaluate(async ({ app: electron, BrowserWindow }) => {
