@@ -6,7 +6,11 @@ export type PairingView =
   | { readonly state: "unpaired"; readonly message: string | null }
   | { readonly state: "starting" }
   | { readonly state: "waiting"; readonly userCode: string; readonly page: string; readonly secondsLeft: number }
+  /** `email` is what is shown for the account: its address, or `NO_EMAIL` for an account with none. */
   | { readonly state: "paired"; readonly email: string; readonly deviceName: string | null; readonly pairAgain: boolean };
+
+/** Shown where the address would be, for an account with no email (the backend's `NO_EMAIL`). */
+export const NO_EMAIL = "your classbeat account";
 
 export const NOTICE_TEXT: Readonly<Record<Notice, string>> = {
   no_server: "Pairing is not set up on this computer: no server address is set.",
@@ -30,6 +34,6 @@ export function pairingView(s: PairingState, now: number): PairingView {
     case "waiting":
       return { state: "waiting", userCode: s.userCode, page: s.page, secondsLeft: Math.max(0, Math.ceil((s.expiresAt - now) / 1000)) };
     case "paired":
-      return { state: "paired", email: s.record.email, deviceName: s.deviceName, pairAgain: s.expired };
+      return { state: "paired", email: s.record.email ?? NO_EMAIL, deviceName: s.deviceName, pairAgain: s.expired };
   }
 }

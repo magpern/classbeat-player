@@ -1,12 +1,12 @@
 // What the keychain entry holds, as text before encryption: the device token, the account's
-// email and the server that issued the token. Pure. The token is used with that server only.
+// email (null for an account with none) and the server that issued the token. Pure. The token is used with that server only.
 import { parseBackendOrigin } from "./origin.ts";
-import { isDeviceToken, MAX_EMAIL, shownText } from "./protocol.ts";
+import { accountEmail, isDeviceToken } from "./protocol.ts";
 
 export interface PairingRecord {
   readonly origin: string;
   readonly token: string;
-  readonly email: string;
+  readonly email: string | null;
 }
 
 export const MAX_RECORD_BYTES = 16 * 1024;
@@ -23,7 +23,7 @@ export function parseRecord(text: string, allowLoopbackHttp: boolean): PairingRe
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const { v, origin, token, email } = raw as Record<string, unknown>;
   const parsed = parseBackendOrigin(origin, allowLoopbackHttp);
-  const shown = shownText(email, MAX_EMAIL);
-  if (v !== 1 || !parsed.ok || parsed.origin !== origin || !isDeviceToken(token) || shown === null) return null;
+  const shown = accountEmail(email);
+  if (v !== 1 || !parsed.ok || parsed.origin !== origin || !isDeviceToken(token) || shown === undefined) return null;
   return { origin: parsed.origin, token, email: shown };
 }
