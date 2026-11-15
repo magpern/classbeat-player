@@ -109,6 +109,8 @@ export function checkTree(tree: Tree): string[] {
     const ok = p.endsWith(".kt") ? KT_PATHS.test(p) : p.endsWith(".kts") ? KTS_PATHS.test(p) : p === "gradle/wrapper/gradle-wrapper.jar";
     if (!ok) add("sources", p, "a source or binary file outside the allowlisted paths");
   }
+  // Every Kotlin source and script that exists must have been read (#570, N10): the loader reads them all, and one it did not read is refused, not skipped.
+  for (const p of tree.paths) if (/\.kts?$/i.test(p) && (tree.files[p] === undefined || !/\.kts?$/.test(p))) add("sources", p, "Kotlin the guard did not read: every .kt and .kts file must be loaded and checked");
   for (const p of tree.paths) if (/\.(?:jks|keystore|p12|pfx)$|(?:^|\/)(?:keystore\.properties|\.env[\w.]*)$/i.test(p)) add("signing", p, "committed signing material or env file");
 
   // Reads Spotify's session only: filtered to Spotify's package before anything is read.

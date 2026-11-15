@@ -1,41 +1,15 @@
 // The hard limits of issue #554, checked on the real sources and, by mutation, shown to bite.
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { checkTree, stripComments } from "../src/guard_rules.js";
 import { reflectionProblem } from "../src/reflection_rules.js";
 import type { Tree } from "../src/guard_rules.js";
+import { loadTree } from "./load_tree.js";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const SKIP = new Set(["build", "node_modules", ".gradle", ".git"]);
-
-function walk(dir: string): string[] {
-  return readdirSync(dir).flatMap((n) => {
-    if (SKIP.has(n)) return [];
-    const p = join(dir, n);
-    return statSync(p).isDirectory() ? walk(p) : [p];
-  });
-}
-
-const BINARIES = ["gradle/wrapper/gradle-wrapper.jar"];
-const TEXTS = ["gradle.properties", "gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.properties"];
-
-function load(): Tree {
-  const paths = walk(root).map((p) => relative(root, p).split("\\").join("/"));
-  const files: Record<string, string> = {};
-  for (const p of paths) {
-    const wanted = p === "app/src/main/AndroidManifest.xml" || (p.endsWith(".kt") && p.includes("/src/main/")) || p.endsWith(".kts") || TEXTS.includes(p);
-    if (wanted) files[p] = readFileSync(join(root, p), "utf8");
-  }
-  const hashes: Record<string, string> = {};
-  for (const p of BINARIES) hashes[p] = createHash("sha256").update(readFileSync(join(root, p))).digest("hex");
-  return { files, paths, hashes };
-}
-
-const real = load();
+const real = loadTree(root);
 
 function mutate(path: string, from: string | RegExp, to: string): Tree {
   const text = real.files[path];
@@ -341,10 +315,13 @@ describe("build scripts pinned whole", () => {
     assert.deepEqual(checkTree({ ...real, files }), []);
   });
 
-  it("ignore trailing tabs and spaces and CRLF in the wrapper scripts too", () => {
-    const files = { ...real.files };
-    for (const p of ["gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.properties"]) files[p] = files[p]!.split("\n").map((l) => `${l}\t `).join("\r\n") + "\r\n";
-    assert.deepEqual(checkTree({ ...real, files }), []);
+  // #570, N8 reverses the earlier "ignore ... in the wrapper scripts too": the wrapper is compared byte for byte
+  // (the normalising assertion above stays, for the build scripts). The firing tests are in hardening.test.ts.
+  it("do not normalise the wrapper scripts: the same normalisation that passes a build script fails them", () => {
+    for (const p of ["gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.properties"]) {
+      const files = { ...real.files, [p]: real.files[p]!.split("\n").map((l) => `${l}\t `).join("\r\n") + "\r\n" };
+      assert.ok(checkTree({ ...real, files }).some((x) => x.startsWith("build:") && x.includes(p)), p);
+    }
   });
 
   it("name the added line that uses a switch-off word (the second layer)", () => {

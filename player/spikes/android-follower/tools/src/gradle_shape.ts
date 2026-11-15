@@ -8,7 +8,7 @@ import { WRAPPER_HASHES, WRAPPER_TEXTS } from "./wrapper_pins.js";
 /** Every build input that is pinned as text: the scripts, `gradle.properties` and the wrapper. */
 const PINNED_SCRIPTS: Record<string, string> = { ...SCRIPTS, ...WRAPPER_TEXTS };
 
-/** Line endings, trailing spaces and tabs and blank lines do not count; everything else does (no Unicode trimming). */
+/** For the build scripts only: line endings, trailing spaces and tabs and blank lines do not count; everything else does (no Unicode trimming). The wrapper is not normalised. */
 export const normalizeScript = (text: string): string =>
   text.replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/[ \t]+$/, "")).filter((l) => l !== "").join("\n");
 
@@ -29,6 +29,12 @@ function addedLineProblem(path: string, text: string): string | null {
   return null;
 }
 
+const firstDifference = (a: string, b: string): number => {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i + 1;
+};
+
 /** [rule, path, what] for every build script that differs from its pin, and for every script that should not exist. */
 export function buildScriptProblems(files: Record<string, string>, paths: string[], hashes: Record<string, string>): [rule: string, path: string, what: string][] {
   const v: [string, string, string][] = [];
@@ -37,6 +43,11 @@ export function buildScriptProblems(files: Record<string, string>, paths: string
     if (text === undefined) { v.push(["build", path, "a pinned build script is missing"]); continue; }
     const added = addedLineProblem(path, text);
     if (added) v.push(["manifest", path, added]);
+    if (path in WRAPPER_TEXTS) {
+      // The wrapper is compared byte for byte (#570, N8): no normalisation of any kind.
+      if (text !== pin) v.push(["build", path, `differs from its pinned bytes (first difference at character ${firstDifference(text, pin)}): change the pin in tools/src/wrapper_pins.ts in the same pull request`]);
+      continue;
+    }
     const have = normalizeScript(text).split("\n");
     const want = pin.split("\n");
     const at = have.findIndex((l, i) => l !== want[i]);
