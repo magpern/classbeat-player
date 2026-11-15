@@ -75,7 +75,7 @@ check "docs/, docs/design/ and root *.md together run nothing (even a package.js
 check "several documentation files: the code flag is false" "false" "$(codeflag push "$before_docs" HEAD)"
 check "a pull request of documentation only runs nothing" "" "$(flags pull_request "$before_docs" HEAD)"
 commit web/src/x.ts
-check "documentation plus one web file runs web and desktop" "web desktop" "$(flags push "$before_docs" HEAD)"
+check "documentation plus one web file runs web, player and desktop" "player web desktop" "$(flags push "$before_docs" HEAD)"
 check "documentation plus one web file: the code flag is true" "true" "$(codeflag push "$before_docs" HEAD)"
 before_rootmd="$(git rev-parse HEAD)"
 commit README.md
@@ -83,13 +83,13 @@ check "a root *.md only runs nothing" "" "$(flags push "$before_rootmd" HEAD)"
 before_sub="$(git rev-parse HEAD)"
 git mv web/src/x.ts docs/moved.ts
 git commit -qm "move a web file into docs"
-check "moving a web file into docs is not docs-only (--no-renames lists both paths)" "web desktop" "$(flags push "$before_sub" HEAD)"
+check "moving a web file into docs is not docs-only (--no-renames lists both paths)" "player web desktop" "$(flags push "$before_sub" HEAD)"
 check "a rename out of web: the code flag is true" "true" "$(codeflag push "$before_sub" HEAD)"
 git commit -q --allow-empty -m "empty"
 check "an empty diff with a known base: the code flag fails safe (true)" "true" "$(codeflag push HEAD HEAD)"
 check "an empty diff sets no other flag" "" "$(flags push HEAD HEAD)"
 commit web/notes.md
-check "a *.md below web/ is not documentation: it runs web and desktop" "web desktop" "$(flags push "$before_sub" HEAD)"
+check "a *.md below web/ is not documentation: it runs web, player and desktop (the range includes the moved web/src file)" "player web desktop" "$(flags push "$before_sub" HEAD)"
 check "an unknown base still runs everything (the code flag too)" "true" "$(codeflag pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef HEAD)"
 before_tok="$(git rev-parse HEAD)"
 before_live="$(git rev-parse HEAD)"
