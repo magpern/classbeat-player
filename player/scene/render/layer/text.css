@@ -1,0 +1,143 @@
+/* The scene's text layer (docs/design/scene.md "Layout", "The score", "Fitting"): HTML over the
+   canvas. Every size is a share of the window (vh, vw), so the room reads the same at any
+   resolution. All text over the scene is --light-1 (S2); hue only on the gel, the next chip and the
+   score's blocks, which are opaque (S12). Positions are the spec's boxes; the pure view model
+   (src/text-view-calc.ts) decides which words and which size class, this file only places them. */
+
+#text, #text *, #text *::before, #text *::after { box-sizing: border-box; margin: 0; padding: 0; }
+#text {
+  position: fixed; inset: 0; pointer-events: none; overflow: hidden;
+  color: var(--light-1); font-family: var(--face-text); font-size: var(--t-label); line-height: 1.1;
+  font-variant-numeric: lining-nums; overflow-wrap: break-word;
+}
+#text [hidden] { display: none !important; }
+#text .n { font-family: var(--face-number); font-weight: 800; letter-spacing: 0; }
+#text .ink { width: fit-content; max-width: 100%; }
+#text .lbl { font-size: var(--t-label); font-weight: 700; line-height: 1.1; }
+
+/* ---------- The gel plate: opaque, the zone colour ---------- */
+#text .gel {
+  position: absolute; left: 0; top: 0; width: 24vw; height: 68.4vh;
+  background: var(--zone); color: var(--ink); padding: 5vh 1.5vw 2vh 5vw;
+  display: flex; flex-direction: column;
+  transition: background-color var(--m-change), color var(--m-change);
+}
+#text .gel .lbl { color: var(--ink); }
+#text .gel-head { display: flex; align-items: flex-start; gap: 1vw; margin-top: 2vh; }
+#text .gel-num { font-size: 32vh; line-height: 0.78; flex: none; }
+#text .gel-name { font-size: min(7.6vh, 4.4vw); line-height: 0.95; margin-top: auto; font-weight: 800; font-family: var(--face-number); }
+#text .gel-name.small { font-size: var(--t-minor); line-height: 1.05; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#text .gel-targets { display: flex; flex-wrap: wrap; column-gap: 1.4vw; margin-top: 1vh; font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; }
+#text .gel-targets span { white-space: nowrap; }
+#text .gel.down { background: color-mix(in srgb, var(--zone) 6%, var(--stage)); color: var(--zone); box-shadow: inset -0.5vh 0 0 var(--zone); }
+#text .gel.down .lbl { color: var(--zone); }
+
+/* ---------- Rail ---------- */
+#text .rail { position: absolute; left: 27vw; right: 5vw; top: 5vh; height: 5vh; display: flex; align-items: baseline; gap: 1.2vw; white-space: nowrap; }
+#text .rail .t { font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; }
+#text .rail .grow { flex: 1; }
+#text .rail .seg { font-size: var(--t-label); font-weight: 700; margin-right: 1vw; }
+#text .link { font-size: var(--t-label); font-weight: 700; display: inline-flex; align-items: center; gap: 0.7vh; }
+#text .link::before { content: ""; width: 1.2vh; height: 1.2vh; border-radius: 50%; background: var(--light-1); flex: none; }
+#text .link.alert { background: var(--light-1); color: var(--ink); padding: 0.5vh 1vh; }
+#text .link.alert::before { background: var(--ink); border-radius: 0; }
+
+/* ---------- Metrics ---------- */
+#text .metrics { position: absolute; left: 27vw; top: 12vh; display: flex; flex-direction: column; gap: 0.9vh; }
+#text .metric { display: flex; flex-direction: column; align-items: flex-start; }
+#text .m-row { display: flex; align-items: baseline; gap: 0.5vw; white-space: nowrap; }
+#text .m-val { font-size: 7.6vh; line-height: 0.9; margin-top: 0.3vh; }
+#text .m-unit { font-size: var(--t-minor); font-weight: 700; }
+#text .m-fold { display: flex; align-items: baseline; gap: 0.8vw; }
+#text .m-fold .side { font-size: 7.6vh; }
+#text .m-fold .count { font-size: 13vh; line-height: 0.8; }
+#text .m-note { font-size: var(--t-label); font-weight: 700; max-width: 20vw; line-height: 1.1; }
+
+/* ---------- Clock ---------- */
+#text .clock { position: absolute; right: 5vw; top: 10.9vh; display: flex; flex-direction: column; align-items: flex-end; }
+#text .c-head { height: 4.2vh; display: flex; align-items: center; justify-content: center; gap: 1.6vw; align-self: stretch; white-space: nowrap; }
+#text .c-bars { font-size: 3.8vh; font-family: var(--face-number); font-weight: 600; line-height: 1; }
+#text .c-paused { font-size: 2.6vh; font-weight: 700; background: var(--light-1); color: var(--ink); height: 3.6vh; padding: 0 1.2vh; display: inline-flex; align-items: center; }
+#text .c-count { font-size: 26vh; line-height: 0.8; margin-top: 1.6vh; white-space: nowrap; }
+#text .c-count.est { border-bottom: 0.7vh dashed var(--light-1); padding-bottom: 0.4vh; }
+#text .c-pause { font-size: var(--t-label); font-weight: 700; }
+
+/* ---------- Pattern block ---------- */
+#text .pattern { position: absolute; left: 46vw; top: 10.9vh; max-width: 24vw; }
+#text .p-label { font-size: var(--t-label); font-weight: 700; }
+#text .p-row { display: flex; align-items: baseline; gap: 1.2vw; margin-top: 1.2vh; white-space: nowrap; }
+#text .p-side { font-size: 9vh; line-height: 0.85; }
+#text .p-count { font-size: 18vh; line-height: 0.8; min-width: 1ch; }
+#text .pattern.compact .p-side { font-size: 7.4vh; }
+#text .pattern.compact .p-count { font-size: 14.6vh; }
+#text .p-squares { display: flex; flex-wrap: wrap; gap: 0.5vh; margin-top: 1.2vh; }
+#text .p-squares span { width: 1.6vh; height: 1.6vh; border: 0.25vh solid var(--light-1); }
+#text .p-squares span.on { background: var(--light-1); }
+#text .p-note { font-size: var(--t-label); font-weight: 700; margin-top: 1vh; }
+
+/* ---------- Cue and next row ---------- */
+#text .cue { position: absolute; left: 27vw; right: 5vw; bottom: 31.6vh; font-size: var(--t-text); line-height: 1.04; font-weight: 700; display: flex; justify-content: flex-start; }
+#text .cue .ink { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+#text .cue.small { font-size: var(--t-text-min); }
+#text .cue.small .ink { -webkit-line-clamp: 3; }
+#text .next { position: absolute; left: 42vw; right: 5vw; top: 39.8vh; display: flex; flex-direction: column; align-items: flex-end; }
+#text .n-line { font-size: var(--t-minor); line-height: 1.1; display: flex; align-items: center; gap: 1vw; white-space: nowrap; font-weight: 700; }
+#text .n-line .n { font-weight: 600; }
+#text .chip { background: var(--zone); color: var(--ink); font-family: var(--face-number); font-weight: 800; padding: 0.3vh 1vh; line-height: 1; }
+#text .n-cue { font-size: var(--t-label); font-weight: 700; margin-top: 1vh; max-width: 52vw; text-align: right; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#text .n-cue.l1 { -webkit-line-clamp: 1; }
+#text .n-cue.l2 { -webkit-line-clamp: 2; }
+
+/* ---------- 4:3 and narrower ---------- */
+#text.narrow .gel { width: 30vw; height: 48vh; padding-right: 1vw; }
+#text.narrow .gel-num { font-size: 28vh; }
+#text.narrow .gel-name:not(.small) { font-size: 7.3vh; }
+#text.narrow .rail { left: 33vw; }
+#text.narrow .metrics { left: 33vw; right: 5vw; top: 39.3vh; flex-direction: row; gap: 2.4vw; align-items: baseline; }
+#text.narrow .metric { flex-direction: row; }
+#text.narrow .m-label { display: none; }
+#text.narrow .m-val, #text.narrow .m-fold .side { font-size: 7.2vh; }
+#text.narrow .m-fold .count { font-size: 13vh; }
+#text.narrow .next { left: 5vw; right: 5vw; top: 52.5vh; align-items: flex-start; }
+#text.narrow .n-cue { text-align: left; max-width: 90vw; margin-top: 1vh; }
+#text.narrow .cue { left: 5vw; bottom: 19.7vh; }
+#text.narrow .cue, #text.narrow .cue.small { font-size: var(--t-text-min); }
+#text.narrow .cue .ink, #text.narrow .cue.small .ink { -webkit-line-clamp: 3; }
+
+/* ---------- The score: flat and opaque ---------- */
+#text .score { position: absolute; left: 0; top: 70.4vh; width: 100vw; height: 24.6vh; background: var(--stage); overflow: hidden; }
+#text .lane-iv { position: absolute; left: 0; right: 0; top: 0.8vh; height: 10.4vh; }
+#text .lane-song { position: absolute; left: 0; right: 0; top: 11.8vh; height: 8.6vh; }
+#text .blk { position: absolute; top: 0; bottom: 0; background: var(--zone); color: var(--ink); overflow: hidden; }
+#text .blk.past { background: var(--stage-line); }
+#text .blk.neutral { background: var(--stage-raised); top: 3vh; bottom: 3vh; }
+#text .blk .txt { position: absolute; top: 0.4vh; bottom: 1.2vh; overflow: hidden; white-space: nowrap; }
+#text .blk .l1 { display: flex; align-items: baseline; gap: 0.25vw; }
+#text .blk .bn { font-size: min(5vh, 2.8vw); line-height: 1; }
+#text .blk .bl { font-size: min(3.72vh, 2.1vw); font-family: var(--face-number); font-weight: 800; line-height: 1; }
+#text .blk .bname { font-size: var(--t-label); font-weight: 700; margin-left: 0.4vw; }
+#text .blk .l2 { font-size: var(--t-label); font-weight: 400; overflow: hidden; text-overflow: ellipsis; margin-top: 0.2vh; line-height: 1.25; }
+#text .blk .strip { position: absolute; left: 0; right: 0; bottom: 0; height: 1vh; background-color: transparent; }
+#text .clip { position: absolute; top: 0; bottom: 0; background: var(--stage-raised); color: var(--light-1); overflow: hidden; }
+#text .clip .txt { position: absolute; top: 0.6vh; overflow: hidden; white-space: nowrap; font-size: var(--t-label); }
+#text .clip .ct { font-weight: 700; }
+#text .clip .cd { font-weight: 400; margin-left: 0.8vw; }
+#text .tick { position: absolute; width: 0.2vw; background: var(--light-1); top: 3.6vh; bottom: 0; }
+#text .tick span { position: absolute; top: 0.2vh; left: 0.4vw; font-size: var(--t-label); font-weight: 700; white-space: nowrap; }
+#text .phrase { position: absolute; bottom: 0; width: 0.12vw; height: 1.2vh; background: var(--light-3); }
+#text .now { position: absolute; top: 0; bottom: 0; width: 0.25vw; background: var(--light-1); }
+#text .end { position: absolute; top: 0.8vh; height: 10.4vh; width: 0.25vw; background: var(--light-1); }
+#text.narrow .score { top: 81vh; height: 14vh; }
+#text.narrow .lane-iv { top: 0; height: 6.6vh; }
+#text.narrow .lane-song { top: 7.4vh; height: 6.4vh; }
+#text.narrow .blk .l2 { display: none; }
+#text.narrow .clip .txt { top: 0.2vh; line-height: 1; }
+#text.narrow .tick { top: 3.3vh; }
+#text.narrow .tick span { top: 0; line-height: 1; }
+#text.narrow .blk .bn { font-size: 5vh; }
+#text.narrow .blk .bl { font-size: 3.72vh; }
+
+
+/* Reduced motion (the system setting or the player's own): colours change at once, nothing glides. */
+#text.rm .gel, #text.rm .gel * { transition: none; }
+@media (prefers-reduced-motion: reduce) { #text .gel { transition: none; } }

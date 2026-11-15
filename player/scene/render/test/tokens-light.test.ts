@@ -20,11 +20,20 @@ test("the zone colours and the white are read from tokens.css, never from a tabl
 
 test("scene tokens the screens lane has not added yet fall back to the spec and are named", () => {
   const t = tokensFromFile();
-  const known = ["--scene-down", "--scene-burst"];
+  const known = ["--scene-down", "--scene-burst", "--scene-text-cap"];
   assert.ok(t.missing.every((m) => known.includes(m)), t.missing.join(","));
   if (t.missing.includes("--scene-down")) assert.equal(t.down, SCENE_TOKEN_DEFAULTS.down);
-  const given = readSceneTokens({ getPropertyValue: (n) => (n === "--scene-burst" ? "0.85, 250 ms" : n === "--scene-down" ? "0.06" : styleFromCss(css).getPropertyValue(n)) });
+  const given = readSceneTokens({ getPropertyValue: (n) => (n === "--scene-burst" ? "0.85, 250 ms" : n === "--scene-down" ? "0.06" : n === "--scene-text-cap" ? "0.08" : styleFromCss(css).getPropertyValue(n)) });
   assert.deepEqual([given.burstPeak, given.burstMs, given.down, given.missing], [0.85, 250, 0.06, []]);
+});
+
+test("--scene-text-cap fails closed: never above 0.08, and a value that is not a bare positive number is missing", () => {
+  const cap = (v: string) => { const t = readSceneTokens({ getPropertyValue: (n) => (n === "--scene-text-cap" ? v : styleFromCss(css).getPropertyValue(n)) }); return [t.textCap, t.missing.includes("--scene-text-cap")]; };
+  assert.deepEqual(cap("0.05"), [0.05, false]);
+  assert.deepEqual(cap("0.2"), [0.08, false]);
+  assert.deepEqual(cap("8 %"), [0.08, true]);
+  assert.deepEqual(cap("0"), [0.08, true]);
+  assert.deepEqual(cap("none"), [0.08, true]);
 });
 
 test("lit fixtures: the zone's count, spread along the rig, capped by the quality level; the fan lights all; a breakdown one", () => {

@@ -21,16 +21,29 @@ export interface SceneTokens {
   readonly burstPeak: number;
   /** `--scene-burst`: the burst's decay, ms. */
   readonly burstMs: number;
+  /** `--scene-text-cap`: the highest relative luminance of the scene under text (S2). */
+  readonly textCap: number;
   /** Scene tokens that were not in tokens.css, so the spec's value was used. */
   readonly missing: readonly string[];
 }
 
 /** The spec's values for the scene-only tokens (scene.md "Tokens"), used only while tokens.css lacks them. */
-export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250 } as const;
+export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250, textCap: 0.08 } as const;
 
 export function parseHex(value: string): number | null {
   const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
   return m ? parseInt(m[1]!, 16) : null;
+}
+
+/** Fails closed: only a bare positive number counts (`8 %` is not one), and the cap is never raised above the spec's 0.08. */
+function textCap(raw: string, missing: string[]): number {
+  const v = /^\s*(\d*\.?\d+)\s*$/.exec(raw);
+  const n = v ? Number(v[1]) : NaN;
+  if (!(n > 0)) {
+    if (!missing.includes("--scene-text-cap")) missing.push("--scene-text-cap");
+    return SCENE_TOKEN_DEFAULTS.textCap;
+  }
+  return Math.min(n, SCENE_TOKEN_DEFAULTS.textCap);
 }
 
 export function readSceneTokens(style: StyleSource): SceneTokens {
@@ -54,6 +67,7 @@ export function readSceneTokens(style: StyleSource): SceneTokens {
     zones, white: colour("--light-1"),
     down: number("--scene-down", SCENE_TOKEN_DEFAULTS.down),
     burstPeak, burstMs: burstMs ? Number(burstMs[1]) : SCENE_TOKEN_DEFAULTS.burstMs,
+    textCap: textCap(style.getPropertyValue("--scene-text-cap"), missing),
     missing,
   };
 }

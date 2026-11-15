@@ -17,5 +17,6 @@ await build({
 });
 cpSync(join(here, "demo", "index.html"), join(dist, "index.html"));
 cpSync(join(here, "demo", "demo.css"), join(dist, "demo.css"));
+cpSync(join(here, "layer", "text.css"), join(dist, "text.css"));
 cpSync(join(design, "tokens.css"), join(dist, "design", "tokens.css"));
 cpSync(join(design, "fonts"), join(dist, "design", "fonts"), { recursive: true });
