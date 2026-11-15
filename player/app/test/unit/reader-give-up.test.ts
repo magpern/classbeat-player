@@ -38,6 +38,28 @@ for (const [system, make] of RIGS) {
     assert.equal(r.count("pause"), 1, "a command sent now goes at once");
   });
 
+  if (system === "macOS") {
+    test("macOS: once Spotify has answered, a read lost at 1.4 s drops the command waiting for it", () => {
+      const r = make();
+      r.reader.setActive(true);
+      r.last("read").ok(r.out.playing);
+      // Follow off and on: the gate closes again, but macOS has already let us ask, so the short limit holds.
+      r.reader.setActive(false);
+      r.clock.t = 100;
+      r.reader.setActive(true);
+      assert.equal(r.count("read"), 2);
+      r.reader.send("next");
+      for (r.clock.t = 350; r.clock.t < 100 + MAC_GIVE_UP_MS; r.clock.t += 250) r.tick();
+      assert.equal(r.count("read"), 2, "the read in flight is not joined");
+      assert.equal(r.count("next"), 0);
+      r.clock.t = 100 + MAC_GIVE_UP_MS;
+      r.tick();
+      assert.equal(r.count("read"), 3, "given up at 1.4 s, not after the long first wait");
+      r.last("read").ok(r.out.playing);
+      assert.equal(r.count("next"), 0, "the command that waited for the lost read is dropped, not sent late");
+    });
+  }
+
   test(`${system}: a command sent after the read was given up waits for the new read, and goes on its good answer`, () => {
     const r = make();
     r.reader.setActive(true);

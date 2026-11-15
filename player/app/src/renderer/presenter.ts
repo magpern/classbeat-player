@@ -1,5 +1,6 @@
 // The minimal presenter: the class's intervals and the clock state, unstyled (the real screens
 // wait for the design spec). Text only through textContent; nothing from a file becomes markup.
+import { describeReason } from "../core/link/macos-reason.ts";
 import { clockText, targetText, zoneText } from "../core/format.ts";
 import type { PairingView } from "../core/pairing/view.ts";
 import type { Snapshot } from "../core/snapshot.ts";
@@ -69,6 +70,8 @@ function renderLink(s: Snapshot): void {
   if (!k) return;
   setText("link-state", k.state);
   hide("link-unavailable", !k.unavailable);
+  hide("link-reason", k.noReading === null);
+  setText("link-reason", k.noReading === null ? "" : describeReason(k.noReading));
   hide("link-guess", !k.guessing);
   hide("link-hold", !k.held);
   hide("link-announcement", k.announcement === null);
