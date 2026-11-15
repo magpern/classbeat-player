@@ -177,7 +177,7 @@ height.
 |                                                                        |
 | Next [5] VO2 max  1:30  105 rpm  Standing                              |
 +------------------------------------------------------------------------+
-| score: 90 s behind now, 4:30 ahead / the band                          |
+| score: 1:54 behind now, 5:41 ahead / the band                          |
 +------------------------------------------------------------------------+
 ```
 
@@ -202,8 +202,9 @@ The score is the room's: the class as a strip, "now" fixed at 25 vw, the past da
 in their zone colour with the number and, only if it fits whole, the name; songs below with title,
 artist and BPM if they fit; moments and the end mark. What changes is the time it shows:
 
-- **Landscape** (room and small landscape): 6 minutes across, 0.28 vw a second, as on the room
-  screen: 90 s behind "now", 4:30 ahead.
+- **Landscape** (room and small landscape): 7.6 minutes across, 0.22 vw a second, as on the room
+  screen (room-2d.md, "The follow-up to the scene", #483): 1:54 behind "now", 5:41 ahead. The
+  code (`web/src/room/score.ts`) still uses 0.28 vw a second, 6 minutes, until the build follows.
 - **Portrait**: **3 minutes** across, 0.56 vw a second: 45 s behind, 2:15 ahead. At 390 px a
   minute is 130 px wide, where 6 minutes would leave a 30-second interval 16 px wide.
 - A block, clip or moment that begins right of the window is not drawn; one that runs past the

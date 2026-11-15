@@ -252,7 +252,13 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   when that interval plays. (scene.md wraps it over up to three lines because its row has the
   room; here the cue above comes first.) A next interval with no cue has no line 2. Its ink ends
   at least 1 vh above the score (and so above the control band, which covers the score's box) and at
-  least 1 vh under the cue above it; it is dropped as described under "Cue". The last interval's
+  least 1 vh under the cue above it. **Departure from scene.md:** scene.md keeps 1.5 vh between the
+  cue's ink and the next row's ink (its next row is above the cue). Here the cue is above the next
+  row and above the score, and a three-line cue of 120 characters leaves 1.11 vh at the least (1.48
+  with four lines, 1.66 at 3:2 and narrower; usually 2.5 vh or more); 1.5 vh would need 0.4 vh
+  taken from the 1.02 vh left above the score, or from the cue's size, which has its own floor. So
+  this pair keeps the general 1 vh (C4, scene.md S16), recorded as scene.md S1 records its
+  numeral. The next row is dropped as described under "Cue". The last interval's
   row is "End of class" and has no line 2.
 - **Score blocks**: the zone number always; the name if and only if the whole name fits beside
   it, never cut (the mock-ups do this with a wrapping row that hides a name that does not fit).
@@ -375,8 +381,10 @@ The score moves at **13.2 vw a minute (0.22 vw a second)**, "now" stays at 25 vw
 behind and **5.7 minutes ahead**, measured to the screen's right edge (it was 1.5 and 4.5, at 16.7
 vw a minute). A block that begins right of 91 vw is not drawn (its number would not fit inside
 the safe area), so **every interval that starts within 5.0 minutes of now is drawn with its
-number**, and the next row names the one after. The rules for slivers, labels and clips are
-unchanged. Reduced motion: the score steps once a second, as before. The control band still
+number** (unless it is shorter than about 13.6 s: under 3 vw it is a sliver with no number, as
+before), and the next row names the one after. The other rules for slivers, labels and clips are
+unchanged. `web/src/room/score.ts` still uses 0.28 vw a second until the build follows this
+spec. Reduced motion: the score steps once a second, as before. The control band still
 covers the score's box exactly.
 
 ### Playlist not loaded
@@ -389,17 +397,26 @@ loading never blocks the clock. The room screen says it in the rail, in the link
 - a white plate "Playlist not loaded" with the square marker, like every other plate (white, grey
   and black only, rule 7), 19 characters ([mock-up](mockups/room-playlist-not-loaded.html),
   [4:3](mockups/room-playlist-not-loaded-1440x1080.png));
-- **for the 30 s after Start** (the figure of the hand-over notice, ADR 0001 `undoWindowMs`), then
-  the rail returns to its link state;
+- **for 30 s after the first Start of the class** (a Designer's choice, the same figure as the
+  hand-over notice, `undoWindowMs` in the player's link settings; ADR 0001 gives no time), then
+  the rail returns to its link state. Resume after a pause does not show it (a second Start
+  resumes and loads nothing, ADR 0001);
 - **only when Start asked the music app to play** (the follower is Spotify's and can be sent
   commands). With the manual clock, or when the instructor presses play in Spotify themselves,
-  nothing was asked of the music app and there is no plate;
+  nothing was asked of the music app and there is no plate (also a Designer's choice: the ADR
+  loads nothing for the manual clock);
 - a link fault wins: if the link is "Music not heard", "Not a class song", "Song is in twice" or
   "Music paused" when the notice would show, that plate stays and this one does not appear. It
   takes the place of the quiet states ("Following Spotify", "Waiting for the first song");
 - while it shows, the segment name is hidden as with any plate; nothing else moves, nothing
   blinks (reduced motion changes nothing). The presenter's matching line is in
   [presenter.md](presenter.md) ("Music link line").
+
+### Not met: scene.md S14
+
+scene.md S14 (every pattern starting in the look-ahead window shows its words in the score or the
+next row) is **not met here beyond the next interval**: this screen's score carries no pattern
+words. Marked for PL4: either the score's blocks get them or the fallback is accepted as is.
 
 ### Measured
 
@@ -413,7 +430,7 @@ Over the eight new fixtures at 1920×1080, 1680×1050, 1280×720, 1650×1080, 14
 
 | What | Wider than 3:2 | 3:2 and narrower |
 |---|---|---|
-| Cue's ink to the next row's ink | 1.11 vh at the least (a three-line cue of 120 characters); 1.48 vh with a four-line cue | 1.66 vh at the least |
+| Cue's ink to the next row's ink (scene.md: 1.5 vh; a recorded departure, see "Next row") | 1.11 vh at the least (a three-line cue of 120 characters); 1.48 vh with a four-line cue | 1.66 vh at the least |
 | Next row's ink to the score's box (which the band covers) | 1.02 vh | 1.33 vh |
 | Metrics (with the count) to the cue | 1.39 vh | 1.49 vh |
 | Four-line cue, narrow: metrics to the next row beside the gel / cue's ink to the score | | 1.43 vh / 1.65 vh (5:4) |
