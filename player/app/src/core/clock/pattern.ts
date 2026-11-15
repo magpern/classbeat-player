@@ -66,14 +66,31 @@ function songAt(plan: ClockPlan, ms: number): number {
   return plan.songBeats?.[i] ? i : -1;
 }
 
-/** Beats counted over class time [from, to], each song window by its own grid. */
+/**
+ * Beat onsets of one song window inside song time [lo, hi], each end open or closed. Counting
+ * onsets, not fractional beats, keeps the count on the beats of the song class time is in: a
+ * window that ends off a whole beat leaves no fraction behind for the next song.
+ */
+function onsetsIn(sb: SongBeat, lo: number, hi: number, loClosed: boolean, hiClosed: boolean): number {
+  const first = loClosed ? Math.ceil(beatCoord(sb, lo) - EPS) : Math.floor(beatCoord(sb, lo) + EPS) + 1;
+  const last = hiClosed ? Math.floor(beatCoord(sb, hi) + EPS) : Math.ceil(beatCoord(sb, hi) - EPS) - 1;
+  return Math.max(0, last - first + 1);
+}
+
+/**
+ * Beat onsets after class time `from` up to and including `to`, each song window by its own
+ * grid. A window ends before its successor starts, so an onset on the boundary is counted once,
+ * by the window that starts there. A window without a `bpm` adds nothing: the count pauses in
+ * it and picks up where it stopped when a window with a `bpm` follows (not from a fresh step).
+ */
 function beatsBetween(plan: ClockPlan, from: number, to: number): number {
   let sum = 0;
   plan.songs.forEach((w, i) => {
     const sb = plan.songBeats?.[i];
     const lo = Math.max(from, w.startMs);
     const hi = Math.min(to, w.endMs);
-    if (sb && hi > lo) sum += beatCoord(sb, hi - w.startMs) - beatCoord(sb, lo - w.startMs);
+    if (!sb || hi < lo) return;
+    sum += onsetsIn(sb, lo - w.startMs, hi - w.startMs, w.startMs > from, to < w.endMs);
   });
   return sum;
 }
@@ -111,7 +128,7 @@ export function patternAt(plan: ClockPlan, classMs: number): PatternView | null 
   const t0 = patternStart(plan, iv.startMs, pat.startOn === "next_downbeat");
   if (t < t0) return { ...uncounted, counted: true, position: pat.position, holding: true, nextPosition: pat.positions[0] };
   const cycle = pat.beats.reduce((x, y) => x + y, 0);
-  const e = beatsBetween(plan, t0, t) + EPS;
+  const e = beatsBetween(plan, t0, t);
   const inCycle = e - Math.floor(e / cycle) * cycle;
   let step = 0;
   let from = 0;

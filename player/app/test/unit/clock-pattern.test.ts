@@ -146,6 +146,69 @@ test("pattern: crossfade or song change inside the interval takes the beat from 
   assert.equal(patternAt(gap, 3_500)?.counted, false);
 });
 
+const B44 = { ...UP_DOWN, beats: [4, 4] };
+
+type Seq = readonly [ms: number, step: number | null, beat: number | null];
+const SEQ_CASES: readonly (readonly [name: string, plan: ClockPlan, seq: readonly Seq[]])[] = [
+  [
+    "song change off a whole beat, no anchors: counts land on the second song's beats",
+    plan(B44, [BPM120, { bpm: 60, anchors: [] }], { startMs: 0, endMs: 60_000 }, [
+      { startMs: 0, endMs: 3_250 },
+      { startMs: 3_250, endMs: 120_000 },
+    ]),
+    [[3_249, 1, 3], [3_250, 1, 4], [4_249, 1, 4], [4_250, 0, 1], [5_249, 0, 1], [5_250, 0, 2], [6_250, 0, 3]],
+  ],
+  [
+    "song change off a whole beat, anchors in the second song (first beat 250 ms into it)",
+    plan(B44, [BPM120, { bpm: 60, anchors: [{ atMs: 250, bpm: 60 }] }], { startMs: 0, endMs: 60_000 }, [
+      { startMs: 0, endMs: 3_250 },
+      { startMs: 3_250, endMs: 120_000 },
+    ]),
+    [[3_250, 1, 3], [3_499, 1, 3], [3_500, 1, 4], [4_499, 1, 4], [4_500, 0, 1]],
+  ],
+  [
+    "a song without bpm in the middle: the count pauses, then resumes where it stopped",
+    plan(B44, [BPM120, null, BPM120], { startMs: 0, endMs: 60_000 }, [
+      { startMs: 0, endMs: 3_000 },
+      { startMs: 3_000, endMs: 6_000 },
+      { startMs: 6_000, endMs: 120_000 },
+    ]),
+    [[2_999, 1, 2], [3_500, null, null], [5_999, null, null], [6_000, 1, 3], [6_500, 1, 4]],
+  ],
+  [
+    "anchors: a non-integer beat count between anchors is rounded so the next anchor is a beat",
+    plan(UP_DOWN, [{ bpm: 120, anchors: [{ atMs: 0, bpm: 120 }, { atMs: 1_250, bpm: 100 }] }]),
+    [[1_249, 0, 3], [1_250, 0, 4], [1_849, 0, 4], [1_850, 0, 5]],
+  ],
+  [
+    "anchors: the grid before the first anchor runs back from it (anchor 1300 ms, beats at 300, 800)",
+    plan({ ...UP_DOWN, startOn: "next_downbeat" }, [{ bpm: 120, anchors: [{ atMs: 1_300, bpm: 120 }] }], { startMs: 100, endMs: 60_000 }),
+    [[299, null, null], [300, 0, 1], [799, 0, 1], [800, 0, 2]],
+  ],
+  [
+    "anchors are measured from the song's own start, not from class time 0",
+    plan(
+      { ...UP_DOWN, startOn: "next_downbeat" },
+      [BPM120, { bpm: 120, anchors: [{ atMs: 100, bpm: 120 }] }],
+      { startMs: 10_000, endMs: 70_000 },
+      [
+        { startMs: 0, endMs: 10_000 },
+        { startMs: 10_000, endMs: 120_000 },
+      ],
+    ),
+    [[10_099, null, null], [10_100, 0, 1], [10_599, 0, 1], [10_600, 0, 2]],
+  ],
+];
+
+for (const [name, p, seq] of SEQ_CASES) {
+  test(`pattern: ${name}`, () => {
+    for (const [ms, step, beat] of seq) {
+      const v = patternAt(p, ms);
+      assert.deepEqual([ms, v?.stepIndex ?? null, v?.beat ?? null], [ms, step, beat]);
+    }
+  });
+}
+
 test("pattern: viewAt is unchanged and patternAt is the sibling over the same plan and class time", () => {
   const s = start(createClock(120_000, 0), 0);
   const p = plan(UP_DOWN);
