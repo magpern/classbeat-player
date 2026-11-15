@@ -535,15 +535,16 @@ step of the countdown (26 vh), by up to **30 %** and **78 %**. Some steps are sm
      or more. Fixed frames are then at least 1 s apart. No `t0` moves later and nothing is aimed
      at a timing.
    - **What a merge shows.** A merged-away interval is **absent everywhere**: the gel, the next
-     row, the text layer, the score (its time joins the block it merged into), the anticipation,
-     the hue cross and the set of tokens S5 allows. The next interval is always the next one not
+     row, the text layer, the anticipation, the hue cross and the set of tokens S5 allows. Only
+     the score keeps its own block, as wide as its length, with no number and no colour (S3, S5). The next interval is always the next one not
      merged away (S3, S5). A drop merges its **light only** onto the frame: which fixtures are
      lit, the energy and the burst; the interval wins what it sets, and the fan's fixtures come
      on in its colour. **Movement never merges**: the end of the gather's hold-still and the start
      of the fan's turn stay on the song's own drop moment ("The drop"), so beam direction depends
      only on the song position (S7, scene rule 4).
    - **P2. Every other mark next, in order of the time it wants:** user actions as they come
-     (ticks not yet shown are placed again after one), then the count's switch beats, then the
+     (ticks not yet shown are placed again after one; a later action replaces a pending one in
+     its placed frame, the latest state wins), then the count's switch beats, then the
      other ticks. Each takes the **earliest frame at or after its time that is at least 500 ms
      from every mark already placed, fixed frames up to 1 s ahead included**. If that frame is
      too late, more than **500 ms** for a user action or more than **one tick period** for a tick
@@ -648,7 +649,7 @@ window**. The steps, in this order:
 | a | Fixed frames | Merged and placed first (text rule 2, P1); they never move afterwards |
 | b | Every other mark | Placed by text rule 2, P2: user actions, the count's switch beats, the other ticks; the countdown, the bars line, the labels and the score's step show on a mark |
 | c | Runs, into the gaps | Each run goes into a gap between marks that holds it whole (rules for runs 1 and 2); with a count running there are none (rule 3) |
-| d | A run that does not fit, or would make a fourth | It becomes a step in a mark and adds nothing: the energy ramp in the change frame, any other ramp in the next mark, a user action's ramp in the action's frame; a run that cannot be a step waits for a gap that holds it |
+| d | A run that does not fit, or would make a fourth (without the beat: every run, so 0 runs) | It becomes a step in a mark and adds nothing: the energy ramp in the change frame, any other ramp in the next mark, a user action's ramp in the action's frame; a run that cannot be a step waits for a gap that holds it |
 | e | A light-only burst | Skipped where a window would still hold a fourth: a plain interval change. A skipped burst does not start a new 10 s spacing |
 | f | A drop burst | Skipped where a window would still hold a fourth: the fan's fixtures come on in the drop's frame |
 | g | A song-change dim | Skipped where a window would still hold a fourth: the re-aim marks the song |
@@ -663,7 +664,7 @@ The procedure always ends inside the cap, because every mark keeps the invariant
 |---|---|---|---|---|
 | Beat running, a count running | at most 2 | 0 (rule 3 for runs) | 0 (a lift at least once a beat) | **2** |
 | Beat running, no count | at most 2 | what the scheduler fits beside them (d to g) | 0 | **3** |
-| Without the beat | at most 2 | 0: every run becomes a step in a mark (d) | at most 1 | **3** |
+| Without the beat | at most 2 | 0 runs: every run becomes a step in a mark (d) | at most 1 | **3** |
 | Just after a pause (the beat stops) | at most 2 | what the scheduler fits beside them and steady light (d to g) | its first possible change at least 0.73 s after the action's frame (1.73 s, or 1.73 beats, after the last lift, which is at most one beat before) | **3** |
 
 **Colour is never late**: the hue cross and the
@@ -698,7 +699,8 @@ changes, steady light included**. No list of moments is kept beside it.
 of any length, 1 ms ones included, drops anywhere, user actions at any time, every state, tempo,
 pattern and refresh rate) are run through the scheduler, and the test asserts on every one that
 any two marks are at least 500 ms apart; that fixed frames never move except by P1's merge; that
-an action is at most 500 ms late, or 1 s when it joins a fixed frame; that no mark falls inside
+an action's state is shown at most 500 ms after it, or 1 s when it joins a fixed frame, unless a
+later action replaced it in its placed frame (then that frame shows the later state); that no mark falls inside
 a run; and that every 1 s window holds at most 3 counted changes, steady light included.
 
 The **strict gate in #577 is the final authority** for any case these rules miss: a gated run
