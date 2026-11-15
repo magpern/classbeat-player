@@ -63,15 +63,34 @@ test(`a load is confirmed when the first fresh reading is song 1 within ${PLAYLI
   assert.equal(c.snapshot().link?.playlistNotLoaded, false);
 });
 
-test("the first fresh reading is another song: not loaded is said, and the existing link states take over", () => {
+test("the first fresh reading is another song: the link fault wins and the notice does not appear (presenter.md)", () => {
   const { f, c, clock } = shell();
   c.command({ type: "start" });
   f.pending[0]("asked");
   clock.t = 1500;
   f.obs = { ...song(0, clock.t), title: "Something else", artist: "Someone" };
   const snap = c.snapshot();
-  assert.equal(snap.link?.playlistNotLoaded, true);
   assert.equal(snap.link?.state, "Off the list", "a song the class does not expect, as always");
+  assert.equal(snap.link?.playlistNotLoaded, false, "a fault state keeps its plate");
+});
+
+test("the notice shows for 30 s after Start, then the link state returns", () => {
+  const { c, clock } = shell(WITH, fake(false));
+  c.command({ type: "start" });
+  assert.equal(c.snapshot().link?.playlistNotLoaded, true);
+  clock.t = 1000 + 29_999;
+  assert.equal(c.snapshot().link?.playlistNotLoaded, true);
+  clock.t = 1000 + 30_000;
+  assert.equal(c.snapshot().link?.playlistNotLoaded, false);
+});
+
+test("the notice does not come back on Pause and Resume after the 30 s", () => {
+  const { c, clock } = shell(WITH, fake(false));
+  c.command({ type: "start" });
+  clock.t += 31_000;
+  c.command({ type: "pause" });
+  c.command({ type: "resume" });
+  assert.equal(c.snapshot().link?.playlistNotLoaded, false);
 });
 
 test("no fresh reading in time (as on Linux, where OpenUri reports nothing): not loaded", () => {
@@ -125,13 +144,15 @@ test("a follower that cannot load a playlist (Windows today): Start presses play
   assert.equal(c.snapshot().link?.playlistNotLoaded, true);
 });
 
-test("a class without a playlist: nothing is loaded and nothing new is said", () => {
+test("a class without a playlist: nothing is loaded, Start plays what Spotify has, and the notice shows for the 30 s", () => {
   for (const loads of [true, false]) {
     const { f, c, clock } = shell(WITHOUT, fake(loads));
     c.command({ type: "start" });
     assert.deepEqual(f.requests, []);
     assert.deepEqual(f.sent, ["play"]);
     clock.t += 10_000;
+    assert.equal(c.snapshot().link?.playlistNotLoaded, true);
+    clock.t += 20_000;
     assert.equal(c.snapshot().link?.playlistNotLoaded, false);
   }
 });
@@ -165,7 +186,7 @@ test("only Start loads it: pause, resume, next, a nudge and a second Start never
   assert.equal(c.snapshot().link?.playlistNotLoaded, false);
 });
 
-test("on the manual clock Start loads nothing (the music app is not asked), and says not loaded", () => {
+test("on the manual clock Start loads nothing (the music app is not asked), and nothing is said", () => {
   const f = fake();
   const mac = Object.assign(f, { setActive: () => undefined });
   const clock = { t: 1000 };
@@ -174,5 +195,12 @@ test("on the manual clock Start loads nothing (the music app is not asked), and 
   c.command({ type: "start" });
   assert.deepEqual(f.requests, []);
   assert.deepEqual(f.sent, []);
-  assert.equal(c.snapshot().link?.playlistNotLoaded, true);
+  assert.equal(c.snapshot().link?.playlistNotLoaded, false);
+  for (const text of [WITH, WITHOUT]) {
+    const mf = Object.assign(fake(), { setActive: () => undefined });
+    const m = createController(() => 1000, mf, mf);
+    m.open("class.json", text);
+    m.command({ type: "start" });
+    assert.equal(m.snapshot().link?.playlistNotLoaded, false);
+  }
 });

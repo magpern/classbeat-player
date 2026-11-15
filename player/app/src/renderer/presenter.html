@@ -68,10 +68,10 @@
   <p>Interval <output id="interval-number"></output>: <output id="interval-left"></output> left</p>
   <p>Crossfade: planned <output id="crossfade"></output><span id="crossfade-measured" hidden>, measured <output id="crossfade-measured-value"></output><span id="crossfade-differs" hidden> (differs from the plan)</span></span></p>
   <section id="link" aria-label="Music link">
-    <p>Music link: <output id="link-state"></output><span id="link-unavailable" hidden> (following the music is unavailable on this computer)</span><span id="link-guess" hidden> (the clock is guessing)</span><span id="link-hold" hidden>, holding at the end of the song</span></p>
+    <p id="link-line">Music link: <output id="link-state"></output><span id="link-unavailable" hidden> (following the music is unavailable on this computer)</span><span id="link-guess" hidden> (the clock is guessing)</span><span id="link-hold" hidden>, holding at the end of the song</span></p>
     <p id="link-reason" role="status" hidden></p>
     <p id="link-announcement" role="status" hidden></p>
-    <p id="link-playlist" role="status" hidden>Class playlist not loaded in Spotify</p>
+    <p id="link-playlist" role="status" hidden>Playlist not loaded <span id="link-playlist-detail">Start played what Spotify had loaded</span></p>
     <p id="link-pick" hidden>Which one is playing? <span id="link-pick-buttons"></span></p>
     <p>
       <button type="button" id="undo" hidden>Undo</button>

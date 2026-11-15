@@ -77,6 +77,7 @@ function renderLink(s: Snapshot): void {
   hide("link-announcement", k.announcement === null);
   setText("link-announcement", k.announcement ?? "");
   hide("link-playlist", !k.playlistNotLoaded);
+  hide("link-line", k.playlistNotLoaded); // the notice takes the link state's place (presenter.md)
   hide("undo", !k.canUndo);
   hide("follow", k.mode === "following" || !k.available);
   hide("manual", k.mode === "manual" || !k.available);
