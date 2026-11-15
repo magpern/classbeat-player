@@ -8,6 +8,7 @@ model's drawn direction.
 | Module | What |
 |---|---|
 | `src/loop.ts`, `src/bursts.ts`, `src/light-calc.ts`, `src/tokens.ts` | Pure: the per-frame loop, bursts and the song-change dim, brightness calculations, tokens reader. No three.js, no DOM, no clock |
+| `src/colour-cross.ts`, `src/stage-calc.ts`, `src/pattern-light-calc.ts`, `src/soft-calc.ts` | Pure, the deferred looks (#546): the 700 ms colour cross between two zone tokens (S5: never a third hue), the stage looks (before the start, finished, off the list), a position pattern's brightness and accent (Beat level only), and the numbers of the softened beam edge, the round wall dot and the haze's shares |
 | `src/aim.ts`, `src/fixtures.ts`, `src/wall.ts`, `src/haze.ts`, `src/rig.ts` | The three.js scene graph (no WebGL): 22 fixtures, the wall, haze, the burst plane, the fixed camera |
 | `src/text-*-calc.ts`, `src/text-words.ts`, `src/text-view.ts`, `src/text-types.ts` | Pure: the text layer's rules. `textView` turns the class, the class clock and the link into every string and size class of the nine content items (S4); the pattern count (S14), the score (S3, S13), the fitting rules (S15, S16) and the dark-under-text mask's numbers (S2) |
 | `src/text-mask.ts` | The dark-under-text mask: a quad per text line, drawn last, writing the lower of the scene and the cap level (S2) |
@@ -37,6 +38,12 @@ The browser run also checks the text layer on the real page, for each zone at 16
 case in each link state (`tools/text-shots.ts`): cap heights (S1), the colour of every line (S2, S12), the safe area
 (S15), overlaps and cut-off text (S16), and the light under the text over 120 frames and more in zones 4 and 7 with
 the mask and without it (S2). Screenshots: `screenshots/text-*.png`.
+
+The browser run measures S6 too (`tools/flash-shots.ts`, counted by `tools/luminance-steps.ts`): the luminance steps of the canvas on every
+moment of the demo class (beats, an interval change, the drop, the song change that is also an interval change, the light-only burst,
+the pattern, the end), per region (whole screen, four quadrants, a 3 x 3 grid), locked with the beat by the absolute measure and without
+the beat by the strict relative one; at most 3 in any second, and the combined case is a burst with no lens flash. The counts are in
+`artifacts/flash-steps.json`. Screenshots wait for the gel's CSS transition to end (`tools/settle.ts`), so each one is final.
 
 `artifacts/frame-log.csv` (Node) and `artifacts/frame-log-browser.csv` hold the highest beam speed of
 each second; the runs fail above 30 degrees a second plus 2 percent.

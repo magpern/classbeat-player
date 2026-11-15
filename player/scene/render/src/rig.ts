@@ -16,6 +16,7 @@ import type { SceneTokens } from "./tokens.ts";
 import { TextMask } from "./text-mask.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
+import { wallPlays } from "./stage-calc.ts";
 import { lookup, nth } from "./lookup.ts";
 
 const BEAM_BASE = 0.3;
@@ -62,20 +63,21 @@ export class SceneRig {
     const q = lookup(QUALITY, quality);
     // The anticipation wipe comes from the far side (right); the still rig changes colour at once.
     const reached = (t: number) => (draw.reduced ? colours.wipe > 0 : t >= 1 - colours.wipe);
+    const [front, back] = [this.hex(draw.front), this.hex(draw.back)];
     const beam = BEAM_BASE * draw.master * (1 + 2 * draw.lift);
     this.fixtures.forEach((fx, i) => {
       aimQuaternion(nth(draw.drawn, i) ?? { pan: 0, tilt: 0 }, fx.pivot.quaternion);
       const lit = nth(draw.lit, i) === true;
       const t = fx.model.count > 1 ? fx.model.index / (fx.model.count - 1) : 0.5;
-      const hue = fx.model.layer === "back" && reached(t) ? colours.back : colours.front;
-      fx.light(this.hex(hue), lit ? beam : 0, (lit ? 0.9 * (1 + draw.lift) : 0.04) * draw.master);
+      const hue = fx.model.layer === "back" && reached(t) ? back : front;
+      fx.light(hue, lit ? beam : 0, (lit ? 0.9 * (1 + draw.lift) : 0.04) * draw.master);
     });
     const hazeLevel = energy.ambientGlow * HAZE_GAIN * (moments.gather ? 1.5 : 1) * draw.master;
-    this.haze[0].set(this.hex(colours.front), hazeLevel, draw.seconds, true);
-    this.haze[1].set(this.hex(colours.front), hazeLevel * 0.7, draw.seconds * 0.7, q.hazeLayers === 2);
-    this.wall.mesh.visible = q.wall;
-    if (q.wall) {
-      this.wall.update((c) => this.hex(reached(c / (WALL_COLUMNS - 1)) ? colours.back : colours.front), energy.wall, draw.chaseStep, draw.seconds, draw.master * WALL_GAIN, draw.reduced);
+    this.haze[0].set(front, hazeLevel, draw.seconds, true);
+    this.haze[1].set(front, hazeLevel * 0.7, draw.seconds * 0.7, q.hazeLayers === 2);
+    this.wall.mesh.visible = q.wall && wallPlays(draw.stage);
+    if (this.wall.mesh.visible) {
+      this.wall.update((c) => (reached(c / (WALL_COLUMNS - 1)) ? back : front), energy.wall, draw.chaseStep, draw.seconds, draw.master * WALL_GAIN, draw.reduced);
     }
     this.flash.material.opacity = draw.burst * this.tokens.burstPeak;
     this.flash.visible = draw.burst > 0;
