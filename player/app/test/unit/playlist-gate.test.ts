@@ -115,3 +115,92 @@ test("playlistAtStart asks only while the clock is ready: a paused or running cl
     assert.equal(playlistAtStart(s, { type: "start" }, 1000, true, true).ask, null, status);
   }
 });
+
+/** Like rig, but every load stays open until answered by its own number, so two loads can be out at once. */
+function rigMany(): { c: ReturnType<typeof createController>; log: string[]; answer: (n: number, o: LoadOutcome) => void } {
+  const log: string[] = [];
+  const pending: ((o: LoadOutcome) => void)[] = [];
+  const f: MusicReader & MusicTransport = { kind: "fake", latest: () => null, send: (a) => void log.push(a) };
+  Object.assign(f, { loadPlaylist: (_id: string, done: (o: LoadOutcome) => void) => void (log.push("load"), pending.push(done)) });
+  const c = createController(() => 1000, f, f);
+  c.open("class.json", WITH);
+  return { c, log, answer: (n, o) => pending[n](o) };
+}
+
+test("two loads out: the first answer does not end the hold of the second", () => {
+  const { c, log, answer } = rigMany();
+  c.command({ type: "start" });
+  c.open("class-b.json", WITH);
+  c.command({ type: "start" });
+  assert.deepEqual(log, ["load", "load"]);
+  c.music("pause");
+  answer(0, "asked");
+  assert.deepEqual(log, ["load", "load"], "class B's load is still out: the Pause waits");
+  answer(1, "asked");
+  assert.deepEqual(log, ["load", "load", "pause"]);
+});
+
+test("two loads out, answered in the other order: the Pause still waits for both", () => {
+  const { c, log, answer } = rigMany();
+  c.command({ type: "start" });
+  c.open("class-b.json", WITH);
+  c.command({ type: "start" });
+  c.music("pause");
+  answer(1, "asked");
+  assert.deepEqual(log, ["load", "load"]);
+  answer(0, "asked");
+  assert.deepEqual(log, ["load", "load", "pause"]);
+});
+
+test("a repeated answer of an old load does not end the hold of a newer one", () => {
+  const { c, log, answer } = rigMany();
+  c.command({ type: "start" });
+  answer(0, "asked");
+  c.open("class-b.json", WITH);
+  c.command({ type: "start" });
+  c.music("pause");
+  answer(0, "asked");
+  assert.deepEqual(log, ["load", "load"], "the repeat of load A does not release B's hold");
+});
+
+test("the command() path goes through the gate: a second Start (a play command) is held while the load is out", () => {
+  const { c, log, answer } = rig();
+  c.command({ type: "start" });
+  c.command({ type: "start" });
+  assert.deepEqual(log, ["load"], "the play command waits for the load");
+  answer("asked");
+  assert.deepEqual(log, ["load", "play"]);
+});
+
+test("the command() path expires a stuck hold: a play command after the window is not held", () => {
+  const { c, log, clock } = rig();
+  c.command({ type: "start" });
+  clock.t += PLAYLIST_CONFIRM_MS + 1;
+  c.command({ type: "start" });
+  assert.deepEqual(log, ["load", "play"]);
+});
+
+test("a follower that answers twice presses play once", () => {
+  const { c, log, answer } = rig();
+  c.command({ type: "start" });
+  answer("failed");
+  answer("failed");
+  assert.deepEqual(log, ["load", "play"]);
+});
+
+test("the gate alone: tokens, a repeated release and expiry of one of two loads", () => {
+  const out: string[] = [];
+  const g = createLoadGate((a) => void out.push(a), 100);
+  const a = g.hold(0);
+  const b = g.hold(50);
+  g.send("pause");
+  g.release(a);
+  g.release(a);
+  assert.deepEqual(out, []);
+  g.expire(120);
+  assert.deepEqual(out, [], "only the first load expired; the second is still open");
+  g.expire(151);
+  assert.deepEqual(out, ["pause"]);
+  g.release(b);
+  assert.deepEqual(out, ["pause"]);
+});

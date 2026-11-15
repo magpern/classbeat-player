@@ -93,12 +93,15 @@ export function createController(now: () => number = () => performance.now(), re
   const load = (to: PlaylistLoader, id: string, fallback: TransportAction | null): void => {
     const loadId = state.loadId;
     const mine = moves;
-    gate.hold(now());
+    const token = gate.hold(now());
+    let answered = false;
     to.loadPlaylist(id, (outcome) => {
+      if (answered) return; // a follower that answers twice neither presses play twice nor ends another load's hold
+      answered = true;
       const back = state.loadId === loadId && state.loaded !== null && fallsBack(state.loaded.playlist, outcome);
       state = answerLoad(state, loadId, outcome, now());
       if (back && fallback !== null && moves === mine && isFollowing(state)) transport?.send(fallback);
-      gate.release();
+      gate.release(token);
     });
   };
 
