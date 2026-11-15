@@ -96,6 +96,25 @@ const demoSyntax = ["error", ...common,
 //    `getElementById` and `createElement`; no three.js. `test/layer-fences.test.ts` shows each fence firing.
 export const LAYER_DOCUMENT_ALLOWED = ["getElementById", "createElement"];
 export const LAYER_TAGS = ["div", "span"];
+// The one element the layer may find: its own root. It never reaches the scene's canvas or anything else.
+export const LAYER_ROOT_ID = "text";
+// Allowlist of globals (ECMAScript built-ins and utility types as in src/, plus the two page objects, each limited by member
+// below, and the one DOM type the layer names). Every other name, `Range`, `Document`, `Reflect`, `Function`..., is undefined or restricted.
+export const LAYER_GLOBALS = [...SRC_GLOBALS, "document", "window", "HTMLElement"];
+// Allowlist of every member name the layer's code reads, calls or sets: the DOM members it uses on its own nodes, and the names of
+// the view it is handed. A member not on it (setHTMLUnsafe, attachShadow, replaceChildren, cssText, createContextualFragment,
+// parseHTMLUnsafe, construct ...) is refused; adding one is a reviewed change, and test/layer-fences.test.ts holds its own copy.
+export const LAYER_MEMBERS_ALLOWED = [
+  "alert", "appendChild", "at", "backgroundImage", "backgroundPosition", "backgroundSize", "bars", "block", "blocks", "bottom", "boxes", "build", "cached",
+  "chip", "className", "clip", "clips", "clock", "compact", "count", "createElement", "cue", "cueLines", "cycleVw", "detail", "done", "end", "endX",
+  "estimated", "flatMap", "fold", "folded", "fontSize", "forEach", "from", "gel", "getBoundingClientRect", "getElementById", "height", "hidden", "ink",
+  "innerHeight", "innerWidth", "intervals", "join", "kind", "label", "layout", "left", "leftVw", "len", "length", "line", "link", "look", "map", "marks",
+  "max", "metrics", "moments", "name", "nameSmall", "next", "note", "now", "nowX", "num", "number", "numeral", "offsetVw", "parts", "pattern", "pause",
+  "pauseLine", "paused", "phrases", "push", "rail", "reduced", "right", "root", "row", "score", "seg", "segment", "side", "signature", "sizeVh", "slice",
+  "small", "songs", "spec", "squares", "strip", "style", "targets", "text", "textContent", "textLeft", "textRight", "then", "ticks", "time", "title", "to",
+  "toFixed", "top", "total", "ts", "txt", "unit", "up", "update", "updateClock", "updateGel", "updateMetrics", "updateNext", "updatePattern", "updateRail",
+  "use", "val", "value", "width", "word", "x", "x0", "x1", "zone", "zoneName", "invalidate",
+];
 const LAYER_BAD_PROPS = BAD_PROPS.split("|").filter((p) => p !== "createElement" && p !== "appendChild").join("|");
 const layerSyntax = ["error",
   ...common.filter((rule) => !rule.selector.includes(BAD_PROPS) && !rule.selector.startsWith("ImportDeclaration[source.value='three']")),
@@ -108,6 +127,14 @@ const layerSyntax = ["error",
   { selector: "MemberExpression[computed=false][property.name='constructor']", message: "No `constructor` member in the text layer." },
   { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only (use .at(i) or a lookup)." },
   { selector: "ImportDeclaration[source.value=/^three/]", message: "The text layer draws no three.js." },
+  { selector: `MemberExpression[computed=false]:not([property.name=/^(${alt(LAYER_MEMBERS_ALLOWED)})$/])`, message: "That member is not on the text layer's allowlist of members (eslint.config.js LAYER_MEMBERS_ALLOWED)." },
+  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "The text layer reads members by a literal key only." },
+  { selector: "ObjectPattern > Property:not([computed=false][key.type='Identifier'])", message: "The text layer destructures by a plain identifier key only." },
+  { selector: `ObjectPattern > Property[key.name=/^(constructor|${REFLECTION_PROPS})$/]`, message: "No `constructor`, prototype or page member in the text layer, destructured or not." },
+  { selector: `CallExpression[callee.property.name='getElementById']:not([arguments.0.value='${LAYER_ROOT_ID}'])`, message: `The text layer finds only its own root, #${LAYER_ROOT_ID}.` },
+  { selector: "Literal[value=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },
+  { selector: "TemplateElement[value.raw=/url\\(/i]", message: "No url( in the text layer: it loads nothing." },
+  { selector: identifierAllowedAsObject("Object", OBJECT_MEMBERS_ALLOWED), message: "The text layer uses Object only by its listed members." },
   { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `The text layer reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
   { selector: identifierAllowedAsObject("document", LAYER_DOCUMENT_ALLOWED), message: `The text layer reaches the document only by ${LAYER_DOCUMENT_ALLOWED.join(", ")}.` },
 ];
@@ -153,10 +180,12 @@ export default tseslint.config(
   },
   {
     files: ["layer/**/*.ts"],
+    languageOptions: { globals: Object.fromEntries(LAYER_GLOBALS.map((name) => [name, "readonly"])) },
     rules: {
       ...base,
       "no-restricted-imports": ["error", { patterns: [{ regex: "^(?!\\./[A-Za-z0-9-]+\\.ts$|\\.\\./src/[A-Za-z0-9-]+\\.ts$).*$", message: "The text layer imports its siblings and the scene's own src/ modules only." }] }],
-      "no-restricted-globals": globals([...BANNED_GLOBALS, "location", "history"], "The text layer draws what the view says: no network, storage, worker, audio or image."),
+      "no-undef": "error",
+      "no-restricted-globals": globals([...new Set([...BANNED_GLOBALS, ...SRC_BUILTINS_RESTRICTED]), "location", "history"], "The text layer draws what the view says: no network, storage, worker, audio or image."),
       "no-restricted-syntax": layerSyntax,
     },
   },

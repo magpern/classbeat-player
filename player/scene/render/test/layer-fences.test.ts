@@ -49,7 +49,21 @@ const BAD: [string, string, string][] = [
   ["a package", 'import { x } from "left-pad";\nexport const a = x;', "no-restricted-imports"],
   ["a file outside the layer's own and src/", 'import { x } from "../demo/main.ts";\nexport const a = x;', "no-restricted-imports"],
   ["a dynamic import", 'export const a = () => import("https://example.invalid/x.js");', "no-restricted-syntax"],
-  ["eval", 'export const a = () => eval("1");', "no-eval"],
+  ["setHTMLUnsafe", 'export const a = (e: { setHTMLUnsafe(h: string): void }) => e.setHTMLUnsafe("<img src=x>");', "no-restricted-syntax"],
+  ["Range.createContextualFragment", 'export const a = (e: HTMLElement) => e.appendChild(new Range().createContextualFragment("<img src=//x>"));', "no-undef"],
+  ["createContextualFragment by name", 'export const a = (e: HTMLElement, r: { createContextualFragment(h: string): HTMLElement }) => e.appendChild(r.createContextualFragment("<img>"));', "no-restricted-syntax"],
+  ["Document.parseHTMLUnsafe", 'export const a = (e: HTMLElement) => e.appendChild(Document.parseHTMLUnsafe("<img src=//x>").body);', "no-undef"],
+  ["a background image url", 'export const a = (e: HTMLElement) => { e.style.backgroundImage = "url(https://example.invalid/x.png)"; };', "no-restricted-syntax"],
+  ["a url( in a template", "export const a = (e: HTMLElement, n: string) => { e.style.backgroundImage = `url(${n})`; };", "no-restricted-syntax"],
+  ["style.cssText", 'export const a = (e: HTMLElement) => { e.style.cssText = "background:u" + "rl(//x)"; };', "no-restricted-syntax"],
+  ["Reflect.construct", 'export const a = () => Reflect.construct(Function, ["return 1"]);', "no-restricted-globals"],
+  ["attachShadow", "export const a = (e: { attachShadow(o: object): void }) => e.attachShadow({});", "no-restricted-syntax"],
+  ["replaceChildren", "export const a = (e: { replaceChildren(): void }) => e.replaceChildren();", "no-restricted-syntax"],
+  ["the scene's canvas by id", 'export const a = () => document.getElementById("scene");', "no-restricted-syntax"],
+  ["an id chosen at run time", "export const a = (id: string) => document.getElementById(id);", "no-restricted-syntax"],
+  ["a global off the allowlist", "export const a = () => Date.now();", "no-restricted-globals"],
+  ["a type off the allowlist", "export const a = (e: HTMLCanvasElement) => e;", "no-undef"],
+  ["eval",'export const a = () => eval("1");', "no-eval"],
 ];
 for (const [what, src, rule] of BAD) {
   test(`layer/ rejects ${what}`, async () => {
@@ -68,7 +82,8 @@ export function ok(view: TextView, parent: HTMLElement): HTMLElement | null {
   parent.appendChild(d); d.appendChild(s);
   make(parent, "span", "x");
   return document.getElementById("text");
-}`);
+}
+export const grad = (e: HTMLElement) => { e.style.backgroundImage = "linear-gradient(90deg, var(--ink) 0% 50%, transparent 50% 100%)"; };`);
   assert.deepEqual(m.map((x) => `${x.ruleId}: ${x.message}`), []);
 });
 
@@ -84,7 +99,12 @@ test("the layer's own files hold only those fences' routes: no network, audio or
 });
 
 test("the ESLint config carries the layer's allowlists", async () => {
-  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { LAYER_DOCUMENT_ALLOWED: string[]; LAYER_TAGS: string[] };
+  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { LAYER_DOCUMENT_ALLOWED: string[]; LAYER_TAGS: string[]; LAYER_ROOT_ID: string; LAYER_GLOBALS: string[]; LAYER_MEMBERS_ALLOWED: string[] };
+  assert.equal(mod.LAYER_ROOT_ID, "text");
+  assert.deepEqual(mod.LAYER_GLOBALS.filter((g) => ["document", "window", "HTMLElement"].includes(g)).sort(), ["HTMLElement", "document", "window"]);
+  assert.deepEqual(mod.LAYER_GLOBALS.filter((g) => ["Range", "Document", "Reflect", "Function", "Date", "fetch", "HTMLCanvasElement"].includes(g)), []);
+  const refused = ["setHTMLUnsafe", "attachShadow", "replaceChildren", "cssText", "createContextualFragment", "parseHTMLUnsafe", "construct", "innerHTML", "src", "append", "setAttribute", "body", "head", "cookie"];
+  assert.deepEqual(mod.LAYER_MEMBERS_ALLOWED.filter((m) => refused.includes(m)), []);
   assert.deepEqual([...mod.LAYER_DOCUMENT_ALLOWED].sort(), ["createElement", "getElementById"]);
   assert.deepEqual([...mod.LAYER_TAGS].sort(), ["div", "span"]);
 });

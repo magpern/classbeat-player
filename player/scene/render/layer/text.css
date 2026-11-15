@@ -124,7 +124,6 @@
 #text .clip .cd { font-weight: 400; margin-left: 0.8vw; }
 #text .tick { position: absolute; width: 0.2vw; background: var(--light-1); top: 3.6vh; bottom: 0; }
 #text .tick span { position: absolute; top: 0.2vh; left: 0.4vw; font-size: var(--t-label); font-weight: 700; white-space: nowrap; }
-#text .tick span, #text .phrase { }
 #text .phrase { position: absolute; bottom: 0; width: 0.12vw; height: 1.2vh; background: var(--light-3); }
 #text .now { position: absolute; top: 0; bottom: 0; width: 0.25vw; background: var(--light-1); }
 #text .end { position: absolute; top: 0.8vh; height: 10.4vh; width: 0.25vw; background: var(--light-1); }

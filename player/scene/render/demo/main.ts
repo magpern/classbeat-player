@@ -45,7 +45,7 @@ const host: Host = {
 };
 const long = params.get("class") === "long" || params.get("class") === "worst";
 const textClass = params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT;
-const layer = new TextLayer("text");
+const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0",
   onFrame: (draw, measured) => { lastBurst = draw.burst; log.add(draw, measured, song); },

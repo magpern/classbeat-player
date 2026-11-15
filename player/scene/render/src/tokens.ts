@@ -35,6 +35,17 @@ export function parseHex(value: string): number | null {
   return m ? parseInt(m[1]!, 16) : null;
 }
 
+/** Fails closed: only a bare positive number counts (`8 %` is not one), and the cap is never raised above the spec's 0.08. */
+function textCap(raw: string, missing: string[]): number {
+  const v = /^\s*(\d*\.?\d+)\s*$/.exec(raw);
+  const n = v ? Number(v[1]) : NaN;
+  if (!(n > 0)) {
+    if (!missing.includes("--scene-text-cap")) missing.push("--scene-text-cap");
+    return SCENE_TOKEN_DEFAULTS.textCap;
+  }
+  return Math.min(n, SCENE_TOKEN_DEFAULTS.textCap);
+}
+
 export function readSceneTokens(style: StyleSource): SceneTokens {
   const colour = (name: string): number => {
     const v = parseHex(style.getPropertyValue(name));
@@ -56,7 +67,7 @@ export function readSceneTokens(style: StyleSource): SceneTokens {
     zones, white: colour("--light-1"),
     down: number("--scene-down", SCENE_TOKEN_DEFAULTS.down),
     burstPeak, burstMs: burstMs ? Number(burstMs[1]) : SCENE_TOKEN_DEFAULTS.burstMs,
-    textCap: number("--scene-text-cap", SCENE_TOKEN_DEFAULTS.textCap),
+    textCap: textCap(style.getPropertyValue("--scene-text-cap"), missing),
     missing,
   };
 }

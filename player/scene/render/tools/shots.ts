@@ -15,7 +15,7 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
-import { lightMeasurement, reducedMotion, worstCase, zoneShots } from "./text-shots.ts";
+import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
 
 const PAGE = pathToFileURL(join(RENDER_DIR, "dist", "index.html")).href;
@@ -150,6 +150,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await lightMeasurement(opener);
+  await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser);
   console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 34 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);

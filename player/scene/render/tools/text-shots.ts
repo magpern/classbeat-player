@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { violations } from "./guard-trap.ts";
-import { capsScript, coloursScript, lumSetup, overlapScript, safeAreaScript } from "./page-checks.ts";
+import { capsScript, coloursScript, lumSetup, maskCoverScript, overlapScript, safeAreaScript } from "./page-checks.ts";
 
 export type Open = (w: number, h: number, query: string) => Promise<{ page: Page; problems: string[] }>;
 
@@ -39,6 +39,7 @@ export async function zoneShots(open: Open, dir: string): Promise<void> {
     assert.deepEqual(await page.evaluate(coloursScript) as string[], [], `${where}: S2 colour`);
     assert.deepEqual(await page.evaluate(safeAreaScript) as string[], [], `${where}: S15 safe area`);
     assert.deepEqual(await page.evaluate(overlapScript) as string[], [], `${where}: S16 overlap`);
+    assert.deepEqual(await page.evaluate(maskCoverScript) as string[], [], `${where}: S2 text with no mask under it`);
     assert.deepEqual([...problems, ...(await violations(page))], [], where);
     await page.close();
   }
@@ -55,6 +56,7 @@ export async function worstCase(open: Open, dir: string): Promise<void> {
     assert.deepEqual(await page.evaluate(coloursScript) as string[], [], `${where}: S2 colour`);
     assert.deepEqual(await page.evaluate(safeAreaScript) as string[], [], `${where}: S15 safe area`);
     assert.deepEqual(await page.evaluate(overlapScript) as string[], [], `${where}: S16 overlap`);
+    assert.deepEqual(await page.evaluate(maskCoverScript) as string[], [], `${where}: S2 text with no mask under it`);
     assert.deepEqual([...problems, ...(await violations(page))], [], where);
     await page.screenshot({ path: join(dir, `text-worst-${link}-${name}-${w}x${h}.png`) });
     await page.close();
@@ -93,6 +95,23 @@ export async function lightMeasurement(open: Open): Promise<void> {
     assert.ok(on.max <= CAP, `zone ${zone}: the light under the text reached ${on.max.toFixed(4)} (${on.worst}), over the cap ${CAP}`);
     assert.ok(off.max > CAP, `zone ${zone}: without the mask the light is only ${off.max.toFixed(4)}, so the measurement shows nothing`);
   }
+}
+
+/**
+ * The reviewer's mutation: a text node over the scene that the layer did not register for the mask (what a cue built
+ * without `ink()` is). The checks find text by walking the DOM, so each of them must fail on it.
+ */
+export async function unmaskedTextIsCaught(open: Open): Promise<void> {
+  const { page } = await open(1280, 720, "&class=long");
+  await page.evaluate(lumSetup);
+  await page.evaluate(`(() => { const d = document.createElement("div"); d.textContent = "stray text"; d.style.cssText = "position:absolute;left:30vw;top:96vh;font-size:3vh;color:var(--light-1)"; document.getElementById("text").appendChild(d); })()`);
+  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(`window.__lum.run(358.5, 361, "unmasked text")`);
+  const uncovered = await page.evaluate(maskCoverScript) as string[];
+  const light = await page.evaluate(() => (window as unknown as { __lum: { max: number } }).__lum.max);
+  await page.close();
+  assert.ok(uncovered.some((u) => u.includes("stray text")), `the stray text has no mask box and the cover check must say so: ${JSON.stringify(uncovered)}`);
+  assert.ok(light > CAP, `the light under the stray text is ${light.toFixed(3)} and the measurement must see it over the cap`);
 }
 
 /** Reduced motion: the layer carries it, and a colour change is instant (no transition on the gel). */

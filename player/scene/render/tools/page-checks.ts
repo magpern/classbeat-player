@@ -32,6 +32,8 @@ const clip = (el, r) => {
   return rr > l && b > t ? { left: l, top: t, right: rr, bottom: b } : null;
 };
 /** The ink of each text node: its line boxes, cut to the glyphs' own height (a font's content area is taller than its ink), and to the clip of its own box. */
+/** The opaque plates: text on them is on a fill of its own. Every other text node is over the scene. */
+const OPAQUE = ".gel, .score, .c-paused, .chip, .link.alert";
 const texts = () => {
   const out = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -54,7 +56,7 @@ const texts = () => {
     const r = clip(el, box);
     // Cut: the clip of its own box took away some of its height (an intended ellipsis is a line clamp, which hides whole lines).
     const clamped = getComputedStyle(el).webkitLineClamp !== "none";
-    if (r) out.push({ el, text, rect: r, score: !!el.closest(".score"), cut: !clamped && (box.bottom - r.bottom > 1.5 || r.top - box.top > 1.5) });
+    if (r) out.push({ el, text, rect: r, score: !!el.closest(".score"), over: !el.closest(OPAQUE), cut: !clamped && (box.bottom - r.bottom > 1.5 || r.top - box.top > 1.5) });
   }
   return out;
 };
@@ -72,7 +74,7 @@ export const capsScript = (narrow: boolean): string => `(async () => {
   return bad;
 })()`;
 
-/** S2 and S12: all text over the scene is --light-1 (a white plate carries ink on its own fill). */
+/** S2 and S12: every text node over the scene is --light-1 (the opaque plates carry ink on their own fill). */
 export const coloursScript = `(() => {
   ${HELPERS}
   const probe = document.createElement("div");
@@ -81,10 +83,11 @@ export const coloursScript = `(() => {
   const want = getComputedStyle(probe).color;
   probe.remove();
   const bad = [];
-  for (const el of root.querySelectorAll(".ink")) {
-    if (!vis(el) || el.classList.contains("alert") || el.closest(".score, .gel")) continue;
-    const c = getComputedStyle(el).color;
-    if (c !== want) bad.push("not --light-1: " + el.className + " " + c);
+  // Every text node over the scene, found by walking the DOM, whatever built it: not only the lines the layer registered.
+  for (const t of texts()) {
+    if (!t.over) continue;
+    const c = getComputedStyle(t.el).color;
+    if (c !== want) bad.push("not --light-1: " + t.text.slice(0, 20) + " " + c);
   }
   return bad;
 })()`;
@@ -114,7 +117,17 @@ export const overlapScript = `(() => {
 })()`;
 
 /** Sets up the light measurement: `__lum.sample()` reads what the canvas holds under every text box grown by 1.2 vh (S2). */
+/** S2: every text node over the scene lies inside a box the mask darkens under (found by the DOM walk, not by the layer's own list). */
+export const maskCoverScript = `(() => {
+  ${HELPERS}
+  const boxes = window.__scene.text.boxes();
+  const tol = 1;
+  return texts().filter((t) => t.over && !boxes.some((b) => t.rect.left >= b.left - tol && t.rect.right <= b.right + tol && t.rect.top >= b.top - tol && t.rect.bottom <= b.bottom + tol))
+    .map((t) => "no mask box under: " + t.text.slice(0, 24));
+})()`;
+
 export const lumSetup = `(() => {
+  ${HELPERS}
   const side = 480;
   const cv = document.createElement("canvas");
   const ctx = cv.getContext("2d", { willReadFrequently: true });
@@ -129,7 +142,9 @@ export const lumSetup = `(() => {
       const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
       const g = 0.012 * h, k = side / w;
       let frameMax = 0;
-      for (const b of window.__scene.text.boxes()) {
+      for (const t of texts()) {
+        if (!t.over) continue;
+        const b = t.rect;
         const [x0, y0, x1, y1] = [Math.max(0, Math.ceil((b.left - g) * k)), Math.max(0, Math.ceil((b.top - g) * k)), Math.min(cv.width, Math.floor((b.right + g) * k)), Math.min(cv.height, Math.floor((b.bottom + g) * k))];
         for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
           const i = (y * cv.width + x) * 4;

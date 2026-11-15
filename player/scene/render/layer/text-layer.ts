@@ -9,6 +9,9 @@ import type { TextView } from "../src/text-view.ts";
 import { Pool, make, setClass, setText, show } from "./dom-kit.ts";
 import { ScoreLayer } from "./score-layer.ts";
 
+/** Mask boxes grow by this share of the window height above and below each line box (descenders on the tight line-height tiers). */
+const DESCENDER_VH = 0.015;
+
 export class TextLayer {
   private readonly root: HTMLElement;
   private readonly ink: HTMLElement[] = [];
@@ -24,9 +27,9 @@ export class TextLayer {
   private readonly cue: { root: HTMLElement; text: HTMLElement };
   private readonly next: { root: HTMLElement; line: HTMLElement; label: HTMLElement; chip: HTMLElement; name: HTMLElement; length: HTMLElement; spec: HTMLElement; cue: HTMLElement };
 
-  constructor(rootId: string) {
-    const found = document.getElementById(rootId);
-    if (found === null) throw new Error(`the page has no #${rootId} for the text layer`);
+  constructor() {
+    const found = document.getElementById("text");
+    if (found === null) throw new Error("the page has no #text for the text layer");
     this.root = found;
     const ink = (parent: HTMLElement, tag: "div" | "span", className: string): HTMLElement => {
       const el = make(parent, tag, `${className} ink`);
@@ -193,12 +196,15 @@ export class TextLayer {
    * are opaque and are not here). The same array comes back while no line changed.
    */
   boxes(): TextBox[] {
-    const signature = `${window.innerWidth}x${window.innerHeight}|${this.root.className}|${this.ink.map((el) => `${el.hidden ? "-" : el.className}:${el.textContent}`).join("|")}`;
+    const lines = this.ink.map((el) => `${el.hidden ? "-" : el.className}:${el.textContent}`).join("|");
+    const signature = `${window.innerWidth}x${window.innerHeight}|${this.root.className}|${this.pattern.root.hidden}|${this.pattern.root.className}|${this.next.root.style.left}|${this.next.line.style.fontSize}|${lines}`;
     if (signature === this.signature) return this.cached;
     this.signature = signature;
     this.cached = this.ink.flatMap((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 ? [{ left: r.left, top: r.top, right: r.right, bottom: r.bottom }] : [];
+      // A little over and under the line box: tight line heights leave descenders below it.
+      const pad = DESCENDER_VH * window.innerHeight;
+      return r.width > 0 && r.height > 0 ? [{ left: r.left, top: r.top - pad, right: r.right, bottom: r.bottom + pad }] : [];
     });
     return this.cached;
   }
