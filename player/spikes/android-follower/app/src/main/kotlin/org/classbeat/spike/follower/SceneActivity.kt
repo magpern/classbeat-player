@@ -40,9 +40,15 @@ private const val COUNTER_JS =
 
 private const val READ_FRAMES_JS = "window.__spikeFrames"
 
-/** The demo's own once-a-second log (scene/render/tools/frame-log.ts): the last row's fps, or null. */
+/**
+ * The demo's own once-a-second log (scene/render/tools/frame-log.ts): the last row's fps, null when
+ * there is none, or the string "ended" once the demo has stopped itself (its auto run is about 66 s).
+ */
 private const val READ_SCENE_FPS_JS =
-    "(window.__scene&&window.__scene.log.rows.length?window.__scene.log.rows[window.__scene.log.rows.length-1].fps:null)"
+    "(function(){var s=window.__scene;if(!s)return null;if(s.ended)return 'ended';var r=s.log.rows;return r.length?r[r.length-1].fps:null})()"
+
+/** What evaluateJavascript returns for the string 'ended'. */
+private const val SCENE_ENDED = "\"ended\""
 
 /**
  * Opens the scene demo from the files bundled in the APK, in the system web view, and logs frames
@@ -122,7 +128,11 @@ class SceneActivity : Activity() {
             val count = frames?.toDoubleOrNull()?.toLong()
             val fps = if (count == null) null else counter.sample(count, now)
             if (fps != null) {
-                web.evaluateJavascript(READ_SCENE_FPS_JS) { scene -> record(count!!, fps, scene?.toDoubleOrNull()) }
+                web.evaluateJavascript(READ_SCENE_FPS_JS) { scene ->
+                    // An idle page is never sampled: once the demo has ended, the run stops there.
+                    if (scene == SCENE_ENDED) endRun(summarize(samples), sceneEnded = true)
+                    else record(count!!, fps, scene?.toDoubleOrNull())
+                }
             }
         }
         handler.postDelayed(::tick, 1000)
@@ -137,10 +147,15 @@ class SceneActivity : Activity() {
         if (second >= RUN_SECONDS) endRun(summarize(samples))
     }
 
-    private fun endRun(summary: FpsSummary) {
+    private fun endRun(summary: FpsSummary, sceneEnded: Boolean = false) {
+        if (finished) return
         finished = true
+        // Stop the demo as the run ends, so nothing keeps drawing (or could be sampled) after it.
+        handler.removeCallbacksAndMessages(null)
+        web.onPause()
+        web.loadUrl("about:blank")
         log.write(fpsSummaryLine(stamp(), summary))
-        log.write(metaLine(stamp(), linkedMapOf("event" to "end")))
+        log.write(metaLine(stamp(), if (sceneEnded) linkedMapOf("event" to "end", "sceneEndedEarly" to true, "samples" to samples.size) else linkedMapOf("event" to "end")))
         log.close()
         status.text = "Done: median ${summary.medianFps?.let { "%.1f".format(it) }} fps, min ${summary.minFps?.let { "%.1f".format(it) }}, " +
             "longest run under 30 fps ${summary.longestRunUnder30} s, Low holds: ${summary.lowLevelHolds}. Log: ${log.file.name}"

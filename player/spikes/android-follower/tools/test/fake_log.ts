@@ -46,7 +46,8 @@ export function fakeLog(): string {
     if (sample) {
       const polled = MONO0 + Math.round(t * 1000);
       const readAt = polled - 120;
-      const pos = sample.positionMs - (sample.state === "playing" ? 120 : 0);
+      // The Kotlin mapper never emits a negative position (whyUnreadable rejects it), so neither does the fake.
+      const pos = Math.max(0, sample.positionMs - (sample.state === "playing" ? 120 : 0));
       reading = `{"trackId":"${sample.song.trackId}","title":"${sample.song.title}","artist":"${sample.song.artist}","positionMs":${pos},"durationMs":${sample.song.durationMs},"state":"${sample.state}","readAtMs":${readAt},"polledAtMs":${polled},"source":"android-media-session","app":"com.spotify.music"}`;
     }
     lines.push(`{"t":"reading",${stamp(t)},"reading":${reading}}`);

@@ -9,39 +9,21 @@ export interface Tree {
   paths: string[];
 }
 
-/** Removes comments but keeps string literals (so a `//` inside "https://..." survives). */
-export function stripComments(src: string): string {
-  let out = "";
-  for (let i = 0; i < src.length; ) {
-    const c = src[i]!;
-    const two = src.slice(i, i + 2);
-    if (src.startsWith('"""', i)) {
-      const end = src.indexOf('"""', i + 3);
-      const stop = end < 0 ? src.length : end + 3;
-      out += src.slice(i, stop);
-      i = stop;
-    } else if (c === '"') {
-      let j = i + 1;
-      while (j < src.length && src[j] !== '"') j += src[j] === "\\" ? 2 : 1;
-      out += src.slice(i, j + 1);
-      i = j + 1;
-    } else if (two === "//") {
-      while (i < src.length && src[i] !== "\n") i++;
-    } else if (two === "/*") {
-      const end = src.indexOf("*/", i + 2);
-      i = end < 0 ? src.length : end + 2;
-      out += " ";
-    } else {
-      out += c;
-      i++;
-    }
-  }
-  return out;
-}
+import { countMatches, stripComments, stripXmlComments } from "./kotlin_text.js";
+import { listenerShapeProblem, networkLoadsProblem, sessionsProblem } from "./kotlin_shape.js";
 
-const stripXmlComments = (x: string) => x.replace(/<!--[\s\S]*?-->/g, "");
+export { stripComments };
 
-const AUDIO = /\b(?:MediaPlayer|ExoPlayer|AudioTrack|AudioRecord|MediaRecorder|SoundPool|AudioPlaybackCapture\w*|MediaProjection\w*|AudioEffect|Visualizer|TextToSpeech)\b|androidx\.media3|androidx\.media\.|com\.spotify\.(?!music")/;
+const READER = "/SpotifyReader.kt";
+/** Reflection and class loading get around every name list, so none is allowed (`javaClass.name` and `::class.java.name` are). */
+const REFLECTION = /Class\.forName|java\.lang\.reflect|kotlin\.reflect|\.getMethods?\(|\.getDeclared\w+\(|\.getFields?\(|\.getConstructors?\(|\bMethodHandles?\b|ClassLoader|::class\.java\.(?!name\b|simpleName\b)|javaClass\.(?!name\b|simpleName\b)/;
+/** Other ways to get the unfiltered session list: never used here. */
+const SESSION_SOURCES = /addOnActiveSessionsChangedListener|getActiveSessionsForUser|\bMediaController\b/;
+const KT_PATHS = /^(?:app\/src\/main|core\/src\/main|core\/src\/test)\/kotlin\/.+\.kt$/;
+const KTS_PATHS = /^(?:|app\/|core\/)(?:build|settings)\.gradle\.kts$/;
+const CODE_FILE = /\.(?:java|kt|kts|groovy|gradle|scala|aidl|c|cc|cpp|h|rs|dex|jar|aar|so)$/i;
+
+const AUDIO =/\b(?:MediaCodec\w*|MediaExtractor|MediaMuxer|Ringtone\w*|playSoundEffect|MediaPlayer|ExoPlayer|AudioTrack|AudioRecord|MediaRecorder|SoundPool|AudioPlaybackCapture\w*|MediaProjection\w*|AudioEffect|Visualizer|TextToSpeech|ToneGenerator|AsyncPlayer|JetPlayer)\b|androidx\.media3|androidx\.media\.|com\.spotify\.(?!music")/;
 const TRANSPORT = /transportControls|TransportControls|dispatchMediaButtonEvent|dispatchMediaKeyEvent|KEYCODE_MEDIA|sendCommand|sendCustomAction|playFromMediaId|playFromUri|adjustVolume|setVolumeTo|MediaBrowser|MediaButtonReceiver/;
 const NOTIFICATION_READ = /getActiveNotifications|activeNotifications|\.notification\b|\.extras\b|tickerText|EXTRA_TITLE|EXTRA_TEXT|EXTRA_BIG_TEXT|snoozeNotification|cancelNotification|currentRanking|getCurrentRanking/;
 const BLUETOOTH = /android\.bluetooth|Bluetooth\w*|BLUETOOTH/;
@@ -49,6 +31,8 @@ const NETWORK = /java\.net\.|javax\.net|okhttp|retrofit|android\.net\.(?!Uri\b)|
 const SECRET = /\b(?:access[_-]?token|client[_-]?secret|api[_-]?key|password|authorization|bearer)\b/i;
 const SIGNING = /signingConfig|storeFile|storePassword|keyPassword|keyAlias/;
 const ALLOWED_DEPENDENCIES = ["androidx.core:core-ktx:1.15.0", "androidx.webkit:webkit:1.12.1"];
+/** The Gradle tasks (as written in app/build.gradle.kts) that must depend on the merged-manifest check. */
+const GUARDED_TASKS = ["compile${cap}Kotlin", "compile${cap}JavaWithJavac", "package$cap", "package${cap}Bundle", "bundle$cap", "install$cap", "assemble$cap"];
 const ALLOWED_URL = "https://appassets.androidplatform.net/";
 
 export function checkTree(tree: Tree): string[] {
@@ -71,6 +55,8 @@ export function checkTree(tree: Tree): string[] {
   const listeners = kt.filter(([, t]) => /\bNotificationListenerService\b/.test(t));
   if (listeners.length !== 1 || !listeners[0]![0].endsWith("/SpikeListener.kt")) add("listener", "app", "exactly one listener, SpikeListener.kt, may exist");
   for (const [p, t] of listeners) {
+    const shape = listenerShapeProblem(t);
+    if (shape) add("listener", p, shape);
     const funs = [...t.matchAll(/\bfun\s+\w+/g)].length;
     const empty = [...t.matchAll(/\bfun\s+\w+\s*\([^)]*\)\s*(?::\s*[\w.?]+)?\s*\{\s*\}/g)].length;
     if (funs !== empty) add("listener", p, "every function of the notification listener must have an empty body");
@@ -91,13 +77,28 @@ export function checkTree(tree: Tree): string[] {
     for (const m of t.matchAll(/https?:\/\/[^"\s)]*/g)) if (!m[0].startsWith(ALLOWED_URL)) add("network", p, `URL ${m[0]}`);
     if (/allowFileAccess\s*=\s*true|setAllowFileAccess\(\s*true|AllowUniversalAccessFromFileURLs/.test(t)) add("webview", p, "opens file access");
     if (p.endsWith("/SceneActivity.kt") && !/blockNetworkLoads\s*=\s*true/.test(t)) add("webview", p, "the web view must set blockNetworkLoads = true");
+    const loads = networkLoadsProblem(t);
+    if (loads) add("webview", p, loads);
+    if (REFLECTION.test(t)) add("reflection", p, "uses reflection or class loading");
+    if (SESSION_SOURCES.test(t)) add("filter", p, "uses a source of the unfiltered session list other than getActiveSessions");
+    if (!p.endsWith(READER) && /\bMediaSessionManager\b/.test(t)) add("filter", p, "MediaSessionManager is allowed only in SpotifyReader.kt");
+  }
+  // Source files come from an allowlist of paths: no .java, no other source set, no other build script.
+  for (const p of tree.paths) {
+    if (p.startsWith("tools/") || !CODE_FILE.test(p)) continue;
+    const ok = p.endsWith(".kt") ? KT_PATHS.test(p) : p.endsWith(".kts") ? KTS_PATHS.test(p) : p === "gradle/wrapper/gradle-wrapper.jar";
+    if (!ok) add("sources", p, "a source or binary file outside the allowlisted paths");
   }
   for (const p of tree.paths) if (/\.(?:jks|keystore|p12|pfx)$|(?:^|\/)(?:keystore\.properties|\.env[\w.]*)$/i.test(p)) add("signing", p, "committed signing material or env file");
 
   // Reads Spotify's session only: filtered to Spotify's package before anything is read.
-  const readers = kt.filter(([, t]) => t.includes("getActiveSessions"));
-  if (readers.length !== 1) add("filter", "app", "exactly one file may call getActiveSessions");
+  // getActiveSessions occurs exactly once in the whole tree (occurrences, not files), in SpotifyReader.kt.
+  const readers = kt.filter(([, t]) => /\bgetActiveSessions\b/.test(t));
+  const calls = kt.reduce((n, [, t]) => n + countMatches(t, /\bgetActiveSessions\b/g), 0);
+  if (calls !== 1 || readers.length !== 1 || !readers[0]![0].endsWith(READER)) add("filter", "app", `getActiveSessions must occur exactly once, in SpotifyReader.kt (found ${calls})`);
   for (const [p, t] of readers) {
+    const used = sessionsProblem(t);
+    if (used) add("filter", p, used);
     const from = t.indexOf("getActiveSessions");
     const filter = t.indexOf("spotifyOnly(", from);
     const firstRead = Math.min(...[".metadata", ".playbackState", "getMetadata", "getPlaybackState"].map((k) => { const i = t.indexOf(k, from); return i < 0 ? Infinity : i; }));
@@ -118,6 +119,13 @@ export function checkTree(tree: Tree): string[] {
   }
   const app = kts.find(([p]) => p === "app/build.gradle.kts");
   if (!app || !/CheckManifest/.test(app[1]) || !/MERGED_MANIFEST/.test(app[1])) add("manifest", "app/build.gradle.kts", "the merged-manifest check is missing");
+
+  // The check is wired to every path to a built or installed app, not only `assemble` (#559, N6).
+  if (app) {
+    for (const task of GUARDED_TASKS) {
+      if (!app[1].includes(`"${task}"`)) add("manifest", "app/build.gradle.kts", `the merged-manifest check is not wired to ${task}`);
+    }
+  }
 
   // The pure module imports no Android class and no I/O.
   for (const [p, t] of kt) {
