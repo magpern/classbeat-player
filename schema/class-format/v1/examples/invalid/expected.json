@@ -496,5 +496,23 @@
       "playlist_without_spotify_source",
       "/music/spotify_playlist"
     ]
+  ],
+  "schema-spotify-playlist-colons-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-quote-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-space-22.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
   ]
 }
