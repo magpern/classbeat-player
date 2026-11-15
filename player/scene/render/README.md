@@ -8,10 +8,9 @@ model's drawn direction.
 | Module | What |
 |---|---|
 | `src/loop.ts`, `src/bursts.ts`, `src/light-calc.ts`, `src/tokens.ts` | Pure: the per-frame loop, bursts and the song-change dim, brightness calculations, tokens reader. No three.js, no DOM, no clock |
-| `src/colour-cross.ts`, `src/stage-calc.ts`, `src/pattern-light-calc.ts`, `src/soft-calc.ts` | Pure, the deferred looks (#546): the 700 ms colour cross between two zone tokens (S5: never a third hue), the stage looks (before the start, finished, off the list), a position pattern's brightness and accent (Beat level only), and the numbers of the softened beam edge, the round wall dot and the haze's shares |
-| `src/aim.ts`, `src/fixtures.ts`, `src/wall.ts`, `src/haze.ts`, `src/rig.ts` | The three.js scene graph (no WebGL): 22 fixtures, the wall, haze, the burst plane, the fixed camera |
+| `src/cross-calc.ts`, `src/stage-calc.ts`, `src/pattern-light-calc.ts`, `src/scene-shader.ts` | Pure: the 700 ms hue cross (the front's place, the energy ramp, the seek gate), the stage looks (before the start, off the list), a position pattern's parsing and numbers (not drawn yet: #577), and the scene's one shader as strings |
+| `src/aim.ts`, `src/fixtures.ts`, `src/rig.ts`, `src/text-mask.ts` | The three.js scene graph (no WebGL): 22 fixture pivots the model's directions turn, and one fullscreen quad whose shader (`scene-shader.ts`) draws every light in linear light as a luminance in one of two tokens, owns each pixel by the larger token share, tone-maps on luminance, applies the text cap (S2) as a scale in linear light and encodes to sRGB once (S5). `text-mask.ts` holds the cap rectangles as the shader's uniforms. The canvas is scaled up nearest-neighbour (`demo.css`) |
 | `src/text-*-calc.ts`, `src/text-words.ts`, `src/text-view.ts`, `src/text-types.ts` | Pure: the text layer's rules. `textView` turns the class, the class clock and the link into every string and size class of the nine content items (S4); the pattern count (S14), the score (S3, S13), the fitting rules (S15, S16) and the dark-under-text mask's numbers (S2) |
-| `src/text-mask.ts` | The dark-under-text mask: a quad per text line, drawn last, writing the lower of the scene and the cap level (S2) |
 | `layer/` | The text layer's DOM, the only place that builds nodes (a `div` or a `span` by text, class and style), fenced by its own lint block; `text.css` places them in shares of the window and names no colour of its own |
 | `src/renderer.ts` | `SceneRenderer`: the canvas, the animation frame, the quality level's render scale |
 | `demo/`, `tools/` | The demo page, the Node and browser frame logs, the screenshots |
@@ -47,3 +46,5 @@ the beat by the strict relative one; at most 3 in any second, and the combined c
 
 `artifacts/frame-log.csv` (Node) and `artifacts/frame-log-browser.csv` hold the highest beam speed of
 each second; the runs fail above 30 degrees a second plus 2 percent.
+
+The browser run checks S5 on the rendered pixels of every frame of the S6 runs (`tools/s5-fit.ts`: every pixel is `a x token + w x white` in linear light within 1 code value, 0 failing pixels). The S6 runs play in a 480 x 270 window and the frame log in 640 x 360: software GL draws the fullscreen shader slowly, and neither the beams' speed nor the luminance counts depend on the size.

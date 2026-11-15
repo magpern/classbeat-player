@@ -23,8 +23,10 @@ export const easeOut = (p: number): number => 1 - (1 - Math.min(1, Math.max(0, p
  * previous one shortens the cross: it never starts before that change.
  */
 export function crossLook(msToChange: number | null, msSincePrevious: number, crossMs = CROSS_MS): CrossLook {
-  const span = Math.min(crossMs, Math.max(0, msSincePrevious));
-  if (msToChange === null || !(span > 0) || msToChange <= 0 || msToChange > span) return NO_CROSS;
+  if (msToChange === null) return NO_CROSS;
+  // The interval's own length (from the previous change to the next) is fixed, so the span is too: it does not grow as the interval goes on.
+  const span = Math.min(crossMs, Math.max(0, msSincePrevious) + msToChange);
+  if (!(span > 0) || msToChange <= 0 || msToChange > span) return NO_CROSS;
   const s = 1 - msToChange / span;
   return { front: 1 - easeOut(s), ramp: s };
 }
