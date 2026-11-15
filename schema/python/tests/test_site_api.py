@@ -1,6 +1,7 @@
 """The site's answers (schema/site-api/v1): every example gets its verdict from the JSON Schema,
 every valid one round-trips through the generated Pydantic model, and the /me answer carries
-the signed-in account's email, or null for an account with none (ADR 0010), and nothing else."""
+the signed-in account's email, or null for an account with none (ADR 0010), and nothing else.
+The passkeys answer's own rules are in test_site_api_passkeys.py."""
 
 from __future__ import annotations
 
@@ -15,13 +16,17 @@ from vectors import V1, files, load
 
 API = V1.parent.parent / "site-api" / "v1"
 EXAMPLES = API / "examples"
-NAMES = ("me",)
+NAMES = ("me", "passkeys")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "generated" / "python"))
 
 import site_api_me
+import site_api_passkeys
 
-MODELS: dict[str, Any] = {"me": site_api_me.MeAnswer}
+MODELS: dict[str, Any] = {
+    "me": site_api_me.MeAnswer,
+    "passkeys": site_api_passkeys.PasskeysAnswer,
+}
 
 
 def validator(name: str) -> Draft202012Validator:
