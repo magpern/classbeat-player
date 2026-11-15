@@ -5,6 +5,7 @@
 import { AdditiveBlending, CircleGeometry, Color, ConeGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, ShaderMaterial } from "three";
 import type { Fixture as ModelFixture, Layer } from "../../model/src/index.ts";
 import { FIXTURES } from "../../model/src/index.ts";
+import { lookup } from "./lookup.ts";
 
 interface LayerSpec { readonly z: number; readonly y: number; readonly span: number; readonly lens: number; readonly beamGain: number }
 /** Depths from scene.md: front 16, floor 19, back 23 (camera at 0, looking down -z). The back truss is smaller and dimmer. */
@@ -37,7 +38,7 @@ export class FixtureView {
 
   constructor(model: ModelFixture) {
     this.model = model;
-    const spec = LAYERS[model.layer];
+    const spec = lookup(LAYERS, model.layer);
     const t = model.count > 1 ? model.index / (model.count - 1) : 0.5;
     this.gain = spec.beamGain;
     this.pivot.position.set((2 * t - 1) * spec.span, spec.y, spec.z);

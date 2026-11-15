@@ -41,3 +41,8 @@ test("the demo page carries a content-security policy that allows its own files 
   assert.doesNotMatch(policy, /unsafe-|https?:|\*/);
   assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)|\sstyle=|<style|\son\w+=/i); // no inline script, style or handler
 });
+
+test("the policy never allows eval, so a Function call throws at run time even if lint misses a route", () => {
+  assert.deepEqual(directives.get("script-src"), ["'self'"]);
+  assert.doesNotMatch(policy, /unsafe-eval|wasm-unsafe-eval|unsafe-inline/);
+});

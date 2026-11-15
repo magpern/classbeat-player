@@ -14,6 +14,7 @@ import type { Draw } from "./loop.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { Wall } from "./wall.ts";
 import { WALL_COLUMNS } from "./light-calc.ts";
+import { lookup, nth } from "./lookup.ts";
 
 const BEAM_BASE = 0.3;
 const HAZE_GAIN = 1;
@@ -46,18 +47,18 @@ export class SceneRig {
   }
 
   private hex(hue: RigHue): number {
-    return hue.kind === "zone" ? this.tokens.zones[hue.zone] : this.tokens.white;
+    return hue.kind === "zone" ? lookup(this.tokens.zones, hue.zone) : this.tokens.white;
   }
 
   apply(draw: Draw, quality: QualityLevel): void {
     const { colours, energy, moments } = draw.frame;
-    const q = QUALITY[quality];
+    const q = lookup(QUALITY, quality);
     // The anticipation wipe comes from the far side (right); the still rig changes colour at once.
     const reached = (t: number) => (draw.reduced ? colours.wipe > 0 : t >= 1 - colours.wipe);
     const beam = BEAM_BASE * draw.master * (1 + 2 * draw.lift);
     this.fixtures.forEach((fx, i) => {
-      aimQuaternion(draw.drawn[i] ?? { pan: 0, tilt: 0 }, fx.pivot.quaternion);
-      const lit = draw.lit[i] === true;
+      aimQuaternion(nth(draw.drawn, i) ?? { pan: 0, tilt: 0 }, fx.pivot.quaternion);
+      const lit = nth(draw.lit, i) === true;
       const t = fx.model.count > 1 ? fx.model.index / (fx.model.count - 1) : 0.5;
       const hue = fx.model.layer === "back" && reached(t) ? colours.back : colours.front;
       fx.light(this.hex(hue), lit ? beam : 0, (lit ? 0.9 * (1 + draw.lift) : 0.04) * draw.master);

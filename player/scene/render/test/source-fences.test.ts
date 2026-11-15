@@ -14,20 +14,26 @@ import { RigLoop } from "../src/loop.ts";
 import { SceneRig } from "../src/rig.ts";
 import { RENDER_DIR, tokensFromFile } from "../tools/tokens-file.ts";
 
-const ALLOWED = ["AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial", "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3", "WebGLRenderer"];
+const ALLOWED = ["AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial", "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3"];
+// The host (demo/ now, the shell later) alone builds the renderer; src/ is handed it (src/host.ts).
+const DEMO_ALLOWED = [...ALLOWED, "WebGLRenderer"];
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const sources = ["src", "demo"].flatMap((d) => readdirSync(join(RENDER_DIR, d)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${d}/${f}`, text: code(readFileSync(join(RENDER_DIR, d, f), "utf8")) })));
 
 test("three.js is imported by allowlisted names only, no subpath, no namespace or default import", () => {
-  const used = sources.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));
-  assert.ok(used.length > 10);
-  assert.deepEqual(used.filter((n) => !ALLOWED.includes(n)), []);
+  const names = (list: typeof sources) => list.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));
+  const inSrc = names(sources.filter((s) => s.name.startsWith("src/")));
+  assert.ok(inSrc.length > 10);
+  assert.deepEqual(inSrc.filter((n) => !ALLOWED.includes(n)), []);
+  assert.deepEqual(names(sources).filter((n) => !DEMO_ALLOWED.includes(n)), []);
   assert.deepEqual(sources.filter((s) => /from\s*["']three\//.test(s.text) || /import\s+(?!type\b)(\*|\w+)[^;]*from\s*"three"/.test(s.text)).map((s) => s.name), []);
 });
 
 test("the ESLint config carries the same allowlist", async () => {
-  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { THREE_ALLOWED: string[] };
+  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { THREE_ALLOWED: string[]; THREE_DEMO_ALLOWED: string[] };
   assert.deepEqual([...mod.THREE_ALLOWED].sort(), [...ALLOWED].sort());
+  assert.ok(!mod.THREE_ALLOWED.includes("WebGLRenderer"));
+  assert.deepEqual([...mod.THREE_DEMO_ALLOWED].sort(), [...DEMO_ALLOWED].sort());
 });
 
 test("each fence fires: three.js audio and loaders, a beacon, dynamic import, crypto, workers, .play(any), cookies, the global object", async () => {
@@ -77,6 +83,64 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
     ["export const a = () => new window.Image();", "no-restricted-syntax", "demo/probe.ts"],
     ['export const a = () => { location.href = "https://example.invalid"; };', "no-restricted-syntax", "demo/probe.ts"],
     ['export const a = (e: { src: string }) => { e.src = "x"; };', "no-restricted-syntax", "demo/probe.ts"],
+    // The last two routes of the #536 review: the renderer is built by the host, and a name is never built at run time.
+    ['import { WebGLRenderer } from "three";\nexport const a = () => new WebGLRenderer();', "no-restricted-imports", "src/probe.ts"],
+    ['import { WebGLRenderer } from "three";\nexport const a = () => new WebGLRenderer();', "no-restricted-imports", "src/rig.ts"],
+    ['export const a = () => ({}).constructor.constructor("return this")();', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => ({})["constructor"]["constructor"]("return this")();', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => { const { constructor: F } = {}; return F; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (x: { ownerDocument: unknown }) => x["owner" + "Document"];', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => x[k];", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => x?.[k];", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => { const { [k]: v } = x; return v; };", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => Function("return this")();', "no-new-func", "src/probe.ts"],
+    // The second round: every ES built-in off the allowlist, Object reflection, and the three.js callback routes.
+    ['export const a = (): unknown => { const F = Function; return F("return this")(); };', "no-restricted-globals", "src/probe.ts"],
+    ['export const a = (): unknown => Reflect.apply(Function, undefined, ["return this"]);', "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => Function.prototype;", "no-restricted-globals", "src/probe.ts"],
+    ['export const a = (x: object): unknown => Reflect.get(x, "constructor");', "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => new Proxy({}, {});", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => new Date();", "no-restricted-globals", "src/probe.ts"],
+    ['export const a = (): unknown => eval("1");', "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => WebAssembly;", "no-undef", "src/probe.ts"],
+    ['export const a = (): unknown => (Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Object), "constructor")?.value as (s: string) => () => unknown)("return this")();', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (o: object): unknown => Object.getOwnPropertyDescriptors(Object.getPrototypeOf(o));", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (o: object): unknown => Object.setPrototypeOf(o, null);", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (o: object): unknown => Object.defineProperty(o, "x", { value: 1 });', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (o: object): unknown => Object.defineProperties(o, {});', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => { const O = Object; return O.getPrototypeOf; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => { const { getPrototypeOf } = Object; return getPrototypeOf; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (o: object): unknown => (o as { __proto__: unknown }).__proto__;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (o: { __lookupGetter__(n: string): unknown }): unknown => o.__lookupGetter__('x');", "no-restricted-syntax", "src/probe.ts"],
+    ['import { Object3D } from "three";\nexport const a = (o: Object3D): void => { o.onBeforeRender = () => undefined; };', "no-restricted-syntax", "src/probe.ts"],
+    ['import { Object3D } from "three";\nexport const a = (o: Object3D): void => { o.onAfterRender = () => undefined; };', "no-restricted-syntax", "src/probe.ts"],
+    ['import { ShaderMaterial } from "three";\nexport const a = (m: ShaderMaterial): void => { m.onBeforeCompile = () => undefined; };', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (n: { getRootNode(): unknown }): unknown => n.getRootNode();", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (n: { ownerDocument: unknown }): unknown => n.ownerDocument;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (n: { defaultView: unknown }): unknown => n.defaultView;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (n: { parentNode: unknown }): unknown => n.parentNode;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (n: { domElement: unknown }): unknown => n.domElement;", "no-restricted-syntax", "src/probe.ts"],
+    // The third round: a destructuring key of any spelling, bare ESLint globals, and Error's static members.
+    ['export const a = (): unknown => { const { "constructor": O } = {}; return O; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (): unknown => { const { ["constructor"]: O } = {}; return O; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (): unknown => { const { "constructor": O } = {}; const { "constructor": F } = O as object; return (F as (s: string) => () => unknown)("return this")(); };', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (f: object): unknown => { const { __proto__: p } = f; return p; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (r: { domElement: unknown }): unknown => { const { domElement } = r; return domElement; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (r: { getRootNode: unknown }): unknown => { const { getRootNode } = r; return getRootNode; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (r: { x: { domElement: unknown } }): unknown => { const { x: { domElement } } = r; return domElement; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = ({ domElement }: { domElement: unknown }): unknown => domElement;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = ({ x: { constructor: F } }: { x: object }): unknown => F;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (r: Record<string, number>, k: string): unknown => { const { [k]: v } = r; return v; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (r: Record<string, number>): unknown => { const { 'a': v } = r; return v; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => constructor;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => Temporal;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => valueOf;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => toString;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => hasOwnProperty;", "no-restricted-globals", "src/probe.ts"],
+    ["export const a = (): unknown => Error.captureStackTrace;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => { Error.prepareStackTrace = () => 1; };", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => TypeError.captureStackTrace;", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (): unknown => { const E = RangeError; return new E('x'); };", "no-restricted-syntax", "src/probe.ts"],
     ['import { Color } from "three";\nexport const a = Color;', "no-restricted-imports", "src/loop.ts"],
     ["export const a = performance;", "no-restricted-globals", "src/bursts.ts"],
   ];
@@ -88,6 +152,9 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
   const allowed: [string, string][] = [
     ["export const a = () => [window.innerWidth, window.innerHeight, window.devicePixelRatio];", "src/probe.ts"],
     ['export const a = () => window.addEventListener("resize", () => 0);', "src/probe.ts"],
+    ["export const a = (l: readonly number[]) => [l[0], l.at(1), l.length];", "src/probe.ts"],
+    ["export const a = (o: { x: number; y: { z: number } }, { x }: { x: number }): unknown => { const { y: { z } } = o; const { y, ...rest } = o; return [x, z, y, rest, new Error('e'), new RangeError('r')]; };", "src/probe.ts"],
+    ["export const a = (o: Record<string, number>) => [Object.entries(o), Object.fromEntries([]), Object.keys(o), Math.max(1, Number(2))];", "src/probe.ts"],
     ['export const a = () => [document.getElementById("scene"), document.documentElement, location.search];', "demo/probe.ts"],
   ];
   for (const [src, file] of allowed) {

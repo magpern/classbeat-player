@@ -12,6 +12,7 @@ import { RigLoop } from "./loop.ts";
 import type { Draw, Feed } from "./loop.ts";
 import { SceneRig } from "./rig.ts";
 import type { SceneTokens } from "./tokens.ts";
+import { lookup } from "./lookup.ts";
 
 export interface RendererOptions {
   readonly tokens: SceneTokens;
@@ -45,7 +46,7 @@ export class SceneRenderer {
   resize(): void {
     const { width, height, pixelRatio } = this.host.size();
     const [w, h] = [Math.max(1, width), Math.max(1, height)];
-    this.host.painter.setPixelRatio(QUALITY[this.quality].renderScale * (pixelRatio || 1));
+    this.host.painter.setPixelRatio(lookup(QUALITY, this.quality).renderScale * (pixelRatio || 1));
     this.host.painter.setSize(w, h);
     this.rig.setAspect(w / h);
   }
