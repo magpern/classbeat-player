@@ -21,7 +21,8 @@ const SIZES: readonly (readonly [number, number])[] = [[1280, 800], [1000, 720]]
 const WITH = readFileSync(join(CONVERTER_FIXTURES, "class-30min-spotify-playlist.expected.json"), "utf8");
 const doc = JSON.parse(WITH) as { music: Record<string, unknown>; songs: { title: string; artist: string; length_ms: number }[] };
 const WITHOUT = JSON.stringify({ ...doc, music: { ...doc.music, spotify_playlist: undefined } });
-const NOTICE = "Playlist not loaded Start played what Spotify had loaded";
+const NOTICE = "Playlist not loaded";
+const DETAIL = "Start played what Spotify had loaded";
 
 /** The snapshot 2 s after Start, with the follower answering `outcome` and then reading `title`. */
 function started(text: string, outcome: LoadOutcome, title: string | null, at = 3000, manual = false): Snapshot {
@@ -101,8 +102,14 @@ test("the playlist notice shows only when the class's playlist was not loaded", 
         await page.screenshot({ path: join(SHOT_DIR, `presenter-playlist-${name}.png`), fullPage: true, animations: "disabled" });
         const notice = page.locator("#link-playlist");
         assert.equal(await notice.isVisible(), s.shown, `${name}: the notice`);
-        assert.equal((await notice.textContent())?.replace(/\s+/g, " ").trim(), NOTICE);
-        assert.equal(await page.locator("#link-line").isVisible(), !s.shown, `${name}: the notice takes the link state's place`);
+        assert.equal((await notice.locator("#link-playlist-notice").textContent())?.trim(), NOTICE);
+        assert.equal((await notice.locator("#link-playlist-detail").textContent())?.trim(), DETAIL);
+        if (s.shown) {
+          const a = await notice.locator("#link-playlist-notice").boundingBox();
+          const b = await notice.locator("#link-playlist-detail").boundingBox();
+          assert.ok(a && b && b.y >= a.y + a.height - 1, `${name}: the detail is on its own line`);
+        }
+        assert.equal(await page.locator("#link p").first().isVisible(), !s.shown, `${name}: the notice takes the link state's place`);
         assert.equal(await notice.getAttribute("role"), "status", "read out when it appears");
         assert.deepEqual(external, [], `${name}: requests left the file system`);
         assert.deepEqual(errors, [], `${name}: page errors`);
