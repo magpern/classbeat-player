@@ -3,16 +3,18 @@
 // removing need a recent sign-in: a 403 shows "Confirm it is you" and nothing is sent again by
 // itself. A 403 `passkeys_closed` (ADR 0010, section 7) shows its own plate, never "Confirm it is
 // you", and "Add a passkey" is not offered again on this page; the list stays, to rename and
-// remove. The registration's challenge and attestation never leave net/passkey-add.ts.
-import { accountPlateWords, outcomeOf } from "../core/account-model.ts";
+// remove. When `GET passkeys` says `can_add: false`, or answers a body that does not match the
+// schema, the page is closed from the start: the reason line stands where "Add a passkey" would.
+// The registration's challenge and attestation never leave net/passkey-add.ts.
+import { outcomeOf } from "../core/account-model.ts";
 import { nameOf } from "../core/pairing-model.ts";
-import { afterAdd, afterRename, atLimit, countWords, PASSKEY_WORDS, passkeysOf } from "../core/passkeys-model.ts";
+import { addOpenOf, afterAdd, afterRename, atLimit, countWords, PASSKEY_WORDS, passkeysOf } from "../core/passkeys-model.ts";
 import type { Passkey } from "../core/passkeys-model.ts";
 import { call } from "../net/api.ts";
 import { addPasskey, passkeyCreateSupported } from "../net/passkey-add.ts";
 import { dayOf, today } from "../ui/day.ts";
 import { el, uid } from "../ui/dom.ts";
-import { button, buttons, h2, note, p, small, working } from "../ui/kit.ts";
+import { button, buttons, h2, note, p, reason, small, working } from "../ui/kit.ts";
 import { focusMessage, hasMessage, idOfPlate, messageNodes, NO_MESSAGES, plateOnly } from "./account-messages.ts";
 import type { Messages } from "./account-messages.ts";
 import { serverFault } from "./errors.ts";
@@ -30,15 +32,16 @@ const readable = (list: readonly Passkey[]): boolean => list.every((k) => dayOf(
 export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown, env: SignedInEnv, reload: () => void): void {
   const first = passkeysOf(body);
   if (first === null || !readable(first)) return serverFault(main, reload);
-  const canAdd = passkeyCreateSupported();
+  const supported = passkeyCreateSupported();
   let list: Passkey[] = first;
   let mode: Mode = LIST;
   let messages: Messages = NO_MESSAGES;
   let done: Done = null;
   let lastName = "";
   let waitingOnline = false;
-  // The backend said adding is closed for this account: kept in memory for this page only.
-  let closed = false;
+  // The backend said adding is closed for this account (`can_add` not true, or a 403
+  // `passkeys_closed`): kept in memory for this page only, and never opened again on this page.
+  let closed = !addOpenOf(body);
 
   const host = {
     env,
@@ -63,6 +66,7 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       return host.set(plateOnly(o.kind === "plate" ? o.plate : { kind: "server" }));
     }
     list = fresh;
+    if (!addOpenOf(a.kind === "ok" ? a.body : null)) closed = true;
     host.set(after);
   }
 
@@ -194,7 +198,7 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
   function content(): Node[] {
     const out: Node[] = [h2(PASSKEY_WORDS.heading)];
     const notAdded = messages.plate?.kind === "not-added";
-    out.push(...messageNodes(host, notAdded && canAdd ? { text: PASSKEY_WORDS.tryAgain, onPress: openAdd } : undefined));
+    out.push(...messageNodes(host, notAdded && supported && !closed ? { text: PASSKEY_WORDS.tryAgain, onPress: openAdd } : undefined));
     if (done?.kind === "added") out.push(note(PASSKEY_WORDS.added, PASSKEY_WORDS.addedDetail));
     if (done?.kind === "removed") out.push(note(PASSKEY_WORDS.removed(done.name), PASSKEY_WORDS.removedDetail));
     if (mode.kind === "add") {
@@ -205,19 +209,21 @@ export function passkeysPage(main: HTMLElement, box: HTMLElement, body: unknown,
       return [...out, p(PASSKEY_WORDS.intro), addPanel(mode, (typed) => void add(typed), () => toList("[data-add]"), waiting, offline?.id)];
     }
     const plain = !hasMessage(messages) && done === null && mode.kind === "list";
-    if (plain || !list.length) out.push(p(PASSKEY_WORDS.intro));
     if (closed) {
-      // Once the plate has gone (after a rename or a removal), the page still says why there is no "Add a passkey".
-      const w = accountPlateWords({ kind: "passkeys-closed" });
-      if (messages.plate?.kind !== "passkeys-closed") out.push(p(`${w.head}. ${w.detail}`));
-    } else if (!list.length) out.push(p(PASSKEY_WORDS.none));
+      // Closed from the start, or once the plate has gone (after a rename or a removal): the reason
+      // line says why there is no "Add a passkey". The explanation and the "none yet" line are gone.
+      if (messages.plate?.kind !== "passkeys-closed") out.push(reason(PASSKEY_WORDS.closed));
+    } else {
+      if (plain || !list.length) out.push(p(PASSKEY_WORDS.intro));
+      if (!list.length) out.push(p(PASSKEY_WORDS.none));
+    }
     const full = atLimit(list.length);
     const limit = full && !closed ? note(PASSKEY_WORDS.limit, PASSKEY_WORDS.limitDetail) : null;
     if (limit) {
       limit.id = uid("limit");
       out.push(limit);
     }
-    if (canAdd && !notAdded && !closed) {
+    if (supported && !notAdded && !closed) {
       // Offline, the plate "You are offline" is the reason the button is off (site.md, Errors, Offline).
       const offline = messages.plate?.kind === "offline" ? idOfPlate(out, "list-offline") : null;
       const b = button(PASSKEY_WORDS.add, { primary: true, disabled: full || offline !== null, onPress: openAdd });

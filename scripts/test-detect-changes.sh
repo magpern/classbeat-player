@@ -25,13 +25,20 @@ flags() { # flags <event> <base> <head>: the true flags, space separated
   local o="$tmp.out"
   : >"$o"
   GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
-  { grep '=true' "$o" | grep -v '^code=' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
+  { grep '=true' "$o" | grep -v '^code=' | grep -v '^scene_spec=' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
 }
 codeflag() { # codeflag <event> <base> <head>: the `code` output (true or false)
   local o="$tmp.out"
   : >"$o"
   GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
   grep '^code=' "$o" | sed 's/^code=//'
+}
+
+scenefn() { # scenefn <event> <base> <head>: the `scene_spec` output (true or false)
+  local o="$tmp.out"
+  : >"$o"
+  GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
+  grep '^scene_spec=' "$o" | sed 's/^scene_spec=//'
 }
 
 commit README.md
@@ -116,5 +123,21 @@ check "another core/clock file runs player and desktop only" "player desktop" "$
 before_clk="$(git rev-parse HEAD)"
 commit player/app/src/core/other.ts
 check "another player file runs player and desktop only" "player desktop" "$(flags push "$before_clk" HEAD)"
+
+before_scene="$(git rev-parse HEAD)"
+commit docs/design/scene.md
+check "docs/design/scene.md alone sets scene_spec (#527)" "true" "$(scenefn push "$before_scene" HEAD)"
+check "docs/design/scene.md alone sets no lane flag" "" "$(flags push "$before_scene" HEAD)"
+check "docs/design/scene.md alone: the code flag is false" "false" "$(codeflag push "$before_scene" HEAD)"
+before_scene="$(git rev-parse HEAD)"
+commit docs/design/room-2d.md
+check "another docs/design file does not set scene_spec" "false" "$(scenefn push "$before_scene" HEAD)"
+before_scene="$(git rev-parse HEAD)"
+commit docs/design/scene.md.bak
+check "a path that only starts like scene.md does not set scene_spec" "false" "$(scenefn push "$before_scene" HEAD)"
+check "an unknown base sets scene_spec" "true" "$(scenefn pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef HEAD)"
+before_scene="$(git rev-parse HEAD)"
+commit web/src/y.ts
+check "a web change alone does not set scene_spec" "false" "$(scenefn push "$before_scene" HEAD)"
 
 exit "$fail"

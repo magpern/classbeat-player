@@ -21,6 +21,7 @@ import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
 import type { NoReadingReason } from "./link/reader.ts";
 import { linkViewAt } from "./link/view.ts";
 import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
+import { patternSnapshotAt } from "./pattern-snapshot.ts";
 import { bandRoutes } from "./room/band-routes.ts";
 import type { Routed } from "./link/while-following.ts";
 import type { TransportAction } from "./link/transport.ts";
@@ -174,14 +175,16 @@ export function isFollowing(s: PlayerState): boolean {
 
 export function snapshotOf(s: PlayerState, now: number, canSend = false, noReading: NoReadingReason | null = null): Snapshot {
   const l = s.loaded;
+  const view = l ? viewAt(l.clock, l.plan, now) : null;
   return {
     loadId: s.loadId,
     fileName: l?.fileName ?? null,
     doc: l?.doc ?? null,
-    view: l ? viewAt(l.clock, l.plan, now) : null,
+    view,
     link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNotLoaded(l.playlist), noReading) : null,
     controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
     band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
+    pattern: l && view ? patternSnapshotAt(l.plan, view.classMs) : null,
     error: s.error,
   };
 }

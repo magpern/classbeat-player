@@ -40,6 +40,18 @@ export function passkeysOf(body: unknown): Passkey[] | null {
   return out;
 }
 
+/**
+ * Whether the answer of `GET passkeys` says this account may add a passkey (`can_add`, ADR 0010,
+ * section 7). Only a body of exactly `passkeys` and `can_add: true` opens adding: a body that does
+ * not match the schema, `can_add` missing or not a boolean, or any other field, fails closed. A
+ * true here promises no addition: the backend still answers 403 `passkeys_closed` when it is closed.
+ */
+export function addOpenOf(body: unknown): boolean {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return false;
+  const keys = Object.keys(body).sort();
+  return keys.length === 2 && keys[0] === "can_add" && keys[1] === "passkeys" && (body as { can_add?: unknown }).can_add === true;
+}
+
 export const atLimit = (n: number): boolean => n >= PASSKEY_MAX;
 export const countWords = (n: number): string => `${n} of ${PASSKEY_MAX} passkeys`;
 
@@ -92,8 +104,10 @@ export function afterRename(a: Answer): RenameNext {
 
 export const PASSKEY_WORDS = {
   heading: "Passkeys",
-  intro: "A passkey lets you sign in with this device's fingerprint, face or screen lock. Your email link always works too.",
-  none: "You have no passkeys yet. Add one to sign in without waiting for an email.",
+  intro: "A passkey signs you in with this device's fingerprint, face or screen lock. Accounts that run classes sign in with classbeat and cannot add one.",
+  none: "You have no passkeys yet.",
+  /** The reason line where "Add a passkey" would be, while adding is closed (site.md, "Not available, after a removal"). */
+  closed: "Passkeys are not available for this account. You sign in with classbeat.",
   add: "Add a passkey",
   addPanel: "Add a passkey",
   nameLabel: "Name this passkey",
@@ -110,11 +124,11 @@ export const PASSKEY_WORDS = {
   cancel: "Cancel",
   remove: "Remove",
   removeAsk: (name: string): string => `Remove “${name}”?`,
-  removeConsequence: "You can no longer sign in with it. Email links still work.",
+  removeConsequence: "You can no longer sign in with it.",
   keep: "Keep it",
   removeButton: "Remove passkey",
   removed: (name: string): string => `Removed “${name}”`,
-  removedDetail: "You can no longer sign in with it. Email links still work.",
+  removedDetail: "You can no longer sign in with it.",
   limit: `You have ${PASSKEY_MAX} passkeys`,
   limitDetail: "That is the most allowed. Remove one to add another.",
   tryAgain: "Try again",

@@ -1,0 +1,24 @@
+{
+  "name": "classbeat-scene-model",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The room scene's pure model (PL6, scene.md): energy by zone, looks, beam direction, beat levels, colour and quality levels. No I/O, no DOM, no three.js.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.src.json && tsc -p tsconfig.json",
+    "test:unit": "node --import tsx --test \"test/*.test.ts\"",
+    "test": "npm run lint && npm run typecheck && npm run test:unit"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "eslint": "10.13.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}
