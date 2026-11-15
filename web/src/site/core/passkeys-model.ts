@@ -59,8 +59,10 @@ const tooMany = (a: Answer): boolean => a.kind === "refused" && a.status === 409
 
 /**
  * After adding. A refused registration (cancelled, 400 `passkey_refused`, 409 `passkey_exists`, a
- * 422) saved nothing: "Not added". The account at its limit reads the list again; a 403 asks the
- * person to confirm it is them, and nothing is sent again by itself.
+ * 422) saved nothing: "Not added". The account at its limit reads the list again; a 403
+ * `recent_sign_in_required` asks the person to confirm it is them, and nothing is sent again by
+ * itself. A 403 `passkeys_closed`, at either step, is the plate "Passkeys are not available for
+ * this account" (ADR 0010, section 7), never "Confirm it is you".
  */
 export function afterAdd(o: AddOutcome): AddNext {
   if (o === "cancelled") return { kind: "plate", plate: { kind: "not-added" } };

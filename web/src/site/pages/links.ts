@@ -36,7 +36,6 @@ export function linksPage(main: HTMLElement, box: HTMLElement, body: unknown, en
       draw(null);
       focusMessage(main, box);
     },
-    readAgain: (m: Messages) => void readAgain(m),
   };
 
   // Already revoked or gone (404): the list is read again, so the page shows what is there.

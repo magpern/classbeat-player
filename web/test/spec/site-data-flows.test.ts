@@ -124,7 +124,7 @@ describe("export", () => {
     await press(site.page, "Download export");
     await site.page.waitForSelector(".plate[data-confirm=ask]");
     assert.match(await site.page.locator(".plate").innerText(), /Confirm it is you/);
-    assert.deepEqual(await site.page.locator(".plate button").allInnerTexts(), ["Use a passkey", "Email me a link"]);
+    assert.deepEqual(await site.page.locator(".plate button").allInnerTexts(), ["Confirm with classbeat"]);
     await site.page.waitForTimeout(100);
     assert.equal(routes(site, EXPORT), 1);
     await site.context.close();

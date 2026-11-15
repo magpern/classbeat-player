@@ -1,15 +1,16 @@
 // The account Passkeys page on the fake backend (docs/design/site.md, "Account" and "Keyboard";
 // ADR 0002, sections 4 and 6): the list, adding one through the browser's prompt (a stand-in,
-// site-passkey.ts), renaming and removing in place, the limit of 10, and "Confirm it is you"
-// after a 403, which sends nothing again by itself.
+// site-passkey.ts), renaming and removing in place, the limit of 10, "Confirm it is you" after a
+// 403 `recent_sign_in_required`, which sends nothing again by itself and goes to classbeat (ADR
+// 0010, section 5), and a 403 `passkeys_closed`, which never asks to confirm (section 7).
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser, Page } from "playwright-core";
 import { launchOffline, openSite, settled, traps } from "../lib/site-fake.ts";
 import type { FakeSite, Passkey, Script } from "../lib/site-fake.ts";
-import { NEW_CREDENTIAL, NEW_PASSKEY, PASSKEYS, PASSKEYS_LISTED, RECENT, REG_OPTIONS, TEN } from "../lib/site-account-states.ts";
-import { PASSKEY_OPTIONS } from "../lib/site-states.ts";
+import { AUTHORIZE, CLOSED, NEW_CREDENTIAL, NEW_PASSKEY, PASSKEYS, PASSKEYS_LISTED, RECENT, REG_OPTIONS, TEN } from "../lib/site-account-states.ts";
 
+const START = "POST sign-in/classbeat/start";
 const FIRST = PASSKEYS[0];
 const OPTIONS: Script = { "POST passkeys/options": { status: 200, body: REG_OPTIONS } };
 const ADDED = { status: 201, body: NEW_PASSKEY } as const;
@@ -272,44 +273,109 @@ describe("remove", () => {
   });
 });
 
+describe("adding is closed (ADR 0010, section 7)", () => {
+  for (const [step, script] of [
+    ["the options", { "POST passkeys/options": CLOSED }],
+    ["the registration", { ...OPTIONS, "POST passkeys": CLOSED }],
+  ] as const) {
+    it(`a 403 passkeys_closed from ${step} never asks to confirm it is you`, async () => {
+      const site = await open(script);
+      await addAs(site, "Tablet");
+      await site.page.waitForSelector(".plate");
+      const plate = site.page.locator(".plate");
+      assert.match(await plate.innerText(), /Passkeys are not available for this account/);
+      assert.doesNotMatch(await site.page.locator("main").innerText(), /Confirm it is you|Confirm with classbeat/);
+      assert.equal(await site.page.locator("[data-confirm]").count(), 0);
+      assert.equal(await plate.locator("button").count(), 0, "nothing to press: no sign-in again can open it");
+      assert.equal(await plate.evaluate((e) => e === document.activeElement), true);
+      // Not offered again, and nothing is sent again by itself; the list stays.
+      assert.equal(await site.page.locator("[data-add], form[data-add]").count(), 0);
+      assert.equal(await site.page.locator(".ac-item").count(), 3);
+      await settled(site, 600);
+      assert.deepEqual(site.api.map((a) => a.route), step === "the options" ? ["GET passkeys", "POST passkeys/options"] : ["GET passkeys", "POST passkeys/options", "POST passkeys"]);
+      assert.deepEqual(site.toClassbeat, []);
+      await site.context.close();
+    });
+  }
+
+  it("the passkeys listed stay renamable and removable, and the page still says why there is no 'Add a passkey'", async () => {
+    const rename = `PATCH passkeys/${FIRST.id}`;
+    const remove = `DELETE passkeys/${PASSKEYS[1].id}`;
+    const site = await open({ "POST passkeys/options": CLOSED, [rename]: { status: 200, body: { ...FIRST, name: "Old laptop" } }, [remove]: { status: 204 } });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate");
+    await press(site.page, "Rename");
+    await site.page.fill("input[name=name]", "Old laptop");
+    await site.page.keyboard.press("Enter");
+    await site.page.waitForFunction(() => document.querySelector(".ac-item")?.textContent?.includes("Old laptop"));
+    assert.equal(sent(site, rename), 1);
+    await site.page.locator(`[data-row="${PASSKEYS[1].id}"][data-act="remove"]`).click();
+    await press(site.page, "Remove passkey");
+    await site.page.waitForSelector(".note");
+    assert.equal(sent(site, remove), 1);
+    assert.equal(await site.page.locator(".ac-item").count(), 2);
+    assert.match(await site.page.locator("main").innerText(), /Passkeys are not available for this account\. You sign in with classbeat\./);
+    assert.equal(await site.page.locator("[data-add], form[data-add]").count(), 0);
+    assert.equal(sent(site, "POST passkeys/options"), 1);
+    await site.context.close();
+  });
+});
+
 describe("confirm it is you", () => {
-  it("after a 403 on adding, nothing is sent again, and a passkey confirms in place", async () => {
-    const site = await open({ "POST passkeys/options": RECENT, "POST sign-in/passkey/options": { status: 200, body: PASSKEY_OPTIONS }, "POST sign-in/passkey": { status: 200, body: { status: "signed_in" } } });
+  it("after a 403 on adding, nothing is sent again, and 'Confirm with classbeat' starts a re-authentication with no return entry", async () => {
+    const site = await open({ "POST passkeys/options": RECENT, [START]: { status: 200, body: { authorize: AUTHORIZE } } });
     await addAs(site, "Tablet");
     await site.page.waitForSelector(".plate[data-confirm=ask]");
     const plate = site.page.locator(".plate");
     assert.match(await plate.innerText(), /Confirm it is you/);
-    assert.deepEqual((await plate.locator("button").allInnerTexts()).map((t) => t.trim()), ["Use a passkey", "Email me a link"]);
+    // The email link and passkeys are closed (ADR 0010, section 7): classbeat is the one way.
+    assert.deepEqual((await plate.locator("button").allInnerTexts()).map((t) => t.trim()), ["Confirm with classbeat"]);
     await settled(site, 600);
     assert.equal(sent(site, "POST passkeys/options"), 1);
-    await press(site.page, "Use a passkey");
-    await site.page.waitForSelector(".note");
-    assert.match(await site.page.locator(".note").innerText(), /You signed in again/);
-    // Signed in again, the person makes the change again themselves: it is not sent by itself.
+    await press(site.page, "Confirm with classbeat");
+    for (let i = 0; i < 200 && site.toClassbeat.length === 0; i += 1) await site.page.waitForTimeout(10);
+    assert.deepEqual(site.toClassbeat, [AUTHORIZE]);
+    const start = site.api.filter((a) => a.route === START);
+    assert.equal(start.length, 1);
+    assert.deepEqual(JSON.parse(start[0].body ?? "null"), { purpose: "reauth" });
     await settled(site, 600);
-    assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys", "POST passkeys/options", "POST sign-in/passkey/options", "POST sign-in/passkey", "GET passkeys"]);
+    // Nothing else is sent: the change is made again by hand after classbeat.
+    assert.deepEqual(site.api.map((a) => a.route), ["GET passkeys", "POST passkeys/options", START]);
+    assert.deepEqual(site.external, []);
     await site.context.close();
   });
 
-  it("without passkeys in the browser, offers the link only", async () => {
-    const site = await open({ [`DELETE passkeys/${FIRST.id}`]: RECENT }, { passkey: "absent" });
-    await press(site.page, "Remove");
-    await press(site.page, "Remove passkey");
-    await site.page.waitForSelector(".plate[data-confirm=ask]");
-    assert.deepEqual((await site.page.locator(".plate button").allInnerTexts()).map((t) => t.trim()), ["Email me a link"]);
-    await site.context.close();
-  });
-
-  it("'Email me a link' goes to Sign in and comes back to the page once signed in", async () => {
-    const site = await open({ "POST passkeys/options": RECENT, "POST sign-in/passkey/options": { status: 200, body: PASSKEY_OPTIONS }, "POST sign-in/passkey": { status: 200, body: { status: "signed_in" } } });
+  it("a 403 on the registration's second step asks to confirm too", async () => {
+    const site = await open({ ...OPTIONS, "POST passkeys": RECENT });
     await addAs(site, "Tablet");
     await site.page.waitForSelector(".plate[data-confirm=ask]");
-    await press(site.page, "Email me a link");
+    assert.equal(sent(site, "POST passkeys"), 1);
+    await site.context.close();
+  });
+
+  it("an authorize address that is not HTTPS is not gone to", async () => {
+    const site = await open({ "POST passkeys/options": RECENT, [START]: { status: 200, body: { authorize: "http://classbeat.test/oauth/authorize" } } });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate[data-confirm=ask]");
+    await press(site.page, "Confirm with classbeat");
+    await site.page.waitForSelector(".plate[data-confirm=failed]");
+    assert.match(await site.page.locator(".plate").innerText(), /it was not your doing/);
+    await settled(site, 300);
+    assert.deepEqual(site.toClassbeat, []);
+    assert.deepEqual(site.external, []);
+    await site.context.close();
+  });
+
+  it("offline, says so and offers to try again; a 401 goes to Sign in", async () => {
+    const site = await open({ "POST passkeys/options": RECENT, [START]: [{ status: 0, fail: true }, { status: 401, body: { error: "not_signed_in" } }] });
+    await addAs(site, "Tablet");
+    await site.page.waitForSelector(".plate[data-confirm=ask]");
+    await press(site.page, "Confirm with classbeat");
+    await site.page.waitForSelector(".plate[data-confirm=failed]");
+    assert.match(await site.page.locator(".plate").innerText(), /You are offline/);
+    await press(site.page, "Confirm with classbeat");
     await site.page.waitForURL(/\/sign-in$/);
-    await press(site.page, "Sign in with a passkey");
-    await site.page.waitForURL(/\/account\/passkeys$/);
-    await site.page.waitForSelector(".ac-item");
-    assert.equal(sent(site, "POST passkeys/options"), 1);
+    assert.equal(sent(site, START), 2);
     await site.context.close();
   });
 });

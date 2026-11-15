@@ -36,7 +36,6 @@ export function sessionsPage(main: HTMLElement, box: HTMLElement, body: unknown,
       draw(null);
       focusMessage(main, box);
     },
-    readAgain: (m: Messages) => void readAgain(m),
   };
 
   async function readAgain(after: Messages): Promise<void> {

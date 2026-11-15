@@ -1,15 +1,17 @@
 // The secrets of the account pages (the registration's challenge and user handle, the new
-// credential, the sign-in challenge and assertion of "Confirm it is you") stay out of the page
-// address, every request address, the history, storage and the console in every account state
-// (ADR 0002, sections 4 and 5; docs/design/site.md, "Account"). Each may go only in the body of
-// its own route. The secrets are tied to the state list (site-account-states.ts), and each one is
-// first seen where it belongs, so the check cannot pass with nothing to look for.
+// credential) stay out of the page address, every request address, the history, storage and the
+// console in every account state (ADR 0002, sections 4 and 5; docs/design/site.md, "Account").
+// Each may go only in the body of its own route. The secrets are tied to the state list
+// (site-account-states.ts), and each one is first seen where it belongs, so the check cannot pass
+// with nothing to look for. "Confirm it is you" signs in again at classbeat only (ADR 0010,
+// sections 5 and 7): no account state asks for or sends a passkey sign-in or an email link, so the
+// sign-in challenge and assertion have no account route to go to, and the check below says so.
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Browser } from "playwright-core";
 import { launchOffline, settled, traps } from "../lib/site-fake.ts";
 import { reach } from "../lib/site-measure.ts";
-import { ACCOUNT_SECRETS, ACCOUNT_STATES, ASSERTION, NEW_CREDENTIAL } from "../lib/site-account-states.ts";
+import { ACCOUNT_SECRETS, ACCOUNT_STATES, NEW_CREDENTIAL } from "../lib/site-account-states.ts";
 import type { Reply } from "../lib/site-fake.ts";
 import { STATES } from "../lib/site-states.ts";
 
@@ -22,6 +24,8 @@ after(async () => {
 });
 
 const OPTION_ROUTES = ["POST passkeys/options", "POST sign-in/passkey/options"];
+/** The player's own sign-in, closed for every account kind there is today (ADR 0010, section 7). */
+const OWN_SIGN_IN = ["POST sign-in/passkey/options", "POST sign-in/passkey", "POST sign-in/link", "POST sign-in/complete"];
 const answers = (r: Reply | readonly Reply[] | undefined): readonly Reply[] => (r === undefined ? [] : Array.isArray(r) ? r : [r as Reply]);
 
 describe("the secrets map and the account states", () => {
@@ -40,7 +44,11 @@ describe("the secrets map and the account states", () => {
   // in that route's body only (#421 N1): "at least one secret" would let a part go unchecked.
   // Each part is found by its name and its value: two parts can have the same value (a credential's
   // id and rawId), so the value alone would let one stand in for the other.
-  for (const [route, what, parts] of [["POST passkeys", "credential", NEW_CREDENTIAL], ["POST sign-in/passkey", "assertion", ASSERTION]] as const) {
+  it("script no passkey sign-in and no email link: 'Confirm it is you' goes to classbeat only (ADR 0010, sections 5 and 7)", () => {
+    for (const s of ACCOUNT_STATES) for (const r of Object.keys(s.script ?? {})) assert.ok(!OWN_SIGN_IN.includes(r), `${s.name} scripts ${r}`);
+  });
+
+  for (const [route, what, parts] of [["POST passkeys", "credential", NEW_CREDENTIAL]] as const) {
     it(`give every part of what goes to ${route} to every state whose ${route} is taken`, () => {
       const taken = ACCOUNT_STATES.filter((s) => answers(s.script?.[route]).some((a) => a.status === 200 || a.status === 201));
       assert.ok(taken.length >= 1, `no state takes ${route}`);
@@ -81,6 +89,8 @@ describe("no account secret is in an address, history entry, store or log", () =
       assert.deepEqual(seen.filter((t) => ["storage", "cookie", "indexeddb", "cache", "console"].includes(t.kind)), []);
       assert.deepEqual(site.unscripted, [], "an API request the state does not expect");
       for (const a of site.api) assert.equal(new URL(a.url).search, "", `a query on ${a.route}`);
+      // A classbeat start carries the purpose only: no return entry (ADR 0010, section 6).
+      for (const a of site.api) if (a.route === "POST sign-in/classbeat/start") assert.deepEqual(JSON.parse(a.body ?? "null"), { purpose: "reauth" });
       assert.equal(await site.page.evaluate(() => localStorage.length + sessionStorage.length), 0);
       await site.context.close();
     });

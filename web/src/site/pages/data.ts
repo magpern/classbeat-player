@@ -39,7 +39,6 @@ export function dataPage(main: HTMLElement, box: HTMLElement, env: SignedInEnv):
       focusMessage(main, box);
     },
     // Signing in again changes nothing on this page: there is no list to read again.
-    readAgain: (m: Messages) => host.set(m),
   };
 
   async function startExport(): Promise<void> {
