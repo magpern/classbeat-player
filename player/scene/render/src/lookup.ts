@@ -10,7 +10,7 @@ export function lookup<K extends string | number, V>(table: Readonly<Record<K, V
   return found[1];
 }
 
-/** `list[index]` for a non-negative integer index (`Array.at` would count a negative one from the end). */
+/** `list[index]` for an integer index of 0 or more; a negative index gives undefined (`Array.at` would count it from the end). Every caller passes an integer. */
 export function nth<T>(list: readonly T[], index: number): T | undefined {
   return index >= 0 ? list.at(index) : undefined;
 }

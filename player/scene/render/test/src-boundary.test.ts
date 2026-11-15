@@ -9,21 +9,37 @@ import { join, dirname } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { ESLint } from "eslint";
+import globalsPackage from "globals";
 import { RENDER_DIR } from "../tools/tokens-file.ts";
 
-const GLOBALS = [
-  "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
-  "Map", "Set", "WeakMap", "WeakSet", "Promise", "RegExp", "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array",
-  "Int32Array", "Uint8Array", "Uint16Array", "Uint32Array", "parseFloat", "parseInt", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
-  "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "Pick", "Omit", "Partial", "Required", "ReturnType", "Parameters",
-  "NonNullable", "Exclude", "Extract", "Awaited", "Iterable", "Iterator", "ArrayLike",
+// The ES built-in values src/ may name (everything else in `globals.builtin` is restricted) and TS utility types.
+const BUILTINS = [
+  "Object", "Array", "Number", "String", "Boolean", "Math", "JSON", "Error", "TypeError", "RangeError", "Map", "Set",
+  "parseFloat", "parseInt", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
 ];
+const TYPES = [
+  "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "Pick", "Omit", "Partial", "Required", "ReturnType", "Parameters",
+  "NonNullable", "Exclude", "Extract", "Awaited", "Iterable", "ArrayLike",
+];
+const GLOBALS = [...BUILTINS, ...TYPES];
+const OBJECT_MEMBERS = ["entries", "fromEntries", "keys", "values", "freeze"];
+interface Config { SRC_GLOBALS: string[]; SRC_BUILTINS: string[]; SRC_BUILTINS_RESTRICTED: string[]; OBJECT_MEMBERS_ALLOWED: string[] }
+
 
 test("the globals src/ may name are exactly this list (ES built-ins and utility types, no browser global)", async () => {
-  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { SRC_GLOBALS: string[] };
+  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as Config;
   assert.deepEqual([...mod.SRC_GLOBALS].sort(), [...GLOBALS].sort());
-  const browser = ["Function", "window", "document", "navigator", "fetch", "Image", "Audio", "Range", "FontFace", "speechSynthesis", "SpeechSynthesisUtterance", "globalThis", "self", "location", "performance", "requestAnimationFrame", "setTimeout", "console", "HTMLCanvasElement", "Date", "crypto"];
+  const browser = ["Function", "Reflect", "Proxy", "Date", "eval", "WebAssembly", "Function", "window", "document", "navigator", "fetch", "Image", "Audio", "Range", "FontFace", "speechSynthesis", "SpeechSynthesisUtterance", "globalThis", "self", "location", "performance", "requestAnimationFrame", "setTimeout", "console", "HTMLCanvasElement", "Date", "crypto"];
   assert.deepEqual(browser.filter((n) => GLOBALS.includes(n)), []);
+});
+
+test("the restricted ES built-ins are exactly ESLint's own built-in set minus the pinned allowlist, and Object is limited to its pinned members", async () => {
+  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as Config;
+  const builtin = Object.keys(globalsPackage.builtin);
+  assert.deepEqual([...mod.SRC_BUILTINS].sort(), [...BUILTINS].sort());
+  assert.deepEqual([...mod.SRC_BUILTINS_RESTRICTED].sort(), builtin.filter((n) => !BUILTINS.includes(n)).sort());
+  for (const n of ["Function", "Reflect", "Proxy", "globalThis", "eval", "Date", "Intl", "WeakRef", "Atomics", "SharedArrayBuffer"]) assert.ok(mod.SRC_BUILTINS_RESTRICTED.includes(n), n);
+  assert.deepEqual([...mod.OBJECT_MEMBERS_ALLOWED].sort(), [...OBJECT_MEMBERS].sort());
 });
 
 const eslint = new ESLint({ cwd: RENDER_DIR });
@@ -87,7 +103,7 @@ export function sneak(canvas: unknown): void {
 });
 
 test("what src/ may use still passes: built-ins, utility types, three.js allowlist names, sibling and model imports", async () => {
-  const m = await lint('import { Color } from "three";\nimport type { Host } from "./host.ts";\nexport const a = (h: Readonly<Host>, n: number): number => Math.max(0, Number(n)) + new Float32Array(2).length + (h ? 1 : 0) + new Color().r;\nexport const b = new Map<string, Record<string, number>>();');
+  const m = await lint('import { Color } from "three";\nimport type { Host } from "./host.ts";\nexport const a = (h: Readonly<Host>, n: number): number => Math.max(0, Number(n)) + (h ? 1 : 0) + new Color().r;\nexport const b = new Map<string, Record<string, number>>();');
   assert.deepEqual(m.map((x) => `${x.ruleId}: ${x.message}`), []);
 });
 
