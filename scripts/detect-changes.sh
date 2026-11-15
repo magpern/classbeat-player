@@ -51,9 +51,16 @@ flag() { # flag <name> <extended regex>
 # The backend also depends on schema/ (the class format and the path dependency schema/python).
 flag backend '^(backend/|schema/|\.github/workflows/)'
 flag schema '^(schema/|\.github/workflows/)'
-flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh)'
-# The Android spike's APK bundles the scene demo (player/scene/render), so a change there rebuilds it too (#558).
-flag android '^(player/spikes/android-follower/|player/scene/render/|\.github/workflows/)'
+# The scene reads files outside player/: web/src/design/tokens.css (player/scene/render/tools/tokens-file.ts and
+# test/tokens-light.test.ts read it) and web/src/design/fonts/ (player/scene/render/build.mjs copies both into the demo).
+# A change to only those files must run the scene tests, or main can go red unseen (#579).
+# The player's room window bundles the plain 2D screen: player/app/src/renderer/room.ts imports web/src/main.ts
+# (so all of web/src/), player/app/test/shots/room-page.ts imports web/src/fixtures/, and room-measure.ts imports
+# web/test/spec/page/{collect,ink}.js. A change to any of those must run the player job (#579).
+flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh|web/src/|web/test/spec/page/)'
+# The Android spike's APK bundles the scene demo (player/scene/render) and its tokens.css and fonts, so a change
+# there rebuilds it too (#558, #579).
+flag android '^(player/spikes/android-follower/|player/scene/render/|web/src/design/(tokens\.css|fonts/)|\.github/workflows/)'
 # The web tests also read files outside web/: the design specs and mock-ups under docs/design/
 # (docs/design/mockups/tokens.css is compared with web/src/design/tokens.css, the checks are ported
 # from docs/design/mockups/*.js), the live-session schema and examples under schema/live/, and
