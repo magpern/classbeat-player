@@ -213,7 +213,7 @@ events. An account with no verified email gets the page notices only.
   server, not a browser: it takes no cookie and no other credential, and refuses a request whose
   `Sec-Fetch-Site` header is present (`403 cross_site_request`), as the app's routes without a
   credential do (ADR 0002 section 6). The token is a JWT checked as in section 3 (algorithm, key,
-  `iss`, `aud`, `iat` within 5 minutes, `exp` if present), with `nonce` absent, a `jti`, a `sub`
+  `iss`, `aud`, `iat` within 5 minutes, `exp` required and in the future), with `nonce` absent, a `jti`, a `sub`
   and an `events` claim, a JSON object whose members are exactly the back-channel logout event
   `http://schemas.openid.net/event/backchannel-logout` (value `{}`) and one of these two
   (value `{}`); any other member, or both, is refused with `400 bad_event`. The names are pinned
@@ -226,7 +226,8 @@ events. An account with no verified email gets the page notices only.
     with one of those sessions is dropped (ADR 0002 sections 5 and 8). Devices are not ended:
     they are read-only and revocable on the site.
   `jti` is single use: its hash is kept in the closed table `classbeat_event_ids` for 8 days. A
-  repeat `jti`, or a `sub` with no account, answers `202` and changes nothing. classbeat retries
+  repeat `jti`, or a `sub` with no account, answers `200` and changes nothing; an accepted
+  event also answers `200`, as back-channel logout specifies. classbeat retries
   until it gets `2xx`, for up to 7 days, signing each attempt afresh with the same `jti`; it keeps
   only the pending event, not a player credential.
   A delivery that fails for 7 days is an operator matter at classbeat; meanwhile the account
@@ -265,7 +266,7 @@ events. An account with no verified email gets the page notices only.
 | Section 4 | Sign-up and sign-in for instructors are sections 4 and 5 here; the email link and passkeys are closed (section 7) |
 | Section 5 | The callback is the one state-changing GET, guarded as section 2 says. The routes that read the session cookie gain the callback (through `asking_session`, and for `reauth` to match the asking session) and `POST /api/site/sign-in/classbeat/start` (for `reauth`). The events route (`/api/classbeat/events`) reads no cookie and is outside the site's API and its `Origin` rule, guarded like the app's routes without a credential. "No form posts to, or is redirected to, another origin" stands; the site's script navigates to classbeat, as for a source link |
 | Section 6 | The pairing mail stays (section 7 here). Pairing is otherwise unchanged |
-| Section 7 | Steps 2, 3 and 5: a `classbeat` link needs `login_hint` and is approved only by the instructor it names; the exchange answer holds `account_subject` (section 10). Section 9's function table: `auth_new_link_code` takes `login_hint`, refuses another account (writing `source.link_refused`) and stores the set account's `(issuer, subject)`; `auth_exchange_link_code` returns `NULL` or that pair instead of true or false; `auth_collect_pairing` returns the email or null |
+| Section 7 | Steps 2, 3 and 5: a `classbeat` link needs `login_hint` and is approved only by the instructor it names; the exchange answer holds `account_subject` (section 10). Section 9's function table: `auth_new_link_code` takes `client`, `login_hint` and `issuer`, returns `wrong_account` for another account (writing `source.link_refused`) and stores the set account's `(issuer, subject)`; `auth_exchange_link_code` returns `NULL` or that pair instead of true or false; `auth_collect_pairing` returns the email or null |
 | Section 9 | Closed tables gain `classbeat_sign_ins` and `classbeat_event_ids`. New functions: `auth_start_classbeat`, `auth_take_classbeat`, `auth_complete_classbeat`, `auth_reauth_classbeat` (the identity check and the session of section 5), `auth_classbeat_event` (section 8). `player_auth` gains `UPDATE (email)` on `accounts`, `DELETE` on `accounts` for `account-deleted`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` on the two new tables, and `UPDATE (bound_issuer, bound_subject)` on `signup_allowlist`. The guard tests' lists gain all of these. The bound in "What this stops" gains the rows below |
 | Section 10 | New limits (below) |
 | Section 11 | New events (below) |
@@ -322,11 +323,18 @@ where someone else is signed in):
   approval answers `403 wrong_account`, no code is made, and the account gets the event
   `source.link_refused` with the reason `wrong_account`. An account that is not an instructor
   gets the same answer. The hint grants nothing.
-- The check is made in the database, not by the backend: `auth_new_link_code` gains the argument
-  `login_hint` (null for other sources). For source `classbeat` it compares the hint with the
-  set account's issuer and subject; on a mismatch, or for an account that is not an instructor,
-  it writes `source.link_refused` (`wrong_account`), stores no code and raises `wrong_account`,
-  which the backend answers as `403 wrong_account`. The backend writes no audit row itself.
+- The check is made in the database, not by the backend: `auth_new_link_code` gains the
+  arguments `client` (as the other functions that write an event), `login_hint` and `issuer`
+  (both null for other sources; `issuer` is the backend's configured classbeat issuer). For
+  source `classbeat` it requires an instructor account whose stored issuer equals `issuer` and
+  whose stored subject equals `login_hint`. Otherwise it writes `source.link_refused`
+  (`wrong_account`), stores no code and **returns** `wrong_account`; it does not raise, so the
+  event is committed with the function's transaction, as every refusal in ADR 0002 section 9
+  is a return value. It returns null when the code is stored. The backend answers
+  `wrong_account` as `403 wrong_account` and writes no audit row itself.
+- This check guards a mistake or a confused browser, not a compromised backend: code running as
+  `player_app` can pass a matching `login_hint` and `issuer`. The guard against that is
+  classbeat's `account_subject` check below.
 - `auth_new_link_code` stores, with the code, the `(issuer, subject)` of the account already set. `auth_exchange_link_code` returns nothing (`NULL`) on a refusal,
   and on success the link's `(issuer, subject)`. The answer of `POST /api/source/token` holds
   it as `account_subject: {"iss": …, "sub": …}`.

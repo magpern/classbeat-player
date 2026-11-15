@@ -685,7 +685,7 @@ Adding one is a security-critical change.
 | `auth_find_pairing(user_code_hash)` | For the account already set only: looks up a pending pairing that has not expired. Changes nothing about it. A code that matches none counts as a wrong code for the account; while the form is closed it finds nothing | The pairing's platform and version, or nothing |
 | `auth_decide_pairing(user_code_hash, approve, name)` | For the account already set only: approves or denies that pending pairing. Counts a wrong code the same way. Refuses an approval above 10 active devices (approved and not yet collected count) | True when decided, false for a wrong code, nothing (`NULL`) when refused at the cap |
 | `auth_collect_pairing(device_code_hash, device_token_hash)` | Poll: if approved, creates the device row and uses up the pairing | The state, and on success the account's email, or null when it has none (amended by ADR 0010, section 8) |
-| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused`. (Amended by ADR 0010, section 10: it takes `login_hint`, refuses a `classbeat` link for any account but the one named and then writes `source.link_refused` (`wrong_account`), and stores the set account's `(issuer, subject)`.) | Nothing |
+| `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused`. (Amended by ADR 0010, section 10: it takes `client`, `login_hint` and `issuer`; for a `classbeat` link to any account but the one named it writes `source.link_refused` (`wrong_account`) and returns `wrong_account`, storing no code; it stores the set account's `(issuer, subject)`.) | Nothing (amended by ADR 0010: null, or `wrong_account`) |
 | `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false. (Amended by ADR 0010, section 10: `NULL` on a refusal, else the link's `(issuer, subject)`.) |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
 | `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
@@ -941,7 +941,7 @@ started or ended; controller added; control code cancelled after wrong tries; ex
 
 Not events, because no account is set when they happen: a passkey sign-in whose signature
 fails, and a request with a revoked device token. Both are counted in the limits (section 10).
-A new source link code writes no event either (section 9). ADR 0010, section 9, adds the
+A new source link code writes no event either (section 9); amended by ADR 0010, section 10: a refused `classbeat` link writes `source.link_refused`. ADR 0010, section 9, adds the
 classbeat sign-in's events.
 Deleting the account writes no event either: its events go with it.
 
