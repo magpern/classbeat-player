@@ -93,6 +93,8 @@
         "spotify_playlist": {
           "description": "Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
           "type": "string",
+          "minLength": 22,
+          "maxLength": 22,
           "pattern": "^[A-Za-z0-9]{22}$"
         }
       }

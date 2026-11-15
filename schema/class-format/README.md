@@ -176,7 +176,7 @@ ignores the field.
 "music": { "source": "spotify", "design_crossfade_ms": 0, "song_timing": "estimated", "spotify_playlist": "37i9dQZF1DXcBWIGoYBM5M" }
 ```
 
-1. **Same pattern as `ids.spotify_track`:** exactly 22 letters or digits (`^[A-Za-z0-9]{22}$`),
+1. **Same pattern as `ids.spotify_track`, plus an exact length:** exactly 22 letters or digits (`^[A-Za-z0-9]{22}$`, `minLength` and `maxLength` 22, because Python's `$` also matches before a final newline and Ajv's does not),
    the bare id, never a URL or a `spotify:` URI. A malformed id is a schema error at
    `/music/spotify_playlist`.
 2. **Strict producers must write `"1.2"` to use it.** A document labelled `"1.0"` or `"1.1"`
@@ -222,6 +222,9 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s5 missing music detail (no anchors, no moments, `missing` timing) | S (qualities), player behaviour | `valid/class-song-timing-missing`, `valid/class-beat-anchors-and-moments` |
 | s6 envelope fields, hash format, removal carries no document | S | `publications/invalid/*` (`removal-carries-document`, `hash-missing-prefix`, `number-zero`, ...) |
 | s6 hash is SHA-256 over RFC 8785 form; mismatch refused | P (`check_publication`) | `publications/invalid/hash-mismatch`, `valid/document`, known-digest test |
+| 1.2 `music.spotify_playlist`: 22-character id, no URI, URL or newline | S | `schema-spotify-playlist-malformed`, `-uri`, `-url`, `-21-chars`, `-23-chars`, `-trailing-newline` |
+| 1.2 playlist only with a 1.2 label | S (strict and reader) | `schema-spotify-playlist-in-format-1-0`, `-1-1`; `test_playlist_document_is_1_2_and_older_labels_are_refused` |
+| 1.2 playlist only with source `spotify` | V (`playlist_without_spotify_source`) | `playlist-without-spotify-source`, `playlist-with-swedebeat-source` |
 | s6 repeat, stale, removal marker (and the carried cases) | P (`sequence`) | `sequences.json` |
 | s7 producers strict, readers lax, any minor of a known major | `check` modes | `reader/accepted-future-minor-unknown-fields`, `test_producer_is_strict_where_reader_is_lax` |
 | s7 unknown major refused | `check` reader mode | `reader/rejected-unknown-major` |

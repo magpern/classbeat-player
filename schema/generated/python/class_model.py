@@ -73,6 +73,8 @@ class Music(BaseModel):
         str | None,
         Field(
             description="Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
+            max_length=22,
+            min_length=22,
             pattern='^[A-Za-z0-9]{22}$',
         ),
     ] = None

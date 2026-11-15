@@ -460,5 +460,41 @@
       "playlist_without_spotify_source",
       "/music/spotify_playlist"
     ]
+  ],
+  "schema-spotify-playlist-uri.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-url.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-21-chars.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-23-chars.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "schema-spotify-playlist-trailing-newline.json": [
+    [
+      "schema",
+      "/music/spotify_playlist"
+    ]
+  ],
+  "playlist-with-swedebeat-source.json": [
+    [
+      "playlist_without_spotify_source",
+      "/music/spotify_playlist"
+    ]
   ]
 }
