@@ -127,7 +127,7 @@ async function browserFrameLog(browser: Browser, query: string, name: string): P
   mkdirSync(ARTIFACTS, { recursive: true });
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } }); // the beams' speed does not depend on the size; software GL draws the fullscreen shader slowly
   await install(page);
-  await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=6${query}`); // the beams' speed through every transition, bursts included
+  await page.goto(`${PAGE}?auto=1&t=10&to=70&speed=3${query}`); // the beams' speed through every transition, bursts included; at 3 times (about 20 s) a slow runner still logs the 8 seconds asserted below (at 6 times it logged 7)
   await page.waitForFunction(() => (window as unknown as Api).__scene?.ended === true, undefined, { timeout: 120_000, polling: 250 });
   const out = await page.evaluate(() => { const l = (window as unknown as Api).__scene.log; return { rows: l.rows, seen: l.seen, failures: l.failures, csv: l.csv(), peak: l.peakOverall }; });
   writeFileSync(join(ARTIFACTS, `${name}.csv`), out.csv);
