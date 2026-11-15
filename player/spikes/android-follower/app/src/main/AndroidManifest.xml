@@ -3,6 +3,7 @@
      no Bluetooth. The only access is the user-granted notification listener below. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="false"
         android:label="Spike 3 follower"
