@@ -80,7 +80,7 @@ def test_no_code_token_or_hash_reaches_a_log_an_event_a_mail_or_a_url(
     names = {json.loads(str(row[0]))["event"] for row in events}
     assert {"pairing.approved", "pairing.denied", "device.created", "device.revoked"} <= names
     stored = " ".join(str(row[0]) for row in events)
-    mails = " ".join(mail.subject + " " + mail.body for mail in site.mailer.sent[1:])
+    mails = " ".join(mail.subject + " " + mail.body for mail in site.mailer.sent)
     assert "A new device was paired" in mails
     places = (logged, stored, mails, " ".join(urls))
     for token in tokens:

@@ -3,6 +3,10 @@ the other's rows (ADR 0002, section 9, the last guard of its list).
 
 Every route that enters an account, by a site session, a device token or a source token, must
 have a case below: a new one fails until it has.
+
+Both accounts are followers, signed in by the email link: passkeys are open for that kind alone
+(ADR 0010, section 7), and the passkey routes have cases here too. A follower is made by the
+tests' superuser (`Site.follower`), since no function makes one yet.
 """
 
 from __future__ import annotations
@@ -441,7 +445,7 @@ def test_every_endpoint_that_enters_an_account_has_a_case(site: Site) -> None:
 
 
 def _account_b(site: Site) -> tuple[Browser, Other]:
-    b = site.sign_in(B, site.browser("198.51.100.2"))
+    b = site.link_sign_in(B, site.browser("198.51.100.2"))
     app = pairhelp.app_client(site, "198.51.100.2")
     token = pairhelp.pair(site, b, "B PC", app)
     # Used once, so that "last used" is already written when the rows are compared.
@@ -516,12 +520,12 @@ def _account_b(site: Site) -> tuple[Browser, Other]:
 
 
 def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site) -> None:
-    site.allow(A)
-    site.allow(B)
+    site.follower(A)
+    site.follower(B)
     b, other = _account_b(site)
     b_app = pairhelp.app_client(site, "198.51.100.2")
     a_app = pairhelp.app_client(site, "198.51.100.1")
-    first = site.sign_in(A, site.browser("198.51.100.1"))
+    first = site.link_sign_in(A, site.browser("198.51.100.1"))
     a_token = pairhelp.pair(site, first, "A PC", a_app)
     a_source = sh.link(site, first)
     a_server = sh.server(site, "192.0.2.21")
@@ -532,7 +536,7 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
             _acted_on_own_rows(site)
         site.su.execute("DELETE FROM player.rate_limits")
         a = Actor(
-            site.sign_in(A, site.browser("198.51.100.1")),
+            site.link_sign_in(A, site.browser("198.51.100.1")),
             a_app,
             a_token,
             a_source,
@@ -542,7 +546,7 @@ def test_as_one_account_no_endpoint_reads_or_changes_the_others_rows(site: Site)
         before = _snapshot(site, B)
         # A session, a device, a pairing that waits, a source link with three classes and its
         # sync cursor, a passkey, a registration that waits, and the events of making them.
-        kinds = ["session", *["event"] * 9, "device", "pairing", "link", *["class"] * 3, "sync"]
+        kinds = ["session", *["event"] * 10, "device", "pairing", "link", *["class"] * 3, "sync"]
         kinds += ["passkey", "registration"]
         assert [row[0] for row in before] == kinds
         case(site, a)

@@ -45,5 +45,6 @@ SQL_FILES: Final = (
     "0012_bounded_lock_waits.sql",
     "0013_live_checks.sql",
     "0014_classbeat_sign_in.sql",
-    "0015_classbeat_events.sql",
+    "0015_close_email_link_and_passkeys.sql",
+    "0016_classbeat_events.sql",
 )

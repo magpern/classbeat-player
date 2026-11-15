@@ -57,10 +57,11 @@ test("the follower's answer: taken means confirming, anything else is not loaded
     assert.equal(playlistNotLoaded(loadAnswered(a, o, 1400)), true, o);
     assert.equal(fallsBack(a, o), true, o);
   }
-  // A late answer, once decided, changes nothing and presses nothing.
+  // A late answer, once decided, changes nothing. A late failure after the window still falls back to play (#494).
   for (const decided of [NO_LOAD, { kind: "confirmed" }, { kind: "not-loaded" }] as PlaylistLoad[]) {
     assert.equal(loadAnswered(decided, "asked", 2000), decided);
-    assert.equal(fallsBack(decided, "failed"), false);
+    assert.equal(fallsBack(decided, "failed"), decided.kind === "not-loaded");
+    assert.equal(fallsBack(decided, "asked"), false);
   }
 });
 

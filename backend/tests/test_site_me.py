@@ -56,8 +56,9 @@ def test_signed_in_the_answer_is_the_accounts_email_alone_and_not_stored(site: S
 
 
 def test_the_email_is_answered_as_stored(site: Site) -> None:
-    # Typed with spaces and capitals; stored trimmed and lower-cased, and answered so.
-    site.allow(EMAIL)
+    # Typed with spaces and capitals; stored trimmed and lower-cased, and answered so. A follower:
+    # the one kind the email link is open for (ADR 0010, section 7).
+    site.follower(EMAIL)
     browser = site.browser()
     asked = browser.post("/api/site/sign-in/link", json={"email": "  Rider@Example.TEST "})
     assert asked.status_code == 200

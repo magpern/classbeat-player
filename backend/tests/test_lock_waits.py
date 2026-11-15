@@ -128,8 +128,8 @@ def _busy_within_the_bound(holder: Conn, call: Callable[[], httpx.Response]) -> 
 def test_a_link_sign_in_waits_for_the_account_lock_at_most_the_bound(
     site: Site, holder: Conn
 ) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     browser = site.browser()
     token = site.ask(browser, EMAIL)
     assert token is not None
@@ -146,9 +146,9 @@ def test_a_link_sign_in_waits_for_the_account_lock_at_most_the_bound(
 def test_a_passkey_sign_in_waits_for_the_account_lock_at_most_the_bound(
     site: Site, holder: Conn
 ) -> None:
-    site.allow(EMAIL)
+    site.follower(EMAIL)
     authenticator = Authenticator()
-    assert register(site.sign_in(EMAIL), authenticator).status_code == 201
+    assert register(site.link_sign_in(EMAIL), authenticator).status_code == 201
     browser = site.browser()
     credential = authenticator.get(options_of(browser.post(SIGN_IN_OPTIONS)))
     _hold(holder, ACCOUNT_SESSIONS, _account(site))
@@ -165,8 +165,8 @@ def test_a_passkey_sign_in_waits_for_the_account_lock_at_most_the_bound(
 def test_a_passkey_addition_waits_for_the_additions_lock_at_most_the_bound(
     site: Site, holder: Conn
 ) -> None:
-    site.allow(EMAIL)
-    browser = site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    browser = site.link_sign_in(EMAIL)
     credential = Authenticator().create(options_of(browser.post(OPTIONS)))
     body = {"name": "Laptop", "credential": credential}
     _hold(holder, PASSKEY_ADDITIONS, _account(site))
@@ -184,8 +184,8 @@ def test_a_passkey_addition_waits_for_the_additions_lock_at_most_the_bound(
 
 def test_the_sign_in_functions_put_the_callers_lock_timeout_back(site: Site, db_url: str) -> None:
     """The bound is set around the lock alone: what the caller had is in force afterwards."""
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     account = _account(site)
     link, browser = _h(), _h()
     site.su.execute(
@@ -213,8 +213,8 @@ def test_the_sign_in_functions_put_the_callers_lock_timeout_back(site: Site, db_
 
 
 def test_the_additions_lock_puts_the_callers_lock_timeout_back(site: Site, db_url: str) -> None:
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     account = _account(site)
     with connect(db_url) as db, db.transaction():
         ctx = AccountContext(
@@ -235,8 +235,8 @@ def test_a_timed_out_additions_lock_leaves_the_callers_transaction_going_on(
 ) -> None:
     """`lock_additions` waits in a savepoint of its own: when the wait runs out, only that
     savepoint is rolled back. What the caller wrote before stays and its next statement runs."""
-    site.allow(EMAIL)
-    site.sign_in(EMAIL)
+    site.follower(EMAIL)
+    site.link_sign_in(EMAIL)
     account = _account(site)
     _hold(holder, PASSKEY_ADDITIONS, account)
     result: list[object] = []

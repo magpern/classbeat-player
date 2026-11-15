@@ -137,7 +137,7 @@ def test_a_denied_pairing_gives_access_denied_and_no_device(site: Site) -> None:
     # A denied code cannot be approved afterwards.
     assert pairhelp.approve(browser, pairing).status_code == 404
     assert site.su.execute("SELECT count(*) FROM player.devices").fetchone() == (0,)
-    assert site.mailer.sent[-1].subject != "A new device was paired"
+    assert all(mail.subject != "A new device was paired" for mail in site.mailer.sent)
     assert site.events(EMAIL)[-1][0] == "pairing.denied"
 
 
