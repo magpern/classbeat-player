@@ -146,7 +146,7 @@ test("the room page's channel answers only the room window: the same preload and
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());
   assert.equal(own?.doc.class.title, TITLE);
-  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "pattern", "view"], "a frame, not the presenter's snapshot");
+  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "pattern", "playlistNotLoaded", "view"], "a frame, not the presenter's snapshot");
 });
 
 test("the room window is on the display the rule picks, and the presenter keeps its window", async () => {
