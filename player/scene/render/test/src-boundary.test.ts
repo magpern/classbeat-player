@@ -12,7 +12,7 @@ import { ESLint } from "eslint";
 import { RENDER_DIR } from "../tools/tokens-file.ts";
 
 const GLOBALS = [
-  "Object", "Function", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
+  "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
   "Map", "Set", "WeakMap", "WeakSet", "Promise", "RegExp", "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array",
   "Int32Array", "Uint8Array", "Uint16Array", "Uint32Array", "parseFloat", "parseInt", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
   "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "Pick", "Omit", "Partial", "Required", "ReturnType", "Parameters",
@@ -22,7 +22,7 @@ const GLOBALS = [
 test("the globals src/ may name are exactly this list (ES built-ins and utility types, no browser global)", async () => {
   const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { SRC_GLOBALS: string[] };
   assert.deepEqual([...mod.SRC_GLOBALS].sort(), [...GLOBALS].sort());
-  const browser = ["window", "document", "navigator", "fetch", "Image", "Audio", "Range", "FontFace", "speechSynthesis", "SpeechSynthesisUtterance", "globalThis", "self", "location", "performance", "requestAnimationFrame", "setTimeout", "console", "HTMLCanvasElement", "Date", "crypto"];
+  const browser = ["Function", "window", "document", "navigator", "fetch", "Image", "Audio", "Range", "FontFace", "speechSynthesis", "SpeechSynthesisUtterance", "globalThis", "self", "location", "performance", "requestAnimationFrame", "setTimeout", "console", "HTMLCanvasElement", "Date", "crypto"];
   assert.deepEqual(browser.filter((n) => GLOBALS.includes(n)), []);
 });
 

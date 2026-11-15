@@ -9,8 +9,10 @@ import tseslint from "typescript-eslint";
 //    it, so the dependency's own audio and network classes cannot be reached.
 export const THREE_ALLOWED = [
   "AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial",
-  "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3", "WebGLRenderer",
+  "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3",
 ];
+// The demo (the host) alone builds the three.js renderer and hands it to src/ (src/host.ts).
+export const THREE_DEMO_ALLOWED = [...THREE_ALLOWED, "WebGLRenderer"];
 // 2. The DOM: `document` is not reachable from src/ at all, and `window` only by these members.
 export const WINDOW_ALLOWED = ["innerWidth", "innerHeight", "devicePixelRatio", "requestAnimationFrame", "cancelAnimationFrame", "addEventListener", "removeEventListener"];
 // The demo page may also read its own canvas and the computed style, and publish its test API.
@@ -23,7 +25,7 @@ export const DEMO_DOCUMENT_ALLOWED = ["getElementById", "documentElement"];
 //    `globalThis` or `self` is defined there, so any use is an error, whatever its name. Widening
 //    this list is a reviewed change; `test/source-fences.test.ts` holds its own copy.
 export const SRC_GLOBALS = [
-  "Object", "Function", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
+  "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Math", "JSON", "Error", "TypeError", "RangeError",
   "Map", "Set", "WeakMap", "WeakSet", "Promise", "RegExp", "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array",
   "Int32Array", "Uint8Array", "Uint16Array", "Uint32Array", "parseFloat", "parseInt", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
   "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "Pick", "Omit", "Partial", "Required", "ReturnType", "Parameters",
@@ -52,6 +54,13 @@ const common = [
   { selector: "CallExpression[callee.property.name=/^(add|remove)EventListener$/][callee.object.name='window']:not([arguments.0.value='resize'])", message: "The window's only listener is for resize." },
 ];
 const srcSyntax = ["error", ...common,
+  // No route to the global object or the page by building a name at run time: `constructor` (reaches `Function`), and any computed key that is not a literal.
+  { selector: "MemberExpression[computed=false][property.name='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
+  { selector: "MemberExpression[computed=true][property.type='Literal'][property.value='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
+  { selector: "ObjectPattern > Property[computed=false][key.name='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
+  { selector: "ObjectPattern > Property[computed=true][key.value='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
+  { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "src/ reads members by a literal key only: a key built at run time can name any member (use .at(i), a destructure or a lookup helper)." },
+  { selector: "ObjectPattern > Property[computed=true]:not([key.type='Literal'])", message: "src/ destructures by a literal key only." },
   { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `src/ reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
 ];
 const demoSyntax = ["error", ...common,
@@ -64,7 +73,7 @@ const properties = ["error",
   { object: "Math", property: "random", message: "The rig is deterministic." },
 ];
 const base = { "no-restricted-properties": properties, "no-eval": "error", "no-implied-eval": "error", "no-new-func": "error" };
-const threeImports = ["error", { paths: [{ name: "three", allowImportNames: THREE_ALLOWED, message: "That three.js name is not on the allowlist (no audio, no loaders)." }] }];
+const threeImports = (allowed) => ["error", { paths: [{ name: "three", allowImportNames: allowed, message: "That three.js name is not on the allowlist (no audio, no loaders; the renderer is built by the host, not src/)." }] }];
 
 // The pure modules (light calculations, bursts, the loop, the tokens reader) import no three.js and
 // no DOM, and read no clock.
@@ -80,7 +89,7 @@ export default tseslint.config(
     rules: {
       ...base,
       "no-undef": "error",
-      "no-restricted-imports": threeImports,
+      "no-restricted-imports": threeImports(THREE_ALLOWED),
       "no-restricted-globals": globals([...BANNED_GLOBALS, "document", "location", "history", "screen", "name"], "The scene draws what the model says: no network, storage, worker, audio, image or document."),
       "no-restricted-syntax": srcSyntax,
     },
@@ -89,7 +98,7 @@ export default tseslint.config(
     files: ["demo/**/*.ts"],
     rules: {
       ...base,
-      "no-restricted-imports": threeImports,
+      "no-restricted-imports": threeImports(THREE_DEMO_ALLOWED),
       "no-restricted-globals": globals(BANNED_GLOBALS, "The demo draws what the model says: no network, storage, worker, audio or image."),
       "no-restricted-syntax": demoSyntax,
     },

@@ -9,6 +9,7 @@ import { START_STATE, beatsAt, stepRig } from "../../model/src/index.ts";
 import { BurstTracker } from "./bursts.ts";
 import { beatLift, beatStride, fixturesLit, masterLevel } from "./light-calc.ts";
 import type { SceneTokens } from "./tokens.ts";
+import { nth } from "./lookup.ts";
 
 /** What the shell gives the scene each frame: the class clock's state, and nothing about riders. */
 export interface Feed {
@@ -56,7 +57,7 @@ export class RigLoop {
     const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still: reduced });
     this.state = stepped.state;
     const { frame, dtSeconds } = stepped;
-    const song = cls.songs[songIndex];
+    const song = nth(cls.songs, songIndex);
     const beats = beatsAt(song?.anchors, songPosMs);
     const { burst, dim } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: reduced });
     if (!reduced && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;

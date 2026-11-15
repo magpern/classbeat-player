@@ -14,20 +14,26 @@ import { RigLoop } from "../src/loop.ts";
 import { SceneRig } from "../src/rig.ts";
 import { RENDER_DIR, tokensFromFile } from "../tools/tokens-file.ts";
 
-const ALLOWED = ["AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial", "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3", "WebGLRenderer"];
+const ALLOWED = ["AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", "DoubleSide", "Group", "InstancedMesh", "Mesh", "MeshBasicMaterial", "Object3D", "PerspectiveCamera", "PlaneGeometry", "Quaternion", "Scene", "ShaderMaterial", "Vector3"];
+// The host (demo/ now, the shell later) alone builds the renderer; src/ is handed it (src/host.ts).
+const DEMO_ALLOWED = [...ALLOWED, "WebGLRenderer"];
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const sources = ["src", "demo"].flatMap((d) => readdirSync(join(RENDER_DIR, d)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${d}/${f}`, text: code(readFileSync(join(RENDER_DIR, d, f), "utf8")) })));
 
 test("three.js is imported by allowlisted names only, no subpath, no namespace or default import", () => {
-  const used = sources.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));
-  assert.ok(used.length > 10);
-  assert.deepEqual(used.filter((n) => !ALLOWED.includes(n)), []);
+  const names = (list: typeof sources) => list.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));
+  const inSrc = names(sources.filter((s) => s.name.startsWith("src/")));
+  assert.ok(inSrc.length > 10);
+  assert.deepEqual(inSrc.filter((n) => !ALLOWED.includes(n)), []);
+  assert.deepEqual(names(sources).filter((n) => !DEMO_ALLOWED.includes(n)), []);
   assert.deepEqual(sources.filter((s) => /from\s*["']three\//.test(s.text) || /import\s+(?!type\b)(\*|\w+)[^;]*from\s*"three"/.test(s.text)).map((s) => s.name), []);
 });
 
 test("the ESLint config carries the same allowlist", async () => {
-  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { THREE_ALLOWED: string[] };
+  const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as { THREE_ALLOWED: string[]; THREE_DEMO_ALLOWED: string[] };
   assert.deepEqual([...mod.THREE_ALLOWED].sort(), [...ALLOWED].sort());
+  assert.ok(!mod.THREE_ALLOWED.includes("WebGLRenderer"));
+  assert.deepEqual([...mod.THREE_DEMO_ALLOWED].sort(), [...DEMO_ALLOWED].sort());
 });
 
 test("each fence fires: three.js audio and loaders, a beacon, dynamic import, crypto, workers, .play(any), cookies, the global object", async () => {
@@ -77,6 +83,17 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
     ["export const a = () => new window.Image();", "no-restricted-syntax", "demo/probe.ts"],
     ['export const a = () => { location.href = "https://example.invalid"; };', "no-restricted-syntax", "demo/probe.ts"],
     ['export const a = (e: { src: string }) => { e.src = "x"; };', "no-restricted-syntax", "demo/probe.ts"],
+    // The last two routes of the #536 review: the renderer is built by the host, and a name is never built at run time.
+    ['import { WebGLRenderer } from "three";\nexport const a = () => new WebGLRenderer();', "no-restricted-imports", "src/probe.ts"],
+    ['import { WebGLRenderer } from "three";\nexport const a = () => new WebGLRenderer();', "no-restricted-imports", "src/rig.ts"],
+    ['export const a = () => ({}).constructor.constructor("return this")();', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => ({})["constructor"]["constructor"]("return this")();', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => { const { constructor: F } = {}; return F; };', "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = (x: { ownerDocument: unknown }) => x["owner" + "Document"];', "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => x[k];", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => x?.[k];", "no-restricted-syntax", "src/probe.ts"],
+    ["export const a = (x: Record<string, number>, k: string) => { const { [k]: v } = x; return v; };", "no-restricted-syntax", "src/probe.ts"],
+    ['export const a = () => Function("return this")();', "no-new-func", "src/probe.ts"],
     ['import { Color } from "three";\nexport const a = Color;', "no-restricted-imports", "src/loop.ts"],
     ["export const a = performance;", "no-restricted-globals", "src/bursts.ts"],
   ];
@@ -88,6 +105,7 @@ test("each fence fires: three.js audio and loaders, a beacon, dynamic import, cr
   const allowed: [string, string][] = [
     ["export const a = () => [window.innerWidth, window.innerHeight, window.devicePixelRatio];", "src/probe.ts"],
     ['export const a = () => window.addEventListener("resize", () => 0);', "src/probe.ts"],
+    ["export const a = (l: readonly number[]) => [l[0], l.at(1), l.length];", "src/probe.ts"],
     ['export const a = () => [document.getElementById("scene"), document.documentElement, location.search];', "demo/probe.ts"],
   ];
   for (const [src, file] of allowed) {

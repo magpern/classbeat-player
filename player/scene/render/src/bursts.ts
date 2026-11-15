@@ -7,6 +7,7 @@
 import type { LinkInput, SceneClass } from "../../model/src/index.ts";
 import { BURST_GAP_MS, gatedBurst, intervalIndexAt, momentsAllowed } from "../../model/src/index.ts";
 import { burstEnvelope } from "./light-calc.ts";
+import { nth } from "./lookup.ts";
 
 export interface BurstInput {
   readonly cls: SceneClass;
@@ -38,7 +39,7 @@ export class BurstTracker {
   private dimLeft = 0;
 
   update(a: BurstInput): BurstOutput {
-    const song = a.cls.songs[a.songIndex];
+    const song = nth(a.cls.songs, a.songIndex);
     const interval = intervalIndexAt(a.cls, a.classMs);
     const first = this.song === -1;
     const songChanged = !first && a.songIndex !== this.song;

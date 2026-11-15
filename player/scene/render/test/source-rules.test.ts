@@ -38,7 +38,7 @@ test("rule 4: the files that aim beams know nothing of the interval, the zone, a
   }
   const rig = sources.find((s) => s.name === "src/rig.ts")!.text;
   assert.doesNotMatch(rig, /intervals|classMs|songPosMs|cadence|pattern|\bcue\b/i);
-  assert.match(rig, /aimQuaternion\(draw\.drawn\[i\]/); // a beam is aimed by the model's drawn direction and by nothing else
+  assert.match(rig, /aimQuaternion\(nth\(draw\.drawn, i\)/); // a beam is aimed by the model's drawn direction and by nothing else
 });
 
 test("the renderer passes on the model's moments and never makes its own", () => {

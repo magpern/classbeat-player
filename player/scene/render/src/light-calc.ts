@@ -4,6 +4,7 @@
 
 import type { BeatLevel, Frame, LinkInput, QualityLevel } from "../../model/src/index.ts";
 import { FIXTURES, MAX_BEAT_LIFT, QUALITY, TEMPO_PULSE_DEPTH } from "../../model/src/index.ts";
+import { lookup } from "./lookup.ts";
 
 export const BUILD_LIFT_MAX = 0.55;
 export const OFF_LIST_LEVEL = 0.6;
@@ -21,7 +22,7 @@ export function litMask(count: number): boolean[] {
 
 /** Which fixtures are on this frame: the zone's count capped by the quality level; the drop's fan lights all; a breakdown one beam. */
 export function fixturesLit(frame: Frame, quality: QualityLevel): boolean[] {
-  const cap = QUALITY[quality].fixtures;
+  const cap = lookup(QUALITY, quality).fixtures;
   if (frame.moments.breakdown) return FIXTURES.map((_, i) => i === BREAKDOWN_FIXTURE);
   return litMask(frame.moments.fan ? cap : Math.min(frame.energy.lit, cap));
 }
