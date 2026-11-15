@@ -2,7 +2,10 @@
 // Nothing is ever interpolated into a script: a caller picks one by name from this allowlist and
 // gets the same argument list every time. Every script first returns when Spotify is not running,
 // so none of them ever starts it. No script reads or sends audio, and none needs a Spotify token
-// (plan section 3, rule 3: the music stays in Spotify's own app).
+// (plan section 3, rule 3: the music stays in Spotify's own app). The playlist load is a fixed
+// script too; its one argument, the checked playlist link, is data the script reads, never code.
+import { playlistUri } from "./playlist.ts";
+import type { LoadOutcome } from "./playlist.ts";
 
 /** The system's own osascript, by absolute path: never looked up through PATH. */
 export const OSASCRIPT = "/usr/bin/osascript";
@@ -49,4 +52,35 @@ export type MacScriptName = keyof typeof MAC_SCRIPTS;
 export function osascriptArgs(name: string): readonly string[] | null {
   if (!Object.hasOwn(MAC_SCRIPTS, name)) return null;
   return MAC_SCRIPTS[name as MacScriptName].flatMap((line) => ["-e", line]);
+}
+
+/**
+ * Start's playlist load (ADR 0001, "Start loads the class playlist"), also a fixed script: the
+ * playlist link is never written into it. osascript hands the one argument after the script to
+ * `on run` as data, and the script passes it to Spotify's `play track`. It is behind the same
+ * NOT_RUNNING guard, so a closed Spotify is never started (it answers "notrunning").
+ */
+export const MAC_LOAD_SCRIPT = Object.freeze([
+  "on run argv",
+  NOT_RUNNING,
+  "set playlistUriText to item 1 of argv",
+  'tell application "Spotify" to play track playlistUriText',
+  'return "asked"',
+  "end run",
+] as const);
+
+/**
+ * The argument list for loading one playlist. The id is checked again here, immediately before
+ * the command is built: null for anything but 22 letters or digits, and then nothing is run. The
+ * one argument is always the fixed prefix plus that id (playlist.ts).
+ */
+export function osascriptLoadArgs(id: unknown): readonly string[] | null {
+  const uri = playlistUri(id);
+  return uri === null ? null : Object.freeze([...MAC_LOAD_SCRIPT.flatMap((line) => ["-e", line]), uri]);
+}
+
+/** What the load script's output says; null is a failed, hung or refused call. A closed Spotify is not loaded. */
+export function macLoadOutcome(out: string | null): LoadOutcome {
+  const said = out?.trim();
+  return said === "asked" ? "asked" : said === "notrunning" ? "not-running" : "failed";
 }
