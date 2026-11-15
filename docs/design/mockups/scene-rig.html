@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scene: the rig (reference mock-up)</title>
+<!-- Reference mock-up for docs/design/scene.md. Plain WebGL, no library, no network.
+     Fonts and tokens come from the files next to this one. Not product code. -->
+<link rel="stylesheet" href="tokens.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--stage); color: var(--light-1); font-family: var(--face-text);
+  font-size: var(--t-label); line-height: 1.1; overflow: hidden; cursor: none;
+}
+body.pointer { cursor: default; }
+canvas#rig { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+.n { font-family: var(--face-number); font-weight: 800; }
+.lbl { font-size: var(--t-label); font-weight: 400; }
+.d { display: inline-block; width: 0.48em; text-align: center; }
+.c { display: inline-block; width: 0.22em; text-align: center; }
+
+/* ---- Gel plate: opaque, the zone as number, name and colour ---- */
+.gel {
+  position: fixed; left: 0; top: 0; width: 24vw; height: 68.4vh; z-index: 2;
+  background: var(--zone); color: var(--ink);
+  padding: var(--safe-y) 1.5vw 2vh var(--safe-x);
+  display: flex; flex-direction: column;
+  transition: background-color var(--m-change), color var(--m-change);
+}
+.gel .lbl { color: var(--ink); font-weight: 700; }
+.gel-head { display: flex; align-items: flex-start; gap: 1vw; margin-top: 1vh; }
+.gel-num { font-size: 32vh; line-height: 0.8; }
+.gel-name { font-size: min(7.6vh, 4.4vw); line-height: 0.95; margin-top: auto; }
+.gel-name.long { font-size: var(--t-minor); } /* only a name that cannot fit two lines (S1 step-down) */
+.gel-targets { display: flex; flex-wrap: wrap; column-gap: 2vw; margin-top: 1vh; font: 600 var(--t-minor)/1 var(--face-number); }
+.gel-targets span { white-space: nowrap; }
+.gel.down { background: color-mix(in srgb, var(--zone) 6%, var(--stage)); color: var(--zone); box-shadow: inset -0.5vh 0 0 var(--zone); }
+.gel.down .lbl { color: var(--zone); }
+.gel.blank { background: var(--light-1); --zone: var(--light-1); }
+.edge { position: absolute; right: -0.5vh; top: 0; width: 1vh; height: 100%; background: var(--light-1); opacity: 0; }
+.edge.on { opacity: 1; }
+
+/* ---- Text layer over the scene ---- */
+.layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.rail { position: absolute; left: 27vw; right: var(--safe-x); top: var(--safe-y); display: flex; align-items: baseline; gap: 1vw; white-space: nowrap; }
+.rail .val { font: 600 var(--t-minor)/1 var(--face-number); }
+.rail .val + .lbl { margin-right: 2vw; }
+.rail .seg { margin-left: auto; }
+.link { display: inline-flex; align-items: center; gap: 0.8vw; }
+.link::before { content: ""; width: 1.2vh; height: 1.2vh; border-radius: 50%; background: currentColor; }
+.link.manual::before { border-radius: 0; }
+.plate { background: var(--light-1); color: var(--ink); font-weight: 700; padding: 0.5vh 1vw; border-radius: 0.5vh; }
+.plate::before { display: none; }
+.metrics { position: absolute; left: 27vw; top: 12vh; display: flex; flex-direction: column; gap: 1.6vh; }
+.metric .v { font: 800 7.6vh/0.95 var(--face-number); white-space: nowrap; }
+.metric .u { font: 600 var(--t-minor)/1 var(--face-number); margin-left: 0.4vw; }
+.beat { display: inline-block; width: 0.22em; height: 0.22em; margin-left: 0.18em; border-radius: 50%; background: var(--light-1); vertical-align: 0.25em; opacity: 0; }
+.clock { position: absolute; right: var(--safe-x); top: 10.9vh; text-align: right; }
+.chead { display: flex; justify-content: flex-end; align-items: center; gap: 1.2vw; white-space: nowrap; height: 4.2vh; }
+.clock .count { font: 800 26vh/0.82 var(--face-number); margin: 1.6vh 0 0 auto; width: fit-content; white-space: nowrap; }
+.clock .bars:empty { display: none; }
+.clock .count.est { border-bottom: 0.5vh dashed var(--light-1); }
+/* 3.8 vh (cap 3.1 %): the head line holds its ink 1 vh clear of the rail above and the countdown below */
+.clock .bars { font: 600 3.8vh/1 var(--face-number); }
+.clock .bars .w { font-family: var(--face-text); font-weight: 400; font-size: 0.8em; }
+/* Compact plates: the paused plate stays inside the 4.2 vh head line, at least 1 vh from the countdown and the rail */
+.pplate { display: inline-block; font-size: var(--t-label); line-height: 1; padding: 0.25vh 0.8vw; }
+.rail .plate { line-height: 1; padding: 0.15vh 0.8vw; }
+.next { margin-top: 1.2vh; }
+.nx1 { display: flex; justify-content: flex-end; align-items: baseline; gap: 1vw; font: 600 var(--t-minor)/1.05 var(--face-number); white-space: nowrap; }
+.nxc { font: 400 var(--t-label)/1.05 var(--face-text); max-width: 52vw; width: fit-content; margin: 1vh 0 0 auto; text-align: left; }
+.chip { background: var(--zone); color: var(--ink); font-weight: 800; padding: 0 0.6vw; border-radius: 0.4vh; }
+.next .lbl { font-family: var(--face-text); }
+.cue { position: absolute; left: 27vw; right: var(--safe-x); bottom: 31.6vh; font: 700 var(--t-text)/1.06 var(--face-text); }
+.cue.long { font-size: var(--t-text-min); }
+.title { font: 800 9vh/1 var(--face-number); }
+
+/* ---- Beat-counted position pattern (format 1.1): word, big beat count, beats left ---- */
+.pat { position: absolute; left: 46vw; top: 10.9vh; display: none; }
+.pat.on { display: block; }
+.prow { display: flex; align-items: flex-end; gap: 1vw; margin-top: 1.2vh; }
+.pat .pw { font: 800 9vh/0.82 var(--face-number); text-transform: uppercase; white-space: nowrap; }
+.pat .pc { font: 800 18vh/0.82 var(--face-number); }
+.pat .pc:empty, .pat .pw:empty { display: none; }
+.pips { display: flex; flex-wrap: wrap; gap: 0.5vw; margin-top: 1.6vh; align-items: center; white-space: nowrap; }
+.prow:empty, .prow.off { display: none; }
+/* Fitting: where the block would come within 2 vw of the countdown, the count steps to 14.6 vh (cap 11.9 %) */
+.pat.tight .pc { font-size: 14.6vh; } .pat.tight .pw { font-size: 7.4vh; }
+.pips i { width: 1.6vh; height: 1.6vh; border: 0.3vh solid var(--light-1); box-sizing: border-box; }
+.pips i.on { background: var(--light-1); border-color: var(--light-1); }
+.pips .pn { flex-basis: 100%; white-space: normal; font: 400 var(--t-label)/1.1 var(--face-text); margin-top: 0.6vh; }
+.cfm { display: inline-block; white-space: normal; max-width: 24vw; font: 400 var(--t-minor)/1.05 var(--face-text); }
+.metric .v .pw2 { text-transform: uppercase; }
+.metric .v .pc2 { font-size: 13vh; margin-left: 0.5vw; }
+
+/* ---- The score: opaque, flat, 8 minutes ahead ---- */
+.score { position: fixed; left: 0; right: 0; top: 70.4vh; bottom: 0; background: var(--stage); z-index: 2; overflow: hidden; border-top: 0.3vh solid var(--stage-line); }
+.blk, .clip { position: absolute; top: 0.8vh; height: 10.4vh; overflow: hidden; background: var(--zone); color: var(--ink); will-change: transform; }
+.clip { top: 11.8vh; height: 8.6vh; background: var(--stage-raised); color: var(--light-1); }
+.blk.past, .blk.sliver { background: var(--stage-line); }
+.blk::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--past, 0px); background: rgb(0 0 0 / 0.62); }
+.blk.past > *, .blk.sliver > * { visibility: hidden; }
+.in { position: absolute; top: 0; padding: 0.9vh 0.6vw 0; white-space: nowrap; }
+.l1 { display: flex; align-items: baseline; gap: 0.6vw; }
+.l1 .num { font: 800 var(--sc-num)/1 var(--face-number); }
+:root { --sc-num: min(5vh, 2.8vw); --sc-len: min(3.72vh, 2.1vw); }
+@media (max-aspect-ratio: 3/2) { :root { --sc-num: 5vh; --sc-len: 3.72vh; } }
+.l1 .nm, .l1 .len { font-weight: 700; }
+.l1 .nm { order: 3; } .l1 .len { order: 2; }
+.l1 .len { font-family: var(--face-number); font-weight: 800; font-size: var(--sc-len); }
+.l2 { margin-top: 0.6vh; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.l2 b { font-weight: 700; }
+.pst { position: absolute; left: 0; right: 0; bottom: 0; height: 1vh; }
+.clip .in { padding-top: 1vh; }
+.clip .ti { font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
+.clip .ar, .clip .bp { color: var(--light-2); margin-left: 1vw; }
+.ticks { position: absolute; left: 0; right: 0; bottom: 0; height: 1vh; }
+.mom { position: absolute; top: 16.6vh; height: 3.8vh; border-left: 0.4vh solid var(--light-1); padding: 0.1vh 0 0 0.4vw; font-weight: 700; white-space: nowrap; }
+.now { position: absolute; top: 0; height: 20.6vh; width: 0.4vh; margin-left: -0.2vh; background: var(--light-1); left: 10vw; z-index: 3; }
+.now.est { background: repeating-linear-gradient(var(--light-1) 0 1.2vh, transparent 1.2vh 2vh); }
+.mins { position: absolute; top: 21vh; left: 0; right: 0; height: 3.6vh; }
+.mins span { position: absolute; color: var(--light-3); white-space: nowrap; }
+
+/* ---- Mock-up panel (not product: the product's control band sits here) ---- */
+.panel { position: fixed; left: 0; right: 0; top: 70.4vh; bottom: 0; z-index: 5; background: #0b0b0e; border-top: 0.3vh solid var(--stage-line);
+  padding: 1.6vh var(--safe-x); display: none; flex-direction: column; gap: 1vh; font-size: 2.2vh; color: var(--light-2); }
+.panel.on { display: flex; }
+.panel .row { display: flex; gap: 0.6vw; align-items: center; flex-wrap: wrap; }
+.panel .row > b { width: 7vw; color: var(--light-3); font-weight: 400; }
+.panel button { font: 700 2.2vh var(--face-text); color: var(--light-1); background: var(--stage-raised); border: 0.2vh solid var(--stage-line); border-radius: 0.6vh; padding: 0.7vh 0.9vw; cursor: pointer; }
+.panel button.sel { border-color: var(--light-1); }
+.panel .info { margin-left: auto; color: var(--light-3); }
+
+@media (max-aspect-ratio: 3/2) {
+  .gel { width: 30vw; height: 48vh; }
+  .gel-num { font-size: 28vh; }
+  .gel-name { font-size: 7.3vh; }
+  .rail { left: 33vw; }
+  .rail .seg { display: none; }
+  /* Metrics: one row under the countdown (room-2d), so a five-glyph countdown never meets them */
+  .metrics { left: 33vw; right: var(--safe-x); top: 39.3vh; flex-direction: row; align-items: baseline; gap: 2.4vw; }
+  .metric { display: flex; align-items: baseline; }
+  .metric .v { font-size: 7.2vh; }
+  /* The units ("rpm", "bpm") and the values ("Seated") carry the meaning: no labels in the row */
+  .metric > .lbl { display: none; }
+  .metric:nth-child(2) { flex: 1 1 0; min-width: 0; }
+  .metric:nth-child(2) .v { white-space: normal; min-width: 0; }
+  .cfm { display: block; max-width: none; font: 400 var(--t-label)/1.05 var(--face-text); }
+  .next { position: fixed; left: var(--safe-x); right: var(--safe-x); top: 52.5vh; margin: 0; text-align: left; }
+  .nx1 { justify-content: flex-start; }
+  .nxc { max-width: none; margin-left: 0; }
+  .cue { left: var(--safe-x); bottom: 19.7vh; }
+  .score, .panel { top: 81vh; }
+  .blk { top: 0.5vh; height: 6.6vh; }
+  .l2 { display: none; }
+  .clip { top: 7.6vh; height: 6.4vh; }
+  .clip .in { padding-top: 0.2vh; }
+  .mom { top: 10.6vh; height: 3.4vh; padding-top: 0; }
+  .now { height: 14vh; }
+  /* No minute labels at 3:2 and narrower: the band ends at the 95 vh safe edge */
+  .mins { display: none; }
+  .pst { height: 0.8vh; }
+  .blk .in { padding-top: 0.3vh; }
+}
+</style>
+</head>
+<body>
+<canvas id="rig"></canvas>
+
+<div class="gel" id="gel">
+  <div class="edge" id="edge"></div>
+  <div class="gel-head"><span class="gel-num n" id="gNum">1</span><span class="lbl" id="gLbl">Zone</span></div>
+  <div class="gel-name n" id="gName">Recovery</div>
+  <div class="gel-targets" id="gTg"></div>
+</div>
+
+<div class="layer" id="layer">
+  <div class="rail">
+    <span class="val tx" id="tLeft">24:00</span><span class="lbl tx">left</span>
+    <span class="val tx" id="tDone">0:00</span><span class="lbl tx">done</span>
+    <span class="seg tx" id="seg">Warm-up</span>
+    <span class="link tx" id="link">Following Spotify</span>
+  </div>
+  <div class="metrics" id="metrics">
+    <div class="metric"><div class="lbl tx">Cadence</div><div class="v tx" id="mCad">80–90<span class="u">rpm</span></div></div>
+    <div class="metric"><div class="lbl tx" id="mPosL">Position</div><div class="v tx" id="mPos">Seated</div></div>
+    <div class="metric"><div class="lbl tx" id="mBpmL">Song</div><div class="v tx" id="mBpm">112<span class="u">bpm</span><span class="beat" id="beat"></span></div></div>
+  </div>
+  <div class="clock">
+    <div class="chead"><span class="lbl tx" id="cLbl">Interval left</span><span class="bars tx" id="bars"></span></div>
+    <div class="count n tx" id="count">2:00</div>
+    <div class="next" id="next"><div class="nx1 tx" id="nx1"></div><div class="nxc tx" id="nxc"></div></div>
+  </div>
+  <div class="pat" id="pat">
+    <div class="lbl tx" id="pLbl">Pattern</div>
+    <div class="prow"><div class="pw tx" id="pWord">Up</div><div class="pc n tx" id="pCount">8</div></div>
+    <div class="pips tx" id="pips"></div>
+  </div>
+  <div class="cue tx" id="cue"></div>
+</div>
+
+<div class="score" id="score">
+  <div class="now" id="now"></div>
+  <div class="mins" id="mins"></div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="row"><b>Jump</b>
+    <button data-j="warm">Warm-up</button><button data-j="z4">Zone 4</button><button data-j="drop">Before a drop (D)</button>
+    <button data-j="song">Before a song change (S)</button><button data-j="int">Before an interval change (I)</button><button data-j="z7">Zone 7</button><button data-j="climb">Climb in a song (C)</button><button data-j="jumps">Patterns (J)</button>
+    <span class="info" id="info"></span></div>
+  <div class="row"><b>State</b>
+    <button data-s="running">Running</button><button data-s="paused">Paused</button><button data-s="coasting">Coasting</button>
+    <button data-s="offlist">Off the list</button><button data-s="before">Before the start</button><button data-s="finished">Finished</button></div>
+  <div class="row"><b>View</b>
+    <button data-v="speed">Speed 1×</button><button data-v="rm">Reduced motion: off</button><button data-v="q">Quality: High</button><button data-v="sound">Sound: off</button><button data-v="detail">Music detail: full</button><button data-v="worst">Worst case: off</button>
+    <span class="info">Mock-up panel, not product. Keys: Space, ←/→, 1–7, C, J, D, S, I, B, W, M, Q, A, H</span></div>
+</div>
+
+<script>
+'use strict';
+// ---------- The fake class ----------
+const ZONES = {
+  1: ['Recovery', 'under 55% FTP', 'RPE 1–2'], 2: ['Endurance', '56–75% FTP', 'RPE 3–4'],
+  3: ['Tempo', '76–90% FTP', 'RPE 5–6'], 4: ['Threshold', '91–105% FTP', 'RPE 7–8'],
+  5: ['VO2 max', '106–120% FTP', 'RPE 8–9'], 6: ['Anaerobic', '121–150% FTP', 'RPE 9'],
+  7: ['Sprint', 'over 150% FTP', 'RPE 10'],
+};
+const SONGS = [
+  { ti: 'Morning Static', ar: 'Lumen Drive', a: 0, b: 230, bpm: 112, m: [] },
+  { ti: 'Neon Avenue', ar: 'The Night Shift', a: 230, b: 470, bpm: 124, m: [[380, 'build'], [396, 'drop']] },
+  { ti: 'Pulse Theory', ar: 'Aurora Lane', a: 470, b: 710, bpm: 132, m: [[600, 'breakdown'], [640, 'drop']] },
+  { ti: 'Iron Lungs', ar: 'Kestrel', a: 710, b: 950, bpm: 140, m: [[800, 'drop']] },
+  { ti: 'Afterglow Run', ar: 'Signal Fire', a: 950, b: 1200, bpm: 128, m: [[1100, 'drop']] },
+  { ti: 'Slow Return', ar: 'Harbour Lights', a: 1200, b: 1440, bpm: 100, m: [] },
+];
+const UPDN = { Standing: 'up', Seated: 'down' };
+// Interval-first: intervals sit on the class clock, several inside one song (climbs), and
+// format 1.1 patterns count positions on the song's beat ([8, 8] = 8 up, 8 down).
+// position stays required in format 1.1 and equals positions[0]; the pattern wins for a 1.1 reader.
+const J88D = { p: ['Standing', 'Seated'], b: [8, 8], on: 'next_downbeat' }, J448 = { p: ['Standing', 'Seated', 'Standing'], b: [4, 4, 8] }, J88 = { p: ['Standing', 'Seated'], b: [8, 8] };
+const IV = [
+  [0, 120, 1, '80–90', 'Seated', 'Settle in. Shoulders down, find the beat with your feet.'],
+  [120, 230, 2, '85–95', 'Seated', 'Add a little load. Breathe through the nose.'],
+  [230, 280, 3, '90–100', 'Seated', 'Climb, step 1 of 3: a quarter turn on.'],
+  [280, 330, 4, '90–100', 'Seated', 'Climb, step 2 of 3: another quarter turn.'],
+  [330, 396, 5, '85–95', 'Seated', 'Step 3 of 3. Heavy and steady, hold it to the drop.'],
+  [396, 470, 6, '70–80', 'Standing', 'Jumps on the drop: 8 up, 8 down. Land soft.', J88D],
+  [470, 530, 2, '85–95', 'Seated', 'Sit down, spin it out. Drink.'],
+  [530, 600, 5, '95–105', 'Seated', 'Push through the verse. A quarter turn each chorus.'],
+  [600, 640, 3, '90–100', 'Seated', 'Breakdown: ease off, stay on the beat.'],
+  [640, 710, 7, '75–85', 'Standing', 'All in on the drop. Thirty seconds, then twenty more.'],
+  [710, 770, 1, '80–90', 'Seated', 'Recover. Big breaths, loose hands.'],
+  [770, 800, 4, '90–100', 'Seated', 'Build into it: the drop is coming.'],
+  [800, 890, 6, '70–80', 'Standing', 'Jumps: 4 up, 4 down, then 8 up. Stay with the kick drum.', J448],
+  [890, 950, 3, '90–100', 'Seated', 'Back to tempo. Smooth circles.'],
+  [950, 1000, 4, '90–100', 'Seated', 'Last climb, step 1 of 3.'],
+  [1000, 1050, 5, '95–105', 'Seated', 'Step 2 of 3. Heavier.'],
+  [1050, 1100, 6, '75–85', 'Standing', 'Step 3 of 3. Out of the saddle, hold for the drop.'],
+  [1100, 1160, 7, '80–90', 'Standing', 'Last big effort: 8 up, 8 down on the drop.', J88],
+  [1160, 1200, 2, '85–95', 'Seated', 'Spin it out.'],
+  [1200, 1440, 1, '75–85', 'Seated', 'Cool down. Thank you, well ridden.'],
+].map(([a, b, z, rpm, pos, cue, pat]) => ({ a, b, z, rpm, pos, cue, pat }));
+const patTxt = (p) => p.b.map((n, i) => n + ' ' + UPDN[p.p[i]]).join(', ');
+const END = 1440;
+const LONG_CUE = 'Stay seated and add a quarter turn every chorus; keep the cadence steady, breathe out on the beat, and hold it.';
+const WORST_RPM = '100–110';
+let WORST_NAME = 'Endurance';
+function measureWorstName() {
+  const c = document.createElement('canvas').getContext('2d');
+  c.font = '800 100px ' + getComputedStyle(document.documentElement).getPropertyValue('--face-number');
+  WORST_NAME = Object.values(ZONES).map((z) => z[0]).reduce((a, b) => (c.measureText(b).width > c.measureText(a).width ? b : a));
+}
+const zName = (z) => (st.worst ? WORST_NAME : ZONES[z][0]);
+const zRpm = (iv) => (st.worst ? WORST_RPM : iv.rpm);
+const LONG_CUE2 = 'Out of the saddle on the first beat, hands light, hips back; push down on every kick drum and keep going to the end.';
+const SEGS = [[0, 230, 'Warm-up'], [230, 1200, 'Main set'], [1200, 1440, 'Cool-down']];
+const LOOKS = ['fan', 'cross', 'sweep', 'circle', 'split', 'fan'];
+// Energy by zone (scene.md): ambient, lit fixtures, movement, beat lift.
+const AMB = [0, .045, .055, .065, .075, .085, .095, .11];
+const LIT = [0, 8, 10, 12, 15, 17, 20, 22];
+const DEPTH = [0, .15, .18, .22, .27, .32, .38, .45];
+
+// ---------- Helpers ----------
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const mmss = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function lin(hex) { const v = parseInt(hex.slice(1), 16); return [16, 8, 0].map((sh) => { const c = ((v >> sh) & 255) / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }); }
+let ZC = {}; function loadColours() { for (let z = 1; z <= 7; z++) ZC[z] = lin(css('--zone-' + z) || '#ffffff'); ZC.white = lin('#f6f4ef'); }
+const songAt = (t) => SONGS.findIndex((s) => t >= s.a && t < s.b);
+const ivAt = (t) => IV.findIndex((i) => t >= i.a && t < i.b);
+// Music detail the mock-up can take away (plan section 4): 'full', 'noanchors', 'nomoments', 'nobpm'.
+// The beat is the song's bpm on a grid from the song's start (the mock-up's stand-in for anchors).
+const detail = () => ({ bpm: st.detail !== 'nobpm', anchors: st.detail === 'full' || st.detail === 'nomoments', moments: st.detail !== 'nomoments' });
+// Where a pattern stands at time t. start_on 'interval_start' (the default) counts from the
+// interval's start at the bpm; 'next_downbeat' needs the anchors (no downbeat is guessed).
+function patAt(iv, song, t) {
+  if (!iv.pat || !song) return null;
+  const p = iv.pat, d = detail();
+  if (!d.bpm) return { unknown: 'nobpm' };
+  const bl = 60 / song.bpm;
+  let s0 = iv.a;
+  if (p.on === 'next_downbeat') {
+    if (!d.anchors) return { unknown: 'nodownbeat' };
+    const bar = 4 * bl; s0 = song.a + Math.ceil((iv.a - song.a) / bar - 1e-6) * bar;
+  }
+  const cyc = p.b.reduce((x, y) => x + y, 0), pos = (t - s0) / bl, n = Math.floor(pos);
+  if (n < 0) return { pre: true, i: 0, s0, bl };
+  let k = n % cyc, i = 0;
+  while (k >= p.b[i]) { k -= p.b[i]; i++; }
+  const nxt = (i + 1) % p.b.length;
+  return { i, left: p.b[i] - k, of: p.b[i], nxt, same: p.p[nxt] === p.p[i], frac: pos - n, first: k === 0, s0, bl };
+}
+const digits = (str) => str.split('').map((ch) => ch === ':' ? '<span class="c">:</span>' : '<span class="d">' + ch + '</span>').join('');
+
+// ---------- WebGL ----------
+const canvas = $('rig');
+const gl = canvas.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+const NB = 22, NR = 30;
+const FS = `precision highp float;
+uniform vec2 uRes; uniform float uTime, uAspect, uTanH;
+uniform vec3 uCA, uCB; uniform float uAnt;
+uniform int uN; uniform vec3 uBO[${NB}]; uniform vec3 uBD[${NB}]; uniform vec4 uBP[${NB}];
+uniform float uAmb, uHaze, uWall, uWallWave, uWallBeat, uWallOn, uBurst, uDim, uLens, uBeatF;
+uniform vec4 uRect[${NR}]; uniform int uRectN; uniform float uPad, uFade, uCap;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.-2.*f);
+  return mix(mix(hash(i), hash(i+vec2(1.,0.)), u.x), mix(hash(i+vec2(0.,1.)), hash(i+vec2(1.,1.)), u.x), u.y); }
+float fbm(vec2 p){ float v = 0., a = .5; for (int i = 0; i < 3; i++){ v += a*noise(p); p *= 2.03; a *= .5; } return v; }
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes * 2. - 1.;
+  vec3 R = normalize(vec3(uv.x * uAspect * uTanH, uv.y * uTanH, -1.));
+  float fb = fbm(uv * vec2(uAspect, 1.) * 1.3 + vec2(uTime * .025, -uTime * .017));
+  float hz = (0.15 + 2.2 * fb * fb) * uHaze;
+  float xr = uv.x * .5 + .5;
+  float wipe = smoothstep(0., .25, uAnt * 1.25 - (1. - xr));
+  vec3 col = mix(uCA, uCB, wipe * .6) * uAmb * hz * (0.15 + 0.85 * smoothstep(-0.6, 1., uv.y));
+  if (uWallOn > .5) {
+    float s = 26. / -R.z; vec3 P = R * s;
+    vec2 g = vec2(P.x / .55, (P.y + 2.5) / .55);
+    if (abs(g.x) < 40. && g.y > 0. && g.y < 20.) {
+      vec2 c = floor(g); vec2 f = fract(g) - .5;
+      float dt = smoothstep(.3, .1, length(f));
+      float wave = .5 + .5 * sin(c.x * .33 + c.y * .55 - uTime * 1.1);
+      float chase = exp(-fract((c.x + 40.) / 10. - uBeatF * .25) * 6.);
+      float v = uWall * .35 * (.06 + uWallWave * wave * wave * wave + uWallBeat * chase);
+      float wx = smoothstep(0., .2, uAnt * 1.25 - (1. - (c.x + 40.) / 80.));
+      col += mix(uCA, uCB, wx) * dt * v;
+    }
+  }
+  for (int i = 0; i < ${NB}; i++) {
+    if (i >= uN) break;
+    vec4 bp = uBP[i]; if (bp.x < .002) continue;
+    vec3 O = uBO[i], D = uBD[i], w0 = -O;
+    float b = dot(R, D), d = dot(R, w0), e = dot(D, w0);
+    float den = max(1e-4, 1. - b * b);
+    float sc = max((b * e - d) / den, 0.);
+    float tc = clamp((e - b * d) / den, 0., 45.);
+    float dist = length(w0 + sc * R - tc * D);
+    float r = bp.z + tc * bp.w;
+    float I = 2.4 * exp(-dist * dist / (r * r)) / (.35 + r * 2.);
+    I *= clamp(.3 / sqrt(den), .3, 2.2) * exp(-tc * .03);
+    vec3 bc = mix(uCA, uCB, bp.y);
+    col += bc * I * bp.x * (.45 + .75 * hz);
+    float s2 = max(dot(R, O), .1); float dl = length(R * s2 - O) / s2;
+    float fc = max(0., dot(D, normalize(-O))); fc = .12 + .88 * fc * fc * fc;
+    col += mix(bc, vec3(1.), .5 + .5 * uLens) * bp.x * fc * (exp(-dl * dl * 12000.) * 3. + .0005 / (dl * dl + .0005) * .3);
+  }
+  col += vec3(uBurst * 1.8);
+  col *= uDim;
+  col = 1. - exp(-col * 1.3);
+  float m = 0.;
+  for (int j = 0; j < ${NR}; j++) {
+    if (j >= uRectN) break;
+    vec4 rc = uRect[j]; vec2 cc = (rc.xy + rc.zw) * .5, hh = (rc.zw - rc.xy) * .5;
+    vec2 q = abs(gl_FragCoord.xy - cc) - hh;
+    float sd = length(max(q, 0.)) + min(max(q.x, q.y), 0.);
+    m = max(m, 1. - smoothstep(uPad, uPad + uFade, sd));
+  }
+  float L = dot(col, vec3(.2126, .7152, .0722));
+  if (L > uCap) col *= mix(1., uCap / L, m);
+  gl_FragColor = vec4(pow(col, vec3(1. / 2.2)), 1.);
+}`;
+const VS = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }';
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const U = {}; ['uRes', 'uTime', 'uAspect', 'uTanH', 'uCA', 'uCB', 'uAnt', 'uN', 'uBO', 'uBD', 'uBP', 'uAmb', 'uHaze', 'uWall', 'uWallWave', 'uWallBeat', 'uWallOn',
+  'uBurst', 'uDim', 'uLens', 'uBeatF', 'uRect', 'uRectN', 'uPad', 'uFade', 'uCap'].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+
+// ---------- Fixtures ----------
+const FX = [];
+const front = [], floor = [], back = [];
+for (let i = 0; i < 8; i++) front.push({ g: 'front', p: [-11.2 + i * 3.2, 7.0, -16], xn: -1 + i * 2 / 7, i });
+for (let i = 0; i < 6; i++) floor.push({ g: 'floor', p: [-10 + i * 4, -4.6, -19], xn: -1 + i * 2 / 5, i });
+for (let i = 0; i < 8; i++) back.push({ g: 'back', p: [-15 + i * 30 / 7, 8.6, -23], xn: -1 + i * 2 / 7, i });
+// Rank: the order in which fixtures light up as the zone rises (symmetric pairs).
+[front[3], front[4], back[3], back[4], front[1], front[6], floor[2], floor[3], back[1], back[6], front[0], front[7],
+  front[2], front[5], back[0], back[7], floor[0], floor[5], back[2], back[5], floor[1], floor[4]].forEach((f) => { f.lit = 0; FX.push(f); });
+const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const mixv = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+// The look: where a fixture points, from the song's look, the motion phase and the phrase. Never from an interval.
+function aim(look, f, mt, mir) {
+  const x = f.xn, k = f.i, s = mir ? -1 : 1;
+  if (f.g === 'floor') {
+    const side = k % 2 ? 1 : -1;
+    return norm([side * 0.28 + 0.3 * Math.sin(mt * 0.9 + k) * s, 1, -0.15 + 0.15 * Math.cos(mt * 0.6 + k)]);
+  }
+  if (f.g === 'back') {
+    if (look === 'circle') return norm([0.4 * Math.cos(mt * 1.1 + k * 0.8), -0.6 + 0.25 * Math.sin(mt * 1.1 + k * 0.8), 0.8]);
+    if (look === 'cross') return norm([-x * 0.5 + 0.2 * Math.sin(mt + k) * s, -0.55, 0.85]);
+    return norm([x * 0.25 + 0.35 * Math.sin(mt * 0.8 + k * 0.5) * s, -0.55 + 0.1 * Math.sin(mt * 0.5), 0.85]);
+  }
+  switch (look) {
+    case 'cross': return norm([-x * 0.9 + 0.3 * Math.sin(mt + k) * s, -1, 0.2]);
+    case 'sweep': return norm([0.7 * Math.sin(mt) * s, -1, 0.3 * Math.cos(mt * 0.5)]);
+    case 'circle': return norm([0.45 * Math.cos(mt * 1.3 + k * 0.8 * s), -1, 0.45 * Math.sin(mt * 1.3 + k * 0.8 * s)]);
+    case 'split': return norm([(k < 4 ? 0.6 : -0.6) * s + 0.2 * Math.sin(mt * 1.2), -1, 0.15]);
+    default: return norm([x * 0.6 + 0.25 * Math.sin(mt) * s, -1, 0.15 + 0.2 * Math.cos(mt * 0.7)]);
+  }
+}
+
+// ---------- State ----------
+const st = {
+  t: 0, state: 'running', speed: 1, detail: 'full', worst: false, rm: matchMedia('(prefers-reduced-motion: reduce)').matches, q: 0, sound: false,
+  mt: 0, dim: 1, colA: null, colFrom: null, colT: 1, ivIdx: -1, flashT: 9, lastBeat: -1, lastHalf: -1, panelT: -10, clock: 0,
+};
+const QUAL = [['High', 0.75, 22, 1], ['Medium', 0.5, 16, 1], ['Low', 0.35, 10, 0]];
+
+// ---------- Sound (synthesised on demand, nothing fetched) ----------
+let ac = null, noiseBuf = null;
+function audio() {
+  if (ac) return ac;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return ac;
+}
+function kick(v) { const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.13); g.gain.setValueAtTime(0.9 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.4); }
+function noise(v, hp, dur, at) { const t = ac.currentTime + (at || 0), s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = hp; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); s.connect(f).connect(g).connect(ac.destination); s.start(t); s.stop(t + dur + 0.05); }
+function riser(dur) { const t = ac.currentTime, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = noiseBuf; s.loop = true; f.type = 'bandpass'; f.Q.value = 4; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(6000, t + dur); g.gain.setValueAtTime(0.02, t); g.gain.linearRampToValueAtTime(0.25, t + dur); s.connect(f).connect(g).connect(ac.destination); s.start(t); s.stop(t + dur); }
+
+// ---------- Score DOM ----------
+const score = $('score');
+const blocks = IV.map((iv) => {
+  const el = document.createElement('div'); el.className = 'blk';
+  el.style.setProperty('--zone', css('--zone-' + iv.z));
+  el.innerHTML = `<div class="in"><div class="l1"><span class="num">${iv.z}</span><span class="len">${mmss(iv.b - iv.a)}</span><span class="nm">${ZONES[iv.z][0]}</span></div><div class="l2">${iv.pat ? '<b>' + patTxt(iv.pat) + '</b> · ' : ''}${iv.cue}</div></div>${iv.pat ? '<div class="pst"></div>' : ''}`;
+  score.appendChild(el); return { el, iv, inn: el.firstChild, nm: el.querySelector('.nm'), len: el.querySelector('.len'), l2: el.querySelector('.l2'), num: el.querySelector('.num'), pst: el.querySelector('.pst') };
+});
+const clips = SONGS.map((s) => {
+  const el = document.createElement('div'); el.className = 'clip';
+  el.innerHTML = `<div class="in"><span class="ti">${s.ti}</span><span class="ar">${s.ar}</span><span class="bp">${s.bpm} bpm</span></div><div class="ticks"></div>`;
+  score.appendChild(el); return { el, s, inn: el.firstChild, ti: el.querySelector('.ti'), ar: el.querySelector('.ar'), bp: el.querySelector('.bp'), tk: el.querySelector('.ticks') };
+});
+const moms = [];
+SONGS.forEach((s) => s.m.forEach(([at, kind]) => { const el = document.createElement('div'); el.className = 'mom'; el.textContent = kind[0].toUpperCase() + kind.slice(1); score.appendChild(el); moms.push({ el, at }); }));
+const minEls = [1, 2, 3, 4, 5, 6, 7, 8].map((m) => { const e = document.createElement('span'); e.textContent = '+' + m + ' min'; $('mins').appendChild(e); return { e, m }; });
+const nowLbl = document.createElement('span'); nowLbl.textContent = 'now'; $('mins').appendChild(nowLbl);
+let W = 1, H = 1, narrow = false, widths = new Map();
+// Label widths from the fonts themselves (canvas), so a fit never depends on layout timing.
+const mctx = document.createElement('canvas').getContext('2d');
+function tw(text, w, face, px) { mctx.font = `${w} ${px}px "${face}"`; return Math.ceil(mctx.measureText(text).width) + 2; }
+function measureLabels() {
+  widths = new Map();
+  const vh = H / 100, BS = 'Big Shoulders Display', AT = 'Atkinson Hyperlegible', lab = 3.1 * vh;
+  const vw = W / 100, scNum = narrow ? 5 * vh : Math.min(5 * vh, 2.8 * vw), scLen = narrow ? 3.72 * vh : Math.min(3.72 * vh, 2.1 * vw);
+  for (const b of blocks) widths.set(b, { num: tw(String(b.iv.z), 800, BS, scNum), nm: tw(ZONES[b.iv.z][0], 700, AT, lab), len: tw(mmss(b.iv.b - b.iv.a), 800, BS, scLen) });
+  for (const c of clips) widths.set(c, { ti: tw(c.s.ti, 700, AT, lab), ar: tw(c.s.ar, 400, AT, lab), bp: tw(c.s.bpm + ' bpm', 400, AT, lab) });
+  for (const m of moms) widths.set(m, tw(m.el.textContent, 700, AT, lab) + 0.4 * vh + 0.4 * W / 100);
+  for (const m of minEls) widths.set(m, tw(m.e.textContent, 400, AT, lab));
+}
+function layoutScore(t) {
+  const vw = W / 100, nowX = 10 * vw, ahead = (narrow ? 6 : 8) * 60, pps = (W - nowX) / ahead, safeR = 95 * vw, gap = 0.25 * vw;
+  const tx = st.rm ? Math.floor(t) : t;
+  const X = (s) => nowX + (s - tx) * pps;
+  for (const b of blocks) {
+    b.el.classList.remove('sliver');
+    const x0 = X(b.iv.a), x1 = X(b.iv.b);
+    if (x1 < 0 || x0 > W) { b.el.style.display = 'none'; continue; }
+    b.el.style.display = '';
+    b.el.style.transform = `translateX(${x0}px)`; b.el.style.width = Math.max(0, x1 - x0 - gap) + 'px';
+    const past = x1 <= nowX, start = Math.max(x0, nowX), avail = Math.min(x1 - gap, W) - start - 1.2 * vw;
+    const w = widths.get(b) || { num: 0, nm: 0, len: 0 };
+    b.el.classList.toggle('past', past);
+    if (!past && (x1 - start) < 2.5 * vw) b.el.classList.add('sliver');
+    b.inn.style.left = (start - x0) + 'px';
+    b.el.style.setProperty('--past', past ? '0px' : Math.max(0, nowX - x0) + 'px');
+    const room = Math.min(avail, safeR - start - 0.6 * vw);
+    // The zone colour never shows without its number: a block cut by the right edge whose
+    // number cannot fit inside the safe area is not drawn; any other such block is neutral.
+    if (!past && room < w.num) {
+      if (x1 > safeR) { b.el.style.display = 'none'; continue; }
+      b.el.classList.add('sliver');
+    }
+    const g6 = 0.6 * vw;
+    // Number, then length (guaranteed from 40 s), then the name if it still fits.
+    const showLen = w.num + g6 + w.len <= room;
+    b.len.style.display = showLen ? '' : 'none';
+    b.nm.style.display = showLen && w.num + g6 + w.len + g6 + w.nm <= room ? '' : 'none';
+    b.l2.style.display = room >= 6 * vw ? '' : 'none';
+    b.l2.style.maxWidth = Math.max(0, room) + 'px';
+    const pz = b.pst ? patAt(b.iv, SONGS[songAt(b.iv.a)], b.iv.a) : null;
+    if (b.pst) b.pst.style.display = pz && !pz.unknown ? '' : 'none';
+    if (pz && !pz.unknown) {
+      // Up beats as ink bars, down beats empty, on the pattern's own beat grid.
+      const bl = pz.bl, p = b.iv.pat, s0 = pz.s0;
+      let acc = 0; const stops = [];
+      p.b.forEach((n, i) => { const c = p.p[i] === 'Standing' ? 'rgb(0 0 0 / 0.72)' : 'transparent'; stops.push(`${c} ${acc * bl * pps}px ${(acc + n) * bl * pps}px`); acc += n; });
+      b.pst.style.background = `repeating-linear-gradient(90deg, ${stops.join(', ')})`;
+      b.pst.style.backgroundPosition = ((s0 - b.iv.a) * pps) + 'px 0';
+    }
+  }
+  for (const c of clips) {
+    const x0 = X(c.s.a), x1 = X(c.s.b);
+    if (x1 < 0 || x0 > W) { c.el.style.display = 'none'; continue; }
+    c.el.style.display = ''; c.el.style.transform = `translateX(${x0}px)`; c.el.style.width = Math.max(0, x1 - x0 - gap) + 'px';
+    const start = Math.max(x0, nowX), room = Math.min(x1 - gap, safeR) - start - 1.2 * vw;
+    const w = widths.get(c) || { ti: 0, ar: 0, bp: 0 };
+    c.inn.style.left = (start - x0) + 'px';
+    c.el.style.opacity = x1 <= nowX ? 0.45 : 1;
+    c.inn.style.visibility = room > 3 * vw ? '' : 'hidden';
+    c.ti.style.maxWidth = Math.max(0, room) + 'px';
+    const vw1 = vw;
+    c.ar.style.display = w.ti + vw1 + w.ar <= room ? '' : 'none';
+    c.bp.style.display = w.ti + 2 * vw1 + w.ar + w.bp <= room ? '' : 'none';
+    const bar4 = 16 * 60 / c.s.bpm * pps, dd = detail();
+    c.bp.textContent = dd.bpm ? c.s.bpm + ' bpm' : 'no tempo';
+    // Phrase ticks come from the anchors only.
+    c.tk.style.background = dd.anchors ? `repeating-linear-gradient(90deg, var(--stage-line) 0 0.2vh, transparent 0.2vh ${bar4}px)` : 'none';
+  }
+  moms.forEach((m, i) => {
+    const x = X(m.at), w = widths.get(m) || 0, nx = moms[i + 1] ? X(moms[i + 1].at) : Infinity;
+    m.el.style.display = (detail().moments && x >= nowX && x + w < safeR) ? '' : 'none';
+    m.el.style.color = x + w + 0.6 * vw > nx ? 'transparent' : '';
+    m.el.style.transform = `translateX(${x}px)`;
+  });
+  for (const m of minEls) {
+    const x = nowX + m.m * 60 * pps, w = widths.get(m) || 0;
+    m.e.style.display = (m.m % 2 === 0 || narrow) && x + 0.4 * vw + w < safeR ? '' : 'none';
+    m.e.style.left = (x + 0.4 * vw) + 'px';
+  }
+  nowLbl.style.left = (nowX + 0.4 * vw) + 'px';
+}
+
+// ---------- Text layer ----------
+const cache = {};
+function set(id, html) { if (cache[id] !== html) { cache[id] = html; $(id).innerHTML = html; } }
+function zoneVars(el, z) { el.style.setProperty('--zone', z ? css('--zone-' + z) : css('--light-1')); }
+let gelZone = 0;
+function updateText(t, iIdx, sIdx, locked, beatKnown) {
+  const est0 = st.state === 'coasting' || st.state === 'offlist';
+  const state = st.state, iv = IV[iIdx] || IV[IV.length - 1], nx = IV[iIdx + 1], song = SONGS[sIdx] || SONGS[SONGS.length - 1];
+  const gel = $('gel');
+  const fin = state === 'finished', bef = state === 'before';
+  gel.classList.toggle('down', state === 'paused' || bef);
+  gel.classList.toggle('blank', fin);
+  if (!fin && gelZone !== iv.z) { gelZone = iv.z; zoneVars(gel, iv.z); }
+  set('gNum', fin ? '' : String(iv.z));
+  set('gLbl', fin ? '' : bef ? 'First zone' : 'Zone');
+  set('gName', fin ? 'Class complete' : zName(iv.z));
+  set('gTg', fin ? '<span>24:00</span>' : `<span>${ZONES[iv.z][1]}</span><span>${ZONES[iv.z][2]}</span>`);
+  set('tLeft', mmss(END - t)); set('tDone', mmss(t));
+  const seg = SEGS.find((s) => t >= s[0] && t < s[1]); set('seg', seg ? seg[2] : '');
+  const linkTxt = { running: 'Following Spotify', paused: 'Music paused', coasting: 'Music not heard', offlist: 'Not a class song', before: 'Waiting for the first song', finished: 'Following Spotify' }[state];
+  set('link', linkTxt);
+  $('link').classList.toggle('plate', ['paused', 'coasting', 'offlist'].includes(state));
+  set('mCad', `${zRpm(iv)}<span class="u">rpm</span>`);
+  const pt = patAt(iv, song, t);
+  const showPat = pt && !fin && !bef;
+  document.body.classList.toggle('patOn', !!showPat);
+  set('mPosL', 'Position');
+  if (showPat) {
+    const p = iv.pat;
+    // The count needs the clock locked to the music and a known start (format 1.1, plan section 4).
+    const live = locked && !est0 && !pt.unknown;
+    const why = pt.unknown === 'nobpm' ? 'No tempo: count from the music' : 'Count from the music';
+    let word = '', cnt = '', after = why;
+    if (live && pt.pre) { word = UPDN[p.p[0]]; after = 'starts on the next bar'; }
+    else if (live) {
+      word = UPDN[p.p[pt.i]]; cnt = String(pt.left);
+      after = pt.same ? 'then ' + UPDN[p.p[pt.nxt]] + ' again' : 'then ' + UPDN[p.p[pt.nxt]];
+    }
+    // Folded into the Position value at 3:2 and narrower, and wherever the block would get less
+    // than 16 vw between the metrics and the countdown at its widest in this interval (Fitting).
+    const fold = () => {
+      $('pat').classList.remove('on');
+      set('mPos', word ? `<span class="pw2 tx">${word}</span><span class="pc2 tx">${cnt}</span>` : `<span class="cfm tx">${why}</span>`);
+    };
+    if (narrow || patternRoom(iv) < 16 * innerWidth / 100) fold();
+    else {
+      $('pat').classList.add('on');
+      set('mPos', 'Up / down');
+      set('pLbl', patTxt(p));
+      set('pWord', word);
+      $('pWord').parentNode.classList.toggle('off', !word);
+      set('pCount', cnt);
+      const pips = cnt && pt.of <= 8 ? Array.from({ length: pt.of }, (_, k) => `<i class="${k < pt.left ? 'on' : ''}"></i>`).join('') : '';
+      set('pips', pips + `<span class="pn">${after}</span>`);
+      placePattern();
+    }
+  } else {
+    $('pat').classList.remove('on');
+    set('mPos', iv.pos || '');
+  }
+  set('mBpmL', !detail().bpm ? 'Song, no tempo' : state === 'offlist' ? 'Song, planned' : 'Song');
+  const bpmTxt = detail().bpm ? String(song.bpm) : '–';
+  if (cache.bpm !== bpmTxt) { cache.bpm = bpmTxt; $('mBpm').firstChild.nodeValue = bpmTxt; }
+  const left = iv.b - t, est = state === 'coasting' || state === 'offlist';
+  if (bef) {
+    set('cLbl', 'Friday ride: Neon climb');
+    set('count', digits('24:00'));
+    set('bars', `<span class="w">${SONGS.length} songs, ${IV.length} intervals</span>`);
+  } else if (fin) {
+    set('cLbl', 'Time ridden'); set('count', digits('24:00')); set('bars', '');
+  } else {
+    set('cLbl', state === 'paused' ? '<span class="plate pplate">Paused</span>' : est ? 'Interval left, estimated' : left <= 5 ? 'Change in' : (iIdx === IV.length - 1 ? 'Last interval' : 'Interval left'));
+    set('count', digits(mmss(left + (st.worst ? 600 : 0))));
+    const bars = Math.ceil(left * song.bpm / 60 / 4);
+    set('bars', beatKnown ? `${bars} <span class="w">${bars === 1 ? 'bar' : 'bars'} to the ${nx ? 'change' : 'end'}</span>` : (state === 'paused' ? '<span class="w">Starts again with the music</span>' : ''));
+  }
+  $('count').classList.toggle('est', est);
+  $('now').classList.toggle('est', est);
+  if (fin) { set('nx1', ''); set('nxc', ''); }
+  else if (nx) {
+    set('nxc', st.worst ? LONG_CUE2 : nx.cue);
+    set('nx1', `<span class="lbl">Next</span><span class="chip" style="--zone:var(--zone-${nx.z})">${nx.z}</span><span>${zName(nx.z)}</span><span>${mmss(nx.b - nx.a)}</span><span>${zRpm(nx)} rpm</span><span>${nx.pat ? patTxt(nx.pat) : nx.pos}</span>`);
+  } else { set('nx1', '<span class="lbl">Next</span><span>End of class</span>'); set('nxc', ''); }
+  const cue = fin ? 'Thank you, well ridden.' : bef ? 'Press Start, or start the first song in Spotify.' : st.worst ? LONG_CUE : iv.cue;
+  document.body.classList.toggle('five', $('count').textContent.replace(':', '').length >= 4);
+  set('cue', cue); $('cue').classList.toggle('long', cue.length > 60);
+}
+// The pattern block starts 2 vw right of the widest metric value and must end 2 vw before the
+// countdown's ink; where it cannot, the side word goes under the count (see "Fitting").
+function inkRight(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().right; }
+function inkLeft(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().left; }
+// Room for the pattern block: from 2 vw right of the widest metric value (or 46 vw) to 2 vw before
+// the countdown at its widest in this interval (five glyphs if the interval starts at 10:00 or more).
+function patternRoom(iv) {
+  const vw = innerWidth / 100, c = $('count'), r = document.createRange();
+  r.selectNodeContents(c); const box = r.getBoundingClientRect();
+  const five = c.textContent.replace(':', '').length >= 4;
+  const widest = five || !(st.worst || iv.b - iv.a >= 600) ? box.width : box.width * 2.16 / 1.70;
+  // Cadence and BPM only: a folded Position value must not decide whether it folds.
+  const right = Math.max(inkRight($('mCad')), inkRight($('mBpm')));
+  return (box.right - widest - 2 * vw) - Math.max(46 * vw, right + 2 * vw);
+}
+function placePattern() {
+  const vw = innerWidth / 100, p = $('pat');
+  let right = 0;
+  document.querySelectorAll('.metric .v').forEach((v) => { right = Math.max(right, inkRight(v)); });
+  p.style.left = Math.max(46 * vw, right + 2 * vw) + 'px';
+  // Measure the ink of the label, the side, the count and the squares; the note wraps in what is left.
+  const limit = inkLeft($('count')) - 2 * vw;
+  // The label shares the head line's height: it ends 2 vw before the head line's ink and wraps.
+  const head = [$('cLbl'), $('bars')].filter((e) => e.textContent.trim());
+  const headLimit = Math.min(limit, ...head.map((e) => inkLeft(e) - 2 * vw));
+  $('pLbl').style.maxWidth = Math.max(10 * vw, headLimit - parseFloat(p.style.left)) + 'px';
+  const ink = () => Math.max(...[...p.querySelectorAll('#pLbl, #pWord, #pCount, .pips i')].map(inkRight), 0);
+  p.classList.remove('tight');
+  if (ink() > limit) p.classList.add('tight');
+  // The squares and the note share the width left; the note always takes a line of its own.
+  $('pips').style.maxWidth = Math.max(10 * vw, limit - p.getBoundingClientRect().left) + 'px';
+}
+function textRects() {
+  const out = [], s = QUAL[st.q][1];
+  for (const el of document.querySelectorAll('.layer .tx')) {
+    if (!el.textContent.trim()) continue;
+    const r = el.getBoundingClientRect(); if (r.width < 1) continue;
+    if (el.id === 'nx1' || el.id === 'count' || el.classList.contains('chead')) {
+      // Only the ink's width: right-aligned text in a block.
+      const kids = el.children; let x0 = r.right;
+      for (const k of kids) x0 = Math.min(x0, k.getBoundingClientRect().left);
+      out.push([x0 * s, (H - r.bottom) * s, r.right * s, (H - r.top) * s]);
+    } else {
+      out.push([r.left * s, (H - r.bottom) * s, r.right * s, (H - r.top) * s]);
+    }
+    if (out.length >= NR) break;
+  }
+  return out;
+}
+
+// ---------- Frame ----------
+function resize() {
+  W = innerWidth; H = innerHeight; narrow = W / H <= 1.5;
+  const s = QUAL[st.q][1];
+  canvas.width = Math.round(W * s); canvas.height = Math.round(H * s);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  measureLabels();
+}
+addEventListener('resize', resize);
+
+let last = performance.now(), fpsN = 0, fpsT = last, fps = 0;
+const bO = new Float32Array(NB * 3), bD = new Float32Array(NB * 3), bP = new Float32Array(NB * 4), rc = new Float32Array(NR * 4);
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = clamp((now - last) / 1000, 0, 0.1); last = now; st.clock += dt;
+  fpsN++; if (now - fpsT > 1000) { fps = fpsN * 1000 / (now - fpsT); fpsN = 0; fpsT = now; }
+  const state = st.state, rm = st.rm;
+  if (state === 'running' || state === 'coasting' || state === 'offlist') st.t = Math.min(END, st.t + dt * st.speed);
+  if (st.t >= END && state !== 'finished' && state !== 'before') st.state = 'finished';
+  const t = st.state === 'finished' ? END : st.state === 'before' ? 0 : st.t;
+  const iIdx = Math.max(0, ivAt(Math.min(t, END - 0.001))), sIdx = Math.max(0, songAt(Math.min(t, END - 0.001)));
+  const iv = IV[iIdx], nx = IV[iIdx + 1], song = SONGS[sIdx], prev = SONGS[sIdx - 1];
+  const locked = st.state === 'running';
+  const z = iv.z, e = (z - 1) / 6;
+
+  // Colour: the zone, crossing in 700 ms at a change; white when finished.
+  const target = st.state === 'finished' ? ZC.white : ZC[z];
+  if (st.ivIdx !== iIdx) {
+    const jump = st.ivIdx < 0 || Math.abs(iIdx - st.ivIdx) !== 1 || rm;
+    st.colFrom = jump ? target : st.colA; st.colT = jump ? 1 : 0; if (!jump && st.state === 'running') { st.flashT = 0; }
+    st.ivIdx = iIdx;
+  }
+  st.colT = Math.min(1, st.colT + dt / 0.7);
+  st.colA = mixv(st.colFrom || target, target, 1 - Math.pow(1 - st.colT, 3));
+  if (st.state === 'finished') st.colA = ZC.white;
+  st.flashT += dt;
+  $('edge').classList.toggle('on', !rm && st.flashT < 0.16);
+
+  // Beat, phrase, moments.
+  // Beat known: locked and anchored. Tempo only: locked with a bpm, no anchors (plan section 4:
+  // the scene pulses at the tempo only, no phrase, no bars, no pattern accent). Otherwise no beat.
+  const dd = detail();
+  const beatKnown = locked && dd.anchors && dd.bpm, tempoOnly = locked && !dd.anchors && dd.bpm;
+  const beatLen = 60 / song.bpm, beats = (t - song.a) / beatLen, phase = beats - Math.floor(beats);
+  const every2 = song.bpm > 180;
+  const bphase = every2 ? ((beats / 2) - Math.floor(beats / 2)) : phase;
+  const tph = (st.clock * song.bpm / 60) % 1;
+  const env = beatKnown ? (bphase < 0.04 ? bphase / 0.04 : Math.exp(-(bphase - 0.04) * 5)) : tempoOnly ? 0.5 + 0.5 * Math.cos(tph * 2 * Math.PI) : 0;
+  // No marked moments: the bursts follow the interval changes inside the song, at least 10 s apart.
+  let moms = song.m;
+  if (!dd.moments) {
+    moms = []; let lastAt = -99;
+    for (const i2 of IV) if (i2.a > song.a && i2.a < song.b && i2.a - lastAt >= 10) { moms.push([i2.a, 'burst']); lastAt = i2.a; }
+  }
+  let gather = 0, wide = 0, burst = 0, brk = 0, extraDepth = 0;
+  for (const [at, kind] of moms) {
+    if (kind === 'drop') {
+      const bs = moms.find(([a2, k2]) => k2 === 'build' && a2 < at && at - a2 < 30);
+      const start = bs ? bs[0] : at - 8 * beatLen;
+      if (t >= start && t < at) { gather = sstep(start, at, t); extraDepth = 0.1 * gather; }
+      const age = t - at;
+      if (age >= 0 && age < 16 * beatLen) { wide = 1 - sstep(15 * beatLen, 16 * beatLen, age); burst = age < 0.6 ? 0.85 * Math.exp(-age / 0.08) : 0; }
+    }
+    // Light only: no gather and no fan, so no beam direction follows an interval's timing (S7).
+    if (kind === 'burst') { const age = t - at; if (age >= 0 && age < 0.6) burst = Math.max(burst, 0.85 * Math.exp(-age / 0.08)); }
+    if (kind === 'breakdown' && t >= at && t < at + 32 * beatLen) brk = 1 - sstep(31 * beatLen, 32 * beatLen, t - at);
+  }
+  // Song change: dim for one beat, re-aim over 1.2 s.
+  const sAge = t - song.a;
+  const reaim = prev ? sstep(0, 1.2, sAge) : 1;
+  const dip = prev ? 0.25 + 0.75 * sstep(beatLen * 0.6, beatLen * 1.2, sAge) : 1;
+  // Anticipation of the next zone.
+  const ant = nx && !rm ? clamp((10 - (iv.b - t)) / 10, 0, 1) : (nx && rm && iv.b - t <= 10 ? 1 : 0);
+  const colB = nx ? ZC[nx.z] : st.colA;
+
+  // Motion.
+  let spd = 0.12 + 0.55 * e;
+  if (st.state === 'offlist') spd *= 0.5;
+  if (st.state === 'before') spd = 0.08;
+  if (wide) spd *= 1 + 0.6 * wide;
+  if (brk) spd = 0.08;
+  const moving = !rm && (st.state === 'running' || st.state === 'coasting' || st.state === 'offlist' || st.state === 'before');
+  if (moving) st.mt += dt * spd * st.speed;
+  const dimT = dimTarget(st.state);
+  st.dim += (dimT - st.dim) * (rm ? 1 : Math.min(1, dt / 0.3));
+
+  // Fixtures.
+  const look = LOOKS[sIdx % LOOKS.length], plook = prev ? LOOKS[(sIdx - 1) % LOOKS.length] : look;
+  const mir = beatKnown && Math.floor(beats / 32) % 2 === 1;
+  const Q = QUAL[st.q], nFx = Q[2];
+  let litN = st.state === 'before' ? 2 : brk ? 1 : LIT[z];
+  if (wide) litN = Math.max(litN, Math.round(LIT[z] + (22 - LIT[z]) * wide));
+  if (st.state === 'finished') litN = 22;
+  const depth = rm ? 0 : beatKnown ? DEPTH[z] + extraDepth : tempoOnly ? 0.12 : 0;
+  const lift = 1 - depth + depth * env;
+  // A position pattern: the room is brighter on the up beats and every switch is an accent.
+  // Energy only: no angle or shape comes from it (rule 4).
+  const pt = beatKnown && !rm ? patAt(iv, song, t) : null;
+  const patOk = pt && !pt.pre && !pt.unknown;
+  const patB = patOk ? (iv.pat.p[pt.i] === 'Standing' ? 1 : 0.72) : 1;
+  const patAcc = patOk && pt.first ? 0.25 * Math.exp(-pt.frac * 3) : 0;
+  const bright = (0.55 + 0.45 * e) * dip * patB * (1 + patAcc);
+  const G = [0, 0.5, -20];
+  FX.forEach((f, i) => {
+    const on = i < litN ? 1 : 0;
+    f.lit += (on - f.lit) * (rm ? 1 : Math.min(1, dt / 0.4));
+    let d = aim(look, f, st.mt, mir);
+    if (reaim < 1) d = norm(mixv(aim(plook, f, st.mt, mir), d, reaim));
+    if (wide && f.g !== 'floor') d = norm(mixv(d, norm([f.xn * 1.3 + 0.3 * Math.sin(st.mt * 2 + f.i), -1, 0.5]), wide * 0.7));
+    if (gather) d = norm(mixv(d, norm([G[0] - f.p[0], G[1] - f.p[1], G[2] - f.p[2]]), gather));
+    bO.set(f.p, i * 3); bD.set(d, i * 3);
+    const base = f.g === 'front' ? 1.0 : f.g === 'floor' ? 0.75 : 0.85;
+    const cm = (f.g === 'back') ? sstep(0, 0.2, ant * 1.25 - (1 - (f.xn * 0.5 + 0.5))) : 0;
+    const spread = (f.g === 'back' ? 0.045 : f.g === 'floor' ? 0.03 : 0.035) * (1 - 0.4 * gather);
+    bP.set([base * bright * lift * f.lit * (1 + 0.3 * wide), cm, 0.07, spread], i * 4);
+  });
+
+  // Text, then the cap rectangles from where the text actually is.
+  updateText(t, iIdx, sIdx, locked, beatKnown);
+  $('beat').style.opacity = (beatKnown && !rm && env > 0.5) ? 1 : 0;
+  layoutScore(t);
+  const rects = textRects(); rc.fill(0); rects.forEach((r, i) => rc.set(r, i * 4));
+
+  const s = Q[1];
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, rm ? 0 : st.clock);
+  gl.uniform1f(U.uAspect, W / H); gl.uniform1f(U.uTanH, Math.tan(25 * Math.PI / 180));
+  gl.uniform3fv(U.uCA, st.colA); gl.uniform3fv(U.uCB, colB); gl.uniform1f(U.uAnt, ant);
+  gl.uniform1i(U.uN, nFx); gl.uniform3fv(U.uBO, bO); gl.uniform3fv(U.uBD, bD); gl.uniform4fv(U.uBP, bP);
+  gl.uniform1f(U.uAmb, AMB[z] * (1 + 0.5 * gather) * (st.state === 'before' ? 0.5 : 1));
+  gl.uniform1f(U.uHaze, 1 + 0.5 * gather);
+  gl.uniform1f(U.uWall, st.state === 'finished' ? 0.25 : (0.35 + 0.5 * e) * dip);
+  gl.uniform1f(U.uWallWave, rm ? 0.3 : 0.8 - 0.5 * e);
+  gl.uniform1f(U.uWallBeat, (beatKnown && !rm && z >= 3) ? 0.3 + 0.7 * e : 0);
+  gl.uniform1f(U.uWallOn, Q[3]);
+  gl.uniform1f(U.uBurst, rm || !locked ? 0 : burst);
+  gl.uniform1f(U.uDim, st.dim);
+  gl.uniform1f(U.uLens, !rm && st.flashT < 0.16 && burst < 0.01 ? 1 : 0);
+  gl.uniform1f(U.uBeatF, rm ? 0 : (beatKnown ? beats : 0));
+  gl.uniform4fv(U.uRect, rc); gl.uniform1i(U.uRectN, rects.length);
+  gl.uniform1f(U.uPad, 1.2 * H / 100 * s); gl.uniform1f(U.uFade, 3 * H / 100 * s); gl.uniform1f(U.uCap, 0.075);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // Sound on the beat (1× only).
+  const bi = Math.floor(beats), hi = Math.floor(beats * 2);
+  if (st.sound && ac && beatKnown && st.speed === 1) {
+    if (bi !== st.lastBeat) {
+      if (!brk && !(gather > 0 && gather < 1 && bi % 2)) kick(0.7 + 0.3 * e);
+      if (z >= 4 && bi % 2 === 1) noise(0.25, 1500, 0.12);
+      for (const [at, kind] of song.m) {
+        if (kind === 'drop' && Math.abs(t - at) < beatLen * 0.5 && t >= at) noise(0.5, 2500, 1.4);
+        const bs = song.m.find(([a2, k2]) => k2 === 'build' && a2 < at && at - a2 < 30);
+        const start = kind === 'drop' ? (bs ? bs[0] : at - 8 * beatLen) : -1;
+        if (start >= 0 && t >= start && t - start < beatLen) riser(at - t);
+      }
+    }
+    if (hi !== st.lastHalf && hi % 2 === 1) noise(0.08 + 0.1 * e, 7000, 0.05);
+  }
+  st.lastBeat = bi; st.lastHalf = hi;
+
+  if (now - st.panelT < 3000) {
+    $('info').textContent = `${mmss(st.t)} · ${song.ti} · ${song.bpm} bpm · look: ${look} · ${fps.toFixed(0)} fps`;
+  } else if ($('panel').classList.contains('on')) { $('panel').classList.remove('on'); document.body.classList.remove('pointer'); }
+}
+
+// ---------- Controls of the mock-up ----------
+function jump(kind) {
+  const t = st.t;
+  const after = (arr) => arr.find((x) => x > t + 1) ?? arr[0];
+  if (kind === 'warm') st.t = 20;
+  else if (kind === 'drop') st.t = after(SONGS.flatMap((s) => s.m.filter((m) => m[1] === 'drop').map((m) => m[0]))) - 14;
+  else if (kind === 'song') st.t = after(SONGS.slice(1).map((s) => s.a)) - 8;
+  else if (kind === 'int') st.t = after(IV.slice(1).map((i) => i.a)) - 13;
+  else if (kind === 'climb') st.t = after(IV.filter((i) => /step 1 of 3/.test(i.cue)).map((i) => i.a)) - 6;
+  else if (kind === 'jumps') st.t = after(IV.filter((i) => i.pat).map((i) => i.a)) + 5;
+  else if (/^z\d$/.test(kind)) { const z = +kind[1]; st.t = IV.find((i) => i.z === z).a + 2; }
+  st.ivIdx = -1; st.lastBeat = -1;
+  if (st.state === 'finished' || st.state === 'before') st.state = 'running';
+}
+function dimTarget(s) { return s === 'paused' || s === 'before' ? 0.06 : s === 'finished' ? 0.4 : s === 'offlist' ? 0.6 : 1; }
+function setState(s) { st.state = s; if (s === 'before') st.t = 0; if (s === 'finished') st.t = END; refreshPanel(); }
+function refreshPanel() {
+  document.querySelectorAll('[data-s]').forEach((b) => b.classList.toggle('sel', b.dataset.s === st.state));
+  document.querySelector('[data-v=speed]').textContent = `Speed ${st.speed}×`;
+  document.querySelector('[data-v=rm]').textContent = `Reduced motion: ${st.rm ? 'on (product: plain 2D screen)' : 'off'}`;
+  document.querySelector('[data-v=q]').textContent = `Quality: ${QUAL[st.q][0]}`;
+  document.querySelector('[data-v=sound]').textContent = `Sound: ${st.sound ? 'on' : 'off'}`;
+  document.querySelector('[data-v=detail]').textContent = 'Music detail: ' + { full: 'full', noanchors: 'no anchors', nomoments: 'no moments', nobpm: 'no tempo' }[st.detail];
+  document.querySelector('[data-v=worst]').textContent = `Worst case: ${st.worst ? `on (120-character cues, 10:00+, ${WORST_RPM} rpm, ${WORST_NAME})` : 'off'}`;
+}
+function view(v) {
+  if (v === 'speed') st.speed = st.speed === 1 ? 4 : 1;
+  if (v === 'rm') st.rm = !st.rm;
+  if (v === 'q') { st.q = (st.q + 1) % QUAL.length; resize(); }
+  if (v === 'detail') { const D = ['full', 'noanchors', 'nomoments', 'nobpm']; st.detail = D[(D.indexOf(st.detail) + 1) % D.length]; }
+  if (v === 'worst') st.worst = !st.worst;
+  if (v === 'sound') { st.sound = !st.sound; if (st.sound) audio().resume(); }
+  refreshPanel();
+}
+function showPanel() { st.panelT = performance.now(); $('panel').classList.add('on'); document.body.classList.add('pointer'); }
+let lastXY = null;
+addEventListener('pointermove', (ev) => { if (lastXY && Math.hypot(ev.clientX - lastXY[0], ev.clientY - lastXY[1]) >= 6) showPanel(); lastXY = [ev.clientX, ev.clientY]; });
+$('panel').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button'); if (!b) return; showPanel();
+  if (b.dataset.j) jump(b.dataset.j); if (b.dataset.s) setState(b.dataset.s); if (b.dataset.v) view(b.dataset.v);
+});
+addEventListener('keydown', (ev) => {
+  const k = ev.key;
+  if (k === ' ') { ev.preventDefault(); setState(st.state === 'running' ? 'paused' : 'running'); }
+  else if (k === 'ArrowRight') { st.t = Math.min(END - 1, st.t + 15); }
+  else if (k === 'ArrowLeft') { st.t = Math.max(0, st.t - 15); }
+  else if (/^[1-7]$/.test(k)) jump('z' + k);
+  else if (k === 'd' || k === 'D') jump('drop');
+  else if (k === 'c' || k === 'C') jump('climb');
+  else if (k === 'j' || k === 'J') jump('jumps');
+  else if (k === 'b' || k === 'B') view('detail');
+  else if (k === 'w' || k === 'W') view('worst');
+  else if (k === 's' || k === 'S') jump('song');
+  else if (k === 'i' || k === 'I') jump('int');
+  else if (k === 'm' || k === 'M') view('rm');
+  else if (k === 'q' || k === 'Q') view('q');
+  else if (k === 'a' || k === 'A') view('sound');
+  else if (k === 'h' || k === 'H') { st.panelT = -1e9; }
+});
+
+// Start: optional ?t=<seconds>&state=<state>&rm=1 for screenshots.
+const qs = new URLSearchParams(location.search);
+if (qs.has('t')) st.t = +qs.get('t');
+if (qs.has('state')) { st.state = qs.get('state'); st.dim = dimTarget(st.state); }
+if (qs.get('rm') === '1') st.rm = true;
+if (qs.has('q')) st.q = +qs.get('q');
+if (qs.has('detail')) st.detail = qs.get('detail');
+if (qs.get('worst') === '1') st.worst = true;
+Promise.all(['800 40px "Big Shoulders Display"', '600 40px "Big Shoulders Display"', '700 40px "Atkinson Hyperlegible"', '400 40px "Atkinson Hyperlegible"'].map((f) => document.fonts.load(f))).catch(() => {}).then(() => document.fonts.ready).then(() => { measureWorstName(); loadColours(); resize(); refreshPanel(); requestAnimationFrame(frame); });
+</script>
+</body>
+</html>
