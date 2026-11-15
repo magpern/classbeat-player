@@ -5,7 +5,7 @@
 // (`?auto=1&t=10&speed=6`): requestAnimationFrame at the page's real frame times, the class clock
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low), `class=long` (sixteen
-// minutes with the lengths of a real class, for the text), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
+// minutes with the lengths of a real class, for the text), `stage=before` or `stage=finished` (the house looks), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
 // dark-under-text mask, to show what the mask darkens), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel } from "../../model/src/index.ts";
@@ -27,6 +27,7 @@ const LINKS: Record<string, LinkInput> = { locked: { state: "Locked" }, paused: 
 const state = {
   link: LINKS[params.get("state") ?? "locked"] ?? LINKS.locked!,
   reduced: params.get("rm") === "1",
+  stage: (["before", "finished"].includes(params.get("stage") ?? "") ? params.get("stage") : undefined) as Feed["stage"],
   quality: (["High", "Medium", "Low"].includes(params.get("q") ?? "") ? params.get("q") : "High") as QualityLevel,
 };
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -34,6 +35,7 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
+let lastFlash = 0;
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
 const gl = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
 gl.setClearColor(0x000000, 1);
@@ -48,11 +50,11 @@ const textClass = params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEX
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0",
-  onFrame: (draw, measured) => { lastBurst = draw.burst; log.add(draw, measured, song); },
+  onFrame: (draw, measured) => { lastBurst = draw.burst; lastFlash = draw.flash; log.add(draw, measured, song); },
 });
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
-const feed = (): Feed => (long ? longFeedAt(classMs, state.link, state.reduced) : feedAt(classMs, { link: state.link, reducedMotion: state.reduced }));
+const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage }));
 let view: TextView | null = null;
 let lastFeed: Feed = feed();
 let lastBoxes: readonly TextBox[] = [];
@@ -82,6 +84,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** The lens flash's share of its peak on the last frame. */
+  readonly flash: number;
 }
 declare global {
   interface Window { __scene: DemoApi }
@@ -117,6 +121,7 @@ const api: DemoApi = {
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
   get burst() { return lastBurst; },
+  get flash() { return lastFlash; },
 };
 window.__scene = api;
 

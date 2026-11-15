@@ -40,6 +40,10 @@ export interface StepInput {
   readonly rawDtSeconds: number;
   /** Reduced motion: the song's look held still, the phase not advanced; a new look is still turned to. */
   readonly still?: boolean;
+  /** Scales the motion phase's rate, 0 to 1 (default 1): off the list and before the start the movement is halved. Never above the zone's row (S7). */
+  readonly motion?: number;
+  /** The frame is computed as with no music link (level None, no moments) while the rig still moves: before the start. */
+  readonly noMusic?: boolean;
 }
 
 export interface Stepped {
@@ -65,12 +69,12 @@ export function turnToward(prev: readonly Direction[] | null, targets: readonly 
 }
 
 export function stepRig(state: RigState, input: StepInput): Stepped {
-  const { cls, classMs, songIndex, songPosMs, link, still = false } = input;
+  const { cls, classMs, songIndex, songPosMs, link, still = false, motion = 1, noMusic = false } = input;
   const dtSeconds = clampFrameTime(input.rawDtSeconds);
   const frozen = rigFrozen(link); // Paused and a hold: the phase and the beams stay where they were
   const zone = cls.intervals[intervalIndexAt(cls, classMs)]?.zone ?? 1;
-  const phaseDeg = frozen || still ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone);
-  const frame = sceneFrame({ cls, classMs, songIndex, songPosMs, phaseDeg, link: still ? STILL_LINK : link });
+  const phaseDeg = frozen || still ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone, motion);
+  const frame = sceneFrame({ cls, classMs, songIndex, songPosMs, phaseDeg, link: still || noMusic ? STILL_LINK : link });
   const drawn = turnToward(state.drawn, frame.directions, dtSeconds, frozen);
   return { state: { phaseDeg, drawn }, frame, drawn, dtSeconds };
 }

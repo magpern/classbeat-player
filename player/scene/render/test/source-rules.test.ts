@@ -51,7 +51,7 @@ test("the renderer passes on the model's moments and never makes its own", () =>
 test("no rider data and no hue of its own: the feed is the class clock's state and nothing else", () => {
   const loop = sources.find((s) => s.name === "src/loop.ts")!.text;
   const feed = /export interface Feed \{([\s\S]*?)\n\}/.exec(loop)![1]!;
-  assert.deepEqual([...feed.matchAll(/readonly (\w+):/g)].map((m) => m[1]), ["cls", "classMs", "songIndex", "songPosMs", "link", "reducedMotion"]);
+  assert.deepEqual([...feed.matchAll(/readonly (\w+)\??:/g)].map((m) => m[1]), ["cls", "classMs", "songIndex", "songPosMs", "link", "reducedMotion", "stage"]);
   assert.doesNotMatch(sources.map((s) => s.text).join("\n"), /\b(heartRate|heart_rate|watts?|riders?)\b/i);
 });
 
