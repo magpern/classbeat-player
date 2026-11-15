@@ -36,15 +36,54 @@ test("guard/: a probe that uses AudioLoader, fetch or globalThis fails lint", as
     ['import { x } from "../tools/frame-log.ts";\nexport const a = x;', "no-restricted-imports"],
     ['import { x } from "../src/rig.ts";\nexport const a = x;', "no-restricted-imports"],
     ['import { x } from "node:fs";\nexport const a = x;', "no-restricted-imports"],
+    ['import { x } from "./other.ts";\nexport const a = x;', "no-restricted-imports"], // guard/ imports three.js only, not even a sibling
+    ['import { AudioLoader } from "THREE";\nexport const a = AudioLoader;', "no-restricted-imports"], // the patterns are case sensitive
+    ['import { Mesh } from "Three";\nexport const a = Mesh;', "no-restricted-imports"],
   ];
   for (const [src, rule] of bad) assert.ok((await rulesOf(src, "guard/probe.ts")).includes(rule), `guard/ not rejected by ${rule}: ${src}`);
 });
 
-test("guard/: it may name prototypes and the callbacks, import its allowlist and use Object reflection, and nothing more", async () => {
+// The review of #564: guard/ takes the src/ syntax fences minus the names it must use (`prototype`, the five callbacks).
+test("guard/: every route to Function, the global object and a moved prototype is refused", async () => {
+  const bad: [string, string][] = [
+    ['export const a = () => (() => 0).constructor("return fet" + "ch")();', "no-restricted-syntax"],
+    ['export const a = () => (() => 0)["constructor"]("return this")();', "no-restricted-syntax"],
+    ['export const a = (): unknown => { const { constructor: F } = {}; return F; };', "no-restricted-syntax"],
+    ['export const a = (): unknown => { const { "constructor": F } = {}; return F; };', "no-restricted-syntax"],
+    ['export const a = (x: Record<string, unknown>) => x["constr" + "uctor"];', "no-restricted-syntax"],
+    ['export const a = (x: Record<string, unknown>, k: string) => x[k];', "no-restricted-syntax"],
+    ['export const a = (x: Record<string, unknown>) => { const k = "constructor"; return x[k]; };', "no-restricted-syntax"],
+    ['export const a = (x: Record<string, unknown>, k: string) => x?.[k];', "no-restricted-syntax"],
+    ['export const a = (x: Record<string, number>, k: string) => { const { [k]: v } = x; return v; };', "no-restricted-syntax"],
+    ["export const a = (x: Record<string, number>) => { const { 'a': v } = x; return v; };", "no-restricted-syntax"],
+    ['export const a = (x: Record<string, unknown>, name: string) => x[name === "a" ? "constructor" : "b"];', "no-restricted-syntax"],
+    ['export const a = () => "constructor";', "no-restricted-syntax"],
+    ['export const a = () => "__proto__";', "no-restricted-syntax"],
+    ["export const a = (o: object, p: object) => Object.setPrototypeOf(o, p);", "no-restricted-syntax"],
+    ['export const a = (o: object) => Object.defineProperty(o, "x", {});', "no-restricted-syntax"],
+    ["export const a = (o: object) => Object.getOwnPropertyDescriptor(o, 'x');", "no-restricted-syntax"],
+    ["export const a = (o: object) => Object.assign(o, {});", "no-restricted-syntax"],
+    ["export class X extends Error {}", "no-restricted-syntax"],
+    ['import { Mesh } from "three";\nexport class X extends Mesh { onBeforeRender(): void {} }', "no-restricted-syntax"],
+    ["export const a = (): unknown => Error.captureStackTrace;", "no-restricted-syntax"],
+    ["export const a = (o: object): unknown => (o as { __proto__: unknown }).__proto__;", "no-restricted-syntax"],
+    ["export const a = (o: { domElement: unknown }): unknown => o.domElement;", "no-restricted-syntax"],
+    ["export const a = (o: { ownerDocument: unknown }): unknown => o.ownerDocument;", "no-restricted-syntax"],
+    ["export const a = (o: { __defineGetter__: unknown }): unknown => o.__defineGetter__;", "no-restricted-syntax"],
+    ["export const a = (o: { parentNode: unknown }): unknown => { const { parentNode } = o; return parentNode; };", "no-restricted-syntax"],
+    ["export const a = (): unknown => window.open('x');", "no-undef"],
+  ];
+  for (const [src, rule] of bad) assert.ok((await rulesOf(src, "guard/probe.ts")).includes(rule), `guard/ not rejected by ${rule}: ${src}`);
+});
+
+test("guard/: it may name prototypes and the callbacks, read `x[name]`, use getPrototypeOf and the Object members, and nothing more", async () => {
   const ok = `import { Material, Mesh, Object3D } from "three";
-const names = ["onBeforeRender", "onAfterRender", "onBeforeCompile", "onBeforeShadow", "onAfterShadow"];
-export const a = (x: object): unknown => [Mesh.prototype, Object3D.prototype, Object.getPrototypeOf(x), x instanceof Material, names.map((n) => (x as Record<string, unknown>)[n]), Object.freeze({}), Array.isArray(x)];`;
+const NAMES = ["onBeforeRender", "onAfterRender", "onBeforeCompile", "onBeforeShadow", "onAfterShadow"] as const;
+export const a = (x: object): unknown => [Mesh.prototype, Object3D.prototype, Object.getPrototypeOf(x), x instanceof Material, NAMES.map((name) => (x as Record<string, unknown>)[name]), Object.freeze({}), Object.values(x), Object.entries(x), Object.fromEntries([]), Array.isArray(x), new Error("e"), Object3D.prototype.onBeforeRender];`;
   assert.deepEqual(await rulesOf(ok, "guard/probe.ts"), []);
+  // The same names stay banned in src/: it must not name a prototype or a callback, nor read `x[name]`, nor getPrototypeOf.
+  const inSrc = await rulesOf(ok, "src/probe.ts");
+  assert.ok(inSrc.filter((r) => r === "no-restricted-syntax").length >= 4, "src/ still refuses what guard/ may name");
   // The real file lints clean under its own fence.
   const [real] = await eslint.lintFiles([join(RENDER_DIR, "guard/render-callbacks.ts")]);
   assert.deepEqual(real!.messages.map((m) => `${m.ruleId}: ${m.message}`), []);
@@ -72,6 +111,9 @@ test("src/: it cannot import tools/, demo/, test/, another guard/ file, a packag
     'export { x } from "../tools/frame-log.ts";',
     'export * from "../tools/frame-log.ts";',
     'import type { X } from "../tools/frame-log.ts";',
+    'import { AudioLoader } from "THREE";',
+    'import { Mesh } from "Three";',
+    'import { x } from "../Guard/render-callbacks.ts";',
   ];
   for (const line of bad) {
     for (const file of ["src/probe.ts", "src/rig.ts"]) {

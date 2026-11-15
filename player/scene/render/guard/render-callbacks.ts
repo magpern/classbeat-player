@@ -40,7 +40,7 @@ const MATERIAL_PROTOTYPES: readonly object[] = Object.freeze([MeshBasicMaterial,
 function refuseUnlessDefault(item: object, kind: "object" | "material"): void {
   const prototypes = kind === "object" ? OBJECT_PROTOTYPES : MATERIAL_PROTOTYPES;
   if (!prototypes.includes(Object.getPrototypeOf(item) as object)) throw new Error(`a scene ${kind} has a prototype that is not a three.js class src/ may use`);
-  const defaults = DEFAULTS[kind];
+  const defaults = kind === "object" ? DEFAULTS.object : DEFAULTS.material; // a literal key: the fence allows no other computed one but `[name]`
   for (const name of NAMES) {
     if ((item as Bag)[name] !== defaults[name]) throw new Error(`a scene ${kind} carries the render callback ${name}`);
   }
