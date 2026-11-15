@@ -13,7 +13,7 @@ export interface StyleSource {
 export interface SceneTokens {
   /** `--zone-1` to `--zone-7`, as 0xRRGGBB. */
   readonly zones: Readonly<Record<ZoneNumber, number>>;
-  /** `--light-1`: the white of the rig (bursts, the finished house). */
+  /** `--light-1`: the white of the rig (bursts). */
   readonly white: number;
   /** `--scene-down`: lights down (paused), a share of full. */
   readonly down: number;
@@ -21,6 +21,8 @@ export interface SceneTokens {
   readonly burstPeak: number;
   /** `--scene-burst`: the burst's decay, ms. */
   readonly burstMs: number;
+  /** `--pattern-down`: a pattern's "down" side, a share of the "up" side's brightness. */
+  readonly patternDown: number;
   /** `--scene-text-cap`: the highest relative luminance of the scene under text (S2). */
   readonly textCap: number;
   /** Scene tokens that were not in tokens.css, so the spec's value was used. */
@@ -28,7 +30,7 @@ export interface SceneTokens {
 }
 
 /** The spec's values for the scene-only tokens (scene.md "Tokens"), used only while tokens.css lacks them. */
-export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250, textCap: 0.08 } as const;
+export const SCENE_TOKEN_DEFAULTS = { down: 0.06, burstPeak: 0.85, burstMs: 250, textCap: 0.08, patternDown: 0.72 } as const;
 
 export function parseHex(value: string): number | null {
   const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
@@ -65,6 +67,7 @@ export function readSceneTokens(style: StyleSource): SceneTokens {
   const burstPeak = number("--scene-burst", SCENE_TOKEN_DEFAULTS.burstPeak);
   return {
     zones, white: colour("--light-1"),
+    patternDown: Math.min(1, number("--pattern-down", SCENE_TOKEN_DEFAULTS.patternDown)),
     down: number("--scene-down", SCENE_TOKEN_DEFAULTS.down),
     burstPeak, burstMs: burstMs ? Number(burstMs[1]) : SCENE_TOKEN_DEFAULTS.burstMs,
     textCap: textCap(style.getPropertyValue("--scene-text-cap"), missing),

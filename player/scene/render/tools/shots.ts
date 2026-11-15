@@ -15,6 +15,8 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
+import { reportS6 } from "./flash-shots.ts";
+import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
 
@@ -26,7 +28,7 @@ const CANDIDATES = ["/usr/bin/google-chrome", "/opt/google/chrome/chrome", "/usr
 const BURST_SHOTS = ["drop-burst", "no-moments-song-burst", "song-change-dim"];
 const SIZES = [[1920, 1080], [1366, 768]] as const;
 
-interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number }
+interface Shot { readonly name: string; readonly query: string; readonly fromS: number; readonly toS: number; /** The lit share the shot must still have (default 1 %): the house look before the start is two beams at 6 %. */ readonly minLit?: number }
 // Each plays from `fromS` to `toS` on a synthetic 60 fps clock, so a screenshot is the same every time.
 const SHOTS_LIST: readonly Shot[] = [
   { name: "warm-up-zone-1", query: "", fromS: 0, toS: 5 },
@@ -38,6 +40,8 @@ const SHOTS_LIST: readonly Shot[] = [
   { name: "song-change-dim", query: "", fromS: 58, toS: 60.2 },
   { name: "no-moments-song-burst", query: "", fromS: 68, toS: 80.03 },
   { name: "breakdown", query: "", fromS: 112, toS: 122 },
+  // The house look before the start (#546).
+  { name: "before-the-start-house", query: "&stage=before", fromS: 0, toS: 5, minLit: 0.001 },
   { name: "zone-7-peak", query: "", fromS: 100, toS: 106 },
   { name: "paused", query: "&state=paused", fromS: 30, toS: 36 },
   { name: "coasting-none-level", query: "&state=coasting", fromS: 30, toS: 38 },
@@ -95,10 +99,11 @@ async function screenshots(browser: Browser): Promise<void> {
     const b = await brightness(page);
     const burst = await page.evaluate(() => (window as unknown as Api).__scene.burst);
     assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
+    assert.equal(await settleTransitions(page), 0, `${shot.name}: a transition is still running, so the shot would be caught half way`);
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
     assert.deepEqual([...problems, ...(await violations(page))], [], `${shot.name}: ${problems.join("; ")}`);
-    assert.ok(b.lit > 0.01, `${shot.name} at ${w}x${h} is blank (${b.lit} of the pixels lit)`);
+    assert.ok(b.lit > (shot.minLit ?? 0.01), `${shot.name} at ${w}x${h} is blank (${b.lit} of the pixels lit)`);
     await page.close();
   }
   const m = (n: string) => means.get(n)!;
@@ -150,6 +155,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await lightMeasurement(opener);
+  await reportS6(opener, ARTIFACTS);
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser);

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { violations } from "./guard-trap.ts";
+import { settleTransitions } from "./settle.ts";
 import { capsScript, coloursScript, lumSetup, maskCoverScript, overlapScript, safeAreaScript } from "./page-checks.ts";
 
 export type Open = (w: number, h: number, query: string) => Promise<{ page: Page; problems: string[] }>;
@@ -23,7 +24,8 @@ type Win = { from: number; to: number; what: string };
 async function settle(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(() => (window as unknown as Api).__scene.settle());
-  await page.waitForTimeout(900); // the gel's colour transition (--m-change) runs on the real clock
+  // The gel's colour transition (--m-change) runs on the real clock: take it to its end instead of waiting for it.
+  assert.equal(await settleTransitions(page), 0, "a transition is still running: the shot is not final");
 }
 
 /** Each zone at each size: the screenshot, and every measured check of the text layer. */
