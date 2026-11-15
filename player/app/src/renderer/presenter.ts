@@ -73,6 +73,7 @@ function renderLink(s: Snapshot): void {
   hide("link-hold", !k.held);
   hide("link-announcement", k.announcement === null);
   setText("link-announcement", k.announcement ?? "");
+  hide("link-playlist", !k.playlistNotLoaded);
   hide("undo", !k.canUndo);
   hide("follow", k.mode === "following" || !k.available);
   hide("manual", k.mode === "manual" || !k.available);

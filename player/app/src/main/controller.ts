@@ -5,7 +5,10 @@ import type { WebContents } from "electron";
 import classSchema from "../../../../schema/class-format/v1/class.schema.json" with { type: "json" };
 import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
-import { advance, command, INITIAL, isFollowing, openText, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
+import { advance, answerLoad, command, INITIAL, isFollowing, openText, playlistAtStart, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
+import { fallsBack } from "../core/link/playlist-load.ts";
+import { canLoadPlaylist } from "../core/link/playlist.ts";
+import type { PlaylistLoader } from "../core/link/playlist.ts";
 import type { PlayerState } from "../core/player-state.ts";
 import { manualReader } from "../core/link/reader.ts";
 import type { MusicReader } from "../core/link/reader.ts";
@@ -73,6 +76,25 @@ export function createController(now: () => number = () => performance.now(), re
     for (const w of watchers) w(snap);
   };
 
+  // Only a follower that can load a playlist is ever asked to (macOS, Linux; a test's fake).
+  const loader = canLoadPlaylist(transport) ? transport : null;
+  /** Counts the instructor's commands, so a late fallback never overrides a newer one. */
+  let moves = 0;
+  /**
+   * Asks the follower to play the playlist from its first track (that starts the music too). When
+   * the load did not go, Start presses play as before, unless another class was opened, following
+   * stopped or the instructor gave another command meanwhile.
+   */
+  const load = (to: PlaylistLoader, id: string, fallback: TransportAction | null): void => {
+    const loadId = state.loadId;
+    const mine = moves;
+    to.loadPlaylist(id, (outcome) => {
+      const back = state.loadId === loadId && state.loaded !== null && fallsBack(state.loaded.playlist, outcome);
+      state = answerLoad(state, loadId, outcome, now());
+      if (back && fallback !== null && moves === mine && isFollowing(state)) transport?.send(fallback);
+    });
+  };
+
   return {
     snapshot,
     read() {
@@ -95,15 +117,23 @@ export function createController(now: () => number = () => performance.now(), re
       return snapshot();
     },
     command(cmd) {
+      moves += 1;
+      const t = now();
+      // Start at class time 0 of a class with a playlist asks the follower to load it (playlist-load.ts).
+      const start = playlistAtStart(state, cmd, t, transport !== null, loader !== null);
+      state = start.state;
       // While following, Start, Pause, Resume and Next go to the music instead of the clock (before the first lock, Start goes to both).
       const action = transportFor(state, cmd, transport !== null);
-      if (action !== null) transport?.send(action);
-      state = command(state, cmd, now(), transport !== null);
+      if (start.ask !== null && loader !== null) load(loader, start.ask, action);
+      else if (action !== null) transport?.send(action);
+      // The load is fire-and-forget: the clock takes the command now, whatever the follower answers.
+      state = command(state, cmd, t, transport !== null);
       sync();
       push();
       return snapshot();
     },
     music(action) {
+      moves += 1;
       if (transport !== null && isFollowing(state)) transport.send(action);
       return snapshot();
     },
