@@ -146,12 +146,12 @@ test("pattern: crossfade or song change inside the interval takes the beat from 
   assert.equal(patternAt(gap, 3_500)?.counted, false);
 });
 
-test("pattern: the viewAt field carries the result and nothing else changes", () => {
+test("pattern: viewAt is unchanged and patternAt is the sibling over the same plan and class time", () => {
   const s = start(createClock(120_000, 0), 0);
   const p = plan(UP_DOWN);
   const v = viewAt(s, p, 4_100);
-  assert.equal(v.pattern?.position, "standing");
-  assert.equal(viewAt(s, plan(null), 4_100).pattern, null);
+  assert.equal("pattern" in v, false);
+  assert.equal(patternAt(p, v.classMs)?.position, "standing");
 });
 
 test("example vector class-pattern-climb-and-jumps loads and yields the expected steps", () => {
