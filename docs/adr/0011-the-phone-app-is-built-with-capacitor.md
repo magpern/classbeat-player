@@ -46,7 +46,7 @@ native plugins**, written in Kotlin on Android. One web code base serves the des
 | | Bluetooth sensors (section 7), keep-awake, an external display |
 
 On an external display the app shows only the room view, as the desktop room window does. The
-riders' list is never shown there ([ADR 0007](0007-the-presenter-view.md), section 4).
+riders' list is never shown there ([ADR 0007](0007-riders-in-a-live-session.md), section 4).
 
 This is more than a thin shell: on the desktop about 1,950 lines of the main process do pairing,
 sync and the live host. What moves to Kotlin is the part that holds a secret or needs the
