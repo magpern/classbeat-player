@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globalsPackage from "globals";
 import tseslint from "typescript-eslint";
+import { definedGlobals } from "./tools/defined-globals.js";
 
 // Allowlists, not blocklists (rule guards). Three layers close the scene's page off by construction:
 // this file (lint), the content-security policy of demo/index.html and the runtime trap of
@@ -35,13 +36,17 @@ export const SRC_TYPES = [
   "NonNullable", "Exclude", "Extract", "Awaited", "Iterable", "ArrayLike",
 ];
 export const SRC_GLOBALS = [...SRC_BUILTINS, ...SRC_TYPES];
-// ESLint defines every ECMAScript built-in whatever `globals` says, so `no-undef` cannot close them:
-// every built-in of the `globals` package that is not on SRC_BUILTINS is restricted instead (a new
-// built-in is therefore refused by default). That covers Function, Reflect, Proxy, globalThis, eval,
-// Date and the rest. A name that is no built-in at all (WebAssembly) is an undefined global.
-// `Object` is further limited to the members below.
-export const SRC_BUILTINS_RESTRICTED = Object.keys(globalsPackage.builtin).filter((name) => !SRC_BUILTINS.includes(name));
+// ESLint defines more than the ES built-ins in every scope (`conf/globals.js`: `Temporal`, `constructor`,
+// `toString`, `valueOf`, `hasOwnProperty` ...), so `no-undef` cannot close them and no list of ours can
+// know them. They are read from ESLint itself (tools/defined-globals.js, the global scope of an empty
+// module) together with the `globals` package's built-ins, and every one that is not on SRC_BUILTINS
+// is restricted: a built-in a new ESLint or ECMAScript adds is refused by default. That covers
+// Function, Reflect, Proxy, globalThis, eval, Date, Temporal and the rest. A name that is no built-in
+// at all (WebAssembly) is an undefined global. `Object` and `Error` are further limited below.
+export const SRC_BUILTINS_RESTRICTED = [...new Set([...definedGlobals(), ...Object.keys(globalsPackage.builtin)])].filter((name) => !SRC_BUILTINS.includes(name)).sort();
 export const OBJECT_MEMBERS_ALLOWED = ["entries", "fromEntries", "keys", "values", "freeze"];
+// `Error` and its subclasses are only built (`new Error(...)`) or named as a type: no `captureStackTrace`, no `prepareStackTrace`.
+export const ERROR_CLASSES = ["Error", "TypeError", "RangeError"];
 
 const alt = (names) => names.join("|");
 // Globals the scene never needs: network, storage, workers, audio, images, randomness, the global
@@ -69,14 +74,15 @@ const srcSyntax = ["error", ...common,
   // src/ is handed the host's painter (src/host.ts) and never reaches for the renderer's element or the page through it or through three.js callbacks.
   { selector: `MemberExpression[computed=false][property.name=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in src/." },
   { selector: `MemberExpression[computed=true][property.type='Literal'][property.value=/^(${REFLECTION_PROPS})$/]`, message: "No prototype access, render callback, element or page member in src/." },
+  { selector: `Identifier[name=/^(${alt(ERROR_CLASSES)})$/]:not(:matches(NewExpression, CallExpression) > Identifier.callee, TSTypeReference > Identifier)`, message: "src/ only builds an Error (`new Error(...)`); it takes no member of it (no captureStackTrace, no prepareStackTrace)." },
   { selector: identifierAllowedAsObject("Object", OBJECT_MEMBERS_ALLOWED), message: `src/ uses Object only by ${OBJECT_MEMBERS_ALLOWED.join(", ")} (no reflection: no getPrototypeOf, getOwnPropertyDescriptor, defineProperty, setPrototypeOf).` },
   // No route to the global object or the page by building a name at run time: `constructor` (reaches `Function`), and any computed key that is not a literal.
   { selector: "MemberExpression[computed=false][property.name='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
   { selector: "MemberExpression[computed=true][property.type='Literal'][property.value='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
-  { selector: "ObjectPattern > Property[computed=false][key.name='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
-  { selector: "ObjectPattern > Property[computed=true][key.value='constructor']", message: "No `constructor` member in src/ (it reaches Function and the global object)." },
+  // Every destructuring key (nested patterns and parameters too) is a plain identifier, and its name faces the same bans as a member access.
+  { selector: "ObjectPattern > Property:not([computed=false][key.type='Identifier'])", message: "src/ destructures by a plain identifier key only (no string or computed key)." },
+  { selector: `ObjectPattern > Property[key.name=/^(constructor|${REFLECTION_PROPS})$/]`, message: "No `constructor`, prototype, render callback, element or page member in src/, destructured or not." },
   { selector: "MemberExpression[computed=true]:not([property.type='Literal'])", message: "src/ reads members by a literal key only: a key built at run time can name any member (use .at(i), a destructure or a lookup helper)." },
-  { selector: "ObjectPattern > Property[computed=true]:not([key.type='Literal'])", message: "src/ destructures by a literal key only." },
   { selector: identifierAllowedAsObject("window", WINDOW_ALLOWED), message: `src/ reaches the window only by ${WINDOW_ALLOWED.join(", ")}.` },
 ];
 const demoSyntax = ["error", ...common,

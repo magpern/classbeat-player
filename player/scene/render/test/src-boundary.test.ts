@@ -8,7 +8,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { ESLint } from "eslint";
+import { ESLint, Linter } from "eslint";
+import type { Rule } from "eslint";
 import globalsPackage from "globals";
 import { RENDER_DIR } from "../tools/tokens-file.ts";
 
@@ -33,13 +34,40 @@ test("the globals src/ may name are exactly this list (ES built-ins and utility 
   assert.deepEqual(browser.filter((n) => GLOBALS.includes(n)), []);
 });
 
-test("the restricted ES built-ins are exactly ESLint's own built-in set minus the pinned allowlist, and Object is limited to its pinned members", async () => {
+// What ESLint itself defines in a module's global scope for the ecmaVersion the config resolves for src/
+// (conf/globals.js: built-ins, `Temporal`, `constructor`, `toString`, `valueOf` ...). Read from the real
+// scope of a linted module, not from a list of ours.
+async function definedByEslint(): Promise<string[]> {
+  const lo = (await new ESLint({ cwd: RENDER_DIR }).calculateConfigForFile(join(RENDER_DIR, "src/probe.ts")) as { languageOptions: { ecmaVersion: number | "latest"; sourceType: "module" } }).languageOptions;
+  let names: string[] = [];
+  new Linter().verify("export {};", [{
+    languageOptions: { ecmaVersion: lo.ecmaVersion, sourceType: lo.sourceType },
+    plugins: { probe: { rules: { scope: { create: (c: Rule.RuleContext) => ({ Program: () => { names = c.sourceCode.getScope(c.sourceCode.ast).variables.map((v) => v.name); } }) } } } },
+    rules: { "probe/scope": "error" },
+  }]);
+  return names;
+}
+
+test("every global ESLint defines is restricted in src/ or on the pinned allowlist, and nothing else is restricted", async () => {
   const mod = (await import(pathToFileURL(join(RENDER_DIR, "eslint.config.js")).href)) as Config;
-  const builtin = Object.keys(globalsPackage.builtin);
+  const defined = await definedByEslint();
+  assert.ok(defined.length > 60 && ["Temporal", "constructor", "toString", "valueOf", "hasOwnProperty", "Function", "Reflect"].every((n) => defined.includes(n)), "the probe sees ESLint's own set");
   assert.deepEqual([...mod.SRC_BUILTINS].sort(), [...BUILTINS].sort());
-  assert.deepEqual([...mod.SRC_BUILTINS_RESTRICTED].sort(), builtin.filter((n) => !BUILTINS.includes(n)).sort());
-  for (const n of ["Function", "Reflect", "Proxy", "globalThis", "eval", "Date", "Intl", "WeakRef", "Atomics", "SharedArrayBuffer"]) assert.ok(mod.SRC_BUILTINS_RESTRICTED.includes(n), n);
+  assert.deepEqual(BUILTINS.filter((n) => !defined.includes(n)), [], "an allowlisted name is a real global");
+  const unrestricted = defined.filter((n) => !BUILTINS.includes(n) && !mod.SRC_BUILTINS_RESTRICTED.includes(n));
+  assert.deepEqual(unrestricted, [], "defined by ESLint, yet neither restricted nor allowlisted");
+  assert.deepEqual(mod.SRC_BUILTINS_RESTRICTED.filter((n) => BUILTINS.includes(n)), []);
+  for (const n of Object.keys(globalsPackage.builtin)) assert.ok(BUILTINS.includes(n) || mod.SRC_BUILTINS_RESTRICTED.includes(n), n);
   assert.deepEqual([...mod.OBJECT_MEMBERS_ALLOWED].sort(), [...OBJECT_MEMBERS].sort());
+});
+
+test("a bare reference to each global ESLint defines, off the allowlist, fails lint in src/", async () => {
+  const defined = await definedByEslint();
+  const eslint = new ESLint({ cwd: RENDER_DIR });
+  for (const n of defined.filter((x) => !BUILTINS.includes(x))) {
+    const [r] = await eslint.lintText(`export const a = (): unknown => ${n};`, { filePath: join(RENDER_DIR, "src/probe.ts") });
+    assert.ok(r!.messages.some((m) => m.ruleId === "no-restricted-globals"), `${n} is not restricted`);
+  }
 });
 
 const eslint = new ESLint({ cwd: RENDER_DIR });
