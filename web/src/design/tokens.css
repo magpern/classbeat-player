@@ -77,7 +77,7 @@
   --scene-text-cap: 0.08; /* highest relative luminance under text, --light-1 text only (S2) */
   --scene-text-pad: 1.2vh 3vh; /* growth of each text box for the cap, then the fade */
   --scene-down: 0.06; /* lights down (paused, before the start) */
-  --scene-house: 0.4; /* house lights (finished), white */
+  --scene-house: 0.40; /* house lights (finished), white */
   --scene-burst: 0.85 250ms; /* drop burst: peak share of white, decay */
   --scene-anticipate: 10s; /* next colour comes in this long before a change */
   --scene-turn-max: 30deg; /* per second: the fastest any beam turns (S7) */

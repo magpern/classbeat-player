@@ -9,7 +9,7 @@ import { ZONES, isZone, zoneClass, zoneToken } from "../../src/design/zones.ts";
 import { checkPalette } from "../lib/palette.ts";
 import { impurities } from "../lib/core-purity.ts";
 import { remoteFontRefs } from "../lib/font-refs.ts";
-import { tokensFromFile } from "../../../player/scene/render/tools/tokens-file.ts";
+import { cssSceneTokens, sceneTokenProblems } from "../lib/scene-tokens-spec.ts";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokens = readFileSync(join(WEB, "src", "design", "tokens.css"), "utf8");
@@ -254,43 +254,33 @@ describe("the web lane stands alone", () => {
 });
 
 describe("scene-only tokens (docs/design/scene.md, Tokens)", () => {
-  // What tokens.css holds today. Where the spec gives a second value for a narrow or stepped case
-  // (--score-ahead, --pattern-count) the token holds the first.
-  const SCENE: Record<string, string> = {
-    "--scene-text-cap": "0.08", "--scene-text-pad": "1.2vh 3vh", "--scene-down": "0.06", "--scene-house": "0.4",
-    "--scene-burst": "0.85 250ms", "--scene-anticipate": "10s", "--scene-turn-max": "30deg", "--scene-reaim": "3.5s",
-    "--scene-lift-max": "3", "--scene-tempo-pulse": "0.12", "--score-ahead": "8min", "--score-now": "10vw",
-    "--pattern-count": "18vh", "--pattern-down": "0.72",
-  };
   const spec = readFileSync(join(WEB, "..", "docs", "design", "scene.md"), "utf8");
-  const rows = [...spec.split(/^## Tokens$/m)[1]!.split(/^## /m)[0]!.matchAll(/^\| (`[^|]+`) \| ([^|]+) \|/gm)].map((m) => ({
-    names: [...m[1]!.matchAll(/`(--[\w-]+)`/g)].map((n) => n[1]!), value: m[2]!.trim(),
-  }));
-  const specNames = rows.flatMap((r) => r.names);
+  const row = (name: string, value: string) => `| \`${name}\` | ${value} | use |`;
+  const table = (...rows: string[]) => `## Tokens\n\n| Token | Value | Use |\n|---|---|---|\n${rows.join("\n")}\n\n## Next\n`;
+  const css = (...lines: string[]) => `:root {\n${lines.map((l) => `  ${l};`).join("\n")}\n}`;
 
-  it("tokens.css holds every scene-only token of the spec table, and the spec table holds no other", () => {
-    const own = specNames.filter((n) => !["--m-change", "--m-flash"].includes(n));
-    assert.deepEqual([...own].sort(), Object.keys(SCENE).sort());
+  it("every scene token in tokens.css has a spec row with an equal value, and every built spec row is in tokens.css", () => {
+    assert.deepEqual(sceneTokenProblems(tokens, spec), []);
+    assert.equal(cssSceneTokens(tokens).size, 14);
   });
 
-  it("every value equals the spec's", () => {
-    for (const [name, value] of Object.entries(SCENE)) {
-      const m = new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m").exec(tokens);
-      assert.equal(m?.[1]?.trim(), value, name);
-      const row = rows.find((r) => r.names.includes(name))!;
-      const spaced = row.value.replace(/(\d)(vh|vw|ms|s|min|deg)\b/g, "$1 $2");
-      for (const n of value.matchAll(/\d*\.?\d+\s*[a-z]*/g)) {
-        const unit = n[0].replace(/^[\d.]+/, "").trim();
-        const num = n[0].match(/^[\d.]+/)![0];
-        const words = unit === "deg" ? "degrees" : unit;
-        assert.ok(new RegExp(`(^|[^\\d.])${num.replace(".", "\\.")}\\s*${words}`).test(spaced), `${name}: ${n[0]} is not in the spec's "${row.value}"`);
-      }
-    }
+  it("a spec row marked 'to be built' is ignored when tokens.css lacks it, but a built row is not", () => {
+    const md = table(row("--scene-down", "0.06"), row("--scene-hold", "2 s (to be built in #577)"));
+    assert.deepEqual(sceneTokenProblems(css("--scene-down: 0.06"), md), []);
+    assert.deepEqual(sceneTokenProblems(css("--scene-down: 0.06"), table(row("--scene-down", "0.06"), row("--scene-house", "0.40"))), ["--scene-house is in the spec but not in tokens.css"]);
   });
 
-  it("the scene's own reader finds every token it reads in the real tokens.css (nothing falls back to the spec's value)", () => {
-    const t = tokensFromFile();
-    assert.deepEqual(t.missing, []);
-    assert.deepEqual([t.down, t.burstPeak, t.burstMs, t.textCap], [0.06, 0.85, 250, 0.08]);
+  it("a token with no spec row, or a value that is only a prefix of the spec's, fails", () => {
+    assert.equal(sceneTokenProblems(css("--pattern-down: 0.7"), table(row("--pattern-down", "0.72"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-down: 0.0"), table(row("--scene-down", "0.06"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-reaim: 3.5s"), table(row("--scene-reaim", "35 s"))).length, 1);
+    assert.equal(sceneTokenProblems(css("--scene-turn-max: 30deg"), table(row("--scene-turn-max", "300 degrees a second"))).length, 1);
+    assert.deepEqual(sceneTokenProblems(css("--pattern-down: 0.72"), table(row("--pattern-down", "0.72"))), []);
+    assert.deepEqual(sceneTokenProblems(css("--scene-extra: 1"), table()), ["--scene-extra has no spec row"]);
+  });
+
+  it("copes with a row that names a later value beside the built one", () => {
+    const md = table(row("--scene-burst", "0.85, rise 40 ms (to be built in #577), decay 250 ms"));
+    assert.deepEqual(sceneTokenProblems(css("--scene-burst: 0.85 250ms"), md), []);
   });
 });
