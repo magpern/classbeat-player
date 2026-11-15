@@ -46,6 +46,7 @@ const TIERS = {
   hero: { cap: 0.2, contrast: 7 },
   gel: { cap: 0.25, contrast: 7 },
   value: { cap: 0.055, contrast: 7 },
+  count: { cap: 0.10, contrast: 7 }, // the pattern's beat count (scene.md, S1)
   text: { cap: 0.03, contrast: 7 },
   minor: { cap: 0.03, contrast: 7 },
   label: { cap: 0.02, contrast: 4.5 },

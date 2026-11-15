@@ -1,0 +1,84 @@
+/* The plain 2D room screen, follow-up to docs/design/scene.md (issue #483): the position
+   pattern folded into the Position metric, the next interval's cue as a second line of the
+   next row, a score 5.7 minutes ahead. Loaded after room.css by the follow-up mock-ups only
+   (docs/design/room-2d.md, "The follow-up to the scene"). Reference mock-up only. */
+
+/* ---------- A pattern folded into the Position metric ---------- */
+/* Side (UP or DOWN, the value tier) and the beats left on it (the count, 13 vh: cap 10.4 %),
+   on one baseline. The digits sit in cells, so the count never shifts as it steps. */
+.metric .v.pv { display: flex; align-items: baseline; column-gap: 1.2vw; line-height: 0.8; }
+.pv b { font-weight: 800; }
+.pv .side { font-size: var(--t-value); line-height: 0.92; }
+.pv .cnt { font-size: 13vh; line-height: 0.8; white-space: nowrap; }
+/* No count (never guessed): the note, at the label tier in the white of a value, at most three
+   lines in the column. */
+.metric .v.note {
+  font-family: var(--face-text); font-weight: 700; font-size: var(--t-label); line-height: 1.12;
+  white-space: normal; color: var(--light-1); margin-top: 0.8vh; max-width: 38vh;
+}
+/* The column gives back what the count adds, so the cue below keeps its place. */
+.metrics.fold { gap: 1.1vh; }
+
+/* The label above the countdown keeps 1 vh of clear space from it (scene.md, "Fitting"). */
+.count { margin-top: 1.7vh; }
+
+/* ---------- The next row: its cue is a second line ---------- */
+/* .next holds the row's first line (.nline: what room.css's .next was) and, under it, the cue. */
+.next { display: block; top: 69vh; }
+.next .nline { display: flex; align-items: center; gap: 1.6vw; white-space: nowrap; }
+.next .nline > * { flex: none; }
+.next .nline .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.next .ncue {
+  display: block; margin-top: 0.95vh; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--face-text); font-size: var(--t-label); font-weight: 400; line-height: 1.1; color: var(--light-1);
+}
+/* The cue of the interval now is two lines at --t-text or three at --t-text-min (the cue above
+   the next row is 14.4 vh at most). */
+.cue { top: 54.2vh; max-height: calc(3 * 1.02 * var(--t-text-min) + 0.3vh); }
+.cue:not(.long) { max-height: calc(2 * 1.12 * var(--t-text) + 0.3vh); }
+/* A cue that needs a fourth line (wide capitals near 120 characters, a ratio near 3:2): four lines
+   at --t-text-min as before, and the next row is the single line it was; its cue is left out. */
+.cue.four { max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); }
+body:has(.cue.four) .next { top: 73.2vh; }
+body:has(.cue.four) .ncue { display: none; }
+
+/* ---------- 4:3 and narrower ---------- */
+@media (max-aspect-ratio: 3/2) {
+  /* The countdown is 26 vh (cap 21 %, the floor is 20 %), as in scene.md, so that the next row's
+     second line fits above the score: everything under it moves up 1.6 vh. */
+  .count { font-size: min(26vh, calc(61vw / var(--count-w))); }
+  .count { margin-top: 1.7vh; }
+  .metrics { top: 44.7vh; }
+  /* The row holds the widest case (100-110 rpm, DOWN with two digits, 200 bpm and its dot) down
+     to 5:4 inside the safe edge: 1.1 vw between the cells, 0.8 vw between the side and its count,
+     0.3 vw before a unit. */
+  .metrics.fold { gap: 1.1vw; }
+  .metrics.fold .v small { margin-left: 0.3vw; }
+  .metric .v.pv { column-gap: 0.8vw; }
+  .metric .v.note { max-width: 19vw; }
+  .pv .side { font-size: min(7.4vh, 5.55vw); }
+  /* Two lines of cue (at --t-text, or at --t-text-min up to about 95 characters); the next row
+     follows with its cue. */
+  .cue { top: 60.2vh; max-height: calc(2 * 1.04 * var(--t-text) + 0.3vh); line-height: 1.04; }
+  .cue.long { max-height: calc(2 * 1.04 * var(--t-text-min) + 0.3vh); }
+  .next { top: 72.5vh; left: var(--safe-x); }
+  /* Three lines: the next row is one line, as before; its cue is left out. */
+  .cue.three { max-height: calc(3 * 1.04 * var(--t-text-min) + 0.5vh); }
+  body:has(.cue.three) .next { top: 76.5vh; }
+  body:has(.cue.three) .ncue { display: none; }
+  /* Four lines: as room.css, with the same cue-less short row. */
+  .cue.four { top: 63.4vh; max-height: calc(4 * 1.02 * var(--t-text-min) + 0.3vh); line-height: 1.02; }
+  body:has(.cue.four) .clock { top: 10.5vh; }
+  body:has(.cue.four) .count { margin-top: 1.3vh; }
+  body:has(.cue.four) .bars { margin-top: 0.3vh; }
+  body:has(.cue.four) .metrics { top: 42.7vh; }
+  body:has(.cue.four) .next { left: 34vw; top: 58vh; }
+}
+
+/* A pattern that starts on the next downbeat: the side of the first entry, and in the count's
+   place the note, at the label tier, two lines at most, in the width the side leaves. */
+.pv .soon {
+  font-family: var(--face-text); font-weight: 700; font-size: var(--t-label); line-height: 1.12; color: var(--light-1);
+  align-self: center; max-width: 18vh; white-space: normal;
+}
+@media (max-aspect-ratio: 3/2) { .pv .soon { max-width: 16vw; } }

@@ -37,6 +37,15 @@ const FOLLOW = ['handover', 'manual-follow'];
 const WORST_FOLLOW = ['worst-handover', 'worst-manual-follow'];
 const KEEP_FOLLOW = new Set(['worst-handover-1280x1024', 'worst-manual-follow-1024x768', 'worst-manual-follow-1280x1024']);
 
+// The follow-up to the scene (room-2d.md, "The follow-up to the scene"): a position pattern folded
+// into the Position metric, the next interval's cue, a score 5.2 minutes ahead, and the playlist
+// plate. Each at every size; their worst cases at every size.
+const FOLLOWUP = ['pattern', 'pattern-down', 'pattern-next-bar', 'pattern-no-count', 'playlist-not-loaded'];
+const WORST_FOLLOWUP = ['worst-pattern', 'worst-pattern-no-tempo', 'worst-pattern-four'];
+const KEEP_FOLLOWUP = new Set(['pattern-1920x1080', 'pattern-1680x1050', 'pattern-1280x800', 'pattern-1440x1080', 'pattern-1280x1024', 'pattern-1024x768', 'pattern-down-1920x1080', 'pattern-next-bar-1920x1080', 'pattern-next-bar-1280x1024',
+  'pattern-no-count-1920x1080', 'pattern-no-count-1440x1080', 'playlist-not-loaded-1920x1080', 'playlist-not-loaded-1440x1080',
+  'worst-pattern-four-1280x1024', 'worst-pattern-four-1650x1080', 'worst-pattern-1650x1080', 'worst-pattern-1280x1024', 'worst-pattern-1024x768', 'worst-pattern-no-tempo-1920x1080', 'worst-pattern-no-tempo-1440x1080']);
+
 const WORST = ['worst-off-list', 'worst-running', 'worst-paused', 'worst-before-start', 'worst-finished', 'worst-ambiguous', 'worst-wide', 'worst-wide-before-start'];
 
 // save: false = checked by measure.js, not kept as a PNG in the repository. motion: 'reduce'
@@ -131,6 +140,8 @@ const SHOTS = [
   ...MORE.flatMap((s) => [room(s, 1920, 1080), room(s, 1650, 1080, false), room(s, 1280, 1024, false)]),
   room('running', 1920, 1080, true, 'reduce'), // the beat dot is off with reduced motion
   ...WORST.flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_WORST.has(`${s}-${w}x${h}`)))),
+  ...[...FOLLOWUP, ...WORST_FOLLOWUP].flatMap((s) => SIZES.map(([w, h]) => room(s, w, h, KEEP_FOLLOWUP.has(`${s}-${w}x${h}`)))),
+  room('pattern', 1920, 1080, true, 'reduce'), // the count still steps; the beat dot is off
   ...CONTROLS.map((s) => room(s, 1920, 1080)),
   ...['starting', 'reconnecting', 'refused', 'unreachable', 'ended'].map((k) => room(`controls-slot-${k}`, 1920, 1080, false)), // the slot's other states
   room('controls-running', 1440, 1080), // 4:3

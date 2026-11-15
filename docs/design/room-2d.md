@@ -1,7 +1,9 @@
 # Screen spec: the plain 2D room screen
 
 Status: proposed in the pull request for issue #22; the controls on the room screen and the class
-code were added for the owner's "one screen first" (plan section 3, 2026-11-13). Design system:
+code were added for the owner's "one screen first" (plan section 3, 2026-11-13); the position
+pattern, the next interval's cue, the five-minute score and the playlist plate were added for
+[scene.md](scene.md) (issue #483, see "The follow-up to the scene"). Design system:
 [system.md](system.md). Reference mock-ups and screenshots: [mockups/](mockups/).
 
 ## Purpose
@@ -25,17 +27,21 @@ below. See "Controls on the room screen". The presenter window is an option for 
 2. **The zone**: number, name and colour, with its target ranges (%FTP, RPE; %HRmax when the
    class's zone scale has it) from `zone_scale` (ADR 0003).
 3. **Cadence** (an RPM range, or "On the beat") and **position** (the word "Seated" or
-   "Standing").
+   "Standing"). In an interval with a position pattern (format 1.1) the position is **the side
+   the room is on now and the beats left on it** ("UP 8 ... 1", then "DOWN"), or "Count from the
+   music" when no count can be given.
 4. **The song's BPM.**
 5. **The cue**, the designer's text for this interval, shown as written (rule 10).
 6. **What comes next**: the next interval's zone (number, name, colour), length, cadence and
-   position; or "End of class".
-7. **The score**: the intervals and songs around now, moving under a fixed "now" line, with song
-   titles, artists, BPM, phrase ticks every 4 bars and moments such as a drop.
+   position (or its pattern in words, "4 up, 4 down"), and **its cue** as a second line; or "End
+   of class".
+7. **The score**: the intervals and songs around now, moving under a fixed "now" line, **at
+   least 5 minutes ahead** (5.7 to the screen's edge) at every size, with song titles, artists, BPM, phrase ticks
+   every 4 bars and moments such as a drop.
 8. **Time in the class**: left and done; the segment name (warm-up, main set, ...).
 9. **The music-link state** (ADR 0001): quiet while following, a white plate otherwise.
 
-All nine are visible at once in every running state at every size below, with two exceptions:
+All nine are visible at once in every running state at every size below, with three exceptions:
 
 - the segment name (part of item 8) is dropped at 3:2 and narrower, and hidden while a link plate
   shows, because the rail then holds only the class time and the plate;
@@ -43,7 +49,12 @@ All nine are visible at once in every running state at every size below, with tw
   row (item 6) is shortened to the next zone's number, name and length; that interval's cadence
   and position are left out by choice, not because they would not fit: the row is shortened
   so that a four-line cue and the next row both stay clear of the score. The next zone's number
-  and name are always on screen.
+  and name are always on screen;
+- the next row's **second line, the next cue**, is left out for an interval whose own cue fills
+  the room above the next row: a cue of three lines at 3:2 and narrower, or of four lines wider
+  than 3:2 (the rare case near 120 characters). The cue of the interval now comes first, and the
+  next row is the one line it was; everything else in it stays (see "Cue" and "Next row" under
+  "Fitting text").
 
 Nothing scrolls.
 
@@ -78,6 +89,7 @@ by hand is a rehearsal view, not held to C1.
 | Threshold| Find the beat and hold it.                              |
 | 88-94%   | Breathe out on every second bar.                        |
 |  FTP RPE | Next [2] Endurance 0:45 85-95 rpm Seated                 |
+|          | Settle in and spin it out. Eyes up, shoulders loose.    |
 +----------+---------------------------------------------------------+
 |//past////| 4 Threshold     | 2 Endurance | 5 VO2 max     | 3 Tempo  |  intervals
 |//////////| Neon Avenue     | Pulse Theory Aurora Lane  132 bpm     |  songs
@@ -89,11 +101,11 @@ by hand is a rehearsal view, not held to C1.
 |---|---|---|
 | Gel | 0, 0, 27 vw, 76 vh | Numeral (`--t-gel`) with the label "Zone" beside its top, name (`--t-value`, at most 5 vw), up to three targets (`--t-minor`, one per line) |
 | Rail | 31 vw, 5 vh, to the right safe edge | Class time left and done, segment (hidden while a link plate shows), link state |
-| Clock | 31 vw, 11 vh, at most 62 vw − 38 vh wide | Label (and the FTP test tag), countdown (`--t-hero` or smaller, see "Fitting text"), bars line (`--t-minor`) |
-| Metrics | 38 vh wide against the right safe edge, 12.5 vh; values never wrap | Cadence, position, BPM (`--t-value`, units `--t-minor`) |
-| Cue | 31 vw, 54.5 vh, to the right safe edge, ends by 73.3 vh | `--t-text` (at most 3 lines), or `--t-text-min` over 60 characters (at most 4 lines, line height 1.02) |
-| Next | 31 vw, 73.5 vh | Label, zone chip, name, length, cadence, position (`--t-minor`) |
-| Score | 0, 79.5 vh, full width, 15.5 vh | Intervals 6.6 vh, songs 8 vh; "now" at 25 vw; 6 minutes wide (1.5 behind, 4.5 ahead) |
+| Clock | 31 vw, 11 vh, at most 62 vw − 38 vh wide | Label (and the FTP test tag), countdown (`--t-hero` or smaller, see "Fitting text"; 1.7 vh under the label), bars line (`--t-minor`) |
+| Metrics | 38 vh wide against the right safe edge, 12.5 vh; values never wrap | Cadence, position, BPM (`--t-value`, units `--t-minor`). In a pattern interval the position is the side and the count (see "A position pattern") |
+| Cue | 31 vw, 54.2 vh, to the right safe edge, ends by 68.6 vh | `--t-text` (at most 2 lines), or `--t-text-min` over 60 characters or when two lines do not hold it (at most 3 lines, line height 1.02; a fourth only as under "Cue") |
+| Next | 31 vw, 69 vh, to the right safe edge | Line 1: label, zone chip, name, length, cadence, position or pattern in words (`--t-minor`). Line 2, 0.95 vh under it: the next interval's cue (`--t-label`, `--light-1`, one line, ending in an ellipsis) |
+| Score | 0, 79.5 vh, full width, 15.5 vh | Intervals 6.6 vh, songs 8 vh; "now" at 25 vw; **13.2 vw a minute (0.22 vw a second), so 7.6 minutes wide: 1.9 behind and 5.7 ahead** |
 
 16:10 (a common native projector resolution) uses this layout unchanged: the metrics column is
 fixed in screen heights, so the clock simply gets less width and the countdown rule below sizes
@@ -115,12 +127,16 @@ layout, [FTP test at 1650×1080](mockups/room-ftp-test-1650x1080.png) (1.53 : 1)
 | Find the beat and hold it.                           |
 | Breathe out on every second bar.                     |
 | Next [2] Endurance 0:45 85-95 rpm Seated             |
+| Settle in and spin it out. Eyes up, shoulders loose. |
 +------------------------------------------------------+
 | score, as at 16:9                                    |
 +------------------------------------------------------+
 ```
 
-The gel is 30 vw by 60 vh; the numeral 31.5 vh; the countdown at most 28 vh; a zone name that
+The gel is 30 vw by 60 vh; the numeral 31.5 vh; the countdown at most **26 vh** (it was 28 vh;
+26 vh is scene.md's size: cap 21.1 % in the mock-ups, about 20.6 % in the product's browser, the
+floor is 20 %; the 2 vh freed, with 0.5 vh more air under the label, make room for the next
+row's second line); a zone name that
 needs two lines is set at 7.1 vh (at most 5.75 vw); the metrics sit in a row under the countdown,
 spread to the safe edge with at least 1.6 vw between them, values at min(7.55 vh, 5.7 vw) so
 "On the beat", "Standing" and "Song, planned" fit on one line down to 5:4 (7.12 vh there, 7.55 vh
@@ -128,10 +144,12 @@ at 4:3). These two sizes are the **product's**: the first is 3 % above the mock-
 and the second is 2 % (its vh term) and 2.7 % (its vw term) above their min(7.4 vh, 5.55 vw), a
 margin because the product is measured in its own
 browser (see C1), whose font metrics give cap heights about 2.3 % lower; the mock-ups keep the
-nominal sizes, and both stay above the 5.5 % floor; the cue (from 60 vh, two lines at
-`--t-text`, three at `--t-text-min`) and the next interval (76 vh) use the full width (a four-line
-cue moves the next row up beside the gel: see
-"Cue" under "Fitting text"); the score is 83 to 95 vh; the segment name is dropped from
+nominal sizes, and both stay above the 5.5 % floor; the metrics row starts at 44.4 vh; the cue
+(from 60.2 vh, line height 1.04, two lines at `--t-text` or at `--t-text-min`) and the next
+interval (line 1 from 72.5 vh, its cue under it) use the full width. A cue of three lines
+takes the next row's second line (the row then starts at 76.5 vh, one line); a four-line cue moves
+the next row up beside the gel, as before: see "Cue" under "Fitting text". The score is 83 to
+95 vh, 13.2 vw a minute as at 16:9; the segment name is dropped from
 the rail. Switch point: any aspect ratio of 3:2 or narrower. 5:4 screenshot:
 [last interval at 1280×1024](mockups/room-last-interval-1280x1024.png) ("On the beat") and the
 worst cases below.
@@ -162,10 +180,10 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   font size = min(36 vh, (62 vw − 38 vh) ÷ w), where w is the widest string of the interval's
   format in em of Big Shoulders 800 with every digit in its cell (system.md, Type: a cell is
   as wide as the widest digit, "5", 0.480 em): 1.70 for `M:SS` (1.678 em), 2.16 for `MM:SS`
-  and `99+` (2.158 em). At 3:2 and narrower: min(28 vh, 61 vw ÷ w). The size is chosen at the
+  and `99+` (2.158 em). At 3:2 and narrower: min(26 vh, 61 vw ÷ w). The size is chosen at the
   interval change and stays fixed for the interval, so the countdown never changes size while
   it runs. `MM:SS` cap heights, measured on "58:58": 2560×1080 29.2 %, 1920×1080 27.2 %,
-  1280×800 22.8 %, 1650×1080 21.3 %, 4:3 22.7 %, 5:4 22.8 %; computed for the narrowest ratio
+  1280×800 22.8 %, 1650×1080 21.3 %, 4:3 and 5:4 21.1 % (26 vh; 22.7 % and 22.8 % at 28 vh before the follow-up, which the older mock-ups still show); computed for the narrowest ratio
   of the layout (just over 3:2): 25.5 vh, 20.6 %, above the 20 % minimum. Mock-ups:
   [FTP test](mockups/room-ftp-test.html) and the worst cases.
 - **Class time** in the rail: `MM:SS`, and `H:MM:SS` from one hour.
@@ -205,23 +223,37 @@ spec comes with PL5; this mock-up fixes only how the preview and the notice look
   seven zones with "Endurance, the aerobic base for long steady rides" (49 characters, ends in an
   ellipsis), "Anaerobic capacity" and "Neuromuscular power".
 - **Link plates** are at most about 20 characters ("Music not heard", "Not a class song", "Song
-  is in twice", "Music paused"), so they fit beside the class time at 16:10 and 4:3; the detail
+  is in twice", "Music paused", "Playlist not loaded"), so they fit beside the class time at 16:10 and 4:3; the detail
   ("estimated") is in the countdown's label, and the full story on the presenter.
 - **Cue**: up to 120 characters, never cut off, never scrolled. Up to 60 characters at
-  `--t-text`, longer at `--t-text-min`. In the wide layout the cue box holds three lines at
-  `--t-text` or four at `--t-text-min` (line height 1.02): a 120-character cue with long words
-  needs the fourth line near 3:2. At 3:2 and narrower it is full width: two lines at `--t-text`,
-  three at `--t-text-min`. A word longer than a line breaks rather than being cut. A cue that
-  still needs a fourth line there (only wide capitals near 120 characters, as in the
+  `--t-text`, longer at `--t-text-min`. In the wide layout the cue box holds **two lines at
+  `--t-text` or three at `--t-text-min`** (line height 1.02; 14.4 vh at most, from 54.2 vh), so
+  that the next row, 1 vh under it, can have its second line. At 3:2 and narrower it is full
+  width, from 60.2 vh, two lines (line height 1.04) at either size. A word longer than a line
+  breaks rather than being cut. A cue that needs more lines than that takes the next cue's
+  place for that interval and nothing else is dropped: **wider than 3:2** a fourth line (wide
+  capitals near 120 characters at a ratio near 3:2: four lines at `--t-text-min`, the box ends at
+  73.3 vh, the next row is one line at 73.2 vh); **at 3:2 and narrower** a third line (three
+  lines at `--t-text-min`, line height 1.04; the next row one line at 76.5 vh), and a fourth line
+  (only wide capitals near 120 characters, as in the
   [wide-glyph worst case at 5:4](mockups/room-worst-wide-1280x1024.png)) takes the next row's
-  place for that interval: four lines at `--t-text-min`, line height 1.02, from 62.8 vh. The next
-  row moves up beside the foot of the gel (34 vw, 56.5 vh) and is shortened to "Next", the zone
-  chip, the name (ellipsis as usual) and the length; cadence and position are left out. To make
-  that room the gaps around the countdown close up (clock from 10.5 vh, 0.4 vh above the
-  countdown, 0.6 vh above the bars, metrics from 44.4 vh); no size changes. The product measures
-  whether three lines hold the cue; the wide-glyph fixture does the same, so at 3:2 and 4:3 it
-  shows three lines and the
-  [full next row](mockups/room-worst-wide-1440x1080.png).
+  place as before: four lines at `--t-text-min`, line height 1.02, from 63.4 vh, the next row
+  beside the foot of the gel (34 vw, 58 vh), shortened to "Next", the zone chip, the name
+  (ellipsis as usual) and the length; cadence, position and the next cue are left out. To make
+  that room the gaps around the countdown close up (clock from 10.5 vh, 1.3 vh above the
+  countdown, 0.3 vh above the bars, metrics from 42.7 vh); no size changes. The product measures
+  whether two lines (three wider than 3:2) hold the cue and picks the layout from that; the
+  mock-ups mark the cue (`three`, `four`) by hand
+  ([worst case, four lines](mockups/room-worst-pattern-four.html)).
+- **Next row**: line 1 is one line as before (the name takes what is left and ends in an
+  ellipsis). **Line 2 is the next interval's cue**, as written (rule 10), at `--t-label` in
+  `--light-1` (as scene.md's next cue), on one line, 0.95 vh under
+  line 1, ending in an ellipsis where it is longer than the row: the whole cue is on the screen
+  when that interval plays. (scene.md wraps it over up to three lines because its row has the
+  room; here the cue above comes first.) A next interval with no cue has no line 2. Its ink ends
+  at least 1 vh above the score (and so above the control band, which covers the score's box) and at
+  least 1 vh under the cue above it; it is dropped as described under "Cue". The last interval's
+  row is "End of class" and has no line 2.
 - **Score blocks**: the zone number always; the name if and only if the whole name fits beside
   it, never cut (the mock-ups do this with a wrapping row that hides a name that does not fit).
   A block or clip that began in the past keeps its label just right of "now". Blocks wholly in
@@ -281,6 +313,134 @@ running at [1280×720](mockups/room-worst-running-1280x720.png), before the star
 [5:4](mockups/room-worst-before-start-1280x1024.png) and
 [1650×1080](mockups/room-worst-before-start-1650x1080.png).
 
+## The follow-up to the scene
+
+[scene.md](scene.md) ("Follow-up for room-2d.md") makes this screen the one that reduced motion
+and the Plain quality level show, and the one that takes over within 2 s when the scene fails
+(plan section 9). It must not show less than the scene does, so PL6's scene work never falls
+back to a screen that lacks something. Issue #483 adds four things, at the sizes scene.md
+measures (16:9, 16:10, 4:3, 5:4 and 1024×768) and at the other five sizes of this spec.
+Where an older mock-up in this folder differs (a 6-minute score, a countdown of 28 vh at 3:2 and
+narrower, a one-line next row, a cue of three or four lines in the wide layout), this section
+governs; the new mock-ups below carry the changes, and the older ones are brought up to date when
+the screen is built (PL4).
+
+### A position pattern, folded into the Position metric
+
+A format 1.1 interval may carry `pattern`: 2 to 4 positions that alternate on the song's beat
+(for example 8 beats standing, 8 seated; schema/class-format/README.md, scene.md "Intervals
+first"). A 1.1 reader follows the pattern, so the screen shows the pattern, not `position`. The
+words are **UP** (standing) and **DOWN** (seated): words for the rider, no hand icon (rule 8).
+
+In a pattern interval the Position metric keeps its label "Position" and its place; its value is
+**the side the room is on now and, beside it on one baseline, the beats left on that side**:
+"UP 8", stepping down on each beat to "UP 1", then "DOWN 8". Nothing is guessed: the count is
+shown only when the link is locked and the song has what the count needs.
+
+| Level (scene.md, "How much of the music is known") | When | The value |
+|---|---|---|
+| Beat | Locked, the song has `bpm` and `beat_anchors` | Side and count; the count steps on every beat, for both `start_on` values |
+| Beat, before the first downbeat | `start_on: "next_downbeat"`, the first downbeat has not come | The side of the first entry; in the count's place "Starts on the next bar" ([mock-up](mockups/room-pattern-next-bar.html)) |
+| Tempo only | Locked, `bpm`, no anchors | `interval_start` (the default): side and count at the bpm from the interval's start. `next_downbeat`: "Count from the music" |
+| None | No lock (coasting, off the list, paused, manual clock, hold) | "Count from the music" ([mock-up](mockups/room-pattern-no-count.html)) |
+| No tempo | The song has no `bpm` (`pattern_without_bpm`, ADR 0003) | "No tempo: count from the music"; the Song metric's label reads "Song, no tempo" and its value "–"; no bars line ([worst case](mockups/room-worst-pattern-no-tempo.html)) |
+
+Sizes (shares of the screen height; cap heights measured in the mock-up browser):
+
+| Part | Wide layout (wider than 3:2) | 3:2 and narrower |
+|---|---|---|
+| Side (UP, DOWN) | `--t-value`, 8.4 vh (cap 6.8 %), Big Shoulders 800 | min(7.4 vh, 5.55 vw), as the other values (cap 5.6 to 6.0 %) |
+| Count | 13 vh, Big Shoulders 800 (**cap 10.4 %**, the floor is 10 %), each figure in a cell so it never shifts | the same |
+| Between side and count | 1.2 vw | 0.8 vw |
+| The metrics | the column's gap of 2.6 vh closes to 1.1 vh, so the cue below keeps its place | the row's gap is 1.1 vw and units sit 0.3 vw from their value; the row holds "100–110 rpm", DOWN with a two-figure count and "200 bpm" with its dot inside the safe edge down to 5:4 |
+| A note ("Count from the music" and the others) | `--t-label`, 700, `--light-1`, up to three lines in the column's 38 vh | the same, in a cell 19 vw wide |
+
+All of it is `--light-1` on the stage: 17 : 1. The side is not coloured. The bars line stays as it
+is (it counts to the interval's change, the count to the next switch). Reduced motion: **the count
+still steps with the beat** (it is information, not decoration); nothing else about the pattern
+moves, and the beat dot stays off. The scene's extras (its pattern block with squares and "then
+down", the rig's accent, the strip in its score) are the scene's: this screen's score blocks carry
+no pattern, and the next row names a next interval's pattern in words.
+
+### The next interval's cue
+
+The next row's **second line** is the next interval's cue, as written (rule 10). Line 1 is
+unchanged, except that a pattern is named in words ("4 up, 4 down", "4 up, 4 down, 8 up") in place
+of "Seated" or "Standing". The layout, and the cases where the line is left out, are under
+"Fitting text", "Cue" and "Next row".
+
+### The score: at least 5 minutes ahead
+
+The score moves at **13.2 vw a minute (0.22 vw a second)**, "now" stays at 25 vw: 1.9 minutes
+behind and **5.7 minutes ahead**, measured to the screen's right edge (it was 1.5 and 4.5, at 16.7
+vw a minute). A block that begins right of 91 vw is not drawn (its number would not fit inside
+the safe area), so **every interval that starts within 5.0 minutes of now is drawn with its
+number**, and the next row names the one after. The rules for slivers, labels and clips are
+unchanged. Reduced motion: the score steps once a second, as before. The control band still
+covers the score's box exactly.
+
+### Playlist not loaded
+
+ADR 0001 (amendment, #486): Start asks the Spotify app to play the class's playlist
+(`music.spotify_playlist`, format 1.2). **Without the field, or when loading fails or is not
+supported, Start plays what Spotify has loaded and the screen says the playlist was not loaded**;
+loading never blocks the clock. The room screen says it in the rail, in the link state's place:
+
+- a white plate "Playlist not loaded" with the square marker, like every other plate (white, grey
+  and black only, rule 7), 19 characters ([mock-up](mockups/room-playlist-not-loaded.html),
+  [4:3](mockups/room-playlist-not-loaded-1440x1080.png));
+- **for the 30 s after Start** (the figure of the hand-over notice, ADR 0001 `undoWindowMs`), then
+  the rail returns to its link state;
+- **only when Start asked the music app to play** (the follower is Spotify's and can be sent
+  commands). With the manual clock, or when the instructor presses play in Spotify themselves,
+  nothing was asked of the music app and there is no plate;
+- a link fault wins: if the link is "Music not heard", "Not a class song", "Song is in twice" or
+  "Music paused" when the notice would show, that plate stays and this one does not appear. It
+  takes the place of the quiet states ("Following Spotify", "Waiting for the first song");
+- while it shows, the segment name is hidden as with any plate; nothing else moves, nothing
+  blinks (reduced motion changes nothing). The presenter's matching line is in
+  [presenter.md](presenter.md) ("Music link line").
+
+### Measured
+
+The new mock-ups pass `measure.js` at all ten sizes of this spec (C1 to C8 and the motion checks,
+with the new `count` tier at 10 %). A separate probe measured the clear space between the ink of
+every pair of separate text pieces, at deviceScaleFactor 1: no two closer than 1 vw across and
+1 vh down, except a label and its own value (a metric's label above its value). Smallest margins:
+
+Over the eight new fixtures at 1920×1080, 1680×1050, 1280×720, 1650×1080, 1440×1080, 1024×768 and
+1280×1024 (the clear space is between the ink of two pieces of text):
+
+| What | Wider than 3:2 | 3:2 and narrower |
+|---|---|---|
+| Cue's ink to the next row's ink | 1.11 vh at the least (a three-line cue of 120 characters); 1.48 vh with a four-line cue | 1.66 vh at the least |
+| Next row's ink to the score's box (which the band covers) | 1.02 vh | 1.33 vh |
+| Metrics (with the count) to the cue | 1.39 vh | 1.49 vh |
+| Four-line cue, narrow: metrics to the next row beside the gel / cue's ink to the score | | 1.43 vh / 1.65 vh (5:4) |
+| Beat count, cap height | 10.42 to 10.48 % (floor 10 %) | the same |
+| Side (UP, DOWN), cap height | 6.5 to 6.8 % | 5.6 to 6.0 % (floor 5.5 %) |
+| Next cue and notes, cap height | 2.08 to 2.15 % (floor 2 %) | the same |
+| Countdown, cap height | 21.3 to 29.3 % | 20.8 to 21.1 % (floor 20 %; about 2.3 % less in the product's browser) |
+| Score ahead of "now" | 5.7 minutes to the edge, 5.0 to the last number that fits | the same |
+
+Text is `--light-1` or an ink on a zone colour: contrast is at least 7 : 1 for everything except
+labels (4.5 : 1), every row of every table `ok`.
+
+### Mock-ups
+
+Built with [mockups/room-followup.css](mockups/room-followup.css) over room.css.
+
+| State | Mock-up | Screenshots |
+|---|---|---|
+| Pattern, beat known: "UP 6", next row with its cue, 5.7-minute score | [html](mockups/room-pattern.html) | [1920×1080](mockups/room-pattern-1920x1080.png), [16:10](mockups/room-pattern-1680x1050.png), [1280×800](mockups/room-pattern-1280x800.png), [4:3](mockups/room-pattern-1440x1080.png), [5:4](mockups/room-pattern-1280x1024.png), [1024×768](mockups/room-pattern-1024x768.png), [reduced motion](mockups/room-pattern-reduced-1920x1080.png) |
+| The other side, two figures ("DOWN 12") | [html](mockups/room-pattern-down.html) | [1920×1080](mockups/room-pattern-down-1920x1080.png) |
+| Starts on the next bar | [html](mockups/room-pattern-next-bar.html) | [1920×1080](mockups/room-pattern-next-bar-1920x1080.png), [5:4](mockups/room-pattern-next-bar-1280x1024.png) |
+| No count (coasting): "Count from the music" | [html](mockups/room-pattern-no-count.html) | [1920×1080](mockups/room-pattern-no-count-1920x1080.png), [4:3](mockups/room-pattern-no-count-1440x1080.png) |
+| Playlist not loaded | [html](mockups/room-playlist-not-loaded.html) | [1920×1080](mockups/room-playlist-not-loaded-1920x1080.png), [4:3](mockups/room-playlist-not-loaded-1440x1080.png) |
+| Worst case: five-glyph countdown, "DOWN 64", "100–110 rpm", 80-character names, 120-character cues, a three-entry pattern next | [html](mockups/room-worst-pattern.html) | [1650×1080](mockups/room-worst-pattern-1650x1080.png), [5:4](mockups/room-worst-pattern-1280x1024.png), [1024×768](mockups/room-worst-pattern-1024x768.png) |
+| Worst case, no tempo | [html](mockups/room-worst-pattern-no-tempo.html) | [1920×1080](mockups/room-worst-pattern-no-tempo-1920x1080.png), [4:3](mockups/room-worst-pattern-no-tempo-1440x1080.png) |
+| Worst case, a four-line cue (the next cue is left out) | [html](mockups/room-worst-pattern-four.html) | [1650×1080](mockups/room-worst-pattern-four-1650x1080.png), [5:4](mockups/room-worst-pattern-four-1280x1024.png) |
+
 ## States
 
 Every state has a mock-up and a screenshot at 1920×1080; the key states also at 4:3 and 16:10.
@@ -302,6 +462,8 @@ Link states are white, grey and black only, never a hue (rule 7).
 | Last 5 seconds | 5 s or less to the change | Label "Change in"; nothing flashes until the change itself | [html](mockups/room-change-in.html) | [16:9](mockups/room-change-in-1920x1080.png) |
 | Hold at a song change | See below | Label "Until the next song"; the countdown is the expected time to the next song; no bar count | [html](mockups/room-hold.html) | [16:9](mockups/room-hold-1920x1080.png) |
 | Before the start, manual clock | Class loaded, no music link | As before the start, with "Press Start" in grey with a square marker (a choice, not a fault). The Start it names is the band's own Start button just below (shown before the start with one display), Space, or the presenter's Start with a second display | [html](mockups/room-before-start-manual.html) | [16:9](mockups/room-before-start-manual-1920x1080.png) |
+| Pattern | The interval has a position pattern (format 1.1) | Position metric: side and count, or a note when no count can be given; see "The follow-up to the scene" | [html](mockups/room-pattern.html), [no count](mockups/room-pattern-no-count.html), [next bar](mockups/room-pattern-next-bar.html), [no tempo](mockups/room-worst-pattern-no-tempo.html) | [16:9](mockups/room-pattern-1920x1080.png), [4:3](mockups/room-pattern-1440x1080.png) |
+| Playlist not loaded | The 30 s after Start, when Start did not load the class playlist (ADR 0001, #486) | White plate "Playlist not loaded" in the link state's place; segment hidden | [html](mockups/room-playlist-not-loaded.html) | [16:9](mockups/room-playlist-not-loaded-1920x1080.png), [4:3](mockups/room-playlist-not-loaded-1440x1080.png) |
 
 These four are also checked at 1650×1080 and 5:4, the narrowest ratio of each layout.
 
@@ -322,7 +484,7 @@ Within the states above:
 
 The interval change is the one moment the screen moves on purpose: the gel's colour crosses in
 700 ms and a white line runs down the gel's edge for 160 ms. The score moves continuously at
-0.28 vw per second. A small dot after the BPM marks the beat when the link is locked and the
+0.22 vw per second. A small dot after the BPM marks the beat when the link is locked and the
 song has beat anchors (otherwise it is not shown; it never claims to hit a beat it cannot
 measure). It follows the beats it marks: the tempo between the song's beat anchors where the
 song is playing, not the song's listed BPM. Two lights always start at least 1/3 s apart; a beat
@@ -331,7 +493,8 @@ that comes sooner after the last light is skipped. In steady time that is every 
 can never give four lights in one second. With `prefers-reduced-motion` (and in the player's own
 reduced-motion setting, which
 the plain screen honours the same way): colour changes are instant, there is no flash and no
-beat dot, and the score steps once a second. No state relies on motion to be understood.
+beat dot, and the score steps once a second; **a pattern's count still steps with the beat**
+(it is information, not decoration). No state relies on motion to be understood.
 
 ## Controls on the room screen (one screen first)
 
@@ -459,7 +622,7 @@ The band is the **score's box exactly** (16:9 and wider down to 3:2: 0, 79.5 vh,
 (zone number, name, targets), the rail (class time, segment, link state), the countdown and bar
 count, the metrics, the cue and the next row stay where they are, uncovered and unchanged. The
 score keeps moving underneath and is back, in its right place, when the band hides. The
-next row's 0.7 vh clearance above the score (C4) is therefore also its clearance above the band.
+next row's clearance above the score (0.7 vh in the older mock-ups, at least 1 vh with its second line) is therefore also its clearance above the band.
 While hidden, the band covers nothing: the screen is pixel for pixel the state without it.
 
 ### Layout of the band
@@ -633,14 +796,15 @@ in PL4, at every supported size with the worst-case content. On the mock-ups,
 [mockups/measure.js](mockups/measure.js) on every shot in [mockups/shots.js](mockups/shots.js)
 (the states, four more states at three sizes, the eight worst cases at all ten sizes, the control
 band in its states and its worst case at all ten sizes, the way back to following the music and
-its two worst cases at all ten sizes, and the presenter at two: 159 room and presenter shots,
-about sixteen minutes with Playwright and Chromium, animations stopped at their first
+its two worst cases at all ten sizes, the follow-up to the scene (five states and three worst
+cases at all ten sizes, and a reduced-motion shot) and the presenter at two: about sixteen
+minutes with Playwright and Chromium for the room screens, animations stopped at their first
 frame so every PNG reproduces); it exits non-zero on any failure and ends with a summary table of
 fixture by size. Every check passes on every shot.
 
 | Check | Requirement |
 |---|---|
-| C1. Text height | **Measured in the product's own browser** on the real screen (the CI Chromium), not on the mock-ups: its font metrics give cap heights about 2.3 % lower than the mock-up browser, which is why the product's value sizes carry the margin given under "Layout". The floors below are not lowered. Cap height as a share of the screen height, at every room size: countdown at least 20 %; gel numeral at least 25 %; values (zone name, cadence, position, BPM) at least 5.5 % (a zone name stepped down by the fitting rules: 3 %); the cue, class time and the next interval at least 3 %; labels and score text at least 2 %. Not applied to the presenter window or the preview |
+| C1. Text height | **Measured in the product's own browser** on the real screen (the CI Chromium), not on the mock-ups: its font metrics give cap heights about 2.3 % lower than the mock-up browser, which is why the product's value sizes carry the margin given under "Layout". The floors below are not lowered. Cap height as a share of the screen height, at every room size: countdown at least 20 %; gel numeral at least 25 %; values (zone name, cadence, position, BPM) at least 5.5 % (a zone name stepped down by the fitting rules: 3 %); the cue, class time and the next interval at least 3 %; a pattern's beat count (tier `count`) at least 10 %; labels, the next cue and score text at least 2 %. Not applied to the presenter window or the preview |
 | C2. Contrast | WCAG 2 ratio between the text colour and the worst rendered background pixel inside the text's ink: at least 7 : 1 for everything except labels, at least 4.5 : 1 for labels |
 | C3. Safe area | All text ink within 5 % of every edge |
 | C4. No collisions | No two pieces of text overlap; no text is covered by a fill (the score over a list); no text wraps to more lines than its slot allows (one unless the spec says more); no text is cut off by its own box or a container, except a designed ellipsis and the score labels shown only when they fit whole; the ink of the next row ends at least 0.7 vh above the top of the score at every size (5.04 px at 1280×720; a minimum: no design may go below it; CI checks it on every room screenshot, with a tolerance of 0.5 px for the ink trim described below) |
