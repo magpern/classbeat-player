@@ -28,7 +28,9 @@ with other work; nothing in the development loop waits for an answer.
 - **The phone and tablet apps (plan, section 13, decision 15).** Whether to publish through Google
   Play and the App Store or hand out the files directly; and whether a music follower on iOS may
   use Spotify's own iOS SDK (iOS gives no app another app's playback). Until you decide, the iOS
-  app runs on the manual clock and builds are handed out directly.
+  app runs on the manual clock, Android builds are handed out directly, and iOS builds go only to
+  test devices (how far an iOS build can reach without the App Store is not verified, plan
+  section 14).
 
 - **Defaults agents picked that you may want to change** (ADR 0002, once merged, lists them all):
   sign-up by allowlist only; sign-in links work only in the browser that asked for them; no

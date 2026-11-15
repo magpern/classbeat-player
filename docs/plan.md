@@ -489,7 +489,9 @@ SDK, if the owner clears it (section 13, decision 15), and otherwise stays the m
 
 Owner, 2026-11-12: sensor reading stays in the plan, from a page opened from a link. No phone
 app of our own is planned; on iPhone the answer is "use Bluefy". (The desktop player stays an
-installed application.)
+installed application.) Amended (owner, 2026-11-15): the instructor's installed Android and iOS
+apps of phase PL12 read sensors natively; riders still join from the web page, so a rider on an
+iPhone still uses Bluefy.
 
 | Device | Can a web page read Bluetooth sensors? |
 |---|---|
@@ -538,7 +540,7 @@ strong at the scene and weak at the application; web technology is the reverse.
 | Television or any other screen | Anything with a browser | Android TV; no Apple TV | Apple TV, Android TV, consoles | Consoles |
 | Virtual reality later | Yes (WebXR) | Yes | Yes | Yes |
 | A rich 3D scene | Good, built in code; fewer ready-made tools | Full engine with an editor | Full engine, largest ecosystem | Highest fidelity |
-| Bluetooth sensors | Built in on desktop and Android; on iPhone through the Bluefy browser | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
+| Bluetooth sensors | Built in on desktop and Android; on iPhone through the Bluefy browser (the instructor's PL12 app reads them natively) | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
 | Sign-in, forms, lists, the website | Native ground | Awkward | Awkward | Awkward |
 | One code base for the room's screen, the phone and the website | **Yes** | No: phone page and website are separate web code anyway | No | No |
 | Agents can build it, test it and check screenshots | Best | Good (text scenes, headless runs) | Harder (editor licence in CI, heavy asset files) | Poor |
@@ -670,7 +672,7 @@ stronger developer and reviewer, as in classbeat.
 | **PL6** | The 3D scene, in the technology spike 2 confirmed: design direction, the light show and the score, beat pulse, quality levels, reduced motion | About 6 to 8 | Reviews the design |
 | **PL7** | Release: signing, notarisation, updater, release workflow, download page, deploy runbook | About 5 | Signing accounts; domain; the first deploy |
 | **PL8** | Live sessions. First **the handlebar companion**: the instructor's phone as teleprompter and remote (section 3). Then riders: join by code, the rider's view in step with the room. Also the player as a web app on a phone or tablet | About 10 | |
-| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
+| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy; the instructor's own phone app reads them natively from PL12) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
 | **PL12** | Installed phone and tablet apps (owner, 2026-11-15). First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. Then an ADR for the native shell, an Android app (the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected), then an iOS app (the same, with the manual clock unless decision 15 clears a follower), store builds in CI | About 8 to 10, 1 spike | A Google Play developer account; the Apple Developer membership (decision 9); an Android phone and an iPhone with Spotify for spike 3 and one live check each; decision 15 |
@@ -702,7 +704,8 @@ the owner described.
 
 At the freeze (2026-11-12) the owner gave go on PL0. Until the owner says otherwise, the
 recommended option of each decision below is the working default (AGENTS.md, section 1).
-Decisions 9 to 13 stay open; agents work around them with reversible defaults.
+Decisions 9 to 13 stay open, and decision 15 is partly open; agents work around them with
+reversible defaults.
 
 1. **Go or no-go** on PL0 (repository setup, the ADRs and two spikes; no product code).
 2. **Music:** follow the Spotify desktop app locally (A) with the manual clock (D) as fallback.
@@ -753,6 +756,9 @@ Decisions 9 to 13 stay open; agents work around them with reversible defaults.
   stops working, iPhone sensors stop with it.
 - Which Bluetooth services each studio bike and treadmill model really exposes.
 - How accurately Android's media sessions report Spotify's position, with crossfade on, and on
-  how many phone makers (spike 3 measures it). How the 3D scene runs on a mid-range phone.
+  how many phone makers (spike 3 measures it); which Android permission reading them needs and
+  how a user grants it. How the 3D scene runs on a mid-range phone.
+- iOS: that no installed app can read another app's playback, apart from Spotify's own iOS SDK;
+  and how an iOS build can reach testers and studios without the App Store.
 - Bluetooth field layouts, engine licence terms and the legal notes in section 3 are from general
   knowledge, not from documents opened for this plan.
