@@ -22,7 +22,7 @@ function play(options: FeedOptions, fromMs: number, toMs: number, each?: (d: Dra
   }
   return { loop, rig };
 }
-const lensHexes = (rig: SceneRig) => rig.fixtures.map((f) => f.lensMaterial.color.getHex());
+const num = (rig: SceneRig, name: string) => rig.uniform(name) as number[];
 
 test("before the start: lights down to 6 % in the first zone's colour, two beams, the wall dark, no beat, nothing bursts", () => {
   let frames = 0;
@@ -32,28 +32,32 @@ test("before the start: lights down to 6 % in the first zone's colour, two beams
     assert.equal(d.stage, "before");
     assert.equal(d.lit.filter(Boolean).length, 2);
     assert.deepEqual([d.lift, d.chaseStep, d.burst, d.frame.level], [0, null, 0, "None"]);
-    assert.equal(rig.wall.mesh.visible, false, "the wall is dark");
-    assert.ok(rig.fixtures.every((f) => f.beamMaterial.uniforms.uColor!.value.getHex() === tokens.zones[1]), "the first zone's colour on every beam");
-    assert.equal(rig.haze[0].material.uniforms.uColor!.value.getHex(), tokens.zones[1]);
-    assert.ok(rig.fixtures.every((f) => f.lensMaterial.opacity <= tokens.down * 0.9 + 1e-9), "lens at the lights-down level");
+    assert.equal(rig.uniform("uWallOn"), 0, "the wall is dark");
+    assert.equal((rig.uniform("uTokA") as { getHex(): number }).getHex(), tokens.zones[1], "the first zone's colour");
+    assert.ok(num(rig, "uBF").every((f) => f === 0), "on every light");
+    assert.equal(num(rig, "uBI").filter((v) => v > 0).length, 2, "two beams");
+    assert.ok(num(rig, "uBL").every((v) => v <= tokens.down * 0.9 + 1e-9), "lens at the lights-down level");
   });
   assert.ok(frames > 500);
 });
 
-test("before the start the beams move, slowly, on the first zone's row and not on the music (no moment, no phrase)", () => {
-  const { loop } = play({ stage: "before" }, 0, 30_000);
-  const first = loop.step(feedAt(0, { stage: "before" }), 1 / 60, "High");
+test("before the start the beams move at half the zone's speed, and not on the music (no moment, no phrase)", () => {
+  const first = new RigLoop(tokens).step(feedAt(0, { stage: "before" }), 1 / 60, "High");
   assert.equal(first.frame.moments.gather || first.frame.moments.fan || first.frame.moments.breakdown, false);
-  const [a, b] = [new RigLoop(tokens), new RigLoop(tokens)];
-  let travelled = 0;
-  let prev = a.step(feedAt(0, { stage: "before" }), 0, "High").drawn;
-  for (let n = 0; n < 600; n++) {
-    const d = a.step(feedAt(0, { stage: "before" }), 1 / 60, "High");
-    travelled += Math.max(...d.drawn.map((x, i) => angleBetween(prev[i]!, x)));
-    prev = d.drawn;
-    b.step(feedAt(0), 1 / 60, "High");
-  }
-  assert.ok(travelled > 5 && travelled < phaseRate(1) * 10, `moves slowly: ${travelled} degrees in 10 s`);
+  // The same clock, the same song, no music either way: only the stage differs, so the ratio is the movement scale (pins HALVED_MOVEMENT).
+  const travel = (options: FeedOptions) => {
+    const loop = new RigLoop(tokens);
+    let [sum, prev] = [0, loop.step(feedAt(0, options), 0, "High").drawn];
+    for (let n = 0; n < 30; n++) { // the same stretch of phase either way would need the same time: half a second keeps the path short and straight
+      const d = loop.step(feedAt(0, options), 1 / 60, "High");
+      sum += d.drawn.reduce((a, x, i) => a + angleBetween(prev[i]!, x), 0);
+      prev = d.drawn;
+    }
+    return sum;
+  };
+  const ratio = travel({ stage: "before" }) / travel({ link: { state: "Coasting" } });
+  assert.ok(ratio > 0.45 && ratio < 0.55, `before the start the beams travel ${ratio} of what a running room's do (half)`);
+  assert.ok(travel({ stage: "before" }) > 0.5 && travel({ stage: "before" }) < phaseRate(1) * 22, "and they do move");
 });
 
 test("stageOf: before is what the shell says, anything else is running (the finished house is #577's)", () => {
@@ -80,7 +84,6 @@ test("off the list the movement is halved: the phase advances at half the zone's
   };
   const ratio = travel({ link: { state: "Off the list" } }) / travel({ link: { state: "Coasting" } });
   assert.ok(ratio > 0.45 && ratio < 0.55, `off the list: ${ratio} of the coasting travel`);
-  assert.equal(lensHexes(new SceneRig(tokens)).length, 22);
 });
 
 test("before the start nothing bursts or dims, even if the clock is moved over an interval or a song change", () => {

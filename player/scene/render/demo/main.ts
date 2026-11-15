@@ -8,7 +8,7 @@
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
 // dark-under-text mask, to show what the mask darkens), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
-import type { LinkInput, QualityLevel } from "../../model/src/index.ts";
+import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
 import { readSceneTokens } from "../src/tokens.ts";
@@ -35,6 +35,7 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
+let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
 const gl = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
 gl.setClearColor(0x000000, 1);
@@ -49,7 +50,12 @@ const textClass = params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEX
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0",
-  onFrame: (draw, measured) => { lastBurst = draw.burst; log.add(draw, measured, song); },
+  onFrame: (draw, measured) => {
+    lastBurst = draw.burst;
+    const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
+    lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
+    log.add(draw, measured, song);
+  },
 });
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
@@ -83,6 +89,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** The two tokens in play on the last frame, as 0xRRGGBB: the planned zone's, and the next zone's during the anticipation. */
+  readonly tokens: { readonly current: number; readonly next: number | null };
 }
 declare global {
   interface Window { __scene: DemoApi }
@@ -118,6 +126,7 @@ const api: DemoApi = {
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
   get burst() { return lastBurst; },
+  get tokens() { return lastTokens; },
 };
 window.__scene = api;
 

@@ -87,9 +87,16 @@ test("route: setValues called on a class prototype changes every later instance,
   try {
     quietly(() => proto.setValues(fromEntries(runtimeKey(["onBefore", "Compile"]), noop)));
     assert.throws(() => assertNoRenderCallbacks(sceneWith(new MeshBasicMaterial())), REFUSED);
-    assert.throws(() => new SceneRig(tokensFromFile()), REFUSED);
   } finally {
     Reflect.deleteProperty(proto, "onBeforeCompile");
+  }
+  // The rig's own material is a ShaderMaterial (its one fullscreen pass): the same route on that class's prototype is refused when the rig is built.
+  const shaderProto = ShaderMaterial.prototype;
+  try {
+    quietly(() => shaderProto.setValues(fromEntries(runtimeKey(["onBefore", "Compile"]), noop)));
+    assert.throws(() => new SceneRig(tokensFromFile()), REFUSED);
+  } finally {
+    Reflect.deleteProperty(shaderProto, "onBeforeCompile");
   }
   assert.doesNotThrow(() => new SceneRig(tokensFromFile()));
 });
