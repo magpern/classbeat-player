@@ -35,8 +35,10 @@ test("the energy ramp is a run the scheduler places: with the beat and no count 
 
 test("beat-like light is held at rest from 250 ms before a run until 300 ms after it: no lift in the hold, lifts outside", () => {
   const frames = play(18_000, 22_000);
-  const inHold = frames.filter((f) => f.ms >= 19_050 && f.ms < 20_280); // the ramp 19 300 to 19 983, held from 19 050 until 300 ms after its end
-  assert.ok(inHold.length > 50 && inHold.every((f) => f.d.lift === 0), "no lift inside the hold");
+  // The ramp is 19 300 to 19 983, held from 19 050 until 300 ms after its end. A lift that started before the hold runs out (at most 240 ms: none is cut), and none starts in it.
+  const inHold = frames.filter((f) => f.ms >= 19_300 && f.ms < 20_280);
+  assert.ok(inHold.length > 50 && inHold.every((f) => f.d.lift === 0), "no lift in the hold");
+  assert.ok(frames.some((f) => f.ms >= 19_050 && f.ms < 19_290 && f.d.lift > 0), "a lift that started before the hold is not cut");
   assert.ok(frames.filter((f) => f.ms < 19_000 || f.ms > 20_400).some((f) => f.d.lift > 0.01), "lifts outside it");
   const none = play(18_000, 22_000, (ms) => feedAt(ms, { link: { state: "Coasting" } }));
   assert.ok(none.every((f) => f.d.lift === 0), "and none at all without the beat");
@@ -53,9 +55,9 @@ test("the lens flash marks an interval change: 160 ms from the change frame, up 
   assert.equal(frames.filter((f) => f.ms < 19_990).filter((f) => f.d.lens > 0).length, 0);
 });
 
-test("the lens flash is not drawn where a burst marks the change, in the still rig, off a seek, or while the rig is frozen", () => {
+test("the lens flash is not drawn in the still rig, off a seek, or while the rig is frozen", () => {
   const at = (from: number, to: number, make?: (ms: number) => Feed) => play(from, to, make).filter((f) => f.d.lens > 0).length;
-  assert.equal(at(59_500, 60_600), 0, "the change at 60 s has a light-only burst: the burst replaces it");
+  assert.ok(at(79_500, 80_600) > 0, "the change at 80 s has no burst (its ramp has the room): the lens flash marks it");
   assert.equal(at(19_500, 20_600, (ms) => feedAt(ms, { reducedMotion: true })), 0, "still rig");
   assert.equal(at(19_500, 20_600, (ms) => feedAt(ms, { link: { state: "Paused" } })), 0, "paused");
   const seek = new RigLoop(tokens);

@@ -6,12 +6,12 @@
 // the cross and the energy ramp are brightness and colour only.
 
 import type { Direction, Energy, Frame, LinkInput, QualityLevel, RigHue, RigState, SceneClass } from "../../model/src/index.ts";
-import { ANTICIPATION_MS, START_STATE, buildElapsedMs, buildHaze, energyFor, beatsAt, intervalIndexAt, rigFrozen, stepRig } from "../../model/src/index.ts";
+import { ANTICIPATION_MS, START_STATE, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, rigFrozen, stepRig } from "../../model/src/index.ts";
 import { RAMP_MS } from "./budget-calc.ts";
 import { BurstTracker } from "./bursts.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
-import { beatLift, beatStride, fixturesLit } from "./light-calc.ts";
+import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
 import { NO_PATTERN_LIGHT, patternLight } from "./pattern-light-calc.ts";
 import { movementScale, stageLit, stageMaster, stageOf } from "./stage-calc.ts";
 import type { Stage } from "./stage-calc.ts";
@@ -65,8 +65,8 @@ export interface Draw {
   readonly seconds: number;
 }
 
-/** The ramp is decided this long before the change: its hold starts 950 ms before it. */
-const RAMP_HOLD_MS = 1500;
+/** The ramp is decided this long before the change, before the bursts (decided 1.5 s ahead), as the scheduler's order has it: its hold starts 950 ms before it. */
+const RAMP_HOLD_MS = 1700;
 const FRAME_MS = 1000 / 60;
 
 type LoopTokens = Pick<SceneTokens, "down" | "burstMs" | "patternDown" | "liftCap" | "holdBeforeMs" | "holdAfterMs">;
@@ -79,13 +79,25 @@ export class RigLoop {
 
   private readonly tokens: LoopTokens;
 
-  constructor(tokens: LoopTokens) {
+  private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
+
+  private merged(cls: SceneClass): SceneClass {
+    const known = this.mergedClasses.get(cls);
+    if (known !== undefined) return known;
+    const made = mergeIntervals(cls);
+    this.mergedClasses.set(cls, made);
+    return made;
+  }
+
+  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). */
+  constructor(tokens: LoopTokens, budgetOff = false) {
     this.tokens = tokens;
-    this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs });
+    this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
   }
 
   step(feed: Feed, rawDtSeconds: number, quality: QualityLevel): Draw {
-    const { cls, classMs, songIndex, songPosMs, link, reducedMotion: reduced } = feed;
+    const { classMs, songIndex, songPosMs, link, reducedMotion: reduced } = feed;
+    const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
     const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: movementScale(stage, link), noMusic: stage === "before" });
@@ -94,24 +106,29 @@ export class RigLoop {
     const song = nth(cls.songs, songIndex);
     const beats = beatsAt(song?.anchors, songPosMs);
     const quiet = still || stage === "before";
-    const { burst, dim, lens } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, level: frame.level, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: quiet });
-    if (!still && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;
     const at = intervalIndexAt(cls, classMs);
     const wipe = frame.colours.wipe;
     const msToChange = wipe > 0 ? (1 - wipe) * ANTICIPATION_MS : null;
-    const startMs = nth(cls.intervals, at)?.startMs ?? 0;
-    const asked = still || stage === "before" || rigFrozen(link) ? NO_CROSS : crossLook(msToChange, classMs - startMs, CROSS_MS);
-    const cross = this.gate.filter(classMs, asked);
+    // The ramp is decided first (1.7 s ahead, step c), the bursts after (1.5 s ahead, steps e and f): steady light counts as one change in
+    // every window, so a ramp, a change frame and a burst's decay do not all fit; the burst is then skipped, the fan comes on in the drop's frame.
     // The energy ramp is a run: the scheduler places it in the 700 ms before the change or the energy is in the change frame.
     const t0 = nth(cls.intervals, at + 1)?.startMs;
     const rampPlaced = t0 !== undefined && msToChange !== null && msToChange <= RAMP_HOLD_MS && !quiet && !rigFrozen(link) &&
       this.bursts.budget.admit(`ramp@${t0}`, "ramp", [{ fromMs: t0 - RAMP_MS, toMs: t0 - FRAME_MS }], { cls, classMs, songIndex, songPosMs, level: frame.level });
+    const { burst, dim, lens } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, level: frame.level, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: quiet });
+    if (!still && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;
+    const startMs = nth(cls.intervals, at)?.startMs ?? 0;
+    const asked = still || stage === "before" || rigFrozen(link) ? NO_CROSS : crossLook(msToChange, classMs - startMs, CROSS_MS);
+    const cross = this.gate.filter(classMs, asked);
     const nextEnergy = cross.front < 2 && rampPlaced && frame.colours.back.kind === "zone" ? energyFor(frame.colours.back.zone) : null;
     // Beat-like light: the beat lift (the pattern's accent in place of it on a side's first beat), held around every run.
     const pattern = patternLight({ cls, classMs, songIndex, songPosMs, level: frame.level, down: this.tokens.patternDown, still });
-    const held = this.bursts.budget.held(classMs);
-    const lifted = beatLift({ frame, bpm: song?.bpm, beats, songPosMs, reduced: still });
-    const lift = held ? 0 : Math.min(this.tokens.liftCap, pattern.accent > 0 ? pattern.accent : lifted);
+    const input = { frame, bpm: song?.bpm, beats, songPosMs, reduced: still };
+    // A hold skips a lift that would start in it and never cuts one: it is decided on the lift's start.
+    const started = (ageMs: number | null) => (ageMs === null ? classMs : classMs - ageMs);
+    const accent = pattern.accent > 0;
+    const skipped = this.bursts.budget.held(started(accent ? pattern.ageMs : liftAgeMs(input)));
+    const lift = skipped ? 0 : Math.min(this.tokens.liftCap, accent ? pattern.accent : beatLift(input));
     const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
     const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
     const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;

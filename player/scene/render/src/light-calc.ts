@@ -46,6 +46,14 @@ export interface LiftInput {
   readonly reduced: boolean;
 }
 
+/** ms since the beat that is lifting started, or null when no lift is running (a lift is skipped, never cut, by a hold: it is decided on its start). */
+export function liftAgeMs({ frame, bpm, beats, songPosMs, reduced }: LiftInput): number | null {
+  if (reduced || bpm === undefined || !(bpm > 0)) return null;
+  if (frame.level === "Beat" && beats !== null) return sinceLift(beats, bpm);
+  if (frame.level === "Tempo only") return sinceLift((songPosMs * bpm) / 60_000, bpm);
+  return null;
+}
+
 /**
  * The beat lift, 0 to 0.045: a share added to every light of the rig (beams, lenses, haze glow, wall; never the gel, the
  * score or the text). Only at the Beat level, on the anchor beat; a 4 % pulse at Tempo only on its own phase; nothing at

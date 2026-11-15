@@ -37,8 +37,10 @@ export interface PatternLight {
   readonly level: number;
   /** 0 to 0.05: the accent of the first beat of a side (rise 40 ms, fall 200 ms). */
   readonly accent: number;
+  /** ms since the side's first beat while its accent runs (the hold skips an accent by its start), else null. */
+  readonly ageMs: number | null;
 }
-export const NO_PATTERN_LIGHT: PatternLight = { level: 1, accent: 0 };
+export const NO_PATTERN_LIGHT: PatternLight = { level: 1, accent: 0, ageMs: null };
 
 export interface PatternLightInput {
   readonly cls: SceneClass;
@@ -78,5 +80,6 @@ export function patternLight(a: PatternLightInput): PatternLight {
   const from = pattern.startOn === "next_downbeat" ? Math.ceil(start / BEATS_PER_BAR - 1e-9) * BEATS_PER_BAR : Math.floor(start);
   if (now < from) return NO_PATTERN_LIGHT; // before the first downbeat: as the zone
   const { up, into } = sideAt(pattern, now - from);
-  return { level: up ? 1 : Math.min(1, Math.max(0, a.down)), accent: ACCENT_DEPTH * liftShape((into * 60_000) / bpm) };
+  const ageMs = (into * 60_000) / bpm;
+  return { level: up ? 1 : Math.min(1, Math.max(0, a.down)), accent: ACCENT_DEPTH * liftShape(ageMs), ageMs: into < 1 ? ageMs : null };
 }

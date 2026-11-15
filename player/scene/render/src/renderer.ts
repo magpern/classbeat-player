@@ -20,6 +20,8 @@ export interface RendererOptions {
   readonly quality?: QualityLevel;
   /** False only in the test that shows the light without the dark-under-text mask. */
   readonly textMask?: boolean;
+  /** The demo's `budget=off`: every run fits, so a burst the scheduler would skip can be looked at. Never the product. */
+  readonly budgetOff?: boolean;
   /** Called after each frame with what was drawn and the rig's measured beam directions. */
   readonly onFrame?: (draw: Draw, measured: ReturnType<SceneRig["measuredDirections"]>, nowMs: number) => void;
 }
@@ -41,7 +43,7 @@ export class SceneRenderer {
     this.options = options;
     this.quality = options.quality ?? "High";
     this.rig = new SceneRig(options.tokens);
-    this.loop = new RigLoop(options.tokens);
+    this.loop = new RigLoop(options.tokens, options.budgetOff === true);
     this.unsubscribe = host.onResize(() => this.resize());
     this.rig.mask.setEnabled(options.textMask !== false);
     this.resize();

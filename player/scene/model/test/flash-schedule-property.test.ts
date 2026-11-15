@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedFrames, frameAt, placeMarks } from "../src/flash-marks.ts";
 import type { Want } from "../src/flash-marks.ts";
-import { fitRuns, steadyChanges } from "../src/flash-runs.ts";
+import { SWEEP_MS, STEADY_PER_WINDOW, fitRuns } from "../src/flash-runs.ts";
 import type { RunWish, Span } from "../src/flash-runs.ts";
 import { sceneFrame } from "../src/frame.ts";
+import { mergeIntervals } from "../src/merge-intervals.ts";
 import type { SceneClass } from "../src/frame.ts";
 import { ZONES } from "../src/energy.ts";
 
@@ -51,7 +52,6 @@ function spans(r: ReturnType<typeof rng>, endMs: number): Span[] {
   return r.next() < 0.1 ? [] : out;
 }
 
-const inside = (xs: readonly Span[], t: number) => xs.some((s) => t >= s.fromMs && t < s.toMs);
 /** The most items in any 1 s window, found by brute force over every window that starts as an item enters (or an item starts, or ends). */
 function brute(items: readonly Span[]): { n: number; held: readonly Span[] } {
   const starts = new Set<number>();
@@ -83,6 +83,14 @@ function oneTimeline(seed: number): void {
     for (let k = 0, t = c.fromMs; t < c.toMs; k++, t += beatMs) wants.push({ kind: k % sideBeats === 0 ? "switch" : "tick", atMs: t, periodMs: beatMs });
   }
   const placed = placeMarks(fixed, wants, frameMs);
+  // A mark already shown never moves for an action that arrives later: without the actions, every tick shown by the
+  // first action is placed exactly as it is with them.
+  const firstAction = Math.min(...wants.filter((w) => w.kind === "action").map((w) => w.atMs));
+  const calm = placeMarks(fixed, wants.filter((w) => w.kind !== "action"), frameMs);
+  wants.filter((w) => w.kind !== "action").forEach((w, i) => {
+    const [a, b] = [calm[i]!, placed[wants.indexOf(w)]!];
+    if (a.how === "own" && a.atMs! <= firstAction - 1e-6) assert.deepEqual([b.how, b.atMs], [a.how, a.atMs], `seed ${seed}: a mark shown at ${a.atMs} moved for an action at ${firstAction}`);
+  });
   const marks = [...fixed.map((f) => f.atMs), ...placed.flatMap((p) => (p.how === "own" ? [p.atMs!] : []))];
 
   // 1. Any two frame marks are at least 500 ms apart.
@@ -113,7 +121,8 @@ function oneTimeline(seed: number): void {
   });
   for (const t of times(r, r.int(0, 8), endMs)) wishes.push({ id: `dim${t}`, kind: "dim", pieces: [{ fromMs: t, toMs: t + 120 }, { fromMs: t + beatMs, toMs: t + beatMs + 120 }] });
   for (const t of times(r, r.int(0, 6), endMs)) wishes.push({ id: `wait${t}`, kind: "ramp", waits: true, pieces: [{ fromMs: t, toMs: t + 700 }] });
-  const plan = fitRuns(wishes, { marks, beat, count, beatMs, endMs, frameMs });
+  const sweeps = times(r, r.int(0, 4), endMs);
+  const plan = fitRuns(wishes, { marks, beat, count, beatMs, endMs, frameMs, sweeps });
   assert.equal(plan.runs.length + plan.steps.length + plan.skipped.length, wishes.length, `seed ${seed}: every wish is placed, a step or skipped`);
 
   const pieces = plan.runs.flatMap((run) => run.pieces);
@@ -125,19 +134,19 @@ function oneTimeline(seed: number): void {
     for (const q of pieces) if (q !== p) assert.ok(!(p.fromMs < q.toMs - TOL && q.fromMs < p.toMs - TOL), `seed ${seed}: runs overlap`);
   }
   // 5. No 1 s window holds more than 3 counted changes: marks, runs, steady light's possible change.
-  const steady = steadyChanges(beat, endMs, beatMs).map((t) => ({ fromMs: t, toMs: t }));
   const counted = sorted.filter((m, i) => i === 0 || m - sorted[i - 1]! > TOL).map((m) => ({ fromMs: m, toMs: m }));
-  const worst = brute([...counted, ...pieces, ...steady]);
-  assert.ok(worst.n <= 3, `seed ${seed}: a 1 s window holds ${worst.n} changes: ${JSON.stringify(worst.held)}`);
+  // Steady light is one change in every window, the beat running or not (an oracle of its own: the constant, not the module's code).
+  const worst = brute([...counted, ...pieces]);
+  assert.ok(worst.n + 1 <= 3 && STEADY_PER_WINDOW === 1, `seed ${seed}: a 1 s window holds ${worst.n} changes and steady light: ${JSON.stringify(worst.held)}`);
+  for (const p of pieces) for (const f of sweeps) assert.ok(!(p.fromMs < f + SWEEP_MS && f < p.toMs), `seed ${seed}: a run in a sweep`);
   assert.ok(brute(counted).n <= 2, `seed ${seed}: marks alone are at most 2 in a second`);
-  assert.ok(steady.every((s) => !inside(beat, s.fromMs)), `seed ${seed}: steady light changes only without the beat`);
 
   // 6. S7: merging an interval away moves no beam; the direction is the song position's alone.
   const intervals = changes.map((t) => ({ startMs: t, zone: r.pick(ZONES) })).sort((a, b) => a.startMs - b.startMs);
   const songs = [{ bpm: 60_000 / beatMs, anchors: [{ at_ms: 0, bpm: 60_000 / beatMs }], moments: drops.slice(0, 3).map((d) => ({ at_ms: d, kind: "drop" as const })) }];
   const full: SceneClass = { songs, intervals: [{ startMs: 0, zone: 1 }, ...intervals], endMs };
-  const merged = new Set(fixed.flatMap((f) => f.changes.slice(1)));
-  const kept: SceneClass = { songs, intervals: [{ startMs: 0, zone: 4 }, ...intervals.filter((i) => !merged.has(i.startMs))], endMs };
+  const kept = mergeIntervals(full); // the scheduler's own P1 output: the rig's class with the merged-away intervals gone
+  assert.ok(kept.intervals.length <= full.intervals.length, `seed ${seed}: a merge only removes intervals`);
   for (let k = 0; k < 6; k++) {
     const pos = r.int(0, endMs);
     const link = { state: r.pick(["Locked", "Coasting"] as const) };

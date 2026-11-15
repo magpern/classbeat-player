@@ -90,8 +90,9 @@ async function measureLight(open: Open, wins: Win[], query: string): Promise<{ m
 /** S2: the light under the text stays within the cap with the mask, and the same scene without it goes over (so the mask darkens real light). */
 export async function lightMeasurement(open: Open): Promise<void> {
   for (const [zone, wins] of LIGHT_ZONES) {
-    const on = await measureLight(open, wins, "");
-    const off = await measureLight(open, wins, "&mask=0");
+    // With the budget off, so the drop's burst (which the scheduler skips at the Beat level) is in the frames the cap must hold under.
+    const on = await measureLight(open, wins, "&budget=off");
+    const off = await measureLight(open, wins, "&mask=0&budget=off");
     console.log(`S2 zone ${zone}: ${on.frames} frames, highest luminance under text ${on.max.toFixed(4)} (${on.worst}); without the mask ${off.max.toFixed(4)} (${off.worst}); cap ${CAP}`);
     assert.ok(on.frames >= 120, `zone ${zone}: only ${on.frames} frames measured`);
     assert.ok(on.max <= CAP, `zone ${zone}: the light under the text reached ${on.max.toFixed(4)} (${on.worst}), over the cap ${CAP}`);
@@ -104,7 +105,7 @@ export async function lightMeasurement(open: Open): Promise<void> {
  * without `ink()` is). The checks find text by walking the DOM, so each of them must fail on it.
  */
 export async function unmaskedTextIsCaught(open: Open): Promise<void> {
-  const { page } = await open(1280, 720, "&class=long");
+  const { page } = await open(1280, 720, "&class=long&budget=off");
   await page.evaluate(lumSetup);
   await page.evaluate(`(() => { const d = document.createElement("div"); d.textContent = "stray text"; d.style.cssText = "position:absolute;left:30vw;top:96vh;font-size:3vh;color:var(--light-1)"; document.getElementById("text").appendChild(d); })()`);
   await page.evaluate(() => document.fonts.ready);

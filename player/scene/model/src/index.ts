@@ -10,6 +10,7 @@ export * from "./flash-runs.ts";
 export * from "./frame.ts";
 export * from "./link-gate.ts";
 export * from "./looks.ts";
+export * from "./merge-intervals.ts";
 export * from "./moments.ts";
 export * from "./phase.ts";
 export * from "./quality.ts";

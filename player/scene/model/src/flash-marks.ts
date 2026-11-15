@@ -65,20 +65,27 @@ const ACTION_LATE_MS = 500;
 const TICK_LATE_MS = 1000;
 
 /**
- * P2: user actions as they come, then the switch beats, then the other ticks, each on the earliest frame at or after
- * its time that is at least 500 ms from every mark already placed (the fixed frames included). Too late (over 500 ms
- * for an action, over a tick period for a tick) it joins the nearest following fixed frame, or a tick is dropped.
- * A later action replaces a pending one in its placed frame. Returns one entry per want, and never moves a fixed frame.
+ * P2, in the order things happen: each want takes the earliest frame at or after its time that is at least 500 ms from
+ * every mark already placed (the fixed frames and `shown`, the marks a caller has already put on screen, included). Too
+ * late (over 500 ms for an action, over a tick period for a tick) it joins the nearest following fixed frame, or a tick
+ * is dropped. A later action replaces a pending one in its placed frame. A user action cannot be foreseen: when one
+ * arrives, the ticks and switch beats placed but not yet shown (their frame after the action's time) are placed again
+ * after it; a mark that is already shown never moves. Never moves a fixed frame. One entry per want, in the order given.
  */
-export function placeMarks(fixed: readonly FixedFrame[], wants: readonly Want[], frameMs: number): Placed[] {
-  const marks = fixed.map((f) => f.atMs);
+export function placeMarks(fixed: readonly FixedFrame[], wants: readonly Want[], frameMs: number, shown: readonly number[] = []): Placed[] {
+  const marks = [...fixed.map((f) => f.atMs), ...shown];
   const actionFrames: number[] = [];
   const out = new Map<Want, Placed>();
-  const ordered = [...wants].sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.atMs - b.atMs);
-  for (const want of ordered) {
+  const place = (want: Want): void => {
     const from = frameAt(want.atMs, frameMs);
+    const same = marks.find((m) => Math.abs(m - from) < EPS); // text steps and the rig's own share a frame wherever they can
+    if (same !== undefined) {
+      if (want.kind === "action") actionFrames.push(same);
+      out.set(want, { want, how: "joined", atMs: same });
+      return;
+    }
     const pending = want.kind === "action" ? actionFrames.find((f) => f >= from - EPS) : undefined;
-    if (pending !== undefined) { out.set(want, { want, how: "replaced", atMs: pending }); continue; }
+    if (pending !== undefined) { out.set(want, { want, how: "replaced", atMs: pending }); return; }
     let at = from;
     for (let moved = true; moved; ) {
       moved = false;
@@ -90,13 +97,24 @@ export function placeMarks(fixed: readonly FixedFrame[], wants: readonly Want[],
       if (next && (want.kind === "action" || next.atMs - want.atMs <= limit)) {
         if (want.kind === "action") actionFrames.push(next.atMs);
         out.set(want, { want, how: "joined", atMs: next.atMs });
-        continue;
+        return;
       }
-      if (want.kind !== "action") { out.set(want, { want, how: "dropped", atMs: null }); continue; }
+      if (want.kind !== "action") { out.set(want, { want, how: "dropped", atMs: null }); return; }
     }
     marks.push(at);
     if (want.kind === "action") actionFrames.push(at);
     out.set(want, { want, how: "own", atMs: at });
+  };
+  const ordered = [...wants].sort((a, b) => a.atMs - b.atMs || RANK[a.kind] - RANK[b.kind]);
+  for (const want of ordered) {
+    // Placed but not yet shown when this arrives, and of a lower rank: it gives way, and is placed again after it.
+    const redo = ordered.filter((w) => {
+      const p = out.get(w);
+      return p !== undefined && p.how === "own" && RANK[w.kind] > RANK[want.kind] && p.atMs! > want.atMs + EPS;
+    });
+    for (const w of redo) { marks.splice(marks.lastIndexOf(out.get(w)!.atMs!), 1); out.delete(w); }
+    place(want);
+    for (const w of redo) place(w);
   }
   return wants.map((w) => out.get(w)!);
 }

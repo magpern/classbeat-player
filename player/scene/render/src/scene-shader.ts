@@ -96,7 +96,7 @@ void main() {
     w = max(w, 1.0 - smoothstep(${f(GROW)}, ${f(GROW + FADE)}, dd));
     float de = length(max(vec2(max(uBoxA[j].x - x, x - uBoxB[j].x), max(uBoxA[j].y - y, y - uBoxB[j].y)), 0.0));
     float s = 1.0 - smoothstep(0.0, ${f(BURST_SHADOW)}, de);
-    shadow = max(shadow, s * s);
+    shadow = 1.0 - (1.0 - shadow) * (1.0 - s * s); // a union that is smooth where two boxes meet
   }
   vec3 R = normalize(vec3(uv.x * uAspect * uTanH, uv.y * uTanH, -1.0));
   vec3 L = vec3(0.0); // luminance: the current token, the next token, white

@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { ACCENT, BUILD_LIFT, BUILD_HAZE_STEP, LENS_FLASH, LIFT_CAP, TEMPO_PULSE, buildHaze, lensShape, liftShape, riseFall } from "../src/flash-budget.ts";
 import { MAX_BEAT_LIFT, ZONES, energyFor } from "../src/energy.ts";
 import { buildElapsedMs } from "../src/moments.ts";
+import { phraseFlipsMs } from "../src/beat-grid.ts";
 
 test("a lift rises in 40 ms, falls in 200 ms and is at rest after; the lens flash rises in 40 ms and falls in 120 ms", () => {
   assert.deepEqual([-1, 0, 20, 40, 140, 240, 500].map(liftShape), [0, 0, 0.5, 1, 0.5, 0, 0]);
@@ -30,6 +31,13 @@ test("the build lasts 8 beats before a drop, or from a build moment; null outsid
   assert.equal(buildElapsedMs(items, 120, 81_000), 1000);
   assert.equal(buildElapsedMs(items, undefined, 39_000), null, "no bpm: no window is known");
   assert.equal(buildElapsedMs(undefined, 120, 39_000), null);
+});
+
+test("the phrase flips are every 32 beats after the first phrase, across a tempo change; none without anchors", () => {
+  assert.deepEqual(phraseFlipsMs([{ at_ms: 0, bpm: 120 }], 0, 50_000), [16_000, 32_000, 48_000]);
+  assert.deepEqual(phraseFlipsMs([{ at_ms: 0, bpm: 120 }], 20_000, 40_000), [32_000]);
+  assert.deepEqual(phraseFlipsMs([{ at_ms: 0, bpm: 120 }, { at_ms: 8_000, bpm: 60 }], 0, 60_000), [24_000, 56_000], "16 beats at 120 bpm, then 16 more at 60 bpm; the next phrase 32 s on");
+  assert.deepEqual(phraseFlipsMs(undefined, 0, 50_000), []);
 });
 
 test("the haze's gain is 1 before the build, steps with the beat, and rises at most 3 % a second where the beat is not known", () => {

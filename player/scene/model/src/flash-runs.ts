@@ -1,7 +1,9 @@
 // The flash budget's runs (scene.md "The flash budget", the scheduler's steps c to g): a run is a change over
 // more than one frame (a ramp, a burst's decay, a dim's two edges), placed into the gaps between the frame marks
 // so that no mark falls inside it, no run overlaps another, and no 1 s window counts more than 3 changes, steady
-// light's possible change included. Without the beat, or with a count running, there are no runs at all. A run
+// light's possible change included. Steady light is counted as one change in every 1 s window, beat or no beat: the gated
+// runs show it moving a region over 10 % with the beat running (a phrase flip's sweep, a drifting haze), so it is never
+// counted as 0. A sweep (the beams' turn after a phrase flip, a build's gather, a drop's fan) takes the runs away. Without the beat, or with a count running, there are no runs at all. A run
 // that does not fit is a step in a mark (a ramp) or is skipped (a burst, a dim). Times are milliseconds. Pure.
 
 /** The most counted changes in any 1 s window (S6). */
@@ -13,9 +15,11 @@ const EPS = 1e-6;
 /** A run that waits tries the gaps after this many of the next marks, then is a step or skipped. */
 const MAX_WAITS = 4;
 const SECOND_MS = 1000;
-/** Steady light's first possible change after the last beat-like rise, then every 3.3 s; below 60 bpm in beats (1.73 and 3.3). */
-const STEADY_FIRST = 1.73;
-const STEADY_EVERY = 3.3;
+
+/** Steady light, counted in every 1 s window with the beat or without it (scene.md, `--scene-steady-max`; measured, #590). */
+export const STEADY_PER_WINDOW = 1;
+/** A sweep is the beams turning at the turn limit from a known moment (a phrase flip, a build's gather, a drop's fan, a re-aim). The gated runs show it moving a region over 10 % within 2.5 s, so no run is placed in it. */
+export const SWEEP_MS = 2500;
 
 export interface Span { readonly fromMs: number; readonly toMs: number }
 /** The scheduler's steps: ramps (c, d), the light-only burst (e), the drop burst (f), the dim (g). */
@@ -40,6 +44,8 @@ export interface Room {
   readonly beatMs: number;
   readonly endMs: number;
   readonly frameMs: number;
+  /** The moments (class clock, ms) a sweep starts; a run does not overlap the 2.5 s after each. */
+  readonly sweeps?: readonly number[];
   /** Runs already placed, which the new ones must not touch and count beside. */
   readonly placed?: readonly PlacedRun[];
 }
@@ -66,23 +72,13 @@ export function maxInASecond(items: readonly Span[]): number {
   return most;
 }
 
-/** Steady light's possible changes: in each stretch without the beat, 1.73 s after it starts and every 3.3 s after. */
-export function steadyChanges(beat: readonly Span[], endMs: number, beatMs: number): number[] {
-  const slow = beatMs > SECOND_MS;
-  const [first, every] = slow ? [STEADY_FIRST * beatMs, STEADY_EVERY * beatMs] : [STEADY_FIRST * SECOND_MS, STEADY_EVERY * SECOND_MS];
-  const gaps: Span[] = [];
-  let at = 0;
-  for (const s of [...beat].sort((x, y) => x.fromMs - y.fromMs)) { if (s.fromMs > at) gaps.push({ fromMs: at, toMs: s.fromMs }); at = Math.max(at, s.toMs); }
-  if (at < endMs) gaps.push({ fromMs: at, toMs: endMs });
-  return gaps.flatMap((g) => { const t: number[] = []; for (let x = g.fromMs + first; x < g.toMs; x += every) t.push(x); return t; });
-}
-
 const overlaps = (a: Span, b: Span): boolean => a.fromMs < b.toMs - EPS && b.fromMs < a.toMs - EPS;
 const point = (t: number): Span => ({ fromMs: t, toMs: t });
 
 /** Steps c to g: the wishes in the scheduler's order, each into a gap that holds it whole, or a step or skipped. */
 export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
-  const items: Span[] = [...room.marks.map(point), ...steadyChanges(room.beat, room.endMs, room.beatMs).map(point)];
+  const items: Span[] = room.marks.map(point);
+  const sweeps: Span[] = (room.sweeps ?? []).map((t) => ({ fromMs: t, toMs: t + SWEEP_MS }));
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
@@ -90,8 +86,8 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
     const whole = (p: Span) => room.beat.some((b) => b.fromMs <= p.fromMs + EPS && b.toMs >= p.toMs - EPS);
     if (!pieces.every(whole) || pieces.some((p) => room.count.some((c) => overlaps(p, c)))) return false;
     if (pieces.some((p) => marks.some((m) => m > p.fromMs + EPS && m <= p.toMs + EPS))) return false;
-    if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))))) return false;
-    return maxInASecond([...items, ...runs.flatMap((r) => r.pieces), ...pieces]) <= CAP;
+    if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))) || sweeps.some((w) => overlaps(p, w)))) return false;
+    return maxInASecond([...items, ...runs.flatMap((r) => r.pieces), ...pieces]) + STEADY_PER_WINDOW <= CAP;
   };
   const shifted = (w: RunWish, by: number): Span[] => w.pieces.map((p) => ({ fromMs: p.fromMs + by, toMs: p.toMs + by }));
   for (const w of [...wishes].sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.pieces[0]?.fromMs ?? 0) - (b.pieces[0]?.fromMs ?? 0))) {

@@ -37,6 +37,8 @@ export interface BurstOutput {
 const CONTINUOUS_MS = 1000;
 const DEFAULT_BEAT_MS = 500;
 const FRAME_MS = 1000 / 60;
+/** A burst is decided this long before its frame, so the hold's 250 ms lead is there. */
+const AHEAD_MS = 1500;
 
 /** The dim's depth `ms` after the song change: down over 120 ms, held to the first beat, up over 120 ms. */
 export function dimDepth(ms: number | null, beatMs: number): number {
@@ -56,8 +58,8 @@ export class BurstTracker {
   private dimBeatMs = DEFAULT_BEAT_MS;
   private lensMs: number | null = null;
 
-  constructor(hold?: { readonly before: number; readonly after: number }) {
-    this.budget = new RunBudget(hold);
+  constructor(hold?: { readonly before: number; readonly after: number }, budgetOff = false) {
+    this.budget = new RunBudget(hold, budgetOff);
   }
 
   update(a: BurstInput): BurstOutput {
@@ -73,13 +75,20 @@ export class BurstTracker {
 
     const spaced = this.sinceBurst === null || this.sinceBurst >= BURST_GAP_MS;
     const continuous = !first && !songChanged && Math.abs(a.songPosMs - this.pos) < CONTINUOUS_MS;
-    const dropPassed = continuous && momentsAllowed(a.link) && song?.bpm !== undefined && song.bpm > 0 &&
-      (song.moments ?? []).some((m) => m.kind === "drop" && this.pos < m.at_ms && m.at_ms <= a.songPosMs);
+    const drops = (song?.moments ?? []).filter((m) => m.kind === "drop");
+    const canBurst = !a.still && momentsAllowed(a.link) && song?.bpm !== undefined && song.bpm > 0;
+    // Decided ahead, from the song position, so the hold before the burst starts 250 ms ahead of it; the answer is kept.
+    const decay = (frame: number) => [{ fromMs: frame + FRAME_MS, toMs: frame + BURST_MS }];
+    const nextChange = nth(a.cls.intervals, interval + 1)?.startMs;
+    if (canBurst) for (const m of drops) if (m.at_ms > a.songPosMs && m.at_ms - a.songPosMs <= AHEAD_MS && (this.sinceBurst === null || this.sinceBurst + m.at_ms - a.songPosMs >= BURST_GAP_MS)) this.budget.admit(`drop@${m.at_ms}`, "dropBurst", decay(a.classMs + m.at_ms - a.songPosMs), where);
+    if (!a.still && momentsAllowed(a.link) && drops.length === 0 && (song?.moments ?? []).length === 0 && nextChange !== undefined && nextChange - a.classMs <= AHEAD_MS && nextChange > a.classMs &&
+      (this.sinceBurst === null || this.sinceBurst + nextChange - a.classMs >= BURST_GAP_MS)) this.budget.admit(`light@${nextChange}`, "lightBurst", decay(nextChange), where);
+    const passed = continuous && canBurst ? drops.find((m) => this.pos < m.at_ms && m.at_ms <= a.songPosMs) : undefined;
     const light = gatedBurst(a.link, (song?.moments ?? []).length > 0, intervalChanged, this.sinceBurst);
     let burstNow = false;
-    if (!a.still && spaced && (dropPassed || light !== null)) {
-      const decay = [{ fromMs: a.classMs + FRAME_MS, toMs: a.classMs + BURST_MS }];
-      if (this.budget.admit(`burst@${a.classMs.toFixed(0)}`, dropPassed ? "dropBurst" : "lightBurst", decay, where)) { this.sinceBurst = 0; burstNow = true; }
+    if (!a.still && spaced && (passed !== undefined || light !== null)) {
+      const id = passed !== undefined ? `drop@${passed.at_ms}` : `light@${nth(a.cls.intervals, interval)?.startMs ?? 0}`;
+      if (this.budget.admit(id, passed !== undefined ? "dropBurst" : "lightBurst", decay(a.classMs), where)) { this.sinceBurst = 0; burstNow = true; }
     }
 
     if (songChanged && !a.still) {

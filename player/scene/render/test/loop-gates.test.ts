@@ -12,8 +12,8 @@ const tokens = tokensFromFile();
 type Make = (classMs: number) => Feed;
 interface Run { readonly gather: number; readonly fan: number; readonly breakdown: number; readonly burstFrames: number; readonly bursts: number; readonly minMaster: number; readonly maxLift: number }
 
-function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60): Run {
-  const loop = new RigLoop(tokens);
+function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60, budgetOff = false): Run {
+  const loop = new RigLoop(tokens, budgetOff);
   const r = { gather: 0, fan: 0, breakdown: 0, burstFrames: 0, bursts: 0, minMaster: 1, maxLift: 0 };
   let [classMs, was] = [fromMs, 0];
   for (let n = 0; classMs < toMs; n++) {
@@ -34,17 +34,20 @@ function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60): Run {
 // and 100 s) and song 2's breakdown (120 s) across the interval changes.
 const through = (link: Feed["link"], reducedMotion = false): Make => (ms) => feedAt(ms, { link, reducedMotion });
 
-test("locked: the build gathers, the drop bursts once and fans, the breakdown runs", () => {
-  const a = play(through({ state: "Locked" }), 30_000, 52_000);
+test("locked: the build gathers, the drop fans (no burst: the scheduler skips it, a sweep takes its room), the breakdown runs", () => {
+  // The fan's sweep (and the gather's, and a phrase flip's) is steady light that moves a region over 10 % in the gated runs, so a burst beside it
+  // would be a fourth change: the drops at 40 s and 58 s are the fan's frame. With the budget off (the demo's `budget=off`) the 58 s drop bursts.
+  const a = play(through({ state: "Locked" }), 30_000, 59_500);
   assert.ok(a.gather > 0 && a.fan > 0);
-  assert.equal(a.bursts, 1);
+  assert.equal(a.bursts, 0);
+  assert.equal(play(through({ state: "Locked" }), 30_000, 59_500, 1 / 60, true).bursts, 2, "budget off: both drops burst, 18 s apart");
   const b = play(through({ state: "Locked" }), 110_000, 128_000);
   assert.ok(b.breakdown > 0);
 });
 
 test("the drop's gather and fan also run at the None level (coasting) and when ambiguous, with no burst and no lift: steady light takes one of the 3 (S6)", () => {
   for (const state of ["Coasting", "Ambiguous", "Manual"] as const) {
-    const a = play(through({ state }), 30_000, 52_000);
+    const a = play(through({ state }), 30_000, 62_000);
     assert.ok(a.gather > 0 && a.fan > 0, state);
     assert.equal(a.bursts, 0, `${state}: the drop is the fan's frame, with no burst`);
     assert.equal(a.maxLift, 0, `${state}: no lift without the beat`);
@@ -73,29 +76,15 @@ test("reduced motion: the still rig has no burst, no lift, no moments", () => {
   assert.deepEqual([r.gather, r.fan, r.breakdown, r.burstFrames, r.maxLift], [0, 0, 0, 0, 0]);
 });
 
-test("a song with marked moments never bursts on an interval change; one without does, at least 10 s apart", () => {
-  // Song 0 has moments: the interval change at 20 s makes no burst. Song 1 has none: 80 s and 100 s each do.
-  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0);
-  const song1 = play(through({ state: "Locked" }), 70_000, 98_000);
-  assert.equal(song1.bursts, 1);
-  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000, 1 / 144).bursts, 1);
-  // Two interval changes closer than 10 s: only the first bursts.
-  const cls = { ...DEMO_CLASS, intervals: [{ startMs: 0, zone: 2 }, { startMs: 65_000, zone: 3 }, { startMs: 70_000, zone: 4 }, { startMs: 90_000, zone: 5 }] };
-  const loop = new RigLoop(tokens);
-  let n = 0;
-  let was = 0;
-  for (let ms = 62_000; ms < 100_000; ms += 1000 / 60) {
-    const d = loop.step({ ...feedAt(ms), cls }, 1 / 60, "High");
-    n += d.burst > 0 && was === 0 ? 1 : 0;
-    was = d.burst;
-  }
-  assert.equal(n, 2, "65 s bursts, 70 s is within 10 s and does not, 90 s bursts");
+test("no song bursts on an interval change at the Beat level: the energy ramp has the room, and a burst beside it, its change frame and steady light would make a fourth change (the scheduler skips it)", () => {
+  assert.equal(play(through({ state: "Locked" }), 12_000, 30_000).bursts, 0, "song 0 has moments");
+  assert.equal(play(through({ state: "Locked" }), 70_000, 98_000).bursts, 0, "song 1 has none: the changes at 80 s have no light-only burst");
 });
 
 test("drops closer than 10 s share one burst; drops 10 s or more apart each burst (S6)", () => {
   const drops = (...at: number[]): Feed["cls"] => ({ ...DEMO_CLASS, songs: [{ bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: at.map((at_ms) => ({ at_ms, kind: "drop" as const })) }] });
-  const count = (cls: Feed["cls"]) => {
-    const loop = new RigLoop(tokens);
+  const count = (cls: Feed["cls"], budgetOff = true) => {
+    const loop = new RigLoop(tokens, budgetOff);
     let [n, was] = [0, 0];
     for (let ms = 30_000, i = 0; ms < 75_000; i++) {
       const d = loop.step({ ...feedAt(ms), cls, songIndex: 0, songPosMs: ms }, i === 0 ? 0 : 1 / 60, "High");
@@ -105,9 +94,11 @@ test("drops closer than 10 s share one burst; drops 10 s or more apart each burs
     }
     return n;
   };
-  assert.equal(count(drops(40_000, 45_000)), 1, "5 s apart: the second drop does not burst");
-  assert.equal(count(drops(40_000, 49_900)), 1, "just under 10 s");
-  assert.equal(count(drops(40_000, 51_000)), 2, "11 s apart: both burst");
+  // The spacing is the burst's own, so it is shown with the budget off (the scheduler skips every drop burst at the Beat level).
+  assert.equal(count(drops(44_000, 47_000), false), 0, "with the budget on no drop bursts");
+  assert.equal(count(drops(44_000, 47_000)), 1, "3 s apart: the second drop does not burst");
+  assert.equal(count(drops(44_000, 53_900)), 1, "just under 10 s");
+  assert.equal(count(drops(44_000, 55_000)), 2, "11 s apart: both burst (on the countdown's second)");
 });
 
 const playMasters = (cls: Feed["cls"], from: number, to: number, change: number | null, link: Feed["link"] = { state: "Locked" }): number[] => {

@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedFrames, frameAt, placeMarks } from "../src/flash-marks.ts";
 import type { Want } from "../src/flash-marks.ts";
-import { fitRuns, holdOf, inHold, maxInASecond, steadyChanges } from "../src/flash-runs.ts";
-import type { Room, RunWish, Span } from "../src/flash-runs.ts";
+import { SWEEP_MS, STEADY_PER_WINDOW, fitRuns, holdOf, inHold, maxInASecond } from "../src/flash-runs.ts";
+import type { Room, RunWish } from "../src/flash-runs.ts";
 
 const F = 1000 / 60;
 const summary = (frames: ReturnType<typeof fixedFrames>) => frames.map((f) => [Math.round(f.atMs), f.change, f.changes.length, f.drops.length]);
@@ -57,13 +57,17 @@ test("P2: a mark takes the earliest frame at least 500 ms from every placed mark
 test("P2: an action is placed before the ticks; too late (over 500 ms) it joins the nearest following fixed frame; fixed frames never move", () => {
   assert.deepEqual(at([action(1100)], [1000]), [["own", 1500]], "400 ms late: placed");
   assert.deepEqual(at([action(800)], [1000]), [["joined", 1000]], "the earliest frame 700 ms late: joins the change frame");
-  assert.deepEqual(at([tick(1000), action(1000)]), [["own", 1500], ["own", 1000]], "the action goes first, the tick gives way");
-  const [worked] = placeMarks(fixedFrames([], [10_700], 1), [action(10_100), tick(10_000)], 1);
-  assert.equal(worked!.how, "own", "the worked case: an action at C + 0.1 beside a drop at C + 0.7 is 600 ms from it and needs no wait");
+  assert.deepEqual(at([tick(1000), action(1000)]), [["joined", 1000], ["own", 1000]], "the action goes first; a tick in the same frame shares it");
+  assert.deepEqual(at([action(1000)], [1000]), [["joined", 1000]], "an action in a fixed frame shares it");
+  assert.deepEqual(at([tick(1000)], [1000]), [["joined", 1000]], "a tick on a fixed frame is in that frame, not 500 ms after it");
+  const worked = placeMarks(fixedFrames([], [10_700], 1), [tick(10_000), action(10_100)], 1);
+  assert.deepEqual(worked.map((p) => [p.how, p.atMs]), [["own", 10_000], ["joined", 10_700]], "the worked case of scene.md: a tick at C, an action at C + 0.1 and a drop's frame at C + 0.7: the action joins the drop's frame, 600 ms late; the tick already shown stays");
+  assert.deepEqual(at([tick(1000), action(1100)]).map((r) => r[1]), [1000, 1500], "with no drop the shown tick stays and the action waits 400 ms");
+  assert.deepEqual(placeMarks(fixedFrames([], [], 1), [action(1100)], 1, [1000]).map((p) => [p.how, p.atMs]), [["own", 1500]], "a mark the caller has already shown is an input: the 500 ms rule holds across an action it did not foresee");
 });
 
 test("P2: a later action replaces a pending one in its placed frame (the latest state wins)", () => {
-  assert.deepEqual(at([action(1000), action(1100), action(1300), action(1450)], [1000]), [["own", 1500], ["replaced", 1500], ["replaced", 1500], ["replaced", 1500]]);
+  assert.deepEqual(at([action(1000), action(1100), action(1300), action(1450)], [1000]), [["joined", 1000], ["own", 1500], ["replaced", 1500], ["replaced", 1500]]);
   const placed = placeMarks(fixedFrames([], [], 1), [action(0), action(100), action(300)], 1);
   assert.deepEqual(placed.map((p) => [p.how, p.atMs]), [["own", 0], ["own", 500], ["replaced", 500]]);
 });
@@ -74,9 +78,14 @@ test("P2: a tick too late (over its period) joins a fixed frame within a period,
   assert.deepEqual(at([tick(1000, 300), tick(1100, 300)]), [["own", 1000], ["dropped", null]], "the second is 400 ms late over a 300 ms period and no fixed frame follows");
 });
 
-test("P2: a switch beat is placed before the other ticks, so it never gives way to them", () => {
-  const placed = placeMarks(fixedFrames([], [], 1), [tick(1000, 500), { kind: "switch", atMs: 1100, periodMs: 500 }], 1);
-  assert.deepEqual(placed.map((p) => [p.how, p.atMs]), [["dropped", null], ["own", 1100]]);
+test("P2: a tick placed but not yet shown gives way to an action or a switch beat that arrives before it; a shown one does not", () => {
+  // A fixed frame at 900 pushes the tick at 800 to 1400; the switch beat at 1000 arrives before that frame is shown.
+  const gives = placeMarks(fixedFrames([900], [], 1), [tick(800), { kind: "switch", atMs: 1000, periodMs: 500 }], 1);
+  assert.deepEqual(gives.map((p) => [p.how, p.atMs]), [["joined", 900], ["own", 1400]], "the tick joins the fixed frame it was next to");
+  const shown = placeMarks(fixedFrames([], [], 1), [tick(1000, 500), { kind: "switch", atMs: 1100, periodMs: 500 }], 1);
+  assert.deepEqual(shown.map((p) => [p.how, p.atMs]), [["own", 1000], ["own", 1500]], "the tick at 1000 is on screen when the switch beat arrives: it stays");
+  const later = placeMarks(fixedFrames([900], [], 1), [tick(800, 2000), action(1000)], 1);
+  assert.deepEqual(later.map((p) => [p.how, p.atMs]), [["own", 1900], ["own", 1400]], "an action takes the frame, the tick not yet shown is placed again after it");
 });
 
 const room = (over: Partial<Room> = {}): Room => ({ marks: [], beat: [{ fromMs: 0, toMs: 60_000 }], count: [], beatMs: 500, endMs: 60_000, frameMs: F, ...over });
@@ -99,33 +108,33 @@ test("runs: no mark falls inside a run (it may start on one, and end the frame b
 });
 
 test("runs: a run that waits slides to the first gap that holds it; one that may not becomes a step", () => {
-  const marks = [10_000, 10_500];
+  const marks = [9_000, 10_500];
   const slid = fitRuns([ramp("w", 10_100, 600, true)], room({ marks }));
   assert.ok(slid.runs[0]!.pieces[0]!.fromMs > 10_500, "it starts after the second mark");
   assert.deepEqual(ids(fitRuns([ramp("n", 10_100, 600)], room({ marks }))), [[], ["n"], []]);
 });
 
-test("runs: a fourth change in a 1 s window is never made: steps become steps in a mark, bursts and dims are skipped, in the scheduler's order", () => {
-  const marks = [10_000, 10_500]; // two marks in the window
+test("runs: a fourth change in a 1 s window is never made, steady light's one included: steps become steps in a mark, bursts and dims are skipped", () => {
   const burst: RunWish = { id: "burst", kind: "dropBurst", pieces: [{ fromMs: 10_017, toMs: 10_250 }] };
   const light: RunWish = { id: "light", kind: "lightBurst", pieces: [{ fromMs: 10_017, toMs: 10_250 }] };
-  // Each fits alone beside two marks (3), but not both: the light-only burst (e) goes before the drop burst (f).
-  assert.deepEqual(ids(fitRuns([burst, light], room({ marks }))), [["light"], [], ["burst"]]);
   const dim: RunWish = { id: "dim", kind: "dim", pieces: [{ fromMs: 10_100, toMs: 10_220 }, { fromMs: 10_600, toMs: 10_720 }] };
-  assert.deepEqual(ids(fitRuns([dim], room({ marks }))), [[], [], ["dim"]], "the dim's two edges would make 4");
+  assert.equal(STEADY_PER_WINDOW, 1);
+  assert.deepEqual(ids(fitRuns([burst], room({ marks: [10_000] }))), [["burst"], [], []], "a mark, the burst's decay and steady light: 3");
+  assert.deepEqual(ids(fitRuns([burst, light, dim], room({ marks: [10_000, 10_500] }))), [[], [], ["light", "burst", "dim"]], "two marks and steady light leave no room for a run, and the order of the skipped is the scheduler's");
+  assert.deepEqual(ids(fitRuns([ramp("r", 9_300, 700 - F), light], room({ marks: [10_000] }))), [["r"], [], ["light"]], "the ramp comes first (c): with its change frame it fills the window, so the burst is skipped");
+  assert.deepEqual(ids(fitRuns([dim], room({ marks: [10_000] }))), [[], [], ["dim"]], "a mark and the dim's two edges would make 3, with steady light 4");
   assert.deepEqual(ids(fitRuns([dim], room({ marks: [5000] }))), [["dim"], [], []]);
   assert.deepEqual(ids(fitRuns([burst, dim], room({ marks: [10_000, 14_000] }))), [["burst"], [], ["dim"]], "a dim never starts inside the burst's run");
   const later: RunWish = { id: "later", kind: "dim", pieces: [{ fromMs: 12_000, toMs: 12_120 }, { fromMs: 12_600, toMs: 12_720 }] };
   assert.deepEqual(ids(fitRuns([burst, later], room({ marks: [10_000, 14_000] }))), [["burst", "later"], [], []]);
 });
 
-test("steady light: without the beat one possible change 1.73 s after the last rise, then every 3.3 s; in beats below 60 bpm; none with the beat", () => {
-  assert.deepEqual(steadyChanges([{ fromMs: 0, toMs: 10_000 }], 10_000, 500), []);
-  assert.deepEqual(steadyChanges([], 8000, 500).map(Math.round), [1730, 5030]);
-  assert.deepEqual(steadyChanges([{ fromMs: 0, toMs: 2000 }], 6000, 500).map(Math.round), [3730]);
-  assert.deepEqual(steadyChanges([], 8000, 2000).map(Math.round), [3460]);
-  const p: Span[] = [{ fromMs: 0, toMs: 1 }];
-  assert.equal(maxInASecond([...p, { fromMs: 999, toMs: 999 }]), 2);
+test("steady light is counted as one change in every window with the beat running or not, and a sweep (a phrase flip, a gather, a fan) takes the runs away", () => {
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000, 700 - F)], room({ marks: [10_700] }))), [["a"], [], []], "a ramp, its change frame and steady light: 3");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000] }))), [[], ["a"], []], "inside the 2.5 s sweep of a flip");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000 - SWEEP_MS - 800] }))), [["a"], [], []], "after it");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_000] }))), [["a"], [], []], "a flip after the run");
+  assert.equal(maxInASecond([{ fromMs: 999, toMs: 999 }, { fromMs: 0, toMs: 1 }]), 2);
   assert.equal(maxInASecond([{ fromMs: 0, toMs: 0 }, { fromMs: 1000, toMs: 1000 }]), 1, "a window of 1 s holds one of two marks 1 s apart");
 });
 
