@@ -1,7 +1,8 @@
 // Beam direction (rule 4, S7): a function of the look, the fixture, the motion phase, the phrase
 // and the song's moments, and of nothing else. The signature is the guard: there is no interval,
 // zone, target, cadence, position, pattern, cue or time in it. Angles are degrees: pan to the
-// right, tilt down from the horizontal (negative rises). The rig blends between looks in 1.2 s.
+// right, tilt down from the horizontal (negative rises). These are targets: the renderer draws
+// them through the turn-rate limiter (turn.ts), at most 30 degrees a second.
 
 import type { Phrase } from "./beat-grid.ts";
 import type { Look } from "./looks.ts";

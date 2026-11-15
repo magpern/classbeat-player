@@ -11,6 +11,7 @@ import type { RigColours } from "./colour.ts";
 import { rigColours } from "./colour.ts";
 import type { Energy } from "./energy.ts";
 import { energyFor } from "./energy.ts";
+import { gatedMoments } from "./link-gate.ts";
 import { lookForSong } from "./looks.ts";
 import type { Look } from "./looks.ts";
 import { momentsAt } from "./moments.ts";
@@ -67,7 +68,7 @@ export function sceneFrame(input: FrameInput): Frame {
   const next = cls.intervals[at + 1];
   const level = beatLevel(link, song ?? null);
   const phrase = allowanceFor(level).phrase ? phraseAt(song?.anchors, songPosMs) : FIRST_PHRASE;
-  const moments = momentsAt(song?.moments, song?.bpm, songPosMs);
+  const moments = gatedMoments(link, momentsAt(song?.moments, song?.bpm, songPosMs));
   const look = lookForSong(songIndex);
   return {
     look, level, phrase, moments,
