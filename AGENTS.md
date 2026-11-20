@@ -65,7 +65,8 @@ Rules of parallel work:
    own worktree with its own ports (`scripts/worktree.sh`, from PL0).
 4. **Waves.** The Orchestrator starts every unblocked issue of a milestone together, one
    Developer each, up to the limits below, and starts the next ones as pull requests merge.
-5. **Limits.** At most two open pull requests per lane and six in total. Reviews and fixes come
+5. **Limits.** At most two open pull requests per lane and six in total, not counting pull
+   requests opened by bots (for example Dependabot). Reviews and fixes come
    before new work: a lane with a `FAIL` waiting starts nothing new.
 6. **Hot files.** Only the Orchestrator edits `docs/status.md`, `docs/plan.md`, `docs/owner.md`
    and this file, in docs pull requests of its own. Developers report in the pull request
