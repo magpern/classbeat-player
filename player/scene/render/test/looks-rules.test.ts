@@ -19,7 +19,7 @@ const allowed = [...Object.values(tokens.zones), tokens.white];
 function faults(rig: SceneRig): string[] {
   const out: string[] = [];
   for (const name of ["uTokA", "uTokB"]) if (!allowed.includes((rig.uniform(name) as Color).getHex())) out.push(name);
-  if (!(rig.uniform("uBF") as number[]).every((f) => f === 0 || f === 1)) out.push("a light carries a share of a token");
+  if (!rig.tokenFlags().every((f) => f === 0 || f === 1)) out.push("a light carries a share of a token");
   return out;
 }
 
@@ -51,7 +51,7 @@ test("the check sees a third hue: a mix of two zones as a token, or a share of a
   const [a, b, c] = [fresh(), fresh(), fresh()];
   (a.uniform("uTokA") as Color).copy(mix);
   (b.uniform("uTokB") as Color).copy(mix);
-  (c.uniform("uBF") as number[]).splice(3, 1, 0.5);
+  (c.uniform("uBP") as number[])[3 * 4 + 2] = 0.5;
   for (const rig of [a, b, c]) assert.ok(faults(rig).length > 0);
 });
 

@@ -42,3 +42,15 @@ export function stageLit(stage: Stage): boolean[] | null {
 export function wallPlays(stage: Stage): boolean {
   return stage !== "before";
 }
+
+/**
+ * S5b: the least luminance a house-look beam's core is drawn at, in linear light before the tone map (which
+ * lifts it by about 1.3): the haze's and the wall's level stay at the 6 % master, the beams are drawn at no
+ * less than this. A fixed level, so the same at every size and quality level. Running, there is no floor.
+ */
+export const HOUSE_BEAM_FLOOR = 0.0055;
+
+/** The floor of a lit beam's core now: only before the start. */
+export function beamFloor(stage: Stage): number {
+  return stage === "before" ? HOUSE_BEAM_FLOOR : 0;
+}
