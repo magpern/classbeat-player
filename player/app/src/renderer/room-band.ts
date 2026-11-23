@@ -5,14 +5,14 @@
 import * as M from "../core/room/band-model.ts";
 import type { BandContext, BandState } from "../core/room/band-model.ts";
 import { bandView, mainCommand } from "../core/room/band-view.ts";
-import type { BandView, ButtonId, ButtonView, ClockStatus } from "../core/room/band-view.ts";
+import type { ButtonId, ClockStatus } from "../core/room/band-view.ts";
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { keyAction, waitsForQuestion } from "../core/room/keys.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import { bandMoved, NO_NOTE, shownSlot, slotArrived } from "../core/room/remote-note.ts";
 import type { Marks } from "./room-marks.ts";
-import { qrSvg } from "./room-qr.ts";
+import { draw, make } from "./room-band-draw.ts";
 
 export interface BandHost {
   command(c: RoomCommand): void;
@@ -34,54 +34,6 @@ export interface Band {
   remote(v: RemoteView): void;
   /** The join sheet opened or closed. */
   redraw(): void;
-}
-
-function make<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string, tier?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  if (tier) e.dataset.tier = tier;
-  return e;
-}
-
-function buttonEl(b: ButtonView, cls: string): HTMLButtonElement {
-  const e = make("button", `btn ${cls}`.trim());
-  e.type = "button";
-  e.dataset.id = b.id;
-  e.disabled = b.disabled;
-  e.append(make("span", "w", b.word, "control"));
-  if (b.sub) e.append(make("span", "sub", b.sub, "label"));
-  return e;
-}
-
-function draw(band: HTMLElement, v: BandView): void {
-  band.replaceChildren();
-  if (v.mode === "finished") {
-    const wrap = make("div", "finished");
-    wrap.append(buttonEl(v.close, "quit"));
-    band.append(wrap);
-    return;
-  }
-  if (v.mode === "ask") {
-    const ask = make("div", "ask");
-    ask.append(make("span", "q", v.question, "text"), buttonEl(v.endClass, ""), make("span", "gap"), buttonEl(v.keepGoing, "quit"));
-    band.append(ask);
-    return;
-  }
-  const transport = make("div", "transport");
-  for (const b of v.transport) transport.append(buttonEl(b, b.id === "main" ? "main" : ""));
-  band.append(transport);
-  if (v.remote) band.append(buttonEl(v.remote, "phone"));
-  if (v.code) {
-    const code = make("div", "code");
-    const qr = v.code.address ? qrSvg(v.code.address) : null;
-    if (qr) code.append(qr);
-    const t = make("div", "code-t");
-    t.append(make("span", "lbl", "Class code", "label"), make("span", "v", v.code.code, "minor"), make("span", "dt", v.code.line, "label"));
-    code.append(t);
-    band.append(code);
-  }
-  band.append(buttonEl(v.end, "quit"));
 }
 
 export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Band {
