@@ -13,8 +13,8 @@ import { frameTimes } from "./luminance-steps.ts";
 import { violations } from "./guard-trap.ts";
 import type { Open } from "./text-shots.ts";
 
-interface Series { t: number[]; regions: number[][]; sweeping: boolean[]; marks: boolean[] }
-export interface SteadyRun { readonly moment: string; readonly state: string; readonly worst: number; readonly region: string; readonly atMs: number; readonly steps: number; readonly windows: number; readonly unnamedAtMs: readonly number[] }
+interface Series { t: number[]; regions: number[][]; sweeping: boolean[]; marks: string[] }
+export interface SteadyRun { readonly moment: string; readonly state: string; readonly worst: number; readonly region: string; readonly atMs: number; readonly steps: number; readonly windows: number; readonly unnamedAtMs: readonly number[]; readonly taken: readonly { readonly atMs: number; readonly cause: string; readonly share: number }[] }
 
 /** The states: locked with the beat (Beat level), coasting (None level) and locked at the Tempo only level (no anchors). */
 export const STATES = [...BEAT_STATES, ["tempo only", "&level=tempo"]] as const;
@@ -34,12 +34,14 @@ async function play(open: Open, name: string, state: string, query: string, from
   assert.deepEqual([...problems, ...(await violations(page))], [], name);
   await page.close();
   const wall = frameTimes(out.t);
-  let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0, windows: Number.POSITIVE_INFINITY, unnamedAtMs: [] };
+  let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0, windows: Number.POSITIVE_INFINITY, unnamedAtMs: [], taken: [] };
   REGIONS.forEach(([region], r) => {
     const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping, out.marks);
     const windows = Math.min(best.windows, rate.windows);
-    const unnamedAtMs = [...best.unnamedAtMs, ...rate.unnamedAtMs.map((ms) => ms)];
-    best = rate.worst > best.worst || best.region === "" ? { moment: name, state, worst: rate.worst, region, atMs: Math.round(rate.atMs), steps: rate.steps, windows, unnamedAtMs } : { ...best, windows, unnamedAtMs };
+    const unnamedAtMs = [...new Set([...best.unnamedAtMs, ...rate.unnamedAtMs])];
+    // The jumps taken out, once each (the same frame's jump shows in many regions): the largest share of the regions.
+    const taken = [...best.taken.filter((t) => !rate.taken.some((u) => u.atMs === t.atMs)), ...rate.taken.map((u) => ({ ...u, share: Math.max(u.share, best.taken.find((t) => t.atMs === u.atMs)?.share ?? 0) }))].sort((x, y) => x.atMs - y.atMs);
+    best = rate.worst > best.worst || best.region === "" ? { moment: name, state, worst: rate.worst, region, atMs: Math.round(rate.atMs), steps: rate.steps, windows, unnamedAtMs, taken } : { ...best, windows, unnamedAtMs, taken };
   });
   return best;
 }
@@ -54,6 +56,7 @@ export async function reportSteady(open: Open, artifacts: string, only?: readonl
       const run = await play(open, m.name, state, query, m.fromS, m.toS, m.events, m.cls);
       runs.push(run);
       line.push(`${state} ${(run.worst * 100).toFixed(2)} % (${run.region}, from ${run.atMs} ms, ${run.steps} jumps taken out)`);
+      for (const t of run.taken) line.push(`[${state}: took out a ${(t.share * 100).toFixed(1)} % jump at ${t.atMs} ms, cause: ${t.cause}]`);
     }
     console.log(`Steady light, ${m.name}: ${line.join(", ")} (limit ${STEADY_MAX * 100} %)`);
   }

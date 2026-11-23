@@ -186,7 +186,7 @@ export const probeSetup = `(() => {
   };
 })()`;
 
-interface Series { t: number[]; regions: number[][]; burst: number[]; sweeping: boolean[]; marks: boolean[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
+interface Series { t: number[]; regions: number[][]; burst: number[]; sweeping: boolean[]; marks: string[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
 export interface Run {
   readonly frames: number;
   readonly burstFrames: number;

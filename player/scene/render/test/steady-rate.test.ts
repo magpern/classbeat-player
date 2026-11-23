@@ -22,11 +22,11 @@ test("a move in 1 s is read whichever way it goes, and a slower move over severa
 
 test("a one-frame jump on a marked frame is a scheduled step, taken out; the drift after it is still read", () => {
   const stepped = signal(3000, (t) => (t < 1000 ? 0.1 : 0.2));
-  const marks = stepped.t.map((t) => t >= 1000 && t < 1000 + FRAME_MS);
+  const marks = stepped.t.map((t) => t >= 1000 && t < 1000 + FRAME_MS ? "planned mark" : "");
   assert.equal(withoutSteps(stepped.y, marks).steps, 1);
   assert.ok(worstRate(stepped.t, stepped.y, [], marks).worst < 1e-9, "a step alone moves nothing");
   const drifting = signal(3000, (t) => (t < 1000 ? 0.1 : 0.2) + 0.00003 * t);
-  const r = worstRate(drifting.t, drifting.y, [], drifting.t.map((t) => t >= 1000 && t < 1000 + FRAME_MS));
+  const r = worstRate(drifting.t, drifting.y, [], drifting.t.map((t) => (t >= 1000 && t < 1000 + FRAME_MS ? "planned mark" : "")));
   assert.ok(r.worst > 0.1 && r.steps === 1, "a drift of 0.03 a second over the step's 0.2 is read");
 });
 

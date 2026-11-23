@@ -102,6 +102,7 @@ export class RigLoop {
 
   private readonly tokens: LoopTokens;
   private holdPhase = false;
+  private first = true;
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
   private readonly clock = new TextClock();
@@ -125,7 +126,7 @@ export class RigLoop {
     this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
   }
 
-  /** The motion phase never advances (the steady-light gate's `steady=1`, never the product). */
+  /** The motion phase stops after the first frame, at its value on it (the steady-light gate's `steady=1`, never the product). */
   holdMotionPhase(): void {
     this.holdPhase = true;
   }
@@ -135,8 +136,9 @@ export class RigLoop {
     const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
-    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase ? 0 : movementScale(stage, link), noMusic: stage === "before" });
+    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase && !this.first ? 0 : movementScale(stage, link), noMusic: stage === "before" });
     this.state = stepped.state;
+    this.first = false;
     const { frame, dtSeconds } = stepped;
     const song = nth(cls.songs, songIndex);
     const beats = beatsAt(song?.anchors, songPosMs);

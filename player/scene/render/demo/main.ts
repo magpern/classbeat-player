@@ -11,6 +11,7 @@ import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue, SceneClass } from "../../model/src/index.ts";
 import { angleBetween } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
+import { plannedMarkIn } from "../src/frame-marks-calc.ts";
 import { SceneRenderer } from "../src/renderer.ts";
 import { TAN_H } from "../src/rig.ts";
 import { readSceneTokens } from "../src/tokens.ts";
@@ -40,9 +41,9 @@ const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
 let lastSweeping = false;
-let lastMark = false;
+let lastMark = "";
 let pendingMark = false;
-let lastKey = "";
+let lastFrameMs: number | null = null;
 let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
@@ -63,12 +64,12 @@ const renderer = new SceneRenderer(host, {
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
     lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
-    // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek), or the frame in which the interval's energy and
-    // colours, the song, the look, the phrase, a moment (gather, fan, breakdown) or the lit fixtures change.
-    const key = JSON.stringify([song, draw.frame.energy, draw.frame.colours.front, draw.frame.look, draw.frame.phrase.index, draw.frame.moments, draw.lit]);
-    lastMark = pendingMark || (lastKey !== "" && key !== lastKey);
+    // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek) or a mark `planMarks` places (a change frame, a
+    // drop's frame, a text step). The cause is named in the gate's report. Nothing is marked because the draw changed.
+    const planned = lastFrameMs !== null && plannedMarkIn({ cls: lastFeed.cls, classMs, songIndex: lastFeed.songIndex, songPosMs: lastFeed.songPosMs, level: draw.frame.level }, lastFrameMs, classMs);
+    lastMark = pendingMark ? "event" : planned ? "planned mark" : "";
     pendingMark = false;
-    lastKey = key;
+    lastFrameMs = classMs;
     lastMaster = draw.master;
     const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
     lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
@@ -135,8 +136,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
-  /** Whether the last frame is one the scheduler marks (a change frame, a quality step, a seek, a jump): its one-frame jump in light is not steady light. */
-  readonly mark: boolean;
+  /** The scheduler's mark on the last frame ("planned mark" or "event": a quality step, a seek, a jump), or "": a marked frame's one-frame jump in light is not steady light. */
+  readonly mark: string;
   /** Whether any beam's drawn direction is off its target on the last frame (a sweep, scene.md "Steady light and sweeps"). */
   readonly sweeping: boolean;
   /** The rig's master level on the last frame: 1 running, a quarter at the bottom of a song-change dim. */
