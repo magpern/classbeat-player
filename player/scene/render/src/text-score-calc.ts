@@ -67,13 +67,16 @@ function stripFor(iv: TextInterval, song: TextSong | null, s: Scale, x0: number)
   return { cycleVw: cycle * beatMs * s.perMs, offsetVw: startX - x0, parts };
 }
 
-function intervalBlock(cls: TextClass, i: number, iv: TextInterval, s: Scale): IntervalBlock | null {
+function intervalBlock(cls: TextClass, i: number, iv: TextInterval, s: Scale, away: boolean): IntervalBlock | null {
   const end = iv.startMs + iv.lengthMs;
   const [rawX0, rawX1] = [xOf(s, iv.startMs), xOf(s, end)];
   const [x0, x1] = [Math.max(0, rawX0), Math.min(100, rawX1)];
   if (x1 <= 0 || x0 >= 100) return null;
   const key = `i${i}`;
   const base = { key, zone: iv.zone, x0, x1, number: null, length: null, name: null, detail: null, strip: null };
+  if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
+  if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
+  if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
   if (end <= s.now) return { ...base, kind: "past", textLeft: x0, textRight: x0 };
   if (x0 >= NUMBER_CUT_X) return null;
   const textLeft = Math.max(x0, NOW_X) + PAD_VW;
@@ -131,7 +134,8 @@ export function scoreView(input: TextInput, narrow: boolean): ScoreView {
   const { cls, classMs, reducedMotion, aspect } = input;
   const ahead = aheadMinutes(narrow);
   const s: Scale = { now: scoreClock(classMs, reducedMotion), perMs: (100 - NOW_X) / (ahead * 60_000), aspect, narrow };
-  const intervals = cls.intervals.flatMap((iv, i) => { const b = intervalBlock(cls, i, iv, s); return b === null ? [] : [b]; });
+  const away = cls.score?.away ?? [];
+  const intervals = (cls.score?.intervals ?? cls.intervals).flatMap((iv, i) => { const b = intervalBlock(cls, i, iv, s, away.includes(iv.startMs)); return b === null ? [] : [b]; });
   const songs = cls.songs.flatMap((song, i) => { const c = songClip(i, song, s); return c === null ? [] : [c]; });
   const endX = xOf(s, cls.endMs);
   return { nowX: NOW_X, aheadMin: ahead, intervals, songs, endX: endX > NOW_X && endX <= 100 ? endX : null };
