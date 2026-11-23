@@ -73,6 +73,9 @@ Rules of parallel work:
    description, never in shared documents.
 7. **`main` stays green.** Merges go in dependency order. If `main` turns red, all merging stops
    and the next pull request is the fix.
+8. **Shared tokens.** The three byte-identical `tokens.css` copies (`docs/design/mockups/`,
+   `web/src/design/`, `player/app/src/renderer/design/`) change together, in one screens-lane
+   pull request.
 
 ## 4. Unit of work and the loop
 

@@ -33,6 +33,23 @@ with other work; nothing in the development loop waits for an answer.
   when iOS starts, whether a music follower on iOS may use Spotify's own iOS SDK (iOS gives no
   app another app's playback). Until then the iOS app runs on the manual clock, and how far an iOS
   build can reach without the App Store is not verified (plan, section 14).
+- **One app, two modes (owner, 2026-11-15).** Decided: the Android app has an instructor mode
+  and a rider mode. Defaults agents picked (ADR 0011, section 1), which you may change: the mode
+  is chosen at sign-in and can be switched in the app; rider mode shows the same rider page
+  inside the app, and the web rider page stays; the Spotify music link and notification access
+  are instructor mode only; rider mode keeps rules 13 to 15 and gives riders no control.
+- **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
+  Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
+  burst, and a song with no marked moments gets no light-only burst on its interval changes: the
+  ramp, the change frame, the burst's decay and steady light's one change would make 4 changes in
+  1 s. They burst at the None level, and a drop away from a change bursts at every level. So
+  plan section 3 ("bursts on a drop") and section 4 ("bursts follow the interval changes") hold
+  only at the None level and away from a change. Changing it needs the ramp to give way to the
+  burst (a spec change), or steady light to stop counting as a change (#592). Say if you want
+  either.
+- **FYI: the beat dot is gone from the plain 2D screen (#584).** Under the strict flash measure
+  it moved a region 12.4 to 14.4 % at 4:3 and 5:4, so the Designer removed it. Riders lose a
+  per-beat cue on the 2D screen; the 3D scene keeps its beat lift. Say if you want a cue back.
 
 - **Defaults agents picked that you may want to change** (ADR 0002, once merged, lists them all):
   sign-up by allowlist only; sign-in links work only in the browser that asked for them; no
@@ -101,6 +118,11 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
     needs.
 - **Product call:** when Spotify is paused while a browser plays other music, the player shows
   "Off the list". Say if you want something else.
+- **Spike 3 (Android music follower).** Ready to run on an Android phone or tablet with Spotify:
+  the debug APK (CI artifact `android-follower-debug-TEST-BUILD`, kept 3 days after a CI run
+  that changes the spike; to be renamed for the two-mode app) or a build of your own following
+  `player/spikes/android-follower/README.md`. It is a test build signed with a throwaway debug
+  key. Hand back the log file the README names.
 - **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
   mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
   mode first (#447).

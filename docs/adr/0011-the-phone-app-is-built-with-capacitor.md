@@ -6,7 +6,8 @@ rest of this ADR becomes Accepted when a Reviewer passes its pull request.
 Amends [ADR 0001](0001-application-stack-music-link-and-timing.md), "Application stack", where it
 says "Phones get a web page; there is no phone app of our own": the instructor's player is now
 also an installed app on Android, and later iOS (plan section 12, phase PL12; section 13,
-decision 15). The rest of ADR 0001 stands. Riders still use the web pages, with nothing to install.
+decision 15). The rest of ADR 0001 stands. Riders can still use the web pages, with nothing to
+install; the app's rider mode (section 1, amended 2026-11-15) is an option, not a requirement.
 
 ## Context
 
@@ -33,16 +34,34 @@ rest), Tauri 2 mobile, Flutter and React Native (plan section 8).
 The installed app is a **Capacitor** app: the player's existing web code runs in the system's web
 view (Android System WebView), and what the desktop's main process does is done by **our own
 native plugins**, written in Kotlin on Android. One web code base serves the desktop, the website,
-`/play` and the app. The app is the instructor's player only; it hosts no rider page.
+`/play` and the app.
+
+**Amended (owner, 2026-11-15): one app, two modes.** The app has two modes, **instructor** and
+**rider** (the owner says MOWL's app works the same way). It replaces "The app is the instructor's player only; it hosts no
+rider page." The defaults agents picked, which the owner may change (owner.md):
+
+- The mode is chosen at sign-in and can be switched in the app.
+- Rider mode shows the same rider page the web serves at `/j` (ADR 0007), inside the shell. The
+  web rider page stays, so a rider can still join with nothing to install.
+- The Spotify music link (section 6) and notification access are instructor mode only. Rider mode
+  never asks for notification access and never starts the follower.
+- Rider mode keeps rules 13 to 15 (plan, section 3): rider data flows one way, to the instructor;
+  the join code carries a session identifier only; no team games. It gives a rider no control of
+  the class and holds no host or controller token.
+- Switching modes never widens what a rider can see or do. A switch to instructor mode needs the
+  instructor's own sign-in; in rider mode the web view gets none of instructor mode's named
+  intents (section 3).
+- The rule guards of section 8 cover the rider mode's code as they cover the rest of
+  `player/mobile/`.
 
 ### 2. What runs where
 
 | In the web view (TypeScript, shared with the desktop) | In native code (Kotlin, the app only) |
 |---|---|
-| The room screen, the 3D scene, the presenter controls | Pairing, the device token and its storage (section 4) |
+| The room screen, the 3D scene, the presenter controls | Pairing, the device token and its storage (section 5) |
 | The class clock and the music-link state machine (`player/app/src/core/`) | Sync with the backend and the class cache on the device |
 | Opening a class the native side returns | The live connection, as transport only (below) |
-| What the live session sends and receives, built and checked by the shared TypeScript | The Android music follower (section 5) |
+| What the live session sends and receives, built and checked by the shared TypeScript | The Android music follower (section 6) |
 | | Bluetooth sensors (section 7), keep-awake, an external display |
 
 On an external display the app shows only the room view, as the desktop room window does. The
