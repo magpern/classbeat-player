@@ -86,6 +86,7 @@
   --scene-lift-cap: 0.05; /* largest run any beat-like light may make alone in any region, share of its larger end (S6) */
   --scene-hold: 250ms 300ms; /* beat-like light held at rest before, after a scheduled run (S6) */
   --scene-lens-flash: 0.25; /* white share the lens flash adds to a lens (S6) */
+  --scene-steady-max: 3%; /* a second: the most steady light may move any region in 1 s, and in one beat below 60 bpm (S6; the rig does not meet it yet, #592) */
   --scene-tempo-pulse: 0.12; /* tempo pulse depth without anchors */
   --score-ahead: 8min; /* score look-ahead (6 at 3:2 and narrower) */
   --score-now: 10vw; /* where "now" is */

@@ -261,7 +261,7 @@ describe("scene-only tokens (docs/design/scene.md, Tokens)", () => {
 
   it("every scene token in tokens.css has a spec row with an equal value, and every built spec row is in tokens.css", () => {
     assert.deepEqual(sceneTokenProblems(tokens, spec), []);
-    assert.equal(cssSceneTokens(tokens).size, 14);
+    assert.equal(cssSceneTokens(tokens).size, 18);
   });
 
   it("a spec row marked 'to be built' is ignored when tokens.css lacks it, but a built row is not", () => {
