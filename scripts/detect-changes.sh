@@ -71,6 +71,8 @@ flag android '^(player/spikes/android-follower/|player/scene/render/|web/src/des
 # rider_page_policy.py and control_page_policy.py, so a backend-only change to either runs the web job (#375).
 # The browser page imports player/app/src/core/clock/{clock,plan,view}.ts, the shared clock surface, so a
 # change to any of those three files runs the web job (ADR 0008 section 4, #391). The rest of core/clock/ is not shared.
+# It also imports player/scene/model/src/flash-marks.ts, the pure flash scheduler (#604), which the backend image's
+# web stage copies by name; a change to that one file runs the web job.
 # A change there must run the whole web job, or main can go red unseen (issue #268).
 # docs/design/ is NOT in the list any more (issue #435, owner 2026-11-14): documentation alone runs no
 # tests. A mismatch between a mock-up or spec in docs/design/ (for example mockups/tokens.css) and the
@@ -79,7 +81,7 @@ flag android '^(player/spikes/android-follower/|player/scene/render/|web/src/des
 # with other code still runs whatever that code needs, but not web only because of docs/design/.
 # player/app/src/core/** and schema/generated/ts are already covered by the drift-only step,
 # through the player and schema flags.
-flag web '^(web/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$)'
+flag web '^(web/|schema/live/|backend/src/player_backend/request_policy\.py$|backend/src/player_backend/(rider|control)_page_policy\.py$|backend/tests/test_control_page\.py$|player/app/src/core/clock/(clock|plan|view)\.ts$|player/scene/model/src/flash-marks\.ts$)'
 # Something other than documentation changed (a docs-only change sets every flag false, above).
 # An empty diff with a known base (an empty or rebased-away change) fails safe: code is true, so the
 # script tests and shellcheck run as before (#438).
