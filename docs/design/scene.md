@@ -116,7 +116,7 @@ slope is taken from an interval's values, and nothing aims at an interval's timi
 | The beat (see "How much of the music is known") | A lift of the rig and a step of the wall's chase, at most 3 a second (a lift of every light of the rig by the same share, 1.5 to 4.5 % by zone, each run at most 5 %, "The flash budget"; built in #577) | Movement speed |
 | The phrase (every 8 bars from the anchors) | The look's variation: mirrored, chase direction, which half leads | |
 | A song change | The rig dims for one beat (when the flash budget has room, built in #577) and turns to the new song's look at the turn limit (next section): at most 3.5 s, never faster than 30 degrees a second | |
-| Moments (`build`, `drop`, `breakdown`) | Build: the 8 beats before a drop (or the `build` moment) gather every beam to one point and the haze brightens (a step up of 3 % on each beat, about 1.25 ×, with a 2 % lift; built in #577). Drop: one white burst, then every fixture on and fanned wide for 4 bars. Breakdown: one slow beam and the wall, for 8 bars | |
+| Moments (`build`, `drop`, `breakdown`) | Build: the 8 beats before a drop (or the `build` moment) gather every beam to one point and the haze brightens (a step up of 3 % on each beat, about 1.25 ×, with a 2 % lift; built in #577). Drop: one white burst, then every fixture on and fanned wide for 4 bars (at least 6.75 s, to be built in #592). Breakdown: one slow beam and the wall, for 8 bars | |
 | No moments in the song | Bursts follow the interval changes inside the song (plan section 4), at least 10 s apart from any burst (built in #577 where the flash budget has room: at the None level, and not at the Beat level and at Tempo only (wherever the ramp runs), where the change's ramp takes the room; "The flash budget", item 2): **light only**, no gather and no fan, so no direction follows an interval's timing | Any angle |
 | The next interval | **Anticipation**: in the last 10 s before an interval change the back truss and the LED wall turn to the next zone's colour, as a wipe from the far side, at constant luminance; the front truss, the floor uplights and the haze cross in the 700 ms that **end** at the change ("Colour: two hues, never a mix") | |
 | A position pattern (format 1.1, beat known) | **Energy only**: the beams at full brightness on the "up" side and at 72 % on the "down" side, and an accent on the first beat of each side. The accent is 5 %, **in place of** that beat's lift, never added to it ("The flash budget"; built in #577). Built in #591: the side's step (100 % and 72 %) is one frame on the count tick that shows the switch; the accent stays on the beat. At most one accent per side, so at most 3 a second | Any angle, height or shape (the rig does not "stand up") |
@@ -192,7 +192,7 @@ beam with a **turn-rate limiter**:
    turn coming ("Steady light and sweeps"); it may be shortened only if the scheduler's property
    test still holds at 3.
 2. **A re-aim takes as long as its turn needs.** The longest turn, 104.7 degrees, takes 3.5 s,
-   so a song change, a phrase flip, a gather or a fan **completes within 3.5 s** of its turn starting (a moment's turn starts 650 ms after the moment; the drop's fan, to be built in #592, 1250 ms after the drop's frame where that is later, item 3 below) and most take
+   so a song change, a phrase flip, a gather or a fan **completes within 3.5 s** of its turn starting (a moment's turn starts 650 ms after the moment; the drop's fan, to be built in #592, 2250 ms after the drop's moment, item 3 below) and most take
    less. The "1.2 s" of the earlier text is gone and names nothing now: the dim is one beat
    long, and no colour belongs to a look (the zone alone gives colour, rule 7). The look
    ranges are not shrunk to fit 1.2 s; that would flatten every look to under 36 degrees.
@@ -270,7 +270,7 @@ horizontal.
 | Gather (build) | Pan -30 to +30 across the fixtures, crossed, so the beams meet at one point; tilt 15 higher than at rest |
 | Fan wide (drop) | Pan -55 to +55 by fixture; tilt at rest |
 | Phrase | 8 bars, a bar is **4 beats**, so 32 beats. Odd phrases mirror every pan; the half of the fixtures that leads is 60 degrees of phase ahead and changes every 2 phrases |
-| Moment windows | Build: 8 beats (before a drop, or from a `build` moment). Drop fan: 16 beats (4 bars). Breakdown: 32 beats (8 bars). A gather wins over a fan. All counted at the song's `bpm`; **no `bpm`, no window** |
+| Moment windows | Build: 8 beats (before a drop, or from a `build` moment). Drop fan: 16 beats (4 bars), and, to be built in #592, at least to 6.75 s after the drop (the fan opens within 5.75 s, "The flash budget" item 3). Breakdown: 32 beats (8 bars). A gather wins over a fan. All counted at the song's `bpm`; **no `bpm`, no window** |
 | Without anchors | No phrase: the first phrase, never mirrored |
 
 The largest pan any look or moment reaches is 55 (the wide fan). These are **targets**; what is
@@ -435,17 +435,23 @@ replaced the earlier ones (the lift column of "Energy by zone", the 12 % tempo p
    window, so a burst on an interval change may find room beside the ramp where no sweep's window, no window that
    counts the looks' sway and no other mark is near. #592 reports, for every gated burst moment and state, whether it bursts, and updates S6's burst
    assertions to that report in the same pull request; it may only add bursts (a burst the gate asserts today
-   stays), each within the cap and 10 s from the next.
+   stays), each within the cap and 10 s from the next. **To be built in #592** a burst's decay is counted inside
+   the one 1 of steady light, the looks' sway and the sweeps ("A burst's decay is light inside the shared 1"), so a
+   burst adds 1, its rise, beside that 1.
 3. **The fan's turn follows the drop by 650 ms.** The beams' turn from the gather toward the fan starts 650 ms
    after the drop (a function of the moments only: rule 4 holds, no beam speed changes); the fixtures come on,
    and the burst goes up, in the drop's frame. Without the delay the beams crossing the screen's centre
    put two more changes in the burst's second (a rise at 0.4 s, a fall at 0.9 s) and no drop could burst.
-   The fan is open within 4.2 s, inside 4 bars. **To be built in #592:** the fan's turn starts at the later of
-   the moment plus `TURN_DELAY_MS` (650 ms, the minimum) and **the drop's fixed frame plus 1250 ms**, which is
-   the burst's 250 ms decay plus 1 s, so no 1 s window holds both the decay and the fan's sweep. Both terms are
-   fixed by the class and the song (the moment, and the drop's frame that P1 places, which is the moment
-   unless it merges with an interval change), so rule 4 holds, and the start does not depend on whether the
-   burst is placed. The fan is then open within 4.75 s of the drop's frame (4 bars at up to 200 bpm).
+   The fan is open within 4.2 s, inside 4 bars. **To be built in #592:** the fan's turn starts at a **fixed
+   offset from the drop's moment alone: the moment plus 2250 ms** (`TURN_DELAY_MS`, 650 ms, stays the minimum
+   delay of every moment's turn). 2250 ms is the largest offset of a drop's frame from its moment, under 1 s
+   (P1: a drop joins a merged change frame less than 1 s before or after it, and a drop frame chained from an
+   earlier drop is at or before the moment), plus the burst's 250 ms decay, plus 1 s. So the decay has ended
+   before the moment plus 1250 ms whatever P1 merges, and no 1 s window holds both the decay and the fan's
+   sweep. The start depends on the song's moment only, never on an interval change, the drop's frame or
+   whether the burst is placed, so rule 4 and S7 hold. The fan is then open within **5.75 s of the drop's
+   moment** (2.25 s plus the longest turn, 3.5 s). 4 bars last 4.8 s at 200 bpm, so the drop's fan window runs
+   to at least 6.75 s after the moment ("Moment windows"), and the fan is open for at least 1 s at any tempo.
 
 A tick in a fixed frame or another mark's frame shares it.
 **Built in #591:** the text layer on the scheduler and the S6 gate on the whole frame, text included ("The text layer on
@@ -531,8 +537,8 @@ the beat and coasting, on every gated moment:
 
 - **Its live spans.** The sway is live in every frame in which the motion phase advances and a lit beam is
   held on a look's target at rest. It is not live in a gather, the drop's wide fan or the hold-still before a
-  drop (their targets do not take the phase), in a pause, in the 2 s hold after an unforeseen cause, or in a
-  burst's hold (below; the phase is held in both). The scheduler knows the live spans with the sweeps' windows (step a): the song's looks,
+  drop (their targets do not take the phase), in a pause or in the 2 s hold after an unforeseen cause (the
+  phase is held in both). The scheduler knows the live spans with the sweeps' windows (step a): the song's looks,
   moments and anchors give them, and an unforeseen cause's hold is planned from its frame.
 - **Counted as 1** (`--scene-sway-max`) in every 1 s window that overlaps a live span, at every level, in every
   zone row, locked and coasting. The 1 covers steady light's possible change (the check below measures with
@@ -548,35 +554,38 @@ the beat and coasting, on every gated moment:
   foresees, would make a fourth.
 - **Without the beat** the sway and steady light share **one** 1 (the check measures them together,
   coasting), so the None level counts as before: at most 2 marks and that 1, every ramp and dim a step, and
-  a burst only with its hold (next).
-- **The sway and steady light yield to a burst** (Orchestrator, 2026-11-23; to be built in #592). Every
-  burst placed, drop or light-only, at every level, has a **burst's hold**: the motion phase and steady
-  light's clock are held from **1 s before the burst's rise to 1 s after its decay ends** (at the Beat level
-  and Tempo only, to the first lift's rise after the decay's 300 ms tail where that is later). As in the hold
-  after an unforeseen cause, the clocks **stop and resume from where they stopped and never catch up**, and
-  the beams' aim, the haze's drift and the wall's slow wave stand still; beat-like light and every turn go on.
-  Bursts are foreseen (fixed frames, step a), so the scheduler places the hold with them. Every 1 s window
-  that touches the burst (holds its rise or any frame of its decay) lies inside the hold, so the sway and
-  steady light count **0** in it, and no other run lies in it (a run that would waits or becomes a step, and
-  where neither can, e and f skip the burst). Such a window holds the rise and at most one other mark (the
-  invariant, user actions included: P2 places an action at least 500 ms from the rise, so after the 250 ms
-  decay) and the decay: **1 + 1 + 1 = 3**. So the light-only burst at **80 s** (None level, the sway live
-  around it) reads rise, decay and a user action: **3**; the drops at **40 s** and **58 s** the same (their
-  gather and wide fan do not take the phase, so the hold changes nothing in their beams). No window that touches a
-  burst overlaps a sweep's window: e and f skip a burst whose decay would, and a drop's own fan turn starts at
-  least 1 s after the decay ends (to be built in #592, "The fan's turn follows the drop"). So at 40 s and 58 s
-  a window over the decay reads the rise, a user action and the decay (**3**), and a window over the fan's
-  turn reads the sweep's 1 and at most 2 marks, the action among them, with no run and without the rise
-  (**1 + 2 = 3**). If the "no other run" rule removes a burst the S6 gate asserts, #592 stops and
-  reports it. At the Beat level and Tempo only, e and f judge "near the looks' sway" as if the burst's hold
-  were not there, so the hold adds no burst there (S6's "no burst on an interval change" stays true).
+  a burst's decay inside that 1 (next).
+- **A burst's decay is light inside the shared 1** (Orchestrator, 2026-11-23; to be built in #592). It
+  replaces the burst's hold, which is gone: nothing tied to a burst or an interval holds the motion phase or
+  steady light's clock, and no direction changes. A burst is its rise, a mark in its fixed frame, and its decay,
+  which becomes a **ramp within the shared bound**: the scheduler counts the decay inside the **one 1** of steady
+  light, the sway and the sweeps, not as a run of its own, so a burst counts **1** (its rise) beside that 1. The
+  decay keeps its peak, its 250 ms and its end level; its curve and its share in each region (light levers only)
+  are shaped so the strict measure finds at most 1 change in any 1 s window that holds a frame of it, with the
+  sway, steady light and any sweep in it (the CI check below measures it). Every 1 s window then holds at most
+  2 marks (the invariant, the rise and user actions included) and that 1: **2 + 1 = 3**, with or without the rise.
+  - *Why not by marks.* A user action before the rise may join the rise's fixed frame (P2, 1 s when it joins a
+    fixed frame), but one after the rise has no later fixed frame to join and P2 gives it only 500 ms, so marks
+    alone cannot close the window. Ticks are never the fourth: they are foreseen, and e and f already skip a
+    burst where a tick would make one; the unforeseen action is the case this rule closes.
+  - *The sums.* The light-only burst at **80 s** (None level, the sway live): the rise, a user action 500 ms
+    later, and the shared 1 (the decay, the sway and steady light): **1 + 1 + 1 = 3**. The drops at **40 s** and
+    **58 s**: the rise, one more mark (an action or a tick) and the decay as the shared 1, the sway not live (the
+    gather, the hold-still and the wide fan do not take the phase): **3**; a window over the fan's turn holds
+    the sweep's 1 and at most 2 marks and never the decay ("The fan's turn follows the drop"): **3**. A window
+    without the rise: 2 marks and the shared 1: **3**.
+  - No other run lies in a window that touches a burst: e and f still skip a burst where such a window would
+    hold another run that can neither wait nor be a step, and, at the Beat level and Tempo only, where its decay
+    would lie near the looks' sway (S6's "no burst on an interval change" stays true). If no light lever brings a
+    decay case to 1, #592 stops and reports it to the Orchestrator; it does not drop a burst the S6 gate asserts.
 - **The CI check that the sway makes at most 1.** Its count c is the most changes the **strict measure** finds
   in any 1 s window that overlaps a live span, on the frame drawn with **no scheduled change** and everything
   else (the sway, the steady light, the beat-like light and any turning beam). The check runs a **generated
   matrix**, locked with the beat at the Beat level and at Tempo only, and coasting: every look at rest (fan,
   cross, sweep, circle, split), every zone's row (zones 1 to 7), both phrase parities, the tempos **60, 90,
-  120, 150, 180 and 200 bpm**, every quality level, and the windows that straddle the first and the last frame of a case of every sweep cause. It
-  **fails if any case counts more than 1**, and fails if a look or a sweep cause has no case. If the light
+  120, 150, 180 and 200 bpm**, every quality level, and the windows that straddle the first and the last frame of a case of every sweep cause, and every window that holds a frame of a burst's decay (drop and light-only, on
+  every look and zone row, wherever e and f place one). It **fails if any case counts more than 1**, and fails
+  if a look, a sweep cause or a burst kind has no case. If the light
   levers of "If a gated run fails" (the turn limit, the movement rates and the looks stay) cannot bring a case
   to 1, #592 stops and reports it to the Orchestrator; the spec does not plan for it.
 - **Marks beside the sway: gated, not argued.** A window that counts the sway holds at most 2 marks (the
@@ -700,7 +709,7 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
     would overlap a sweep's window is skipped (steps e and f). A drop's own gather and fan are not in the way of
     its burst: the gather's window ends where the beams hold still, 1 s before the drop, and the fan's turn, and
     so its window, starts at least 1 s after the 250 ms decay has ended (as built in #577, 650 ms after the
-    drop; to be built in #592, the later of that and the drop's frame plus 1250 ms).
+    drop; to be built in #592, 2250 ms after the drop's moment, whatever P1 merges).
   - **Marks are not thinned.** Ticks, fixed frames and user actions are placed by text rule 2 as everywhere
     else; a user action is never shown more than 1 s late.
 - **The loop test for a run wanted just after a phrase flip** (mutation M8 of the #590 review, required): an
@@ -762,8 +771,8 @@ splits a sweep's run (the last bullet). In a window that counts the looks' sway,
 - **The looks' sway**, worst case in every state it is live in, outside a sweep's window: with the beat,
   the sway's 1, at most 2 marks (user actions included) and no run: **1 + 2 + 0 = 3**, with a count
   running too (rule 3 for runs); without the beat, the one 1 of the sway and steady light, at most 2
-  marks and no run (**3**); in a window that touches a burst, 0 (the burst's hold), beside the rise,
-  one more mark and the decay (**1 + 1 + 1 = 3**, the 80 s burst included); in the hold after an
+  marks and no run (**3**); in a window that touches a burst, the decay inside that one 1, beside the
+  rise and one more mark (**1 + 1 + 1 = 3**, the 80 s burst included); in the hold after an
   unforeseen cause, 0. The sway's own changes are at most 1 by its CI
   check; whether a mark's step splits one of its runs rests on the strict gate ("The looks' sway, counted").
 - **Inside a sweep's window** the sum is not argued. The sweep with the steady and beat-like light during it
@@ -912,7 +921,7 @@ PR's notes name it for the Orchestrator).
 |---|---|---|
 | A text tick; the change frame at an interval change | Step | One frame; the change frame at `t0` holds the gel, the text, and with no ramp the new energy |
 | Energy ramp at an interval change | Run | 700 ms, linear, ending on the frame before `t0`; only when the scheduler has room, otherwise the energy is in the change frame |
-| Drop burst; light-only burst (a song without moments) | Step and run (2) | Up in **one frame** to 0.85 of white at the moment; decay 250 ms to the level after it (the new zone's, or the drop's fan with every fixture on) |
+| Drop burst; light-only burst (a song without moments) | Step and run (2); to be built in #592, a step (1) and a decay counted inside the shared 1 of steady light, the sway and sweeps | Up in **one frame** to 0.85 of white at the moment; decay 250 ms to the level after it (the new zone's, or the drop's fan with every fixture on) |
 | Song-change dim | Run and run (2) | Down in 120 ms to 25 %, held, up in 120 ms on the new song's first beat |
 | Pattern side step (100 % and 72 %) | Step | **One frame on the count tick that shows the switch** (text rule 2): it shares the tick's frame |
 | End of the drop's fan, start and end of a breakdown, the house looks in and out, a quality step (High to Medium drops 6 fixtures and a haze layer; Medium to Low 6 more and the wall) | Run, or a step with a count | 700 ms, linear; a fixture or layer that goes fades to 0 in it. With a count running, one frame in a count tick's frame |
@@ -960,8 +969,8 @@ in this order:
 | b | Every other mark | Placed by text rule 2, P2: user actions, the count's switch beats, the other ticks; the countdown, the bars line, the labels and the score's step show on a mark. |
 | c | Runs, into the gaps | Each run goes into a gap between marks that holds it whole (rules for runs 1 and 2) and overlaps no sweep's window (built for 2.5 s; 4.15 s to be built in #592); after an unforeseen cause a run in progress ends in the cause's frame, and no run ends less than 1 s before the turn that follows the 2 s hold (to be built in #592); at the Beat level and Tempo only none lies near the sway ("No run near the sway", to be built in #592); with a count running there are none (rule 3) |
 | d | A run that does not fit, or would make a fourth (without the beat: every ramp and dim; with it, every run near the looks' sway) | It becomes a step in a mark and adds nothing: the energy ramp in the change frame, any other ramp in the next mark, a user action's ramp in the action's frame; a run that cannot be a step waits for a gap that holds it. **An energy ramp that a sweep's window would hold waits, and so its energy is in the change frame; the change frame is never moved** (to be built in #592) |
-| e | A light-only burst | Skipped where a window would still hold a fourth, where its decay would overlap a sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (judged without the burst's hold), or where a window touching it would hold another run that can neither wait nor be a step: a plain interval change at the Beat level and at Tempo only (wherever the ramp runs), where the ramp has the room. Placed at the None level and where nothing else competes. A skipped burst does not start a new 10 s spacing |
-| f | A drop burst | Skipped where a window would still hold a fourth, where its decay would overlap another sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (judged without the burst's hold; a drop's gather and wide fan have none), or where a window touching it would hold another run that can neither wait nor be a step: a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) (the ramp comes first) or with a count running; the fan's fixtures come on in the drop's frame. Its own gather and fan are not in its way (the gather's window ends 1 s before the drop; the fan's turn starts at least 1 s after the decay ends, to be built in #592, and for this burst its window starts there) |
+| e | A light-only burst | Skipped where a window would still hold a fourth, where its decay would overlap a sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway, or where a window touching it would hold another run that can neither wait nor be a step: a plain interval change at the Beat level and at Tempo only (wherever the ramp runs), where the ramp has the room. Placed at the None level and where nothing else competes. A skipped burst does not start a new 10 s spacing |
+| f | A drop burst | Skipped where a window would still hold a fourth, where its decay would overlap another sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (a drop's gather and wide fan have none), or where a window touching it would hold another run that can neither wait nor be a step: a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) (the ramp comes first) or with a count running; the fan's fixtures come on in the drop's frame. Its own gather and fan are not in its way (the gather's window ends 1 s before the drop; to be built in #592, the fan's turn starts 2250 ms after the drop's moment, at least 1 s after the decay ends) |
 | g | A song-change dim | Skipped where a window would still hold a fourth: the re-aim marks the song. Under #592's accounting it is skipped in every state: its rise, on the new song's first beat, lies in the song change's sweep window, which no run overlaps (#592 measures the song change's c and reports it) |
 
 Steady light is never moved, nor is a sweep (its window and its turn are the song's, rule 4 and S7), nor the
@@ -979,8 +988,8 @@ sweep or the looks' sway, whose count together is at most 1 in any window:
 | Beat running, no count, a window that counts the sway, outside a sweep's window (to be built in #592) | at most 2 | 0 (no run near the sway; d to f) | 0 | 0 | 1 (its CI check) | **2 + 0 + 0 + 0 + 1 = 3** |
 | Without the beat, outside a sweep's window | at most 2 | 0 runs: every run becomes a step in a mark (d) | at most 1 | 0 | in steady light's 1 (one 1 together, its CI check) | **2 + 0 + 1 = 3** |
 | Just after a pause (the beat stops) | at most 2 | where the sway was live, 0 (the pause is a step in the action's frame); elsewhere what the scheduler fits beside them and steady light (d to g) | its first possible change at least 0.73 s after the action's frame (1.73 s, or 1.73 beats, after the last lift, which is at most one beat before); where the pause was a step, a falling run joins its fall to 6 % and a rising one needs 3.3 s, so 0 in the window | 0 | 1 up to the action's frame where live, 0 after it (the phase stops) | **3**: 2 + 0 + 0 + 0 + 1 where the sway was live, 2 + runs + steady light where not |
-| Any state, a window that touches a burst (its rise or its decay; to be built in #592) | at most 2, the rise among them; a user action at least 500 ms after the rise | the decay only (no other run in it) | 0 (the burst's hold) | 0 (no window that touches a burst overlaps a sweep's window: e and f, and a drop's fan turn at least 1 s after the decay) | 0 (the burst's hold) | **2 + 1 + 0 + 0 + 0 = 3**, the 80 s light-only burst with a user action included |
-| A drop's burst and its fan turn, a user action between them (the drops at 40 s and 58 s; to be built in #592) | at most 2: the rise and the action where the window touches the burst; the action and one more mark over the turn | the decay where the window touches the burst; 0 over the turn | 0 (the burst's hold) | 0 where the window touches the burst; 1 over the turn (it starts at least 1 s after the decay ends) | 0 (the gather and the wide fan do not take the phase) | over the burst **2 + 1 + 0 + 0 + 0 = 3**; over the turn **2 + 0 + 0 + 1 + 0 = 3**; no window holds both |
+| Any state, a window that touches a burst (its rise or its decay; to be built in #592) | at most 2, the rise among them where the window holds it; a user action may come 500 ms after the rise | 0 (the decay is in the shared 1; no other run in it, e and f) | in the shared 1 | in the shared 1 (e and f, and a drop's fan turn 2250 ms after its moment, keep a sweep's window off the decay) | in the shared 1 (the decay's case of the CI check) | **2 + 0 + 1 = 3**, the 80 s light-only burst with a user action 500 ms after the rise included |
+| A drop's burst and its fan turn, a user action between them (the drops at 40 s and 58 s, and a drop merged onto an interval change up to 1 s later; to be built in #592) | at most 2: the rise and the action where the window touches the burst; the action and one more mark over the turn | 0 (the decay is in the shared 1) | in the shared 1 | 0 where the window touches the burst; 1 over the turn (it starts 2250 ms after the moment, at least 1 s after the decay ends) | 0 (the gather, the hold-still and the wide fan do not take the phase) | over the burst **2 + 0 + 1 = 3** (the decay as the 1); over the turn **2 + 0 + 1 = 3** (the sweep as the 1); no window holds both |
 | Any state, a window that overlaps a sweep's window (to be built in #592) | at most 2 | 0 (no run overlaps a sweep's window) | in the sweep's 1 | 1 (the CI matrix proves at most 1) | in the sweep's 1 (one 1 together, the sway's check) | **2 + 0 + 1 = 3**, held by the strict gate's moments with each mark type inside each sweep cause |
 | The 2 s after an unforeseen cause (a seek or a jump, a reload, a lost lock, a regained lock, a resume), in any state it leaves or enters (to be built in #592) | at most 2, the cause's own frame among them (the invariant) | at most the run in progress, which ends in the cause's frame, at most 1 s after the cause; no new run ends less than 1 s before the turn | 0 (held still in the hold) | 0 (no beam moves in the hold) | 0 (the phase is held) | **2 + 1 + 0 + 0 + 0 = 3** |
 | Over the turn that follows the hold (to be built in #592) | at most 2 | 0 (no run overlaps it; none ends less than 1 s before it) | in the sweep's 1 | 1 | in the sweep's 1 | **2 + 0 + 1 = 3**, by construction |
@@ -1021,10 +1030,10 @@ page is played up to each text step; the layer is taken as a screenshot over bla
 
 **Without the beat** steady light and the looks' sway may take one of the 3 between them, so there is no dim and no energy ramp at the
 None level (a song change is its re-aim, an interval change is its change frame and the energy in it). A
-burst is not taken away by the missing beat: it is the rise in its fixed frame and a decay run, and it
-fits wherever the window has the room, with the burst's hold around it, so steady light and the sway count 0
-in every window that touches it (to be built in #592; "The sway and steady light yield to a burst") (built in #577, gated: the drops at 40 s and 58 s and the
-light-only burst at 80 s at the None level). The cap holds by the table above: 2 frame marks, user
+burst is not taken away by the missing beat: it is the rise in its fixed frame and a decay, and it
+fits wherever the window has the room (built in #577, gated: the drops at 40 s and 58 s and the
+light-only burst at 80 s at the None level). To be built in #592 the decay is counted inside the one 1 of
+steady light and the sway ("A burst's decay is light inside the shared 1"), so the burst adds its rise. The cap holds by the table above: 2 frame marks, user
 actions included, and the one 1 of steady light and the sway, with every run a step in a mark already counted (a: a
 ramp into the next mark, the resume ramp into the action's frame). Steady light never waits.
 
@@ -1035,11 +1044,11 @@ one drop burst at most per drop moment (S6).
 beams **hold still** where the gather has brought them (slowing to a stop over the 250 ms
 before): the gather is the song's moment, so this keeps rule 4. The fixtures that come on for
 the fan come on in the drop's frame, under the burst, wherever text rule 2 puts that frame. The
-hold-still ends and **the beams' turn follows the song's moments by 650 ms** (`TURN_DELAY_MS`, a function of the moments only, rule 4): the fan's fixtures and the burst come in the drop's frame, and the turn to the fan starts 650 ms later, on the same moment-derived target, so the beams crossing the screen do not add two changes to the burst's second (#577, gated). To be built in #592 it starts at the later of that and the drop's frame plus 1250 ms, so no 1 s window holds the burst's decay and the turn ("The fan's turn follows the drop"). It is never on a merged frame.
+hold-still ends and **the beams' turn follows the song's moments by 650 ms** (`TURN_DELAY_MS`, a function of the moments only, rule 4): the fan's fixtures and the burst come in the drop's frame, and the turn to the fan starts 650 ms later, on the same moment-derived target, so the beams crossing the screen do not add two changes to the burst's second (#577, gated). To be built in #592 it starts 2250 ms after the drop's moment (the drop's frame is under 1 s from it, P1, plus the 250 ms decay, plus 1 s), so no 1 s window holds the burst's decay and the turn, whatever P1 merges ("The fan's turn follows the drop"). It is never on a merged frame.
 The turn is a **sweep** (the fan's kind, "Steady light and sweeps"; to be built in #592): as built in #577 it
 counts as steady light, under one change in every window. Under #592's accounting its window runs from the turn's
-first frame, 650 ms after the drop as built in #577 (to be built in #592: the later of that and the drop's
-frame plus 1250 ms, so it starts at least 1 s after the burst's decay ends), for at most 4.15 s; the scheduler counts it as 1 in every 1 s window that
+first frame, 650 ms after the drop as built in #577 (to be built in #592: 2250 ms after the drop's moment,
+so it starts at least 1 s after the burst's decay ends), for at most 4.15 s; the scheduler counts it as 1 in every 1 s window that
 overlaps it, and no run overlaps it. Its start and its target are the song's and never move. A case of the CI
 matrix that finds the fan above 1 is fixed in the light (the levers below), never by moving the turn, or stops
 #592 as "Steady light and sweeps" says.
@@ -1064,13 +1073,13 @@ them, and the test asserts as well that no run overlaps a sweep's window, with n
 window that overlaps a sweep counts at most 3 with the sweep as 1, with no exception; that at the Beat level
 and Tempo only no run, its hold or its tail lies in a window that counts the looks' sway, and that every 1 s
 window that overlaps a live span of the sway counts at most 3 with the sway as 1 (one 1 with steady light's
-and a sweep's); that the sway is not live in the 2 s after an unforeseen cause; that around every burst the motion phase
-and steady light are held from 1 s before its rise to 1 s after its decay, no other run lies in a window that
-touches it, and every such window counts at most 3 (a fixed case: a light-only burst at the None level with
-the sway live and a user action 500 ms after the rise, as at 80 s); that a drop's fan turn starts at the later
-of the moment plus `TURN_DELAY_MS` and the drop's frame plus 1250 ms, and no 1 s window holds both a burst's
-decay and a sweep (fixed cases: the drops at 40 s and 58 s, at the Beat level and the None level, each with a
-user action 500 ms after the drop and one 900 ms after it, every window counting at most 3); that after an unforeseen
+and a sweep's); that the sway is not live in the 2 s after an unforeseen cause; that no burst holds the motion phase or steady light's clock, a burst's decay is counted inside the shared 1,
+no other run lies in a window that touches it, and every such window counts at most 3 (a fixed case: a
+light-only burst at the None level with the sway live and a user action 500 ms after the rise, as at 80 s);
+that a drop's fan turn starts 2250 ms after the drop's moment, whatever P1 merges, and no 1 s window holds
+both a burst's decay and a sweep (fixed cases: the drops at 40 s and 58 s, at the Beat level and the None level, each with a
+user action 500 ms after the drop and one 900 ms after it, and a drop 0.9 s before an interval change, merged
+onto its frame, every window counting at most 3); that after an unforeseen
 cause no beam turns and no steady light moves for 2 s of class-clock time, a run in progress ends in the
 cause's P2-placed frame, and no run ends less than 1 s before the turn; that every unforeseen mark is placed by
 P2. The timelines generate a change at the cause between **every ordered pair of link states** the link can
@@ -1303,7 +1312,7 @@ straight on the scene.
 | Interval change | (Built in #576 and #577.) The front truss, the floor uplights and the haze cross to the new colour in the 700 ms that end at the change, a wipe from the far side toward the gel, each light switching hue at constant luminance, never a mix; the new zone's energy arrives in one 700 ms ramp ending at the change ("Colour: two hues, never a mix"); the energy is in the change frame instead when a count runs, without the beat, or where a window over the ramp counts the looks' sway (to be built in #592, "The looks' sway, counted"); every lens flashes toward white once at the change (160 ms, `--m-flash`, under the flash threshold), unless a burst falls on the same moment, which then replaces it ("The flash budget", collisions) | New values, the gel's cut and the countdown's reset in **one frame** at the change (the gel never shows a mix); on the scene no white line down the gel's edge (#577; the lens flash marks the change) |
 | Song change | Rig dims to 25 % for one beat, back on the first beat of the new song (built in #577: down in 120 ms and up in 120 ms; no dim when a burst or an interval change falls within 1 s, when a count runs or without the beat); the beams turn to the new song's look at no more than 30 degrees a second, so the turn is done within 3.5 s ("How a beam turns") | Score moves on; song clip and BPM change |
 | Build (8 beats before a drop, or a `build` moment) | Beams turn, at the turn limit, to gather at one point in the middle of the room (complete in time up to about 170 bpm), the haze brightens (built in #577: a step up of 3 % on each beat, about 1.25 ×, with a lift of 2 %; as built, 1.5 × with a 55 % lift); for the last 1 s before the drop the haze has finished rising and the beams hold still where they are ("The flash budget") | Nothing new (the score shows the "Drop" tick) |
-| Drop | One white burst over the whole scene (also at the None level, except paused, holding and off the list) (a peak of 0.85 of white at the drop, 250 ms decay; built in #577: up in one frame in the drop's fixed frame (the nearest interval change's, when one is under 1 s away, light only), at least 10 s from any other burst; skipped, and the fan's frame instead, where the window has no room: at the Beat level and at Tempo only (wherever the ramp runs), on an interval change (the ramp comes first) and with a count running; with the light-only bursts, the only full-screen flashes; the fan's extra fixtures come on in the burst's frame), then every fixture on, the beams' turn starting 650 ms after the drop and going, at the turn limit, to the wide fan for 4 bars (the fan is open within 4.2 s and 4 bars last 5.3 s even at 180 bpm), then the zone's own energy | Unchanged; the text is never flashed (dark-under-text holds during the burst) |
+| Drop | One white burst over the whole scene (also at the None level, except paused, holding and off the list) (a peak of 0.85 of white at the drop, 250 ms decay; built in #577: up in one frame in the drop's fixed frame (the nearest interval change's, when one is under 1 s away, light only), at least 10 s from any other burst; skipped, and the fan's frame instead, where the window has no room: at the Beat level and at Tempo only (wherever the ramp runs), on an interval change (the ramp comes first) and with a count running; with the light-only bursts, the only full-screen flashes; the fan's extra fixtures come on in the burst's frame), then every fixture on, the beams' turn starting 650 ms after the drop (to be built in #592: 2250 ms after the drop's moment, whatever P1 merges) and going, at the turn limit, to the wide fan for 4 bars (as built, the fan is open within 4.2 s and 4 bars last 5.3 s even at 180 bpm; to be built in #592 it is open within 5.75 s of the moment and the fan's window lasts at least 6.75 s), then the zone's own energy | Unchanged; the text is never flashed (dark-under-text holds during the burst) |
 | Breakdown | One slow beam on the front truss and the wall's wave for 8 bars | Unchanged |
 | Paused | Lights down: everything to 6 %, frozen where it was | As 2D: gel lights down, "Paused" plate, link plate "Music paused" |
 | Coasting (readings stopped or stale) | No beat at all (the beat cannot be measured); the rig keeps the zone's colour and moves at its energy | As 2D: "estimated", dimmed dashed countdown, link plate "Music not heard" |
