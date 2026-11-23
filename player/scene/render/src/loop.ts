@@ -12,6 +12,7 @@ import { BurstTracker } from "./bursts.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
 import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
+import { MarkHold } from "./mark-hold-calc.ts";
 import { NO_PATTERN_LIGHT, patternLight } from "./pattern-light-calc.ts";
 import { movementScale, stageLit, stageMaster, stageOf } from "./stage-calc.ts";
 import { TextClock } from "./text-clock.ts";
@@ -106,6 +107,7 @@ export class RigLoop {
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
   private readonly clock = new TextClock();
+  private readonly hold = new MarkHold();
 
   /** The text for this frame (the host calls it before the frame to paint the text; the same feed asked again gives the same answer). */
   shown(feed: Feed): Shown {
@@ -174,14 +176,18 @@ export class RigLoop {
     const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
     const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
     const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;
+    // The lit fixtures and the haze's gain change on a planned mark only: a change between marks waits for the next one.
+    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs);
+    const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
+    const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`);
     return {
       drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
-      hazeGain: still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs),
+      hazeGain: held.haze,
       energyRamp: rampPlaced ? cross.ramp : 0,
       tokens: { current: frame.colours.front, next: wipe > 0 ? frame.colours.back : null },
       cross,
       ahead: nextEnergy === null ? null : { energy: nextEnergy, lit: fixturesLit({ ...frame, energy: nextEnergy }, quality) },
-      lit: stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality),
+      lit: [...held.lit],
       master: stageMaster(stage, link, this.tokens, dim),
       chaseStep: chase ? Math.floor(beats / beatStride(song.bpm!)) : null,
       text,
