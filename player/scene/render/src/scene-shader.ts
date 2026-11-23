@@ -12,6 +12,8 @@ import { COMB, COMB_HALF_WIDTH } from "./light-calc.ts";
 import { BURST_SHADOW, BURST_SHADOW_DEPTH, FADE, GROW, MAX_BOXES } from "./text-mask-calc.ts";
 
 export const BEAMS = 22;
+/** The beam's lateral profile is `exp(-d^2 / rad^2)` with `rad = BEAM_BASE_RADIUS + t x spread` (world units, `t` along the beam): the checks (tools/beam-floor.ts) use these. */
+export const BEAM_BASE_RADIUS = 0.12;
 /** A wall dot: full inside this share of its radius, nothing at the edge (the mock-up's smoothstep(.3, .1, r)). */
 export const DOT_INNER = 0.33;
 export const DOT_OUTER = 1;
@@ -45,10 +47,8 @@ uniform float uLensW;        // the white share of a lens: 0.5 at rest, up to 0.
 uniform int uN;
 uniform vec3 uBO[${BEAMS}];
 uniform vec3 uBD[${BEAMS}];
-uniform float uBI[${BEAMS}]; // beam luminance
-uniform float uBL[${BEAMS}]; // lens luminance
-uniform float uBF[${BEAMS}]; // 0 the current token, 1 the next
-uniform float uBS[${BEAMS}]; // spread
+uniform vec4 uBP[${BEAMS}];  // per beam: x beam luminance, y lens luminance, z 0 the current token or 1 the next, w spread (packed: 4 floats would take a vector each)
+uniform float uFloor;        // S5b: the least luminance of a lit beam's core, 0 when running
 uniform int uBoxN;
 uniform vec3 uBoxA[${MAX_BOXES}]; // l, b
 uniform vec3 uBoxB[${MAX_BOXES}]; // r, t
@@ -132,17 +132,20 @@ void main() {
     float sc = max((b * e - d) / den, 0.0);
     float tc = clamp((e - b * d) / den, 0.0, 45.0);
     float dist = length(w0 + sc * R - tc * D);
-    float rad = 0.12 + tc * uBS[i];
-    float I = 2.4 * exp(-dist * dist / (rad * rad)) / (0.35 + rad * 2.0);
+    float rad = ${BEAM_BASE_RADIUS.toFixed(2)} + tc * uBP[i].w;
+    float prof = exp(-dist * dist / (rad * rad));
+    float I = 2.4 * prof / (0.35 + rad * 2.0);
     I *= clamp(0.3 / sqrt(den), 0.3, 2.2) * exp(-tc * 0.03);
-    float beam = I * uBI[i] * (0.45 + 0.75 * hz);
+    float beam = I * uBP[i].x * (0.45 + 0.75 * hz);
+    // S5b: a lit beam's core never reads below the floor (a fixed level, not a share): the beam's own profile, in its token.
+    beam = max(beam, uFloor * prof * step(1e-6, uBP[i].x));
     float s2 = max(dot(R, O), 0.1);
     float dl = length(R * s2 - O) / s2;
     float fc = max(0.0, dot(D, normalize(-O)));
     fc = 0.12 + 0.88 * fc * fc * fc;
-    float lens = uBL[i] * fc * (exp(-dl * dl * 12000.0) * 3.0 + 0.0005 / (dl * dl + 0.0005) * 0.3);
+    float lens = uBP[i].y * fc * (exp(-dl * dl * 12000.0) * 3.0 + 0.0005 / (dl * dl + 0.0005) * 0.3);
     // The lens is half white, half its token.
-    if (uBF[i] > 0.5) L.y += beam + 0.5 * lens; else L.x += beam + 0.5 * lens;
+    if (uBP[i].z > 0.5) L.y += beam + 0.5 * lens; else L.x += beam + 0.5 * lens;
     L.z += uLensW * lens;
   }
   // The burst is held back round the text by a soft shadow (rounded, wide), so the dark under the text is a penumbra and not a slab.
