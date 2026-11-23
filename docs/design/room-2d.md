@@ -1,7 +1,7 @@
 # Screen spec: the plain 2D room screen
 
 Status: proposed in the pull request for issue #22; the strict S6 measure ("Motion and reduced motion") was
-added in #582 and is built as follows: the room screen in #583 (merged), the control band and the join sheet in #585 (not yet); the controls on the room screen and the class
+added in #582 and is built as follows: the room screen in #583 and the control band and the join sheet in #585 (both merged, as built); the controls on the room screen and the class
 code were added for the owner's "one screen first" (plan section 3, 2026-11-13); the position
 pattern, the next interval's cue, the five-minute score and the playlist plate were added for
 [scene.md](scene.md) (issue #483, see "The follow-up to the scene"). Design system:
@@ -499,11 +499,9 @@ Within the states above:
 
 ## Motion and reduced motion: the flash budget on the plain screen (S6)
 
-**Decided in #582 (the Designer); built in #583 (the room screen, `web/src/room`, merged: as built) and #585 (the
-control band and the join sheet, `player/app/src/renderer`, not yet merged).** What is marked "as built in #583" is
-what the code holds. Every number and behaviour that differs from what is built for the band and the join sheet is
-marked "to be built in #585"; the figures there are what the code and `tokens.css` hold until #585 lands, and the tests
-that read them keep reading them.
+**Decided in #582 (the Designer); built in #583 (the room screen, `web/src/room`) and #585 (the
+control band and the join sheet, `player/app/src/renderer`), both merged: as built.** What is marked "as built in #583"
+or "as built in #585" is what the code holds.
 **The shared tokens `--m-change`, `--m-flash` and `--m-state` do not change** (the scene's colour
 cross and lens flash, the companion, the rider page, the play screen and the join sheet's spec read
 them); the plain screen is cut **locally**: its own CSS sets no transition or animation, so it no
@@ -541,7 +539,7 @@ in paused, before the start and finished, where there are no ticks, the change i
 So no state waits for a tick that does not come, and the band hides 3 s after the last input, at
 most 500 ms late (C10).
 
-| What changes | Kind | Frame it falls in | Before #583 (the #585 rows: as built now) |
+| What changes | Kind | Frame it falls in | Before #583 and #585 |
 |---|---|---|---|
 | The countdown's seconds, the class time left and done | Step | A **tick**: the countdown's second; with a count running, the first count tick at or after it, never early | Each second (unchanged, except under a count) |
 | The bars line | Step | The first tick at or after its downbeat | On its bar (as built in #583) |
@@ -550,9 +548,9 @@ most 500 ms late (C10).
 | A label ("Change in" at 5 s, "estimated", "Until the next song", "Last interval"), a link plate, "Following stopped" appearing and its 30 s ending, the countdown dimmed to `--light-2` | Step | A tick when one falls within the 500 ms; otherwise its own mark (timed or outside change, above). A plate that answers an action ("Paused", "Music paused") is in the action's frame | Plates fade over 300 ms (cut in #583, as built) |
 | An interval change: the gel's colour, numeral and name, the targets, the values, the cue, the next row, the segment name, the countdown's reset | Step | One frame, the **change frame at `t0`**. The gel's colour is **cut**, never mixed, and **no white line** runs down its edge | A 700 ms mix and a 160 ms white edge line (cut in #583, as built) |
 | Lights down on pause and up on resume (the gel goes dark and the zone colour moves into the numeral, and back); "Class Complete" lights up | Step | The user action's frame; the class's end is a change frame | 300 ms (cut in #583, as built) |
-| The control band and the class code appearing, the End question | Step | The user action's frame (the move, tap or key that shows it) | A 300 ms fade (**to be built in #585**) |
-| The control band going; the band's state line ("Phone connected", "Ended"); the End question closing on its 8 s timeout | Step | Timed or outside changes: their own mark, at most 500 ms after their time (above); the band counts as hidden from that frame | A 300 ms fade (**to be built in the player-lane issue #585**) |
-| The join sheet appearing and going, and its "New code" plate (room-join.md; a 300 ms opacity animation in `room-join.css`) | Step | The join sheet is in the action's frame (or the frame of the phone's join); the plate and the sheet's end are timed or outside changes (above) | 300 ms (**to be built in #585**) |
+| The control band and the class code appearing, the End question | Step | The user action's own mark: at most 500 ms after the move, tap or key that shows it, 1 s when it joins a change frame (as built in #585) | A 300 ms fade (cut in #585, as built) |
+| The control band going; the band's state line ("Phone connected", "Ended"); the End question closing on its 8 s timeout | Step | Timed or outside changes: their own mark, at most 500 ms after their time (above), 1 s when it joins a change frame; the band counts as hidden from that frame | A 300 ms fade (cut in #585, as built) |
+| The join sheet appearing and going, and its "New code" plate (room-join.md; a 300 ms opacity animation in `room-join.css` before #585) | Step | The join sheet is in its own mark, as the band is (the action's, or the phone's join); the plate and the sheet's end are timed or outside changes (above) | 300 ms (cut in #585, as built) |
 | A seek, a 15 s jump, Previous, Next, a reload, the return from the scene | Step | One frame: every value and text at the new position; no start-up animation | One frame (unchanged) |
 | The beat dot | Removed | | A dot after the BPM, 120 ms a beat (removed in #583, as built) |
 
@@ -727,10 +725,10 @@ notice.
   inside the band, and the **End question** while it is open. A pointer resting over the band
   does not hold it, and a click does not leave it held: a button pressed with the pointer or by a
   tap does its job and the band hides 3 s later (a pointer press never counts as keyboard focus;
-  the shell drops the focus from a button pressed that way). Esc hides it at once and drops the
+  the shell drops the focus from a button pressed that way). Esc hides it in one frame (its own mark, at most 500 ms after the key; 1 s when it joins a change frame) and drops the
   focus. The pointer is hidden with it.
-- **The fade.** Buttons take presses from the first frame the band starts to appear. From the
-  first frame of the fade-out (as built: 300 ms, or at once with reduced motion; to be built in #585: one frame, its own mark at most 500 ms after the 3 s, with or without the setting) the band counts as hidden:
+- **No fade.** Buttons take presses from the frame the band appears in. From the 3 s on
+  (as built in #585: one frame, its own mark at most 500 ms after the 3 s, or 1 s when it joins a change frame, with or without the reduced-motion setting) the band counts as hidden:
   it takes no presses, and a click or tap then only shows it again (next item).
 - **With one display it does not hide before the start, nor on "Class Complete"**: Start (or
   Close class) is always in sight there, which is what the owner missed on the first Mac run.
@@ -857,7 +855,7 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | F | Follow the music (`follow`), when the music could be followed; otherwise nothing. Named in the rail while the clock is manual ("Back to following the music") | No: the rail names it |
 | Tab, Shift+Tab | Shows the band and moves through its buttons | |
 | Enter | The focused button | |
-| Esc | Closes the End question ("Keep going"); otherwise hides the band at once | |
+| Esc | Closes the End question ("Keep going"); otherwise hides the band in one frame, at most 500 ms after the key (1 s when it joins a change frame) | |
 
 **While the End question is open**, Space, the arrows (with or without Shift), Page Up, Page
 Down, F5 and Shift+F5 do nothing, so a stray clicker press or a nudged key cannot move the class or answer the
@@ -874,10 +872,10 @@ not keys. Follow the music is both: the presenter's button and F.
 
 ### Motion
 
-As built, the band appears and fades with `--m-state` (300 ms, ease out); with reduced motion it
-is there and gone at once (0 ms, C7). To be built in #585, it is there and gone at once with or
-without the setting: it appears in the frame of the input that shows it and goes in its own mark,
-at most 500 ms after the 3 s ("Motion and reduced motion"), as a step. Nothing in it moves, blinks or pulses;
+As built in #585, the band is there and gone in one frame with or without the setting (no
+transition, no `--m-state`, 0 ms, C7): every appearing and going is a mark of the room window's one
+ledger (`room-marks.ts`), at most 500 ms after the input that shows it or the 3 s that hides it, and 1 s
+when it joins a change frame ("Motion and reduced motion"), as a step. Nothing in it moves, blinks or pulses;
 the score under it steps on the ticks.
 
 ### Mock-ups
@@ -944,7 +942,7 @@ fixture by size. Every check passes on every shot.
 | C6. Hue | Any text, fill or border that is not grey lies inside an element that stands for a zone. Not covered by the mock-up script: hue inside `box-shadow` and gradients (the gel's glow is the zone's own colour); PL4 CI must cover them or forbid hue there |
 | C7. Motion | With or without reduced motion (the system's or the player's own), no transition or animation lasts longer than 0 and nothing repeats (`room-checks.test.ts` on every shot; `room-quiet.test.ts` reads the room's own code and styles for any transition, animation, frame loop or shared motion token); every text and colour change falls in a frame mark, any two marks at least 500 ms apart, an action, or a change the shell asks for through `RoomScreen.requestMark`, showing at most 500 ms after it (measured 500 ms plus 1 to 2 frames: the timer and the frame it lands in each add up to a frame), or at most 1 s (the same tolerance) when it joins a change frame or a switch beat, on a clock that is on the frame grid and on one that is not, the gaps measured between the draws as they are made, never between rounded frames (`mark-gate.test.ts`, `flash-marks-property.test.ts` and, with outside changes and pauses, `mark-ledger.test.ts`, on random timelines); and the strict S6 gate of scene.md passes on the real states, with the count running, with the beat but no count and without the beat, with reduced motion off and on, at 16:9 and 4:3 (`room-s6.test.ts`, which reports every gated run; the cap table in "Motion and reduced motion"). Reduced motion shows the same marks. The mock-ups, being stills, cannot check it |
 | C8. Coverage | Every piece of text on the screen is inside an element the checks see (in the mock-ups: a `data-tier` element), so no text escapes C1 to C4 |
-| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. **Behaviour, PL4 CI only** (the mock-ups are static and cannot check it): the band hides 3 s after the last input of each kind (pointer move, click, tap, key press), at most 500 ms later as a timed change's own mark ("Motion and reduced motion"; to be built in #585), in every state, paused included; a pointer resting over the band does not hold it; after a button is pressed by click or tap the band still hides 3 s later; keyboard focus reached by Tab holds it, and so does the End question, until Esc or an answer; with one display it does not hide before the start or on "Class Complete"; a click or tap while hidden, or during the fade-out, presses nothing and only shows the band; on touch a tap is the only way in; with reduced motion it appears and hides in 0 ms; F follows the music without showing the band; while the End question is open the transport keys (Space, the arrows with or without Shift, Page Up, Page Down, F5 and Shift+F5) do nothing. No control code reaches the room window on any room channel (ADR 0005's guard, extended to the new channels) |
+| C10. Control band | Hidden: the screenshot equals the same state without the band, pixel for pixel, with no pointer. Shown: every pixel outside the score's box equals the hidden screenshot (the band covers the score and nothing else). Band text passes C1 to C4 at the label floor (2 %), the class code at 3 %; button words measure 2.4 % on the mock-ups. Buttons are at least 9.4 vh high (72 px at 768 lines). The QR code has at least 2 px per module at every supported size (29 modules and a 4-module quiet zone in 12.4 vh, or 10.8 vh at 3:2 and narrower) and is black on white. "Keep going" covers the centre of End's box; "End class" is at least 5 vw from it. **Behaviour, PL4 CI only** (the mock-ups are static and cannot check it): the band hides 3 s after the last input of each kind (pointer move, click, tap, key press), at most 500 ms later as a timed change's own mark, and up to 1 s later when the band joins a change frame ("Motion and reduced motion"; as built in #585), in every state, paused included; a pointer resting over the band does not hold it; after a button is pressed by click or tap the band still hides 3 s later; keyboard focus reached by Tab holds it, and so does the End question, until Esc or an answer; with one display it does not hide before the start or on "Class Complete"; a click or tap while hidden, or during the fade-out, presses nothing and only shows the band; on touch a tap is the only way in; with reduced motion it appears and hides in 0 ms; F follows the music without showing the band; while the End question is open the transport keys (Space, the arrows with or without Shift, Page Up, Page Down, F5 and Shift+F5) do nothing. No control code reaches the room window on any room channel (ADR 0005's guard, extended to the new channels) |
 | C9. Palette | From `tokens.css`, by [mockups/palette.js](mockups/palette.js): every zone at least 7 : 1 with black on it, on the stage and on the lights-down gel; neighbouring zones at least ΔE 30 apart for normal vision, 25 for protanopia and deuteranopia, 12 for tritanopia (system.md) |
 
 How the mock-up script finds ink ([mockups/ink.js](mockups/ink.js)): a pixel is ink when it differs
