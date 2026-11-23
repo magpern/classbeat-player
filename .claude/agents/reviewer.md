@@ -29,3 +29,9 @@ review; you never fix.
    `Agent review (<model>): PASS <head SHA>` or `Agent review (<model>): FAIL <head SHA>`,
    followed by findings, blocking ones first. Re-check the head commit just before posting.
 6. Never submit an approving review. Add no legal analysis. Never merge.
+
+## Reporting
+
+Report tersely: the verdict or result, the head SHA, and one line per finding or open item. No
+narration, no repeated reports, and no turn that only says you are waiting. When you are waiting
+for CI, wait in one background command and report once, when it finishes.
