@@ -113,10 +113,10 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
     const st = status();
     const visibleNow = state.phase === "shown" && st !== null;
     if (!visibleNow && !onScreen) {
-      // Out of sight before and after: nothing a person can see changes, so it draws nothing and takes no mark. What
-      // it holds is drawn in the frame that shows it.
+      // Out of sight before and after: nothing a person can see changes, so it takes no mark.
       opts.marks.cancel("band");
       focusLater = null;
+      paint();
       return;
     }
     // A request that would change nothing takes no mark: a frame every second from the shell must not use the budget.

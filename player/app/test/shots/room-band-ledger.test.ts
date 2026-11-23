@@ -25,8 +25,13 @@ const PROBE = `
     if (el.closest && el.closest(".band, .join")) return !(r.type === "childList" && el === document.body);
     return el === document.body && (r.attributeName === "data-band" || r.attributeName === "data-join");
   };
+  // A change of what a hidden band holds is not seen by anyone; one that shows or hides it, or touches the sheet, is.
+  const unseen = (r) => {
+    const band = document.querySelector(".band");
+    return band !== null && band.dataset.phase === "hidden" && band.contains(r.target) && !(r.target === band && r.type === "attributes");
+  };
   const obs = new MutationObserver((records) => {
-    for (const r of records) if (mine(r)) window.__ledger.outside.push(r.type + ":" + (r.attributeName || (r.target.className || r.target.nodeName)));
+    for (const r of records) if (mine(r) && !unseen(r)) window.__ledger.outside.push(r.type + ":" + (r.attributeName || (r.target.className || r.target.nodeName)));
   });
   obs.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   let mounted;
