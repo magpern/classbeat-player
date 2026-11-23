@@ -51,6 +51,8 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   // What the page shows, which is the model's `state` as of the last mark it reached the screen in.
   let onScreen = false;
   let drawn = "";
+  // The clock's state the drawn buttons were made for: a press acts on what is drawn, never on a newer state still waiting for its frame.
+  let drawnStatus: ClockStatus | null = null;
   // Focus that waits for the band to be on screen (Tab or the End question just after it went).
   let focusLater: (() => void) | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,6 +75,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       if (v === null) band.replaceChildren();
       else draw(band, v);
       drawn = key;
+      drawnStatus = st;
       changed = want || onScreen;
       if (focused) band.querySelector<HTMLElement>(`[data-id="${focused}"]`)?.focus();
     }
@@ -145,9 +148,8 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   }
 
   function act(id: ButtonId): void {
-    const st = status();
-    if (id === "main" && st) {
-      const c = mainCommand(st);
+    if (id === "main" && drawnStatus) {
+      const c = mainCommand(drawnStatus);
       if (c) h.command({ type: c });
     } else if (id === "next" || id === "previous") h.command({ type: id });
     else if (id === "end") openAsk();
