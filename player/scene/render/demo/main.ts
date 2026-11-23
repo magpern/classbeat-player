@@ -9,6 +9,7 @@
 // dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
+import { angleBetween } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
 import { TAN_H } from "../src/rig.ts";
@@ -38,6 +39,7 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
+let lastSweeping = false;
 let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
@@ -57,6 +59,7 @@ const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off", steadyOnly: params.get("steady") === "1",
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
+    lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
     lastMaster = draw.master;
     const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
     lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
@@ -115,6 +118,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** Whether any beam's drawn direction is off its target on the last frame (a sweep, scene.md "Steady light and sweeps"). */
+  readonly sweeping: boolean;
   /** The rig's master level on the last frame: 1 running, a quarter at the bottom of a song-change dim. */
   readonly master: number;
   /** The two tokens in play on the last frame, as 0xRRGGBB: the planned zone's, and the next zone's during the anticipation. */
@@ -201,6 +206,7 @@ const api: DemoApi = {
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
   get burst() { return lastBurst; },
+  get sweeping() { return lastSweeping; },
   get master() { return lastMaster; },
   get tokens() { return lastTokens; },
   rigState() {
