@@ -101,7 +101,7 @@ export class RigLoop {
   private seconds = 0;
 
   private readonly tokens: LoopTokens;
-  private readonly holdPhase: boolean;
+  private holdPhase = false;
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
   private readonly clock = new TextClock();
@@ -119,11 +119,15 @@ export class RigLoop {
     return made;
   }
 
-  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). `holdPhase`: the motion phase never advances (the steady-light gate, never the product). */
-  constructor(tokens: LoopTokens, budgetOff = false, holdPhase = false) {
-    this.holdPhase = holdPhase;
+  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). */
+  constructor(tokens: LoopTokens, budgetOff = false) {
     this.tokens = tokens;
     this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
+  }
+
+  /** The motion phase never advances (the steady-light gate's `steady=1`, never the product). */
+  holdMotionPhase(): void {
+    this.holdPhase = true;
   }
 
   step(feed: Feed, rawDtSeconds: number, quality: QualityLevel): Draw {
