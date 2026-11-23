@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-14 (after #439).
+Updated 2026-11-23 (after #590 and #593; `main` green at 3cb1591).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -127,6 +127,37 @@ every navigation; #162, #165: a refusal never throws out of the shell listeners,
 tested); keep-awake while a class runs (#157, #159). **Done on fakes:** the Verifier ran the PL4 "done when" on
 `main` at `e2d7c6c` (#159) and filed no gap issues; #165 merged after it. The lasting-fault plate and the display removal are covered by unit tests
 only (memory keychain, one xvfb display).
+
+## PL6: the room scene (web 3D, ADR 0009)
+
+Merged: the scene direction (#471), a pure scene model (#526), the turn-rate limiter and moments
+gate in the web 3D renderer (#536), the render-callback and lint fences (#549, #557, #564), the
+text layer and the dark-under-text mask (#563), halved movement, the before-the-start look and the
+strict S6 report (#569), the scene-only tokens (#581), the two-hue colour cross and the S6 budget
+in the spec (#575), the 2D screen under the strict S6 measure in the spec (#584), the linear-light
+renderer and the two-hue cross (#586), the house-look beam floor S5b in the spec (#588), and the
+flash budget, its scheduler and the strict S6 gate on the canvas (#590).
+
+**Known rule gaps (S6), with their fixes:**
+- The strict S6 gate measures the canvas only. On the whole frame as shown (the scene and its text
+  layer) S6 is **not met** until #591 puts the text layer on the scheduler and gates the whole
+  frame.
+- Steady light is **not** at its cap of 3 % a second (`--scene-steady-max`): beam sweeps move a
+  region 20 to 40 % a second, haze and wall drift 8 to 12 %. The scheduler counts steady light as
+  one change a second until #592.
+- The plain 2D screen (#583) and the control band and join sheet (#585) are built to the strict
+  measure in their own issues.
+
+Open pull requests: #596 (closes #594, the flash budget's tokens in `tokens.css`). Open, no pull
+request yet: #591 (text layer, whole-frame gate), #589 (S5b beam floor), #583 (plain 2D
+screen), #585 (control band and join sheet). Queued: #592 (after #591).
+
+## PL12: installed phone and tablet apps
+
+Merged: the plan (#551), ADR 0011 (Capacitor, #553), spike 3 (an Android media-session follower
+and frame-rate logger, #555) with its CI build (#560) and guard hardening (#561, #566, #568,
+#573). The owner decided on 2026-11-15 that the app has two modes, instructor and rider
+(ADR 0011 section 1, amended). Spike 3 waits for the owner's run on a phone (owner.md).
 
 ## Infra
 
