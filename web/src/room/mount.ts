@@ -6,7 +6,7 @@ import { el } from "./dom.ts";
 import { toRoomModel } from "./adapter.ts";
 import type { RoomInput } from "./input.ts";
 import { createMarkGate } from "./mark-gate.ts";
-import type { MarkContext } from "./mark-gate.ts";
+import type { MarkContext, MarkTicket } from "./mark-gate.ts";
 import type { RoomModel } from "./model.ts";
 import { fitCue } from "./fit-cue.ts";
 import { createGel } from "./render-gel.ts";
@@ -18,6 +18,8 @@ import type { ScoreScale } from "./score-scale.ts";
 
 /** The faces the screen measures with (system.md, Type); loaded explicitly so the first fit is not made with a fallback. */
 const FONT_FACES = ['600 1em "Big Shoulders Display"', '800 1em "Big Shoulders Display"', '400 1em "Atkinson Hyperlegible"', '700 1em "Atkinson Hyperlegible"'];
+
+export type { MarkTicket };
 
 /** Time as the screen sees it: injected so the checks can run a class on a clock they step by frames. */
 export interface RoomClock {
@@ -45,6 +47,19 @@ export interface RoomOptions {
 
 export interface RoomScreen {
   update(input: RoomInput): void;
+  /**
+   * Asks for a frame mark for a change the shell makes itself on top of the screen (the control band, the join sheet, a
+   * plate): `draw` is called when the frame comes, and the frame is returned now, on the clock of `RoomOptions.clock`
+   * (`performance.now()` by default). The mark is placed by the same ledger and the same scheduler call as the screen's own
+   * marks (flash-marks.ts, P1 fixed frames first, then P2, scene.md "The flash budget"): at least 500 ms from every
+   * mark drawn, reserved or pending, so a tick that would fall within 500 ms of it gives way, and at most 500 ms late (1 s
+   * when it joins the interval's change frame or the count's switch beat). Call it from the shell's own timers or event
+   * handlers, at the time the change is wanted, and draw only inside `draw`: it is called synchronously before this
+   * returns when the frame is now (or shares the frame of a draw just made), otherwise from the screen's timer. Every
+   * change of the band, the sheet and the plate must go through it; one that is drawn without it breaks the whole
+   * window's budget. `cancel` gives the mark up before `draw` has run.
+   */
+  requestMark(draw: () => void): MarkTicket;
   destroy(): void;
 }
 
@@ -106,10 +121,18 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
     if (gate === null || at === null) return;
     timer = clock.later(() => {
       timer = undefined;
-      const m = gate.due(clock.now());
-      if (m) draw(m);
+      flush();
       arm();
     }, Math.max(0, at - clock.now()));
+  }
+
+  /** Everything whose frame has come, in one frame: the screen's own mark and the outside changes. */
+  function flush(): void {
+    if (gate === null) return;
+    const now = clock.now();
+    const m = gate.due(now);
+    if (m) draw(m);
+    for (const run of gate.dueOutside(now)) run();
   }
 
   return {
@@ -126,7 +149,18 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       };
       const shown = gate.offer(m, now, ctx);
       if (shown) draw(shown);
+      flush();
       arm();
+    },
+    requestMark(run) {
+      if (gate === null) {
+        run();
+        return { atMs: clock.now(), cancel: () => undefined };
+      }
+      const ticket = gate.request(clock.now(), run);
+      flush();
+      arm();
+      return { atMs: ticket.atMs, cancel: () => { ticket.cancel(); arm(); } };
     },
     destroy() {
       if (timer !== undefined) clock.cancel(timer);

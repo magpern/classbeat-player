@@ -31,7 +31,14 @@ export interface S6Run {
   readonly rafCalls: number;
 }
 
-export async function playS6(browser: Browser, scenario: Scenario, size: readonly [number, number], reduced: boolean, seconds: number): Promise<S6Run> {
+/** Changes the shell makes on top of the screen, as the control band does (see `Drive.begin`). */
+export interface Outside {
+  readonly times: readonly number[];
+  /** Drawn at once with no mark asked for: the negative control. */
+  readonly bypass?: boolean;
+}
+
+export async function playS6(browser: Browser, scenario: Scenario, size: readonly [number, number], reduced: boolean, seconds: number, outside?: Outside): Promise<S6Run> {
   const page = await newPage(browser, { width: size[0], height: size[1], reducedMotion: reduced });
   const external: string[] = [];
   page.on("request", (r) => {
@@ -41,7 +48,7 @@ export async function playS6(browser: Browser, scenario: Scenario, size: readonl
   await page.addInitScript("window.__raf = 0; const r = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (f) => { if (window.__counting) window.__raf += 1; return r(f); };");
   try {
     await page.goto(harnessUrl("running", "virtual=1"));
-    await page.evaluate(({ s, r }) => window.drive.begin(s, r), { s: scenario, r: reduced });
+    await page.evaluate(({ s, r, o }) => window.drive.begin(s, r, o?.times, o?.bypass), { s: scenario, r: reduced, o: outside });
     await page.evaluate(() => document.fonts.ready);
     await settle(page);
     await page.evaluate(() => {
