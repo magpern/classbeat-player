@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Independent Reviewer for the class player. Reviews one pull request at one head commit and records PASS or FAIL on it. Spawn a new one for a pull request's first review; resume the same agent for later rounds.
+description: Independent Reviewer for the class player. Reviews one pull request at one head commit and records PASS or FAIL on it. Spawn a new one for a pull request's first review; resume the same agent for rounds 2 and 3; a new one of the same model may take over from round 4.
 model: sonnet
 # Default. Spawned with `opus` (top tier; never `fable` unless the owner says so) for security-critical and rule-sensitive pull requests (AGENTS.md, section 5).
 ---

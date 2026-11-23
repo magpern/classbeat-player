@@ -90,12 +90,12 @@ Rules of parallel work:
 issue → Developer in its own worktree → pull request → CI
       → Reviewer (and Designer, if a user sees the change)
       → PASS → the Orchestrator merges
-      → FAIL → the same Developer fixes every finding → CI → the same Reviewer, resumed
+      → FAIL → the same Developer fixes every finding → CI → the same Reviewer, resumed (a fresh one may take over from round 4, section 5)
 milestone's last merge → Verifier → gaps become issues → milestone closes on a clean run
 ```
 
 If one finding survives three rounds, the Orchestrator reassesses the cause, revises the issue or
-the ADR, and a fresh Reviewer reviews the revised work (item 2 of section 5). The Orchestrator does
+the ADR, and a fresh Reviewer of the same model may review the revised work (item 2 of section 5). The Orchestrator does
 not stop for a `FAIL` or at the end of a milestone.
 
 ## 5. The review gate (every merge)
