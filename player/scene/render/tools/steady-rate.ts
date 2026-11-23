@@ -43,14 +43,12 @@ export interface Rate {
 /** The most the series ranges (highest to lowest) in any window of 1 s, as a share of its highest, and where the window starts. */
 export function worstRate(timesMs: readonly number[], luminance: readonly number[], sweeping: readonly boolean[] = []): Rate {
   const { series, steps } = withoutSteps(luminance);
-  let [worst, atMs, from, read] = [0, 0, 0, 0];
+  let [worst, atMs, from] = [0, 0, 0];
   let windows = 0;
   for (let i = 0; i < series.length; i++) {
     while (timesMs[i]! - timesMs[from]! >= 1000) from++;
     let [min, max] = [series[i]!, series[i]!];
-    read = 0;
-    for (let j = from; j <= i; j++) if (sweeping[j] === true) { read = -1; break; }
-    if (read < 0) continue;
+    if (sweeping.slice(from, i + 1).some(Boolean)) continue;
     for (let j = from; j < i; j++) { min = Math.min(min, series[j]!); max = Math.max(max, series[j]!); }
     windows++;
     if (max > FLOOR && (max - min) / max > worst) [worst, atMs] = [(max - min) / max, timesMs[from]!];
