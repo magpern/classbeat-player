@@ -15,12 +15,19 @@ export interface FrameStop {
 }
 
 export interface Drive {
-  /** Mounts the room on `scenario` at frame 0; `reduced` is the player's own setting. */
-  begin(scenario: Scenario, reduced: boolean): void;
+  /**
+   * Mounts the room on `scenario` at frame 0; `reduced` is the player's own setting. `outside` are the times (ms) at which
+   * the shell changes something on top of the screen, as the control band does: each toggles a bright block in the top right
+   * corner (one change in one frame). They are drawn through `RoomScreen.requestMark`, or, with `bypass`, at once and with
+   * no mark asked for (the negative control of the whole-room gate).
+   */
+  begin(scenario: Scenario, reduced: boolean, outside?: readonly number[], bypass?: boolean): void;
   /** Forget the changes so far (the first draw, the fonts arriving). */
   reset(): void;
   /** Steps frames up to `lastFrame`; stops at the first frame in which the page changed, or returns null at the end. */
   advance(lastFrame: number): FrameStop | null;
+  /** Two outside changes due in one frame, the first throws: whether the second was drawn, and whether a third, asked for after, still is. */
+  probeThrow(): Promise<{ thrown: boolean; second: boolean; third: boolean }>;
   /** What on the page transitions, animates or is moved by the Web Animations API now. */
   moving(): string[];
 }
@@ -31,6 +38,9 @@ export function createDrive(host: HTMLElement): Drive {
   let frame = 0;
   let now = 0;
   let timers: { id: number; at: number; run: () => void }[] = [];
+  let requests: number[] = [];
+  let bypassed = false;
+  let block: HTMLElement | null = null;
   let next = 0;
   const changes = new MutationObserver(() => undefined);
   changes.observe(host, { childList: true, attributes: true, characterData: true, subtree: true });
@@ -46,9 +56,13 @@ export function createDrive(host: HTMLElement): Drive {
   };
 
   return {
-    begin(scenario, reduced) {
+    begin(scenario, reduced, outside = [], bypass = false) {
       screen?.destroy();
-      [frame, now, timers] = [0, 0, []];
+      block?.remove();
+      block = document.createElement("div");
+      block.style.cssText = "position:fixed;right:0;top:0;width:30vw;height:30vh;background:#fff;z-index:9;display:none";
+      host.append(block);
+      [frame, now, timers, requests, bypassed] = [0, 0, [], [...outside].sort((a, b) => a - b), bypass];
       timeline = createTimeline(scenario);
       screen = mountRoom(host, { reducedMotion: reduced, clock });
       screen.update(timeline.inputAt(0));
@@ -66,10 +80,43 @@ export function createDrive(host: HTMLElement): Drive {
           timers = timers.filter((t) => t !== due);
           due.run();
         }
+        while (requests.length > 0 && requests[0] <= now) {
+          requests.shift();
+          const toggle = (): void => {
+            if (block) block.style.display = block.style.display === "none" ? "block" : "none";
+          };
+          if (bypassed) toggle();
+          else screen.requestMark(toggle);
+        }
         screen.update(timeline.inputAt(now));
         if (changes.takeRecords().length > 0) return { frame, ms: now };
       }
       return null;
+    },
+    async probeThrow() {
+      if (!screen) throw new Error("begin first");
+      const ran = { second: false, third: false };
+      let thrown = false;
+      const onError = (e: ErrorEvent): void => {
+        thrown = true;
+        e.preventDefault();
+      };
+      window.addEventListener("error", onError);
+      screen.requestMark(() => {
+        throw new Error("a draw that fails");
+      });
+      screen.requestMark(() => {
+        ran.second = true;
+      });
+      this.advance(frame + 90);
+      await Promise.resolve();
+      screen.requestMark(() => {
+        ran.third = true;
+      });
+      this.advance(frame + 90);
+      await Promise.resolve();
+      window.removeEventListener("error", onError);
+      return { thrown, ...ran };
     },
     moving() {
       const found = [...host.querySelectorAll("*")].filter((e) => {
