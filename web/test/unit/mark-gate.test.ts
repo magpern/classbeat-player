@@ -9,6 +9,7 @@ import type { Scenario } from "../../src/fixtures/timeline.ts";
 import { toRoomModel } from "../../src/room/adapter.ts";
 import { changeKind } from "../../src/room/change-kind.ts";
 import { FRAME_MS, LOOKAHEAD_MS, createMarkGate } from "../../src/room/mark-gate.ts";
+import type { RoomModel } from "../../src/room/model.ts";
 
 interface Run {
   /** The times (ms) at which the screen changed, after the first draw. */
@@ -25,6 +26,8 @@ interface Clock {
   readonly jitter: number;
   /** How late a timer fires (ms): the page's `setTimeout` is not exact. */
   readonly timerLate: number;
+  /** The time between snapshots; a frame when absent. */
+  readonly step?: number;
 }
 const ON_GRID: Clock = { offset: 0, jitter: 0, timerLate: 0 };
 
@@ -42,8 +45,7 @@ function play(s: Scenario, seconds: number, frameMs = FRAME_MS, clock: Clock = O
   let [current, since, waited, waitedJoined] = [null as ReturnType<typeof toRoomModel> | null, null as number | null, 0, 0];
   const draw = (drawn: ReturnType<typeof toRoomModel> | null, t: number): void => {
     if (!drawn) return;
-    // A mark is a display frame: the page paints the change on the next frame after the draw.
-    if (marks.length > 0 || t > 0) marks.push(Math.ceil(t / frameMs - 1e-9) * frameMs);
+    if (marks.length > 0 || t > 0) marks.push(t);
     if (since !== null && current) {
       const joined = drawn.intervalKey !== current.intervalKey || changeKind(current, drawn) === "switch";
       if (joined) waitedJoined = Math.max(waitedJoined, t - since);
@@ -54,8 +56,9 @@ function play(s: Scenario, seconds: number, frameMs = FRAME_MS, clock: Clock = O
     since = null;
   };
   let last = -1;
-  for (let k = 0; k * frameMs <= seconds * 1000; k += 1) {
-    const t = Math.max(last + 0.01, k * frameMs + (k === 0 ? 0 : clock.offset + random() * clock.jitter));
+  const step = clock.step ?? frameMs;
+  for (let k = 0; k * step <= seconds * 1000; k += 1) {
+    const t = Math.max(last + 0.01, k * step + (k === 0 ? 0 : clock.offset + random() * clock.jitter));
     last = t;
     const wake = gate.wakeAtMs();
     if (wake !== null && wake + clock.timerLate < t) draw(gate.due(wake + clock.timerLate), wake + clock.timerLate);
@@ -75,7 +78,7 @@ function play(s: Scenario, seconds: number, frameMs = FRAME_MS, clock: Clock = O
 
 /** An action shows at most 500 ms after it, or at most 1 s when it shows in a change frame or on a switch beat (a frame or two for the clock's own step). */
 function assertTimely(r: Run, frameMs: number, label: string): void {
-  assert.ok(r.waited <= 500 + 2 * frameMs + 4, `${label}: an action waited ${r.waited.toFixed(0)} ms`);
+  assert.ok(r.waited <= 500 + 2 * frameMs + 4, `${label}: an action waited ${r.waited.toFixed(0)} ms, marks ${r.marks.map((m) => Math.round(m)).join(",")}`);
   assert.ok(r.waitedJoined <= 1000 + 2 * frameMs + 4, `${label}: an action waited ${r.waitedJoined.toFixed(0)} ms for a change frame`);
 }
 
@@ -211,5 +214,58 @@ describe("the gate on a clock that is not on the frame grid (performance.now and
 
   it("looks ahead 1 s for a fixed frame, as room-2d.md says (\"Timed and outside changes\")", () => {
     assert.equal(LOOKAHEAD_MS, 1000);
+  });
+
+  it("every real gap between draws is at least 500 ms, and no 3 draws fall within 1 s, on clocks with any offset, period and late timers", () => {
+    let runs = 0;
+    for (const step of [FRAME_MS, 16.9, 33.3, 250]) {
+      for (let n = 0; n < 40; n += 1) {
+        const clock: Clock = { step, offset: (n * 0.73) % FRAME_MS, jitter: n % 3 === 0 ? 0 : 6, timerLate: (n % 4) * 0.9 };
+        for (const fixture of ["running", "pattern"]) {
+          for (const bpm of [128, 180]) {
+            const s: Scenario = { fixture, startMs: 1_159_000 + n * 30, bpm, events: [{ atMs: 2000 + n * 91, do: "link", state: "Coasting" }, { atMs: 4100 + n * 13, do: "pause" }, { atMs: 4400 + n * 17, do: "resume" }] };
+            const r = play(s, 12, FRAME_MS, clock, n + 3);
+            runs += 1;
+            // Real draw times, as made: never rounded to a frame.
+            for (let i = 1; i < r.marks.length; i += 1) assert.ok(r.marks[i] - r.marks[i - 1] >= 500 - 1e-6, `${JSON.stringify({ s, clock })}: draws ${r.marks[i - 1].toFixed(1)} and ${r.marks[i].toFixed(1)} are ${(r.marks[i] - r.marks[i - 1]).toFixed(1)} ms apart`);
+            for (const m of r.marks) assert.ok(r.marks.filter((x) => x >= m && x < m + 1000 - 1e-6).length <= 2, `3 draws within 1 s from ${m.toFixed(1)}`);
+          }
+        }
+      }
+    }
+    assert.ok(runs > 600);
+  });
+
+  it("a tick wanted just before a change frame is placed against fixed frames only 1 s ahead (a switch beat 1.3 s ahead does not move it)", () => {
+    const tl = createTimeline({ fixture: "running", startMs: 1_099_000, events: [] });
+    const at0 = toRoomModel(tl.inputAt(0));
+    const gate = createMarkGate();
+    gate.offer(at0, 0, { changeAtMs: null, switchAtMs: null });
+    // One second later: the countdown has stepped, a change frame comes in 400 ms and a switch beat 1.3 s ahead.
+    const next: RoomModel = toRoomModel(tl.inputAt(1000));
+    assert.equal(gate.offer(next, 1000, { changeAtMs: 1400, switchAtMs: 2300 }), null);
+    const wake = gate.wakeAtMs();
+    // Placed after the change frame, 500 ms on: 1900 ms. Looking 2 s ahead, the switch beat would push it past its period.
+    assert.ok(wake !== null && Math.abs(wake - 1900) <= FRAME_MS, `wakes at ${wake}`);
+  });
+
+  it("times off the grid do not push an action to a change frame ahead: 500 ms after the last draw is its place", () => {
+    const tl = createTimeline({ fixture: "running", startMs: 1_099_000, events: [{ atMs: 5, do: "link", state: "Coasting" }] });
+    const gate = createMarkGate();
+    assert.ok(gate.offer(toRoomModel(tl.inputAt(0)), 7.3, { changeAtMs: 800, switchAtMs: null }), "the first draw");
+    // The link changes 2.7 ms later, a change frame 800 ms ahead: the action wants a place at once, and may not take it.
+    assert.equal(gate.offer(toRoomModel(tl.inputAt(10)), 10, { changeAtMs: 800, switchAtMs: null }), null);
+    const wake = gate.wakeAtMs();
+    assert.ok(wake !== null && wake >= 507.2 && wake <= 517, `the action is placed at ${wake}, not on the change frame`);
+  });
+
+  it("a tick is timed from its frame, not from the raw clock: 5 ms after a draw, a 490 ms beat is placed 500 ms on, not dropped", () => {
+    const base = toRoomModel(createTimeline({ fixture: "running", startMs: 1_099_000, events: [] }).inputAt(0));
+    const tick: RoomModel = { ...base, clock: base.clock && { ...base.clock, count: "0:59" }, count: { beatMs: 490, beatsLeft: 5 }, classMs: base.classMs + 5 };
+    const gate = createMarkGate();
+    assert.ok(gate.offer(base, 0, { changeAtMs: null, switchAtMs: null }));
+    assert.equal(gate.offer(tick, 5, { changeAtMs: null, switchAtMs: null }), null);
+    const wake = gate.wakeAtMs();
+    assert.ok(wake !== null && Math.abs(wake - 500) <= 1, `the tick is placed at ${wake}`);
   });
 });

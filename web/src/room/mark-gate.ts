@@ -55,6 +55,7 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
   let pending: Pending | null = null;
   let prev: Seen | null = null;
 
+  /** Draws now. The mark is the time of the draw itself, never a rounded one: the gap to the next is kept from it. */
   const show = (nowMs: number): RoomModel | null => {
     shown = latest;
     lastMark = nowMs;
@@ -73,28 +74,30 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
     return nowMs >= before.ctx.changeAtMs - NATURAL_MS && !jumped(before, model, nowMs);
   }
 
-  function place(kind: ChangeKind, model: RoomModel, nowMs: number, ctx: MarkContext, since: number): number | null {
+  function place(kind: ChangeKind, model: RoomModel, nowMs: number, rawMs: number, ctx: MarkContext, since: number): number | null {
     const fixed: FixedFrame[] = [ctx.changeAtMs, ctx.switchAtMs]
       .filter((t): t is number => t !== null && t >= nowMs - NATURAL_MS && t - nowMs < LOOKAHEAD_MS)
       .map((t) => ({ atMs: frameAt(t, frameMs), change: true, changes: [t], drops: [] }));
     const want: Want = { kind, atMs: since, periodMs: kind === "tick" ? (model.count?.beatMs ?? TICK_MS) : undefined };
-    const [placed] = placeMarks(fixed, [want], frameMs, Number.isFinite(lastMark) ? [lastMark] : []);
+    // The scheduler sees the grid only: the last draw, rounded up, is a mark at least as late as it really was.
+    const [placed] = placeMarks(fixed, [want], frameMs, Number.isFinite(lastMark) ? [frameAt(lastMark, frameMs)] : []);
     if (!placed || placed.atMs === null) return null;
     // A want that joined a fixed frame still ahead shows in that frame, with the snapshot of the frame itself (the change
     // frame, the switch beat): it waits for it, and is placed again by every snapshot until then.
-    if (placed.how === "joined" && placed.atMs > nowMs && fixed.some((f) => f.atMs === placed.atMs)) return Number.POSITIVE_INFINITY;
+    if (placed.how === "joined" && placed.atMs > rawMs && fixed.some((f) => f.atMs === placed.atMs)) return Number.POSITIVE_INFINITY;
     return Math.max(placed.atMs, lastMark + MARK_GAP_MS);
   }
 
   return {
     offer(model, rawMs, ctx) {
-      // Every time the scheduler sees is on the frame grid: a clock that is off the grid would round a placement past
-      // 500 ms late and send an action to a frame mark far ahead.
+      // Every time the scheduler is given is on the frame grid: a clock that is off the grid would round a placement past
+      // 500 ms late and send an action to a frame mark far ahead. A draw is never before its placed frame, on the real
+      // clock, and is recorded at the real time it was made.
       const nowMs = frameAt(rawMs, frameMs);
       const before = prev;
       prev = { model, atMs: nowMs, ctx };
       latest = model;
-      if (shown === null) return show(nowMs);
+      if (shown === null) return show(rawMs);
       const found = changeKind(shown, model);
       if (found === null) {
         pending = null;
@@ -104,17 +107,16 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
       const change = pending?.kind === "change" || natural(before, model, nowMs);
       // The change frame is fixed: it shows at once. Only if the clock did not tell the screen it was coming (and the last
       // mark is under 500 ms away) is it held back, so that no two marks are ever closer than the invariant.
-      const at = change ? Math.max(nowMs, lastMark + MARK_GAP_MS) : place(jumped(before, model, nowMs) && found === "tick" ? "action" : found, model, nowMs, ctx, since);
+      const at = change ? Math.max(rawMs, lastMark + MARK_GAP_MS) : place(jumped(before, model, nowMs) && found === "tick" ? "action" : found, model, nowMs, rawMs, ctx, since);
       if (at === null) {
         pending = null;
         return null;
       }
       pending = { since, kind: change ? "change" : found, at };
-      return at <= nowMs ? show(nowMs) : null;
+      return at <= rawMs ? show(rawMs) : null;
     },
     due(rawMs) {
-      const nowMs = frameAt(rawMs, frameMs);
-      return pending && pending.at <= nowMs ? show(nowMs) : null;
+      return pending && pending.at <= rawMs ? show(rawMs) : null;
     },
     wakeAtMs: () => (pending && Number.isFinite(pending.at) ? pending.at : null),
   };
