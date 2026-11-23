@@ -2,13 +2,15 @@
 // the person's events; never a frame because the draw changed there. A beam popping on without a mark must stay in the series and be reported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mergeIntervals } from "../../model/src/index.ts";
 import { DEMO_CLASS } from "../demo/scenario.ts";
 import { plannedMarkIn } from "../src/frame-marks-calc.ts";
 import { FRAME_MS } from "../src/marks-calc.ts";
 import type { Where } from "../src/marks-calc.ts";
 import { worstRate } from "../tools/steady-rate.ts";
 
-const where = (classMs: number): Where => ({ cls: DEMO_CLASS, classMs, songIndex: 0, songPosMs: classMs, level: "Beat" });
+const MERGED = mergeIntervals(DEMO_CLASS);
+const where = (classMs: number): Where => ({ cls: MERGED, classMs, songIndex: 0, songPosMs: classMs, level: "Beat" });
 const frames = (fromMs: number, toMs: number) => { const t: number[] = []; for (let x = fromMs; x < toMs; x += FRAME_MS) t.push(x); return t; };
 
 test("the frame an interval change falls in is marked, and no frame away from a mark is", () => {

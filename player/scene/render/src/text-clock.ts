@@ -49,6 +49,12 @@ export class TextClock {
   private out: Shown | null = null;
   private seen: ClockFeed | null = null;
 
+  /** A mark the rig placed for itself (P2, mark-hold-calc.ts): the text's own marks keep 500 ms from it. */
+  note(markMs: number): void {
+    if (!this.fired.includes(markMs)) this.fired = [...this.fired, markMs];
+    this.plan = null;
+  }
+
   /** The text for this frame. The same feed again (the host asks first, the rig's loop after) gives the same answer. */
   step(feed: ClockFeed): Shown {
     const s = this.seen;

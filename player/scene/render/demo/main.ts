@@ -9,7 +9,7 @@
 // dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue, SceneClass } from "../../model/src/index.ts";
-import { angleBetween } from "../../model/src/index.ts";
+import { angleBetween, mergeIntervals } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { plannedMarkIn } from "../src/frame-marks-calc.ts";
 import { SceneRenderer } from "../src/renderer.ts";
@@ -44,6 +44,13 @@ let lastSweeping = false;
 let lastMark = "";
 let pendingMark = false;
 let lastFrameMs: number | null = null;
+/** The class with interval changes under 1 s apart merged (P1), as the loop has it: once per class. */
+const mergedClasses = new WeakMap<SceneClass, SceneClass>();
+const mergedClass = (cls: SceneClass): SceneClass => {
+  let made = mergedClasses.get(cls);
+  if (made === undefined) { made = mergeIntervals(cls); mergedClasses.set(cls, made); }
+  return made;
+};
 let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
@@ -66,8 +73,8 @@ const renderer = new SceneRenderer(host, {
     lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
     // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek) or a mark `planMarks` places (a change frame, a
     // drop's frame, a text step). The cause is named in the gate's report. Nothing is marked because the draw changed.
-    const planned = lastFrameMs !== null && plannedMarkIn({ cls: lastFeed.cls, classMs, songIndex: lastFeed.songIndex, songPosMs: lastFeed.songPosMs, level: draw.frame.level }, lastFrameMs, classMs);
-    lastMark = pendingMark ? "event" : planned ? "planned mark" : "";
+    const planned = lastFrameMs !== null && plannedMarkIn({ cls: mergedClass(lastFeed.cls), classMs, songIndex: lastFeed.songIndex, songPosMs: lastFeed.songPosMs, level: draw.frame.level }, lastFrameMs, classMs);
+    lastMark = pendingMark ? "event" : planned ? "planned mark" : draw.heldMark !== null ? "held change, own mark (P2)" : "";
     pendingMark = false;
     lastFrameMs = classMs;
     lastMaster = draw.master;

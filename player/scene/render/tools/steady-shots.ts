@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { VARIANTS } from "../demo/scenario.ts";
 import { MOMENTS, REGIONS, STATES as BEAT_STATES, probeSetup } from "./flash-shots.ts";
 import { STEADY_MAX, worstRate } from "./steady-rate.ts";
 import { frameTimes } from "./luminance-steps.ts";
@@ -33,10 +34,13 @@ async function play(open: Open, name: string, state: string, query: string, from
   const out = await page.evaluate(() => (window as unknown as { __steps: Series }).__steps);
   assert.deepEqual([...problems, ...(await violations(page))], [], name);
   await page.close();
+  // The window is 1 s, or one beat when the slowest song of the class is slower than 60 bpm (`--scene-steady-max`).
+  const slowest = Math.min(...(VARIANTS[cls ?? "demo"] ?? VARIANTS.demo!).cls.songs.map((song) => song.bpm ?? 120));
+  const windowMs = Math.max(1000, 60_000 / slowest);
   const wall = frameTimes(out.t);
   let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0, windows: Number.POSITIVE_INFINITY, unnamedAtMs: [], taken: [] };
   REGIONS.forEach(([region], r) => {
-    const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping, out.marks);
+    const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping, out.marks, windowMs);
     const windows = Math.min(best.windows, rate.windows);
     const unnamedAtMs = [...new Set([...best.unnamedAtMs, ...rate.unnamedAtMs])];
     // The jumps taken out, once each (the same frame's jump shows in many regions): the largest share of the regions.

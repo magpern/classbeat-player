@@ -4,6 +4,7 @@
 // ending at its own moment instead of its frame) is the defect the steady gate (tools/steady-shots.ts) reports as an unmarked jump.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mergeIntervals } from "../../model/src/index.ts";
 import type { SceneClass } from "../../model/src/index.ts";
 import { VARIANTS, feedAt } from "../demo/scenario.ts";
 import type { Feed } from "../src/loop.ts";
@@ -22,6 +23,7 @@ export function unmarkedChanges(variant: string, state: (typeof STATES)[number],
   const [name, tempo] = state;
   const cls = tempo ? noAnchors(v.cls) : v.cls;
   const link = name === "coasting" ? ({ state: "Coasting" } as const) : ({ state: "Locked" } as const);
+  const merged = mergeIntervals(cls);
   const loop = new RigLoop(tokens);
   const bad: string[] = [];
   let [classMs, before, key, gain, prev] = [0, 0, "", 1, 0];
@@ -31,7 +33,7 @@ export function unmarkedChanges(variant: string, state: (typeof STATES)[number],
     const k0 = JSON.stringify([d.lit, d.frame.energy, d.frame.colours.front]);
     const k = mutate ? mutate(k0, classMs) : k0;
     const jumped = n > 0 && (k !== key || Math.abs(d.hazeGain - gain) > 0.005);
-    if (jumped && !plannedMarkIn({ cls, classMs, songIndex: f.songIndex, songPosMs: f.songPosMs, level: d.frame.level }, prev, classMs)) bad.push(`${name} ${variant} ${Math.round(classMs)} ms: ${k !== key ? "lit, energy or colour" : "haze gain"}`);
+    if (jumped && d.heldMark === null && !plannedMarkIn({ cls: merged, classMs, songIndex: f.songIndex, songPosMs: f.songPosMs, level: d.frame.level }, prev, classMs)) bad.push(`${name} ${variant} ${Math.round(classMs)} ms: ${k !== key ? "lit, energy or colour" : "haze gain"}`);
     [before, key, gain, prev] = [classMs, k, d.hazeGain, classMs];
     classMs += d.dtSeconds * 1000;
   }

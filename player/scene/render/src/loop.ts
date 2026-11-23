@@ -46,6 +46,8 @@ export interface Draw {
   readonly beamLevel: number;
   /** The haze's gain in a build: a 3 % step a beat at the Beat level, steady light below it. */
   readonly hazeGain: number;
+  /** The frame of a mark the hold placed for a change of the lit fixtures or the haze's gain (P2), on the frame it lands; else null. */
+  readonly heldMark: number | null;
   /** The lens flash at an interval change, 0 to 1. */
   readonly lens: number;
   /** How far the energy has got from the zone left to the zone entered: the cross's ramp where the scheduler placed it, else 0 (a step in the change frame). */
@@ -180,9 +182,11 @@ export class RigLoop {
     const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs);
     const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
     const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`);
+    if (held.mark !== null) this.clock.note(held.mark);
     return {
       drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
       hazeGain: held.haze,
+      heldMark: held.mark,
       energyRamp: rampPlaced ? cross.ramp : 0,
       tokens: { current: frame.colours.front, next: wipe > 0 ? frame.colours.back : null },
       cross,
