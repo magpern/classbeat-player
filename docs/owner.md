@@ -34,10 +34,12 @@ with other work; nothing in the development loop waits for an answer.
   app another app's playback). Until then the iOS app runs on the manual clock, and how far an iOS
   build can reach without the App Store is not verified (plan, section 14).
 - **One app, two modes (owner, 2026-11-15).** Decided: the Android app has an instructor mode
-  and a rider mode. Defaults agents picked (ADR 0011, section 1), which you may change: the mode
-  is chosen at sign-in and can be switched in the app; rider mode shows the same rider page
-  inside the app, and the web rider page stays; the Spotify music link and notification access
-  are instructor mode only; rider mode keeps rules 13 to 15 and gives riders no control.
+  and a rider mode. Defaults agents picked (ADR 0011, section 1), which you may change: rider
+  mode needs no account and runs the rider page bundled in the app, and the web rider page
+  stays; the app starts in rider mode until it is paired; switching to instructor mode asks for
+  the phone's screen lock (or starts pairing); switching to rider mode first ends everything of
+  instructor mode; the Spotify music link and notification access are instructor mode only;
+  rider mode keeps rules 13 to 15 and gives riders no control.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
@@ -85,8 +87,9 @@ with other work; nothing in the development loop waits for an answer.
   control: Remove, Lock joining and New code are in the presenter window only. Say if you want
   them on the room screen.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
-  FastAPI, PostgreSQL); no phone app of our own, with Bluefy on iPhone for sensors; no external
-  hardware such as lighting.
+  FastAPI, PostgreSQL); installed Android and iOS apps with two modes, Android first (decision
+  15, above); riders' sensors from the web page, with Bluefy on iPhone; no external hardware such
+  as lighting.
 
 ## Tasks only the owner can run
 

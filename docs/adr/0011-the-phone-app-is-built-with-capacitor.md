@@ -37,20 +37,37 @@ native plugins**, written in Kotlin on Android. One web code base serves the des
 `/play` and the app.
 
 **Amended (owner, 2026-11-15): one app, two modes.** The app has two modes, **instructor** and
-**rider** (the owner says MOWL's app works the same way). It replaces "The app is the instructor's player only; it hosts no
-rider page." The defaults agents picked, which the owner may change (owner.md):
+**rider** (the owner says MOWL's app works the same way). It replaces "The app is the
+instructor's player only; it hosts no rider page." What follows are the safest reversible
+defaults the Orchestrator picked; the owner may change them (owner.md).
 
-- The mode is chosen at sign-in and can be switched in the app.
-- Rider mode shows the same rider page the web serves at `/j` (ADR 0007), inside the shell. The
-  web rider page stays, so a rider can still join with nothing to install.
+- **The rider page is bundled.** Rider mode runs the rider page's code from the APK, never the
+  page the web serves at `/j` (ADR 0007). Section 4 applies unchanged in rider mode: the same
+  CSP with `connect-src 'none'`, no remote load, the same plugin allowlist. The web rider page
+  stays, so a rider can still join with nothing to install.
+- **Rider traffic goes through native code.** The join (`POST /api/live/join`) and the rider's
+  socket go through rider-only named intents (section 3), never through the web view.
+- **The rider token stays native.** It is held only in native memory for that session: never
+  persisted, never given to the web view, and discarded on leave, on a mode switch and when the
+  app exits. This differs by design from the web rider page, which keeps it in `sessionStorage`
+  (ADR 0007).
+- **Native code holds the mode.** The mode is held and enforced in native code. Each mode exposes
+  only its own intents (section 3), and the web view cannot select, change or unlock a mode.
+- **Rider mode needs no account,** only the join code and a nickname (ADR 0007). The app starts
+  in rider mode on an unpaired device and in instructor mode on a paired one.
+- **Switching to instructor mode.** On an unpaired device it starts the pairing of section 5. On
+  a paired device it first asks for the operating system's screen-lock confirmation (the device
+  credential or a biometric).
+- **Switching to rider mode.** Native code first stops the music follower, closes any host or
+  controller connection, drops all instructor state and reloads the bundled page fresh. Only then
+  does the rider page load, so no host event (for example `rider_joined`, which carries other
+  riders' nicknames) can reach a web view in rider mode (rule 13).
+- **Leaving rider mode** closes the rider socket and discards the rider token.
 - The Spotify music link (section 6) and notification access are instructor mode only. Rider mode
   never asks for notification access and never starts the follower.
 - Rider mode keeps rules 13 to 15 (plan, section 3): rider data flows one way, to the instructor;
   the join code carries a session identifier only; no team games. It gives a rider no control of
   the class and holds no host or controller token.
-- Switching modes never widens what a rider can see or do. A switch to instructor mode needs the
-  instructor's own sign-in; in rider mode the web view gets none of instructor mode's named
-  intents (section 3).
 - The rule guards of section 8 cover the rider mode's code as they cover the rest of
   `player/mobile/`.
 
@@ -92,8 +109,15 @@ intents** with checked arguments and answers, never a general channel. In partic
   live session for class *id*".
 - The backend origin is fixed in the native build: HTTPS only in release builds, loopback in a
   debug build, as on the desktop (ADR 0002).
-- No answer to the web view ever contains the device token, a pairing device code, a host token or
-  a controller token. The device code and the host token live in native memory only.
+- No answer to the web view ever contains the device token, a pairing device code, a host token,
+  a controller token or a rider token. The device code, the host token and the rider token live
+  in native memory only.
+- **The intents are split by mode (amended 2026-11-15, section 1).** Instructor intents, such as
+  the examples above, exist only in instructor mode. Rider mode has its own fixed set, and only
+  that set: "join session *code* as *nickname*" (native code calls `POST /api/live/join` and keeps
+  the rider token), "send the rider's message" and "receive the rider's messages" over the rider
+  socket native code opens with that token, and "leave". The rider's messages are still built and
+  checked by the shared TypeScript; native code carries them as opaque text, as for the host.
 - Every intent has a test that rejects unexpected arguments.
 
 ### 4. The web view is locked down

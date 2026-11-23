@@ -148,8 +148,9 @@ flash budget, its scheduler and the strict S6 gate on the canvas (#590).
 - The plain 2D screen (#583) and the control band and join sheet (#585) are built to the strict
   measure in their own issues.
 
-In progress: #591 (text layer, whole-frame gate), #589 (S5b beam floor), #583, #585, #594 (the
-flash budget's tokens in `tokens.css`). Queued: #592 (after #591).
+Open pull requests: #596 (closes #594, the flash budget's tokens in `tokens.css`). Started, with
+no pull request yet: #591 (text layer, whole-frame gate), #589 (S5b beam floor), #583 (plain 2D
+screen), #585 (control band and join sheet). Queued: #592 (after #591).
 
 ## PL12: installed phone and tablet apps
 
