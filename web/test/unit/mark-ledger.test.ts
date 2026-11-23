@@ -16,8 +16,8 @@ import { TOLERANCE, checkRun, grid, runSeed, simulate } from "./ledger-sim.ts";
 /** A fixed sweep: the same seeds on every run, so CI never depends on the day. `SEEDS=a-b` runs another range, `CASES` sets the timelines per seed, `SEED_ONLY` one seed, `N_ONLY` one case of it. */
 const [FROM, TO] = (process.env.SEEDS ?? "1-500").split("-").map(Number);
 const CASES = Number(process.env.CASES ?? 16);
-/** Seeds the reviews of #609 found failing (B5, B7): all 120 timelines of each are played, for good. */
-const PINNED = [119391, 1256761, 1989864, 2094593, 1675677, 4189173, 1047303];
+/** Seeds the reviews of #609 found failing (B5, B7, B8): all 120 timelines of each are played, for good. */
+const PINNED = [874, 119391, 1256761, 1989864, 2094593, 1675677, 4189173, 1047303];
 const only = process.env.N_ONLY ? Number(process.env.N_ONLY) : undefined;
 
 describe("one ledger: the screen's marks and the shell's outside changes", () => {

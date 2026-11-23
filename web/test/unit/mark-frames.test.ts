@@ -77,3 +77,46 @@ describe("a change whose fixed frame is gone", () => {
     assert.ok(Math.abs(second.atMs - other.atMs) < 1e-6, "still one mark when the beat is gone");
   });
 });
+
+describe("the gate's guards that keep P2 and P1 when the world moves under a placed mark", () => {
+  const tl = createTimeline({ fixture: "running", startMs: 1_099_000, events: [] });
+  const first = toRoomModel(tl.inputAt(0));
+  /** A model one countdown second on: the screen's own change, a tick. */
+  const ticked = toRoomModel(tl.inputAt(1100));
+  const none = { changeAtMs: null, switchAtMs: null };
+
+  it("an outside draw under 500 ms before the screen's pending mark pushes it to 500 ms after the draw (a late timer)", () => {
+    const gate = createMarkGate();
+    assert.ok(gate.offer(first, 0, none));
+    gate.request(100, () => undefined); // reserved at 500
+    assert.equal(gate.offer(ticked, 695, none), null);
+    // The timer is late: the outside change is drawn at 700, 16 ms before the tick's frame.
+    for (const run of gate.dueOutside(700)) run();
+    assert.equal(gate.due(1150), null, "the tick gives way: no mark within 500 ms of the draw at 700");
+    assert.ok(gate.due(700 + 500 + FRAME_MS), "and shows 500 ms after it");
+  });
+
+  it("a mark whose place is already past is not drawn 400 ms before a change frame that has come into view since", () => {
+    const gate = createMarkGate();
+    assert.ok(gate.offer(first, 0, none));
+    assert.equal(gate.offer(ticked, 100, none), null, "the tick is placed at 500");
+    // At 600 the change frame at 1000 is known: the tick's place (500) is past, and it is drawn now or never, 400 ms before the frame.
+    assert.equal(gate.offer(ticked, 600, { changeAtMs: 1000, switchAtMs: null }), null, "it rides the change frame instead");
+    const wake = gate.wakeAtMs();
+    assert.ok(wake !== null && wake >= 1000, `waits for the frame's snapshot: ${wake}`);
+  });
+
+  it("a stopped clock brings no snapshot of a frame that was coming: a change riding it is seated again at once", () => {
+    const gate = createMarkGate();
+    assert.ok(gate.offer(first, 0, none));
+    gate.offer(first, 900, { changeAtMs: null, switchAtMs: 1500 });
+    const ticket = gate.request(1100.01, () => undefined);
+    assert.ok(ticket.atMs >= 1600 - 1, `it rides the beat: ${ticket.atMs}`);
+    // The beat passes while the clock still runs: the frame is announced, and its snapshot is on its way.
+    gate.offer(first, 1510, none);
+    assert.ok(ticket.atMs >= 1600 - 1, `still waiting for it: ${ticket.atMs}`);
+    // Then the clock stops: no snapshot comes.
+    gate.offer({ ...first, moving: false }, 1520, none);
+    assert.ok(ticket.atMs <= 1520 + FRAME_MS, `seated again now: ${ticket.atMs}`);
+  });
+});

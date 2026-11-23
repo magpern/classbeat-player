@@ -136,10 +136,7 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
     // interval's change frame is not one of those: a switch near it waits for the change frame's snapshot (it may come a frame
     // after the frame the clock estimated), and never draws ahead of it.
     const beats = [switchFrame(ctx), ...announcedBeats].filter((b): b is number => b !== null).map((b) => frameAt(b, frameMs));
-    // A beat that came after a change was reserved within 500 ms of it (a resume starts the beats) gives way to it: P2 first (a count that
-    // shows a moment late harms less than two marks under 500 ms apart), and the beat takes the next frame like any other count step.
-    const reserved = outside.filter((o) => o.live && !o.rides).map((o) => o.at);
-    const own = kind === "switch" ? fixed.find((f) => Math.abs(f.atMs - nowMs) <= NATURAL_MS && beats.some((b) => Math.abs(b - f.atMs) < 1e-6) && !reserved.some((r) => Math.abs(r - f.atMs) < MARK_GAP_MS - 1 && Math.abs(r - f.atMs) > 1e-6)) : undefined;
+    const own = kind === "switch" ? fixed.find((f) => Math.abs(f.atMs - nowMs) <= NATURAL_MS && beats.some((b) => Math.abs(b - f.atMs) < 1e-6)) : undefined;
     const want: Want = { kind, atMs: own?.atMs ?? since, periodMs: kind === "tick" ? (model.count?.beatMs ?? TICK_MS) : undefined };
     // The scheduler sees the grid only: the last draw, rounded up, is a mark at least as late as it really was.
     let [put] = placeMarks(fixed, [want], frameMs, placed(false));
