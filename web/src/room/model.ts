@@ -102,6 +102,8 @@ export interface IntroModel {
 export interface CountModel {
   readonly beatMs: number;
   readonly beatsLeft: number;
+  /** The time until this side ends and the count switches (the next switch beat), from where the beats fall. */
+  readonly switchInMs?: number;
 }
 
 export interface RoomModel {

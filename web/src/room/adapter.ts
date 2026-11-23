@@ -1,6 +1,7 @@
 // The typed adapter: a snapshot (the open class, the clock view, the music link view) becomes the
 // room screen's model. Pure; nothing here reads the DOM, a clock or the network, so every state
 // is a function of its input and is tested as one.
+import { nthOnsetAfter } from "./beat-grid.ts";
 import { cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
 import type { Class, LinkInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
@@ -92,7 +93,7 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
     metrics: metricsFor(iv, song, link, position),
-    count: countFor(position, song),
+    count: countFor(position, song, view.classMs),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
     intro: null,
@@ -153,11 +154,18 @@ function metricsFor(iv: Class["intervals"][number], song: Song | null, link: Lin
   ];
 }
 
-/** The count's beat: the song's tempo, while a count is shown (the player counts; this only says how fast it steps). */
-function countFor(position: PatternValue | null, song: Song | null): CountModel | null {
+/**
+ * The count's beat and when its side ends (the switch beat), while a count is shown. The player counts; this only says how
+ * fast it steps and where the beats fall: on the song's own grid (`beat-grid.ts`, the player's rule, `pattern.ts`), whatever
+ * the interval's start, for both kinds of pattern. The side ends on the `beatsLeft`-th beat onset after now.
+ */
+function countFor(position: PatternValue | null, song: Song | null, classMs: number): CountModel | null {
   const bpm = song ? songBpm(song) : null;
-  if (position?.kind !== "count" || !bpm) return null;
-  return { beatMs: 60_000 / bpm, beatsLeft: Number(position.count) };
+  if (position?.kind !== "count" || !song || !bpm) return null;
+  const grid = { bpm, anchors: (song.beat_anchors?.anchors ?? []).map((a) => ({ atMs: a.at_ms, bpm: a.bpm })) };
+  const beatsLeft = Number(position.count);
+  const u = classMs - song.start_ms;
+  return { beatMs: 60_000 / bpm, beatsLeft, switchInMs: nthOnsetAfter(grid, u, beatsLeft) - u };
 }
 
 function nextFor(doc: Class, view: View): NextModel {

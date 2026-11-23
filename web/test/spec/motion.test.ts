@@ -125,3 +125,12 @@ describe("a pattern's count (room-2d.md: it is information, not decoration)", ()
     await page.context().close();
   });
 });
+
+describe("the shell's changes through requestMark", () => {
+  it("a draw that throws does not take the other changes of its frame with it, and the screen goes on", async () => {
+    const page = await play({ fixture: "running", startMs: 1_099_000, events: [] });
+    const r = await page.evaluate(() => window.drive.probeThrow());
+    assert.deepEqual(r, { thrown: true, second: true, third: true });
+    await page.context().close();
+  });
+});
