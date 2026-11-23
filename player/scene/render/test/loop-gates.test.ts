@@ -96,9 +96,11 @@ test("drops closer than 10 s share one burst; drops 10 s or more apart each burs
   };
   // The spacing is the burst's own, with the budget on (drops away from a change) and off.
   assert.equal(count(drops(44_000, 47_000), true), 1, "budget off: the same spacing");
-  assert.equal(count(drops(44_000, 47_000)), 1, "3 s apart: the second drop does not burst");
-  assert.equal(count(drops(44_000, 53_900)), 1, "just under 10 s");
-  assert.equal(count(drops(44_000, 55_000)), 2, "11 s apart: both burst (on the countdown's second)");
+  assert.equal(count(drops(44_000, 53_900), true), 1, "budget off, just under 10 s: the same spacing");
+  assert.equal(count(drops(44_000, 55_000), true), 2, "budget off, 11 s apart: both burst");
+  // With the budget on, a drop 3 s after another lies in the first one's gather window and inside its fan's, 11 s after it inside the turn that leaves the fan: no burst is placed there.
+  assert.equal(count(drops(44_000, 47_000)), 0, "3 s apart: each lies in the other's sweep window, neither bursts");
+  assert.equal(count(drops(44_000, 58_000)), 2, "14 s apart: both burst, clear of every sweep window");
 });
 
 const playMasters = (cls: Feed["cls"], from: number, to: number, change: number | null, link: Feed["link"] = { state: "Locked" }): number[] => {

@@ -4,8 +4,8 @@
 // does not fit is a step in the change frame, a burst or a dim that does not fit is left out, and beat-like light is
 // held at rest around every run that is placed. Pure: the class and the time come in, nothing is read.
 
-import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, phraseFlipsMs, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
-import type { PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
+import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, fitRuns, inHold, patternCountRuns, songChangeSweep, songSweeps } from "../../model/src/index.ts";
+import type { CutRecord, PlacedRun, RunKind, RunWish, Span, Sweep } from "../../model/src/index.ts";
 import { FRAME_MS, REACH_MS, nearby, planMarks } from "./marks-calc.ts";
 import type { Where } from "./marks-calc.ts";
 import { readPattern } from "./pattern-light-calc.ts";
@@ -13,8 +13,6 @@ import { nth } from "./lookup.ts";
 
 export type { Where } from "./marks-calc.ts";
 const FAR_MS = 1e9;
-/** The build gathers every beam over the 8 beats before a drop. */
-const GATHER_BEATS = 8;
 export const RAMP_MS = 700;
 export const BURST_MS = 250;
 export const DIM_EDGE_MS = 120;
@@ -38,7 +36,8 @@ export function dropFrame(w: Where, dropClassMs: number): number {
 export class RunBudget {
   private readonly decided = new Map<string, boolean>();
   private placed: PlacedRun[] = [];
-  private sweepsSeen: number[] = [];
+  private sweepsSeen: Sweep[] = [];
+  private readonly cutLog: CutRecord[] = [];
   private readonly hold: { readonly before: number; readonly after: number };
 
   private readonly off: boolean;
@@ -60,28 +59,31 @@ export class RunBudget {
     const beat: Span[] = w.level === "None" ? [] : [{ fromMs: -FAR_MS, toMs: FAR_MS }];
     const wish: RunWish = { id, kind, pieces, waits };
     const song = nth(w.cls.songs, w.songIndex);
-    const offset = w.classMs - w.songPosMs;
-    const bpm = song?.bpm;
-    // Where the beams start a sweep: a phrase flip (Beat level), a build's gather, a drop's fan. Moments are gated off the list and while frozen.
-    const gather = GATHER_BEATS * (bpm !== undefined && bpm > 0 ? 60_000 / bpm : 0);
-    const sweeps = [
-      ...(w.level === "Beat" ? phraseFlipsMs(song?.anchors, w.songPosMs - REACH_MS, w.songPosMs + REACH_MS) : []),
-      ...(song?.moments ?? []).flatMap((m) => (m.kind === "drop" ? [m.at_ms - gather, m.at_ms] : m.kind === "build" ? [m.at_ms] : [])),
-    ].filter((t) => Math.abs(t - w.songPosMs) <= REACH_MS).map((t) => t + offset);
-    // A sweep outlives its song: one the budget saw before a song change still counts after it.
-    const allSweeps = [...new Set([...this.sweepsSeen, ...sweeps])];
-    this.sweepsSeen = allSweeps.filter((t) => t > w.classMs - REACH_MS);
-    // A drop's own gather and fan are not in the way of its burst: the fan's fixtures come on in the drop's frame, under it.
-    const own = id.startsWith("drop@") ? Number(id.slice(5)) : Number.NaN;
-    const ownAt = new Set(Number.isNaN(own) ? [] : [own - gather + offset, own + offset]);
-    const heard = allSweeps.filter((t) => !ownAt.has(t));
-    const beatMs = bpm !== undefined && bpm > 0 ? 60_000 / bpm : 500;
-    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweeps: heard });
+    const offset = w.classMs - w.songPosMs; // where the song starts, on the class clock
+    // Where the beams start a sweep, planned from the song alone (phrase flips, a build's gather, the fan's turn, the song change): the same at every
+    // level, since the plan is a function of the song, not of the link. Seen ones are kept: a sweep outlives its song.
+    const [lo, hi] = [w.classMs - REACH_MS, w.classMs + REACH_MS];
+    const next = nth(w.cls.songs, w.songIndex + 1);
+    const heard = [
+      ...songSweeps(song, offset, lo, hi),
+      ...(w.songIndex > 0 ? [songChangeSweep(offset)] : []),
+      ...(next !== undefined && song?.lengthMs !== undefined ? [songChangeSweep(offset + song.lengthMs)] : []),
+    ].filter((s) => s.toMs > lo && s.fromMs < hi);
+    const seen = new Set(heard.map((s) => `${s.cause}@${s.fromMs}`));
+    const allSweeps = [...heard, ...this.sweepsSeen.filter((s) => !seen.has(`${s.cause}@${s.fromMs}`))];
+    this.sweepsSeen = allSweeps.filter((s) => s.toMs > w.classMs - REACH_MS);
+    const beatMs = song?.bpm !== undefined && song.bpm > 0 ? 60_000 / song.bpm : 500;
+    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSweeps });
     const run = plan.runs.find((r) => r.wish.id === id);
-    if (run) this.placed.push(run);
+    if (run) { this.placed.push(run); this.cutLog.push(...plan.cuts); }
     this.decided.set(id, run !== undefined);
     this.placed = this.placed.filter((r) => (r.pieces.at(-1)?.toMs ?? 0) > w.classMs - 4000);
     return run !== undefined;
+  }
+
+  /** The planned sweep windows the placed bursts have cut so far: only their counted length changed, never a turn. */
+  cuts(): readonly CutRecord[] {
+    return this.cutLog;
   }
 
   /** Beat-like light is held at rest: 250 ms before a placed run starts until 300 ms after it ends. */

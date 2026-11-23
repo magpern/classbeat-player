@@ -6,7 +6,7 @@
 import type { LinkInput } from "./beat-level.ts";
 import { rigFrozen } from "./link-gate.ts";
 import { MARK_GAP_MS, frameAt } from "./flash-marks.ts";
-import { CAP, STEADY_PER_WINDOW, maxInASecond } from "./flash-runs.ts";
+import { CAP, STEADY_PER_WINDOW, isBurstKind, maxInASecond } from "./flash-runs.ts";
 import type { PlacedRun, Span } from "./flash-runs.ts";
 
 /** `--scene-unforeseen-hold`: P2's longest lateness, 1 s, plus 1 s, so the scheduler sees the turn coming. */
@@ -79,7 +79,7 @@ export function causeFrame(
   const items: Span[] = [];
   const all = [...marks, ...fixed];
   for (const m of all) if (!absorbed.some((a) => Math.abs(a - m) < EPS) && !items.some((i) => i.fromMs === i.toMs && Math.abs(i.fromMs - m) < EPS)) items.push({ fromMs: m, toMs: m });
-  for (const b of bounds) if (b.to <= atMs + EPS) items.push(...b.r.pieces); // runs that have ended
+  for (const b of bounds) if (b.to <= atMs + EPS && !isBurstKind(b.r.wish.kind)) items.push(...b.r.pieces); // runs that have ended; a burst's decay is inside the shared 1
   const fits = (at: number): boolean => {
     const near = items.filter((i) => i.toMs > at - 2000 && i.fromMs < at + 2000);
     return maxInASecond([...near, { fromMs: at, toMs: at }]) + STEADY_PER_WINDOW <= CAP;

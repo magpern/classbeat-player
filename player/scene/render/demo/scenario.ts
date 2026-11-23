@@ -3,15 +3,16 @@
 // 48 s, has a drop at 40 s (on an interval change: the build is 36 to 40 s, the fan 40 to 48 s; it bursts at the None level, and at the Beat level the ramp takes the room) and one at 58 s (away from any change: it bursts at both levels)
 // and ends at 60 s in a
 // mirrored phrase, so the song change at 60 s turns from a mirrored phrase. Song 1 has no marked
-// moments (light-only bursts on its interval changes); song 2 has a breakdown, and its interval at 120 s
+// moments (light-only bursts on its interval changes); every song has its length (a drop less than 2.25 s before its end has no fan turn, as the one at 58 s); song 2 has a breakdown, and its interval at 120 s
 // (zone 3) carries an 8 up, 8 down position pattern. Fake data only.
 import type { SceneClass, SceneInterval, SceneSong } from "../../model/src/index.ts";
 import type { Feed } from "../src/loop.ts";
+import { withGenerated } from "./generated.ts";
 
 const SONGS: readonly SceneSong[] = [
-  { bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: [{ at_ms: 40_000, kind: "drop" }, { at_ms: 58_000, kind: "drop" }] },
-  { bpm: 128, anchors: [{ at_ms: 0, bpm: 128 }] },
-  { bpm: 100, anchors: [{ at_ms: 0, bpm: 100 }], moments: [{ at_ms: 20_000, kind: "breakdown" }] },
+  { bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: [{ at_ms: 40_000, kind: "drop" }, { at_ms: 58_000, kind: "drop" }], lengthMs: 60_000 },
+  { bpm: 128, anchors: [{ at_ms: 0, bpm: 128 }], lengthMs: 40_000 },
+  { bpm: 100, anchors: [{ at_ms: 0, bpm: 100 }], moments: [{ at_ms: 20_000, kind: "breakdown" }], lengthMs: 60_000 },
 ];
 export const SONG_STARTS_MS = [0, 60_000, 100_000] as const;
 const interval = (startMs: number, zone: number, pattern?: unknown): SceneInterval => (pattern === undefined ? { startMs, zone } : { startMs, zone, pattern });
@@ -37,12 +38,14 @@ const COLLIDE_CLASS: SceneClass = {
   intervals: [...DEMO_CLASS.intervals, interval(20_400, 3), interval(80_300, 3), interval(100_600, 5)].sort((a, b) => a.startMs - b.startMs),
 };
 /** A song change away from any interval change (at 70 s, into a song with no moments), where the song-change dim has room. */
-const DIM_CLASS: SceneClass = { ...DEMO_CLASS, songs: [SONGS[0]!, SONGS[1]!, SONGS[1]!, SONGS[2]!] };
-export const VARIANTS: Readonly<Record<string, Variant>> = {
+const DIM_CLASS: SceneClass = { ...DEMO_CLASS, songs: [SONGS[0]!, { ...SONGS[1]!, lengthMs: 10_000 }, { ...SONGS[1]!, lengthMs: 30_000 }, SONGS[2]!] };
+const FIXED: Readonly<Record<string, Variant>> = {
   demo: DEMO_VARIANT,
   collide: { cls: COLLIDE_CLASS, starts: SONG_STARTS_MS },
   dim: { cls: DIM_CLASS, starts: [0, 60_000, 70_000, 100_000] },
 };
+/** The fixed variants, and the names the CI matrices generate (demo/generated.ts: `tempo~<variant>`, `gen~<json>`). */
+export const VARIANTS: Readonly<Record<string, Variant>> = withGenerated(FIXED);
 
 export function songIndexAt(classMs: number, starts: readonly number[] = SONG_STARTS_MS): number {
   let at = 0;

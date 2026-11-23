@@ -39,17 +39,35 @@ test("a drop 0.4 s after an interval change goes up in the change's frame, light
 const flip: Where = { cls: DEMO_CLASS, classMs: 31_000, songIndex: 0, songPosMs: 31_000, level: "Beat" };
 const burst = [{ fromMs: 32_100, toMs: 32_300 }];
 
-test("a run wanted just after a phrase flip (32 s) does not fit at the Beat level, where the beams turn; it does where there are no flips", () => {
+test("a run wanted just after a phrase flip (32 s) does not fit: the sweep's window is 4.15 s, at every level, since the plan is the song's", () => {
   assert.equal(new RunBudget().admit("a", "lightBurst", burst, flip), false);
-  assert.equal(new RunBudget().admit("a", "lightBurst", burst, { ...flip, level: "Tempo only" }), true);
-  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 34_700, toMs: 34_900 }], flip), true, "after the 2.5 s sweep");
+  assert.equal(new RunBudget().admit("a", "lightBurst", burst, { ...flip, level: "Tempo only" }), false, "the plan does not depend on the link");
+  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 34_700, toMs: 34_900 }], flip), false, "still inside the 4.15 s window of the flip");
+  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 37_100, toMs: 37_300 }], flip), false, "inside the 40 s drop's gather window (36.65 to 39 s)");
+  assert.equal(new RunBudget().admit("r", "ramp", [{ fromMs: 35_500, toMs: 36_100 }], flip), false, "a ramp is a run too: none overlaps the window");
 });
 
-test("a drop's own gather and fan do not keep its burst away; another drop's sweep still does", () => {
+test("a song change is a sweep, known from the song before it and from the song itself: no burst in its 4.15 s, one 0.15 s after it with the window cut", () => {
+  const before: Where = { cls: DEMO_CLASS, classMs: 59_000, songIndex: 0, songPosMs: 59_000, level: "None" };
+  const inside = [{ fromMs: 60_500, toMs: 60_700 }];
+  assert.equal(new RunBudget().admit("a", "lightBurst", inside, before), false, "seen ahead, from the song's length");
+  assert.equal(new RunBudget().admit("a", "lightBurst", inside, { ...before, classMs: 60_400, songIndex: 1, songPosMs: 400 }), false, "seen from the new song");
+  const after = new RunBudget();
+  assert.equal(after.admit("a", "lightBurst", [{ fromMs: 64_300, toMs: 64_500 }], { ...before, classMs: 63_500, songIndex: 1, songPosMs: 3_500 }), true);
+  assert.deepEqual(after.cuts().map((c) => [c.planned.cause, c.planned.fromMs, c.planned.toMs]), [["song change", 60_000, 64_150]]);
+});
+
+test("a burst cuts the length of the planned window that comes within 1 s of its decay, and is skipped where its decay lies in one", () => {
   const near: Where = { cls: DEMO_CLASS, classMs: 57_000, songIndex: 0, songPosMs: 57_000, level: "None" };
-  const decay = [{ fromMs: 58_017, toMs: 58_250 }];
-  assert.equal(new RunBudget().admit("drop@58000", "dropBurst", decay, near), true);
-  assert.equal(new RunBudget().admit("other", "dropBurst", decay, near), false, "no burst inside a drop's fan that is not its own");
+  const own = new RunBudget();
+  assert.equal(own.admit("drop@58000", "dropBurst", [{ fromMs: 58_017, toMs: 58_250 }], near), true, "its own gather ends 1 s before the drop: nothing is cut, and it has no fan turn");
+  assert.deepEqual(own.cuts(), []);
+  const inFan: Where = { ...near, classMs: 43_000, songPosMs: 43_000 };
+  assert.equal(new RunBudget().admit("x", "dropBurst", [{ fromMs: 43_017, toMs: 43_250 }], inFan), false, "no burst in the 40 s drop's fan turn");
+  const cut = new RunBudget();
+  const after: Where = { ...near, classMs: 79_000, songIndex: 1, songPosMs: 19_000 };
+  assert.equal(cut.admit("light@80000", "lightBurst", [{ fromMs: 80_017, toMs: 80_250 }], after), true);
+  assert.deepEqual(cut.cuts().map((c) => [c.planned.fromMs, c.planned.toMs, c.counted?.toMs]), [[75_000, 79_150, 79_017]], "song 1's flip at 75 s plans to 79.15 s and is cut to end 1 s before the decay's first frame");
 });
 
 function sources(dir: string): string[] {

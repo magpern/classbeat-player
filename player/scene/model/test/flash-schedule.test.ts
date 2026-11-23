@@ -103,7 +103,8 @@ test("runs: without the beat a burst still fits where the count has room, a dim 
   const burst = (from: number): RunWish => ({ id: "b", kind: "dropBurst", pieces: [{ fromMs: from + F, toMs: from + 250 }] });
   const dim: RunWish = { id: "d", kind: "dim", pieces: [{ fromMs: 10_000, toMs: 10_120 }, { fromMs: 10_500, toMs: 10_620 }] };
   assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000] }))), [["b"], [], []], "the change frame, the decay and steady light: 3");
-  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500] }))), [[], [], ["b"]], "a tick beside the change frame makes a fourth");
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500] }))), [["b"], [], []], "a tick beside the change frame: two marks and the decay inside the shared 1, 3");
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500], placed: [{ wish: ramp("r", 9_500, 300), pieces: [{ fromMs: 9_500, toMs: 9_800 }] }] }))), [["r"], [], ["b"]], "another run within 1 s of the decay: no run lies in a window that touches a burst");
   assert.deepEqual(ids(fitRuns([dim], room({ beat: [] }))), [[], [], ["d"]]);
   assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000], count: [{ fromMs: 9000, toMs: 11_000 }] }))), [[], [], ["b"]]);
 });
@@ -129,7 +130,7 @@ test("runs: a fourth change in a 1 s window is never made, steady light's one in
   const dim: RunWish = { id: "dim", kind: "dim", pieces: [{ fromMs: 10_100, toMs: 10_220 }, { fromMs: 10_600, toMs: 10_720 }] };
   assert.equal(STEADY_PER_WINDOW, 1);
   assert.deepEqual(ids(fitRuns([burst], room({ marks: [10_000] }))), [["burst"], [], []], "a mark, the burst's decay and steady light: 3");
-  assert.deepEqual(ids(fitRuns([burst, light, dim], room({ marks: [10_000, 10_500] }))), [[], [], ["light", "burst", "dim"]], "two marks and steady light leave no room for a run, and the order of the skipped is the scheduler's");
+  assert.deepEqual(ids(fitRuns([burst, light, dim], room({ marks: [10_000, 10_500] }))), [["light"], [], ["burst", "dim"]], "two marks and the decay inside the shared 1 are 3: the burst fits; no run overlaps it, and the order of the skipped is the scheduler's");
   assert.deepEqual(ids(fitRuns([ramp("r", 9_300, 700 - F), light], room({ marks: [10_000] }))), [["r"], [], ["light"]], "the ramp comes first (c): with its change frame it fills the window, so the burst is skipped");
   assert.deepEqual(ids(fitRuns([dim], room({ marks: [10_000] }))), [[], [], ["dim"]], "a mark and the dim's two edges would make 3, with steady light 4");
   assert.deepEqual(ids(fitRuns([dim], room({ marks: [5000] }))), [["dim"], [], []]);
