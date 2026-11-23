@@ -126,7 +126,7 @@ function checkRun(label: string, sim: Sim, base: Sim | null): void {
 
 /** A seed from the date, printed, so that every run looks at something new and a failure can be replayed. */
 const TODAY = Number(new Date().toISOString().slice(0, 10).replaceAll("-", "")) % 100_000;
-const SEEDS = process.env.SEED_ONLY ? [Number(process.env.SEED_ONLY)] : [...Array.from({ length: 24 }, (_, i) => 606 + i * 7919), TODAY];
+const SEEDS = process.env.SEED_ONLY ? [Number(process.env.SEED_ONLY)] : [...Array.from({ length: 24 }, (_, i) => 606 + i * 7919), 119391 /* a pause took the fixed frame a change was riding: marks 300 ms apart (review of #609, B5) */, TODAY];
 
 describe("one ledger: the screen's marks and the shell's outside changes", () => {
   it(`any two marks at least 500 ms apart, at most 2 in any second, outside changes at most 500 ms late (1 s in a change frame), a fixed frame on time; ${SEEDS.length} seeds of 120 timelines (the date's seed is ${TODAY})`, () => {
@@ -137,7 +137,7 @@ describe("one ledger: the screen's marks and the shell's outside changes", () =>
         const events: Scenario["events"][number][] = [];
         // Without a pause or resume (a user action that makes a new fixed frame after a mark is placed), the fixed frames are known from the start.
         // (A pause or seek stops the fixed frames a change was riding: it is then drawn at the frame's wait bound, which the bound test below covers.)
-        for (let e = 0; e < (random() < 0.5 ? 0 : 2); e += 1) events.push({ atMs: Math.floor(random() * 11_000), do: "resume" });
+        for (let e = 0; e < (random() < 0.5 ? 0 : 2); e += 1) events.push({ atMs: Math.floor(random() * 11_000), do: pick(["pause", "resume"] as const) });
         const s: Scenario = { fixture: pick(["running", "pattern", "coasting", "pattern-tempo-only"]), startMs: 1_169_000 - Math.floor(random() * 12_000), bpm: pick([undefined, 60, 95, 120, 128, 180, 200]), tinyAtMs: random() < 0.2 ? 1_169_000 : undefined, events };
         const asks = Array.from({ length: Math.floor(random() * 14) }, () => 300 + Math.floor(random() * 11_000));
         // Some clocks sit on the frame grid, some do not; a late timer.

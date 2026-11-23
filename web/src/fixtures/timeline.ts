@@ -50,7 +50,10 @@ export function patternAt(doc: Class, classMs: number): PatternInput | null {
   const song = doc.songs.find((x) => x.start_ms <= classMs && classMs < x.end_ms);
   const pat = i < 0 ? undefined : doc.intervals[i].pattern;
   if (!pat || !song?.bpm) return null;
-  const n = Math.floor((classMs - doc.intervals[i].start_ms) / (60_000 / song.bpm));
+  // The count steps on the song's own grid (`pattern.ts`): the beat onsets after the interval's start, counted from the song's start.
+  const beat = 60_000 / song.bpm;
+  const onset = (ms: number): number => Math.floor((ms - song.start_ms) / beat + 1e-9);
+  const n = onset(classMs) - onset(doc.intervals[i].start_ms);
   const cycle = pat.beats.reduce((a, b) => a + b, 0);
   let r = n % cycle;
   for (let k = 0; k < pat.beats.length; k += 1) {
