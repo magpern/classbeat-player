@@ -118,6 +118,12 @@ for f in clock plan view; do
   check "shared clock surface $f.ts runs player, web and desktop" "player web desktop" "$(flags push "$before_clk" HEAD)"
 done
 before_clk="$(git rev-parse HEAD)"
+commit player/scene/model/src/flash-marks.ts
+check "the flash scheduler flash-marks.ts runs player, web and desktop (#604)" "player web desktop" "$(flags push "$before_clk" HEAD)"
+before_clk="$(git rev-parse HEAD)"
+commit player/scene/model/src/other.ts
+check "another player/scene file runs player and desktop only (#604)" "player desktop" "$(flags push "$before_clk" HEAD)"
+before_clk="$(git rev-parse HEAD)"
 commit player/app/src/core/clock/apply.ts
 check "another core/clock file runs player and desktop only" "player desktop" "$(flags push "$before_clk" HEAD)"
 before_clk="$(git rev-parse HEAD)"
