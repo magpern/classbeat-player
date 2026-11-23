@@ -51,6 +51,8 @@ export interface TextClass {
   readonly segments: readonly { readonly startMs: number; readonly name: string }[];
   /** "Following Spotify": the link state's words while the music is followed. */
   readonly following: string;
+  /** Set by `mergeTextClass`: the score keeps every interval as the class has it, and those merged away (by start) have no number and no colour. */
+  readonly score?: { readonly intervals: readonly TextInterval[]; readonly away: readonly number[] };
 }
 
 export interface TextInput {

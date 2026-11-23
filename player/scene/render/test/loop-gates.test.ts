@@ -111,14 +111,24 @@ const playMasters = (cls: Feed["cls"], from: number, to: number, change: number 
   return out;
 };
 
-test("a song change dims the rig to a quarter: down in 120 ms, held, up in 120 ms on the first beat (100 bpm: 600 ms)", () => {
-  // The change at 70 s is no interval change and no burst, so the scheduler has room for both edges.
+test("a song change away from an interval change has no dim where step g says so: a tick every second leaves no window with both edges and a mark, and the re-aim marks the song", () => {
+  // The countdown's seconds are frame marks (text rule 2): a window holding the dim's two edges and one tick is four with steady light's one.
   const masters = playMasters(DEMO_CLASS, 69_000, 72_000, 70_000);
-  assert.equal(Math.min(...masters), 0.25);
-  const frames = (test: (m: number) => boolean) => masters.filter(test).length / 60;
-  assert.ok(Math.abs(frames((m) => m < 1) - (0.6 + 0.12) ) < 0.05, "the dim lasts the beat and the up edge");
-  assert.ok(Math.abs(frames((m) => m === 0.25) - 0.48) < 0.05, "held at a quarter between the edges");
-  assert.ok(masters.filter((m) => m < 1 && m > 0.25).length >= 12, "and the edges are ramps, not steps");
+  assert.equal(Math.min(...masters), 1, "no dim");
+  // The song change at 70 s is still marked: the beams turn to the new song's look.
+  const loop = new RigLoop(tokens);
+  let before = "";
+  let after = "";
+  for (let ms = 69_000; ms < 72_000; ms += 1000 / 60) {
+    const f = feedAt(ms);
+    const d = loop.step(ms >= 70_000 ? { ...f, songIndex: 2, songPosMs: ms - 70_000 } : f, 1 / 60, "High");
+    const key = JSON.stringify(d.drawn);
+    if (ms < 70_000) before = key;
+    else if (ms > 71_500) after = key;
+  }
+  assert.notEqual(before, after, "the re-aim marks the song");
+  // No state of the demo leaves such a window: a tick comes every second without a count, and with a count there are no runs at all.
+  for (const link of [{ state: "Locked" }, { state: "Coasting" }] as const) assert.equal(Math.min(...playMasters(DEMO_CLASS, 69_000, 72_000, 70_000, link)), 1, link.state);
 });
 
 test("Tempo only (bpm, no anchors) is as the Beat level: the ramp runs, so a drop away from a change bursts, a drop on a change and a no-moments change do not (the gap, as built)", () => {

@@ -1,11 +1,16 @@
-// The strict S6 gate (#577; reported since #546): the count of scene.md on the real page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
-// the scene's canvas is read every frame (linear light), and tools/luminance-steps.ts counts every change over
+// The strict S6 gate (#577; reported since #546; the whole frame since #591): the count of scene.md on the real page. Every moment of the demo class is played at 60 fps in headless Chrome, locked with the beat and coasting,
+// the whole frame as shown (the scene's canvas and the text layer over it) is read every frame (linear light), and tools/luminance-steps.ts counts every change over
 // 10 % of the larger end, each direction, no gate on duration, in every region: the whole screen, the four
 // quadrants, every 1/3 x 1/3 window at a stride of 1/6 (the 3 x 3 grid, the grid offset by half a cell, and the
 // positions between) and the 1/3 strips. The most changes in any sliding second, and the region it is in, go to the
 // log and to artifacts/flash-steps.json. The run fails if any run of any moment, locked with the beat or coasting, has more
 // than 3 changes in a sliding second in any region, and if it measured nothing. A run that fails is fixed in the light or
 // the schedule, never in the measure.
+//
+// The whole frame: the canvas is read in the page every frame, and the text layer, which changes only on a text step, is
+// taken from the page when it steps: a screenshot of the text over black and over white (the canvas hidden) gives each text pixel's
+// colour and its opacity, and the frame is the canvas under it, blended as the browser does, in the page, every frame. The
+// run is played in the page up to each text step (`__scene.resume`), the layer is captured, and the run goes on.
 //
 // The same frames carry S5 (tools/s5-fit.ts): every pixel of every frame, read from the canvas as shown, must be
 // `a x token + w x white` within 1 code value for the current zone's token, or the next zone's during the
@@ -14,10 +19,14 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { violations } from "./guard-trap.ts";
+import { overlayOf } from "./text-overlay.ts";
+import { settleTransitions } from "./settle.ts";
 import { FIT_SOURCE, TOLERANCE } from "./s5-fit.ts";
-import { MAX_CHANGES_PER_SECOND, findChanges, mostInASecond } from "./luminance-steps.ts";
+import { MAX_CHANGES_PER_SECOND, findChanges, frameTimes, mostInASecond } from "./luminance-steps.ts";
 import type { Change } from "./luminance-steps.ts";
 import type { Open } from "./text-shots.ts";
+import { decodePng } from "./png.ts";
+import type { Page } from "playwright-core";
 
 /** What the person does during a moment, each once: a link state ("paused", or "base" for the run's own), a quality step, a seek or jump (`jumpMs`). */
 interface Event { readonly atMs: number; readonly link?: string; readonly quality?: string; readonly jumpMs?: number }
@@ -75,22 +84,33 @@ export const REGIONS: readonly Rect[] = (() => {
 /** The page plays this long, undrawn, before a window: a jump from the page's first frame is read as a burst, and the next burst keeps 10 s from it. */
 const WARM_UP_S = 12;
 
-/** Reads the canvas after every frame: the relative luminance (linear light) of each region, by a summed-area table. */
+/** Reads the whole frame after every frame: the canvas under the text layer's captured pixels (`setOverlay`), the relative luminance (linear light) of each region, by a summed-area table. */
 export const probeSetup = `(() => {
   const [w, h] = [96, 54];
+  const [W, H] = [window.innerWidth, window.innerHeight];
   const rects = ${JSON.stringify(REGIONS)};
-  const cv = document.createElement("canvas");
-  cv.width = w; cv.height = h;
-  const ctx = cv.getContext("2d", { willReadFrequently: true });
   const lut = Array.from({ length: 256 }, (_, i) => { const v = i / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
   const sat = new Float64Array((w + 1) * (h + 1));
+  const cells = new Float64Array(w * h);
   const S5 = ${FIT_SOURCE};
   const full = document.createElement("canvas");
   const shown = document.getElementById("scene");
   full.width = shown.width; full.height = shown.height;
   const fctx = full.getContext("2d", { willReadFrequently: true });
+  // The canvas as the window shows it (scaled up nearest-neighbour, as demo.css does), to blend the text layer over.
+  const big = document.createElement("canvas");
+  big.width = W; big.height = H;
+  const bctx = big.getContext("2d", { willReadFrequently: true });
+  bctx.imageSmoothingEnabled = false;
   window.__steps = {
-    t: [], regions: [], burst: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" },
+    t: [], regions: [], burst: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" }, overlay: null, textSteps: 0,
+    setOverlay(b64) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      this.overlay = bytes;
+      this.textSteps++;
+    },
     check(ms) {
       fctx.drawImage(shown, 0, 0);
       const px = fctx.getImageData(0, 0, full.width, full.height).data;
@@ -107,33 +127,69 @@ export const probeSetup = `(() => {
       }
       this.s5.frames++; this.s5.pixels += px.length / 4; this.s5.bad += bad;
     },
-    run(from, to, events) {
+    // One frame's regions: the canvas under the text layer, blended in sRGB as the browser does (the layer's pixel is its colour
+    // over black plus what the canvas shows through), averaged per cell in linear light.
+    // The frame as the window shows it: the canvas with the text layer's pixels over it, RGBA bytes (the gate's own blend, which blended() hands to the check against a real screenshot).
+    compose() {
+      bctx.drawImage(shown, 0, 0, W, H);
+      const px = bctx.getImageData(0, 0, W, H).data;
+      const ov = this.overlay;
+      const out = new Uint8ClampedArray(px.length);
+      for (let i = 0; i < px.length; i += 4) {
+        const through = ov === null ? 1 : 1 - ov[i + 3] / 255;
+        for (let k = 0; k < 3; k++) out[i + k] = Math.round((ov === null ? 0 : ov[i + k]) + through * px[i + k]);
+        out[i + 3] = 255;
+      }
+      return out;
+    },
+    blended() {
+      const bytes = this.compose();
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 4096) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
+      return btoa(bin);
+    },
+    measure(ms) {
+      const px = this.compose();
+      cells.fill(0);
+      for (let y = 0; y < H; y++) {
+        const row = Math.min(h - 1, Math.floor(y * h / H)) * w;
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          cells[row + Math.min(w - 1, Math.floor(x * w / W))] += 0.2126 * lut[px[i]] + 0.7152 * lut[px[i + 1]] + 0.0722 * lut[px[i + 2]];
+        }
+      }
+      const per = (W / w) * (H / h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        sat[(y + 1) * (w + 1) + x + 1] = cells[y * w + x] / per + sat[y * (w + 1) + x + 1] + sat[(y + 1) * (w + 1) + x] - sat[y * (w + 1) + x];
+      }
+      this.check(ms);
+      this.t.push(ms);
+      this.regions.push(rects.map(([, x0, y0, x1, y1]) => {
+        const [a, b, c, d] = [Math.round(x0 * w), Math.round(y0 * h), Math.round(x1 * w), Math.round(y1 * h)];
+        return (sat[d * (w + 1) + c] - sat[b * (w + 1) + c] - sat[d * (w + 1) + a] + sat[b * (w + 1) + a]) / ((c - a) * (d - b));
+      }));
+      this.burst.push(window.__scene.burst);
+    },
+    begin(from, to, events) {
       const self = this;
       window.__scene.advance(Math.max(0, from - ${WARM_UP_S}) * 1000, from * 1000, 60, { draws: () => false, after() {} });
-      window.__scene.advance(from * 1000, to * 1000, 60, { events: events || [], draws: () => true, after(ms) {
-        ctx.drawImage(document.getElementById("scene"), 0, 0, w, h);
-        const px = ctx.getImageData(0, 0, w, h).data;
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-          const i = (y * w + x) * 4;
-          const lum = 0.2126 * lut[px[i]] + 0.7152 * lut[px[i + 1]] + 0.0722 * lut[px[i + 2]];
-          sat[(y + 1) * (w + 1) + x + 1] = lum + sat[y * (w + 1) + x + 1] + sat[(y + 1) * (w + 1) + x] - sat[y * (w + 1) + x];
-        }
-        self.check(ms);
-        self.t.push(ms);
-        self.regions.push(rects.map(([, x0, y0, x1, y1]) => {
-          const [a, b, c, d] = [Math.round(x0 * w), Math.round(y0 * h), Math.round(x1 * w), Math.round(y1 * h)];
-          return (sat[d * (w + 1) + c] - sat[b * (w + 1) + c] - sat[d * (w + 1) + a] + sat[b * (w + 1) + a]) / ((c - a) * (d - b));
-        }));
-        self.burst.push(window.__scene.burst);
-      } });
+      window.__scene.begin(from * 1000, to * 1000, 60, { events: events || [], draws: () => true, after(ms) { self.measure(ms); } });
+    },
+    // The text layer's elements are hidden or shown for a screenshot, and put back: only styles, set one by one.
+    cover(on) {
+      shown.style.visibility = on === null ? "" : "hidden";
+      document.documentElement.style.background = on === null ? "" : on;
+      document.body.style.background = on === null ? "" : on;
     },
   };
 })()`;
 
-interface Series { t: number[]; regions: number[][]; burst: number[]; s5: { frames: number; pixels: number; bad: number; worst: string } }
+interface Series { t: number[]; regions: number[][]; burst: number[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
 export interface Run {
   readonly frames: number;
   readonly burstFrames: number;
+  /** The times the text layer was captured: the first frame and every frame on which the text stepped. */
+  readonly textSteps: number;
   /** The most changes in any sliding second, over every region, and the region it is in. */
   readonly most: number;
   readonly worstRegion: string;
@@ -144,19 +200,53 @@ export interface Run {
 }
 export interface Counted { readonly moment: string; readonly state: string; readonly run: Run }
 
+/** The text layer as it is now: its colour over black and its opacity, from a screenshot over black and one over white with the canvas hidden. */
+async function captureText(page: Page): Promise<void> {
+  assert.equal(await settleTransitions(page), 0, "a transition is still running: the text layer is not final");
+  const shot = async (ground: string) => {
+    await page.evaluate(`window.__steps.cover(${JSON.stringify(ground)})`);
+    return decodePng(await page.screenshot({ type: "png" }));
+  };
+  const [black, white] = [await shot("#000"), await shot("#fff")];
+  await page.evaluate("window.__steps.cover(null)");
+  await page.evaluate(`window.__steps.setOverlay(${JSON.stringify(Buffer.from(overlayOf(black, white)).toString("base64"))})`);
+}
+
+/** The blended frame the probe measured against a real screenshot of the same frame: every channel of every pixel within 1 code value. */
+async function blendMatchesScreenshot(page: Page, what: string): Promise<void> {
+  const mine = Buffer.from(await page.evaluate<string>("window.__steps.blended()"), "base64");
+  const real = decodePng(await page.screenshot({ type: "png" }));
+  let worst = 0;
+  for (let i = 0; i < real.data.length; i += 4) for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(mine[i + k]! - real.data[i + k]!));
+  assert.ok(worst <= 1, `${what}: the gate's blended frame differs from the screenshot by ${worst} code values`);
+}
+
 async function play(open: Open, m: Moment, query: string): Promise<Run> {
   const { page, problems } = await open(480, 270, query + (m.cls === undefined ? "" : `&class=${m.cls}`));
   await page.evaluate(probeSetup);
-  await page.evaluate(`window.__steps.run(${m.fromS}, ${m.toS}, ${JSON.stringify(m.events ?? [])})`);
+  await page.evaluate(`window.__steps.begin(${m.fromS}, ${m.toS}, ${JSON.stringify(m.events ?? [])})`);
+  // The page plays until the text steps in a drawn frame; the layer is captured then, and that frame measured with it.
+  let checked = false;
+  for (let done = false; !done; ) {
+    const r = await page.evaluate(() => (window as unknown as { __scene: { resume(): { pending: number | null; done: boolean } } }).__scene.resume());
+    if (r.pending !== null) {
+      await captureText(page);
+      await page.evaluate(`window.__steps.measure(${r.pending})`);
+      // The capture is checked against the browser on the first frame of every run, and on the last text step: the blend the gate measures is what a real screenshot shows, within 1 code value.
+      if (!checked) { await blendMatchesScreenshot(page, m.name); checked = true; }
+    }
+    done = r.done;
+  }
   const out = await page.evaluate(() => (window as unknown as { __steps: Series }).__steps);
   assert.deepEqual([...problems, ...(await violations(page))], [], m.name);
   await page.close();
-  const changesOf = (r: number) => findChanges(out.t, out.regions.map((row) => row[r]!));
+  const wall = frameTimes(out.t); // S6 is a real second: the window is in the time a viewer lives through, not the class clock (a seek replays class time)
+  const changesOf = (r: number) => findChanges(wall, out.regions.map((row) => row[r]!));
   const byRegion: Record<string, number> = {};
   REGIONS.forEach(([name], r) => { byRegion[name] = mostInASecond(changesOf(r)); });
   const [worstRegion, most] = Object.entries(byRegion).reduce((a, b) => (b[1] > a[1] ? b : a));
   const round = (c: Change): Change => ({ atMs: Math.round(c.atMs), rising: c.rising, from: Number(c.from.toFixed(4)), to: Number(c.to.toFixed(4)) });
-  return { frames: out.t.length, burstFrames: out.burst.filter((b) => b > 0).length, most, worstRegion, s5: out.s5, worstChanges: changesOf(REGIONS.findIndex(([n]) => n === worstRegion)).map(round), byRegion };
+  return { frames: out.t.length, burstFrames: out.burst.filter((b) => b > 0).length, textSteps: out.textSteps, most, worstRegion, s5: out.s5, worstChanges: changesOf(REGIONS.findIndex(([n]) => n === worstRegion)).map(round), byRegion };
 }
 
 /** Plays every moment in each state, reports the strict S6 count, and gates S5 on every frame. */
@@ -174,7 +264,7 @@ export async function reportS6(open: Open, artifacts: string): Promise<Counted[]
       if (run.most > MAX_CHANGES_PER_SECOND) s6Faults.push(`${m.name}, ${state}: ${run.most} changes in a second in ${run.worstRegion} (limit ${MAX_CHANGES_PER_SECOND})`);
       if ((m.bursts ?? []).includes(state) && run.burstFrames === 0) burstFaults.push(`${m.name}, ${state}: no white burst with the budget on`);
       counted.push({ moment: m.name, state, run });
-      line.push(`${state} ${run.most} (${run.worstRegion}), bursts ${run.burstFrames} fr, S5 ${run.s5.bad} of ${run.s5.pixels} px`);
+      line.push(`${state} ${run.most} (${run.worstRegion}), bursts ${run.burstFrames} fr, text steps ${run.textSteps}, S5 ${run.s5.bad} of ${run.s5.pixels} px`);
     }
     console.log(`S6 report, ${m.name}: ${line.join(", ")} (limit ${MAX_CHANGES_PER_SECOND})`);
   }
