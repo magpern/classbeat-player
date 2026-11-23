@@ -22,7 +22,6 @@ function play(options: FeedOptions, fromMs: number, toMs: number, each?: (d: Dra
   }
   return { loop, rig };
 }
-const num = (rig: SceneRig, name: string) => rig.uniform(name) as number[];
 
 test("before the start: lights down to 6 % in the first zone's colour, two beams, the wall dark, no beat, nothing bursts", () => {
   let frames = 0;
@@ -34,9 +33,9 @@ test("before the start: lights down to 6 % in the first zone's colour, two beams
     assert.deepEqual([d.lift, d.chaseStep, d.burst, d.frame.level], [0, null, 0, "None"]);
     assert.equal(rig.uniform("uWallOn"), 0, "the wall is dark");
     assert.equal((rig.uniform("uTokA") as { getHex(): number }).getHex(), tokens.zones[1], "the first zone's colour");
-    assert.ok(num(rig, "uBF").every((f) => f === 0), "on every light");
-    assert.equal(num(rig, "uBI").filter((v) => v > 0).length, 2, "two beams");
-    assert.ok(num(rig, "uBL").every((v) => v <= tokens.down * 0.9 + 1e-9), "lens at the lights-down level");
+    assert.ok(rig.tokenFlags().every((f) => f === 0), "on every light");
+    assert.equal(rig.beamLevels().filter((v) => v > 0).length, 2, "two beams");
+    assert.ok(rig.lensLevels().every((v) => v <= tokens.down * 0.9 + 1e-9), "lens at the lights-down level");
   });
   assert.ok(frames > 500);
 });

@@ -12,12 +12,13 @@ import { BEAM_AXIS, aimQuaternion, aimedDirection } from "./aim.ts";
 import { FixtureView, buildFixtures } from "./fixtures.ts";
 import type { Draw } from "./loop.ts";
 import { BEAMS, FRAGMENT, VERTEX } from "./scene-shader.ts";
+import { beamFloor } from "./stage-calc.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { TextMask } from "./text-mask.ts";
 import { lookup, nth } from "./lookup.ts";
 
 /** The fixed camera's half field of view, as the shader's `tan`: 25 degrees. */
-const TAN_H = Math.tan((25 * Math.PI) / 180);
+export const TAN_H = Math.tan((25 * Math.PI) / 180);
 const BEAM_GAIN = 0.2;
 const LENS_UNLIT = 0.04;
 const LENS_LIT = 0.9;
@@ -35,6 +36,8 @@ export class SceneRig {
   readonly mask: TextMask;
   readonly material: ShaderMaterial;
   private readonly tokens: SceneTokens;
+  /** False only in the test that shows the house look without S5b's floor (the check must fail on it). */
+  floorOn = true;
   private aspect = 16 / 9;
 
   constructor(tokens: SceneTokens) {
@@ -50,7 +53,7 @@ export class SceneRig {
         uWallOn: { value: 1 }, uWallLevel: { value: 0 }, uWallMode: { value: 0 }, uChase: { value: 0 }, uBurst: { value: 0 }, uLensW: { value: LENS_WHITE_AT_REST },
         uN: { value: BEAMS },
         uBO: { value: array(BEAMS, () => new Vector3()) }, uBD: { value: array(BEAMS, () => new Vector3(0, 0, -1)) },
-        uBI: { value: array(BEAMS, () => 0) }, uBL: { value: array(BEAMS, () => 0) }, uBF: { value: array(BEAMS, () => 0) }, uBS: { value: array(BEAMS, () => 0.03) },
+        uBP: { value: array(BEAMS * 4, () => 0) }, uFloor: { value: 0 },
         uBoxN: { value: 0 }, uBoxA: { value: this.mask.cornerA }, uBoxB: { value: this.mask.cornerB }, uCap: { value: this.mask.level }, uMaskOn: { value: 1 },
       },
     });
@@ -60,7 +63,6 @@ export class SceneRig {
     for (const f of this.fixtures) this.scene.add(f.pivot);
     this.scene.add(quad);
     this.material.uniforms.uBO!.value = this.fixtures.map((f) => f.pivot.position.clone());
-    this.material.uniforms.uBS!.value = this.fixtures.map((f) => f.spread);
     // The scene is complete: nothing is added later. Anything that is, or gets a new material, needs this check too.
     assertNoRenderCallbacks(this.scene);
   }
@@ -69,6 +71,20 @@ export class SceneRig {
   uniform(name: string): unknown {
     return lookup(this.material.uniforms, name).value as unknown;
   }
+
+  /** The packed per-beam vec4 array (x beam, y lens, z token flag, w spread), flat: three.js uploads a flat array as it is. */
+  private get beamPack(): number[] {
+    return this.uniform("uBP") as number[];
+  }
+
+  private packed(component: 0 | 1 | 2): number[] {
+    return Array.from({ length: BEAMS }, (_, i) => this.beamPack.at(i * 4 + component) ?? 0);
+  }
+
+  /** Each beam's luminance, its lens's, and which token it carries (0 the current, 1 the next), as the shader is given them. */
+  beamLevels(): number[] { return this.packed(0); }
+  lensLevels(): number[] { return this.packed(1); }
+  tokenFlags(): number[] { return this.packed(2); }
 
   setAspect(aspect: number): void {
     this.aspect = aspect;
@@ -114,9 +130,8 @@ export class SceneRig {
       };
     });
     u.uBD!.value = beams.map((b) => b.dir);
-    u.uBI!.value = beams.map((b) => b.beam);
-    u.uBL!.value = beams.map((b) => b.lens);
-    u.uBF!.value = beams.map((b) => b.next);
+    u.uBP!.value = beams.flatMap((b, i) => [b.beam, b.lens, b.next, nth(this.fixtures, i)?.spread ?? 0.03]);
+    u.uFloor!.value = this.floorOn ? beamFloor(draw.stage) : 0;
     const glow = draw.ahead ? mix(energy.ambientGlow, draw.ahead.energy.ambientGlow) : energy.ambientGlow;
     u.uMaster!.value = draw.master;
     u.uAmb!.value = glow * draw.hazeGain * lift;

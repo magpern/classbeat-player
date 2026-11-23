@@ -242,8 +242,8 @@ fi
 # exactly the paths the Dockerfile copies (a missing, extra or wider entry such as !schema/** or
 # !web/ fails), and the **/ lines come after them, so **/tests still removes backend/src/tests.
 # Comments and blank lines are skipped; CRLF and indentation are not trimmed, so they fail.
-# The three player/ lines are the shared clock surface the play page imports (issue #404); no other
-# player/ path may be admitted.
+# The four player/ lines are the shared clock surface the play page imports (issue #404) and the flash
+# scheduler the plain 2D screen imports (issue #604); no other player/ path may be admitted.
 # web/tsconfig.json is in the list because the web stage copies it (the TypeScript build reads it).
 di="$root/docker/backend.Dockerfile.dockerignore"
 want_di="$(printf '%s\n' \
@@ -253,6 +253,7 @@ want_di="$(printf '%s\n' \
   '!docker/backend-entrypoint.sh' '!docker/purge-loop.sh' \
   '!web/package.json' '!web/package-lock.json' '!web/tsconfig.json' '!web/build.mjs' '!web/src' \
   '!player/app/src/core/clock/clock.ts' '!player/app/src/core/clock/plan.ts' '!player/app/src/core/clock/view.ts' \
+  '!player/scene/model/src/flash-marks.ts' \
   '**/.venv' '**/__pycache__' '**/tests' '**/node_modules')"
 # grep exits 1 for an empty file and 2 for a missing one; under pipefail that would end the script
 # before it prints its message, so it is tolerated here and the comparison below fails explicitly.
@@ -283,36 +284,56 @@ fi
 if grep -Eq '^!schema/generated/?(\*)?$' "$root/docker/backend.Dockerfile.dockerignore"; then
   bad "backend.Dockerfile.dockerignore admits more of schema/generated than python/"
 fi
-# The shared clock surface (issue #404): the web stage copies exactly three files of player/, and the
-# dockerignore (compared exactly above) admits exactly those three and no other player/ path.
+# The player/ files the web stage copies (issues #404, #604): exactly four, each named, in two COPY lines
+# (the three clock files the play page imports, and the flash scheduler the plain 2D screen imports).
+# The dockerignore (compared exactly above) admits exactly those four and no other player/ path.
+# `player_lists_exact` takes a Dockerfile and a dockerignore and succeeds only for that exact list, so
+# it is also run on copies with a fifth player/ file added, which it must reject.
 want_clock_copy='COPY player/app/src/core/clock/clock.ts player/app/src/core/clock/plan.ts player/app/src/core/clock/view.ts /player/app/src/core/clock/'
-if [ "$(grep -Ec '^COPY player/' "$root/docker/backend.Dockerfile")" = 1 ] \
-  && grep -Fxq "$want_clock_copy" "$root/docker/backend.Dockerfile"; then
-  ok "the Dockerfile's web stage copies exactly the three clock files of player/"
+want_flash_copy='COPY player/scene/model/src/flash-marks.ts /player/scene/model/src/'
+player_lists_exact() {
+  [ "$(grep -Ec '^COPY player/' "$1")" = 2 ] \
+    && grep -Fxq "$want_clock_copy" "$1" && grep -Fxq "$want_flash_copy" "$1" \
+    && [ "$(grep -Ec '^!player/' "$2")" = 4 ] \
+    && [ "$(grep -Ec '^!player/(app/src/core/clock/(clock|plan|view)|scene/model/src/flash-marks)\.ts$' "$2")" = 4 ]
+}
+if player_lists_exact "$root/docker/backend.Dockerfile" "$di"; then
+  ok "the Dockerfile and dockerignore name exactly the four player/ files (three clock files, flash-marks.ts)"
 else
-  bad "the Dockerfile does not copy exactly the three clock files of player/ with one COPY"
+  bad "the Dockerfile and dockerignore do not name exactly the four player/ files"
 fi
-if [ "$(grep -Ec '^!player/' "$di")" = 3 ] \
-  && [ "$(grep -Ec '^!player/app/src/core/clock/(clock|plan|view)\.ts$' "$di")" = 3 ]; then
-  ok "the dockerignore lets in only the three clock files from player/"
+cp "$root/docker/backend.Dockerfile" "$tmp/Dockerfile.five"
+printf 'COPY player/app/src/core/other.ts /player/app/src/core/\n' >>"$tmp/Dockerfile.five"
+cp "$di" "$tmp/dockerignore.five"
+printf '!player/app/src/core/other.ts\n' >>"$tmp/dockerignore.five"
+if player_lists_exact "$tmp/Dockerfile.five" "$tmp/dockerignore.five"; then
+  bad "a fifth player/ file in the Dockerfile and dockerignore was accepted"
 else
-  bad "the dockerignore admits something other than the three clock files from player/"
+  ok "a fifth player/ file in the Dockerfile and dockerignore is rejected"
+fi
+cp "$root/docker/backend.Dockerfile" "$tmp/Dockerfile.dir"
+sed -i 's|^COPY player/scene/model/src/flash-marks.ts .*|COPY player/scene/model/src /player/scene/model/src/|' "$tmp/Dockerfile.dir"
+if player_lists_exact "$tmp/Dockerfile.dir" "$di"; then
+  bad "a directory COPY in place of flash-marks.ts was accepted"
+else
+  ok "a directory COPY in place of flash-marks.ts is rejected"
 fi
 # The built image holds the schemas where the backend reads them, and the backend loads them.
 # Needs a Docker daemon and the network an image build already uses (base images, PyPI, npm).
 if docker info >/dev/null 2>&1; then
   image="player-backend-test:$$"
-  # The build context holds exactly the three clock files of player/: a fourth file of the same
-  # directory (apply.ts) is not in it. The web stage is built alone and its /player listed.
+  # The build context holds exactly the four named files of player/: another file of the same
+  # directories (apply.ts) is not in it. The web stage is built alone and its /player listed.
   if docker build -q -f "$root/docker/backend.Dockerfile" --target web -t "$image-web" "$root" >"$tmp/web.log" 2>&1; then
     got_player="$(docker run --rm --entrypoint sh "$image-web" -c 'find /player -type f | sort' 2>&1 || true)"
     want_player='/player/app/src/core/clock/clock.ts
 /player/app/src/core/clock/plan.ts
-/player/app/src/core/clock/view.ts'
+/player/app/src/core/clock/view.ts
+/player/scene/model/src/flash-marks.ts'
     if [ "$got_player" = "$want_player" ]; then
-      ok "the web stage holds exactly the three clock files of player/ (apply.ts is not in the context)"
+      ok "the web stage holds exactly the four named files of player/ (apply.ts is not in the context)"
     else
-      bad "the web stage's /player is not exactly the three clock files: $(printf '%s' "$got_player" | tr '\n' ' ')"
+      bad "the web stage's /player is not exactly the four named files: $(printf '%s' "$got_player" | tr '\n' ' ')"
     fi
     docker rmi -f "$image-web" >/dev/null 2>&1 || true
   else

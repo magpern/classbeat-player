@@ -6,11 +6,12 @@
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low), `class=long` (sixteen
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
-// dark-under-text mask, to show what the mask darkens), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
+// dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
+import { TAN_H } from "../src/rig.ts";
 import { readSceneTokens } from "../src/tokens.ts";
 import type { Feed } from "../src/loop.ts";
 import type { TextBox } from "../src/text-box.ts";
@@ -62,6 +63,7 @@ const renderer = new SceneRenderer(host, {
     log.add(draw, measured, song);
   },
 });
+renderer.rig.floorOn = params.get("floor") !== "off";
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
 const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
@@ -123,6 +125,8 @@ interface DemoApi {
   begin(fromMs: number, toMs: number, fps: number, sampler?: Sampler): void;
   /** Plays the run's frames until the text steps in a drawn frame (it returns that frame's time: the page now holds the new text, and the sampler's `after` for that frame is the caller's to run) or the run ends. */
   resume(): { readonly pending: number | null; readonly done: boolean };
+  /** The lit beams as the shader has them (origin, direction, spread), the canvas's drawing-buffer size and the camera's half field of view as a tangent: what the S5b check walks. */
+  rigState(): { beams: { o: number[]; d: number[]; spread: number }[]; width: number; height: number; tanH: number };
 }
 declare global {
   interface Window { __scene: DemoApi }
@@ -199,6 +203,12 @@ const api: DemoApi = {
   get burst() { return lastBurst; },
   get master() { return lastMaster; },
   get tokens() { return lastTokens; },
+  rigState() {
+    const dirs = renderer.rig.uniform("uBD") as { x: number; y: number; z: number }[];
+    const levels = renderer.rig.beamLevels();
+    const beams = renderer.rig.fixtures.flatMap((f, i) => ((levels[i] ?? 0) > 0 ? [{ o: f.pivot.position.toArray(), d: [dirs[i]!.x, dirs[i]!.y, dirs[i]!.z], spread: f.spread }] : []));
+    return { beams, width: canvas.width, height: canvas.height, tanH: TAN_H };
+  },
 };
 window.__scene = api;
 

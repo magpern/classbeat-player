@@ -15,6 +15,7 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
+import { beamFloor } from "./beam-floor-shots.ts";
 import { reportS6 } from "./flash-shots.ts";
 import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
@@ -165,6 +166,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await lightMeasurement(opener);
+  await beamFloor(opener); // S5b: the house look's beams keep their floor, and the check fails the look without it
   await reportS6(opener, ARTIFACTS);
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
