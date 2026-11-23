@@ -70,7 +70,7 @@ export const MOMENTS: readonly Moment[] = [
   { name: "collision: song change and intervals 0.6 s apart (100.0 s and 100.6 s)", fromS: 98.5, toS: 103.5, cls: "collide" },
 ];
 /** The states measured on the moments: the real running state, and without the beat. */
-const STATES = [["locked", ""], ["coasting", "&state=coasting"]] as const;
+export const STATES = [["locked", ""], ["coasting", "&state=coasting"]] as const;
 
 type Rect = readonly [name: string, x0: number, y0: number, x1: number, y1: number];
 /** Every region the count looks at, as shares of the width and the height. */

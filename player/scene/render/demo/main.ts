@@ -54,7 +54,7 @@ const long = params.get("class") === "long" || params.get("class") === "worst";
 const textClass = mergeTextClass(params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT);
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
-  tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off",
+  tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off", steadyOnly: params.get("steady") === "1",
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
     lastMaster = draw.master;
