@@ -181,7 +181,7 @@ export class RigLoop {
     // The lit fixtures and the haze's gain change on a planned mark only: a change between marks waits for the next one.
     const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs);
     const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
-    const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`);
+    const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`, this.bursts.budget.runs);
     if (held.mark !== null) this.clock.note(held.mark);
     return {
       drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,

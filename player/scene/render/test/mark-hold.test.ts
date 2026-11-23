@@ -100,3 +100,42 @@ test("the quality level passes through in the loop: a lower cap lights fewer fix
   assert.equal(a, b);
   assert.ok(lit("Low", 100_033) < a, "the lower cap shows at once");
 });
+
+// A change wanted just after a count's beat at 50 bpm: the next planned mark is 1.1 s away, so the hold places a mark of its own (P2).
+const slowAt = whereOf(mergeIntervals(withSong(2, { bpm: 50, anchors: [{ at_ms: 0, bpm: 50 }] })), "Beat");
+interface Frame { readonly ms: number; readonly mark: number | null; readonly lit: boolean }
+function ownMarkCase(runs: Parameters<MarkHold["step"]>[3] = []): { wanted: number; frames: Frame[]; marks: readonly number[] } {
+  for (let w = 121_000; w < 139_000; w += FRAME_MS) {
+    const hold = new MarkHold();
+    hold.step(OFF, slowAt(w - FRAME_MS), "c", runs);
+    const frames: Frame[] = [];
+    for (let ms = w; ms < w + 1500; ms += FRAME_MS) {
+      const shown = hold.step(ON, slowAt(ms), "c", runs);
+      frames.push({ ms, mark: shown.mark, lit: shown.lit[0] === true });
+      if (shown.lit[0] === true) break;
+    }
+    if (frames.some((f) => f.mark !== null)) return { wanted: w, frames, marks: planMarks(slowAt(w), w).marks };
+  }
+  throw new Error("no change in the count interval needed a mark of its own");
+}
+
+test("a change that gets a mark of its own reports it, on the frame it lands and on no other, under 1 s and 500 ms from every mark", () => {
+  const { wanted, frames, marks } = ownMarkCase();
+  const own = frames.filter((f) => f.mark !== null);
+  assert.equal(own.length, 1, "the mark is reported once");
+  const landed = own[0]!;
+  assert.equal(landed.lit, true, "on the frame the change is drawn");
+  assert.equal(frames.filter((f) => f.lit).length, 1);
+  assert.ok(landed.mark! <= landed.ms && landed.ms - landed.mark! < FRAME_MS, "the frame of the mark");
+  assert.ok(landed.mark! - wanted < 1000, "P2: under 1 s after the change was wanted");
+  assert.ok(marks.every((m) => Math.abs(m - landed.mark!) >= 500 - 1e-6), "P2: 500 ms from every planned mark");
+});
+
+test("the runs already placed are counted beside a mark of its own (S6): with two runs just before it, it moves later", () => {
+  const first = ownMarkCase();
+  const free = first.frames.find((f) => f.mark !== null)!.mark!;
+  const run = (id: string, fromMs: number) => ({ wish: { id, kind: "lightBurst" as const, pieces: [{ fromMs, toMs: fromMs + 50 }] }, pieces: [{ fromMs, toMs: fromMs + 50 }] });
+  const runs = [run("a", first.wanted - 300), run("b", first.wanted - 200)];
+  const crowded = ownMarkCase(runs).frames.find((f) => f.mark !== null);
+  assert.ok(crowded !== undefined && crowded.mark! > free, "the window already holds two runs, so the mark waits for it to clear");
+});

@@ -7,6 +7,7 @@
 // 1 s with no seek frees nothing. Light only: no angle is held here (S7, rule 4). Pure: a frame's target and its time come in.
 
 import { CAUSE_LATE_MS, causeFrame, clockCause } from "../../model/src/index.ts";
+import type { PlacedRun } from "../../model/src/index.ts";
 import { FRAME_MS, planMarks } from "./marks-calc.ts";
 import type { Where } from "./marks-calc.ts";
 
@@ -39,8 +40,8 @@ export class MarkHold {
   /** Causes whose own mark would have been 1 s or more late (S6 won over P2): never expected, reported to the tests. */
   late = 0;
 
-  /** The lit fixtures and haze gain to draw this frame (`context` names what a change of passes through): `target`, or the last frame's where the change waits for its mark. */
-  step(target: Held, where: Where, context: string): Shown {
+  /** The lit fixtures and haze gain to draw this frame (`context` names what a change of passes through; `runs` are those already placed, which a mark of its own counts beside, S6): `target`, or the last frame's where the change waits for its mark. */
+  step(target: Held, where: Where, context: string, runs: readonly PlacedRun[] = []): Shown {
     const prev = this.held;
     const from = this.prevMs;
     const ms = where.classMs;
@@ -66,7 +67,7 @@ export class MarkHold {
       if (here) this.pending = { releaseMs: ms, placed: false };
       else if (next !== undefined && next < ms + CAUSE_LATE_MS - EPS) this.pending = { releaseMs: next, placed: false };
       else {
-        const cause = causeFrame(ms, FRAME_MS, plan.marks, [], [], plan.fixed.map((f) => f.atMs));
+        const cause = causeFrame(ms, FRAME_MS, plan.marks, runs, [], plan.fixed.map((f) => f.atMs));
         this.late += cause.late.length;
         this.pending = { releaseMs: cause.frameMs, placed: true };
       }
