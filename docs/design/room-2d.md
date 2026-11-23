@@ -598,19 +598,19 @@ rule is not relaxed.
 ### The cap, state by state
 
 Counted as scene.md does: every frame mark is 1 change in every region at once, a run is 1,
-steady light's possible change is 1, a sweep counts its measured count (scene.md, "Steady light and
+steady light's possible change is 1, a sweep counts 1 (scene.md, "Steady light and
 sweeps"), and the cap is **3 in any 1 s**. On this screen runs, steady light and sweeps are 0 in every state
 (it has no beams), so the count is the marks, and the invariant gives **at most 2**:
 
-| State | Frame marks in any 1 s | Runs | Steady light | Counted | Margin |
-|---|---|---|---|---|---|
-| Running, locked, a count running (a pattern, Beat level, or Tempo only from `interval_start`) | At most 2: the count's ticks (the countdown, bars line, class time and score join them), the change frame and an action, any two at least 500 ms apart | 0 | 0 | **2** | 1 |
-| Running, locked, no count (no pattern, "Count from the music", "No tempo") | At most 2: the countdown's tick (nominally 1 s apart, but P2 can delay one, so a window may hold two of them; the invariant still bounds all marks at 2) plus a change frame or an action | 0 | 0 | **2** | 1 |
-| Coasting, off the list, manual clock, hold, ambiguous, playlist not loaded | The countdown's tick, plus a change frame, an action or a timed or outside change; a plate shares a tick that falls within its 500 ms | 0 | 0 | **2** | 1 |
-| Paused | The countdown is frozen: no tick. Actions (pause, then resume, or a seek) and timed or outside changes (the band going, a link state, "Phone connected", the End question's timeout), each its own mark, any two at least 500 ms apart: at most 2 | 0 | 0 | **2** | 1 |
-| Before the start, finished | No ticks (the clock is at 0, or at the end): actions, timed or outside changes (the band going, a link plate, the "New code" plate, "Phone connected"), and the change frame at the start and at the end, each its own mark, any two at least 500 ms apart: at most 2 | 0 | 0 | **2** | 1 |
-| Last 5 seconds ("Change in") | The label appears on the countdown's tick of that second | 0 | 0 | **2** | 1 |
-| Sub-second intervals, or a seek, jump or reload at a change | Merged by P1 into one change frame; an action 500 ms or more later, or joined to it | 0 | 0 | **2** | 1 |
+| State | Frame marks in any 1 s | Runs | Steady light | Sweep | Counted | Margin |
+|---|---|---|---|---|---|---|
+| Running, locked, a count running (a pattern, Beat level, or Tempo only from `interval_start`) | At most 2: the count's ticks (the countdown, bars line, class time and score join them), the change frame and an action, any two at least 500 ms apart | 0 | 0 | 0 | **2** | 1 |
+| Running, locked, no count (no pattern, "Count from the music", "No tempo") | At most 2: the countdown's tick (nominally 1 s apart, but P2 can delay one, so a window may hold two of them; the invariant still bounds all marks at 2) plus a change frame or an action | 0 | 0 | 0 | **2** | 1 |
+| Coasting, off the list, manual clock, hold, ambiguous, playlist not loaded | The countdown's tick, plus a change frame, an action or a timed or outside change; a plate shares a tick that falls within its 500 ms | 0 | 0 | 0 | **2** | 1 |
+| Paused | The countdown is frozen: no tick. Actions (pause, then resume, or a seek) and timed or outside changes (the band going, a link state, "Phone connected", the End question's timeout), each its own mark, any two at least 500 ms apart: at most 2 | 0 | 0 | 0 | **2** | 1 |
+| Before the start, finished | No ticks (the clock is at 0, or at the end): actions, timed or outside changes (the band going, a link plate, the "New code" plate, "Phone connected"), and the change frame at the start and at the end, each its own mark, any two at least 500 ms apart: at most 2 | 0 | 0 | 0 | **2** | 1 |
+| Last 5 seconds ("Change in") | The label appears on the countdown's tick of that second | 0 | 0 | 0 | **2** | 1 |
+| Sub-second intervals, or a seek, jump or reload at a change | Merged by P1 into one change frame; an action 500 ms or more later, or joined to it | 0 | 0 | 0 | **2** | 1 |
 
 Timed and outside changes are marks like an action: they add no row, because the invariant bounds
 **every** mark of every kind at 2 in any 1 s.

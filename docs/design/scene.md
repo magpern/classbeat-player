@@ -396,8 +396,8 @@ replaced the earlier ones (the lift column of "Energy by zone", the 12 % tempo p
    region's whole beam share). Holding a re-aim to 3 % a second would need the beams at about 1/20 to 1/60 of
    their light, which hides them. The haze's drift and the wall's slow wave alone read **2.3 to 2.6 %**. So
    `--scene-steady-max` now bounds **steady light** only (the haze's drift, the wall's slow wave and the looks'
-   sway at rest), and the beams' re-aims are **sweeps**: each kind is counted by the scheduler as the changes the
-   strict measure gives it, at most 1 in any 1 s, over a 4.15 s window ("Steady light and sweeps" below). The
+   sway at rest, if it measures at 3 % or less), and the beams' re-aims are **sweeps**: the scheduler counts every
+   sweep as 1, and a CI check proves the strict measure gives it at most 1 in any 1 s, over a window of at most 4.15 s ("Steady light and sweeps" below). The
    3 % a second is a design sub-budget (#575), not a product rule. **S6's rule and the strict whole-frame gate
    are unchanged by this and stay the authority**: every gated run must still pass them on every moment. Fixed
    frames and count ticks may land inside a sweep and are counted beside it.
@@ -460,91 +460,117 @@ added to anything else that is not scheduled, it still cannot make a run of 10 %
 | Kind | What | Bound |
 |---|---|---|
 | **Beat-like light** | The beat lift, the tempo pulse, the pattern accent, the wall chase's step, the build's haze step, the lens flash | Every run it makes, alone, is at most **5 %** of its larger end in every region (`--scene-lift-cap`) |
-| **Steady light** | The haze's drift, the wall's slow wave, the looks' sway at rest (the motion phase moving a look with no target step), and below the Beat level the build's haze rise (the score's travel is not: it steps on the ticks) | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`), measured as "Steady light and sweeps" says |
-| **Sweeps** | The beams' re-aims: a phrase flip (the mirror and the lead-half swap), a build's gather, a drop's fan, a song change's new look, and any other new look (leaving the Beat level mid-phrase, which un-mirrors) | Each kind at most **1** counted change in any 1 s (`--scene-sweep-max`), as the strict measure gives it, counted by the scheduler in every 1 s window that overlaps the sweep's window (`--scene-sweep-window`, **4.15 s**) |
+| **Steady light** | The haze's drift, the wall's slow wave, the looks' sway at rest (the motion phase moving a look with no target step; steady light only if #592 measures it at 3 % or less), and below the Beat level the build's haze rise (the score's travel is not: it steps on the ticks) | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`), measured as "Steady light and sweeps" says |
+| **Sweeps** | Any span in which a beam's drawn direction differs from its look's rest direction by more than the sway, whatever set its target: a phrase flip, a gather, a fan, a song change, a new look, a seek, jump or reload, the Beat level entered mid-phrase, a resume after a frozen turn | Counted by the scheduler as **1** in every 1 s window that overlaps the sweep's window (`--scene-sweep-window`, at most **4.15 s**); a CI check proves the strict measure gives at most **1** in any 1 s (`--scene-sweep-max`) |
 | **Scheduled changes** | Every text step, and the rig's bursts, ramps, steps and dims, each a **step** (one frame) or a **run** (several frames; "Steps and runs" below) | Placed by the scheduler: at most **3** in any 1 s, steady light's possible change and a sweep's count included, **counted as if each changed every region** |
 
 **Steady light and sweeps (decided in #592; to be built in #592 unless marked otherwise).**
 
 *Steady light, measured.* The gate draws the frame with steady light alone: every scheduled change and all
 beat-like light taken out (the lift, the lens flash, the bursts, the energy ramp, the dims, the build's haze
-steps at the Beat level, the wall's chase), the beams still turning, the text layer left out (between its
+steps at the Beat level, the wall's chase), the beams still moving, the text layer left out (between its
 steps it is still, so leaving it out is the stricter measure). On that frame, in **every region of the strict
 gate** (the 40 of `tools/flash-shots.ts`), relative luminance in linear light, every frame at 60 fps, locked with
 the beat and coasting, on every gated moment:
 
-- **The rate** is a region's range in any 1 s (highest less lowest, as a share of the highest), with every
-  **one-frame scheduled step taken out** first: a one-frame jump of more than **2 %** of its larger end is the
-  scheduler's (an energy step in a change frame, a quality step, a seek), and its jump is subtracted from every
-  later frame. A region under **0.002** is black and not read. In a class slower than 60 bpm the window is one
-  beat when that is longer than 1 s.
+- **The rate** is a region's range in any 1 s (highest less lowest, as a share of the highest). Only the
+  one-frame jumps **on frames the scheduler's log names as marks** (a change frame, a quality step, a seek, a
+  jump, a reload) are taken out first: each such jump is subtracted from every later frame, and the run prints
+  every jump it took out with its frame and its cause. **Any other one-frame jump of more than 2 %** of its
+  larger end fails the steady gate, whatever made it (a beam popping on, a target applied in one frame). A
+  region under **0.002** is black and not read. In a class slower than 60 bpm the window is one beat when that
+  is longer than 1 s.
 - **Where it is read:** every 1 s window that does not overlap a sweep's window (below). Inside a window the
-  sweep's count covers steady light.
+  sweep's count covers steady light. The gate asserts that **at least one 1 s window is read** on every gated
+  moment in every state, so a moment that lies wholly inside sweeps' windows cannot pass by measuring nothing.
 - **Where the rig gives a region less than 8 % of its light**, the region is read on the rig's light alone (the
   gel and the score drawn black), so its bound is 3 % a second of the rig's own light there.
-- **The gate** fails if any region of any run reads more than **3 %**. The build slows the haze's drift, the
-  wall's wave and the looks' sway to at most **2.5 %** on every run (0.5 points of margin), and the run prints
-  each moment's worst region, its rate and the steps taken out.
+- **The gate** fails if any region of any run reads more than **3 %**. The build slows the haze's drift and the
+  wall's wave to at most **2.5 %** on every run (0.5 points of margin), and the run prints each moment's worst
+  region, its rate and the jumps taken out.
+- **The looks' sway at rest is steady light only if #592 measures it at 3 % or less.** It is not yet measured:
+  the 2.3 to 2.6 % above is the haze and the wall alone, and the sway moves the beams at the zone's movement
+  rate, the mechanism that makes a re-aim a sweep. The levers for it are the light's only (wider and softer
+  beams, a lower share of the beams against the haze, then fewer lit fixtures in that zone's row); **the turn
+  limit, the movement rates and the looks stay**, and the looks and their movement are not flattened without
+  the owner (owner input 3, "Energy by zone"). If the steady light with the sway cannot meet 3 % by those
+  levers, #592 stops and reports it to the Orchestrator; the spec does not plan for it.
 
-*Sweeps.* A sweep is one re-aim of the beams, by its kind: **a phrase flip**, **a gather**, **a fan**, **a
-song change** (its new look), and **another new look** (leaving the Beat level mid-phrase, which un-mirrors).
+*Sweeps.* A **sweep** is any span of frames in which the drawn direction of any beam differs from its look's
+rest direction by more than the sway: the turn-rate limiter is holding the beam away from the target that the
+look, the fixture, the motion phase, the phrase and the moments give ("How a beam turns"), **whatever set
+that target**. The definition closes the list, not its causes. The known causes, each with a measured case
+(below): **a phrase flip** (the mirror and the lead-half swap), **a gather**, **a fan**, **a song change**,
+**a new look** (leaving the Beat level mid-phrase, which un-mirrors), **a seek, a 15 s jump or a reload** to a
+position with other targets (the limiter keeps the drawn direction across it), **entering the Beat level
+mid-phrase** (the mirror and the lead half return), and **a resume after a pause that froze a turn** (the rest
+of the turn runs after it, item 4 of "How a beam turns").
 
-- **The window.** A sweep's window starts on its moment, the frame its target changes (the phrase's anchor beat,
-  the song's first frame, the gather's start) or, for a moment whose turn follows it by `TURN_DELAY_MS`, the
-  moment itself, and lasts **4.15 s**: the longest turn, 3.5 s (`--scene-reaim`), plus `TURN_DELAY_MS`, 650 ms.
-  Every re-aim has arrived inside it (S7's limiter, "How a beam turns" item 2). A gather's window ends where
-  the beams hold still, 1 s before the drop, if that is sooner. The window is a function of the song's order,
-  anchors and moments only, like the turn (rule 4, S7), and nothing moves or shortens it.
-- **Its count, c.** For each kind, the most changes the **strict measure** (the gate's regions, monotone runs of
-  more than 10 % of the larger end, each direction a change) finds in any 1 s of its window, on the frame drawn
-  with **no scheduled change** (no burst, ramp, dim, energy step, quality step or text step; the text layer left
-  out) and **everything else**: the turning beams, the steady light and the beat-like light, so that a lift
-  splitting a sweep's run is counted too. It is read locked with the beat and coasting, over every gated moment
-  that holds that kind. The counts are a table in the
-  scene model that the scheduler reads. A CI check measures every kind and **fails if a measured count is above
-  the table's or above 1** (`--scene-sweep-max`). Every kind has a gated moment that holds it; the check also
-  fails if a kind has none.
-- **Overlapping windows** sum to at most 1 together. Each overlap the class can give (a re-aim inside a re-aim:
-  a song change on a phrase flip, a gather inside a phrase flip's window, a fan inside the next phrase flip's)
-  is measured as a kind of its own, on the frame of its own moment, and its count must be at most 1, as for any
-  kind. The second sweep's turn does **not** wait for the first: a phrase flip's target changes on its anchor
-  beat ("How a beam turns", item 5), and a turn held back by another sweep would move it off the song's
-  position, so both turns start where the song puts them (rule 4, S7).
-- **A sweep that cannot be foreseen** (leaving the Beat level mid-phrase) is counted from its own frame: a run
-  not yet started that would overlap its window gives way as step d says; a run in progress ends in that frame,
-  as a user action ends one ("The rules for runs", 1), and that frame is counted as a mark. The gate list gains a
-  moment with the lock lost mid-phrase in #592, so this kind has a measured count and a gated run.
-- **In the scheduler's count**, every 1 s window that overlaps a sweep's window counts the larger of **c** and
-  steady light's possible change (c is measured with the steady light in it), beside the marks. **No
-  run overlaps a sweep's window, whatever its c**: a sweep moves a region 20 to 85 % a second and can reverse
-  it inside a run, splitting it (the 2.1 % of "A run is whole" holds for steady light only).
+- **The window** starts on the turn's first frame and ends on the frame every beam's drawn direction has
+  reached its target, or where the beams hold still before a drop. It is at most **4.15 s**
+  (`--scene-sweep-window`: the longest turn, 3.5 s, `--scene-reaim`, plus `TURN_DELAY_MS`, 650 ms) of
+  **class-clock time**, so a pause that freezes a turn freezes its window with it. Where the turn is foreseen
+  (a phrase flip, a gather, a fan, a song change: a function of the song's order, anchors and moments only,
+  rule 4, S7), the scheduler plans the window from the turn's first frame (the moment, or the moment plus
+  `TURN_DELAY_MS` where the turn follows it) for the full 4.15 s, since arrival can only end it sooner; nothing
+  moves or shortens a turn. Where it is not foreseen (a seek, a jump, a reload, the Beat level left or entered,
+  a resume), the window starts on the turn's own first frame and is counted from there.
+- **Overlaps are one sweep.** Any span in which two turns overlap is one sweep, from the first turn's first
+  frame to the last arrival, each turn's part at most 4.15 s. The second turn does **not** wait for the first:
+  a phrase flip's target changes on its anchor beat ("How a beam turns", item 5), and a turn held back by
+  another sweep would move it off the song's position (rule 4, S7).
+- **The scheduler counts every sweep as 1** (`--scene-sweep-max`), the most it may make, in every 1 s window
+  that overlaps its window, whatever its cause; no table of counts by kind is used for scheduling. The 1 covers
+  steady light's possible change too (the CI check below measures with the steady light in it). **No run
+  overlaps a sweep's window**: a sweep moves a region 20 to 85 % a second and can reverse it inside a run,
+  splitting it (the 2.1 % of "A run is whole" holds for steady light only).
+- **The CI check that a sweep makes at most 1.** Its count c is the most changes the **strict measure** (the
+  gate's regions, monotone runs of more than 10 % of the larger end, each direction a change) finds in any 1 s
+  of its window, on the frame drawn with **no scheduled change** (no burst, ramp, dim, energy step, quality step
+  or text step; the text layer left out) and **everything else**: the turning beams, the steady light and the
+  beat-like light, so that a lift splitting a sweep's run is counted too. The check runs a **generated
+  matrix**, locked with the beat and coasting: every look (fan, cross, sweep, circle, split), every zone's row
+  (zones 1 to 7), both phrase parities (and so either half leading), and for two turns that overlap, every
+  offset between their first frames in steps of **at most 250 ms** across the window; it also holds a case of
+  every cause in the list above. It **fails if any case counts more than 1**, and **fails if a cause has no
+  measured case**. If the light levers of "If a gated run fails" (the turn limit, the movement rates and the
+  looks stay) cannot bring a case to 1, #592 stops and reports it to the Orchestrator; the spec does not plan
+  for it.
+- **Marks inside a sweep: gated, not argued.** A 1 s window over a sweep holds at most 2 marks (the invariant,
+  unchanged), the sweep's 1 and no run. That alone does not prove 3: a mark's step that reverses a region
+  inside one of the sweep's monotone runs (the side step from 100 % to 72 %, a text step of up to 78 % in its
+  region, the energy in a change frame) can split that run in two, and c is measured without the marks. So the
+  **strict whole-frame gate** holds a moment with **each mark type inside each sweep cause**, wherever the
+  states allow it: a count tick, the side step, a text step, a change frame and a user action, each inside a
+  phrase flip, a gather, a fan, a song change, a new look, a seek or a jump, the Beat level entered, and a
+  resume. The gate stays the authority. If a moment counts more than 3, #592 stops and reports it to the
+  Orchestrator.
+- **An unforeseen mark is placed by P2.** The frame of a lost lock (its plate, and the end of a run in progress,
+  "The rules for runs", 1), and any other mark nothing foresaw, is placed by text rule 2's P2 like any other
+  mark: at least 500 ms from every mark, or joined to a fixed frame, so the invariant holds. Between the lost
+  lock and that frame the run in progress and the new look's turn may overlap; the gated moment of a new look
+  with a run in progress decides it, under the stop above.
 - **What gives way to a sweep.**
-  - **The energy ramp waits, and a change frame is never moved.** Where a sweep's window would hold any part of
-    an interval change's ramp or its hold (`t0 - 950 ms` to `t0`), the ramp does not start in the window; it
-    must end on the frame before `t0` and `t0` never moves, so waiting leaves it no room and its energy goes up
-    in the change frame (step d). The sweep, its turn and the change frame are never moved, and no light is
-    lowered to make room.
+  - **The energy ramp waits, and a change frame is never moved.** Where a sweep's planned window would hold any
+    part of an interval change's ramp or its hold (`t0 - 950 ms` to `t0`), the ramp does not start in the
+    window; it must end on the frame before `t0` and `t0` never moves, so waiting leaves it no room and its
+    energy goes up in the change frame (step d). The sweep, its turn and the change frame are never moved, and
+    no light is lowered to make room.
   - **Any other run** that may wait (the fan's end, a breakdown, the house looks, a quality step) waits for the
     first gap after the window that holds it whole, or becomes a step in a mark (step d). A burst whose decay
-    would overlap another sweep's window is skipped (steps e and f). A drop's own gather and fan are not in the
-    way of its burst: the gather's window ends 1 s before the drop, and its fan's turn starts 650 ms after the
-    drop, so the 250 ms decay ends before any beam of the fan moves. For that burst alone the fan's window is
-    taken from the turn's start, 650 ms after the drop, to 4.15 s after the drop; the decay lies before it, and
-    the fan's c is counted in the 1 s windows that overlap it.
-  - **Marks are not thinned.** With c at most 1, a 1 s window over a sweep holds at most 2 marks (the
-    invariant, unchanged), c and no run: 3. Ticks, fixed frames and user actions are placed by text rule 2 as
-    everywhere else; a user action is never shown more than 1 s late. A kind the light levers of "If a gated run
-    fails" cannot bring to 1 (wider and softer beams, a lower share of the beams against the haze, fewer lit
-    fixtures in that zone's row; the turn limit, the movement rates and the looks stay) is not planned for here:
-    #592 stops and reports it to the Orchestrator.
+    would overlap a sweep's window is skipped (steps e and f). A drop's own gather and fan are not in the way of
+    its burst: the gather's window ends where the beams hold still, 1 s before the drop, and the fan's turn, and
+    so its window, starts 650 ms after the drop, after the 250 ms decay has ended.
+  - **Marks are not thinned.** Ticks, fixed frames and user actions are placed by text rule 2 as everywhere
+    else; a user action is never shown more than 1 s late.
 - **The loop test for a run wanted just after a phrase flip** (mutation M8 of the #590 review, required): an
   energy ramp, a fan's end and a breakdown each wanted inside a phrase flip's window are not placed in it (the
   ramp's energy is in its change frame; the others wait for the gap after the window or are a step), and no
-  1 s window over the flip counts more than 3, the flip's c included. One case wants its run between 2.5 s and
+  1 s window over the flip counts more than 3, the flip's 1 included. One case wants its run between 2.5 s and
   4.15 s after the flip, so the test fails if the window is shortened to the 2.5 s of #577.
 
 **Why that adds up, on the combined signal.** The bullets below hold outside the sweeps' windows; inside one,
-the sweep's measured count, at most 1, stands in place of steady light's, beside at most 2 marks and no run
+the sweep's 1 stands in place of steady light's, beside at most 2 marks and no run, and the strict gate decides
 (the last bullet).
 
 - **With the beat running** (Beat level, or Tempo only), a lift, a pulse or an accent starts at
@@ -587,10 +613,10 @@ the sweep's measured count, at most 1, stands in place of steady light's, beside
   steady light: only its ticks move it.
 - **A step is one change at most**, however many things move in its one frame. So text steps
   and the rig's own steps share frames wherever they can (the ticks, below).
-- **Inside a sweep's window** the sum is not argued; it is measured. The sweep with the steady and beat-like
-  light during it gives at most c changes in any 1 s (measured, at most 1), no run lies in the window, and the
-  marks are at most 2 (the invariant), so every 1 s window holds at most 3. Whether a
-  mark's step moves where the sweep's runs begin and end is what the strict gate, on the whole frame, checks.
+- **Inside a sweep's window** the sum is not argued. The sweep with the steady and beat-like light during it
+  gives at most 1 change in any 1 s (the CI matrix), no run lies in the window, and the marks are at most 2 (the
+  invariant); whether a mark's step splits one of the sweep's runs is not bounded here, so it rests on the
+  strict whole-frame gate's moments with each mark type inside each sweep cause ("Steady light and sweeps").
 
 The reviewer's pairings on #569 now give: a 4.5 % lift (zone 7) with 3 % a second of steady
 light at 90 bpm, a falling run of at most 4.3 + 2.0 = 6.3 %; a build at 120 bpm, at most
@@ -642,7 +668,7 @@ step of the countdown (26 vh), by up to **30 %** and **78 %**. Some steps are sm
 
    **The invariant: any two frame marks, of whatever kind, are at least 500 ms apart, in time.**
    So any 1 s window holds at most **2 frame marks**, plus steady light's 1 at most (inside a sweep's window,
-   its count c, at most 1, instead: "Steady light and sweeps"). The minimum
+   its 1 instead, with the strict gate deciding: "Steady light and sweeps"). The minimum
    wins over rounding to frames, so it holds at any refresh rate (30 frames at 60 Hz, 25 at
    50 Hz, 72 at 144 Hz), and a "1 s window" is any 1 s of time, from a frame up to but not
    including the frame 1 s later, not a count of frames. This cap is the budget, and the count's
@@ -767,7 +793,7 @@ window, as if all were in one region: every mark and every run as 1 (a burst is 
 its decay, a dim its two edges), and steady light's possible change at the earliest frame one
 could pass 10 % (none while a beat-like rise comes at least once a beat; otherwise 1.73 s after
 the last rise, then every 3.3 s, and below 60 bpm 1.73 and 3.3 beats); in a window that overlaps
-a sweep's window, the larger of that and the sweep's count c ("Steady light and sweeps"). The cap
+a sweep's window, the sweep's 1, which covers it ("Steady light and sweeps"). The cap
 is **3 in every window**. **As built in #577** steady light is counted as 1 in every window, beat
 or no beat, and no run is placed in the 2.5 s after a sweep start; **to be built in #592**: the
 count above, the 4.15 s window, the sweep counts and the rows of the table marked so. The steps,
@@ -775,7 +801,7 @@ in this order:
 
 | Step | What | How |
 |---|---|---|
-| a | Fixed frames, and the sweeps' windows | Fixed frames merged and placed first (text rule 2, P1); they never move afterwards. Every sweep the song's order, anchors and moments give, with its window of 4.15 s and its count c, is known with them and never moves (to be built in #592: the window, from 2.5 s, and c) |
+| a | Fixed frames, and the sweeps' windows | Fixed frames merged and placed first (text rule 2, P1); they never move afterwards. Every foreseen sweep (the song's order, anchors and moments give it), its window planned from its turn's first frame for 4.15 s and counted as 1, is known with them and never moves; an unforeseen one counts from its own first frame (to be built in #592: the window, from 2.5 s, and the count) |
 | b | Every other mark | Placed by text rule 2, P2: user actions, the count's switch beats, the other ticks; the countdown, the bars line, the labels and the score's step show on a mark. |
 | c | Runs, into the gaps | Each run goes into a gap between marks that holds it whole (rules for runs 1 and 2) and overlaps no sweep's window (built for 2.5 s; 4.15 s to be built in #592); with a count running there are none (rule 3) |
 | d | A run that does not fit, or would make a fourth (without the beat: every ramp and dim) | It becomes a step in a mark and adds nothing: the energy ramp in the change frame, any other ramp in the next mark, a user action's ramp in the action's frame; a run that cannot be a step waits for a gap that holds it. **An energy ramp that a sweep's window would hold waits, and so its energy is in the change frame; the change frame is never moved** (to be built in #592) |
@@ -797,7 +823,7 @@ sweep, whose count is at most 1:
 | Beat running, no count, outside a sweep's window | at most 2 | what the scheduler fits beside them (d to g) | 0 | 0 | **3** |
 | Without the beat, outside a sweep's window | at most 2 | 0 runs: every run becomes a step in a mark (d) | at most 1 | 0 | **3** |
 | Just after a pause (the beat stops) | at most 2 | what the scheduler fits beside them and steady light (d to g) | its first possible change at least 0.73 s after the action's frame (1.73 s, or 1.73 beats, after the last lift, which is at most one beat before) | 0 | **3** |
-| Any state, a window that overlaps a sweep's window (to be built in #592) | at most 2 | 0 (no run overlaps a sweep's window) | in c, or 1 without the beat where c is 0 | c, at most 1 (measured) | **3** at most |
+| Any state, a window that overlaps a sweep's window (to be built in #592) | at most 2 | 0 (no run overlaps a sweep's window) | in the sweep's 1 | 1 (the CI matrix proves at most 1) | **3**, held by the strict gate's moments with each mark type inside each sweep cause |
 
 **Colour is never late**: the hue cross and the
 anticipation make no change (constant luminance), so they are never scheduled.
@@ -824,7 +850,7 @@ read its answer. The text shows the class **as it was on the last mark** and hol
   frame. The beams' turn and the hold-still stay on the song's drop moment (S7, rule 4).
 - **A person's action** (pause, resume, seek, jump) is a mark placed by P2: shown within 500 ms.
 - **The song-change dim** has no room beside a tick every second: a window holding both its edges and one tick is four
-  with steady light. The scheduler leaves it out (step g) and the re-aim marks the song, as step g says. No running state leaves room for it today (a tick every second without a count, no runs at all with one), so its shape (25 %, 120 ms edges) is not built behaviour that anything shows. **Under #592's accounting it still does not return**: steady light no longer takes a place in every window, but the dim's rise, on the new song's first beat, lies in the song change's sweep window (every song change brings a new look, and neighbouring songs never share one), and no run overlaps a sweep's window. #592 measures the song change's count c, locked and coasting, at 60 s, 100 s and the dim's own moment at 70 s, and reports it; the dim returns only by a later change to this spec.
+  with steady light. The scheduler leaves it out (step g) and the re-aim marks the song, as step g says. No running state leaves room for it today (a tick every second without a count, no runs at all with one), so its shape (25 %, 120 ms edges) is not built behaviour that anything shows. **Under #592's accounting it still does not return**: steady light no longer takes a place in every window, but the dim's rise, on the new song's first beat, lies in the song change's sweep window (every song change brings a new look, and neighbouring songs never share one), and no run overlaps a sweep's window. #592 measures the song change's cases of the CI matrix and the gated moments at 60 s, 100 s and the dim's own moment at 70 s, locked and coasting, and reports them; the dim returns only by a later change to this spec.
 - **A seek or a jump's text frame** is a user action's frame, placed against the marks of the new position; it can fall less than 500 ms of wall time after the last tick shown before the seek. It shares the rig's own one-frame seek step, and the gate counts it by frame time. The action's frame as the scheduler's input stays to be built (above).
 
 **The gate on the whole frame.** `tools/flash-shots.ts` reads the frame as shown: the canvas under the text layer. The
@@ -849,17 +875,17 @@ before): the gather is the song's moment, so this keeps rule 4. The fixtures tha
 the fan come on in the drop's frame, under the burst, wherever text rule 2 puts that frame. The
 hold-still ends and **the beams' turn follows the song's moments by 650 ms** (`TURN_DELAY_MS`, a function of the moments only, rule 4): the fan's fixtures and the burst come in the drop's frame, and the turn to the fan starts 650 ms later, on the same moment-derived target, so the beams crossing the screen do not add two changes to the burst's second (#577, gated). It is never on a merged frame.
 The turn is a **sweep** (the fan's kind, "Steady light and sweeps"; to be built in #592): as built in #577 it
-counts as steady light, under one change in every window. Under #592's accounting its window runs from the drop
-to 4.15 s after it (for the drop's own burst, from the turn's start, 650 ms after the drop), the scheduler
-counts the fan's measured c in every 1 s window that overlaps it, and no run overlaps it. Its start and its
-target are the song's and never move. A gated run that finds the fan's count above its table's is fixed in the
-light (the levers below), never by moving the turn.
+counts as steady light, under one change in every window. Under #592's accounting its window runs from the turn's
+first frame, 650 ms after the drop, for at most 4.15 s; the scheduler counts it as 1 in every 1 s window that
+overlaps it, and no run overlaps it. Its start and its target are the song's and never move. A case of the CI
+matrix that finds the fan above 1 is fixed in the light (the levers below), never by moving the turn, or stops
+#592 as "Steady light and sweeps" says.
 
 **Every moment, worst case.** Every moment (beats, a pattern, an interval change, a drop, a song
 change, a build, a breakdown, the anticipation, the class's end, a quality step, a user action)
 is decided by the rules above, and its worst 1 s is the scheduler's table: at most 2 frame marks,
 user actions included, plus the runs the scheduler fits or steady light's 1, or, in a sweep's window, the
-sweep's c, at most 1: **at most 3 counted changes, steady light and sweeps included**. No
+sweep's 1: **at most 3 counted changes, steady light and sweeps included**. No
 list of moments is kept beside it.
 
 **The scheduler's property test** (built in #577, required): random timelines (intervals
@@ -869,10 +895,10 @@ any two marks are at least 500 ms apart; that fixed frames never move except by 
 an action's state is shown at most 500 ms after it, or 1 s when it joins a fixed frame, unless a
 later action replaced it in its placed frame (then that frame shows the later state); that no mark falls inside
 a run; and that every 1 s window holds at most 3 counted changes, steady light included. **To be built in
-#592**, the timelines also hold phrase flips, gathers, fans, song changes and a lock lost mid-phrase, with
-counts c of 0 and 1 from a table, and the test asserts as well that no run overlaps a sweep's 4.15 s window;
-that every 1 s window that overlaps one counts at most 3 with the larger of c and steady light's possible
-change; that a change frame and a sweep's window never move; and that an energy ramp a sweep's
+#592**, the timelines also hold every sweep cause (phrase flips, gathers, fans, song changes, the Beat level
+left and entered mid-phrase, seeks, jumps, reloads and resumes after a frozen turn), overlapping ones among
+them, and the test asserts as well that no run overlaps a sweep's window; that every 1 s window that overlaps
+one counts at most 3 with the sweep as 1; that every unforeseen mark is placed by P2; that a change frame and a sweep's window never move; and that an energy ramp a sweep's
 window would hold is a step in the change frame. The loop test for a run wanted just after a phrase flip
 ("Steady light and sweeps") is one of its fixed cases.
 
@@ -880,8 +906,7 @@ The **strict gate in #577 is the final authority** for any case these rules miss
 that finds a fourth change is fixed by a rule here, never by an exception.
 
 **If a gated run fails,** the fix is in the light or the schedule, never in the measure and never
-by an exception: for beat-like light, a lower amplitude; for steady light, a slower haze drift and wall wave,
-then a smaller or slower sway of the looks at rest (the same for every class, so rule 4 and S7 hold); for a sweep, wider and softer
+by an exception: for beat-like light, a lower amplitude; for steady light, a slower haze drift and wall wave; for the looks' sway and for a sweep, wider and softer
 beams, a lower share of the beams against the haze, then fewer lit fixtures in that zone's row, in
 that order (the turn limit, the movement rates and the looks stay); for scheduled changes, the
 scheduler's order above. A pull request reports every gated run, by moment and state, with its
@@ -1163,7 +1188,7 @@ room-2d.md (and on the mock-up by eye until PL6's first pull request ships its c
 | S4. Visible at once | All nine content items in every running state, with the band hidden, at every supported size |
 | S5. Zone | The zone is a number and a name as well as a colour on the gel, the next row and the score (as C5); a score block never shows its colour without its number. The rig shows only the current zone's colour, the next zone's colour during the 10 s anticipation (while its number and name are in the next row; the next interval not merged away, "The flash budget", text rule 2), and white. A merged-away interval's token is not allowed. Never another hue, never a measured heart-rate zone (rule 7). A token keeps its hue at any lightness and any share of white: in linear light every rig pixel is `a × T + w × white` for one allowed token `T`. Tested on the rendered pixels of every frame of the S6 runs, 0 failing pixels ("Colour: two hues, never a mix", the test) |
 | S5b. House-look beams | In the before-the-start state each of the two beams has a core of at least **0.006** relative luminance (about 18 of 255 in sRGB), at least **15 code values** above the haze beside it on the channel of the token's strongest primary, and the same at every render scale; the haze and the wall stay at the 6 % level. Beams at the plain 6 % measured about 0.0017 over 0.0006 (3 to 4 codes) and do not read at room distance; the floor is a fixed level, not a share, so it is the same colour at every size. The beams still carry one token and white only (S5), do not move faster than S7, and add no beat (S8). Checked on the CI screenshot of the state at every room size |
-| S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. At most one full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart, placed where the scheduler has room for it: the gate asserts at least one white burst at 40 s (None level), 58 s (both levels) and 80 s (None level), and a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) has none (the ramp comes first). Measured as "The flash budget" says (every region of at least 10 %, each direction a change, no duration gate, any sliding 1 s), locked with the beat and in every other state; **the gate on the real running states, locked with the beat, is the authority**. Built in #577 for the scene's canvas, the design that meets it: beat-like light at most 5 % per run in every region, and at most 3 counted changes in any 1 s, steady light counted as one in every window (every step a frame mark at least 500 ms apart, so at most 2). The whole frame, text layer included, has been gated since #591 ("The text layer on the scheduler, as built"). **To be built in #592** ("Steady light and sweeps"): steady light gated per region at **3 %** in any 1 s outside the sweeps' windows, locked and coasting; each sweep kind counted at its measured count, at most **1** in any 1 s, over its **4.15 s** window, with no run in it; a CI check fails on a measured count above the table's or above 1. **This rule and the strict whole-frame gate are not changed by #592** and stay the authority: every gated run must still pass them |
+| S6. Flashes | No region larger than 10 % of the screen changes in relative luminance by more than 10 % more than 3 times in any second; the drop burst and the light-only bursts count within that limit. At most one full-screen burst per drop moment (or per interval change in a song without moments), at least 10 s apart, placed where the scheduler has room for it: the gate asserts at least one white burst at 40 s (None level), 58 s (both levels) and 80 s (None level), and a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) has none (the ramp comes first). Measured as "The flash budget" says (every region of at least 10 %, each direction a change, no duration gate, any sliding 1 s), locked with the beat and in every other state; **the gate on the real running states, locked with the beat, is the authority**. Built in #577 for the scene's canvas, the design that meets it: beat-like light at most 5 % per run in every region, and at most 3 counted changes in any 1 s, steady light counted as one in every window (every step a frame mark at least 500 ms apart, so at most 2). The whole frame, text layer included, has been gated since #591 ("The text layer on the scheduler, as built"). **To be built in #592** ("Steady light and sweeps"): steady light gated per region at **3 %** in any 1 s outside the sweeps' windows, locked and coasting; every sweep (any span a beam is turned away from its look's rest direction, whatever the cause) counted as **1** over its window of at most **4.15 s** of class-clock time, with no run in it; a CI check over a generated matrix (every look, zone row and phrase parity, overlap offsets in steps of at most 250 ms, and every cause) fails above 1 or on a cause with no case; the gate holds a moment with each mark type inside each sweep cause. **This rule and the strict whole-frame gate are not changed by #592** and stay the authority: every gated run must still pass them |
 | S7. Movement | The camera never moves. No beam turns faster than 30 degrees a second **on any frame**, a re-aim, a phrase flip and a moment included: the drawn direction follows the model's target through a turn-rate limiter ("How a beam turns"). Rule 4: a beam's direction is a function of the song's look, the fixture, the motion phase, the phrase and the song's moments only. Test (scene model): two classes that differ only in their intervals (zones, targets, positions, patterns, cues), evaluated at the same song, look, phrase, moments and **motion phase**, give every beam the same direction; and the motion phase's rate depends only on the zone's row, at most 30 degrees a second. Light-only bursts on interval changes change no direction |
 | S8. Beat | Beat lift, wall chase, phrase and pattern accent only at the **Beat** level (lock, `bpm` and anchors), within 50 ms of the anchor beat (spike 1's criterion). At **Tempo only** a pulse of at most 4 % (built in #577; 12 % as built) and the pattern count of S14 (at the `bpm` from the interval start, `start_on: "interval_start"` only), and nothing else beat-like. At **None** (paused, coasting, off the list, manual clock, holding, no `bpm`) no lift, pulse or accent. No downbeat is ever guessed |
 | S9. Frame rate | ADR 0009's re-check: at the **default quality level (High)**, on a studio-class computer at 1920 × 1080, a **median of at least 58 fps over a full class** and **no second under 30 fps**, from the frame-rate log (once a second, with the quality level). A class that steps down from High misses this criterion; the steps of the table above only keep the room usable on a weaker computer |
@@ -1192,8 +1217,8 @@ pull request:
 | `--scene-anticipate` | 10 s | How long before an interval change the next colour comes in |
 | `--scene-turn-max` | 30 degrees a second | The fastest any beam turns; the limiter's rate (S7) |
 | `--scene-reaim` | 3.5 s at most | The longest a re-aim, phrase flip, gather or fan may take: the largest target step of 105 degrees at the turn limit. Replaces the 1.2 s of earlier revisions, which names nothing now (the song-change dim is one beat). With `TURN_DELAY_MS` it sets `--scene-sweep-window` |
-| `--scene-sweep-window` | 4.15 s (to be built in #592; 2.5 s as built in #577) | A sweep's window: `--scene-reaim`, 3.5 s, plus `TURN_DELAY_MS`, 650 ms, from the sweep's moment; a gather's ends 1 s before its drop if sooner. No run overlaps it, and the scheduler counts the sweep's c in every 1 s window that overlaps it ("Steady light and sweeps") |
-| `--scene-sweep-max` | 1 counted change in any 1 s (to be built in #592) | The most changes the strict measure may find for one sweep kind (phrase flip, gather, fan, song change, another new look), or for overlapping sweeps together, in any 1 s of its window; measured per kind, locked and coasting, into a table the scheduler reads; a CI check fails above the table or above 1. A kind the light levers cannot bring to 1 stops #592 and goes to the Orchestrator |
+| `--scene-sweep-window` | 4.15 s (to be built in #592; 2.5 s as built in #577) | The longest a sweep's window lasts, in class-clock time: `--scene-reaim`, 3.5 s, plus `TURN_DELAY_MS`, 650 ms. It starts on the turn's first frame and ends when the drawn directions reach their targets (a gather's where the beams hold still); a foreseen one is planned for the full 4.15 s. No run overlaps it, and the scheduler counts the sweep as 1 in every 1 s window that overlaps it ("Steady light and sweeps") |
+| `--scene-sweep-max` | 1 counted change in any 1 s (to be built in #592) | What the scheduler counts for every sweep, and the most changes the strict measure may find in any 1 s of one (overlapping turns are one sweep); a CI check over the generated matrix, locked and coasting, fails above 1 or on a cause with no case. A case the light levers cannot bring to 1 stops #592 and goes to the Orchestrator |
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
 | `--scene-lift-cap` | 0.05 (built in #577) | The largest run any beat-like light (lift, pulse, accent, wall chase, the build's haze step, lens flash) may make alone in any region, as a share of its larger end (S6) |
 | `--scene-steady-max` | 3 % a second, per region (to be gated in #592, built to 2.5 %; the haze's drift and the wall's wave alone measured 2.3 to 2.6 % on main) | The most **steady light** (the haze's drift, the wall's slow wave, the looks' sway at rest; not the beams' re-aims, which are sweeps) may move any region of the strict gate in any 1 s, and in one beat below 60 bpm, with the one-frame scheduled steps taken out, outside the sweeps' windows, locked and coasting; where the rig gives a region less than 8 % of its light, 3 % of the rig's own light there ("Steady light and sweeps", S6) |
