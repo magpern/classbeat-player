@@ -18,10 +18,8 @@ const TICK_MS = 1000;
 const NATURAL_MS = 100;
 /** A move of the class clock that differs from the wall time by more than this is a seek or a jump. */
 const JUMP_MS = 1500;
-/** Fixed frames further ahead than this cannot affect where a mark is placed. */
-const LOOKAHEAD_MS = 2000;
-/** A mark that joined a fixed frame waits this long for the snapshot of that frame before it shows itself. */
-const JOIN_GRACE_MS = 250;
+/** A mark is placed against fixed frames up to this far ahead (room-2d.md, "Timed and outside changes": up to 1 s). */
+export const LOOKAHEAD_MS = 1000;
 
 export interface MarkContext {
   /** When the running interval ends (its change frame), or null when no change is coming. */
@@ -82,13 +80,17 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
     const want: Want = { kind, atMs: since, periodMs: kind === "tick" ? (model.count?.beatMs ?? TICK_MS) : undefined };
     const [placed] = placeMarks(fixed, [want], frameMs, Number.isFinite(lastMark) ? [lastMark] : []);
     if (!placed || placed.atMs === null) return null;
-    // A want that joined a fixed frame waits for that frame's own snapshot; it shows itself only if that never comes.
-    const onFixed = placed.how === "joined" && fixed.some((f) => f.atMs === placed.atMs);
-    return Math.max(placed.atMs + (onFixed ? JOIN_GRACE_MS : 0), lastMark + MARK_GAP_MS);
+    // A want that joined a fixed frame still ahead shows in that frame, with the snapshot of the frame itself (the change
+    // frame, the switch beat): it waits for it, and is placed again by every snapshot until then.
+    if (placed.how === "joined" && placed.atMs > nowMs && fixed.some((f) => f.atMs === placed.atMs)) return Number.POSITIVE_INFINITY;
+    return Math.max(placed.atMs, lastMark + MARK_GAP_MS);
   }
 
   return {
-    offer(model, nowMs, ctx) {
+    offer(model, rawMs, ctx) {
+      // Every time the scheduler sees is on the frame grid: a clock that is off the grid would round a placement past
+      // 500 ms late and send an action to a frame mark far ahead.
+      const nowMs = frameAt(rawMs, frameMs);
       const before = prev;
       prev = { model, atMs: nowMs, ctx };
       latest = model;
@@ -110,9 +112,10 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
       pending = { since, kind: change ? "change" : found, at };
       return at <= nowMs ? show(nowMs) : null;
     },
-    due(nowMs) {
+    due(rawMs) {
+      const nowMs = frameAt(rawMs, frameMs);
       return pending && pending.at <= nowMs ? show(nowMs) : null;
     },
-    wakeAtMs: () => pending?.at ?? null,
+    wakeAtMs: () => (pending && Number.isFinite(pending.at) ? pending.at : null),
   };
 }

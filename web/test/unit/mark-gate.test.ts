@@ -8,40 +8,75 @@ import { createTimeline } from "../../src/fixtures/timeline.ts";
 import type { Scenario } from "../../src/fixtures/timeline.ts";
 import { toRoomModel } from "../../src/room/adapter.ts";
 import { changeKind } from "../../src/room/change-kind.ts";
-import { FRAME_MS, createMarkGate } from "../../src/room/mark-gate.ts";
+import { FRAME_MS, LOOKAHEAD_MS, createMarkGate } from "../../src/room/mark-gate.ts";
 
 interface Run {
-  /** The frame times (ms) at which the screen changed, after the first draw. */
+  /** The times (ms) at which the screen changed, after the first draw. */
   readonly marks: number[];
   readonly shown: Map<number, ReturnType<typeof toRoomModel>>;
-  /** The longest time an action (or a timed or outside change) waited on screen to show. */
+  /** The longest an action (or a timed or outside change) waited to show, and the longest when it showed in a change frame or on a switch beat. */
   readonly waited: number;
+  readonly waitedJoined: number;
 }
 
-/** What `mountRoom` does with each snapshot, without a page: model, gate, and the gate's wake-up at each frame. */
-function play(s: Scenario, seconds: number, frameMs = FRAME_MS): Run {
+interface Clock {
+  /** Where the page's clock sits against the frame grid (ms), and how far a snapshot strays from it (ms). */
+  readonly offset: number;
+  readonly jitter: number;
+  /** How late a timer fires (ms): the page's `setTimeout` is not exact. */
+  readonly timerLate: number;
+}
+const ON_GRID: Clock = { offset: 0, jitter: 0, timerLate: 0 };
+
+/**
+ * What `mountRoom` does with each snapshot, without a page: model, gate, and the gate's own wake-up timer. A snapshot
+ * every frame (the harshest cadence); with `clock` the times are not on the frame grid, as `performance.now()` is not.
+ */
+function play(s: Scenario, seconds: number, frameMs = FRAME_MS, clock: Clock = ON_GRID, seed = 1): Run {
   const tl = createTimeline(s);
   const gate = createMarkGate(frameMs);
+  let r = seed;
+  const random = (): number => ((r = (Math.imul(r, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
   const marks: number[] = [];
   const shown = new Map<number, ReturnType<typeof toRoomModel>>();
-  let [current, since, waited] = [null as ReturnType<typeof toRoomModel> | null, null as number | null, 0];
+  let [current, since, waited, waitedJoined] = [null as ReturnType<typeof toRoomModel> | null, null as number | null, 0, 0];
+  const draw = (drawn: ReturnType<typeof toRoomModel> | null, t: number): void => {
+    if (!drawn) return;
+    // A mark is a display frame: the page paints the change on the next frame after the draw.
+    if (marks.length > 0 || t > 0) marks.push(Math.ceil(t / frameMs - 1e-9) * frameMs);
+    if (since !== null && current) {
+      const joined = drawn.intervalKey !== current.intervalKey || changeKind(current, drawn) === "switch";
+      if (joined) waitedJoined = Math.max(waitedJoined, t - since);
+      else waited = Math.max(waited, t - since);
+    }
+    shown.set(t, drawn);
+    current = drawn;
+    since = null;
+  };
+  let last = -1;
   for (let k = 0; k * frameMs <= seconds * 1000; k += 1) {
-    const t = k * frameMs;
-    let drawn = gate.due(t);
+    const t = Math.max(last + 0.01, k * frameMs + (k === 0 ? 0 : clock.offset + random() * clock.jitter));
+    last = t;
+    const wake = gate.wakeAtMs();
+    if (wake !== null && wake + clock.timerLate < t) draw(gate.due(wake + clock.timerLate), wake + clock.timerLate);
     const m = toRoomModel(tl.inputAt(t));
     const ctx = { changeAtMs: m.changeInMs === null ? null : t + m.changeInMs, switchAtMs: m.changeInMs === null || m.count === null ? null : t + m.count.beatsLeft * m.count.beatMs };
-    drawn = gate.offer(m, t, ctx) ?? drawn;
-    if (drawn) {
-      if (k > 0) marks.push(t);
+    const first = k === 0;
+    const drawn = gate.offer(m, t, ctx);
+    if (first && drawn) {
       shown.set(t, drawn);
       current = drawn;
-    }
-    if (current && changeKind(current, m) === "action") {
-      since ??= t;
-      waited = Math.max(waited, t - since);
-    } else since = null;
+    } else draw(drawn, t);
+    if (current && changeKind(current, m) === "action") since ??= t;
+    else since = null;
   }
-  return { marks, shown, waited };
+  return { marks, shown, waited, waitedJoined };
+}
+
+/** An action shows at most 500 ms after it, or at most 1 s when it shows in a change frame or on a switch beat (a frame or two for the clock's own step). */
+function assertTimely(r: Run, frameMs: number, label: string): void {
+  assert.ok(r.waited <= 500 + 2 * frameMs + 4, `${label}: an action waited ${r.waited.toFixed(0)} ms`);
+  assert.ok(r.waitedJoined <= 1000 + 2 * frameMs + 4, `${label}: an action waited ${r.waitedJoined.toFixed(0)} ms for a change frame`);
 }
 
 const gapsOk = (marks: readonly number[]): void => {
@@ -108,11 +143,25 @@ describe("frame marks, played on the real adapter", () => {
   });
 
   it("intervals 0.3 s and 0.4 s apart are one change frame: the latest shows, the merged-away ones never", () => {
-    const tiny = 1_079_000 + 20_000;
+    const tiny = 1_169_000; // the Threshold interval ends here: its successor is cut into 0.3 s, 0.4 s and the rest
     const r = play({ fixture: "running", startMs: tiny - 3000, tinyAtMs: tiny, events: [] }, 6);
     gapsOk(r.marks);
-    const zones = new Set(r.marks.map((t) => r.shown.get(t)?.gel?.numeral));
-    assert.ok(!zones.has("5") && !zones.has("6"), `a merged-away interval showed: ${[...zones].join(",")}`);
+    const zones = r.marks.map((t) => r.shown.get(t)?.gel?.numeral);
+    assert.ok(zones.includes("2"), `the latest interval never showed: ${zones.join(",")}`);
+    assert.ok(!zones.includes("5") && !zones.includes("6"), `a merged-away interval showed: ${zones.join(",")}`);
+    const change = r.marks.find((t) => r.shown.get(t)?.gel?.numeral === "2");
+    assert.ok(change !== undefined && Math.abs(change - 3000) <= FRAME_MS + 1, "one change frame, at the first change");
+    // Its countdown is the latest interval's time left at that frame; its next row is the one after it.
+    assert.equal(r.shown.get(change)?.next?.name, "VO2 max");
+  });
+
+  it("a merged-away interval is absent everywhere but its own score block: drawn with no number and no colour", () => {
+    const tl = createTimeline({ fixture: "running", startMs: 1_168_000, tinyAtMs: 1_169_000, events: [] });
+    const m = toRoomModel(tl.inputAt(0));
+    const narrow = m.score?.slivers.filter((g) => g.width < 0.2) ?? [];
+    assert.equal(narrow.length, 2, "the 0.3 s and 0.4 s intervals are two neutral slivers");
+    assert.ok(!m.score?.blocks.some((b) => b.width < 0.2), "no zone block, so no number and no colour, for either");
+    assert.ok(m.score?.blocks.every((b) => b.width > 1), "every block that has a number is a whole interval");
   });
 });
 
@@ -138,10 +187,29 @@ describe("frame marks, random timelines (any tempo, any refresh rate, an action 
         events.push(kind === "seek" ? { atMs, do: "seek", toMs: 1_000_000 + Math.floor(random() * 200_000) } : kind === "link" ? { atMs, do: "link", state: pick(["Locked", "Coasting", "Off the list"] as const) } : { atMs, do: kind });
       }
       const s: Scenario = { fixture, startMs: 1_169_000 - Math.floor(random() * 12_000), bpm: pick([undefined, 60, 95, 128, 160, 200]), tinyAtMs: random() < 0.3 ? 1_169_000 : undefined, events };
-      const r = play(s, 12, frameMs);
+      const clock: Clock = n % 2 === 0 ? ON_GRID : { offset: random() * frameMs, jitter: random() * 4, timerLate: random() * 3 };
+      const r = play(s, 12, frameMs, clock, n + 1);
       gapsOk(r.marks);
-      // An action shows within 500 ms; 1 s when it joins a change frame (the gate waits 250 ms more for that frame's snapshot).
-      assert.ok(r.waited <= 1000 + 250 + frameMs, `${JSON.stringify(s)}: an action waited ${r.waited.toFixed(0)} ms`);
+      assertTimely(r, frameMs, JSON.stringify({ s, clock }));
     }
+  });
+});
+
+describe("the gate on a clock that is not on the frame grid (performance.now and setTimeout are not)", () => {
+  it("a link change anywhere before a change frame or a switch beat shows within 500 ms, or 1 s in that frame", () => {
+    for (let n = 0; n < 150; n += 1) {
+      const at = 6000 + ((n * 37) % 2900);
+      const clock: Clock = { offset: (n % 17) * 0.97, jitter: 3 + (n % 5), timerLate: 1.7 };
+      for (const fixture of ["running", "pattern"]) {
+        const s: Scenario = { fixture, startMs: 1_160_000 - 700, bpm: fixture === "pattern" ? 128 : undefined, events: [{ atMs: at, do: "link", state: "Coasting" }] };
+        const r = play(s, 12, FRAME_MS, clock, n + 7);
+        gapsOk(r.marks);
+        assertTimely(r, FRAME_MS, JSON.stringify({ s, clock }));
+      }
+    }
+  });
+
+  it("looks ahead 1 s for a fixed frame, as room-2d.md says (\"Timed and outside changes\")", () => {
+    assert.equal(LOOKAHEAD_MS, 1000);
   });
 });
