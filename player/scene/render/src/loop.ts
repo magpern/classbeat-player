@@ -101,6 +101,7 @@ export class RigLoop {
   private seconds = 0;
 
   private readonly tokens: LoopTokens;
+  private readonly holdPhase: boolean;
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
   private readonly clock = new TextClock();
@@ -118,8 +119,9 @@ export class RigLoop {
     return made;
   }
 
-  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). */
-  constructor(tokens: LoopTokens, budgetOff = false) {
+  /** `budgetOff`: every run fits (the demo's `budget=off`, never the product). `holdPhase`: the motion phase never advances (the steady-light gate, never the product). */
+  constructor(tokens: LoopTokens, budgetOff = false, holdPhase = false) {
+    this.holdPhase = holdPhase;
     this.tokens = tokens;
     this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
   }
@@ -129,7 +131,7 @@ export class RigLoop {
     const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
-    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: movementScale(stage, link), noMusic: stage === "before" });
+    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase ? 0 : movementScale(stage, link), noMusic: stage === "before" });
     this.state = stepped.state;
     const { frame, dtSeconds } = stepped;
     const song = nth(cls.songs, songIndex);

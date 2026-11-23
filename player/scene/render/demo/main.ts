@@ -8,7 +8,7 @@
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
 // dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
-import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
+import type { LinkInput, QualityLevel, RigHue, SceneClass } from "../../model/src/index.ts";
 import { angleBetween } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
@@ -40,6 +40,9 @@ const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
 let lastSweeping = false;
+let lastMark = false;
+let pendingMark = false;
+let lastKey = "";
 let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
@@ -60,6 +63,12 @@ const renderer = new SceneRenderer(host, {
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
     lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
+    // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek), or the frame in which the interval's energy and
+    // colours, the song, the look, the phrase, a moment (gather, fan, breakdown) or the lit fixtures change.
+    const key = JSON.stringify([song, draw.frame.energy, draw.frame.colours.front, draw.frame.look, draw.frame.phrase.index, draw.frame.moments, draw.lit]);
+    lastMark = pendingMark || (lastKey !== "" && key !== lastKey);
+    pendingMark = false;
+    lastKey = key;
     lastMaster = draw.master;
     const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
     lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
@@ -69,7 +78,15 @@ const renderer = new SceneRenderer(host, {
 renderer.rig.floorOn = params.get("floor") !== "off";
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
-const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
+/** The demo's `level=tempo`: every song keeps its bpm and loses its anchors, so the link is locked at the Tempo only level. Never the product. */
+const tempoClasses = new WeakMap<SceneClass, SceneClass>();
+const tempoOnly = (f: Feed): Feed => {
+  if (params.get("level") !== "tempo") return f;
+  let cls = tempoClasses.get(f.cls);
+  if (cls === undefined) { cls = { ...f.cls, songs: f.cls.songs.map((song) => ({ ...song, anchors: [] })) }; tempoClasses.set(f.cls, cls); }
+  return { ...f, cls };
+};
+const feed = (): Feed => tempoOnly(long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
 let view: TextView | null = null;
 let lastFeed: Feed = feed();
 let lastBoxes: readonly TextBox[] = [];
@@ -118,6 +135,8 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** Whether the last frame is one the scheduler marks (a change frame, a quality step, a seek, a jump): its one-frame jump in light is not steady light. */
+  readonly mark: boolean;
   /** Whether any beam's drawn direction is off its target on the last frame (a sweep, scene.md "Steady light and sweeps"). */
   readonly sweeping: boolean;
   /** The rig's master level on the last frame: 1 running, a quarter at the bottom of a song-change dim. */
@@ -151,6 +170,7 @@ let run: Run | null = null;
 function playFrame(r: Run, stopOnText: boolean): number | null {
   for (const e of r.due.filter((x) => x.atMs <= classMs)) {
     r.due.splice(r.due.indexOf(e), 1);
+    pendingMark = true;
     if (e.link) state.link = LINKS[e.link === "base" ? (params.get("state") ?? "locked") : e.link] ?? state.link;
     if (e.quality) renderer.setQuality(e.quality);
     if (e.jumpMs !== undefined) classMs = e.jumpMs;
@@ -207,6 +227,7 @@ const api: DemoApi = {
   get ended() { return ended; },
   get burst() { return lastBurst; },
   get sweeping() { return lastSweeping; },
+  get mark() { return lastMark; },
   get master() { return lastMaster; },
   get tokens() { return lastTokens; },
   rigState() {

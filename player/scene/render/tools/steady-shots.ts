@@ -7,18 +7,21 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { MOMENTS, REGIONS, STATES, probeSetup } from "./flash-shots.ts";
+import { MOMENTS, REGIONS, STATES as BEAT_STATES, probeSetup } from "./flash-shots.ts";
 import { STEADY_MAX, worstRate } from "./steady-rate.ts";
 import { frameTimes } from "./luminance-steps.ts";
 import { violations } from "./guard-trap.ts";
 import type { Open } from "./text-shots.ts";
 
-interface Series { t: number[]; regions: number[][]; sweeping: boolean[] }
-export interface SteadyRun { readonly moment: string; readonly state: string; readonly worst: number; readonly region: string; readonly atMs: number; readonly steps: number }
+interface Series { t: number[]; regions: number[][]; sweeping: boolean[]; marks: boolean[] }
+export interface SteadyRun { readonly moment: string; readonly state: string; readonly worst: number; readonly region: string; readonly atMs: number; readonly steps: number; readonly windows: number; readonly unnamedAtMs: readonly number[] }
+
+/** The states: locked with the beat (Beat level), coasting (None level) and locked at the Tempo only level (no anchors). */
+export const STATES = [...BEAT_STATES, ["tempo only", "&level=tempo"]] as const;
 
 /** Plays one moment with steady light alone and returns the worst region's rate. */
 async function play(open: Open, name: string, state: string, query: string, fromS: number, toS: number, events: unknown, cls: string | undefined): Promise<SteadyRun> {
-  const { page, problems } = await open(480, 270, `${query}&steady=1${cls === undefined ? "" : `&class=${cls}`}`);
+  const { page, problems } = await open(480, 270, `${query}&steady=1&text=0${cls === undefined ? "" : `&class=${cls}`}`);
   await page.evaluate(probeSetup);
   await page.evaluate("window.__steps.check = () => {}"); // S5 is gated on the real frames; here the frames are not the product's
   await page.evaluate(`window.__steps.begin(${fromS}, ${toS}, ${JSON.stringify(events ?? [])})`);
@@ -31,10 +34,12 @@ async function play(open: Open, name: string, state: string, query: string, from
   assert.deepEqual([...problems, ...(await violations(page))], [], name);
   await page.close();
   const wall = frameTimes(out.t);
-  let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0 };
+  let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0, windows: Number.POSITIVE_INFINITY, unnamedAtMs: [] };
   REGIONS.forEach(([region], r) => {
-    const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping);
-    if (rate.worst > best.worst || best.region === "") best = { moment: name, state, worst: rate.worst, region, atMs: Math.round(rate.atMs), steps: rate.steps };
+    const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping, out.marks);
+    const windows = Math.min(best.windows, rate.windows);
+    const unnamedAtMs = [...best.unnamedAtMs, ...rate.unnamedAtMs.map((ms) => ms)];
+    best = rate.worst > best.worst || best.region === "" ? { moment: name, state, worst: rate.worst, region, atMs: Math.round(rate.atMs), steps: rate.steps, windows, unnamedAtMs } : { ...best, windows, unnamedAtMs };
   });
   return best;
 }
@@ -48,13 +53,15 @@ export async function reportSteady(open: Open, artifacts: string, only?: readonl
     for (const [state, query] of STATES) {
       const run = await play(open, m.name, state, query, m.fromS, m.toS, m.events, m.cls);
       runs.push(run);
-      line.push(`${state} ${(run.worst * 100).toFixed(2)} % (${run.region}, from ${run.atMs} ms, ${run.steps} steps taken out)`);
+      line.push(`${state} ${(run.worst * 100).toFixed(2)} % (${run.region}, from ${run.atMs} ms, ${run.steps} jumps taken out)`);
     }
     console.log(`Steady light, ${m.name}: ${line.join(", ")} (limit ${STEADY_MAX * 100} %)`);
   }
   mkdirSync(artifacts, { recursive: true });
   writeFileSync(join(artifacts, "steady-light.json"), JSON.stringify({ limitPerSecond: STEADY_MAX, runs }, null, 2));
   assert.ok(runs.length > 0, "steady light: nothing was measured");
+  assert.deepEqual(runs.filter((r) => r.windows < 1).map((r) => `${r.moment}, ${r.state}`), [], "steady light: a moment in which no 1 s window was read");
+  assert.deepEqual(runs.filter((r) => r.unnamedAtMs.length > 0).map((r) => `${r.moment}, ${r.state}: a jump of more than 2 % on an unmarked frame at ${r.unnamedAtMs.slice(0, 3).join(", ")} ms`), [], "steady light: a one-frame jump no mark names");
   assert.deepEqual(runs.filter((r) => r.worst > STEADY_MAX).map((r) => `${r.moment}, ${r.state}: ${(r.worst * 100).toFixed(2)} % in ${r.region} from ${r.atMs} ms`), [], "steady light moved a region more than 3 % in a second");
   return runs;
 }

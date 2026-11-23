@@ -47,7 +47,7 @@ export class SceneRenderer {
     this.options = options;
     this.quality = options.quality ?? "High";
     this.rig = new SceneRig(options.tokens);
-    this.loop = new RigLoop(options.tokens, options.budgetOff === true);
+    this.loop = new RigLoop(options.tokens, options.budgetOff === true, options.steadyOnly === true);
     this.unsubscribe = host.onResize(() => this.resize());
     this.rig.mask.setEnabled(options.textMask !== false);
     this.resize();

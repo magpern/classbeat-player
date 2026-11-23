@@ -1,6 +1,5 @@
-// Runs the steady-light measure (tools/steady-shots.ts) on its own, for a moment or all of them: `npm run steady -- "interval change (20"`
-// (arguments are the starts of moment names). Not part of `npm test`: #592 found the 3 % bound not reachable (scene.md), so this is the
-// measurement, reported, not a gate. Chrome as in tools/shots.ts.
+// Runs the steady-light gate (tools/steady-shots.ts) on its own, for a moment or all of them: `npm run steady -- "interval change (20"`
+// (arguments are the starts of moment names). `npm test` runs it on every moment; this is for working on one. Chrome as in tools/shots.ts.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";

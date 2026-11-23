@@ -8,6 +8,7 @@
 // A source changes token by a flag, in one frame, at constant luminance (the flag moves no luminance). Text only:
 // strings and the numbers they are built from; nothing here reads a clock or the page.
 
+import { HAZE_DRIFT_X, HAZE_DRIFT_Y, WALL_WAVE_RATE } from "./drift-calc.ts";
 import { COMB, COMB_HALF_WIDTH } from "./light-calc.ts";
 import { BURST_SHADOW, BURST_SHADOW_DEPTH, FADE, GROW, MAX_BOXES } from "./text-mask-calc.ts";
 
@@ -75,7 +76,7 @@ vec3 encode(vec3 c) {
   return mix(lo, hi, step(vec3(0.0031308), c));
 }
 float wallDot(float col, float row) {
-  float wave = 0.18 + 0.12 * sin(col * 0.35 + row * 0.5 + uTime * 0.6);
+  float wave = 0.18 + 0.12 * sin(col * 0.35 + row * 0.5 + uTime * ${f(WALL_WAVE_RATE)});
   if (uStill > 0.5) return 0.2;
   if (uWallMode < 0.5) return wave;
   // The chase is a comb that travels, a lit dot every ${COMB} columns and one column a beat: any region holds the same number of them.
@@ -102,7 +103,7 @@ void main() {
   vec3 L = vec3(0.0); // luminance: the current token, the next token, white
 
   // Haze: the zone's ambient glow, in the current token, switched per pixel as the cross's front passes.
-  float fb = fbm(uv * vec2(uAspect, 1.0) * 1.3 + vec2(uTime * 0.025, -uTime * 0.017));
+  float fb = fbm(uv * vec2(uAspect, 1.0) * 1.3 + vec2(uTime * ${f(HAZE_DRIFT_X)}, uTime * ${f(HAZE_DRIFT_Y)}));
   float hz = 0.15 + 2.2 * fb * fb;
   float haze = uAmb * uMaster * hz * (0.15 + 0.85 * smoothstep(-0.6, 1.0, uv.y));
   if (sx >= uCrossX) L.y += haze; else L.x += haze;

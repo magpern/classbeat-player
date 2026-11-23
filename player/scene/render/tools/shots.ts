@@ -17,6 +17,7 @@ import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
 import { beamFloor } from "./beam-floor-shots.ts";
 import { reportS6 } from "./flash-shots.ts";
+import { reportSteady } from "./steady-shots.ts";
 import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
@@ -168,6 +169,7 @@ try {
   await lightMeasurement(opener);
   await beamFloor(opener); // S5b: the house look's beams keep their floor, and the check fails the look without it
   await reportS6(opener, ARTIFACTS);
+  await reportSteady(opener, ARTIFACTS); // --scene-steady-max: the haze and the wall, per region, with the motion phase held
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser, "&budget=off", "frame-log-browser"); // every run fits: the beams' speed through every burst the scheduler might skip

@@ -13,20 +13,27 @@ export const STEP_SHARE = 0.02;
 
 const larger = (a: number, b: number): number => Math.max(a, b);
 
-/** The series with every one-frame step taken out: each step's jump is subtracted from all the frames after it. */
-export function withoutSteps(luminance: readonly number[]): { readonly series: number[]; readonly steps: number } {
+/**
+ * The series with every one-frame step on a marked frame taken out: each such jump is subtracted from all the frames after it. A jump
+ * of more than `STEP_SHARE` on a frame the scheduler's log does not name is not taken out: it is returned in `unnamed` (frame indexes)
+ * and fails the gate, whatever made it (a beam popping on, a target applied in one frame), except on a frame in which a beam is turning
+ * (a sweep): the windows that overlap one are not read, the sweep's count covers its light.
+ */
+export function withoutSteps(luminance: readonly number[], marks: readonly boolean[] = [], sweeping: readonly boolean[] = []): { readonly series: number[]; readonly steps: number; readonly unnamed: number[] } {
   const series: number[] = [];
+  const unnamed: number[] = [];
   let carried = 0;
   let steps = 0;
   luminance.forEach((y, i) => {
     const before = luminance[i - 1];
-    if (before !== undefined && larger(y, before) > FLOOR && Math.abs(y - before) / larger(y, before) > STEP_SHARE) {
-      carried += y - before;
-      steps++;
+    if (before !== undefined && larger(y, before) > FLOOR) {
+      const jump = Math.abs(y - before) / larger(y, before);
+      // A marked frame's jump is the scheduler's, whatever its size; on any other frame a jump over `STEP_SHARE` is reported.
+      if (marks[i] === true) { carried += y - before; if (jump > STEP_SHARE) steps++; } else if (jump > STEP_SHARE && sweeping[i] !== true) unnamed.push(i);
     }
     series.push(y - carried);
   });
-  return { series, steps };
+  return { series, steps, unnamed };
 }
 
 export interface Rate {
@@ -38,11 +45,13 @@ export interface Rate {
   readonly steps: number;
   /** How many 1 s windows were read (a window that overlaps a sweep is not). */
   readonly windows: number;
+  /** The times (ms) of one-frame jumps over 2 % on frames no mark names. */
+  readonly unnamedAtMs: number[];
 }
 
 /** The most the series ranges (highest to lowest) in any window of 1 s, as a share of its highest, and where the window starts. */
-export function worstRate(timesMs: readonly number[], luminance: readonly number[], sweeping: readonly boolean[] = []): Rate {
-  const { series, steps } = withoutSteps(luminance);
+export function worstRate(timesMs: readonly number[], luminance: readonly number[], sweeping: readonly boolean[] = [], marks: readonly boolean[] = []): Rate {
+  const { series, steps, unnamed } = withoutSteps(luminance, marks, sweeping);
   let [worst, atMs, from] = [0, 0, 0];
   let windows = 0;
   for (let i = 0; i < series.length; i++) {
@@ -53,5 +62,5 @@ export function worstRate(timesMs: readonly number[], luminance: readonly number
     windows++;
     if (max > FLOOR && (max - min) / max > worst) [worst, atMs] = [(max - min) / max, timesMs[from]!];
   }
-  return { worst, atMs, steps, windows };
+  return { worst, atMs, steps, windows, unnamedAtMs: unnamed.map((i) => Math.round(timesMs[i]!)) };
 }

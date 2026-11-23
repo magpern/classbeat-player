@@ -14,6 +14,7 @@ export function steadyOnly(draw: Draw): Draw {
     burst: 0,
     energyRamp: 0,
     ahead: null,
+    beamLevel: 1, // the pattern's side step is beat-like light
     master: 1,
     chaseStep: null,
     // Below the Beat level the build's haze rises steadily; at it, it steps with the beat, which is beat-like light.
