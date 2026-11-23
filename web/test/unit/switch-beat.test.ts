@@ -7,6 +7,7 @@ import { planFrom } from "../../../player/app/src/core/clock/plan.ts";
 import { FIXTURES } from "../../src/fixtures/index.ts";
 import { clockAt, linkAt } from "../../src/fixtures/build.ts";
 import type { Class, RoomInput } from "../../src/room/input.ts";
+import { beatCoord } from "../../src/room/beat-grid.ts";
 import { toRoomModel } from "../../src/room/adapter.ts";
 
 const base = FIXTURES.pattern.doc as Class;
@@ -43,6 +44,10 @@ describe("the switch beat is on the song's grid, as in the player's count", () =
     ["tempo only, interval start", 126, undefined, "interval_start"],
     ["tempo only, 128 bpm", 128, undefined, "interval_start"],
     ["anchors at another tempo", 126, [{ at_ms: 400, bpm: 124 }], "interval_start"],
+    // Whole beats are added for each span before an anchor (`Math.round`), so these anchors shift the grid's phase by the rounding: the switch beat has to
+    // follow the player's own sum, and it is found as the player does (`coordTime`), not by halving on a coordinate that is not monotonic at an anchor (N10).
+    ["anchors whose span rounds down", 126, [{ at_ms: 0, bpm: 126 }, { at_ms: 1100, bpm: 126 }, { at_ms: 2300, bpm: 124 }, { at_ms: 6100, bpm: 130 }], "interval_start"],
+    ["anchors whose span rounds up", 120, [{ at_ms: 250, bpm: 122 }, { at_ms: 1350, bpm: 126 }, { at_ms: 9000, bpm: 118 }], "interval_start"],
     ["next downbeat, with anchors", 128, [{ at_ms: 300, bpm: 128 }], "next_downbeat"],
   ];
   for (const [name, bpm, anchors, startOn] of cases) {
@@ -51,7 +56,7 @@ describe("the switch beat is on the song's grid, as in the player's count", () =
       const iv = doc.intervals[INDEX];
       // The interval's start is off the song's grid, so a count taken from the interval start would differ (the old rule).
       const song = doc.songs.find((s) => s.start_ms <= iv.start_ms && iv.start_ms < s.end_ms)!;
-      const off = (((iv.start_ms - song.start_ms) * bpm) / 60_000) % 1;
+      const off = beatCoord({ bpm, anchors: (anchors ?? []).map((a) => ({ atMs: a.at_ms, bpm: a.bpm })) }, iv.start_ms - song.start_ms) % 1;
       assert.ok(off > 0.05 && off < 0.95, `the interval starts off a beat (${off})`);
       let checked = 0;
       for (let t = iv.start_ms + 1500; t < iv.start_ms + iv.length_ms - 20_000 && checked < 40; t += 337) {

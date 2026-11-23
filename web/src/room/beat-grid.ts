@@ -31,15 +31,27 @@ export function beatCoord(s: BeatGrid, u: number): number {
   return base + ((u - a[k].atMs) * a[k].bpm) / MS_PER_MIN;
 }
 
+/**
+ * Song time of beat coordinate `c`, the inverse of `beatCoord` (the player's `coordTime`, line for line). At an anchor the coordinate
+ * can step back a little: `beatCoord` adds whole beats (`Math.round`) for the span before it. So the coordinate is not monotonic there
+ * and is not searched for by halving: each span is taken in order, as the player does, and the first span that holds `c` gives the time.
+ */
+function coordTime(s: BeatGrid, c: number): number {
+  const a = s.anchors;
+  if (a.length === 0) return (c * MS_PER_MIN) / s.bpm;
+  if (c < 0) return a[0].atMs + (c * MS_PER_MIN) / s.bpm;
+  let base = 0;
+  let k = 0;
+  while (k + 1 < a.length) {
+    const next = base + Math.round(((a[k + 1].atMs - a[k].atMs) * a[k].bpm) / MS_PER_MIN);
+    if (next > c) break;
+    base = next;
+    k += 1;
+  }
+  return a[k].atMs + ((c - base) * MS_PER_MIN) / a[k].bpm;
+}
+
 /** Song time of the `n`-th beat onset after song time `u` (n >= 1): the player's count steps on that onset. */
 export function nthOnsetAfter(s: BeatGrid, u: number, n: number): number {
-  const target = Math.floor(beatCoord(s, u) + EPS) + n;
-  let [lo, hi] = [u, u + ((n + 1) * MS_PER_MIN) / Math.min(s.bpm, ...s.anchors.map((x) => x.bpm))];
-  // `beatCoord` only grows, so the onset is found by halving.
-  for (let i = 0; i < 50; i += 1) {
-    const mid = (lo + hi) / 2;
-    if (beatCoord(s, mid) >= target - EPS) hi = mid;
-    else lo = mid;
-  }
-  return hi;
+  return coordTime(s, Math.floor(beatCoord(s, u) + EPS) + n);
 }
