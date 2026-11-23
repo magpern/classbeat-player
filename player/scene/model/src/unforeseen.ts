@@ -43,7 +43,7 @@ export const holdEnd = (causeClassMs: number): number => causeClassMs + UNFORESE
 /** Whether the beams are held at this class-clock time: on the class clock, never wall time. */
 export const isHeld = (holdUntilMs: number | null, classMs: number): boolean => holdUntilMs !== null && classMs < holdUntilMs;
 
-/** C10: no change is drawn 1 s or more after the cause, so a cause's mark is strictly earlier than cause + this. */
+/** P2: no change is drawn 1 s or more after the cause (a user action shows within 1 s), so a cause's mark is strictly earlier than cause + this. */
 export const CAUSE_LATE_MS = 1000;
 const EPS = 1e-6;
 
@@ -58,20 +58,20 @@ export interface CauseMark {
 /**
  * The frame of a cause's mark (P2, for a user action or a link event the scheduler did not plan). It is never null.
  * - A cause whose window [cause, cause + 1 s) already holds a mark of an earlier cause (`causeMarks`) takes that mark (one change).
- * - Otherwise the first frame at or after the cause, strictly before cause + 1 s (C10), that is at least 500 ms from every mark
+ * - Otherwise the first frame at or after the cause, strictly before cause + 1 s (P2), that is at least 500 ms from every mark
  *   (`marks`: those shown and the earlier causes'; `fixed`: the fixed frames, which never move) and at which every 1 s window
  *   still holds 3 changes or fewer, steady light counted, with what is already shown or decided: the marks, the fixed frames and
  *   the runs that have ended; a mark a cut run absorbed (`absorbed`) is one change with its run.
  * - Failing that (9a), it joins a mark or fixed frame already decided that lies at or after the cause and before cause + 1 s:
  *   one change with it.
- * - Failing that (9b), S6 wins over C10: the first frame at or after cause + 1 s that meets S6 and P2, with an entry in `late`.
+ * - Failing that (9b), S6 wins over the 1 s bound: the first frame at or after cause + 1 s that meets S6 and P2, with an entry in `late`.
  * - A cause that lands in a run (decision 7): where P2 has no frame before the run's end, the run is not cut and its end frame
  *   is the mark, one change with the run.
  */
 export function causeFrame(
   atMs: number, frameMs: number, marks: readonly number[], runs: readonly PlacedRun[], causeMarks: readonly number[] = [], fixed: readonly number[] = [], absorbed: readonly number[] = [],
 ): CauseMark {
-  const limit = atMs + CAUSE_LATE_MS - EPS; // C10: no change is drawn 1 s or more after the cause
+  const limit = atMs + CAUSE_LATE_MS - EPS; // P2: no change is drawn 1 s or more after the cause
   const merged = causeMarks.find((m) => m >= atMs - EPS && m - atMs < CAUSE_LATE_MS - EPS);
   if (merged !== undefined) return { frameMs: merged, late: [] };
   const bounds = runs.map((r) => ({ from: Math.min(...r.pieces.map((p) => p.fromMs)), to: Math.max(...r.pieces.map((p) => p.toMs)), r }));

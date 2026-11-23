@@ -214,7 +214,7 @@ test("causeFrame: P2 against shown marks, then the first frame where every 1 s w
   assert.deepEqual([near.frameMs, near.late], [1990, []]);
 });
 
-test("causeFrame, boundary (C10): a frame at cause + 1000 ms or later is late, never silently accepted", () => {
+test("causeFrame, boundary (P2): a frame at cause + 1000 ms or later is late, never silently accepted", () => {
   // Shown mark 999 and a run ending at the cause: the first frame that meets S6 is exactly 2000 = cause + 1000, which is not before it.
   const edge = causeFrame(1000, FRAME, [999], [run([900, 1000])]);
   assert.equal(edge.frameMs, 2000);
@@ -232,6 +232,13 @@ test("decision 9a: a cause with no frame of its own joins the earliest mark or f
 test("decision 3: a cause whose window holds an earlier cause's mark takes it, even where a frame of its own exists", () => {
   assert.equal(frameOf(1000, FRAME, [800], [], [1400]), 1400);
   assert.equal(frameOf(1000, FRAME, [800], [], [2000]), 1300, "a mark at cause + 1 s is not in the window");
+});
+
+test("decision 7 past the 1 s bound: the run's end frame is the mark and is reported late (a run that outlasts cause + 1 s)", () => {
+  // Cause 1000, shown mark 999, a run ended at 1000, a fixed frame at 2100 and a run open from 950 to 2300: P2 and S6 leave nothing before 2600.
+  const m = causeFrame(1000, FRAME, [999], [run([900, 1000]), run([950, 2300])], [], [2100]);
+  assert.equal(m.frameMs, 2300);
+  assert.deepEqual(m.late, [{ atMs: 1000, frameMs: 2300, lateMs: 1300 }]);
 });
 
 test("decision 7: a cause in a run whose own frame comes after the run's end takes the run's end frame as its mark", () => {
