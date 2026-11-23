@@ -11,6 +11,7 @@ import { REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import type { ClockStatus } from "../core/room/band-view.ts";
 import { mountBand } from "./room-band.ts";
+import { createMarks } from "./room-marks.ts";
 import { mountSheet } from "./room-join.ts";
 
 type Answer<T> = Promise<T | null>;
@@ -46,7 +47,9 @@ let pushed = false;
 // The join sheet (room-join.ts) reads the clock's state and the slot; the band, whether it is open.
 let status: ClockStatus | null = null;
 let slot: RemoteView = REMOTE_ABSENT;
-const sheet = mountSheet(document.body, () => band.redraw());
+// The room screen's one mark ledger decides the frame of every visible change of the band, the sheet and the plate (room-marks.ts).
+const marks = createMarks((draw) => screen.requestMark(draw));
+const sheet = mountSheet(document.body, () => band.redraw(), marks);
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;
   screen.update(frame);
@@ -81,7 +84,7 @@ const band = mountBand(document.body, {
   command: send,
   endClass: () => void api.endClass(),
   startRemote: () => void api.startRemote().then(remote),
-}, { alone, reducedMotion, sheet });
+}, { alone, marks, sheet });
 
 // A push can arrive before the first answer; the older answer then does not draw over it.
 api.onUpdate((frame) => {

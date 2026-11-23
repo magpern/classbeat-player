@@ -17,14 +17,12 @@
   font-family: var(--face-text); color: var(--light-1);
   opacity: 1;
 }
-/* It appears whole on its first frame (it takes presses from then); only the fade out is animated. */
-.band[data-phase="fading"] { opacity: 0; pointer-events: none; transition: opacity var(--m-state); }
+/* It appears and goes in one frame, a step with no transition and no animation (room-2d.md, S6): the
+   page sets data-phase in the frame its mark falls in (room-marks.ts). Nothing here reads --m-state. */
 .band[data-phase="hidden"] { visibility: hidden; opacity: 0; pointer-events: none; }
-:root[data-reduced-motion] .band[data-phase="fading"] { transition: none; }
-@media (prefers-reduced-motion: reduce) { .band[data-phase="fading"] { transition: none; } }
 
 /* The pointer is hidden with the band. */
-body[data-band="hidden"], body[data-band="fading"] { cursor: none; }
+body[data-band="hidden"] { cursor: none; }
 
 /* A button: words, never an icon alone. */
 .band .btn {
