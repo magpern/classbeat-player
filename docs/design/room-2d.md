@@ -598,8 +598,9 @@ rule is not relaxed.
 ### The cap, state by state
 
 Counted as scene.md does: every frame mark is 1 change in every region at once, a run is 1,
-steady light's possible change is 1, and the cap is **3 in any 1 s**. On this screen runs and
-steady light are 0 in every state, so the count is the marks, and the invariant gives **at most 2**:
+steady light's possible change is 1, a sweep counts its measured count (scene.md, "Steady light and
+sweeps"), and the cap is **3 in any 1 s**. On this screen runs, steady light and sweeps are 0 in every state
+(it has no beams), so the count is the marks, and the invariant gives **at most 2**:
 
 | State | Frame marks in any 1 s | Runs | Steady light | Counted | Margin |
 |---|---|---|---|---|---|
