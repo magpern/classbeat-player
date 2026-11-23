@@ -15,7 +15,7 @@ import type { RunWish, Span } from "../src/flash-runs.ts";
 import type { LinkInput } from "../src/beat-level.ts";
 import { START_STATE, stepRig } from "../src/step.ts";
 import type { RigState } from "../src/step.ts";
-import { UNFORESEEN_HOLD_MS, endRunsAtCauses } from "../src/unforeseen.ts";
+import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses } from "../src/unforeseen.ts";
 import { angleBetween } from "../src/turn.ts";
 import { classA } from "./fixtures.ts";
 
@@ -61,6 +61,11 @@ function drive(seed: number): { frames: Frame[]; causes: number[]; frameMs: numb
   return { frames, causes, frameMs: 1000 / fps };
 }
 
+const midRuns = { count: 0 };
+/** Off only to prove the 1 s clear rule is what holds the count (see the mutation test). */
+let ENFORCE_CLEAR = true;
+let ENFORCE_MERGE = true;
+
 function oneTimeline(seed: number): void {
   const { frames, causes, frameMs } = drive(seed);
   const r = rng(seed * 7919);
@@ -70,33 +75,84 @@ function oneTimeline(seed: number): void {
   const planned: Span[] = [...foreseen, ...unforeseen].map((t) => ({ fromMs: t - frameMs - 1e-6, toMs: t + WINDOW_MS + frameMs }));
   for (const f of frames.filter((x) => x.off)) assert.ok(planned.some((p) => f.ms >= p.fromMs && f.ms <= p.toMs), `seed ${seed}: the beams are off target at ${f.ms} outside every planned window (causes ${JSON.stringify(causes.map(Math.round))}, foreseen ${JSON.stringify(foreseen.map(Math.round))})`);
 
-  // The marks: every cause is a user action or a link event with its own frame (P2), beside a tick a second.
+  // The scheduler plans its marks and runs without knowing the causes (a cause cannot be foreseen): a tick a second, and runs
+  // (ramps, bursts, two-piece dims), many of them under a later cause so that it lands mid-run.
   const end = Math.max(...frames.map((f) => f.ms)) + 1;
-  const wants: Want[] = causes.map((c) => ({ kind: "action", atMs: c }));
-  for (let t = r.int(0, 999); t < end; t += 1000) wants.push({ kind: "tick", atMs: t, periodMs: 1000 });
-  const placed = placeMarks([], wants, frameMs);
-  const marks = placed.flatMap((p) => (p.how === "own" || p.how === "joined" ? [p.atMs!] : []));
-  const causeFrames = placed.flatMap((p) => (p.want.kind === "action" && p.atMs !== null ? [{ atMs: p.want.atMs, frameMs: p.atMs }] : []));
-
+  const ticks: Want[] = [];
+  for (let t = r.int(0, 999); t < end; t += 1000) ticks.push({ kind: "tick", atMs: t, periodMs: 1000 });
+  const placedTicks = placeMarks([], ticks, frameMs);
+  const tickMarks = placedTicks.flatMap((p) => (p.atMs === null ? [] : [p.atMs]));
+  let tickNow: { want: Want; frame: number | null }[] = placedTicks.map((p) => ({ want: p.want, frame: p.atMs }));
   const wishes: RunWish[] = [];
-  for (let k = 0; k < 40; k++) {
-    const t = r.int(0, end);
-    wishes.push({ id: `w${k}`, kind: r.pick(["ramp", "lightBurst", "dim"] as const), pieces: [{ fromMs: t, toMs: t + r.pick([250, 700]) }], waits: r.next() < 0.3 });
+  const wishAt = (t: number, k: number): void => {
+    const kind = r.pick(["ramp", "lightBurst", "dim"] as const);
+    const pieces = kind === "dim" ? [{ fromMs: t, toMs: t + 120 }, { fromMs: t + 500, toMs: t + 620 }] : [{ fromMs: t, toMs: t + r.pick([250, 700]) }];
+    wishes.push({ id: `w${k}`, kind, pieces, waits: r.next() < 0.3 });
+  };
+  for (let k = 0; k < 40; k++) wishAt(r.int(0, end), k);
+  causes.forEach((c, k) => { for (let m = 0; m < 3; m++) wishAt(c - r.int(0, 600), 100 + k * 3 + m); });
+  const room = { beat: [{ fromMs: -1e9, toMs: 1e9 }], count: [], beatMs: 500, endMs: end, frameMs, sweeps: foreseen };
+  const plan0 = fitRuns(wishes, { ...room, marks: tickMarks });
+
+  // Then the causes arrive, one at a time in time order. Each gets its own frame (P2, 1 s clear of a run that has ended), the runs
+  // in progress are cut in it, and a run not yet started is decided again with the cause known.
+  const span = (run: { pieces: readonly Span[] }) => ({ from: Math.min(...run.pieces.map((p) => p.fromMs)), to: Math.max(...run.pieces.map((p) => p.toMs)) });
+  const midRun = (run: { pieces: readonly Span[] }, c: { atMs: number }) => span(run).from < c.atMs && c.atMs < span(run).to;
+  let runs = plan0.runs;
+  const absorbed: number[] = [];
+  let known: number[];
+  const causeMarks: number[] = [];
+  const turns: number[] = [];
+  const causeFrames: { atMs: number; frameMs: number }[] = [];
+  for (const at of [...causes].sort((a, b) => a - b)) {
+    // The ticks not yet shown when the cause arrives give way and are placed again after it (P2); the marks already shown stay.
+    const shown = [...causeMarks, ...tickNow.flatMap((t) => (t.frame !== null && t.frame <= at ? [t.frame] : []))];
+    const f = causeFrame(at, frameMs, shown, ENFORCE_CLEAR ? runs : [], ENFORCE_MERGE ? causeMarks : []);
+    assert.notEqual(f, null, `seed ${seed}: no frame for the cause at ${at} within 1 s (marks shown ${JSON.stringify(shown.map(Math.round))}, run ends ${JSON.stringify(runs.map((x) => [Math.round(span(x).from), Math.round(span(x).to)]).filter((x) => x[1]! > at - 1500 && x[1]! <= at))}, ticks after ${JSON.stringify(tickNow.filter((t) => t.frame !== null && t.frame > at && t.frame < at + 2000).map((t) => Math.round(t.frame!)))})`);
+    const c = { atMs: at, frameMs: f! };
+    causeFrames.push(c);
+    const late = runs.filter((x) => !midRun(x, c) && span(x).from >= c.atMs);
+    const cutNow = endRunsAtCauses(runs.filter((x) => !late.includes(x)), [c]);
+    absorbed.push(...cutNow.absorbed);
+    midRuns.count += cutNow.absorbed.length;
+    if (!causeMarks.includes(c.frameMs)) causeMarks.push(c.frameMs); // a merged cause has no mark of its own
+    const future = tickNow.filter((t) => t.frame === null || t.frame > at);
+    const again = placeMarks([], future.map((t) => t.want), frameMs, [...shown, c.frameMs]);
+    tickNow = [...tickNow.filter((t) => t.frame !== null && t.frame <= at), ...future.map((t, i) => ({ want: t.want, frame: again[i]!.atMs }))];
+    known = [...causeMarks, ...tickNow.flatMap((t) => (t.frame === null ? [] : [t.frame]))];
+    turns.push(c.atMs + UNFORESEEN_HOLD_MS);
+    runs = fitRuns(late.map((x) => x.wish), { ...room, marks: known, unforeseenTurns: turns, placed: cutNow.runs }).runs;
   }
-  const plan = fitRuns(wishes, { marks, beat: [{ fromMs: -1e9, toMs: 1e9 }], count: [], beatMs: 500, endMs: end, frameMs, sweeps: foreseen, unforeseenTurns: unforeseen });
-  const runs = endRunsAtCauses(plan.runs, causeFrames, frameMs);
   const pieces = runs.flatMap((run) => run.pieces);
 
   // The turn after a cause is where it was planned (above), so no run, cut at the cause's frame, is near it.
-  for (const p of pieces) for (const t of unforeseen) assert.ok(!(p.toMs > t - 1000 + 1e-6 && p.fromMs < t + WINDOW_MS - 1e-6), `seed ${seed}: a run near the turn at ${t}`);
-  // At most 3 in any 1 s window, steady light or a sweep counted as 1, with no exception.
-  const counted = [...new Set(marks.map((m) => Math.round(m * 1000)))].map((m) => ({ fromMs: m / 1000, toMs: m / 1000 }));
+  for (const p of pieces) for (const t of unforeseen) assert.ok(!(p.toMs > t - 1000 + 1e-6 && p.fromMs < t + WINDOW_MS - 1e-6), `seed ${seed}: a run ${p.fromMs} to ${p.toMs} near the turn at ${t} (causes ${JSON.stringify(causeFrames.map((c) => [Math.round(c.atMs), Math.round(c.frameMs)]))})`);
+  // At most 3 in any 1 s window, steady light or a sweep counted as 1, with no exception. A cause's mark that a cut run ends in is one change with it.
+  const finalTicks = tickNow.flatMap((t) => (t.frame === null ? [] : [t.frame]));
+  const marks = [...finalTicks, ...causeFrames.map((c) => c.frameMs)].filter((m, i, all) => all.indexOf(m) === i && !absorbed.some((a) => Math.abs(a - m) < 1e-6 && !finalTicks.includes(m)));
+  const counted = marks.map((m) => ({ fromMs: m, toMs: m }));
   const worst = maxInASecond([...counted, ...pieces]) + STEADY_PER_WINDOW;
-  assert.ok(worst <= 3, `seed ${seed}: a 1 s window holds ${worst} changes`);
+  assert.ok(worst <= 3, `seed ${seed}: a 1 s window holds ${worst} changes: ${JSON.stringify([...counted.map((c) => [Math.round(c.fromMs), "mark"]), ...pieces.map((p) => [Math.round(p.fromMs), Math.round(p.toMs)])].sort((a, b) => Number(a[0]) - Number(b[0])))} causes ${JSON.stringify(causeFrames.map((c) => [Math.round(c.atMs), Math.round(c.frameMs)]))}`);
 }
 
 test(`unforeseen causes: ${TIMELINES} random seek and link-event timelines draw sweeps only where planned, keep runs out of them and every 1 s window at 3 or fewer`, () => {
   for (let seed = 1; seed <= TIMELINES; seed++) oneTimeline(seed);
+  assert.ok(midRuns.count > 50, `causes really land mid-run: ${midRuns.count}`);
+});
+
+test("seed 2, pinned: a run, a tick and a cause 548 ms after the run ended keep 3 in 1 s because the cause's mark waits 1 s after the run", () => {
+  oneTimeline(2);
+});
+
+test("seed 42, pinned: a cause 0.9 s after another cause, with a run just ended, merges into that cause's mark", () => {
+  oneTimeline(42);
+});
+
+test("mutations: without the 1 s clear seed 2 holds 4 in a second; without the merge seed 42 has no frame within 1 s", () => {
+  ENFORCE_CLEAR = false;
+  try { assert.throws(() => oneTimeline(2), /holds 4 changes/); } finally { ENFORCE_CLEAR = true; }
+  ENFORCE_MERGE = false;
+  try { assert.throws(() => oneTimeline(42), /no frame for the cause/); } finally { ENFORCE_MERGE = true; }
 });
 
 test("the timelines really hold: causes happen and some beam is off target after a hold", () => {

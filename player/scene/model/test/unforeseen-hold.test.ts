@@ -9,6 +9,7 @@ import { MAX_DEG_PER_SECOND } from "../src/energy.ts";
 import { START_STATE, stepRig } from "../src/step.ts";
 import type { RigState, StepInput } from "../src/step.ts";
 import { UNFORESEEN_HOLD_MS, endRunsAtCauses, linkCause } from "../src/unforeseen.ts";
+import type { UnforeseenCause } from "../src/unforeseen.ts";
 import { angleBetween } from "../src/turn.ts";
 import { classA, classSameZones } from "./fixtures.ts";
 
@@ -18,41 +19,46 @@ type Over = Partial<StepInput>;
 const input = (classMs: number, songPosMs: number, over: Over = {}): StepInput =>
   ({ cls: classA, classMs, songIndex: 0, songPosMs, link: locked, rawDtSeconds: DT, ...over });
 
-/** Settles the rig on a position, then returns its state. */
-function settled(songPosMs: number, over: Over = {}): RigState {
-  let s = stepRig(START_STATE, input(1000, songPosMs, over)).state;
-  for (let i = 1; i < 10; i++) s = stepRig(s, input(1000 + i * 16, songPosMs, over)).state;
+/** Settles the rig on a position under each link in turn (10 frames each), then returns its state. */
+function settled(songPosMs: number, links: readonly LinkInput[] = [locked]): RigState {
+  let s = START_STATE;
+  let ms = 1000;
+  for (const link of links) for (let i = 0; i < 10; i++, ms += 16) s = stepRig(s, input(ms, songPosMs, { link })).state;
   return s;
 }
 const same = (a: readonly Direction[], b: readonly Direction[]) => a.every((d, i) => angleBetween(d, b[i]!) === 0);
 
-// Song 0 at 120 bpm flips its phrase (mirrors every pan) at 16 s: 15 s and 20 s have different targets.
-const CAUSES: readonly [string, (s: RigState) => { s: RigState; at: number; over: Over; first: Over }][] = [
-  ["a seek", (s) => ({ s, at: 20_000, over: {}, first: { songPosMs: 20_000 } })],
-  ["a jump named by the host", (s) => ({ s, at: 20_000, over: {}, first: { songPosMs: 20_000, cause: "jump" } })],
-  ["a reload named by the host", (s) => ({ s, at: s.lastClassMs! + 16, over: {}, first: { songPosMs: 20_000, cause: "reload" } })],
-  ["a lost lock", (s) => ({ s, at: s.lastClassMs! + 16, over: {}, first: { songPosMs: 20_000, link: { state: "Coasting" } } })], // mirrored phrase at 20 s locked; none coasting
-  ["a regained lock", (s) => ({ s, at: s.lastClassMs! + 16, over: { link: { state: "Coasting" } }, first: { songPosMs: 20_000, link: locked } })],
-  ["a resume", (s) => ({ s, at: s.lastClassMs! + 16, over: { link: { state: "Paused" } }, first: { songPosMs: 20_000, link: locked } })],
+// Song 0 at 120 bpm flips its phrase (mirrors every pan) at 16 s: 15 s and 20 s have different targets, and the Beat level
+// (locked) is mirrored at 20 s where no lock is not. Each case isolates one cause: the link event or the jump is the only thing that changes.
+interface Case { readonly name: string; readonly cause: UnforeseenCause; readonly settleAt: number; readonly before: readonly LinkInput[]; readonly after: LinkInput; readonly host?: UnforeseenCause }
+const coasting: LinkInput = { state: "Coasting" };
+const CASES: readonly Case[] = [
+  { name: "a seek", cause: "seek", settleAt: 15_000, before: [locked], after: locked },
+  { name: "a jump named by the host", cause: "jump", settleAt: 15_000, before: [locked], after: locked, host: "jump" },
+  { name: "a reload named by the host", cause: "reload", settleAt: 15_000, before: [locked], after: locked, host: "reload" },
+  { name: "a lost lock", cause: "lock lost", settleAt: 20_000, before: [locked], after: coasting },
+  { name: "a regained lock", cause: "lock regained", settleAt: 20_000, before: [coasting], after: locked },
+  { name: "a resume (to a state with no lock, so not a regained lock)", cause: "resume", settleAt: 20_000, before: [locked, { state: "Paused" }], after: coasting },
+  { name: "a resume from a hold of the link (to a state with no lock)", cause: "resume", settleAt: 20_000, before: [locked, { state: "Locked", held: true }], after: coasting },
 ];
 
-for (const [name, make] of CAUSES) {
-  test(`${name}: every beam stays on its present aim for 2 s of class-clock time, then turns at the limit`, () => {
-    const probe = name === "a regained lock" || name === "a resume" ? { link: { state: "Coasting" } as LinkInput } : {};
-    const base = settled(name === "a lost lock" ? 20_000 : 15_000, name === "a resume" ? { link: { state: "Paused" } } : probe);
-    const { at, over, first } = make(base);
+for (const c of CASES) {
+  test(`${c.name}: every beam stays on its present aim for 2 s of class-clock time, then turns at the limit`, () => {
+    const base = settled(c.settleAt, c.before);
     const aim = base.drawn!;
-    let s = base;
-    const classAt = (ms: number): Over => ({ classMs: ms, songPosMs: 20_000 + (ms - at), ...over });
-    const frame0 = stepRig(s, input(at, 20_000, { ...over, ...first }));
-    assert.ok(frame0.cause !== null, `${name} is seen as a cause`);
+    const at = base.lastClassMs! + (c.cause === "seek" ? 5000 : 16); // a seek moves the class clock
+      const where = (ms: number): StepInput => input(ms, 20_000 + (ms - at), { link: c.after, ...(c.host ? { cause: c.host } : {}) });
+    const frame0 = stepRig(base, where(at));
+    assert.equal(frame0.cause, c.cause, `${c.name} is seen as ${c.cause}`);
     assert.ok(frame0.held && same(frame0.drawn, aim), "the cause's own frame holds the present aim");
-    assert.notDeepEqual(frame0.frame.directions, aim, "the target did change, so the hold is doing the work");
-    s = frame0.state;
+    assert.ok(frame0.frame.directions.some((d, i) => angleBetween(d, aim[i]!) > 5), "the target did change, so the hold is doing the work");
+    let s = frame0.state;
     let ms = at;
+    const later = (m: number): StepInput => ({ ...where(m), cause: undefined }); // the host names the cause on its frame only
     while (ms + 16 < at + UNFORESEEN_HOLD_MS) {
       ms += 16;
-      const f = stepRig(s, { ...input(ms, 0), ...classAt(ms), link: first.link ?? over.link ?? locked });
+      const f = stepRig(s, later(ms));
+      assert.equal(f.cause, null, "no second cause in the hold");
       assert.ok(f.held && same(f.drawn, aim), `still held at +${ms - at} ms`);
       s = f.state;
     }
@@ -60,7 +66,7 @@ for (const [name, make] of CAUSES) {
     let turned = 0;
     for (let i = 0; i < 80; i++) {
       ms += 16;
-      const f = stepRig(s, { ...input(ms, 0), ...classAt(ms), link: first.link ?? over.link ?? locked });
+      const f = stepRig(s, later(ms));
       f.drawn.forEach((d, k) => {
         const moved = angleBetween(s.drawn![k]!, d);
         assert.ok(moved / f.dtSeconds <= MAX_DEG_PER_SECOND * 1.000001);
@@ -157,12 +163,34 @@ test("linkCause: resume, lost and regained lock; nothing for steady or unrelated
   assert.equal(linkCause({ state: "Locked", held: true }, locked), "resume");
   assert.equal(linkCause({ state: "Coasting" }, { state: "Off the list" }), null);
   assert.equal(linkCause(locked, { state: "Paused" }), "lock lost");
+  assert.equal(linkCause(locked, { state: "Locked", held: true }), "lock lost"); // the link's hold is no lock (scene.md): a lost lock, and a resume on leaving it
 });
 
-test("endRunsAtCauses: a run in progress ends one frame before the cause's frame; a run elsewhere is untouched", () => {
-  const wish = { id: "r", kind: "ramp" as const, pieces: [] };
-  const runs = [{ wish, pieces: [{ fromMs: 1000, toMs: 1700 }] }, { wish, pieces: [{ fromMs: 5000, toMs: 5700 }] }];
-  const out = endRunsAtCauses(runs, [{ atMs: 1300, frameMs: 1500 }], 10);
-  assert.deepEqual(out[0]!.pieces, [{ fromMs: 1000, toMs: 1490 }]);
-  assert.deepEqual(out[1]!.pieces, runs[1]!.pieces);
+const wish = { id: "r", kind: "ramp" as const, pieces: [] };
+const run = (...pieces: [number, number][]) => ({ wish, pieces: pieces.map(([fromMs, toMs]) => ({ fromMs, toMs })) });
+
+test("endRunsAtCauses: a run in progress ends in the cause's frame, merged with its mark; a run elsewhere is untouched", () => {
+  const out = endRunsAtCauses([run([1000, 1700]), run([5000, 5700])], [{ atMs: 1300, frameMs: 1500 }]);
+  assert.deepEqual(out.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1500 }]);
+  assert.deepEqual(out.runs[1]!.pieces, [{ fromMs: 5000, toMs: 5700 }]);
+  assert.deepEqual(out.absorbed, [1500]);
+  // A run that ends before its cause's frame is not extended; a cause after the run (or before it) cuts nothing.
+  assert.deepEqual(endRunsAtCauses([run([1000, 1400])], [{ atMs: 1300, frameMs: 1500 }]).runs[0]!.pieces, [{ fromMs: 1000, toMs: 1400 }]);
+  assert.deepEqual(endRunsAtCauses([run([1000, 1400])], [{ atMs: 1400, frameMs: 1500 }]).absorbed, []);
+  assert.deepEqual(endRunsAtCauses([run([1000, 1400])], [{ atMs: 900, frameMs: 950 }]).absorbed, []);
+});
+
+test("endRunsAtCauses: a two-piece run (a dim) loses every piece after the cut, whether the cause is in a piece or in the gap", () => {
+  const dim = run([1000, 1120], [1500, 1620]);
+  const inFirst = endRunsAtCauses([dim], [{ atMs: 1050, frameMs: 1100 }]);
+  assert.deepEqual(inFirst.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1100 }], "the second piece is gone");
+  const inGap = endRunsAtCauses([dim], [{ atMs: 1300, frameMs: 1350 }]);
+  assert.deepEqual(inGap.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }], "the first piece is whole, the second is gone");
+  assert.deepEqual(inGap.absorbed, [1350]);
+  const inSecond = endRunsAtCauses([dim], [{ atMs: 1550, frameMs: 1580 }]);
+  assert.deepEqual(inSecond.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }, { fromMs: 1500, toMs: 1580 }]);
+  const frameInGap = endRunsAtCauses([dim], [{ atMs: 1100, frameMs: 1130 }]); // the frame falls after piece one ended
+  assert.deepEqual(frameInGap.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }]);
+  const two = endRunsAtCauses([dim], [{ atMs: 1050, frameMs: 1100 }, { atMs: 1550, frameMs: 1580 }]);
+  assert.deepEqual(two.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1100 }], "a second cause finds the run already cut");
 });
