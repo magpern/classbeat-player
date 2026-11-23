@@ -18,8 +18,6 @@ const TICK_MS = 1000;
 const NATURAL_MS = 100;
 /** A move of the class clock that differs from the wall time by more than this is a seek or a jump. */
 const JUMP_MS = 1500;
-/** Two draws this close in real time are one change (made in one task, painted in one frame). */
-const SAME_INSTANT_MS = 1;
 /** A mark is placed against fixed frames up to this far ahead (room-2d.md, "Timed and outside changes": up to 1 s). */
 export const LOOKAHEAD_MS = 1000;
 
@@ -32,14 +30,22 @@ export interface MarkContext {
 
 /** A frame mark reserved for an outside change: `run` is called when the frame comes (see `MarkGate.request`). */
 export interface MarkTicket {
-  /** The frame the change will be drawn in, on the screen's clock (`RoomClock.now`). */
+  /**
+   * The frame the change is now planned to be drawn in, on the screen's clock (`RoomClock.now`). It can move after the
+   * request (to the draw of the screen's own mark it shares, or 500 ms after a draw that was made first), so read it when
+   * it is needed.
+   */
   readonly atMs: number;
-  /** Gives the mark up (the change is no longer wanted); no effect once `run` has been called. */
+  /** Gives the mark up (the change is no longer wanted): works until the moment `run` is called. */
   cancel(): void;
 }
 interface Outside {
   at: number;
   readonly run: () => void;
+  /** False once it has been drawn or given up. */
+  live: boolean;
+  /** It rides a fixed frame (drawn with that frame's own snapshot): it is not a mark of its own, and no mark gives way to it. */
+  readonly rides: boolean;
 }
 
 export interface MarkGate {
@@ -47,8 +53,11 @@ export interface MarkGate {
    * The one ledger of the whole room window. An outside change (the band, the join sheet, a plate) asks for a mark at
    * `nowMs`: it is placed by the same `placeMarks` call as the screen's own marks, as an action, against the fixed frames
    * of the last offer (the interval's end, the count's switch beat), the mark last drawn, and every mark already reserved
-   * or pending, so no two marks of either kind are closer than 500 ms. The frame is returned at once; `dueOutside` hands
-   * back `run` when it has come.
+   * or pending, so no two marks of either kind are closer than 500 ms. It is at most 500 ms late (C10, plus the frames of
+   * the clock's own step), or 1 s when it joins a fixed frame: it is then drawn in the same draw as that frame's own snapshot
+   * and never moves the fixed frame (P1). Any draw of the screen's own that comes first takes every waiting outside change
+   * with it (one change). The frame is returned at once; `dueOutside` hands back `run` when it has come. A request made
+   * from inside a draw (`nowMs` equal to the draw's) is part of that draw.
    */
   request(nowMs: number, run: () => void): MarkTicket;
   /** The outside changes whose frame has come, to be drawn now (in one frame together with `due`'s model). */
@@ -82,32 +91,59 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
 
   const grid = (ms: number): number => frameAt(ms, frameMs);
   const sameFrame = (a: number, b: number): boolean => Math.abs(grid(a) - grid(b)) < 1e-6;
-  /** Every mark the scheduler must keep away from, on the grid: the last draw, the marks reserved for outside changes, the pending mark. */
-  const placed = (): number[] => [
+  /**
+   * Every mark the scheduler must keep away from, on the grid: the last draw, the marks reserved for outside changes, the pending
+   * mark. The screen's own marks ignore a change that rides a fixed frame (it is drawn with that frame, which never gives way);
+   * another outside change keeps its distance from it.
+   */
+  const placed = (forOutside: boolean): number[] => [
     ...(Number.isFinite(lastMark) ? [grid(lastMark)] : []),
-    ...outside.map((o) => grid(o.at)),
-    ...(pending && Number.isFinite(pending.at) ? [grid(pending.at)] : []),
+    ...outside.filter((o) => forOutside || !o.rides).map((o) => grid(o.at)),
+    // A pending tick gives way to an outside change (P2: an action is placed first and the ticks not yet shown are placed again).
+    ...(pending && Number.isFinite(pending.at) && (!forOutside || pending.kind === "action" || pending.kind === "change") ? [grid(pending.at)] : []),
   ];
-  /** A draw at the real time `nowMs`: a reserved mark in this frame is drawn with it, one still ahead and under 500 ms away gives way to the real gap. */
-  function settle(nowMs: number): void {
+  /**
+   * A draw at the real time `nowMs`. One made by the screen takes every outside change that is waiting with it: that draw is
+   * itself placed 500 ms from every mark, so they are one change with it. One made for an outside change takes those in its
+   * frame; those still ahead and under 500 ms away give way to the real gap.
+   */
+  function settle(nowMs: number, byScreen: boolean): void {
     lastMark = Math.max(lastMark, nowMs);
+    if (byScreen) announced = announced.filter((a) => a > nowMs + frameMs);
     for (const o of outside) {
       if (o.at <= nowMs) continue;
-      // In the frame of this draw it is drawn with it (one change); under 500 ms ahead in another, it gives way to the real gap.
-      if (sameFrame(o.at, nowMs)) o.at = nowMs;
+      if (o.rides && !byScreen) continue;
+      if (byScreen || sameFrame(o.at, nowMs)) o.at = nowMs;
       else if (o.at - nowMs < MARK_GAP_MS) o.at = grid(nowMs + MARK_GAP_MS);
     }
   }
+  /** Fixed frames the offers have announced and no draw has taken yet: a change asked for just before one is still due to ride it. */
+  let announced: number[] = [];
   const fixedFrames = (ctx: MarkContext, nowMs: number): FixedFrame[] =>
-    [ctx.changeAtMs, ctx.switchAtMs]
+    [ctx.changeAtMs, ctx.switchAtMs, ...announced]
       .filter((t): t is number => t !== null && t >= nowMs - NATURAL_MS && t - nowMs < LOOKAHEAD_MS)
       .map((t) => ({ atMs: frameAt(t, frameMs), change: true, changes: [t], drops: [] }));
+
+  /**
+   * Keeps a time off the fixed frames: one within 500 ms of a fixed frame (in another frame) is not taken. If the fixed frame
+   * is ahead of it, it joins that frame (`rides`); if it is behind, it moves to 500 ms after it. P1: no mark makes a fixed frame give way.
+   */
+  function awayFromFixed(fixed: readonly FixedFrame[], at: number): { at: number; rides: number | null } {
+    let t = at;
+    for (let i = 0; i < fixed.length + 1; i += 1) {
+      const f = fixed.find((x) => Math.abs(x.atMs - t) < MARK_GAP_MS - 1 && Math.abs(x.atMs - t) > 1e-6);
+      if (!f) return { at: t, rides: null };
+      if (f.atMs > t) return { at: f.atMs, rides: f.atMs };
+      t = grid(f.atMs + MARK_GAP_MS);
+    }
+    return { at: t, rides: null };
+  }
 
   /** Draws now. The mark is the time of the draw itself, never a rounded one: the gap to the next is kept from it. */
   const show = (nowMs: number): RoomModel | null => {
     shown = latest;
     pending = null;
-    settle(nowMs);
+    settle(nowMs, true);
     return shown;
   };
 
@@ -124,17 +160,26 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
 
   function place(kind: ChangeKind, model: RoomModel, nowMs: number, rawMs: number, ctx: MarkContext, since: number): number | null {
     const fixed = fixedFrames(ctx, nowMs);
-    const want: Want = { kind, atMs: since, periodMs: kind === "tick" ? (model.count?.beatMs ?? TICK_MS) : undefined };
+    // The switch beat's own snapshot is the fixed frame it announced, whichever side of it it falls on: it takes that frame.
+    const own = kind === "switch" ? fixed.find((f) => Math.abs(f.atMs - nowMs) <= NATURAL_MS) : undefined;
+    const want: Want = { kind, atMs: own?.atMs ?? since, periodMs: kind === "tick" ? (model.count?.beatMs ?? TICK_MS) : undefined };
     // The scheduler sees the grid only: the last draw, rounded up, is a mark at least as late as it really was.
-    const [put] = placeMarks(fixed, [want], frameMs, placed());
+    let [put] = placeMarks(fixed, [want], frameMs, placed(false));
+    // A tick or switch beat in the very frame of the mark just drawn joins it, but it cannot show there: it is placed again, 500 ms on, among
+    // the fixed frames and the marks, so that nothing is put within 500 ms of a fixed frame by that join.
+    if (kind !== "action" && put?.how === "joined" && !fixed.some((f) => f.atMs === put?.atMs) && !own && Number.isFinite(lastMark)) {
+      [put] = placeMarks(fixed, [{ ...want, atMs: Math.max(want.atMs, grid(lastMark + MARK_GAP_MS)) }], frameMs, placed(false));
+    }
     if (!put || put.atMs === null) return null;
     // A want that joined a fixed frame still ahead shows in that frame, with the snapshot of the frame itself (the change
-    // frame, the switch beat): it waits for it, and is placed again by every snapshot until then.
-    // It waits at most NATURAL_MS past that frame: the snapshot of the frame itself is due then.
-    if (put.how === "joined" && put.atMs > rawMs && fixed.some((f) => f.atMs === put.atMs)) return put.atMs + NATURAL_MS;
-    // At the instant of the mark just drawn (an outside change drew with it) it shares that draw: one change, not two.
-    if (put.how === "joined" && rawMs - lastMark <= SAME_INSTANT_MS) return rawMs;
-    return Math.max(put.atMs, lastMark + MARK_GAP_MS);
+    // frame, the switch beat): it waits for it, at most NATURAL_MS past that frame, and is placed again by every snapshot.
+    if (put.how === "joined" && put.atMs > rawMs && !own && fixed.some((f) => f.atMs === put.atMs)) return Math.max(put.atMs + NATURAL_MS, lastMark + MARK_GAP_MS);
+    const raw = Math.max(put.atMs, lastMark + MARK_GAP_MS);
+    // An action keeps the spec's earlier rule (500 ms after the last mark); ticks and switch beats keep off the fixed frames.
+    if (kind === "action") return raw;
+    const away = awayFromFixed(fixed, raw);
+    // Too close ahead of a fixed frame it waits for that frame's snapshot, as above; never earlier than the real gap allows.
+    return away.rides !== null ? Math.max(away.rides + NATURAL_MS, lastMark + MARK_GAP_MS) : away.at;
   }
 
   return {
@@ -145,6 +190,9 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
       const nowMs = frameAt(rawMs, frameMs);
       const before = prev;
       prev = { model, atMs: nowMs, ctx };
+      // A frame the last offer announced that has now come, and no draw has taken, is still due for NATURAL_MS (its snapshot is on its way).
+      announced = announced.filter((a) => a >= rawMs - NATURAL_MS);
+      if (before) for (const t of [before.ctx.changeAtMs, before.ctx.switchAtMs]) if (t !== null && t <= rawMs && t >= rawMs - NATURAL_MS && lastMark < t - frameMs && !announced.some((a) => Math.abs(a - t) < 2 * frameMs)) announced.push(t);
       latest = model;
       if (shown === null) return show(rawMs);
       const found = changeKind(shown, model);
@@ -169,23 +217,56 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
     },
     request(rawMs, run) {
       const nowMs = grid(rawMs);
-      const [put] = placeMarks(fixedFrames(prev?.ctx ?? { changeAtMs: null, switchAtMs: null }, nowMs), [{ kind: "action", atMs: nowMs }], frameMs, placed());
-      // At the instant of the last draw it shares that draw; else never closer than 500 ms to the real last draw.
-      const sharesDrawn = put?.how === "joined" && rawMs - lastMark <= SAME_INSTANT_MS;
-      let at = sharesDrawn ? rawMs : Math.max(put?.atMs ?? nowMs, grid(lastMark + MARK_GAP_MS), rawMs);
-      // Over 500 ms late (a mark of the screen's own, pending or reserved, stands in the way): it shares the nearest mark already
-      // placed ahead of it, a frame that is drawn anyway, as P2 does with a fixed frame.
-      if (at - rawMs > MARK_GAP_MS + 1e-6) {
-        const ahead = [...fixedFrames(prev?.ctx ?? { changeAtMs: null, switchAtMs: null }, nowMs).map((f) => f.atMs), ...outside.map((o) => o.at), ...(pending && Number.isFinite(pending.at) ? [pending.at] : [])].filter((t) => t >= rawMs && t - rawMs <= 1000);
-        if (ahead.length > 0) at = Math.min(...ahead);
+      const fixed = fixedFrames(prev?.ctx ?? { changeAtMs: null, switchAtMs: null }, nowMs);
+      let [put] = placeMarks(fixed, [{ kind: "action", atMs: nowMs }], frameMs, placed(true));
+      // In the frame of the mark just drawn it joins that mark but cannot show there: placed again 500 ms on, among the fixed frames.
+      if (put?.how === "joined" && !fixed.some((f) => f.atMs === put?.atMs) && Number.isFinite(lastMark)) {
+        [put] = placeMarks(fixed, [{ kind: "action", atMs: Math.max(nowMs, grid(lastMark + MARK_GAP_MS)) }], frameMs, placed(true));
       }
-      const entry: Outside = { at, run };
+      // From inside a draw (the time of that draw) it is part of it; else never closer than 500 ms to the real last draw.
+      let rides = false;
+      let at = rawMs === lastMark ? rawMs : Math.max(put?.atMs ?? nowMs, grid(lastMark + MARK_GAP_MS), rawMs);
+      const onFixed = (t: number): boolean => fixed.some((f) => f.atMs === t);
+      const putAt = put?.atMs ?? null;
+      // A fixed frame whose snapshot is due this very moment and has not been drawn yet: the change rides it, whatever its own place.
+      const due = fixed.find((f) => f.atMs <= nowMs && f.atMs >= nowMs - NATURAL_MS && lastMark < f.atMs - frameMs);
+      if (due && rawMs !== lastMark) {
+        at = Math.max(due.atMs + NATURAL_MS, rawMs, grid(lastMark + MARK_GAP_MS));
+        rides = true;
+      } else if (put?.how === "joined" && putAt !== null && putAt > rawMs && onFixed(putAt)) {
+        // On a fixed frame: drawn in the draw of that frame's own snapshot (which takes it), at the latest NATURAL_MS after it.
+        at = Math.max(putAt + NATURAL_MS, grid(lastMark + MARK_GAP_MS));
+        rides = true;
+      } else if (at - rawMs > MARK_GAP_MS + frameMs) {
+        // Over 500 ms late (a mark of the screen's own, pending or reserved, stands in the way): it shares the nearest mark
+        // already placed ahead of it, a frame that is drawn anyway, as P2 does with a fixed frame.
+        const waiting = [...outside.filter((o) => o.live && !o.rides).map((o) => o.at), ...(pending && Number.isFinite(pending.at) ? [pending.at] : [])];
+        const ahead = [...fixed.map((f) => f.atMs), ...waiting].filter((t) => t >= rawMs && t - rawMs <= LOOKAHEAD_MS);
+        const sooner = ahead.filter((t) => t < at - frameMs);
+        if (sooner.length > 0) {
+          const t = Math.min(...sooner);
+          rides = onFixed(t);
+          at = rides ? Math.max(t + NATURAL_MS, grid(lastMark + MARK_GAP_MS)) : t;
+        }
+      }
+      if (!rides && rawMs !== lastMark) {
+        const away = awayFromFixed(fixed, at);
+        if (away.rides !== null) {
+          at = Math.max(away.rides + NATURAL_MS, grid(lastMark + MARK_GAP_MS));
+          rides = true;
+        } else at = away.at;
+      }
+      // Changes riding the same fixed frame are one draw: they keep one time, whatever the frame quantisation of each offer.
+      const sibling = rides ? outside.find((o) => o.rides && Math.abs(o.at - at) < 2 * frameMs) : undefined;
+      if (sibling) at = sibling.at;
+      const entry: Outside = { at, run, live: true, rides };
       outside.push(entry);
       return {
         get atMs() {
           return entry.at;
         },
         cancel: () => {
+          entry.live = false;
           outside = outside.filter((o) => o !== entry);
         },
       };
@@ -194,8 +275,13 @@ export function createMarkGate(frameMs: number = FRAME_MS): MarkGate {
       const ready = outside.filter((o) => o.at <= rawMs).sort((a, b) => a.at - b.at);
       if (ready.length === 0) return [];
       outside = outside.filter((o) => !ready.includes(o));
-      settle(rawMs);
-      return ready.map((o) => o.run);
+      settle(rawMs, false);
+      // Each is drawn only if it is still wanted when its turn comes (an earlier draw of the batch may give it up).
+      return ready.map((o) => () => {
+        if (!o.live) return;
+        o.live = false;
+        o.run();
+      });
     },
     wakeAtMs() {
       const times = [...outside.map((o) => o.at), ...(pending && Number.isFinite(pending.at) ? [pending.at] : [])];

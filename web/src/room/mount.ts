@@ -121,18 +121,39 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
     if (gate === null || at === null) return;
     timer = clock.later(() => {
       timer = undefined;
-      flush();
-      arm();
+      try {
+        flush();
+      } finally {
+        arm();
+      }
     }, Math.max(0, at - clock.now()));
   }
 
-  /** Everything whose frame has come, in one frame: the screen's own mark and the outside changes. */
+  let flushing: number | null = null;
+  /**
+   * Everything whose frame has come, in one frame: the screen's own mark and the outside changes. Each outside change is
+   * drawn on its own, so one that throws does not take the others of the frame with it; the errors are reported (as uncaught) once
+   * they have all been drawn.
+   */
   function flush(): void {
     if (gate === null) return;
     const now = clock.now();
+    const errors: unknown[] = [];
+    const attempt = (run: () => void): void => {
+      try {
+        run();
+      } catch (e) {
+        errors.push(e);
+      }
+    };
     const m = gate.due(now);
-    if (m) draw(m);
-    for (const run of gate.dueOutside(now)) run();
+    if (m) attempt(() => draw(m));
+    const outer = flushing;
+    flushing = now;
+    for (const run of gate.dueOutside(now)) attempt(run);
+    flushing = outer;
+    // Reported where the page reports errors, once every change of the frame has been drawn and the timer is armed again.
+    for (const e of errors) queueMicrotask(() => { throw e; });
   }
 
   return {
@@ -145,22 +166,37 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
       const now = clock.now();
       const ctx: MarkContext = {
         changeAtMs: m.changeInMs === null ? null : now + m.changeInMs,
-        switchAtMs: m.changeInMs === null || m.count === null ? null : now + m.count.beatsLeft * m.count.beatMs,
+        switchAtMs: m.changeInMs === null || m.count === null ? null : now + (m.count.switchInMs ?? m.count.beatsLeft * m.count.beatMs),
       };
-      const shown = gate.offer(m, now, ctx);
-      if (shown) draw(shown);
-      flush();
-      arm();
+      try {
+        const shown = gate.offer(m, now, ctx);
+        if (shown) draw(shown);
+        flush();
+      } finally {
+        arm();
+      }
     },
     requestMark(run) {
       if (gate === null) {
         run();
         return { atMs: clock.now(), cancel: () => undefined };
       }
-      const ticket = gate.request(clock.now(), run);
-      flush();
-      arm();
-      return { atMs: ticket.atMs, cancel: () => { ticket.cancel(); arm(); } };
+      // From inside a draw of this frame it is part of that draw.
+      const ticket = gate.request(flushing ?? clock.now(), run);
+      try {
+        flush();
+      } finally {
+        arm();
+      }
+      return {
+        get atMs() {
+          return ticket.atMs;
+        },
+        cancel: () => {
+          ticket.cancel();
+          arm();
+        },
+      };
     },
     destroy() {
       if (timer !== undefined) clock.cancel(timer);

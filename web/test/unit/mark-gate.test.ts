@@ -45,8 +45,7 @@ function play(s: Scenario, seconds: number, frameMs = FRAME_MS, clock: Clock = O
   let [current, since, waited, waitedJoined] = [null as ReturnType<typeof toRoomModel> | null, null as number | null, 0, 0];
   const draw = (drawn: ReturnType<typeof toRoomModel> | null, t: number): void => {
     if (!drawn) return;
-    // Draws within 1 ms of each other are one change (one task, one frame).
-    if ((marks.length > 0 || t > 0) && (marks.length === 0 || t - marks[marks.length - 1] > 1)) marks.push(t);
+    if (marks.length > 0 || t > 0) marks.push(t);
     if (since !== null && current) {
       const joined = drawn.intervalKey !== current.intervalKey || changeKind(current, drawn) === "switch";
       if (joined) waitedJoined = Math.max(waitedJoined, t - since);

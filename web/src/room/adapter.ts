@@ -15,6 +15,7 @@ import type { ScoreScale } from "./score-scale.ts";
 
 type View = NonNullable<RoomInput["view"]>;
 type Song = Class["songs"][number];
+type Interval = Class["intervals"][number];
 
 const EMPTY: RoomModel = {
   kind: "empty",
@@ -92,7 +93,7 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
     metrics: metricsFor(iv, song, link, position),
-    count: countFor(position, song),
+    count: countFor(position, song, iv, view.classMs),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
     intro: null,
@@ -153,11 +154,21 @@ function metricsFor(iv: Class["intervals"][number], song: Song | null, link: Lin
   ];
 }
 
-/** The count's beat: the song's tempo, while a count is shown (the player counts; this only says how fast it steps). */
-function countFor(position: PatternValue | null, song: Song | null): CountModel | null {
+/**
+ * The count's beat and when its side ends (the switch beat), while a count is shown. The player counts; this only says how
+ * fast it steps and where the beats fall: on the interval's start for a pattern that starts with the interval, on the song's
+ * beat anchors for one that starts on the next downbeat.
+ */
+function countFor(position: PatternValue | null, song: Song | null, iv: Interval, classMs: number): CountModel | null {
   const bpm = song ? songBpm(song) : null;
-  if (position?.kind !== "count" || !bpm) return null;
-  return { beatMs: 60_000 / bpm, beatsLeft: Number(position.count) };
+  if (position?.kind !== "count" || !song || !bpm) return null;
+  const beatMs = 60_000 / bpm;
+  const anchors = song.beat_anchors?.anchors;
+  const anchor = anchors && [...anchors].reverse().find((x) => song.start_ms + x.at_ms <= classMs);
+  const origin = iv.pattern?.start_on === "next_downbeat" && anchor ? song.start_ms + anchor.at_ms : iv.start_ms;
+  const phase = (((classMs - origin) % beatMs) + beatMs) % beatMs;
+  const beatsLeft = Number(position.count);
+  return { beatMs, beatsLeft, switchInMs: beatsLeft * beatMs - phase };
 }
 
 function nextFor(doc: Class, view: View): NextModel {

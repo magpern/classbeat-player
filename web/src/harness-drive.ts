@@ -26,6 +26,8 @@ export interface Drive {
   reset(): void;
   /** Steps frames up to `lastFrame`; stops at the first frame in which the page changed, or returns null at the end. */
   advance(lastFrame: number): FrameStop | null;
+  /** Two outside changes due in one frame, the first throws: whether the second was drawn, and whether a third, asked for after, still is. */
+  probeThrow(): Promise<{ thrown: boolean; second: boolean; third: boolean }>;
   /** What on the page transitions, animates or is moved by the Web Animations API now. */
   moving(): string[];
 }
@@ -90,6 +92,31 @@ export function createDrive(host: HTMLElement): Drive {
         if (changes.takeRecords().length > 0) return { frame, ms: now };
       }
       return null;
+    },
+    async probeThrow() {
+      if (!screen) throw new Error("begin first");
+      const ran = { second: false, third: false };
+      let thrown = false;
+      const onError = (e: ErrorEvent): void => {
+        thrown = true;
+        e.preventDefault();
+      };
+      window.addEventListener("error", onError);
+      screen.requestMark(() => {
+        throw new Error("a draw that fails");
+      });
+      screen.requestMark(() => {
+        ran.second = true;
+      });
+      this.advance(frame + 90);
+      await Promise.resolve();
+      screen.requestMark(() => {
+        ran.third = true;
+      });
+      this.advance(frame + 90);
+      await Promise.resolve();
+      window.removeEventListener("error", onError);
+      return { thrown, ...ran };
     },
     moving() {
       const found = [...host.querySelectorAll("*")].filter((e) => {
