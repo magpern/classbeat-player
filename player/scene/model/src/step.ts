@@ -11,6 +11,8 @@ import type { Frame, SceneClass } from "./frame.ts";
 import { rigFrozen } from "./link-gate.ts";
 import { advancePhase } from "./phase.ts";
 import { limitTurn } from "./turn.ts";
+import { clockCause, holdEnd, isHeld, linkCause } from "./unforeseen.ts";
+import type { UnforeseenCause } from "./unforeseen.ts";
 
 /** A stalled frame or a tab brought back to the front turns a beam by at most 3 degrees. */
 export const MAX_FRAME_SECONDS = 0.1;
@@ -20,12 +22,18 @@ export function clampFrameTime(rawSeconds: number): number {
   return rawSeconds > 0 ? Math.min(rawSeconds, MAX_FRAME_SECONDS) : 0;
 }
 
-/** What the next frame starts from: the motion phase and what is drawn (null before the first frame). */
+/**
+ * What the next frame starts from: the motion phase and what is drawn (null before the first frame), the class-clock time
+ * an unforeseen cause's hold ends (null: no hold), and what the last frame saw, to tell a seek or a link event from a steady frame.
+ */
 export interface RigState {
   readonly phaseDeg: number;
   readonly drawn: readonly Direction[] | null;
+  readonly holdUntilMs: number | null;
+  readonly lastClassMs: number | null;
+  readonly lastLink: LinkInput | null;
 }
-export const START_STATE: RigState = { phaseDeg: 0, drawn: null };
+export const START_STATE: RigState = { phaseDeg: 0, drawn: null, holdUntilMs: null, lastClassMs: null, lastLink: null };
 
 /** The link the still rig is computed with: no phrase, no moments (reduced motion, S11). */
 export const STILL_LINK: LinkInput = { state: "Paused" };
@@ -44,6 +52,8 @@ export interface StepInput {
   readonly motion?: number;
   /** The frame is computed as with no music link (level None, no moments) while the rig still moves: before the start. */
   readonly noMusic?: boolean;
+  /** A cause the host knows and the step cannot see (a reload that kept the state, a jump the host names); a seek, a lost or regained lock and a resume are seen by the step itself. */
+  readonly cause?: UnforeseenCause;
 }
 
 export interface Stepped {
@@ -54,6 +64,10 @@ export interface Stepped {
   readonly drawn: readonly Direction[];
   /** The frame time used, after the clamp. */
   readonly dtSeconds: number;
+  /** The beams (and the motion phase) are held on their present aim, 2 s of class-clock time after an unforeseen cause. */
+  readonly held: boolean;
+  /** The cause seen on this frame, if any. */
+  readonly cause: UnforeseenCause | null;
 }
 
 /**
@@ -72,9 +86,14 @@ export function stepRig(state: RigState, input: StepInput): Stepped {
   const { cls, classMs, songIndex, songPosMs, link, still = false, motion = 1, noMusic = false } = input;
   const dtSeconds = clampFrameTime(input.rawDtSeconds);
   const frozen = rigFrozen(link); // Paused and a hold: the phase and the beams stay where they were
+  // An unforeseen cause (scene.md "How a beam turns", item 1) holds the present aim for 2 s of class-clock time; nothing before the first frame.
+  const cause = state.drawn === null ? null : (input.cause ?? clockCause(state.lastClassMs, classMs) ?? linkCause(state.lastLink, link));
+  const holdUntil = cause === null ? state.holdUntilMs : holdEnd(classMs);
+  const held = isHeld(holdUntil, classMs);
+  const stopped = frozen || held;
   const zone = cls.intervals[intervalIndexAt(cls, classMs)]?.zone ?? 1;
-  const phaseDeg = frozen || still ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone, motion);
+  const phaseDeg = stopped || still ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone, motion);
   const frame = sceneFrame({ cls, classMs, songIndex, songPosMs, phaseDeg, link: still || noMusic ? STILL_LINK : link });
-  const drawn = turnToward(state.drawn, frame.directions, dtSeconds, frozen);
-  return { state: { phaseDeg, drawn }, frame, drawn, dtSeconds };
+  const drawn = turnToward(state.drawn, frame.directions, dtSeconds, stopped);
+  return { state: { phaseDeg, drawn, holdUntilMs: held ? holdUntil : null, lastClassMs: classMs, lastLink: link }, frame, drawn, dtSeconds, held, cause };
 }

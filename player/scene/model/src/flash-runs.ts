@@ -12,6 +12,10 @@ export const CAP = 3;
 export const HOLD_BEFORE_MS = 250;
 export const HOLD_AFTER_MS = 300;
 const EPS = 1e-6;
+/** No new run ends less than this before the turn after an unforeseen cause starts (scene.md "The flash budget"). */
+const TURN_CLEAR_MS = 1000;
+/** The window planned for the turn after an unforeseen cause: the longest turn, 3.5 s, plus `TURN_DELAY_MS` (`--scene-sweep-window`). */
+const TURN_WINDOW_MS = 4150;
 /** A run that waits tries the gaps after this many of the next marks, then is a step or skipped. */
 const MAX_WAITS = 4;
 const SECOND_MS = 1000;
@@ -48,6 +52,8 @@ export interface Room {
   readonly frameMs: number;
   /** The moments (class clock, ms) a sweep starts; a run does not overlap the 2.5 s after each. */
   readonly sweeps?: readonly number[];
+  /** The moments (class clock, ms) the turn after an unforeseen cause starts (the cause's time plus 2 s): a sweep, and no new run ends less than 1 s before it either. */
+  readonly unforeseenTurns?: readonly number[];
   /** Runs already placed, which the new ones must not touch and count beside. */
   readonly placed?: readonly PlacedRun[];
 }
@@ -80,7 +86,10 @@ const point = (t: number): Span => ({ fromMs: t, toMs: t });
 /** Steps c to g: the wishes in the scheduler's order, each into a gap that holds it whole, or a step or skipped. */
 export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const items: Span[] = room.marks.map(point);
-  const sweeps: Span[] = (room.sweeps ?? []).map((t) => ({ fromMs: t, toMs: t + SWEEP_MS }));
+  const sweeps: Span[] = [
+    ...(room.sweeps ?? []).map((t) => ({ fromMs: t, toMs: t + SWEEP_MS })),
+    ...(room.unforeseenTurns ?? []).map((t) => ({ fromMs: t - TURN_CLEAR_MS, toMs: t + TURN_WINDOW_MS })),
+  ];
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
