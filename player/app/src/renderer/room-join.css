@@ -8,12 +8,9 @@
   box-sizing: border-box; overflow: hidden;
   background: var(--stage); color: var(--light-1); font-family: var(--face-text);
   display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 4vw; align-items: start;
-  animation: join-in var(--m-state);
 }
 .join[hidden] { display: none; }
-@keyframes join-in { from { opacity: 0; } to { opacity: 1; } }
-:root[data-reduced-motion] .join { animation: none; }
-@media (prefers-reduced-motion: reduce) { .join { animation: none; } }
+/* It appears and goes in one frame: a step with no animation (room-2d.md, S6); room-marks.ts places the frame. */
 
 .join .card { display: flex; gap: 3vw; min-width: 0; }
 .join .card .body { display: flex; flex-direction: column; min-width: 0; gap: 1.4vh; }

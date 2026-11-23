@@ -4,24 +4,22 @@
 // - It shows on a pointer move of at least MOVE_PX, a click or tap, Tab and the End key.
 // - It hides HIDE_AFTER_MS after the last input of any kind; only keyboard focus reached by Tab
 //   and the End question hold it. A pointer resting over it or a press with the pointer does not.
-// - From the first frame of the fade-out it counts as hidden: it takes no presses, and a click or
-//   tap then only shows it again. A click or tap while hidden presses nothing.
+// - It goes in one frame, with no fade (room-2d.md, S6): from the 3 s on it counts as hidden, it takes no
+//   presses, and a click or tap then only shows it again. A click or tap while hidden presses nothing.
+//   When the frame comes is room-marks.ts's: a step of its own at least 500 ms from any other (marks.ts).
 // - With one display it does not hide before the start, nor on "Class Complete" (`pinned`).
 
 export const HIDE_AFTER_MS = 3000;
-/** `--m-state`; 0 with reduced motion. */
-export const FADE_MS = 300;
 /** A smaller move is a nudged table, not a hand on the mouse. */
 export const MOVE_PX = 6;
 /** The End question answers "Keep going" by itself after this long. */
 export const ASK_TIMEOUT_MS = 8000;
 
-export type Phase = "hidden" | "shown" | "fading";
+export type Phase = "hidden" | "shown";
 
 export interface BandState {
   readonly phase: Phase;
   readonly lastInputAt: number;
-  readonly fadeEndsAt: number | null;
   /** Keyboard focus inside the band, reached by Tab or Shift+Tab. */
   readonly tabFocus: boolean;
   /** The End question is open. */
@@ -33,18 +31,17 @@ export interface BandState {
 export interface BandContext {
   /** One display, before the start or on "Class Complete": the band stays in sight. */
   readonly pinned: boolean;
-  readonly fadeMs: number;
 }
 
-export const HIDDEN: BandState = { phase: "hidden", lastInputAt: 0, fadeEndsAt: null, tabFocus: false, asking: false, anchor: null };
+export const HIDDEN: BandState = { phase: "hidden", lastInputAt: 0, tabFocus: false, asking: false, anchor: null };
 
 /** Pinned with one display before the start ("ready") and on "Class Complete" ("ended"); never with a second display. */
 export const isPinned = (alone: boolean, status: string | null): boolean => alone && (status === "ready" || status === "ended");
 
 const held = (s: BandState): boolean => s.tabFocus || s.asking;
-const show = (s: BandState, now: number): BandState => ({ ...s, phase: "shown", lastInputAt: now, fadeEndsAt: null });
+const show = (s: BandState, now: number): BandState => ({ ...s, phase: "shown", lastInputAt: now });
 
-/** The band takes presses only while fully shown (not while fading out). */
+/** The band takes presses only while shown. */
 export const takesPresses = (s: BandState, ctx: BandContext): boolean => ctx.pinned || s.phase === "shown";
 
 /** A pointer move: shows the band (or restarts the 3 s) when it is at least MOVE_PX from the last one that counted. */
@@ -74,26 +71,24 @@ export const tabFocus = (s: BandState, on: boolean, now: number): BandState => (
 /** The End question opens (it shows the band) or closes (the 3 s start again). */
 export const asking = (s: BandState, on: boolean, now: number): BandState => ({ ...show(s, now), asking: on });
 
-/** Esc with no question open: hides the band at once and drops the focus (unless pinned). */
-export function escape(s: BandState, now: number, ctx: BandContext): BandState {
+/** Esc with no question open: hides the band and drops the focus (unless pinned). */
+export function escape(s: BandState, ctx: BandContext): BandState {
   const dropped = { ...s, tabFocus: false };
   if (ctx.pinned || s.phase !== "shown") return dropped;
-  return ctx.fadeMs > 0 ? { ...dropped, phase: "fading", fadeEndsAt: now + ctx.fadeMs } : { ...dropped, phase: "hidden", fadeEndsAt: null };
+  return { ...dropped, phase: "hidden" };
 }
 
-/** Time passes: the 3 s run out (fade-out begins), the fade ends (hidden), or pinning shows it. */
+/** Time passes: the 3 s run out (hidden), or pinning shows it. */
 export function tick(s: BandState, now: number, ctx: BandContext): BandState {
   if (ctx.pinned) return s.phase === "shown" ? s : show(s, now);
   if (s.phase === "shown" && !held(s) && now - s.lastInputAt >= HIDE_AFTER_MS) {
-    return ctx.fadeMs > 0 ? { ...s, phase: "fading", fadeEndsAt: now + ctx.fadeMs } : { ...s, phase: "hidden", fadeEndsAt: null };
+    return { ...s, phase: "hidden" };
   }
-  if (s.phase === "fading" && s.fadeEndsAt !== null && now >= s.fadeEndsAt) return { ...s, phase: "hidden", fadeEndsAt: null };
   return s;
 }
 
 /** When `tick` may next change something, or null when nothing will change without an input. */
 export function nextChangeAt(s: BandState, ctx: BandContext): number | null {
   if (ctx.pinned) return null;
-  if (s.phase === "shown") return held(s) ? null : s.lastInputAt + HIDE_AFTER_MS;
-  return s.phase === "fading" ? s.fadeEndsAt : null;
+  return s.phase === "shown" && !held(s) ? s.lastInputAt + HIDE_AFTER_MS : null;
 }

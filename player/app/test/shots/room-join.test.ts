@@ -191,10 +191,10 @@ test("before the start the sheet shows both codes by itself; J closes and opens 
       await shoot(r.page, "before-start", size);
       await checkSheet(r, size, name, SITE, JOIN, null);
       await r.page.keyboard.press("j");
-      await r.run(20);
+      await r.run(520);
       assert.equal(await r.page.isHidden("section.join"), true, `${name}: J closes it`);
       await r.page.keyboard.press("j");
-      await r.run(20);
+      await r.run(520);
       assert.equal(await r.page.isVisible("section.join"), true, `${name}: J opens it again`);
       assert.deepEqual(await r.calls(), [], `${name}: J moves nothing`);
       assert.deepEqual([r.errors, r.external], [[], []]);
@@ -211,6 +211,7 @@ test("a new code while the sheet is open: every code is the new one at once, wit
     const r = await openRoom(browser, { size, frame: frameOf("before-start"), remote: on(), reducedMotion: true });
     try {
       await r.pushRemote(remoteOn(SITE, NEW));
+      await r.run(520);
       await shoot(r.page, "new-code", size);
       assert.equal(await r.page.isVisible("section.join .plate-new"), true, `${name}: the plate`);
       await checkSheet(r, size, name, SITE, NEW, JOIN);
@@ -258,6 +259,7 @@ test("the worst case: a 48-character site and the plate; nothing is cut or cover
     const r = await openRoom(browser, { size, frame: frameOf("worst-before-start"), remote: remoteOn(LONG_SITE, JOIN), reducedMotion: true });
     try {
       await r.pushRemote(remoteOn(LONG_SITE, NEW));
+      await r.run(520);
       await shoot(r.page, "worst", size);
       assert.equal(await r.page.isVisible("section.join .plate-new"), true, `${name}: the plate`);
       await checkSheet(r, size, name, LONG_SITE, NEW, JOIN);

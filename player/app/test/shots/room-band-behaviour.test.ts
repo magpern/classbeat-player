@@ -18,6 +18,8 @@ after(async () => {
 
 const SIZE: readonly [number, number] = [1920, 1080];
 const RUNNING = frameOf("running", ROUTES.following);
+/** The band's own frame comes at most 500 ms after an input that finds the mark before it just placed (S6: marks 500 ms apart). */
+const APPEARS = 510;
 
 async function room(o: Partial<RoomOpenOptions>, body: (r: RoomOpen) => Promise<void>): Promise<void> {
   const r = await openRoom(browser, { size: SIZE, frame: RUNNING, remote: on(1), ...o });
@@ -47,7 +49,7 @@ async function restOnHidden(r: RoomOpen, id: string): Promise<{ x: number; y: nu
   return p;
 }
 
-test("it hides 3 s after a pointer move, fading out over 300 ms; a nudge of the table does not show it", async () => {
+test("it hides 3 s after a pointer move, in one frame with no fade; a nudge of the table does not show it", async () => {
   await room({}, async (r) => {
     assert.equal(await r.phase(), "hidden");
     await r.page.mouse.move(400, 300);
@@ -58,9 +60,7 @@ test("it hides 3 s after a pointer move, fading out over 300 ms; a nudge of the 
     await r.run(2950);
     assert.equal(await r.phase(), "shown");
     await r.run(60);
-    assert.equal(await r.phase(), "fading");
-    await r.run(310);
-    assert.equal(await r.phase(), "hidden");
+    assert.equal(await r.phase(), "hidden", "one frame: there is no fading phase");
   });
 });
 
@@ -72,7 +72,7 @@ test("each kind of input restarts the 3 s: a key press too", async () => {
     await r.run(2500);
     assert.equal(await r.phase(), "shown");
     await r.run(600);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
   });
 });
 
@@ -82,7 +82,7 @@ test("a pointer resting over the band does not hold it", async () => {
     const p = await at(r, "main");
     await r.page.mouse.move(p.x, p.y);
     await r.run(3050);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
   });
 });
 
@@ -95,21 +95,23 @@ test("a click on a shown button presses it once, and the band still hides 3 s la
     }
     assert.deepEqual(await r.calls(), ["pause", "next", "previous"]);
     await r.run(3050);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
   });
 });
 
-test("a click while hidden, or during the fade-out, presses nothing and only shows the band", async () => {
+test("a click while hidden, or in the frames after it went, presses nothing and only shows the band", async () => {
   await room({}, async (r) => {
     const p = await restOnHidden(r, "main");
     await r.page.mouse.down();
     await r.page.mouse.up();
+    await r.run(APPEARS);
     assert.equal(await r.phase(), "shown");
     assert.deepEqual(await r.calls(), []);
     await r.run(3100);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
     await r.page.mouse.down();
     await r.page.mouse.up();
+    await r.run(APPEARS);
     assert.equal(await r.phase(), "shown");
     assert.deepEqual(await r.calls(), []);
     await r.page.mouse.click(p.x, p.y);
@@ -124,12 +126,13 @@ test("on touch a tap is the only way in: the first tap shows the band, the next 
     await r.run(3400);
     assert.equal(await r.phase(), "hidden");
     await r.page.touchscreen.tap(p.x, p.y);
+    await r.run(APPEARS);
     assert.equal(await r.phase(), "shown");
     assert.deepEqual(await r.calls(), []);
     await r.page.touchscreen.tap(p.x, p.y);
     assert.deepEqual(await r.calls(), ["pause"]);
     await r.run(3050);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
   });
 });
 
@@ -145,7 +148,7 @@ test("keyboard focus reached by Tab holds it until Esc", async () => {
     await r.page.keyboard.press("Enter");
     assert.deepEqual(await r.calls(), ["pause"]);
     await r.page.keyboard.press("Escape");
-    await r.run(310);
+    await r.run(20);
     assert.equal(await r.phase(), "hidden");
   });
 });
@@ -160,16 +163,19 @@ test("End asks; the question holds the band until answered; Esc and Keep going c
     await r.page.keyboard.press("Escape");
     assert.equal(await r.page.locator(".band .ask").count(), 0);
     await r.run(3050);
-    assert.equal(await r.phase(), "fading");
+    assert.equal(await r.phase(), "hidden");
     // Enter answers the focused Keep going.
     await r.page.keyboard.press("End");
+    await r.run(APPEARS);
     await r.page.keyboard.press("Enter");
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band .ask").count(), 0);
     // Unanswered, it closes by itself after 8 s.
     await r.page.keyboard.press("End");
     await r.run(8050);
     assert.equal(await r.page.locator(".band .ask").count(), 0);
     await r.page.keyboard.press("End");
+    await r.run(APPEARS);
     const p = await at(r, "end-class");
     await r.page.mouse.click(p.x, p.y);
     assert.deepEqual(await r.calls(), ["endClass"]);
@@ -191,8 +197,10 @@ test("a tap on End only asks too", async () => {
   await room({ touch: true }, async (r) => {
     const p = await restOnHidden(r, "end");
     await r.page.touchscreen.tap(p.x, p.y);
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band .ask").count(), 0, "the first tap only shows the band");
     await r.page.touchscreen.tap(p.x, p.y);
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band .ask").count(), 1);
     assert.deepEqual(await r.calls(), []);
   });
@@ -283,6 +291,7 @@ test("a clicker: F5 and Shift+F5 are Start only before the start; B and '.' do n
 test("while the End question is open before the start, F5 and Shift+F5 do nothing; after Esc, F5 starts (#232)", async () => {
   await room({ frame: frameOf("before-start"), alone: false }, async (r) => {
     await r.page.keyboard.press("End");
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band .ask").count(), 1);
     for (const k of ["F5", "Shift+F5"]) await r.page.keyboard.press(k);
     assert.deepEqual(await r.calls(), []);
@@ -300,9 +309,11 @@ test("the Phone remote button asks for the remote; the slot's answers redraw the
     await r.page.mouse.click(p.x, p.y);
     assert.deepEqual(await r.calls(), ["startRemote"]);
     await r.pushRemote(on(0));
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band .code-t .v").textContent(), "KXPD-RMTB");
     assert.equal(await r.page.locator(".band svg.qr").count(), 1);
     await r.pushRemote({ slot: "on", joinCode: "KXPD-RMTB", phones: 0, reconnecting: false });
+    await r.run(APPEARS);
     assert.equal(await r.page.locator(".band svg.qr").count(), 0, "no site, no QR code");
   });
 });
