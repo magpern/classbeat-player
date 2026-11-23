@@ -28,6 +28,11 @@ with other work; nothing in the development loop waits for an answer.
 
 ## Decisions waiting
 
+- **The looks' sway and the steady-light budget (2026-11-23).** Default agents picked, which you
+  may change: the looks' slow sway is not held to the 3 % a second steady-light budget, because
+  meeting it in zones 6 and 7 would need the beams at about 1/8 of their light. The sway stays
+  inside the flash rule's strict gate and the 30° a second turn limit. Ask if you want flatter
+  looks or dimmer beams in the high zones instead.
 - **The phone and tablet apps (plan, section 13, decision 15).** Decided: Android first, as a
   self-signed APK with no store. Open, for later: whether to publish through Google Play; and,
   when iOS starts, whether a music follower on iOS may use Spotify's own iOS SDK (iOS gives no

@@ -413,8 +413,8 @@ replaced the earlier ones (the lift column of "Energy by zone", the 12 % tempo p
    of it from the beams' re-aims, whose light crosses region edges (a re-aim of up to 105 degrees moves a
    region's whole beam share). Holding a re-aim to 3 % a second would need the beams at about 1/20 to 1/60 of
    their light, which hides them. The haze's drift and the wall's slow wave alone read **2.3 to 2.6 %**. So
-   `--scene-steady-max` now bounds **steady light** only (the haze's drift, the wall's slow wave and the looks'
-   sway at rest, if it measures at 3 % or less), and the beams' re-aims are **sweeps**: the scheduler counts every
+   `--scene-steady-max` now bounds **steady light** only (the haze's drift and the wall's slow wave; the looks'
+   sway at rest is not steady light, see below), and the beams' re-aims are **sweeps**: the scheduler counts every
    sweep as 1, and a CI check proves the strict measure gives it at most 1 in any 1 s, over a window of at most 4.15 s ("Steady light and sweeps" below). The
    3 % a second is a design sub-budget (#575), not a product rule. **S6's rule and the strict whole-frame gate
    are unchanged by this and stay the authority**: every gated run must still pass them on every moment. Fixed
@@ -478,7 +478,7 @@ added to anything else that is not scheduled, it still cannot make a run of 10 %
 | Kind | What | Bound |
 |---|---|---|
 | **Beat-like light** | The beat lift, the tempo pulse, the pattern accent, the wall chase's step, the build's haze step, the lens flash | Every run it makes, alone, is at most **5 %** of its larger end in every region (`--scene-lift-cap`) |
-| **Steady light** | The haze's drift, the wall's slow wave, the looks' sway at rest (the motion phase moving a look with no target step; steady light only if #592 measures it at 3 % or less), and below the Beat level the build's haze rise (the score's travel is not: it steps on the ticks) | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`), measured as "Steady light and sweeps" says |
+| **Steady light** | The haze's drift, the wall's slow wave, and below the Beat level the build's haze rise (the score's travel is not: it steps on the ticks) | In every region, at most **3 %** of its luminance over any 1 s, and over any one beat when the beat is slower than 60 bpm (`--scene-steady-max`), measured as "Steady light and sweeps" says |
 | **Sweeps** | Any span in which a beam's drawn direction is not on its target (the limiter holds it away), whatever changed the target; a beam held on its target is not one: a phrase flip, a gather, a fan, a song change, a new look, a seek, jump or reload, the Beat level entered mid-phrase, a resume after a frozen turn | Counted by the scheduler as **1** in every 1 s window that overlaps the sweep's window (`--scene-sweep-window`, at most **4.15 s**); a CI check proves the strict measure gives at most **1** in any 1 s (`--scene-sweep-max`) |
 | **Scheduled changes** | Every text step, and the rig's bursts, ramps, steps and dims, each a **step** (one frame) or a **run** (several frames; "Steps and runs" below) | Placed by the scheduler: at most **3** in any 1 s, steady light's possible change and a sweep's count included, **counted as if each changed every region** |
 
@@ -506,13 +506,13 @@ the beat and coasting, on every gated moment:
 - **The gate** fails if any region of any run reads more than **3 %**. The build slows the haze's drift and the
   wall's wave to at most **2.5 %** on every run (0.5 points of margin), and the run prints each moment's worst
   region, its rate and the jumps taken out.
-- **The looks' sway at rest is steady light only if #592 measures it at 3 % or less.** It is not yet measured:
-  the 2.3 to 2.6 % above is the haze and the wall alone, and the sway moves the beams at the zone's movement
-  rate, the mechanism that makes a re-aim a sweep. The levers for it are the light's only (wider and softer
-  beams, a lower share of the beams against the haze, then fewer lit fixtures in that zone's row); **the turn
-  limit, the movement rates and the looks stay**, and the looks and their movement are not flattened without
-  the owner (owner input 3, "Energy by zone"). If the steady light with the sway cannot meet 3 % by those
-  levers, #592 stops and reports it to the Orchestrator; the spec does not plan for it.
+- **The looks' sway at rest is not steady light** (Orchestrator, 2026-11-23, after #592 measured it). With
+  the sway, zone 7 reads up to 12.7 %, and zones 6 and 7 would need the beams at about 1/8 of their light to
+  reach 3 %, which flattens the looks (owner input 3, "Energy by zone"). So `--scene-steady-max` does not
+  bound the sway. The sway stays bounded by S7 (30° a second), by the looks as they are and by **S6's strict
+  whole-frame gate, which stays the authority** and is not changed. The steady-light measure leaves out the
+  sway by measuring with the motion phase held, and it gates the haze and the wall as above. The hold after an
+  unforeseen cause still stops the sway with the rest of steady light.
 
 *Sweeps.* A **sweep** is any span of frames in which the drawn direction of some beam is **not on its
 target**: the turn-rate limiter is holding it away from the target that the look, the fixture, the motion
@@ -557,7 +557,7 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
     the cause's own mark.
   - **The other marks are placed by P2 as everywhere else**: P2's 500 ms rule, C10 and S14 are unchanged.
     The invariant (any two marks at least 500 ms apart) already keeps the marks to 2 in any 1 s, so nothing
-    else gives way.
+    else gives way to the hold.
   - **Steady light is held still in the hold**, with the beams: the haze's drift, the wall's slow wave and the
     looks' sway stop on the cause's frame and go on 2 s after it. Their own clocks, steady light's and the
     motion phase's, **stop in the hold and resume from where they stopped**, as the drift's clock already does
@@ -1296,7 +1296,7 @@ pull request:
 | `--scene-sweep-max` | 1 counted change in any 1 s (to be built in #592) | What the scheduler counts for every sweep, and the most changes the strict measure may find in any 1 s of one (overlapping turns are one sweep); a CI check over the generated matrix, locked and coasting, fails above 1 or on a cause with no case. A case the light levers cannot bring to 1 stops #592 and goes to the Orchestrator |
 | `--scene-lift-max` | 3 per second | The beat lift's highest rate |
 | `--scene-lift-cap` | 0.05 (built in #577) | The largest run any beat-like light (lift, pulse, accent, wall chase, the build's haze step, lens flash) may make alone in any region, as a share of its larger end (S6) |
-| `--scene-steady-max` | 3 % a second, per region (to be gated in #592, built to 2.5 %; the haze's drift and the wall's wave alone measured 2.3 to 2.6 % on main) | The most **steady light** (the haze's drift, the wall's slow wave, and the looks' sway at rest only if #592 measures it at 3 % or less; not the beams' turns, which are sweeps) may move any region of the strict gate in any 1 s, and in one beat below 60 bpm, with only the one-frame jumps on frames the scheduler's log names as marks taken out (any other jump over 2 % fails), outside the sweeps' windows, locked and coasting; where the rig gives a region less than 8 % of its light, 3 % of the rig's own light there ("Steady light and sweeps", S6) |
+| `--scene-steady-max` | 3 % a second, per region (to be gated in #592, built to 2.5 %; the haze's drift and the wall's wave alone measured 2.3 to 2.6 % on main) | The most **steady light** (the haze's drift, the wall's slow wave, not the looks' sway at rest, which S7 and the strict gate bound, and not the beams' turns, which are sweeps) may move any region of the strict gate in any 1 s, and in one beat below 60 bpm, with only the one-frame jumps on frames the scheduler's log names as marks taken out (any other jump over 2 % fails), outside the sweeps' windows, locked and coasting; where the rig gives a region less than 8 % of its light, 3 % of the rig's own light there ("Steady light and sweeps", S6) |
 | `--scene-hold` | 250 ms before, 300 ms after (built in #577) | Beat-like light held at rest around a scheduled run (S6) |
 | `--scene-lens-flash` | 0.25 over 0.5 at rest (built in #577) | The white share the lens flash adds to a lens, which is 0.5 white at rest; lowered if a region would pass `--scene-lift-cap` |
 | `--scene-tempo-pulse` | 0.12 | The tempo pulse's depth when there are no anchors, as built |
