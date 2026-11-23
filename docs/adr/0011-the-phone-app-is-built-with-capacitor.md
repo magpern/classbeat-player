@@ -53,11 +53,17 @@ defaults the Orchestrator picked; the owner may change them (owner.md).
   (ADR 0007).
 - **Native code holds the mode.** The mode is held and enforced in native code. Each mode exposes
   only its own intents (section 3), and the web view cannot select, change or unlock a mode.
-- **Rider mode needs no account,** only the join code and a nickname (ADR 0007). The app starts
-  in rider mode on an unpaired device and in instructor mode on a paired one.
-- **Switching to instructor mode.** On an unpaired device it starts the pairing of section 5. On
-  a paired device it first asks for the operating system's screen-lock confirmation (the device
-  credential or a biometric).
+- **Rider mode needs no account,** only the join code and a nickname (ADR 0007).
+- **The app starts in the last mode used.** The mode is kept in native storage the web view cannot
+  reach. The first launch on an unpaired device is in rider mode.
+- **Entering instructor mode.** On an unpaired device it starts the pairing of section 5. On a
+  paired device, every entry into instructor mode from rider mode first asks for the operating
+  system's screen-lock confirmation (the device credential or a biometric), so a restart never
+  skips it: the app reopens in rider mode if it was last in rider mode.
+- **No screen lock, no instructor mode.** With no secure screen lock set on the device, the app
+  does not enter instructor mode on a paired device: it says a screen lock is needed and offers to
+  set one. If the device's pairing is lost (for example, the app's data was cleared), the device
+  is unpaired and instructor mode needs pairing again.
 - **Switching to rider mode.** Native code first stops the music follower, closes any host or
   controller connection, drops all instructor state and reloads the bundled page fresh. Only then
   does the rider page load, so no host event (for example `rider_joined`, which carries other

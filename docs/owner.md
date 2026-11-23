@@ -36,8 +36,9 @@ with other work; nothing in the development loop waits for an answer.
 - **One app, two modes (owner, 2026-11-15).** Decided: the Android app has an instructor mode
   and a rider mode. Defaults agents picked (ADR 0011, section 1), which you may change: rider
   mode needs no account and runs the rider page bundled in the app, and the web rider page
-  stays; the app starts in rider mode until it is paired; switching to instructor mode asks for
-  the phone's screen lock (or starts pairing); switching to rider mode first ends everything of
+  stays; the app reopens in the last mode used (rider mode until it is paired); entering
+  instructor mode always asks for the phone's screen lock (or starts pairing), and with no screen
+  lock set the app stays out of instructor mode; switching to rider mode first ends everything of
   instructor mode; the Spotify music link and notification access are instructor mode only;
   rider mode keeps rules 13 to 15 and gives riders no control.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
