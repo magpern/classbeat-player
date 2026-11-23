@@ -70,6 +70,8 @@ export interface RoomOpenOptions {
   readonly alone?: boolean;
   readonly reducedMotion?: boolean;
   readonly touch?: boolean;
+  /** A script that runs in the page before its own (a test's probe). */
+  readonly init?: string;
 }
 
 export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<RoomOpen> {
@@ -82,6 +84,7 @@ export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<Ro
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(STUB);
   await context.addInitScript(`window.__frame = ${JSON.stringify(o.frame)}; window.__remote = ${JSON.stringify(o.remote ?? { slot: "absent" })};`);
+  if (o.init) await context.addInitScript(o.init);
   if (o.alone === false) await context.addInitScript("Object.defineProperty(Screen.prototype, 'isExtended', { get: () => true });");
   const page = await context.newPage();
   await page.clock.install({ time: new Date("2026-11-13T18:00:00Z") });
@@ -96,7 +99,8 @@ export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<Ro
   await page.goto(`file://${join(APP_DIR, "dist", "room.html")}`);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForSelector(".room");
-  await page.clock.runFor(50);
+  // The screen's own first draw and the band's or the sheet's first change are marks of one ledger, 500 ms apart: the page is let to settle.
+  await page.clock.runFor(650);
   return {
     page,
     errors,
@@ -128,4 +132,6 @@ export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<Ro
 export async function wiggle(page: Page, x = 400, y = 300): Promise<void> {
   await page.mouse.move(x, y);
   await page.mouse.move(x + 20, y + 10);
+  // The band's frame is the next one of the room ledger (60 Hz), not this instant.
+  await page.clock.runFor(20);
 }

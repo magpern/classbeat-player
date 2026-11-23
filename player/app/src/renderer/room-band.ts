@@ -5,7 +5,7 @@
 import * as M from "../core/room/band-model.ts";
 import type { BandContext, BandState } from "../core/room/band-model.ts";
 import { bandView, mainCommand } from "../core/room/band-view.ts";
-import type { ButtonId, ClockStatus } from "../core/room/band-view.ts";
+import type { BandView, ButtonId, ClockStatus } from "../core/room/band-view.ts";
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { keyAction, waitsForQuestion } from "../core/room/keys.ts";
@@ -40,6 +40,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   const band = make("div", "band");
   band.setAttribute("role", "toolbar");
   band.setAttribute("aria-label", "Class controls");
+  band.dataset.phase = "hidden";
   host.append(band);
 
   let state: BandState = M.HIDDEN;
@@ -63,12 +64,23 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   /** A press acts only on a band that is on the screen and not counted hidden. */
   const takesPresses = (): boolean => onScreen && M.takesPresses(state, ctx());
 
-  /** Draws the band as the model says: what is on screen after this is what is wanted. Returns whether it changed. */
-  function paint(): boolean {
+  /** What the model says the band should be: whether it shows, and its buttons. */
+  function wanted(): { st: ClockStatus | null; want: boolean; v: BandView | null; key: string } {
     const st = status();
     const want = state.phase === "shown" && st !== null;
     const v = st === null ? null : bandView(st, frame?.band ?? null, shownSlot(note), state.asking, opts.sheet?.isOpen() ?? false);
-    const key = v === null ? "" : JSON.stringify(v);
+    return { st, want, v, key: v === null ? "" : JSON.stringify(v) };
+  }
+
+  /** Whether drawing now would change what a person sees (a hidden band's buttons are not seen). */
+  function wouldChange(): boolean {
+    const w = wanted();
+    return w.want !== onScreen || (w.key !== drawn && (w.want || onScreen));
+  }
+
+  /** Draws the band as the model says: what is on screen after this is what is wanted. Returns whether it changed. */
+  function paint(): boolean {
+    const { st, want, v, key } = wanted();
     let changed = false;
     if (key !== drawn) {
       const focused = (document.activeElement as HTMLElement | null)?.dataset?.id;
@@ -84,8 +96,10 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
       changed = true;
     }
     const phase = onScreen ? "shown" : "hidden";
-    band.dataset.phase = phase;
-    document.body.dataset.band = phase;
+    if (band.dataset.phase !== phase) {
+      band.dataset.phase = phase;
+      document.body.dataset.band = phase;
+    }
     if (onScreen && focusLater) {
       const f = focusLater;
       focusLater = null;
@@ -99,13 +113,15 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
     const st = status();
     const visibleNow = state.phase === "shown" && st !== null;
     if (!visibleNow && !onScreen) {
-      // Out of sight before and after: nothing a person can see changes, so it takes no mark.
+      // Out of sight before and after: nothing a person can see changes, so it draws nothing and takes no mark. What
+      // it holds is drawn in the frame that shows it.
       opts.marks.cancel("band");
       focusLater = null;
-      paint();
       return;
     }
-    opts.marks.request("band", paint);
+    // A request that would change nothing takes no mark: a frame every second from the shell must not use the budget.
+    if (wouldChange()) opts.marks.request("band", () => void paint());
+    else opts.marks.cancel("band");
   }
 
   function schedule(): void {

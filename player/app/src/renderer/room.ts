@@ -47,8 +47,8 @@ let pushed = false;
 // The join sheet (room-join.ts) reads the clock's state and the slot; the band, whether it is open.
 let status: ClockStatus | null = null;
 let slot: RemoteView = REMOTE_ABSENT;
-// One place decides the frame of every visible change of the band, the sheet and the plate (room-marks.ts).
-const marks = createMarks();
+// The room screen's one mark ledger decides the frame of every visible change of the band, the sheet and the plate (room-marks.ts).
+const marks = createMarks((draw) => screen.requestMark(draw));
 const sheet = mountSheet(document.body, () => band.redraw(), marks);
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;

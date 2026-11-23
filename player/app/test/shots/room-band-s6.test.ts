@@ -34,10 +34,11 @@ test("with two displays the band goes within 500 ms after its 3 s in paused, bef
   for (const fixture of ["paused", "before-start", "finished"]) {
     await room({ frame: frameOf(fixture), alone: false, remote: { slot: "absent" } }, async (r) => {
       await wiggle(r.page);
+      await r.run(520); // its frame: at most 500 ms behind the screen's own marks
       assert.equal(await r.phase(), "shown", fixture);
-      await r.run(2950);
+      await r.run(2400);
       assert.equal(await r.phase(), "shown", fixture);
-      await r.run(550);
+      await r.run(640);
       assert.equal(await r.phase(), "hidden", `${fixture}: gone by 3 s + 500 ms`);
     });
   }
@@ -103,7 +104,9 @@ async function centre(r: RoomOpen, id: string): Promise<{ x: number; y: number }
 test("a press acts on the button that is drawn: a newer state waiting for its frame does not change what the main button sends", async () => {
   await room({}, async (r) => {
     await wiggle(r.page);
+    await r.run(520);
     const p = await centre(r, "main");
+    await r.pushRemote(on(2)); // a band change takes a mark, so the next one has to wait for the gap
     await r.run(30);
     // The shell pushes `paused` while the band's next change waits for its frame; the button still reads Pause.
     await r.push(frameOf("paused", ROUTES.following));
@@ -118,10 +121,14 @@ test("a press acts on the button that is drawn: a newer state waiting for its fr
   // The same from the keyboard: Enter on the focused button.
   await room({}, async (r) => {
     await r.page.keyboard.press("Tab");
+    await r.run(520);
     await r.page.keyboard.press("Tab");
     assert.equal(await r.page.evaluate(() => (document.activeElement as HTMLElement).dataset.id), "main");
+    await r.run(530);
+    await r.pushRemote(on(2)); // a band change takes a mark, so the next one has to wait for the gap
     await r.run(30);
     await r.push(frameOf("paused", ROUTES.following));
+    assert.equal(await r.page.locator('.band [data-id="main"] .w').textContent(), "Pause");
     await r.page.keyboard.press("Enter");
     assert.deepEqual(await r.calls(), ["pause"]);
   });
@@ -169,6 +176,7 @@ test("a click on a button that the model counts shown but the page has not drawn
 test("a press between the 3 s running out and the hide's own frame presses nothing, and only shows the band again", async () => {
   await room({}, async (r) => {
     await wiggle(r.page);
+    await r.run(520);
     const p = await centre(r, "main");
     await r.page.mouse.move(p.x, p.y); // the pointer rests on the button; its own move is the last input
     await r.run(2900);

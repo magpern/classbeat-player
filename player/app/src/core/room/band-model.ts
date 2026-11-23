@@ -6,7 +6,7 @@
 //   and the End question hold it. A pointer resting over it or a press with the pointer does not.
 // - It goes in one frame, with no fade (room-2d.md, S6): from the 3 s on it counts as hidden, it takes no
 //   presses, and a click or tap then only shows it again. A click or tap while hidden presses nothing.
-//   When the frame comes is room-marks.ts's: a step of its own at least 500 ms from any other (marks.ts).
+//   When the frame comes is the room window's mark ledger's (room-marks.ts): a step of its own at least 500 ms from any other.
 // - With one display it does not hide before the start, nor on "Class Complete" (`pinned`).
 
 export const HIDE_AFTER_MS = 3000;

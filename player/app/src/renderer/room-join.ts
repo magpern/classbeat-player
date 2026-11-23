@@ -85,10 +85,12 @@ export function mountSheet(host: HTMLElement, changed: () => void, marks: Marks)
   let timer: ReturnType<typeof setTimeout> | undefined;
   const now = (): number => performance.now();
 
+  const sheetKey = (): string => (s.open && s.code !== null ? JSON.stringify([s.code, site, plateShown(s, now())]) : "");
+
   /** The sheet as the model says it is now. Returns whether anything on screen changed. */
   function paint(): boolean {
     const plate = plateShown(s, now());
-    const key = s.open && s.code !== null ? JSON.stringify([s.code, site, plate]) : "";
+    const key = sheetKey();
     if (key === drawn) return false;
     if (key === "" || s.code === null) box.replaceChildren();
     else box.replaceChildren(...cards(s.code, site, plate));
@@ -106,10 +108,9 @@ export function mountSheet(host: HTMLElement, changed: () => void, marks: Marks)
    */
   function draw(): void {
     const key = s.open && s.code !== null ? "open" : "";
-    if (key === "" && drawn === "") {
-      marks.cancel("sheet");
-      paint();
-    } else marks.request("sheet", paint);
+    if (key === "" && drawn === "") marks.cancel("sheet"); // out of sight before and after: nothing to draw, no mark
+    else if (drawn !== sheetKey()) marks.request("sheet", () => void paint());
+    else marks.cancel("sheet");
     clearTimeout(timer);
     const at = sheetWakeAt(s);
     if (at !== null) timer = setTimeout(() => set(sheetTick(s, now())), Math.max(0, at - now()));
