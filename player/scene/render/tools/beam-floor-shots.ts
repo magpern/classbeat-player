@@ -8,8 +8,8 @@ import { FLOOR_SOURCE, MIN_ABOVE_HAZE, MIN_CORE, floorFaults } from "./beam-floo
 import type { Measured } from "./beam-floor.ts";
 import type { Open } from "./text-shots.ts";
 
-// 16:9 and 16:10. (At 4:3 the back truss's right-hand end is outside the frame, so that beam has no visible core to measure.)
-const SIZES = [[1920, 1080], [1366, 768], [1280, 800], [854, 480]] as const;
+// 16:9, 16:10, 4:3 and 5:4. A beam whose whole axis is outside the frame is skipped (and listed), any other must pass.
+const SIZES = [[1920, 1080], [1366, 768], [1280, 800], [854, 480], [1024, 768], [800, 600], [1280, 1024]] as const;
 const QUALITIES = ["High", "Medium", "Low"] as const;
 
 /** The two beams of the page's before-the-start state, measured on the canvas at its drawing-buffer size. */
@@ -40,7 +40,9 @@ export async function beamFloor(open: Open): Promise<void> {
   const rows: string[] = [];
   for (const [w, h] of SIZES) for (const q of QUALITIES) {
     const m = await measureHouse(open, w, h, `&q=${q}`);
+    assert.ok(m.beams.some((b) => b.visible), `S5b: no house-look beam is on screen at ${w}x${h}`);
     for (const [i, beam] of m.beams.entries()) {
+      if (!beam.visible) { rows.push(`${w}x${h} ${q} beam ${i}: whole axis outside the frame, skipped`); continue; }
       assert.deepEqual(floorFaults(beam), [], `S5b: beam ${i} of the house look at ${w}x${h}, ${q} (canvas ${m.width}x${m.height}) is under the floor (${JSON.stringify(beam)})`);
       rows.push(`${w}x${h} ${q} beam ${i}: ${beam.n} samples, core >= ${beam.minY.toFixed(5)}, >= ${beam.minAbove} codes over the haze`);
     }

@@ -41,7 +41,18 @@ export const FLOOR_SOURCE = `(function () {
     }
     return out;
   };
-  /** Per beam: the samples kept, the lowest core luminance, the lowest margin over the haze in codes on \`channel\`. */
+  /** Whether any of the beam's axis, beyond the lens's own highlight, projects inside the frame: false means the beam is off screen and there is no core to measure. */
+  const visible = (b, W, H, tanH) => {
+    const aspect = W / H;
+    const at0 = (t) => { const z = b.o[2] + t * b.d[2]; return { z, x: ((b.o[0] + t * b.d[0]) / (-z * tanH * aspect) * 0.5 + 0.5) * W, y: (1 - ((b.o[1] + t * b.d[1]) / (-z * tanH) * 0.5 + 0.5)) * H }; };
+    const lens = at0(0);
+    for (let t = 0.5; t <= 45; t += 0.5) {
+      const p = at0(t);
+      if (p.z < -0.5 && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H && Math.hypot(p.x - lens.x, p.y - lens.y) >= ${LENS_MARGIN} * H) return true;
+    }
+    return false;
+  };
+  /** Per beam: whether it is on screen, the samples kept, the lowest core luminance, the lowest margin over the haze in codes on \`channel\`. */
   const measure = (px, W, H, beams, tanH, channel, base) => beams.map((b) => {
     let minY = Infinity, minAbove = Infinity, n = 0;
     for (const s of axis(b, W, H, tanH, base)) {
@@ -65,13 +76,13 @@ export const FLOOR_SOURCE = `(function () {
       minY = Math.min(minY, lumOf(best));
       minAbove = Math.min(minAbove, best[channel] - haze[channel]);
     }
-    return { n, minY, minAbove };
+    return { visible: visible(b, W, H, tanH), n, minY, minAbove };
   });
-  return { dec, lumOf, axis, measure };
+  return { dec, lumOf, axis, visible, measure };
 })()`;
 
 export interface Beam { readonly o: readonly number[]; readonly d: readonly number[]; readonly spread: number }
-export interface Measured { readonly n: number; readonly minY: number; readonly minAbove: number }
+export interface Measured { readonly visible: boolean; readonly n: number; readonly minY: number; readonly minAbove: number }
 export interface FloorCheck {
   readonly lumOf: (p: readonly number[]) => number;
   readonly measure: (px: ArrayLike<number>, w: number, h: number, beams: readonly Beam[], tanH: number, channel: number, base: number) => Measured[];
@@ -79,8 +90,13 @@ export interface FloorCheck {
 /** The check, built from the same source the browser evaluates. */
 export const makeFloorCheck = (): FloorCheck => (0, eval)(FLOOR_SOURCE) as FloorCheck;
 
-/** What is wrong with a beam's measure against S5b (empty when it passes). */
+/**
+ * What is wrong with a beam's measure against S5b (empty when it passes). A beam is skipped only when its whole axis
+ * projects outside the frame (`visible` false: "outside the frame" is a test, and the caller asserts that some beam is
+ * on screen); a beam with any of its axis in the frame and no kept sample fails.
+ */
 export function floorFaults(m: Measured): string[] {
+  if (!m.visible) return [];
   if (m.n === 0) return ["no sample of the beam's core was found in the frame"];
   const out: string[] = [];
   if (m.minY < MIN_CORE) out.push(`core ${m.minY.toFixed(5)} is under ${MIN_CORE}`);

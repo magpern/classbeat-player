@@ -65,11 +65,15 @@ test("S5b: the check measures the whole axis, so a beam that fades along it is c
   assert.ok(floorFaults(measure(dim)).length > 0);
 });
 
-test("S5b: a beam with no core in the frame fails, it is never passed unmeasured", () => {
+test("S5b: a beam is skipped only when its whole axis is outside the frame; any beam with part of its axis in the frame and no kept sample fails", () => {
+  const blank = new Uint8ClampedArray(W * H * 4).fill(255);
   const away = { o: [40, 0, -10], d: [1, 0, 0], spread: 0.05 };
-  const m = check.measure(new Uint8ClampedArray(W * H * 4).fill(255), W, H, [away], TAN_H, 1, BEAM_BASE_RADIUS)[0]!;
-  assert.equal(m.n, 0);
-  assert.ok(floorFaults(m).length > 0);
+  const off = check.measure(blank, W, H, [away], TAN_H, 1, BEAM_BASE_RADIUS)[0]!;
+  assert.equal(off.visible, false, "outside the frame is a measured fact");
+  assert.deepEqual(floorFaults(off), []);
+  assert.equal(measure(frame(0.0006, 0.0075)).visible, true, "the test beam is on screen");
+  // On screen with no kept sample is a fault, never a skip.
+  assert.ok(floorFaults({ visible: true, n: 0, minY: Infinity, minAbove: Infinity }).length > 0);
 });
 
 test("S5b: the channel is the token's strongest primary: a margin on another channel does not count", () => {
