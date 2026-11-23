@@ -63,6 +63,8 @@ export interface Placed {
 const RANK = { action: 0, switch: 1, tick: 2 } as const;
 const ACTION_LATE_MS = 500;
 const TICK_LATE_MS = 1000;
+/** The farthest ahead an action joins a fixed frame (P2). */
+const ACTION_JOIN_MS = 1000;
 
 /**
  * P2, in the order things happen: each want takes the earliest frame at or after its time that is at least 500 ms from
@@ -92,9 +94,13 @@ export function placeMarks(fixed: readonly FixedFrame[], wants: readonly Want[],
       for (const m of marks) if (Math.abs(at - m) < MARK_GAP_MS - EPS) { at = frameAt(m + MARK_GAP_MS - EPS, frameMs); moved = true; }
     }
     const limit = want.kind === "action" ? ACTION_LATE_MS : (want.periodMs ?? TICK_LATE_MS);
-    if (at - want.atMs > limit + EPS) {
-      const next = fixed.find((f) => f.atMs >= want.atMs - EPS);
-      if (next && (want.kind === "action" || next.atMs - want.atMs <= limit)) {
+    // Lateness is measured on the frame grid, from the want's own frame, so the rounding up to a frame is never
+    // counted against it (at 75 Hz 500 ms is 37.5 frames: counting it sent an action 6 s ahead, #608).
+    if (at - from > limit + EPS) {
+      // A fixed frame is joined only when it is at most 1 s after the want itself (a tick: within its period).
+      const next = fixed.find((f) => f.atMs >= from - EPS);
+      const reach = want.kind === "action" ? ACTION_JOIN_MS : limit;
+      if (next && next.atMs - want.atMs <= reach + EPS) {
         if (want.kind === "action") actionFrames.push(next.atMs);
         out.set(want, { want, how: "joined", atMs: next.atMs });
         return;
