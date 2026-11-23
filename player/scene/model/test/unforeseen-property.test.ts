@@ -15,7 +15,7 @@ import type { RunWish, Span } from "../src/flash-runs.ts";
 import type { LinkInput } from "../src/beat-level.ts";
 import { START_STATE, stepRig } from "../src/step.ts";
 import type { RigState } from "../src/step.ts";
-import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses, pulledFixed } from "../src/unforeseen.ts";
+import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses } from "../src/unforeseen.ts";
 import { angleBetween } from "../src/turn.ts";
 import { classA } from "./fixtures.ts";
 
@@ -65,7 +65,6 @@ const midRuns = { count: 0 };
 /** Off only to prove the 1 s clear rule is what holds the count (see the mutation test). */
 let ENFORCE_CLEAR = true;
 let ENFORCE_MERGE = true;
-let ENFORCE_PULL = true;
 let ENFORCE_END = true;
 
 function oneTimeline(seed: number, withFixed = true): void {
@@ -84,8 +83,8 @@ function oneTimeline(seed: number, withFixed = true): void {
   for (let t = r.int(0, 999); t < end; t += 1000) ticks.push({ kind: "tick", atMs: t, periodMs: 1000 });
   // Fixed frames (P1): interval changes and drops, which a cause's mark may have to join.
   const rf = rng(seed * 104729); // its own stream, so the other draws of a seed do not move
-  let fixed = withFixed ? fixedFrames(Array.from({ length: rf.int(0, 8) }, () => rf.int(0, end)), Array.from({ length: rf.int(0, 4) }, () => rf.int(0, end)), frameMs) : [];
-  let fixedAt = fixed.map((f) => f.atMs);
+  const fixed = withFixed ? fixedFrames(Array.from({ length: rf.int(0, 8) }, () => rf.int(0, end)), Array.from({ length: rf.int(0, 4) }, () => rf.int(0, end)), frameMs) : [];
+  const fixedAt = fixed.map((f) => f.atMs);
   const placedTicks = placeMarks(fixed, ticks, frameMs);
   const tickMarks = [...fixedAt, ...placedTicks.flatMap((p) => (p.atMs === null || fixedAt.includes(p.atMs) ? [] : [p.atMs]))];
   let tickNow: { want: Want; frame: number | null }[] = placedTicks.map((p) => ({ want: p.want, frame: p.atMs }));
@@ -113,15 +112,10 @@ function oneTimeline(seed: number, withFixed = true): void {
   for (const at of [...causes].sort((a, b) => a - b)) {
     // The ticks not yet shown when the cause arrives give way and are placed again after it (P2); the marks already shown stay.
     const shown = [...causeMarks, ...tickNow.flatMap((t) => (t.frame !== null && t.frame <= at ? [t.frame] : []))];
-    const f0 = causeFrame(at, frameMs, shown, (ENFORCE_CLEAR ? runs : []).filter((x) => ENFORCE_END || !midRun(x, { atMs: at })), ENFORCE_MERGE ? causeMarks : [], fixedAt);
-    const pulledF = f0 === null ? undefined : pulledFixed(f0, at, frameMs, fixedAt);
-    const f = !ENFORCE_PULL && pulledF !== undefined ? null : f0;
+    const f0 = causeFrame(at, frameMs, shown, (ENFORCE_CLEAR ? runs : []).filter((x) => ENFORCE_END || !midRun(x, { atMs: at })), ENFORCE_MERGE ? causeMarks : [], fixedAt, absorbed);
+    const f = f0;
     assert.notEqual(f, null, `seed ${seed}: no frame for the cause at ${at} within 1 s (fixed ${JSON.stringify(fixedAt.map(Math.round))}, marks shown ${JSON.stringify(shown.map(Math.round))}, run ends ${JSON.stringify(runs.map((x) => [Math.round(span(x).from), Math.round(span(x).to)]).filter((x) => x[1]! > at - 1500 && x[1]! <= at))}, ticks after ${JSON.stringify(tickNow.filter((t) => t.frame !== null && t.frame > at && t.frame < at + 2000).map((t) => Math.round(t.frame!)))})`);
     const c = { atMs: at, frameMs: f! };
-    if (pulledF !== undefined) { // the fixed frame's change is drawn at the mark's frame, as one change with it (decision 8)
-      fixed = fixed.map((x) => (x.atMs === pulledF ? { ...x, atMs: f! } : x));
-      fixedAt = fixed.map((x) => x.atMs);
-    }
     causeFrames.push(c);
     const late = runs.filter((x) => !midRun(x, c) && span(x).from >= c.atMs);
     const cutNow = endRunsAtCauses(runs.filter((x) => !late.includes(x)), [c], frameMs);
@@ -160,8 +154,12 @@ test("seed 42, pinned: a cause 0.9 s after another cause, with a run just ended,
   oneTimeline(42, false);
 });
 
-test("seed 68, pinned: a cause just after a run, with a fixed frame 381 ms after the earliest allowed frame, pulls that frame early", () => {
+test("seed 68, pinned: a cause just after a run, a shown tick and a fixed frame ahead: its mark takes the first frame that keeps every window at 3", () => {
   oneTimeline(68);
+});
+
+test("seed 53, pinned: a cause within a second of an earlier cause merges into its mark; no frame of its own exists", () => {
+  oneTimeline(53, false);
 });
 
 test("seed 7, pinned: a cause 518 ms after a run, with a tick shown before it, keeps 3 in a second", () => {
@@ -172,15 +170,13 @@ test("seed 24, pinned: a cause in a run whose own frame comes after the run's en
   oneTimeline(24);
 });
 
-test("mutations: without the 1 s clear seed 2 holds 4 in a second; without the merge seed 42 has no frame; without the run's end frame as the mark seed 24 holds 4; without the pulled fixed frame seed 68 has no frame", () => {
+test("mutations: without the window check seed 2 holds 4 in a second; without the merge seed 53 has no frame; without the run's end frame as the mark seed 7 holds 4", () => {
   ENFORCE_CLEAR = false;
   try { assert.throws(() => oneTimeline(2, false), /holds 4 changes/); } finally { ENFORCE_CLEAR = true; }
   ENFORCE_MERGE = false;
-  try { assert.throws(() => oneTimeline(42, false), /no frame for the cause/); } finally { ENFORCE_MERGE = true; }
-  ENFORCE_PULL = false;
-  try { assert.throws(() => oneTimeline(68), /no frame for the cause/); } finally { ENFORCE_PULL = true; }
+  try { assert.throws(() => oneTimeline(53, false), /no frame for the cause/); } finally { ENFORCE_MERGE = true; }
   ENFORCE_END = false;
-  try { assert.throws(() => oneTimeline(24), /holds 4 changes|no frame/); } finally { ENFORCE_END = true; }
+  try { assert.throws(() => oneTimeline(7, false), /holds 4 changes/); } finally { ENFORCE_END = true; }
 });
 
 test("the timelines really hold: causes happen and some beam is off target after a hold", () => {

@@ -8,7 +8,7 @@ import type { LinkInput } from "../src/beat-level.ts";
 import { MAX_DEG_PER_SECOND } from "../src/energy.ts";
 import { START_STATE, stepRig } from "../src/step.ts";
 import type { RigState, StepInput } from "../src/step.ts";
-import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses, linkCause, pulledFixed } from "../src/unforeseen.ts";
+import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses, linkCause } from "../src/unforeseen.ts";
 import type { UnforeseenCause } from "../src/unforeseen.ts";
 import { angleBetween } from "../src/turn.ts";
 import { classA, classSameZones } from "./fixtures.ts";
@@ -180,6 +180,11 @@ test("endRunsAtCauses: a run in progress ends in the cause's frame, merged with 
   assert.deepEqual(endRunsAtCauses([run([1000, 1400])], [{ atMs: 900, frameMs: 950 }]).absorbed, []);
 });
 
+test("endRunsAtCauses: a run that ended exactly one frame before the mark is not one change with it (the tolerance is exclusive); one that ends inside the frame is", () => {
+  assert.deepEqual(endRunsAtCauses([run([1000, 1480])], [{ atMs: 1300, frameMs: 1500 }], 20).absorbed, [], "ended on the previous frame");
+  assert.deepEqual(endRunsAtCauses([run([1000, 1481])], [{ atMs: 1300, frameMs: 1500 }], 20).absorbed, [1500], "ended inside the frame");
+});
+
 test("endRunsAtCauses: a two-piece run (a dim) loses every piece after the cut, whether the cause is in a piece or in the gap", () => {
   const dim = run([1000, 1120], [1500, 1620]);
   const inFirst = endRunsAtCauses([dim], [{ atMs: 1050, frameMs: 1100 }]);
@@ -197,15 +202,16 @@ test("endRunsAtCauses: a two-piece run (a dim) loses every piece after the cut, 
 });
 
 const FRAME = 10;
-test("causeFrame: P2 against shown marks, 1 s after an ended run, at most 1 s late; a frame rounded past that by one frame is allowed", () => {
+test("causeFrame: P2 against shown marks, then the first frame where every 1 s window holds 3 changes or fewer, at most 1 s late", () => {
   assert.equal(causeFrame(1000, FRAME, [800], []), 1300); // 500 ms after the shown mark
-  assert.equal(causeFrame(1000, FRAME, [], [run([700, 900])]), 1900); // 1 s after the run's end
-  assert.equal(causeFrame(10005, FRAME, [], [run([9000, 10005])]), 11010); // a run ended in the cause's frame: one frame of rounding past 1 s
+  assert.equal(causeFrame(1000, FRAME, [], [run([700, 900])]), 1000, "a run and a mark make 2, with steady light 3: allowed");
+  assert.equal(causeFrame(1000, FRAME, [500], [run([700, 900])]), 1500, "a shown mark, a run and a mark would be 3 changes in [500, 1500): the mark waits");
+  assert.equal(causeFrame(10005, FRAME, [], [run([9000, 10005])]), 10010); // a run ended in the cause's frame
   assert.equal(causeFrame(1000, FRAME, [900, 1400, 1900], []), null); // 2400 is more than a second late: no frame
 });
 
 test("causeFrame: a cause joins the following fixed frame, or an earlier cause's mark in its window (one change)", () => {
-  assert.equal(causeFrame(1000, FRAME, [800], [], [], [1100]), 1600, "own frame 500 ms after the fixed frame");
+  assert.equal(causeFrame(1000, FRAME, [800], [], [], [1100]), 1800, "500 ms from both marks, and no window of 4");
   assert.equal(causeFrame(1000, FRAME, [1050, 1550, 2050], [], [], [1900]), 1900, "no free frame of its own: joins the fixed frame");
   assert.equal(causeFrame(1000, FRAME, [], [], [1400], []), 1400, "an earlier cause's mark in its window");
 });
@@ -215,9 +221,7 @@ test("decision 7: a cause in a run whose own frame comes after the run's end tak
   assert.equal(causeFrame(1300, FRAME, [], [run([1000, 1700])]), 1300, "its own frame is inside the run: the run is cut there");
 });
 
-test("decision 8: a fixed frame less than 500 ms after the earliest allowed frame and past cause + 1 s is pulled to it", () => {
-  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [36067]), 35690);
-  assert.equal(pulledFixed(35690, 34710, FRAME, [36067]), 36067);
-  assert.equal(pulledFixed(35690, 34710, FRAME, [35700]), undefined, "a frame inside cause + 1 s is not pulled");
-  assert.equal(pulledFixed(35690, 34710, FRAME, [36300]), undefined, "500 ms or more away is not pulled");
+test("the exact window check (seed 68): a mark after a run with a shown tick takes the first frame that keeps every window at 3, a fixed frame never moves", () => {
+  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [36067]), 34850);
+  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [34900]), 35690, "a fixed frame stays where it is");
 });
