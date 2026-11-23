@@ -103,7 +103,7 @@ export const probeSetup = `(() => {
   const bctx = big.getContext("2d", { willReadFrequently: true });
   bctx.imageSmoothingEnabled = false;
   window.__steps = {
-    t: [], regions: [], burst: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" }, overlay: null, textSteps: 0,
+    t: [], regions: [], burst: [], sweeping: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" }, overlay: null, textSteps: 0,
     setOverlay(b64) {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
@@ -169,6 +169,7 @@ export const probeSetup = `(() => {
         return (sat[d * (w + 1) + c] - sat[b * (w + 1) + c] - sat[d * (w + 1) + a] + sat[b * (w + 1) + a]) / ((c - a) * (d - b));
       }));
       this.burst.push(window.__scene.burst);
+      this.sweeping.push(window.__scene.sweeping);
     },
     begin(from, to, events) {
       const self = this;
@@ -184,7 +185,7 @@ export const probeSetup = `(() => {
   };
 })()`;
 
-interface Series { t: number[]; regions: number[][]; burst: number[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
+interface Series { t: number[]; regions: number[][]; burst: number[]; sweeping: boolean[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
 export interface Run {
   readonly frames: number;
   readonly burstFrames: number;

@@ -13,7 +13,7 @@ import { frameTimes } from "./luminance-steps.ts";
 import { violations } from "./guard-trap.ts";
 import type { Open } from "./text-shots.ts";
 
-interface Series { t: number[]; regions: number[][] }
+interface Series { t: number[]; regions: number[][]; sweeping: boolean[] }
 export interface SteadyRun { readonly moment: string; readonly state: string; readonly worst: number; readonly region: string; readonly atMs: number; readonly steps: number }
 
 /** Plays one moment with steady light alone and returns the worst region's rate. */
@@ -33,7 +33,7 @@ async function play(open: Open, name: string, state: string, query: string, from
   const wall = frameTimes(out.t);
   let best: SteadyRun = { moment: name, state, worst: 0, region: "", atMs: 0, steps: 0 };
   REGIONS.forEach(([region], r) => {
-    const rate = worstRate(wall, out.regions.map((row) => row[r]!));
+    const rate = worstRate(wall, out.regions.map((row) => row[r]!), out.sweeping);
     if (rate.worst > best.worst || best.region === "") best = { moment: name, state, worst: rate.worst, region, atMs: Math.round(rate.atMs), steps: rate.steps };
   });
   return best;
