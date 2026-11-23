@@ -48,3 +48,11 @@ test("a merged-away interval's zone is nowhere in the text but the score", () =>
   assert.ok(!words.includes("cue 2") && !words.includes("cue 3"), "no cue of a merged-away interval");
   assert.ok(!words.includes("Zone 2") && !words.includes("Zone 3"), "no name of one");
 });
+
+test("a merged-away interval already behind 'now' is neutral too, never a past block", () => {
+  const view = textView(input(mergeTextClass(crowded), 30_000));
+  const behind = view.score.intervals.filter((b) => b.key === "i1" || b.key === "i2"); // 20.0 s and 20.4 s, merged away
+  assert.equal(behind.length, 2);
+  assert.ok(behind.every((b) => b.kind === "neutral"), `kinds ${behind.map((b) => b.kind).join(", ")}`);
+  assert.ok(view.score.intervals.filter((b) => b.key === "i0").every((b) => b.kind === "past"), "while an interval that is not merged away is past");
+});

@@ -39,7 +39,7 @@ case in each link state (`tools/text-shots.ts`): cap heights (S1), the colour of
 (S15), overlaps and cut-off text (S16), and the light under the text over 120 frames and more in zones 4 and 7 with
 the mask and without it (S2). Screenshots: `screenshots/text-*.png`.
 
-The browser run gates S6 too, strictly (`tools/flash-shots.ts`, counted by `tools/luminance-steps.ts`): the luminance steps of the whole frame as shown (the canvas and the text layer over it: the page is played up to each text step, the layer is taken as a screenshot over black and over white, `tools/png.ts` and `tools/text-overlay.ts`, and blended under the canvas of every frame as the browser blends it), in
+The browser run gates S6 too, strictly (`tools/flash-shots.ts`, counted by `tools/luminance-steps.ts`): the luminance steps of the whole frame as shown (the canvas and the text layer over it: the page is played up to each text step, the layer is taken as a screenshot over black and over white, `tools/png.ts` and `tools/text-overlay.ts`, and blended over the canvas of every frame as the browser blends it), in
 linear light, on every moment of the demo class (beats in every zone, every interval change, the drop, the song change that is also an
 interval change, the light-only burst, the breakdown, the pattern, the end), locked with the beat and coasting, in 40 regions (the whole screen,
 the four quadrants, every 1/3 x 1/3 window at a 1/6 stride, the 1/3 strips). A change is a monotone run of more than 10 % of its larger end, each

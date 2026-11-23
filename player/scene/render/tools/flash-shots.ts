@@ -129,21 +129,33 @@ export const probeSetup = `(() => {
     },
     // One frame's regions: the canvas under the text layer, blended in sRGB as the browser does (the layer's pixel is its colour
     // over black plus what the canvas shows through), averaged per cell in linear light.
-    measure(ms) {
+    // The frame as the window shows it: the canvas with the text layer's pixels over it, RGBA bytes (the gate's own blend, which blended() hands to the check against a real screenshot).
+    compose() {
       bctx.drawImage(shown, 0, 0, W, H);
       const px = bctx.getImageData(0, 0, W, H).data;
       const ov = this.overlay;
+      const out = new Uint8ClampedArray(px.length);
+      for (let i = 0; i < px.length; i += 4) {
+        const through = ov === null ? 1 : 1 - ov[i + 3] / 255;
+        for (let k = 0; k < 3; k++) out[i + k] = Math.round((ov === null ? 0 : ov[i + k]) + through * px[i + k]);
+        out[i + 3] = 255;
+      }
+      return out;
+    },
+    blended() {
+      const bytes = this.compose();
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 4096) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
+      return btoa(bin);
+    },
+    measure(ms) {
+      const px = this.compose();
       cells.fill(0);
       for (let y = 0; y < H; y++) {
         const row = Math.min(h - 1, Math.floor(y * h / H)) * w;
         for (let x = 0; x < W; x++) {
           const i = (y * W + x) * 4;
-          let r = px[i], g = px[i + 1], b = px[i + 2];
-          if (ov !== null) {
-            const through = 1 - ov[i + 3] / 255;
-            r = Math.min(255, ov[i] + through * r); g = Math.min(255, ov[i + 1] + through * g); b = Math.min(255, ov[i + 2] + through * b);
-          }
-          cells[row + Math.min(w - 1, Math.floor(x * w / W))] += 0.2126 * lut[Math.round(r)] + 0.7152 * lut[Math.round(g)] + 0.0722 * lut[Math.round(b)];
+          cells[row + Math.min(w - 1, Math.floor(x * w / W))] += 0.2126 * lut[px[i]] + 0.7152 * lut[px[i + 1]] + 0.0722 * lut[px[i + 2]];
         }
       }
       const per = (W / w) * (H / h);
@@ -200,16 +212,28 @@ async function captureText(page: Page): Promise<void> {
   await page.evaluate(`window.__steps.setOverlay(${JSON.stringify(Buffer.from(overlayOf(black, white)).toString("base64"))})`);
 }
 
+/** The blended frame the probe measured against a real screenshot of the same frame: every channel of every pixel within 1 code value. */
+async function blendMatchesScreenshot(page: Page, what: string): Promise<void> {
+  const mine = Buffer.from(await page.evaluate<string>("window.__steps.blended()"), "base64");
+  const real = decodePng(await page.screenshot({ type: "png" }));
+  let worst = 0;
+  for (let i = 0; i < real.data.length; i += 4) for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(mine[i + k]! - real.data[i + k]!));
+  assert.ok(worst <= 1, `${what}: the gate's blended frame differs from the screenshot by ${worst} code values`);
+}
+
 async function play(open: Open, m: Moment, query: string): Promise<Run> {
   const { page, problems } = await open(480, 270, query + (m.cls === undefined ? "" : `&class=${m.cls}`));
   await page.evaluate(probeSetup);
   await page.evaluate(`window.__steps.begin(${m.fromS}, ${m.toS}, ${JSON.stringify(m.events ?? [])})`);
   // The page plays until the text steps in a drawn frame; the layer is captured then, and that frame measured with it.
+  let checked = false;
   for (let done = false; !done; ) {
     const r = await page.evaluate(() => (window as unknown as { __scene: { resume(): { pending: number | null; done: boolean } } }).__scene.resume());
     if (r.pending !== null) {
       await captureText(page);
       await page.evaluate(`window.__steps.measure(${r.pending})`);
+      // The capture is checked against the browser on the first frame of every run, and on the last text step: the blend the gate measures is what a real screenshot shows, within 1 code value.
+      if (!checked) { await blendMatchesScreenshot(page, m.name); checked = true; }
     }
     done = r.done;
   }

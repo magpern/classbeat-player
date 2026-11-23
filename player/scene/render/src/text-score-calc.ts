@@ -75,8 +75,6 @@ function intervalBlock(cls: TextClass, i: number, iv: TextInterval, s: Scale, aw
   const key = `i${i}`;
   const base = { key, zone: iv.zone, x0, x1, number: null, length: null, name: null, detail: null, strip: null };
   if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
-  if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
-  if (away) return { ...base, kind: "neutral", textLeft: x0, textRight: x0 }; // merged away (P1): its own block, no number and no colour
   if (end <= s.now) return { ...base, kind: "past", textLeft: x0, textRight: x0 };
   if (x0 >= NUMBER_CUT_X) return null;
   const textLeft = Math.max(x0, NOW_X) + PAD_VW;
