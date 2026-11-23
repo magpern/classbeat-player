@@ -1,91 +1,80 @@
-// The room screen: mounts into an element and redraws from a snapshot. The only code that owns
-// time (the score's motion and the beat dot); every other decision is in the pure modules.
+// The room screen: mounts into an element and redraws from a snapshot. The only code that owns time,
+// and only to place a redraw on a frame mark (mark-gate.ts): between marks nothing on the screen moves,
+// there is no transition, no animation and no frame loop (docs/design/room-2d.md, "Motion and reduced
+// motion"). Every other decision is in the pure modules.
 import { el } from "./dom.ts";
 import { toRoomModel } from "./adapter.ts";
-import { lastLightStart, nextSchedule } from "./beat-schedule.ts";
-import type { BeatSchedule } from "./beat-schedule.ts";
 import type { RoomInput } from "./input.ts";
-import type { BeatModel } from "./model.ts";
+import { createMarkGate } from "./mark-gate.ts";
+import type { MarkContext, MarkTicket } from "./mark-gate.ts";
+import type { RoomModel } from "./model.ts";
 import { fitCue } from "./fit-cue.ts";
 import { createGel } from "./render-gel.ts";
 import { clampTitle, fitTitle, renderIntro } from "./render-intro.ts";
 import { allowTwoLines, renderClock, renderCue, renderMetrics, renderNext, renderRail } from "./render-parts.ts";
 import { renderScore } from "./render-score.ts";
-import type { ScoreView } from "./render-score.ts";
-import { scoreShiftVw, VW_PER_S } from "./score.ts";
 import { LANDSCAPE_SCALE, layoutOf } from "./score-scale.ts";
 import type { ScoreScale } from "./score-scale.ts";
 
 /** The faces the screen measures with (system.md, Type); loaded explicitly so the first fit is not made with a fallback. */
 const FONT_FACES = ['600 1em "Big Shoulders Display"', '800 1em "Big Shoulders Display"', '400 1em "Atkinson Hyperlegible"', '700 1em "Atkinson Hyperlegible"'];
 
+export type { MarkTicket };
+
+/** Time as the screen sees it: injected so the checks can run a class on a clock they step by frames. */
+export interface RoomClock {
+  now(): number;
+  later(run: () => void, delayMs: number): unknown;
+  cancel(handle: unknown): void;
+}
+
+const REAL_CLOCK: RoomClock = {
+  now: () => performance.now(),
+  later: (run, delayMs) => setTimeout(run, Math.ceil(delayMs)),
+  cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
 export interface RoomOptions {
-  /** Defaults to the system's `prefers-reduced-motion`; the player's own setting passes true. */
+  /** The player's own setting passes true; the system's `prefers-reduced-motion` otherwise. The plain screen is the same either way. */
   readonly reducedMotion?: boolean;
-  /** False freezes the score and the beat dot (screenshots and checks). */
+  /** False draws every snapshot at once, with no frame marks (screenshots and checks of one state). */
   readonly animate?: boolean;
   /** The score's scale for the layout now on screen (the web player page changes it with the viewport); the room's own when absent. */
   readonly scale?: () => ScoreScale;
+  /** Defaults to the page's own clock. */
+  readonly clock?: RoomClock;
 }
 
 export interface RoomScreen {
   update(input: RoomInput): void;
+  /**
+   * Asks for a frame mark for a change the shell makes itself on top of the screen (the control band, the join sheet, a
+   * plate): `draw` is called when the frame comes, and the frame is returned now, on the clock of `RoomOptions.clock`
+   * (`performance.now()` by default). The mark is placed by the same ledger and the same scheduler call as the screen's own
+   * marks (flash-marks.ts, P1 fixed frames first, then P2, scene.md "The flash budget"): at least 500 ms from every
+   * mark drawn, reserved or pending, so a tick that would fall within 500 ms of it gives way, and at most 500 ms late (1 s
+   * when it joins the interval's change frame or the count's switch beat). Call it from the shell's own timers or event
+   * handlers, at the time the change is wanted, and draw only inside `draw`: it is called synchronously before this
+   * returns when the frame is now (or shares the frame of a draw just made), otherwise from the screen's timer. Every
+   * change of the band, the sheet and the plate must go through it; one that is drawn without it breaks the whole
+   * window's budget. `cancel` gives the mark up before `draw` has run.
+   */
+  requestMark(draw: () => void): MarkTicket;
   destroy(): void;
-}
-
-/**
- * The beat dot after the BPM. The element is redrawn with every snapshot, but when it lights is
- * kept in a schedule (beat-schedule.ts), so jitter between snapshots never adds a light and a new
- * tempo never lights within 1/3 s of the last one. Not made at all with reduced motion.
- */
-function createBeatDots(reduced: boolean, animate: boolean): (beat: BeatModel | null) => HTMLElement | null {
-  let schedule: BeatSchedule | null = null;
-  let lastStart: number | null = null;
-  return (beat) => {
-    const now = performance.now();
-    if (schedule) lastStart = lastLightStart(schedule, now) ?? lastStart;
-    if (!beat || reduced) {
-      schedule = null;
-      return null;
-    }
-    schedule = nextSchedule(schedule, lastStart, beat, now);
-    const dot = el("span", { class: "beat" });
-    if (animate && typeof dot.animate === "function") {
-      // Lit for the first 30 % of each period. The start time is absolute on the document's
-      // timeline, so redrawing the dot (a new element every snapshot) cannot move a light.
-      const a = dot.animate(
-        [{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0.2, offset: 0.3 }, { opacity: 0.2, offset: 1 }],
-        { duration: schedule.periodMs, iterations: Infinity },
-      );
-      a.startTime = schedule.anchorMs;
-    }
-    return dot;
-  };
 }
 
 export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen {
   const reduced = opts.reducedMotion ?? (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const animate = opts.animate ?? true;
+  const clock = opts.clock ?? REAL_CLOCK;
+  const gate = (opts.animate ?? true) ? createMarkGate() : null;
   if (reduced) document.documentElement.dataset.reducedMotion = "";
   const root = el("div", { class: "room" });
   const gel = createGel();
   const dyn = el("div", { class: "dyn" });
-  const beatDot = createBeatDots(reduced, animate);
   root.append(gel.element, dyn);
   host.append(root);
 
-  let lastKey: string | null = null;
-  let score: ScoreView | null = null;
-  let moving = false;
-  let vwPerS = VW_PER_S;
-  let startedAt = 0;
-  let raf = 0;
-
-  const tick = (): void => {
-    if (score && moving) score.shift(scoreShiftVw(performance.now() - startedAt, reduced, vwPerS));
-    raf = requestAnimationFrame(tick);
-  };
-  if (animate) raf = requestAnimationFrame(tick);
+  let timer: unknown;
 
   // The player's window never passes a scale and is always the room's layout; the web page chooses by its viewport.
   const roomLayout = (): boolean => opts.scale === undefined || layoutOf(window.innerWidth, window.innerHeight) === "room";
@@ -109,32 +98,108 @@ export function mountRoom(host: HTMLElement, opts: RoomOptions = {}): RoomScreen
     void Promise.all(FONT_FACES.map((f) => fonts.load(f))).then(() => fonts.ready).then(fit, fit);
   }
 
+  /** One frame: everything that changes, changes here, whole (a step, never a run). */
+  function draw(m: RoomModel): void {
+    gel.element.hidden = m.gel === null;
+    if (m.gel) gel.update(m.gel);
+    const parts: HTMLElement[] = [renderRail(m.rail)];
+    if (m.clock) parts.push(renderClock(m.clock));
+    if (m.metrics.length) parts.push(renderMetrics(m.metrics));
+    if (m.cue) parts.push(renderCue(m.cue));
+    if (m.next) parts.push(renderNext(m.next));
+    if (m.intro) parts.push(renderIntro(m.intro));
+    if (m.score) parts.push(renderScore(m.score));
+    dyn.replaceChildren(...parts);
+    fit();
+  }
+
+  /** Wakes at the next placed mark, when one waits for its frame. */
+  function arm(): void {
+    if (timer !== undefined) clock.cancel(timer);
+    timer = undefined;
+    const at = gate?.wakeAtMs() ?? null;
+    if (gate === null || at === null) return;
+    timer = clock.later(() => {
+      timer = undefined;
+      try {
+        flush();
+      } finally {
+        arm();
+      }
+    }, Math.max(0, at - clock.now()));
+  }
+
+  let flushing: number | null = null;
+  /**
+   * Everything whose frame has come, in one frame: the screen's own mark and the outside changes. Each outside change is
+   * drawn on its own, so one that throws does not take the others of the frame with it; the errors are reported (as uncaught) once
+   * they have all been drawn.
+   */
+  function flush(): void {
+    if (gate === null) return;
+    const now = clock.now();
+    const errors: unknown[] = [];
+    const attempt = (run: () => void): void => {
+      try {
+        run();
+      } catch (e) {
+        errors.push(e);
+      }
+    };
+    const m = gate.due(now);
+    if (m) attempt(() => draw(m));
+    const outer = flushing;
+    flushing = now;
+    for (const run of gate.dueOutside(now)) attempt(run);
+    flushing = outer;
+    // Reported where the page reports errors, once every change of the frame has been drawn and the timer is armed again.
+    for (const e of errors) queueMicrotask(() => { throw e; });
+  }
+
   return {
     update(input) {
-      const sc = opts.scale?.() ?? LANDSCAPE_SCALE;
-      vwPerS = sc.vwPerS;
-      const m = toRoomModel(input, sc);
-      // The first draw is not an interval change: no start-up animation (recovery from the 3D scene).
-      const changed = lastKey !== null && lastKey !== m.intervalKey;
-      lastKey = m.intervalKey;
-      gel.element.hidden = m.gel === null;
-      if (m.gel) gel.update(m.gel, changed);
-      const parts: HTMLElement[] = [renderRail(m.rail)];
-      if (m.clock) parts.push(renderClock(m.clock));
-      const dot = beatDot(m.beat);
-      if (m.metrics.length) parts.push(renderMetrics(m.metrics, dot));
-      if (m.cue) parts.push(renderCue(m.cue));
-      if (m.next) parts.push(renderNext(m.next));
-      if (m.intro) parts.push(renderIntro(m.intro));
-      score = m.score ? renderScore(m.score) : null;
-      if (score) parts.push(score.element);
-      moving = m.moving;
-      startedAt = performance.now();
-      dyn.replaceChildren(...parts);
-      fit();
+      const m = toRoomModel(input, opts.scale?.() ?? LANDSCAPE_SCALE);
+      if (gate === null) {
+        draw(m);
+        return;
+      }
+      const now = clock.now();
+      const ctx: MarkContext = {
+        changeAtMs: m.changeInMs === null ? null : now + m.changeInMs,
+        switchAtMs: m.changeInMs === null || m.count === null ? null : now + (m.count.switchInMs ?? m.count.beatsLeft * m.count.beatMs),
+      };
+      try {
+        const shown = gate.offer(m, now, ctx);
+        if (shown) draw(shown);
+        flush();
+      } finally {
+        arm();
+      }
+    },
+    requestMark(run) {
+      if (gate === null) {
+        run();
+        return { atMs: clock.now(), cancel: () => undefined };
+      }
+      // From inside a draw of this frame it is part of that draw.
+      const ticket = gate.request(flushing ?? clock.now(), run);
+      try {
+        flush();
+      } finally {
+        arm();
+      }
+      return {
+        get atMs() {
+          return ticket.atMs;
+        },
+        cancel: () => {
+          ticket.cancel();
+          arm();
+        },
+      };
     },
     destroy() {
-      cancelAnimationFrame(raf);
+      if (timer !== undefined) clock.cancel(timer);
       resize?.disconnect();
       fonts?.removeEventListener("loadingdone", fit);
       root.remove();

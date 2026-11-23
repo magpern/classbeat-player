@@ -38,12 +38,12 @@ describe("the way in and out of a class", () => {
     await opened(site.page);
     assert.equal(await link(site.page), "Press Start");
     await site.page.keyboard.press("ArrowRight");
-    await tickBy(site.page, 100);
+    await tickBy(site.page, 600);
     assert.equal(await text(site.page, ".gel .lbl"), "Starts here");
     assert.equal(await text(site.page, ".gel-num"), "2");
     assert.equal(await link(site.page), "Press Start");
     await site.page.keyboard.press("ArrowLeft");
-    await tickBy(site.page, 100);
+    await tickBy(site.page, 600);
     assert.equal(await text(site.page, ".gel .lbl"), "First zone");
     await site.context.close();
   });

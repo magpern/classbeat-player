@@ -22,3 +22,9 @@ and the plan sections and ADRs it names before writing code.
   finding away; if you believe one is wrong, say why in a comment and let the Reviewer decide.
 - Run lint, types and the targeted tests locally; CI runs the full suite.
 - Report back: the pull request number, its head commit, and anything left open.
+
+## Reporting
+
+Report tersely: the verdict or result, the head SHA, and one line per finding or open item. No
+narration, no repeated reports, and no turn that only says you are waiting. When you are waiting
+for CI, wait in one background command and report once, when it finishes.

@@ -345,7 +345,7 @@ jobs:
       - name: Keep the debug APK (test build)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: android-follower-debug-TEST-BUILD
+          name: android-app-debug-TEST-BUILD
           path: player/spikes/android-follower/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 3

@@ -15,6 +15,7 @@ import type { Browser, Page } from "playwright-core";
 import { LIMIT_DEG_PER_SECOND } from "./frame-log.ts";
 import { install, selfTest, violations } from "./guard-trap.ts";
 import type { LogRow, Seen } from "./frame-log.ts";
+import { beamFloor } from "./beam-floor-shots.ts";
 import { reportS6 } from "./flash-shots.ts";
 import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
@@ -40,7 +41,7 @@ const SHOTS_LIST: readonly Shot[] = [
   // A light-only burst on the interval change at 80 s in a song with no moments, where nothing competes (coasting, no ramp), the budget on.
   { name: "light-burst", query: "&state=coasting", fromS: 78, toS: 80.05, warmS: 12 },
   { name: "drop-fan", query: "", fromS: 38, toS: 45 },
-  // A song change away from an interval change (the demo's `class=dim`, at 70 s), where the scheduler has room for the dim: held at the dim's bottom, a quarter.
+  // A song change away from an interval change (the demo's `class=dim`, at 70 s), where the countdown's tick every second leaves the scheduler no room for the dim's two edges (step g): no dim, the rig stays at full level and the re-aim marks the song.
   { name: "song-change-dim", query: "&class=dim", fromS: 68, toS: 70.3 },
   { name: "breakdown", query: "", fromS: 112, toS: 122 },
   // The house look before the start (#546).
@@ -108,7 +109,7 @@ async function screenshots(browser: Browser): Promise<void> {
     const b = await brightness(page);
     const burst = await page.evaluate(() => (window as unknown as Api).__scene.burst);
     assert.equal(burst > 0, BURST_SHOTS.includes(shot.name), `${shot.name}: burst ${burst}`);
-    if (shot.name === "song-change-dim") assert.equal(await page.evaluate(() => (window as unknown as Api).__scene.master), 0.25, "the song-change dim's bottom is held at 25 %");
+    if (shot.name === "song-change-dim") assert.equal(await page.evaluate(() => (window as unknown as Api).__scene.master), 1, "no song-change dim: the scheduler has no room for both edges beside the countdown's ticks (step g)");
     assert.equal(await settleTransitions(page), 0, `${shot.name}: a transition is still running, so the shot would be caught half way`);
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
@@ -165,6 +166,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await lightMeasurement(opener);
+  await beamFloor(opener); // S5b: the house look's beams keep their floor, and the check fails the look without it
   await reportS6(opener, ARTIFACTS);
   await unmaskedTextIsCaught(opener);
   await reducedMotion(opener, SHOTS);

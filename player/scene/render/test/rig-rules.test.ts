@@ -62,7 +62,7 @@ const allowed = [...Object.values(tokens.zones), tokens.white];
 const hueHex = (h: { kind: "zone"; zone: 1 | 2 | 3 | 4 | 5 | 6 | 7 } | { kind: "white" }) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
 const tokenA = (rig: SceneRig) => hexOf(rig.uniform("uTokA") as Color);
 const tokenB = (rig: SceneRig) => hexOf(rig.uniform("uTokB") as Color);
-const flags = (rig: SceneRig) => rig.uniform("uBF") as number[];
+const flags = (rig: SceneRig) => rig.tokenFlags();
 
 test("rule 7: the shader is given the planned zone's token, the next zone's only during the anticipation, and a flag per light that is 0 or 1; on every frame of the class", () => {
   const rig = new SceneRig(tokens);
@@ -120,7 +120,7 @@ test("the hue cross runs only in the 700 ms that end at the change, from the rig
 test("reduced motion (S11): the still rig shows no change between two frames a second apart", () => {
   const rig = new SceneRig(tokens);
   const loop = new RigLoop(tokens);
-  const snap = () => JSON.stringify([rig.measuredDirections(), rig.uniform("uBI"), rig.uniform("uBL"), flags(rig), tokenA(rig), rig.uniform("uAmb"), rig.uniform("uCrossX")]);
+  const snap = () => JSON.stringify([rig.measuredDirections(), rig.beamLevels(), rig.lensLevels(), flags(rig), tokenA(rig), rig.uniform("uAmb"), rig.uniform("uCrossX")]);
   let first = "";
   for (let ms = 22_000, n = 0; ms < 24_100; n++) {
     const d = loop.step(feedAt(ms, { reducedMotion: true }), n === 0 ? 0 : 1 / 60, "High");

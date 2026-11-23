@@ -6,14 +6,16 @@
 // the cross and the energy ramp are brightness and colour only.
 
 import type { Direction, Energy, Frame, LinkInput, QualityLevel, RigHue, RigState, SceneClass } from "../../model/src/index.ts";
-import { ANTICIPATION_MS, START_STATE, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, rigFrozen, stepRig } from "../../model/src/index.ts";
-import { RAMP_MS } from "./budget-calc.ts";
+import { ANTICIPATION_MS, START_STATE, beatLevel, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, momentsAllowed, rigFrozen, stepRig } from "../../model/src/index.ts";
+import { RAMP_MS, dropFrame } from "./budget-calc.ts";
 import { BurstTracker } from "./bursts.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
 import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
 import { NO_PATTERN_LIGHT, patternLight } from "./pattern-light-calc.ts";
 import { movementScale, stageLit, stageMaster, stageOf } from "./stage-calc.ts";
+import { TextClock } from "./text-clock.ts";
+import type { Shown } from "./text-clock.ts";
 import type { Stage } from "./stage-calc.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { nth } from "./lookup.ts";
@@ -63,11 +65,32 @@ export interface Draw {
   readonly chaseStep: number | null;
   /** The seconds the wall's wave and the haze drift on (frozen in the still rig). */
   readonly seconds: number;
+  /** What the text layer shows this frame: the class as it was on the last frame mark (the scheduler's, text rule 2). */
+  readonly text: Shown;
 }
 
 /** The ramp is decided this long before the change, before the bursts (decided 1.5 s ahead), as the scheduler's order has it: its hold starts 950 ms before it. */
 const RAMP_HOLD_MS = 1700;
 const FRAME_MS = 1000 / 60;
+
+const FAN_BEATS = 16;
+
+/**
+ * The fan's fixtures come on in the drop's frame (P1): a drop within 1 s of an interval change joins the change frame, light only, so
+ * the fixtures are on from that frame to the end of the fan. The beams' turn and the hold-still stay on the song's drop moment (S7, rule 4),
+ * so only which fixtures are lit moves; nothing here is an angle.
+ */
+function lightMoments(frame: Frame, at: { cls: SceneClass; classMs: number; songIndex: number; songPosMs: number; link: LinkInput }): Frame {
+  const song = nth(at.cls.songs, at.songIndex);
+  if (!momentsAllowed(at.link) || song?.bpm === undefined || !(song.bpm > 0)) return frame;
+  const where = { cls: at.cls, classMs: at.classMs, songIndex: at.songIndex, songPosMs: at.songPosMs, level: frame.level };
+  const offset = at.classMs - at.songPosMs;
+  const joined = (song.moments ?? []).filter((m) => m.kind === "drop").map((m) => ({ m, frameMs: dropFrame(where, m.at_ms + offset) })).filter(({ m, frameMs }) => Math.abs(frameMs - (m.at_ms + offset)) > 20);
+  const on = joined.some(({ m, frameMs }) => at.classMs >= frameMs && at.songPosMs < m.at_ms + (FAN_BEATS * 60_000) / song.bpm!);
+  const waiting = joined.some(({ m, frameMs }) => at.classMs < frameMs && at.songPosMs >= m.at_ms); // the drop moment has come, its frame is later
+  const fan = on || (frame.moments.fan && !waiting);
+  return fan === frame.moments.fan ? frame : { ...frame, moments: { ...frame.moments, fan } };
+}
 
 type LoopTokens = Pick<SceneTokens, "down" | "burstMs" | "patternDown" | "liftCap" | "holdBeforeMs" | "holdAfterMs">;
 
@@ -80,6 +103,12 @@ export class RigLoop {
   private readonly tokens: LoopTokens;
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
+  private readonly clock = new TextClock();
+
+  /** The text for this frame (the host calls it before the frame to paint the text; the same feed asked again gives the same answer). */
+  shown(feed: Feed): Shown {
+    return this.clock.step({ cls: this.merged(feed.cls), classMs: feed.classMs, songIndex: feed.songIndex, songPosMs: feed.songPosMs, link: feed.link, reducedMotion: feed.reducedMotion });
+  }
 
   private merged(cls: SceneClass): SceneClass {
     const known = this.mergedClasses.get(cls);
@@ -122,7 +151,12 @@ export class RigLoop {
     const cross = this.gate.filter(classMs, asked);
     const nextEnergy = cross.front < 2 && rampPlaced && frame.colours.back.kind === "zone" ? energyFor(frame.colours.back.zone) : null;
     // Beat-like light: the beat lift (the pattern's accent in place of it on a side's first beat), held around every run.
-    const pattern = patternLight({ cls, classMs, songIndex, songPosMs, level: frame.level, down: this.tokens.patternDown, still });
+    // The side's step (100 % and 72 %) is one frame on the count tick that shows the switch (S14, text rule 2); the accent stays on the beat.
+    const text = this.shown(feed);
+    const live = patternLight({ cls, classMs, songIndex, songPosMs, level: frame.level, down: this.tokens.patternDown, still });
+    const shownLevel = beatLevel(text.link, nth(cls.songs, text.songIndex) ?? null);
+    const side = patternLight({ cls, classMs: text.classMs, songIndex: text.songIndex, songPosMs: text.songPosMs, level: shownLevel, down: this.tokens.patternDown, still });
+    const pattern = { ...live, level: side.level };
     const input = { frame, bpm: song?.bpm, beats, songPosMs, reduced: still };
     // A hold skips a lift that would start in it and never cuts one: it is decided on the lift's start.
     const started = (ageMs: number | null) => (ageMs === null ? classMs : classMs - ageMs);
@@ -139,9 +173,10 @@ export class RigLoop {
       tokens: { current: frame.colours.front, next: wipe > 0 ? frame.colours.back : null },
       cross,
       ahead: nextEnergy === null ? null : { energy: nextEnergy, lit: fixturesLit({ ...frame, energy: nextEnergy }, quality) },
-      lit: stageLit(stage) ?? fixturesLit(frame, quality),
+      lit: stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality),
       master: stageMaster(stage, link, this.tokens, dim),
       chaseStep: chase ? Math.floor(beats / beatStride(song.bpm!)) : null,
+      text,
     };
   }
 }

@@ -6,14 +6,17 @@
 // running `speed` times faster than the wall clock. Other parameters: `state` (locked, paused,
 // coasting, off, held), `rm=1` (reduced motion), `q` (High, Medium, Low), `class=long` (sixteen
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
-// dark-under-text mask, to show what the mask darkens), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
+// dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
 import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
 import { SceneRenderer } from "../src/renderer.ts";
+import { TAN_H } from "../src/rig.ts";
 import { readSceneTokens } from "../src/tokens.ts";
 import type { Feed } from "../src/loop.ts";
 import type { TextBox } from "../src/text-box.ts";
+import type { Shown } from "../src/text-clock.ts";
+import { mergeTextClass } from "../src/text-merge-calc.ts";
 import { textView } from "../src/text-view-calc.ts";
 import type { TextView } from "../src/text-view.ts";
 import { TextLayer } from "../layer/text-layer.ts";
@@ -47,7 +50,8 @@ const host: Host = {
   schedule: (callback) => { const id = window.requestAnimationFrame(callback); return () => window.cancelAnimationFrame(id); },
 };
 const long = params.get("class") === "long" || params.get("class") === "worst";
-const textClass = params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT;
+// Interval changes under 1 s apart are one change frame in the text too (P1): the merged-away interval is absent from it.
+const textClass = mergeTextClass(params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT);
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off",
@@ -59,6 +63,7 @@ const renderer = new SceneRenderer(host, {
     log.add(draw, measured, song);
   },
 });
+renderer.rig.floorOn = params.get("floor") !== "off";
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
 const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
@@ -66,14 +71,28 @@ let view: TextView | null = null;
 let lastFeed: Feed = feed();
 let lastBoxes: readonly TextBox[] = [];
 
-/** The text layer for this frame: the view, the DOM, and the lines' boxes handed to the scene's mask (S2). */
-function paintText(f: Feed): void {
+let lastShown: Shown | null = null;
+/** The text has stepped (a frame mark) since it was last painted: a frame that was not drawn leaves it to the next one that is. */
+let textDirty = true;
+let textVersion = 0;
+
+/** The text layer for this frame: the class as the scheduler's last frame mark has it (the renderer's `textAt`), the DOM, and the lines' boxes handed to the scene's mask (S2). */
+function stepText(f: Feed): void {
   lastFeed = f;
-  if (params.get("text") === "0") return;
-  view = textView({ cls: textClass, classMs: f.classMs, songIndex: f.songIndex, songPosMs: f.songPosMs, link: f.link, reducedMotion: f.reducedMotion, aspect: window.innerWidth / Math.max(1, window.innerHeight) });
+  const shown = renderer.textAt(f);
+  if (shown.changed) textDirty = true;
+  lastShown = shown;
+}
+function paintText(force = false): boolean {
+  if (params.get("text") === "0" || lastShown === null || !(textDirty || force || view === null)) return false;
+  const s = lastShown;
+  view = textView({ cls: textClass, classMs: s.classMs, songIndex: s.songIndex, songPosMs: s.songPosMs, link: s.link, reducedMotion: s.reducedMotion, aspect: window.innerWidth / Math.max(1, window.innerHeight) });
+  textDirty = false;
+  textVersion++;
   layer.update(view);
   const boxes = layer.boxes();
   if (boxes !== lastBoxes) { lastBoxes = boxes; renderer.setTextBoxes(boxes); }
+  return true;
 }
 
 /** Which frames of a run are drawn, and what to do after one (the light measurement). */
@@ -100,37 +119,77 @@ interface DemoApi {
   readonly master: number;
   /** The two tokens in play on the last frame, as 0xRRGGBB: the planned zone's, and the next zone's during the anticipation. */
   readonly tokens: { readonly current: number; readonly next: number | null };
+  /** How many times the text layer has been painted: the frames on which the text stepped. */
+  readonly textVersion: number;
+  /** Starts a run for `resume`: from `fromMs` to `toMs` at `fps`, with the sampler's events. */
+  begin(fromMs: number, toMs: number, fps: number, sampler?: Sampler): void;
+  /** Plays the run's frames until the text steps in a drawn frame (it returns that frame's time: the page now holds the new text, and the sampler's `after` for that frame is the caller's to run) or the run ends. */
+  resume(): { readonly pending: number | null; readonly done: boolean };
+  /** The lit beams as the shader has them (origin, direction, spread), the canvas's drawing-buffer size and the camera's half field of view as a tangent: what the S5b check walks. */
+  rigState(): { beams: { o: number[]; d: number[]; spread: number }[]; width: number; height: number; tanH: number };
 }
 declare global {
   interface Window { __scene: DemoApi }
 }
+/** A run being played frame by frame, for a driver that must look at the page when the text steps (the whole-frame S6 gate). */
+interface Run {
+  readonly toMs: number;
+  readonly fps: number;
+  readonly sampler: Sampler | undefined;
+  readonly due: { readonly atMs: number; readonly link?: string; readonly quality?: QualityLevel; readonly jumpMs?: number }[];
+}
 let nowMs = 0;
 let ended = false;
+let run: Run | null = null;
+
+/** One frame of a run: the events due, the text clock, the text when it stepped, the rig. Returns the frame's time when the text stepped in it and `stopOnText` asked to look. */
+function playFrame(r: Run, stopOnText: boolean): number | null {
+  for (const e of r.due.filter((x) => x.atMs <= classMs)) {
+    r.due.splice(r.due.indexOf(e), 1);
+    if (e.link) state.link = LINKS[e.link === "base" ? (params.get("state") ?? "locked") : e.link] ?? state.link;
+    if (e.quality) renderer.setQuality(e.quality);
+    if (e.jumpMs !== undefined) classMs = e.jumpMs;
+  }
+  nowMs += 1000 / r.fps;
+  const f = feed();
+  song = f.songIndex;
+  stepText(f);
+  // Software GL is slow: only the last frames (or the sampler's) are drawn, every frame is stepped.
+  const drawn = r.sampler ? r.sampler.draws(classMs) : r.toMs - classMs <= 1500 / r.fps;
+  const painted = drawn && paintText();
+  const d = renderer.frame(f, nowMs, drawn);
+  let looked: number | null = null;
+  if (drawn) {
+    if (stopOnText && painted) looked = classMs;
+    else r.sampler?.after(classMs);
+  }
+  classMs += d.dtSeconds * 1000;
+  return looked;
+}
+
 const api: DemoApi = {
   advance(fromMs, toMs, fps, sampler) {
     classMs = fromMs;
-    const due = [...(sampler?.events ?? [])];
-    while (classMs < toMs) {
-      for (const e of due.filter((x) => x.atMs <= classMs)) {
-        due.splice(due.indexOf(e), 1);
-        if (e.link) state.link = LINKS[e.link === "base" ? (params.get("state") ?? "locked") : e.link] ?? state.link;
-        if (e.quality) renderer.setQuality(e.quality);
-        if (e.jumpMs !== undefined) classMs = e.jumpMs;
-      }
-      nowMs += 1000 / fps;
-      const f = feed();
-      song = f.songIndex;
-      // Software GL is slow: only the last frames (or the sampler's) are drawn, every frame is stepped.
-      const drawn = sampler ? sampler.draws(classMs) : toMs - classMs <= 1500 / fps;
-      if (drawn) paintText(f);
-      const d = renderer.frame(f, nowMs, drawn);
-      if (drawn) sampler?.after(classMs);
-      classMs += d.dtSeconds * 1000;
-    }
+    const r: Run = { toMs, fps, sampler, due: [...(sampler?.events ?? [])] };
+    while (classMs < toMs) playFrame(r, false);
   },
+  begin(fromMs, toMs, fps, sampler) {
+    classMs = fromMs;
+    run = { toMs, fps, sampler, due: [...(sampler?.events ?? [])] };
+  },
+  resume() {
+    if (run === null) throw new Error("no run begun");
+    while (classMs < run.toMs) {
+      const looked = playFrame(run, true);
+      if (looked !== null) return { pending: looked, done: false };
+    }
+    return { pending: null, done: true };
+  },
+  get textVersion() { return textVersion; },
   settle() {
     layer.invalidate();
-    paintText(lastFeed);
+    stepText(lastFeed);
+    paintText(true);
     renderer.frame(lastFeed, nowMs, true);
   },
   text: { boxes: () => layer.boxes(), get view() { return view; }, endMs: long ? LONG_END_MS : DEMO_CLASS.endMs },
@@ -144,6 +203,12 @@ const api: DemoApi = {
   get burst() { return lastBurst; },
   get master() { return lastMaster; },
   get tokens() { return lastTokens; },
+  rigState() {
+    const dirs = renderer.rig.uniform("uBD") as { x: number; y: number; z: number }[];
+    const levels = renderer.rig.beamLevels();
+    const beams = renderer.rig.fixtures.flatMap((f, i) => ((levels[i] ?? 0) > 0 ? [{ o: f.pivot.position.toArray(), d: [dirs[i]!.x, dirs[i]!.y, dirs[i]!.z], spread: f.spread }] : []));
+    return { beams, width: canvas.width, height: canvas.height, tanH: TAN_H };
+  },
 };
 window.__scene = api;
 
@@ -158,10 +223,13 @@ if (params.get("auto") === "1") {
     if (classMs >= stopAt) { ended = true; classMs = stopAt; renderer.stop(); }
     const f = feed();
     song = f.songIndex;
-    paintText(f);
+    stepText(f);
+    paintText();
     return f;
   });
 } else {
-  paintText(feed());
-  renderer.frame(feed(), 0); // the first frame: the beams start on their targets
+  const first = feed();
+  stepText(first);
+  paintText();
+  renderer.frame(first, 0); // the first frame: the beams start on their targets
 }

@@ -18,6 +18,7 @@
 !player/app/src/core/clock/clock.ts
 !player/app/src/core/clock/plan.ts
 !player/app/src/core/clock/view.ts
+!player/scene/model/src/flash-marks.ts
 **/.venv
 **/__pycache__
 **/tests

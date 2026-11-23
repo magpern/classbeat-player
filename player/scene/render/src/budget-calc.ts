@@ -4,39 +4,20 @@
 // does not fit is a step in the change frame, a burst or a dim that does not fit is left out, and beat-like light is
 // held at rest around every run that is placed. Pure: the class and the time come in, nothing is read.
 
-import type { BeatLevel, SceneClass } from "../../model/src/index.ts";
-import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, phraseFlipsMs, fitRuns, inHold, patternCountRuns, placeMarks } from "../../model/src/index.ts";
-import type { PlacedRun, RunKind, RunWish, Span, Want } from "../../model/src/index.ts";
+import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, phraseFlipsMs, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
+import type { PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
+import { FRAME_MS, REACH_MS, nearby, planMarks } from "./marks-calc.ts";
+import type { Where } from "./marks-calc.ts";
 import { readPattern } from "./pattern-light-calc.ts";
 import { nth } from "./lookup.ts";
 
-const FRAME_MS = 1000 / 60;
-/** How far around a wish the marks are gathered, ms. */
-const REACH_MS = 6000;
+export type { Where } from "./marks-calc.ts";
 const FAR_MS = 1e9;
 /** The build gathers every beam over the 8 beats before a drop. */
 const GATHER_BEATS = 8;
 export const RAMP_MS = 700;
 export const BURST_MS = 250;
 export const DIM_EDGE_MS = 120;
-
-export interface Where {
-  readonly cls: SceneClass;
-  readonly classMs: number;
-  /** The current song's position, which fixes where its drops fall on the class clock. */
-  readonly songIndex: number;
-  readonly songPosMs: number;
-  readonly level: BeatLevel;
-}
-
-/** The intervals' change times and the song's drops near `at`, on the class clock. */
-function nearby(w: Where, at: number): { changes: number[]; drops: number[]; next: number[] } {
-  const near = (t: number) => Math.abs(t - at) <= REACH_MS;
-  const changes = w.cls.intervals.map((iv) => iv.startMs).filter((t, i) => i > 0 && near(t));
-  const song = nth(w.cls.songs, w.songIndex);
-  const drops = (song?.moments ?? []).filter((m) => m.kind === "drop").map((m) => m.at_ms + w.classMs - w.songPosMs).filter(near);
-  return { changes, drops, next: changes };
-}
 
 /** The spans where a count runs: a pattern interval whose count the level allows (a count takes every run away). */
 function countSpans(w: Where): Span[] {
@@ -74,10 +55,8 @@ export class RunBudget {
     const known = this.decided.get(id);
     if (known !== undefined) return known;
     const at = pieces[0]?.fromMs ?? w.classMs;
-    const { changes, drops, next } = nearby(w, at);
-    const fixed = fixedFrames(changes, drops, FRAME_MS);
-    const wants: Want[] = next.flatMap((t) => Array.from({ length: Math.floor(REACH_MS / 1000) }, (_, k) => ({ kind: "tick" as const, atMs: t - (k + 1) * 1000, periodMs: 1000 })));
-    const marks = [...fixed.map((f) => f.atMs), ...placeMarks(fixed, wants, FRAME_MS).flatMap((p) => (p.how === "own" ? [p.atMs!] : []))];
+    // The frame marks are the text layer's too (marks-calc.ts): one placement, for the canvas and the text.
+    const { marks } = planMarks(w, at);
     const beat: Span[] = w.level === "None" ? [] : [{ fromMs: -FAR_MS, toMs: FAR_MS }];
     const wish: RunWish = { id, kind, pieces, waits };
     const song = nth(w.cls.songs, w.songIndex);

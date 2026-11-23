@@ -95,13 +95,15 @@ export interface IntroModel {
   readonly zones: readonly ZoneRow[];
 }
 
-export interface BeatModel {
-  /** Flashes this often; never more than three times a second. */
-  readonly periodMs: number;
-  /** Where in that period the next beat falls, from the song's own anchors. */
-  readonly phaseMs: number;
-  /** Changes when the song or tempo does: the dot restarts only then. */
-  readonly key: string;
+/**
+ * A pattern's count running (room-2d.md, "Every change is a step"): the beat in force and the beats left on
+ * this side. The count steps on its ticks, so the screen needs the beat to place the next switch.
+ */
+export interface CountModel {
+  readonly beatMs: number;
+  readonly beatsLeft: number;
+  /** The time until this side ends and the count switches (the next switch beat), from where the beats fall. */
+  readonly switchInMs?: number;
 }
 
 export interface RoomModel {
@@ -110,15 +112,17 @@ export interface RoomModel {
   readonly rail: RailModel;
   readonly clock: ClockModel | null;
   readonly metrics: readonly MetricModel[];
-  /** The BPM metric has a beat dot beside it. */
-  readonly beat: BeatModel | null;
+  /** Set while a pattern's count runs: the countdown, bars line and score show on its ticks. */
+  readonly count: CountModel | null;
   readonly cue: { readonly text: string; readonly long: boolean } | null;
   readonly next: NextModel | null;
   readonly intro: IntroModel | null;
   readonly score: ScoreModel | null;
-  /** Changes when the interval does: the gel's colour crosses and its edge flashes then. */
+  /** Changes when the interval does: the change frame (the gel's colour is cut, never mixed). */
   readonly intervalKey: string;
-  /** The class time the score is drawn for, and whether it advances by itself. */
+  /** The class time the score is drawn for, and whether the clock runs on by itself. */
   readonly classMs: number;
   readonly moving: boolean;
+  /** While the clock runs: the time to the next change frame, the interval's end (merged intervals counted); else null. */
+  readonly changeInMs: number | null;
 }

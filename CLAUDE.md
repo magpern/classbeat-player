@@ -7,11 +7,22 @@
   message so they run at the same time: one `developer` per unblocked issue, each in an isolated
   worktree; a `reviewer` per pull request; the `designer` and `verifier` when section 5 and
   section 4 of AGENTS.md call for them.
-- The first review of a pull request is a new `reviewer`. Every later round on that pull
-  request, after any number of `FAIL`s, resumes the same one with the new head commit.
+- The first review of a pull request is a new `reviewer`. Rounds 2 and 3 resume the same one
+  with the new head commit. From round 4, a new `reviewer` of the same model may take over, given
+  a written summary of every earlier finding (AGENTS.md section 5, item 2).
 - Pass a top-tier model when spawning for a security-critical or rule-sensitive pull request.
 - Never ask the owner in chat whether to continue, skip a review or start the next issue. Open
   owner items go in `docs/owner.md`.
+
+## Spending tokens well (owner, 2026-11-23)
+
+- Settle open design questions in the issue before a designer or developer starts, so a spec
+  pull request takes one or two rounds.
+- Ask every agent for a terse report: the verdict or result, the SHA, and one line per finding.
+- The Orchestrator reads pull request state and verdict lines only. It never reads diffs, CI logs
+  or review bodies, and it never reproduces a finding itself.
+- Use the mid tier wherever the rules allow it: designer verdicts, as-built docs, explorers.
+- Stop an agent at once when it loops or repeats a report. Resume it only with a new task.
 
 ## Models
 

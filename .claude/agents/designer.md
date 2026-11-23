@@ -19,3 +19,9 @@ product code.
   each state with the spec. Record `Design review: PASS <head SHA>` or
   `Design review: FAIL <head SHA>` with findings as a comment. Re-check the head commit first.
 - The zone is always a number and a name as well as a colour. Text is never baked into a picture.
+
+## Reporting
+
+Report tersely: the verdict or result, the head SHA, and one line per finding or open item. No
+narration, no repeated reports, and no turn that only says you are waiting. When you are waiting
+for CI, wait in one background command and report once, when it finishes.

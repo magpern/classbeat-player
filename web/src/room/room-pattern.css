@@ -34,7 +34,6 @@
      safe edge at 5:4; the gaps give that back and stay at 1 vw between two pieces of text. */
   .metrics.fold { gap: 1vw; }
   .metrics.fold .v small { margin-left: 0.2vw; }
-  .metrics.fold .beat { margin-left: 0.12em; }
   .metric .v.pv { column-gap: 0.7vw; }
   .metric .v.note { max-width: 19vw; }
   .pv .side { font-size: min(7.55vh, 5.7vw); } /* as the other values of this layout (room.css) */

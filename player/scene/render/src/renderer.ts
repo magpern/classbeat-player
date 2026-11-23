@@ -11,6 +11,7 @@ import type { Host } from "./host.ts";
 import { RigLoop } from "./loop.ts";
 import type { Draw, Feed } from "./loop.ts";
 import { SceneRig } from "./rig.ts";
+import type { Shown } from "./text-clock.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { lookup } from "./lookup.ts";
 import type { TextBox } from "./text-box.ts";
@@ -54,6 +55,11 @@ export class SceneRenderer {
     this.boxes = boxes;
     const { width, height } = this.host.size();
     this.rig.mask.set(boxes, width, height);
+  }
+
+  /** What the text layer shows on this frame: the class as it was on the last frame mark (text rule 2). Ask before `frame` to paint the text first; `frame` gives the same answer. */
+  textAt(feed: Feed): Shown {
+    return this.loop.shown(feed);
   }
 
   /** The render scale is a share of the window (the text layer stays at full resolution). */
