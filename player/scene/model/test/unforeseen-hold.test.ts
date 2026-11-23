@@ -202,26 +202,44 @@ test("endRunsAtCauses: a two-piece run (a dim) loses every piece after the cut, 
 });
 
 const FRAME = 10;
-test("causeFrame: P2 against shown marks, then the first frame where every 1 s window holds 3 changes or fewer, at most 1 s late", () => {
-  assert.equal(causeFrame(1000, FRAME, [800], []), 1300); // 500 ms after the shown mark
-  assert.equal(causeFrame(1000, FRAME, [], [run([700, 900])]), 1000, "a run and a mark make 2, with steady light 3: allowed");
-  assert.equal(causeFrame(1000, FRAME, [500], [run([700, 900])]), 1500, "a shown mark, a run and a mark would be 3 changes in [500, 1500): the mark waits");
-  assert.equal(causeFrame(10005, FRAME, [], [run([9000, 10005])]), 10010); // a run ended in the cause's frame
-  assert.equal(causeFrame(1000, FRAME, [900, 1400, 1900], []), null); // 2400 is more than a second late: no frame
+const frameOf = (...args: Parameters<typeof causeFrame>): number => causeFrame(...args).frameMs;
+
+test("causeFrame: P2 against shown marks, then the first frame where every 1 s window holds 3 changes or fewer, strictly before cause + 1 s", () => {
+  assert.equal(frameOf(1000, FRAME, [800], []), 1300); // 500 ms after the shown mark
+  assert.equal(frameOf(1000, FRAME, [], [run([700, 900])]), 1000, "a run and a mark make 2, with steady light 3: allowed");
+  assert.equal(frameOf(1000, FRAME, [500], [run([700, 900])]), 1500, "a shown mark, a run and a mark would be 3 changes in [500, 1500): the mark waits");
+  assert.equal(frameOf(10005, FRAME, [], [run([9000, 10005])]), 10010); // a run ended in the cause's frame
+  // Shown mark 989 and a run ending at the cause: every frame before 1989 would put the mark in a window with both, so the first is 1990.
+  const near = causeFrame(1000, FRAME, [989], [run([900, 1000])]);
+  assert.deepEqual([near.frameMs, near.late], [1990, []]);
 });
 
-test("causeFrame: a cause joins the following fixed frame, or an earlier cause's mark in its window (one change)", () => {
-  assert.equal(causeFrame(1000, FRAME, [800], [], [], [1100]), 1800, "500 ms from both marks, and no window of 4");
-  assert.equal(causeFrame(1000, FRAME, [1050, 1550, 2050], [], [], [1900]), 1900, "no free frame of its own: joins the fixed frame");
-  assert.equal(causeFrame(1000, FRAME, [], [], [1400], []), 1400, "an earlier cause's mark in its window");
+test("causeFrame, boundary (C10): a frame at cause + 1000 ms or later is late, never silently accepted", () => {
+  // Shown mark 999 and a run ending at the cause: the first frame that meets S6 is exactly 2000 = cause + 1000, which is not before it.
+  const edge = causeFrame(1000, FRAME, [999], [run([900, 1000])]);
+  assert.equal(edge.frameMs, 2000);
+  assert.deepEqual(edge.late, [{ atMs: 1000, frameMs: 2000, lateMs: 1000 }]);
+});
+
+test("decision 9a: a cause with no frame of its own joins the earliest mark or fixed frame already decided in [cause, cause + 1 s)", () => {
+  const joined = causeFrame(1000, FRAME, [900, 1400, 1900], []); // P2 and S6 leave nothing before 2400
+  assert.deepEqual([joined.frameMs, joined.late], [1400, []]);
+  assert.equal(frameOf(1000, FRAME, [1050, 1550, 2050], [], [], [1900]), 1050, "the earliest decided mark, here a shown one");
+  assert.equal(frameOf(1000, FRAME, [900, 1950], [], [], [1400]), 1400, "a fixed frame when no earlier mark is there");
+  assert.equal(frameOf(1000, FRAME, [800], [], [], [1100]), 1800, "500 ms from both marks, and no window of 4");
+});
+
+test("decision 3: a cause whose window holds an earlier cause's mark takes it, even where a frame of its own exists", () => {
+  assert.equal(frameOf(1000, FRAME, [800], [], [1400]), 1400);
+  assert.equal(frameOf(1000, FRAME, [800], [], [2000]), 1300, "a mark at cause + 1 s is not in the window");
 });
 
 test("decision 7: a cause in a run whose own frame comes after the run's end takes the run's end frame as its mark", () => {
-  assert.equal(causeFrame(52783, FRAME, [52633], [run([52736, 52986])]), 52990); // not 53133, which is 500 ms after the shown tick
-  assert.equal(causeFrame(1300, FRAME, [], [run([1000, 1700])]), 1300, "its own frame is inside the run: the run is cut there");
+  assert.equal(frameOf(52783, FRAME, [52633], [run([52736, 52986])]), 52990); // not 53133, which is 500 ms after the shown tick
+  assert.equal(frameOf(1300, FRAME, [], [run([1000, 1700])]), 1300, "its own frame is inside the run: the run is cut there");
 });
 
 test("the exact window check (seed 68): a mark after a run with a shown tick takes the first frame that keeps every window at 3, a fixed frame never moves", () => {
-  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [36067]), 34850);
-  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [34900]), 35690, "a fixed frame stays where it is");
+  assert.equal(frameOf(34710, FRAME, [33850], [run([34436, 34686])], [], [36067]), 34850);
+  assert.equal(frameOf(34710, FRAME, [33850], [run([34436, 34686])], [], [34900]), 35690, "a fixed frame stays where it is");
 });

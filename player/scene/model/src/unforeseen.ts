@@ -47,50 +47,67 @@ export const isHeld = (holdUntilMs: number | null, classMs: number): boolean => 
 export const CAUSE_LATE_MS = 1000;
 const EPS = 1e-6;
 
+/** A cause whose mark could not be placed before cause + 1 s without breaking S6: reported, never hidden (decision 9b, #617). */
+export interface LateCause { readonly atMs: number; readonly frameMs: number; readonly lateMs: number }
+export interface CauseMark {
+  readonly frameMs: number;
+  /** Empty, or the one cause whose mark is 1 s or more late. A real class that ever returns an entry goes back to the Orchestrator. */
+  readonly late: readonly LateCause[];
+}
+
 /**
- * The frame of a cause's mark (P2, for a user action or a link event the scheduler did not plan), at most 1 s after the
- * cause (plus the rounding of one frame): the first frame at or after the cause that is at least 500 ms from every mark
- * (`marks`: those shown and the earlier causes'; `fixed`: the fixed frames, which never move) and at which every 1 s window
- * still holds 3 changes or fewer, steady light counted, with what is already shown or decided: the marks, the fixed frames
- * and the runs that have ended. Where P2 would find no frame of its own in time, the mark joins the nearest following fixed
- * frame, as one change with it. A cause whose window [cause, cause + 1 s] already holds a mark of an earlier cause
- * (`causeMarks`) takes that mark: no mark of its own, one change for both. A mark a cut run absorbed (`absorbed`) is one change
- * with its run and is not counted again. A cause that lands in a run (decision 7): where
- * P2 has no frame before the run's end, the run's end frame is the mark. Null when nothing fits: the scheduler reports it,
- * never a workaround.
+ * The frame of a cause's mark (P2, for a user action or a link event the scheduler did not plan). It is never null.
+ * - A cause whose window [cause, cause + 1 s) already holds a mark of an earlier cause (`causeMarks`) takes that mark (one change).
+ * - Otherwise the first frame at or after the cause, strictly before cause + 1 s (C10), that is at least 500 ms from every mark
+ *   (`marks`: those shown and the earlier causes'; `fixed`: the fixed frames, which never move) and at which every 1 s window
+ *   still holds 3 changes or fewer, steady light counted, with what is already shown or decided: the marks, the fixed frames and
+ *   the runs that have ended; a mark a cut run absorbed (`absorbed`) is one change with its run.
+ * - Failing that (9a), it joins a mark or fixed frame already decided that lies at or after the cause and before cause + 1 s:
+ *   one change with it.
+ * - Failing that (9b), S6 wins over C10: the first frame at or after cause + 1 s that meets S6 and P2, with an entry in `late`.
+ * - A cause that lands in a run (decision 7): where P2 has no frame before the run's end, the run is not cut and its end frame
+ *   is the mark, one change with the run.
  */
 export function causeFrame(
   atMs: number, frameMs: number, marks: readonly number[], runs: readonly PlacedRun[], causeMarks: readonly number[] = [], fixed: readonly number[] = [], absorbed: readonly number[] = [],
-): number | null {
+): CauseMark {
   const limit = atMs + CAUSE_LATE_MS - EPS; // C10: no change is drawn 1 s or more after the cause
   const merged = causeMarks.find((m) => m >= atMs - EPS && m - atMs < CAUSE_LATE_MS - EPS);
-  if (merged !== undefined) return merged;
+  if (merged !== undefined) return { frameMs: merged, late: [] };
   const bounds = runs.map((r) => ({ from: Math.min(...r.pieces.map((p) => p.fromMs)), to: Math.max(...r.pieces.map((p) => p.toMs)), r }));
   const open = bounds.filter((b) => b.from < atMs && atMs < b.to).map((b) => b.to);
   const items: Span[] = [];
-  for (const m of [...marks, ...fixed]) if (!absorbed.some((a) => Math.abs(a - m) < EPS) && !items.some((i) => i.fromMs === i.toMs && Math.abs(i.fromMs - m) < EPS)) items.push({ fromMs: m, toMs: m });
-  for (const b of bounds) if (b.to <= atMs + EPS) items.push(...b.r.pieces); // runs that have ended
   const all = [...marks, ...fixed];
+  for (const m of all) if (!absorbed.some((a) => Math.abs(a - m) < EPS) && !items.some((i) => i.fromMs === i.toMs && Math.abs(i.fromMs - m) < EPS)) items.push({ fromMs: m, toMs: m });
+  for (const b of bounds) if (b.to <= atMs + EPS) items.push(...b.r.pieces); // runs that have ended
   const fits = (at: number): boolean => {
-    if (items.some((i) => i.fromMs === i.toMs && Math.abs(i.fromMs - at) < EPS)) return true; // joins a mark that is there
     const near = items.filter((i) => i.toMs > at - 2000 && i.fromMs < at + 2000);
     return maxInASecond([...near, { fromMs: at, toMs: at }]) + STEADY_PER_WINDOW <= CAP;
   };
-  const cutReaches = (at: number): boolean => open.some((e) => at <= frameAt(e, frameMs) + EPS); // the cut run and the mark are one change
-  let at = frameAt(atMs, frameMs);
-  for (; at <= limit; at += frameMs) {
-    const near500 = all.find((m) => Math.abs(at - m) < MARK_GAP_MS - EPS);
-    if (near500 !== undefined) { at = frameAt(near500 + MARK_GAP_MS - EPS, frameMs) - frameMs; continue; }
-    if (cutReaches(at) || fits(at)) break;
+  // The first frame meeting P2 and S6 from `from` on. It ends: past every item a frame fits (the cap only guards a bug).
+  const search = (from: number): number => {
+    let at = from;
+    for (let n = 0; n < 1_000_000; n++, at += frameMs) {
+      const near500 = all.find((m) => Math.abs(at - m) < MARK_GAP_MS - EPS);
+      if (near500 !== undefined) { at = frameAt(near500 + MARK_GAP_MS - EPS, frameMs) - frameMs; continue; }
+      if (fits(at)) return at;
+    }
+    throw new RangeError(`no frame meets P2 and S6 for the cause at ${atMs}`);
+  };
+  const own = search(frameAt(atMs, frameMs));
+  let result: CauseMark;
+  if (own <= limit) result = { frameMs: own, late: [] };
+  else {
+    const join = all.filter((m) => m >= atMs - EPS && m <= limit).sort((x, y) => x - y)[0];
+    result = join !== undefined ? { frameMs: join, late: [] } : { frameMs: own, late: [{ atMs, frameMs: own, lateMs: own - atMs }] };
   }
-  const own = at <= limit ? at : ([...fixed].sort((a, b) => a - b).find((f) => f >= atMs - EPS && f <= limit) ?? null);
   // A cause that lands in a run: where P2 has no frame before the run's end, the run is not cut and its end frame is the
   // cause's mark, one change with the run (decision 7, #617).
   if (open.length > 0) {
     const end = frameAt(Math.max(...open), frameMs);
-    if (own === null || own > end + EPS) return end;
+    if (result.frameMs > end + EPS) return { frameMs: end, late: end - atMs < CAUSE_LATE_MS ? [] : [{ atMs, frameMs: end, lateMs: end - atMs }] };
   }
-  return own;
+  return result;
 }
 
 export interface CutRuns {

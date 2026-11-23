@@ -64,7 +64,6 @@ function drive(seed: number): { frames: Frame[]; causes: number[]; frameMs: numb
 const midRuns = { count: 0 };
 /** Off only to prove the 1 s clear rule is what holds the count (see the mutation test). */
 let ENFORCE_CLEAR = true;
-let ENFORCE_MERGE = true;
 let ENFORCE_END = true;
 
 function oneTimeline(seed: number, withFixed = true): void {
@@ -109,13 +108,14 @@ function oneTimeline(seed: number, withFixed = true): void {
   const causeMarks: number[] = [];
   const turns: number[] = [];
   const causeFrames: { atMs: number; frameMs: number }[] = [];
+  const lates: unknown[] = [];
   for (const at of [...causes].sort((a, b) => a - b)) {
     // The ticks not yet shown when the cause arrives give way and are placed again after it (P2); the marks already shown stay.
     const shown = [...causeMarks, ...tickNow.flatMap((t) => (t.frame !== null && t.frame <= at ? [t.frame] : []))];
-    const f0 = causeFrame(at, frameMs, shown, (ENFORCE_CLEAR ? runs : []).filter((x) => ENFORCE_END || !midRun(x, { atMs: at })), ENFORCE_MERGE ? causeMarks : [], fixedAt, absorbed);
-    const f = f0;
-    assert.notEqual(f, null, `seed ${seed}: no frame for the cause at ${at} within 1 s (fixed ${JSON.stringify(fixedAt.map(Math.round))}, marks shown ${JSON.stringify(shown.map(Math.round))}, run ends ${JSON.stringify(runs.map((x) => [Math.round(span(x).from), Math.round(span(x).to)]).filter((x) => x[1]! > at - 1500 && x[1]! <= at))}, ticks after ${JSON.stringify(tickNow.filter((t) => t.frame !== null && t.frame > at && t.frame < at + 2000).map((t) => Math.round(t.frame!)))})`);
-    const c = { atMs: at, frameMs: f! };
+    const mark0 = causeFrame(at, frameMs, shown, (ENFORCE_CLEAR ? runs : []).filter((x) => ENFORCE_END || !midRun(x, { atMs: at })), causeMarks, fixedAt, absorbed);
+    lates.push(...mark0.late);
+    const f = mark0.frameMs;
+    const c = { atMs: at, frameMs: f };
     causeFrames.push(c);
     const late = runs.filter((x) => !midRun(x, c) && span(x).from >= c.atMs);
     const cutNow = endRunsAtCauses(runs.filter((x) => !late.includes(x)), [c], frameMs);
@@ -129,6 +129,7 @@ function oneTimeline(seed: number, withFixed = true): void {
     turns.push(c.atMs + UNFORESEEN_HOLD_MS);
     runs = fitRuns(late.map((x) => x.wish), { ...room, marks: known, unforeseenTurns: turns, placed: cutNow.runs }).runs;
   }
+  assert.ok(lates.length === 0, `seed ${seed}: a cause's mark is 1 s or more late: ${JSON.stringify(lates)}`); // decision 9b: S6 wins over C10, and no timeline needs it
   const pieces = runs.flatMap((run) => run.pieces);
 
   // The turn after a cause is where it was planned (above), so no run, cut at the cause's frame, is near it.
@@ -170,11 +171,9 @@ test("seed 24, pinned: a cause in a run whose own frame comes after the run's en
   oneTimeline(24);
 });
 
-test("mutations: without the window check seed 2 holds 4 in a second; without the merge seed 53 has no frame; without the run's end frame as the mark seed 7 holds 4", () => {
+test("mutations: without the window check seed 2 holds 4 in a second; without the run's end frame as the mark seed 7 holds 4", () => {
   ENFORCE_CLEAR = false;
   try { assert.throws(() => oneTimeline(2, false), /holds 4 changes/); } finally { ENFORCE_CLEAR = true; }
-  ENFORCE_MERGE = false;
-  try { assert.throws(() => oneTimeline(53, false), /no frame for the cause/); } finally { ENFORCE_MERGE = true; }
   ENFORCE_END = false;
   try { assert.throws(() => oneTimeline(7, false), /holds 4 changes/); } finally { ENFORCE_END = true; }
 });
