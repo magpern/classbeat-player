@@ -8,7 +8,7 @@ import type { LinkInput } from "../src/beat-level.ts";
 import { MAX_DEG_PER_SECOND } from "../src/energy.ts";
 import { START_STATE, stepRig } from "../src/step.ts";
 import type { RigState, StepInput } from "../src/step.ts";
-import { UNFORESEEN_HOLD_MS, endRunsAtCauses, linkCause } from "../src/unforeseen.ts";
+import { UNFORESEEN_HOLD_MS, causeFrame, endRunsAtCauses, linkCause, pulledFixed } from "../src/unforeseen.ts";
 import type { UnforeseenCause } from "../src/unforeseen.ts";
 import { angleBetween } from "../src/turn.ts";
 import { classA, classSameZones } from "./fixtures.ts";
@@ -186,11 +186,38 @@ test("endRunsAtCauses: a two-piece run (a dim) loses every piece after the cut, 
   assert.deepEqual(inFirst.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1100 }], "the second piece is gone");
   const inGap = endRunsAtCauses([dim], [{ atMs: 1300, frameMs: 1350 }]);
   assert.deepEqual(inGap.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }], "the first piece is whole, the second is gone");
-  assert.deepEqual(inGap.absorbed, [1350]);
+  assert.deepEqual(inGap.absorbed, []); // the first piece ended 230 ms before the frame: the mark is a change of its own
+  assert.deepEqual(endRunsAtCauses([dim], [{ atMs: 1300, frameMs: 1130 }], 20).absorbed, [1130], "a run that ends in the mark frame (within a frame) is one change with it");
   const inSecond = endRunsAtCauses([dim], [{ atMs: 1550, frameMs: 1580 }]);
   assert.deepEqual(inSecond.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }, { fromMs: 1500, toMs: 1580 }]);
   const frameInGap = endRunsAtCauses([dim], [{ atMs: 1100, frameMs: 1130 }]); // the frame falls after piece one ended
   assert.deepEqual(frameInGap.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1120 }]);
   const two = endRunsAtCauses([dim], [{ atMs: 1050, frameMs: 1100 }, { atMs: 1550, frameMs: 1580 }]);
   assert.deepEqual(two.runs[0]!.pieces, [{ fromMs: 1000, toMs: 1100 }], "a second cause finds the run already cut");
+});
+
+const FRAME = 10;
+test("causeFrame: P2 against shown marks, 1 s after an ended run, at most 1 s late; a frame rounded past that by one frame is allowed", () => {
+  assert.equal(causeFrame(1000, FRAME, [800], []), 1300); // 500 ms after the shown mark
+  assert.equal(causeFrame(1000, FRAME, [], [run([700, 900])]), 1900); // 1 s after the run's end
+  assert.equal(causeFrame(10005, FRAME, [], [run([9000, 10005])]), 11010); // a run ended in the cause's frame: one frame of rounding past 1 s
+  assert.equal(causeFrame(1000, FRAME, [900, 1400, 1900], []), null); // 2400 is more than a second late: no frame
+});
+
+test("causeFrame: a cause joins the following fixed frame, or an earlier cause's mark in its window (one change)", () => {
+  assert.equal(causeFrame(1000, FRAME, [800], [], [], [1100]), 1600, "own frame 500 ms after the fixed frame");
+  assert.equal(causeFrame(1000, FRAME, [1050, 1550, 2050], [], [], [1900]), 1900, "no free frame of its own: joins the fixed frame");
+  assert.equal(causeFrame(1000, FRAME, [], [], [1400], []), 1400, "an earlier cause's mark in its window");
+});
+
+test("decision 7: a cause in a run whose own frame comes after the run's end takes the run's end frame as its mark", () => {
+  assert.equal(causeFrame(52783, FRAME, [52633], [run([52736, 52986])]), 52990); // not 53133, which is 500 ms after the shown tick
+  assert.equal(causeFrame(1300, FRAME, [], [run([1000, 1700])]), 1300, "its own frame is inside the run: the run is cut there");
+});
+
+test("decision 8: a fixed frame less than 500 ms after the earliest allowed frame and past cause + 1 s is pulled to it", () => {
+  assert.equal(causeFrame(34710, FRAME, [33850], [run([34436, 34686])], [], [36067]), 35690);
+  assert.equal(pulledFixed(35690, 34710, FRAME, [36067]), 36067);
+  assert.equal(pulledFixed(35690, 34710, FRAME, [35700]), undefined, "a frame inside cause + 1 s is not pulled");
+  assert.equal(pulledFixed(35690, 34710, FRAME, [36300]), undefined, "500 ms or more away is not pulled");
 });
