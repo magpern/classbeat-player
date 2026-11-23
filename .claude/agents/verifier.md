@@ -17,3 +17,9 @@ milestone except its written "done when".
 5. File one issue per gap, with steps to reproduce and the lane it belongs to. Fix nothing.
 6. Report `Verification: PASS` or `Verification: FAIL` with the list of issues on the
    milestone's tracking issue.
+
+## Reporting
+
+Report tersely: the verdict or result, the head SHA, and one line per finding or open item. No
+narration, no repeated reports, and no turn that only says you are waiting. When you are waiting
+for CI, wait in one background command and report once, when it finishes.
