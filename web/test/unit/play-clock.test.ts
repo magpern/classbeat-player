@@ -159,7 +159,7 @@ describe("the room screen's input from the clock", () => {
     const running = apply(ready, "start", START);
     assert.equal(model(running, START + 5 * S).kind, "running");
     assert.equal(model(running, START + 5 * S).rail.link?.text, "Manual clock");
-    assert.equal(model(running, START + 5 * S).beat, null, "no beat dot: no music link");
+    assert.equal(model(running, START + 5 * S).count, null, "no count: no music link");
     assert.equal(model(apply(running, "pause", START + 5 * S), START + 6 * S).clock?.pill, true);
     assert.equal(model(advance(running, START + 9999 * S), START + 9999 * S).kind, "finished");
   });

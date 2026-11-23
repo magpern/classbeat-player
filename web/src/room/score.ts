@@ -99,15 +99,6 @@ export function xAt(timeMs: number, classMs: number, vwPerS: number = VW_PER_S):
   return NOW_X + ((timeMs - classMs) / 1000) * vwPerS;
 }
 
-/**
- * How far the strip has moved left, in vw, since the score was laid out for `classMs`: continuous,
- * or in whole-second steps with reduced motion (system.md, Motion).
- */
-export function scoreShiftVw(elapsedMs: number, reducedMotion: boolean, vwPerS: number = VW_PER_S): number {
-  const s = Math.max(0, elapsedMs) / 1000;
-  return (reducedMotion ? Math.floor(s) : s) * vwPerS;
-}
-
 export function ordinalText(n: number): string {
   const tens = n % 100;
   if (tens >= 11 && tens <= 13) return `${n}th`;

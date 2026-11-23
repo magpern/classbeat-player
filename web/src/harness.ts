@@ -3,9 +3,12 @@
 //   freeze=1   nothing moves: no score motion, no beat flashing, no transitions (screenshots)
 //   steady=1   the score and the beat dot stand still; CSS transitions stay as they are
 //   reduced=1  the player's own reduced-motion setting
+//   virtual=1  no room is mounted: `window.drive` plays a class through the room on a stepped clock (the S6 checks)
 import "./design/tokens.css";
 import "./room/room.css";
 import { FIXTURES } from "./fixtures/index.ts";
+import { createDrive } from "./harness-drive.ts";
+import type { Drive } from "./harness-drive.ts";
 import { mountRoom } from "./room/mount.ts";
 
 const params = new URLSearchParams(location.search);
@@ -14,24 +17,29 @@ const input = FIXTURES[name];
 const freeze = params.get("freeze") === "1";
 
 if (freeze) document.documentElement.dataset.freeze = "";
-const screen = mountRoom(document.body, {
-  animate: !freeze && params.get("steady") !== "1",
-  reducedMotion: params.get("reduced") === "1" ? true : undefined,
-});
-if (input) screen.update(input);
+const virtual = params.get("virtual") === "1";
+const screen = virtual
+  ? null
+  : mountRoom(document.body, {
+      animate: !freeze && params.get("steady") !== "1",
+      reducedMotion: params.get("reduced") === "1" ? true : undefined,
+    });
+if (screen && input) screen.update(input);
 document.documentElement.dataset.fixture = input ? name : "unknown";
 
 // For the motion tests: draw another snapshot on the same screen, as the shell does each second.
 declare global {
   interface Window {
     harness: { show(fixture: string, classOffsetMs?: number): void };
+    drive: Drive;
   }
 }
+if (virtual) window.drive = createDrive(document.body);
 window.harness = {
   // `classOffsetMs` moves the clock on (or back) as a later or jittery snapshot would.
   show(fixture, classOffsetMs = 0) {
     const next = FIXTURES[fixture];
     if (!next) return;
-    screen.update(next.view && classOffsetMs ? { ...next, view: { ...next.view, classMs: next.view.classMs + classOffsetMs } } : next);
+    screen?.update(next.view && classOffsetMs ? { ...next, view: { ...next.view, classMs: next.view.classMs + classOffsetMs } } : next);
   },
 };

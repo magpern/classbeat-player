@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STATE_FIXTURES } from "../../src/fixtures/states.ts";
 import type { Class } from "../../src/room/input.ts";
-import { MIN_BLOCK_W, NOW_X, NUMBER_FITS_UNTIL, VW_PER_S, layoutScore, ordinalText, scoreShiftVw, xAt } from "../../src/room/score.ts";
+import { MIN_BLOCK_W, NOW_X, NUMBER_FITS_UNTIL, VW_PER_S, layoutScore, ordinalText, xAt } from "../../src/room/score.ts";
 import type { ScoreInput } from "../../src/room/score.ts";
 
 function scoreOf(name: string, patch: Partial<ScoreInput> = {}) {
@@ -119,12 +119,11 @@ describe("score rules", () => {
     assert.equal(scoreOf("running").endLeft, null);
   });
 
-  it("the strip moves 0.22 vw a second, in whole-second steps with reduced motion", () => {
+  it("travels 0.22 vw a second (13.2 vw a minute); the screen draws it again at each frame mark, it never moves between", () => {
     assert.equal(VW_PER_S, 0.22);
-    assert.ok(Math.abs(scoreShiftVw(1000, false) - 0.22) < 1e-9);
-    assert.ok(Math.abs(scoreShiftVw(60_000, false) - 13.2) < 1e-9, "13.2 vw a minute");
-    assert.equal(scoreShiftVw(1500, true), scoreShiftVw(1000, true));
-    assert.equal(scoreShiftVw(999, true), 0);
-    assert.equal(scoreShiftVw(-5, false), 0);
+    const [now, later] = [scoreOf("running"), scoreOf("running", { classMs: STATE_FIXTURES.running.view!.classMs + 10_000 })];
+    const [a, b] = [now.blocks.find((x) => x.zone === 3), later.blocks.find((x) => x.zone === 3)];
+    assert.ok(a && b);
+    assert.ok(Math.abs(a.left - b.left - 2.2) < 0.01, "ten seconds later: 2.2 vw to the left");
   });
 });

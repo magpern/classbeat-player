@@ -36,7 +36,6 @@ body {
   box-shadow: 0 0 16vh 1vh color-mix(in srgb, var(--zone) 30%, transparent);
   padding: var(--safe-y) 2vw 2vh var(--safe-x);
   display: flex; flex-direction: column;
-  transition: background-color var(--m-change), color var(--m-change);
 }
 .gel .lbl { color: var(--ink); font-weight: 700; }
 /* The label sits beside the numeral's top, not above it: the gel's height goes to the name and
@@ -238,26 +237,10 @@ body:has(.cue.four) .ncue { display: none; }
 .dyn { display: contents; }
 .gel[hidden] { display: none; }
 
-/* The interval change: a white line, 1 vh wide, down the gel's right edge for --m-flash. */
-.gel .edge { position: absolute; right: 0; top: 0; bottom: 0; width: 1vh; background: var(--light-1); opacity: 0; pointer-events: none; }
-.gel .edge.go { animation: edge var(--m-flash) linear; }
-@keyframes edge { from { opacity: 1; } to { opacity: 0; } }
-
-/* The strip moves as one element; the player's own reduced-motion setting zeroes the same tokens
-   as the system's (tokens.css holds the media query). */
+/* The plain screen has no transition, no animation and no steady light (room-2d.md, "Motion and reduced
+   motion"): every change is a step, on a frame mark. It reads none of --m-change, --m-flash and --m-state
+   (the scene, the companion, the rider and play pages do), so reduced motion has nothing to remove here. */
 .score .scroll { position: absolute; inset: 0; }
-:root[data-reduced-motion] { --m-change: 0ms linear; --m-flash: 0ms; --m-state: 0ms linear; }
-
-/* The beat dot after the BPM (spec: room.css on 78-room-spec-follow-ups): only while the link is
-   locked and the song has beat anchors. Lit for about a third of the period on each beat, two
-   lights at least 1/3 s apart, drawn in the text colour so the checks count it as part of the
-   value. mount.ts runs its lights (a Web Animation on the document's timeline: lit for the first 30 %
-   of each period, from a schedule that survives redraws); with reduced motion it is not made at all. */
-.beat {
-  display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-left: 0.18em;
-  background: currentColor; vertical-align: 0.5em; opacity: 0.2;
-}
-@media (prefers-reduced-motion: reduce) { .beat { display: none; } }
 
 /* A block with no room for its number ahead of "now" (a short interval to come, or the last seconds
    of the current one): neutral, no zone colour, no number. It carries `gone` for the checks. */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { beatPeriodMs, canShowBeat, cueIsLong, hasThreeTargets } from "../../src/room/fit.ts";
+import { cueIsLong, hasThreeTargets } from "../../src/room/fit.ts";
 import { cadenceText, classTimeText, clockText, countdownIsWide, countdownText, positionText, rangeText, targetTexts } from "../../src/room/format.ts";
 import type { Class } from "../../src/room/input.ts";
 
@@ -63,23 +63,5 @@ describe("fit", () => {
   it("three targets are noticed", () => {
     assert.equal(hasThreeTargets(["a", "b"]), false);
     assert.equal(hasThreeTargets(["a", "b", "c"]), true);
-  });
-
-  it("nothing flashes more than three times a second at any tempo", () => {
-    for (let bpm = 30; bpm <= 300; bpm += 1) {
-      const period = beatPeriodMs(bpm);
-      assert.ok(1000 / period <= 3 + 1e-9, `${bpm} bpm flashes ${(1000 / period).toFixed(2)} times a second`);
-    }
-    assert.equal(beatPeriodMs(120), 500); // every beat when that is slow enough
-    assert.ok(Math.abs(beatPeriodMs(180) - 1000 / 3) < 1e-9); // every beat up to 180 bpm, exactly 1/3 s
-    assert.ok(Math.abs(beatPeriodMs(181) - 60_000 / 181 * 2) < 1e-9); // every second beat above it
-    assert.equal(beatPeriodMs(200), 600); // every second beat when it would be too fast
-  });
-
-  it("the beat dot needs anchors and a tempo", () => {
-    assert.equal(canShowBeat(120, true), true);
-    assert.equal(canShowBeat(120, false), false);
-    assert.equal(canShowBeat(null, true), false);
-    assert.equal(canShowBeat(0, true), false);
   });
 });

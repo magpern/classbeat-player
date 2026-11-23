@@ -23,12 +23,21 @@ export const SURFACE = ["clock.ts", "plan.ts", "view.ts"].map((f) => join(CLOCK_
 /** What a file of the surface may name: the others of the three, and the generated class-format types (five levels up to `schema/`). */
 const SURFACE_ALLOWED = /^(\.\/(clock|plan|view)\.ts|(\.\.\/){5}schema\/generated\/ts\/class\.d\.ts)$/;
 
+/**
+ * The one other player file the web lane reaches (issue #583): the flash budget's frame-mark scheduler of the scene
+ * lane (P1 and P2, scene.md "The flash budget"), a pure module that imports nothing, which the plain room screen
+ * places its changes with, so the screen and the scene share one scheduler. Only `web/src/room/` may name it, by
+ * this exact path, and the web player page's bundle reaches it through the room screen.
+ */
+export const SCHEDULER = join(REPO, "player", "scene", "model", "src", "flash-marks.ts");
+export const SCHEDULER_SPEC = /^(\.\.\/)+player\/scene\/model\/src\/flash-marks\.ts$/;
+
 const rel = (f: string): string => relative(REPO, f).split("\\").join("/");
 const underPlayer = (f: string): boolean => rel(f).startsWith("player/");
 
 /** The player files a set of reached files includes, other than the surface. */
 export function outsideSurface(files: Iterable<string>): string[] {
-  return [...files].filter((f) => underPlayer(f) && !SURFACE.includes(f)).map(rel).sort();
+  return [...files].filter((f) => underPlayer(f) && !SURFACE.includes(f) && f !== SCHEDULER).map(rel).sort();
 }
 
 const PLAY_DIR = join(WEB_DIR, "src", "play");
@@ -74,12 +83,22 @@ describe("the shared clock surface", () => {
     }
   });
 
-  it("web/src/room and the rest of web/src import nothing from player/ (the play bundle is the one place)", () => {
+  it("web/src/room and the rest of web/src import nothing from player/ (the play bundle is the one place), but the room's scheduler", () => {
     const bad: string[] = [];
+    const room = join(WEB_DIR, "src", "room") + sep;
     for (const f of sources(join(WEB_DIR, "src")).filter((x) => !inPlayDir(x))) {
-      for (const spec of specifiersOf(f, readFileSync(f, "utf8"))) if (spec === null || /(^|\/)player(\/|$)/.test(spec)) bad.push(`${rel(f)} names ${spec}`);
+      for (const spec of specifiersOf(f, readFileSync(f, "utf8"))) {
+        if (spec !== null && f.startsWith(room) && SCHEDULER_SPEC.test(spec) && resolve(f, "..", spec) === SCHEDULER) continue;
+        if (spec === null || /(^|\/)player(\/|$)/.test(spec)) bad.push(`${rel(f)} names ${spec}`);
+      }
     }
     assert.deepEqual(bad, []);
+  });
+
+  it("the scheduler is one file that imports nothing and names no DOM or I/O global, and the room screen takes it", () => {
+    assert.deepEqual(impurities(SCHEDULER, readFileSync(SCHEDULER, "utf8"), /^$/), []);
+    assert.ok(reach(join(WEB_DIR, "src", "room", "mount.ts")).files.has(SCHEDULER), "the room screen does not reach the scheduler");
+    assert.ok(play.files.has(SCHEDULER), "the web player page's room screen does not reach the scheduler");
   });
 });
 

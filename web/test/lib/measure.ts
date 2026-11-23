@@ -8,7 +8,7 @@
 // light-on-dark ink box by about a pixel at its edges, which C1 to C4 tolerate.
 //
 // C1 cap height, C2 contrast, C3 safe area, C4 collisions, C5 zone, C6 hue (text, fills, borders,
-// box-shadows and gradients; borders are read in border-walk.ts), C7 reduced motion, C8 coverage.
+// box-shadows and gradients; borders are read in border-walk.ts), C7 motion (none, with or without reduced motion), C8 coverage.
 import type { Browser, Page } from "playwright-core";
 import collect from "../spec/page/collect.js";
 import type { Item } from "../spec/page/collect.js";
@@ -128,22 +128,27 @@ export function shadowHues(page: Page): Promise<string[]> {
   }, CHROMA_OUTSIDE_ZONE);
 }
 
-/** C7: with reduced motion, no transition or animation lasts longer than 0. */
-async function movingWithReducedMotion(browser: Browser, s: Shot): Promise<string[]> {
-  const page = await newPage(browser, { width: s.width, height: s.height, reducedMotion: true });
+/** C7: with or without reduced motion, no transition or animation lasts longer than 0, and nothing repeats (the plain screen changes in steps, on frame marks). */
+async function moving(browser: Browser, s: Shot): Promise<Record<"motion" | "reduced motion", string[]>> {
+  const page = await newPage(browser, { width: s.width, height: s.height });
   // Not frozen: the transitions and animations must be there, and be zero.
   await page.goto(harnessUrl(s.fixture, "steady=1"));
-  const moving = await page.evaluate(() =>
-    [...document.querySelectorAll("*")]
-      .filter((el) => {
-        const c = getComputedStyle(el);
-        const long = (v: string): boolean => v.split(",").some((d) => parseFloat(d) > 0);
-        return long(c.transitionDuration) || (c.animationName !== "none" && long(c.animationDuration));
-      })
-      .map((el) => String(el.className || el.tagName)),
-  );
+  const find = (): Promise<string[]> =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("*")]
+        .filter((el) => {
+          const c = getComputedStyle(el);
+          const long = (v: string): boolean => v.split(",").some((d) => parseFloat(d) > 0);
+          return long(c.transitionDuration) || (c.animationName !== "none" && (long(c.animationDuration) || c.animationIterationCount !== "1"));
+        })
+        .map((el) => String(el.className || el.tagName))
+        .concat(document.getAnimations().map(() => "a Web Animation")),
+    );
+  const motion = await find();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const reduced = await find();
   await page.context().close();
-  return moving;
+  return { motion, "reduced motion": reduced };
 }
 
 export async function checkShot(browser: Browser, probe: Page, s: Shot): Promise<ShotResult> {
@@ -215,8 +220,7 @@ export async function checkShot(browser: Browser, probe: Page, s: Shot): Promise
   }
   for (const t of loose) rows.push({ tier: "text", text: t, result: "FAIL text outside any data-tier element (C8)" });
   for (const h of [...hues, ...(await shadowHues(page)), ...(await borderHues(page))]) rows.push({ tier: "hue", text: h.slice(0, 40), result: "FAIL hue outside a zone (C6)" });
-  const moving = await movingWithReducedMotion(browser, s);
-  rows.push({ tier: "motion", text: "reduced motion", result: moving.length ? `FAIL still moves: ${moving.join(", ")}` : "ok" });
+  for (const [text, found] of Object.entries(await moving(browser, s))) rows.push({ tier: "motion", text, result: found.length ? `FAIL still moves: ${found.join(", ")}` : "ok" });
   for (const e of external) rows.push({ tier: "network", text: e.slice(0, 40), result: "FAIL external request" });
   await page.context().close();
   const inked = items.filter((it) => it.ink);
