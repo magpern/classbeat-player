@@ -43,5 +43,9 @@ test("the phrase flips are every 32 beats after the first phrase, across a tempo
 test("the haze's gain is 1 before the build, steps with the beat, and rises at most 3 % a second where the beat is not known", () => {
   assert.equal(buildHaze(-5, 500), 1);
   assert.ok(buildHaze(4000, 500) > buildHaze(3000, 500));
-  assert.equal(buildHaze(2000, null), 1.06);
+  assert.equal(buildHaze(2000, null), 1.02);
+});
+
+test("below the Beat level the build haze rises at most 2.5 % a second (steady light, built inside the 3 % cap)", () => {
+  for (const t of [0, 500, 3000, 9000]) assert.ok(buildHaze(t + 1000, null) / buildHaze(t, null) - 1 <= 0.025);
 });

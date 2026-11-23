@@ -12,6 +12,7 @@ import { BurstTracker } from "./bursts.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
 import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
+import { MarkHold } from "./mark-hold-calc.ts";
 import { NO_PATTERN_LIGHT, patternLight } from "./pattern-light-calc.ts";
 import { movementScale, stageLit, stageMaster, stageOf } from "./stage-calc.ts";
 import { TextClock } from "./text-clock.ts";
@@ -45,6 +46,8 @@ export interface Draw {
   readonly beamLevel: number;
   /** The haze's gain in a build: a 3 % step a beat at the Beat level, steady light below it. */
   readonly hazeGain: number;
+  /** The frame of a mark the hold placed for a change of the lit fixtures or the haze's gain (P2), on the frame it lands; else null. */
+  readonly heldMark: number | null;
   /** The lens flash at an interval change, 0 to 1. */
   readonly lens: number;
   /** How far the energy has got from the zone left to the zone entered: the cross's ramp where the scheduler placed it, else 0 (a step in the change frame). */
@@ -101,9 +104,12 @@ export class RigLoop {
   private seconds = 0;
 
   private readonly tokens: LoopTokens;
+  private holdPhase = false;
+  private first = true;
 
   private readonly mergedClasses = new WeakMap<SceneClass, SceneClass>();
   private readonly clock = new TextClock();
+  private readonly hold = new MarkHold();
 
   /** The text for this frame (the host calls it before the frame to paint the text; the same feed asked again gives the same answer). */
   shown(feed: Feed): Shown {
@@ -124,13 +130,19 @@ export class RigLoop {
     this.bursts = new BurstTracker({ before: tokens.holdBeforeMs, after: tokens.holdAfterMs }, budgetOff);
   }
 
+  /** The motion phase stops after the first frame, at its value on it (the steady-light gate's `steady=1`, never the product). */
+  holdMotionPhase(): void {
+    this.holdPhase = true;
+  }
+
   step(feed: Feed, rawDtSeconds: number, quality: QualityLevel): Draw {
     const { classMs, songIndex, songPosMs, link, reducedMotion: reduced } = feed;
     const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
-    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: movementScale(stage, link), noMusic: stage === "before" });
+    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase && !this.first ? 0 : movementScale(stage, link), noMusic: stage === "before" });
     this.state = stepped.state;
+    this.first = false;
     const { frame, dtSeconds } = stepped;
     const song = nth(cls.songs, songIndex);
     const beats = beatsAt(song?.anchors, songPosMs);
@@ -166,14 +178,20 @@ export class RigLoop {
     const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
     const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
     const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;
+    // The lit fixtures and the haze's gain change on a planned mark only: a change between marks waits for the next one.
+    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs);
+    const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
+    const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`, this.bursts.budget.runs);
+    if (held.mark !== null) this.clock.note(held.mark);
     return {
       drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
-      hazeGain: still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs),
+      hazeGain: held.haze,
+      heldMark: held.mark,
       energyRamp: rampPlaced ? cross.ramp : 0,
       tokens: { current: frame.colours.front, next: wipe > 0 ? frame.colours.back : null },
       cross,
       ahead: nextEnergy === null ? null : { energy: nextEnergy, lit: fixturesLit({ ...frame, energy: nextEnergy }, quality) },
-      lit: stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality),
+      lit: [...held.lit],
       master: stageMaster(stage, link, this.tokens, dim),
       chaseStep: chase ? Math.floor(beats / beatStride(song.bpm!)) : null,
       text,

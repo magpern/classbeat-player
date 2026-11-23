@@ -70,7 +70,7 @@ export const MOMENTS: readonly Moment[] = [
   { name: "collision: song change and intervals 0.6 s apart (100.0 s and 100.6 s)", fromS: 98.5, toS: 103.5, cls: "collide" },
 ];
 /** The states measured on the moments: the real running state, and without the beat. */
-const STATES = [["locked", ""], ["coasting", "&state=coasting"]] as const;
+export const STATES = [["locked", ""], ["coasting", "&state=coasting"]] as const;
 
 type Rect = readonly [name: string, x0: number, y0: number, x1: number, y1: number];
 /** Every region the count looks at, as shares of the width and the height. */
@@ -103,7 +103,7 @@ export const probeSetup = `(() => {
   const bctx = big.getContext("2d", { willReadFrequently: true });
   bctx.imageSmoothingEnabled = false;
   window.__steps = {
-    t: [], regions: [], burst: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" }, overlay: null, textSteps: 0,
+    t: [], regions: [], burst: [], sweeping: [], marks: [], cacheKey: "", cache: new Map(), s5: { frames: 0, pixels: 0, bad: 0, worst: "" }, overlay: null, textSteps: 0,
     setOverlay(b64) {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
@@ -169,6 +169,8 @@ export const probeSetup = `(() => {
         return (sat[d * (w + 1) + c] - sat[b * (w + 1) + c] - sat[d * (w + 1) + a] + sat[b * (w + 1) + a]) / ((c - a) * (d - b));
       }));
       this.burst.push(window.__scene.burst);
+      this.sweeping.push(window.__scene.sweeping);
+      this.marks.push(window.__scene.mark);
     },
     begin(from, to, events) {
       const self = this;
@@ -184,7 +186,7 @@ export const probeSetup = `(() => {
   };
 })()`;
 
-interface Series { t: number[]; regions: number[][]; burst: number[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
+interface Series { t: number[]; regions: number[][]; burst: number[]; sweeping: boolean[]; marks: string[]; textSteps: number; s5: { frames: number; pixels: number; bad: number; worst: string } }
 export interface Run {
   readonly frames: number;
   readonly burstFrames: number;

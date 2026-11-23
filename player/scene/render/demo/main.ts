@@ -8,8 +8,10 @@
 // minutes with the lengths of a real class, for the text), `stage=before` (the house look before the start), `class=worst` (its worst case of fitting), `mask=0` (the scene without the
 // dark-under-text mask, to show what the mask darkens), `floor=off` (the house look without S5b's floor: the check must fail on it), `budget=off` (every run fits: to look at a burst the scheduler skips), `text=0` (the scene without the text layer).
 import { WebGLRenderer } from "three";
-import type { LinkInput, QualityLevel, RigHue } from "../../model/src/index.ts";
+import type { LinkInput, QualityLevel, RigHue, SceneClass } from "../../model/src/index.ts";
+import { angleBetween, mergeIntervals } from "../../model/src/index.ts";
 import type { Host } from "../src/host.ts";
+import { plannedMarkIn } from "../src/frame-marks-calc.ts";
 import { SceneRenderer } from "../src/renderer.ts";
 import { TAN_H } from "../src/rig.ts";
 import { readSceneTokens } from "../src/tokens.ts";
@@ -38,6 +40,17 @@ const tokens = readSceneTokens(getComputedStyle(document.documentElement));
 const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
+let lastSweeping = false;
+let lastMark = "";
+let pendingMark = false;
+let lastFrameMs: number | null = null;
+/** The class with interval changes under 1 s apart merged (P1), as the loop has it: once per class. */
+const mergedClasses = new WeakMap<SceneClass, SceneClass>();
+const mergedClass = (cls: SceneClass): SceneClass => {
+  let made = mergedClasses.get(cls);
+  if (made === undefined) { made = mergeIntervals(cls); mergedClasses.set(cls, made); }
+  return made;
+};
 let lastMaster = 1;
 let lastTokens: { current: number; next: number | null } = { current: 0, next: null };
 // The host: it builds the three.js renderer from its own canvas and hands the scene only this.
@@ -54,9 +67,16 @@ const long = params.get("class") === "long" || params.get("class") === "worst";
 const textClass = mergeTextClass(params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT);
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
-  tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off",
+  tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off", steadyOnly: params.get("steady") === "1",
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
+    lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
+    // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek) or a mark `planMarks` places (a change frame, a
+    // drop's frame, a text step). The cause is named in the gate's report. Nothing is marked because the draw changed.
+    const planned = lastFrameMs !== null && plannedMarkIn({ cls: mergedClass(lastFeed.cls), classMs, songIndex: lastFeed.songIndex, songPosMs: lastFeed.songPosMs, level: draw.frame.level }, lastFrameMs, classMs);
+    lastMark = pendingMark ? "event" : planned ? "planned mark" : draw.heldMark !== null ? "held change, own mark (P2)" : "";
+    pendingMark = false;
+    lastFrameMs = classMs;
     lastMaster = draw.master;
     const hex = (h: RigHue) => (h.kind === "zone" ? tokens.zones[h.zone] : tokens.white);
     lastTokens = { current: hex(draw.tokens.current), next: draw.tokens.next === null ? null : hex(draw.tokens.next) };
@@ -66,7 +86,15 @@ const renderer = new SceneRenderer(host, {
 renderer.rig.floorOn = params.get("floor") !== "off";
 
 let classMs = Number(params.get("t") ?? 0) * 1000;
-const feed = (): Feed => (long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
+/** The demo's `level=tempo`: every song keeps its bpm and loses its anchors, so the link is locked at the Tempo only level. Never the product. */
+const tempoClasses = new WeakMap<SceneClass, SceneClass>();
+const tempoOnly = (f: Feed): Feed => {
+  if (params.get("level") !== "tempo") return f;
+  let cls = tempoClasses.get(f.cls);
+  if (cls === undefined) { cls = { ...f.cls, songs: f.cls.songs.map((song) => ({ ...song, anchors: [] })) }; tempoClasses.set(f.cls, cls); }
+  return { ...f, cls };
+};
+const feed = (): Feed => tempoOnly(long ? { ...longFeedAt(classMs, state.link, state.reduced), ...(state.stage ? { stage: state.stage } : {}) } : feedAt(classMs, { link: state.link, reducedMotion: state.reduced, stage: state.stage, variant: VARIANTS[params.get("class") ?? "demo"] ?? VARIANTS.demo! }));
 let view: TextView | null = null;
 let lastFeed: Feed = feed();
 let lastBoxes: readonly TextBox[] = [];
@@ -115,6 +143,10 @@ interface DemoApi {
   readonly ended: boolean;
   /** The white burst's share of its peak on the last frame. */
   readonly burst: number;
+  /** The scheduler's mark on the last frame ("planned mark" or "event": a quality step, a seek, a jump), or "": a marked frame's one-frame jump in light is not steady light. */
+  readonly mark: string;
+  /** Whether any beam's drawn direction is off its target on the last frame (a sweep, scene.md "Steady light and sweeps"). */
+  readonly sweeping: boolean;
   /** The rig's master level on the last frame: 1 running, a quarter at the bottom of a song-change dim. */
   readonly master: number;
   /** The two tokens in play on the last frame, as 0xRRGGBB: the planned zone's, and the next zone's during the anticipation. */
@@ -146,6 +178,7 @@ let run: Run | null = null;
 function playFrame(r: Run, stopOnText: boolean): number | null {
   for (const e of r.due.filter((x) => x.atMs <= classMs)) {
     r.due.splice(r.due.indexOf(e), 1);
+    pendingMark = true;
     if (e.link) state.link = LINKS[e.link === "base" ? (params.get("state") ?? "locked") : e.link] ?? state.link;
     if (e.quality) renderer.setQuality(e.quality);
     if (e.jumpMs !== undefined) classMs = e.jumpMs;
@@ -201,6 +234,8 @@ const api: DemoApi = {
   log, missingTokens: tokens.missing,
   get ended() { return ended; },
   get burst() { return lastBurst; },
+  get sweeping() { return lastSweeping; },
+  get mark() { return lastMark; },
   get master() { return lastMaster; },
   get tokens() { return lastTokens; },
   rigState() {
