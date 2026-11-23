@@ -19,7 +19,7 @@
 //    whole name fits in the block, and never draws it cut.
 // 6. Hue: any coloured (not grey) text, fill or border sits inside a zone (class z1..z7).
 // 7. Motion: with prefers-reduced-motion, no transition or animation lasts longer than 0; without
-//    it, nothing that repeats (an infinite animation, the beat dot) cycles more than three
+//    it, nothing that repeats (an infinite animation) cycles more than three
 //    times a second. Screenshots are taken with animations stopped at their first frame.
 // 8. Coverage: every piece of text on the page sits inside a data-tier element, so 1 to 4 see it.
 // 9. Palette (once, from tokens.css): see palette.js.
