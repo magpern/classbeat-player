@@ -56,3 +56,23 @@ export function findChanges(timesMs: readonly number[], luminance: readonly numb
 export function mostInASecond(changes: readonly Change[]): number {
   return Math.max(0, ...changes.map((s) => changes.filter((o) => o.atMs >= s.atMs && o.atMs < s.atMs + 1000).length));
 }
+
+/** A frame step longer than this, or backwards, is a seek or a jump: the class clock moved, no time passed beyond one frame. */
+const JUMP_MS = 100;
+const FRAME_MS = 1000 / 60;
+
+/**
+ * The time a viewer lives through, per frame, from the class clock's value on each frame. S6 counts changes in a real second, so
+ * the sliding window is in this time: in normal play it is the class time (each step is the class clock's own), and across a seek
+ * or a jump (a step backwards, or over `JUMP_MS`) it advances by one frame, so a replayed stretch of the class is not folded onto
+ * its first pass.
+ */
+export function frameTimes(classMs: readonly number[]): number[] {
+  const out: number[] = [];
+  classMs.forEach((t, i) => {
+    if (i === 0) { out.push(t); return; }
+    const step = t - classMs[i - 1]!;
+    out.push(out[i - 1]! + (step > 0 && step <= JUMP_MS ? step : FRAME_MS));
+  });
+  return out;
+}

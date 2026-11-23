@@ -22,7 +22,7 @@ import { violations } from "./guard-trap.ts";
 import { overlayOf } from "./text-overlay.ts";
 import { settleTransitions } from "./settle.ts";
 import { FIT_SOURCE, TOLERANCE } from "./s5-fit.ts";
-import { MAX_CHANGES_PER_SECOND, findChanges, mostInASecond } from "./luminance-steps.ts";
+import { MAX_CHANGES_PER_SECOND, findChanges, frameTimes, mostInASecond } from "./luminance-steps.ts";
 import type { Change } from "./luminance-steps.ts";
 import type { Open } from "./text-shots.ts";
 import { decodePng } from "./png.ts";
@@ -216,7 +216,8 @@ async function play(open: Open, m: Moment, query: string): Promise<Run> {
   const out = await page.evaluate(() => (window as unknown as { __steps: Series }).__steps);
   assert.deepEqual([...problems, ...(await violations(page))], [], m.name);
   await page.close();
-  const changesOf = (r: number) => findChanges(out.t, out.regions.map((row) => row[r]!));
+  const wall = frameTimes(out.t); // S6 is a real second: the window is in the time a viewer lives through, not the class clock (a seek replays class time)
+  const changesOf = (r: number) => findChanges(wall, out.regions.map((row) => row[r]!));
   const byRegion: Record<string, number> = {};
   REGIONS.forEach(([name], r) => { byRegion[name] = mostInASecond(changesOf(r)); });
   const [worstRegion, most] = Object.entries(byRegion).reduce((a, b) => (b[1] > a[1] ? b : a));

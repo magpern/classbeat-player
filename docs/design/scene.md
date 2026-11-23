@@ -719,12 +719,12 @@ read its answer. The text shows the class **as it was on the last mark** and hol
   frame. The beams' turn and the hold-still stay on the song's drop moment (S7, rule 4).
 - **A person's action** (pause, resume, seek, jump) is a mark placed by P2: shown within 500 ms.
 - **The song-change dim** has no room beside a tick every second: a window holding both its edges and one tick is four
-  with steady light. The scheduler leaves it out (step g). Open for the Orchestrator.
+  with steady light. The scheduler leaves it out (step g) and the re-aim marks the song, as step g says; no running state of the demo leaves room for it.
 
 **The gate on the whole frame.** `tools/flash-shots.ts` reads the frame as shown: the canvas under the text layer. The
 page is played up to each text step; the layer is taken as a screenshot over black and over white with the canvas hidden
 (its colour and opacity per pixel), and blended under the canvas of every frame in the page as the browser blends it
-(checked to within 1 code value against a real screenshot). The strict 40-region count is on that.
+(checked to within 1 code value against a real screenshot). The strict 40-region count is on that, and its sliding second is in frame (wall-clock) time: equal to the class clock in normal play, and one frame across a seek or a jump, so a stretch of the class a seek replays is not folded onto its first pass.
 
 **Without the beat** steady light may take one of the 3, so there is no dim and no energy ramp at the
 None level (a song change is its re-aim, an interval change is its change frame and the energy in it). A
