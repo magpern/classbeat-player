@@ -66,13 +66,16 @@ describe("the web lane stands alone", () => {
   // syntax-tree guard in play-clock-surface.test.ts follows the play bundle's whole graph.
   const SURFACE = /^(\.\.\/)+player\/app\/src\/core\/clock\/(clock|plan|view)\.ts$/;
 
-  it("nothing in src imports from player/, but the play page's three clock files", () => {
+  // Issue #583: web/src/room/ also takes the scene lane's frame-mark scheduler, one pure file (play-clock-surface.test.ts holds the rest of the guard).
+  const SCHEDULER = /^(\.\.\/)+player\/scene\/model\/src\/flash-marks\.ts$/;
+
+  it("nothing in src imports from player/, but the play page's three clock files and the room's scheduler", () => {
     for (const p of sources) {
       const text = readFileSync(p, "utf8");
-      const name = relative(WEB, p);
-      const inPlay = name.split(sep).join("/").startsWith("src/play/");
+      const name = relative(WEB, p).split(sep).join("/");
       for (const m of text.matchAll(/from\s+["']([^"']*\/player\/[^"']*)["']/g)) {
-        assert.ok(inPlay && SURFACE.test(m[1]), `${name} imports ${m[1]} from player/`);
+        const ok = (name.startsWith("src/play/") && SURFACE.test(m[1])) || (name.startsWith("src/room/") && SCHEDULER.test(m[1]));
+        assert.ok(ok, `${name} imports ${m[1]} from player/`);
       }
     }
   });
@@ -214,7 +217,7 @@ describe("the web lane stands alone", () => {
   });
 
   it("the pure modules import no DOM or I/O", () => {
-    for (const f of ["adapter", "fit", "format", "score", "link-text", "intro-model", "beat-schedule", "model", "input"]) {
+    for (const f of ["adapter", "fit", "format", "score", "link-text", "intro-model", "merge-view", "change-kind", "mark-gate", "model", "input"]) {
       // Comments may say "window" or "document"; code may not use them.
       const text = readFileSync(join(WEB, "src", "room", `${f}.ts`), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
       assert.doesNotMatch(text, /from\s+["'](node:|\.\/dom|\.\/render|\.\/mount)/, f);

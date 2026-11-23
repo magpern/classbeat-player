@@ -62,10 +62,10 @@ describe("keep-awake", () => {
     assert.equal(await link(site.page), "Screen may turn off");
     assert.equal(await site.page.locator(".rail .link").evaluate((e) => e.className.includes("manual") && e.className.includes("handover")), true, "white, with the square");
     await site.page.keyboard.press("Space");
-    await tickBy(site.page, 100);
+    await tickBy(site.page, 600);
     assert.equal(await link(site.page), "Screen may turn off", "still refused while paused");
     await site.page.keyboard.press("Space");
-    await tickBy(site.page, 100);
+    await tickBy(site.page, 600);
     assert.equal(await site.page.evaluate(() => (window as unknown as { __asks: number }).__asks), 2, "asked again on Resume");
     assert.equal(await link(site.page), "Manual clock");
     assert.ok((await countdown(site.page)).length > 0, "the class ran on throughout");

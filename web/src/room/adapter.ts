@@ -1,13 +1,14 @@
 // The typed adapter: a snapshot (the open class, the clock view, the music link view) becomes the
 // room screen's model. Pure; nothing here reads the DOM, a clock or the network, so every state
 // is a function of its input and is tested as one.
-import { beatPeriodMs, canShowBeat, cueIsLong } from "./fit.ts";
+import { cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
 import type { Class, LinkInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
 import { countLabel, linkPlate, pauseLine } from "./link-text.ts";
 import { isNoTempo, patternText, patternValue, patternWords } from "./pattern-model.ts";
-import type { BeatModel, ClockLine, ClockModel, GelModel, MetricModel, NextModel, PatternValue, RoomModel } from "./model.ts";
+import type { ClockLine, ClockModel, GelModel, MetricModel, NextModel, PatternValue, RoomModel, CountModel } from "./model.ts";
+import { mergedView } from "./merge-view.ts";
 import { layoutScore, songBpm } from "./score.ts";
 import { LANDSCAPE_SCALE } from "./score-scale.ts";
 import type { ScoreScale } from "./score-scale.ts";
@@ -21,7 +22,7 @@ const EMPTY: RoomModel = {
   rail: { left: null, done: null, segment: null, link: null },
   clock: null,
   metrics: [],
-  beat: null,
+  count: null,
   cue: null,
   next: null,
   intro: null,
@@ -29,12 +30,15 @@ const EMPTY: RoomModel = {
   intervalKey: "",
   classMs: 0,
   moving: false,
+  changeInMs: null,
 };
 
 export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCALE): RoomModel {
   const notice = input.notice ?? null;
-  const { doc, view, link } = input;
-  if (!doc || !view || doc.intervals.length === 0) return EMPTY;
+  const { doc, link } = input;
+  if (!doc || !input.view || doc.intervals.length === 0) return EMPTY;
+  // Interval changes less than 1 s apart are one change frame: it shows the latest of them (room-2d.md, "Merged intervals").
+  const view = mergedView(doc, input.view);
   const finished = view.status === "ended" || view.classMs >= view.lengthMs;
   const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
   if (finished) return outside("finished", doc, view, link, notice, scale);
@@ -81,20 +85,22 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
   const following = link?.mode === "following";
   const left = following ? link.classRemainingMs : view.classRemainingMs;
   const position = patternValue(iv, song, link, pattern, view.status === "running");
+  const moving = view.status === "running" && !paused && !(link?.held ?? false);
   return {
     kind: "running",
     gel,
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
     metrics: metricsFor(iv, song, link, position),
-    beat: isNoTempo(position) ? null : beatFor(view, link, song),
+    count: countFor(position, song),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
     next: nextFor(doc, view),
     intro: null,
     score: scoreFor(doc, view, link, scale),
     intervalKey: `running:${view.intervalIndex}`,
     classMs: view.classMs,
-    moving: view.status === "running" && !paused && !(link?.held ?? false),
+    moving,
+    changeInMs: moving ? view.intervalRemainingMs : null,
   };
 }
 
@@ -147,20 +153,11 @@ function metricsFor(iv: Class["intervals"][number], song: Song | null, link: Lin
   ];
 }
 
-function beatFor(view: View, link: LinkInput | null, song: Song | null): BeatModel | null {
-  // Only while the link is locked and the song has its own beat anchors; the beats come from the
-  // anchors (the anchor in force now), not from the song's listed BPM.
-  if (link?.state !== "Locked" || link.held || !song) return null;
-  const anchors = song.beat_anchors;
-  if (!anchors || anchors.quality === "missing" || anchors.anchors.length === 0) return null;
-  const rel = view.classMs - song.start_ms;
-  const anchor = [...anchors.anchors].reverse().find((x) => x.at_ms <= rel) ?? anchors.anchors[0];
-  if (!canShowBeat(anchor.bpm, true)) return null;
-  // Lights fall on every k-th beat counted from the anchor: the period is k beats, exactly.
-  const period = beatPeriodMs(anchor.bpm);
-  const sinceAnchor = rel - anchor.at_ms;
-  const toNext = period - (((sinceAnchor % period) + period) % period);
-  return { periodMs: period, phaseMs: toNext, key: `${song.start_ms}:${anchor.at_ms}:${anchor.bpm}` };
+/** The count's beat: the song's tempo, while a count is shown (the player counts; this only says how fast it steps). */
+function countFor(position: PatternValue | null, song: Song | null): CountModel | null {
+  const bpm = song ? songBpm(song) : null;
+  if (position?.kind !== "count" || !bpm) return null;
+  return { beatMs: 60_000 / bpm, beatsLeft: Number(position.count) };
 }
 
 function nextFor(doc: Class, view: View): NextModel {

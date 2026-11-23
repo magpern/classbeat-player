@@ -40,14 +40,12 @@ function patternValueEl(p: PatternValue): HTMLElement {
   return el("span", { class: "v n pv" }, kids);
 }
 
-export function renderMetrics(metrics: readonly MetricModel[], beat: HTMLElement | null): HTMLElement {
-  const items = metrics.map((m, i) => {
+export function renderMetrics(metrics: readonly MetricModel[]): HTMLElement {
+  const items = metrics.map((m) => {
     const label = el("span", { class: "lbl", tier: "label", text: m.label });
     if (m.pattern) return el("div", { class: "metric" }, [label, patternValueEl(m.pattern)]);
     const value: Child[] = [m.value];
     if (m.unit) value.push(el("small", { tier: "minor", text: m.unit }));
-    // The beat dot follows the BPM, the last metric, inside its value.
-    if (beat && i === metrics.length - 1) value.push(beat);
     return el("div", { class: "metric" }, [label, el("span", { class: "v n", tier: "value" }, value)]);
   });
   // A pattern's count closes the column's gap so the cue below keeps its place.

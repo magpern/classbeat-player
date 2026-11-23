@@ -20,7 +20,8 @@ describe("adapter: the states of room-2d.md", () => {
     assert.deepEqual(m.next, { end: false, zone: 2, name: "Endurance", length: "0:45", cadence: "85–95 rpm", position: "Seated", cue: "Hold the pace." });
     assert.equal(m.cue?.text, "Find the beat and hold it. Breathe out on every second bar.");
     assert.equal(m.cue?.long, false);
-    assert.ok(m.beat, "locked, with beat anchors: the dot");
+    assert.equal(m.changeInMs, 70_000, "the change frame is the interval's end");
+    assert.equal(m.count, null, "no pattern: no count");
     assert.equal(m.moving, true);
   });
 
@@ -51,16 +52,15 @@ describe("adapter: the states of room-2d.md", () => {
     assert.deepEqual(m.clock?.line, { kind: "text", text: "Starts again with the music" });
     assert.deepEqual(m.rail.link, { text: "Music paused", look: "alert" });
     assert.equal(m.moving, false);
-    assert.equal(m.beat, null, "no beat dot while paused");
+    assert.equal(m.changeInMs, null, "paused: no change is coming");
   });
 
-  it("coasting: 'Music not heard', estimated, no bar count, no beat dot", () => {
+  it("coasting: 'Music not heard', estimated, no bar count", () => {
     const m = model("coasting");
     assert.deepEqual(m.rail.link, { text: "Music not heard", look: "alert" });
     assert.deepEqual([m.clock?.label, m.clock?.estimated, m.clock?.line], ["Interval left, estimated", true, null]);
     assert.equal(m.cue?.long, true);
     assert.equal(m.score?.unsure, true);
-    assert.equal(m.beat, null);
   });
 
   it("off the list: 'Not a class song', the song's BPM is called planned", () => {
@@ -80,7 +80,6 @@ describe("adapter: the states of room-2d.md", () => {
     const m = model("manual");
     assert.deepEqual(m.rail.link, { text: "Manual clock", look: "manual" });
     assert.equal(m.clock?.line, null);
-    assert.equal(m.beat, null);
   });
 
   it("last interval: its label, bars to the end, 'End of class' next, an End mark", () => {

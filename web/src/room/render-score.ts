@@ -1,15 +1,9 @@
 // The score: intervals above, songs below, a fixed "now" line. DOM at the edge; positions come
-// from score.ts. The strip is one element (`scroll`) that moves sideways as a unit, so the motion
-// loop only ever sets one transform.
+// from score.ts. It never moves between frame marks: each mark draws it again, laid out for the
+// class time of that mark (it steps with the countdown's tick, room-2d.md, "The score").
 import { zoneClass } from "../design/zones.ts";
 import { el, vw } from "./dom.ts";
 import type { ScoreBlock, ScoreClip, ScoreModel } from "./score.ts";
-
-export interface ScoreView {
-  readonly element: HTMLElement;
-  /** Moves the strip left by this many vw (the clock has run on since the model was drawn). */
-  shift(vwLeft: number): void;
-}
 
 function pads(pl: number | null, pr: number | null): Record<string, string> {
   const s: Record<string, string> = {};
@@ -39,7 +33,7 @@ function renderClip(c: ScoreClip): HTMLElement {
   return el("div", { class: "clip", style }, kids);
 }
 
-export function renderScore(score: ScoreModel): ScoreView {
+export function renderScore(score: ScoreModel): HTMLElement {
   const history = [...(score.gone ? [score.gone] : []), ...score.slivers.map((g) => ({ ...g, sliver: true }))].map((g) => el("div", { class: `block gone${"sliver" in g ? " sliver" : ""}`, style: { left: vw(g.left), width: vw(g.width) } }));
   const intervals = el("div", { class: "track iv" }, [...history, ...score.blocks.map(renderBlock)]);
   const songs = el("div", { class: "track songs" }, [
@@ -48,11 +42,5 @@ export function renderScore(score: ScoreModel): ScoreView {
   ]);
   const scroll = el("div", { class: "scroll" }, [intervals, songs]);
   if (score.endLeft !== null) scroll.append(el("div", { class: "end", style: { left: vw(score.endLeft) } }, [el("span", { tier: "label", text: "End" })]));
-  const element = el("section", { class: `score${score.unsure ? " unsure" : ""}` }, [scroll, el("div", { class: "past" }), el("div", { class: "now" })]);
-  return {
-    element,
-    shift: (vwLeft) => {
-      scroll.style.transform = vwLeft === 0 ? "" : `translateX(${-vwLeft}vw)`;
-    },
-  };
+  return el("section", { class: `score${score.unsure ? " unsure" : ""}` }, [scroll, el("div", { class: "past" }), el("div", { class: "now" })]);
 }
