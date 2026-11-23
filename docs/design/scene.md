@@ -526,8 +526,8 @@ the beat and coasting, on every gated moment:
 
 - **Its live spans.** The sway is live in every frame in which the motion phase advances and a lit beam is
   held on a look's target at rest. It is not live in a gather, the drop's wide fan or the hold-still before a
-  drop (their targets do not take the phase), in a pause, or in the 2 s hold after an unforeseen cause (the
-  phase is held). The scheduler knows the live spans with the sweeps' windows (step a): the song's looks,
+  drop (their targets do not take the phase), in a pause, in the 2 s hold after an unforeseen cause, or in a
+  burst's hold (below; the phase is held in both). The scheduler knows the live spans with the sweeps' windows (step a): the song's looks,
   moments and anchors give them, and an unforeseen cause's hold is planned from its frame.
 - **Counted as 1** (`--scene-sway-max`) in every 1 s window that overlaps a live span, at every level, in every
   zone row, locked and coasting. The 1 covers steady light's possible change (the check below measures with
@@ -542,16 +542,33 @@ the beat and coasting, on every gated moment:
   `t0`, the change frame and the sway are 3 already, and a user action 500 ms after `t0`, which nothing
   foresees, would make a fourth.
 - **Without the beat** the sway and steady light share **one** 1 (the check measures them together,
-  coasting), so the None level counts as before: at most 2 marks and that 1, every ramp and dim a step, a
-  burst only where the window has room. Whether the sway splits a burst's 250 ms decay is gated, not argued:
-  the light-only burst at 80 s (None level) has the sway live; the drops at 40 s and 58 s do not (the gather
-  and the wide fan do not take the phase), so their bursts are not affected at either level.
+  coasting), so the None level counts as before: at most 2 marks and that 1, every ramp and dim a step, and
+  a burst only with its hold (next).
+- **The sway and steady light yield to a burst** (Orchestrator, 2026-11-23; to be built in #592). Every
+  burst placed, drop or light-only, at every level, has a **burst's hold**: the motion phase and steady
+  light's clock are held from **1 s before the burst's rise to 1 s after its decay ends** (at the Beat level
+  and Tempo only, to the first lift's rise after the decay's 300 ms tail where that is later). As in the hold
+  after an unforeseen cause, the clocks **stop and resume from where they stopped and never catch up**, and
+  the beams' aim, the haze's drift and the wall's slow wave stand still; beat-like light and every turn go on.
+  Bursts are foreseen (fixed frames, step a), so the scheduler places the hold with them. Every 1 s window
+  that touches the burst (holds its rise or any frame of its decay) lies inside the hold, so the sway and
+  steady light count **0** in it, and no other run lies in it (a run that would waits or becomes a step, and
+  where neither can, e and f skip the burst). Such a window holds the rise and at most one other mark (the
+  invariant, user actions included: P2 places an action at least 500 ms from the rise, so after the 250 ms
+  decay) and the decay: **1 + 1 + 1 = 3**. So the light-only burst at **80 s** (None level, the sway live
+  around it) reads rise, decay and a user action: **3**; the drops at **40 s** and **58 s** the same (their
+  gather and wide fan do not take the phase, so the hold changes nothing in their beams). A window that also
+  overlaps a sweep's window (a drop's fan turn, 650 ms after the drop) counts the sweep's 1 as well; its sum
+  rests on the strict gate's moments at 40 s and 58 s, as before this change, and that residual is the
+  Orchestrator's to weigh. If the "no other run" rule removes a burst the S6 gate asserts, #592 stops and
+  reports it. At the Beat level and Tempo only, e and f judge "near the looks' sway" as if the burst's hold
+  were not there, so the hold adds no burst there (S6's "no burst on an interval change" stays true).
 - **The CI check that the sway makes at most 1.** Its count c is the most changes the **strict measure** finds
   in any 1 s window that overlaps a live span, on the frame drawn with **no scheduled change** and everything
   else (the sway, the steady light, the beat-like light and any turning beam). The check runs a **generated
-  matrix**, locked with the beat and coasting: every look at rest (fan, cross, sweep, circle, split), every
-  zone's row (zones 1 to 7), both phrase parities, the tempos **60, 90, 120, 150, 180 and 200 bpm**, every
-  quality level, and the windows that straddle the first and the last frame of a case of every sweep cause. It
+  matrix**, locked with the beat at the Beat level and at Tempo only, and coasting: every look at rest (fan,
+  cross, sweep, circle, split), every zone's row (zones 1 to 7), both phrase parities, the tempos **60, 90,
+  120, 150, 180 and 200 bpm**, every quality level, and the windows that straddle the first and the last frame of a case of every sweep cause. It
   **fails if any case counts more than 1**, and fails if a look or a sweep cause has no case. If the light
   levers of "If a gated run fails" (the turn limit, the movement rates and the looks stay) cannot bring a case
   to 1, #592 stops and reports it to the Orchestrator; the spec does not plan for it.
@@ -707,8 +724,8 @@ splits a sweep's run (the last bullet). In a window that counts the looks' sway,
   frame to its last nothing else steps in it ("Steps and runs" below). Steady light cannot split
   it: it can only reverse a region where the run is slower than 3 % a second, and there the run
   moves that region by less than 2.1 % in its 700 ms. The sway is never beside a run with the beat
-  ("No run near the sway"); without the beat it can be beside a burst's decay, and whether it splits
-  it is gated (the burst at 80 s).
+  ("No run near the sway"), and it is held around every burst ("The sway and steady light yield to
+  a burst"), so it is beside no decay either.
 - **Around a scheduled run**, the stretches with no lift and no scheduled run are bounded too,
   the drift on either side of the hold included:
   - *before it:* from the peak of the last lift before the hold to the run's start is at most one
@@ -737,8 +754,9 @@ splits a sweep's run (the last bullet). In a window that counts the looks' sway,
 - **The looks' sway**, worst case in every state it is live in, outside a sweep's window: with the beat,
   the sway's 1, at most 2 marks (user actions included) and no run: **1 + 2 + 0 = 3**, with a count
   running too (rule 3 for runs); without the beat, the one 1 of the sway and steady light, at most 2
-  marks and no run (**3**), or that 1 and a burst's rise and decay with no other mark (**1 + 1 + 1 = 3**,
-  where the scheduler finds the room); in the hold, 0. The sway's own changes are at most 1 by its CI
+  marks and no run (**3**); in a window that touches a burst, 0 (the burst's hold), beside the rise,
+  one more mark and the decay (**1 + 1 + 1 = 3**, the 80 s burst included); in the hold after an
+  unforeseen cause, 0. The sway's own changes are at most 1 by its CI
   check; whether a mark's step splits one of its runs rests on the strict gate ("The looks' sway, counted").
 - **Inside a sweep's window** the sum is not argued. The sweep with the steady and beat-like light during it
   gives at most 1 change in any 1 s (the CI matrix), no run lies in the window, and the marks are at most 2 (the
@@ -934,8 +952,8 @@ in this order:
 | b | Every other mark | Placed by text rule 2, P2: user actions, the count's switch beats, the other ticks; the countdown, the bars line, the labels and the score's step show on a mark. |
 | c | Runs, into the gaps | Each run goes into a gap between marks that holds it whole (rules for runs 1 and 2) and overlaps no sweep's window (built for 2.5 s; 4.15 s to be built in #592); after an unforeseen cause a run in progress ends in the cause's frame, and no run ends less than 1 s before the turn that follows the 2 s hold (to be built in #592); at the Beat level and Tempo only none lies near the sway ("No run near the sway", to be built in #592); with a count running there are none (rule 3) |
 | d | A run that does not fit, or would make a fourth (without the beat: every ramp and dim; with it, every run near the looks' sway) | It becomes a step in a mark and adds nothing: the energy ramp in the change frame, any other ramp in the next mark, a user action's ramp in the action's frame; a run that cannot be a step waits for a gap that holds it. **An energy ramp that a sweep's window would hold waits, and so its energy is in the change frame; the change frame is never moved** (to be built in #592) |
-| e | A light-only burst | Skipped where a window would still hold a fourth, where its decay would overlap a sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway: a plain interval change at the Beat level and at Tempo only (wherever the ramp runs), where the ramp has the room. Placed at the None level and where nothing else competes. A skipped burst does not start a new 10 s spacing |
-| f | A drop burst | Skipped where a window would still hold a fourth, where its decay would overlap another sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (a drop's gather and wide fan have none): a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) (the ramp comes first) or with a count running; the fan's fixtures come on in the drop's frame. Its own gather and fan are not in its way (the gather's window ends 1 s before the drop; the fan's turn follows the drop by 650 ms, and for this burst its window starts there) |
+| e | A light-only burst | Skipped where a window would still hold a fourth, where its decay would overlap a sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (judged without the burst's hold), or where a window touching it would hold another run that can neither wait nor be a step: a plain interval change at the Beat level and at Tempo only (wherever the ramp runs), where the ramp has the room. Placed at the None level and where nothing else competes. A skipped burst does not start a new 10 s spacing |
+| f | A drop burst | Skipped where a window would still hold a fourth, where its decay would overlap another sweep's window, or, at the Beat level and Tempo only, where its decay would lie near the looks' sway (judged without the burst's hold; a drop's gather and wide fan have none), or where a window touching it would hold another run that can neither wait nor be a step: a drop on an interval change at the Beat level and at Tempo only (wherever the ramp runs) (the ramp comes first) or with a count running; the fan's fixtures come on in the drop's frame. Its own gather and fan are not in its way (the gather's window ends 1 s before the drop; the fan's turn follows the drop by 650 ms, and for this burst its window starts there) |
 | g | A song-change dim | Skipped where a window would still hold a fourth: the re-aim marks the song. Under #592's accounting it is skipped in every state: its rise, on the new song's first beat, lies in the song change's sweep window, which no run overlaps (#592 measures the song change's c and reports it) |
 
 Steady light is never moved, nor is a sweep (its window and its turn are the song's, rule 4 and S7), nor the
@@ -953,6 +971,7 @@ sweep or the looks' sway, whose count together is at most 1 in any window:
 | Beat running, no count, a window that counts the sway, outside a sweep's window (to be built in #592) | at most 2 | 0 (no run near the sway; d to f) | 0 | 0 | 1 (its CI check) | **2 + 0 + 0 + 0 + 1 = 3** |
 | Without the beat, outside a sweep's window | at most 2 | 0 runs: every run becomes a step in a mark (d) | at most 1 | 0 | in steady light's 1 (one 1 together, its CI check) | **2 + 0 + 1 = 3** |
 | Just after a pause (the beat stops) | at most 2 | where the sway was live, 0 (the pause is a step in the action's frame); elsewhere what the scheduler fits beside them and steady light (d to g) | its first possible change at least 0.73 s after the action's frame (1.73 s, or 1.73 beats, after the last lift, which is at most one beat before); where the pause was a step, a falling run joins its fall to 6 % and a rising one needs 3.3 s, so 0 in the window | 0 | 1 up to the action's frame where live, 0 after it (the phase stops) | **3**: 2 + 0 + 0 + 0 + 1 where the sway was live, 2 + runs + steady light where not |
+| Any state, a window that touches a burst (its rise or its decay; to be built in #592) | at most 2, the rise among them; a user action at least 500 ms after the rise | the decay only (no other run in it) | 0 (the burst's hold) | 0, except where a drop's fan turn starts 650 ms after the drop (then the strict gate's moments at 40 s and 58 s, a residual for the Orchestrator) | 0 (the burst's hold) | **2 + 1 + 0 + 0 + 0 = 3**, the 80 s light-only burst with a user action included |
 | Any state, a window that overlaps a sweep's window (to be built in #592) | at most 2 | 0 (no run overlaps a sweep's window) | in the sweep's 1 | 1 (the CI matrix proves at most 1) | in the sweep's 1 (one 1 together, the sway's check) | **2 + 0 + 1 = 3**, held by the strict gate's moments with each mark type inside each sweep cause |
 | The 2 s after an unforeseen cause (a seek or a jump, a reload, a lost lock, a regained lock, a resume), in any state it leaves or enters (to be built in #592) | at most 2, the cause's own frame among them (the invariant) | at most the run in progress, which ends in the cause's frame, at most 1 s after the cause; no new run ends less than 1 s before the turn | 0 (held still in the hold) | 0 (no beam moves in the hold) | 0 (the phase is held) | **2 + 1 + 0 + 0 + 0 = 3** |
 | Over the turn that follows the hold (to be built in #592) | at most 2 | 0 (no run overlaps it; none ends less than 1 s before it) | in the sweep's 1 | 1 | in the sweep's 1 | **2 + 0 + 1 = 3**, by construction |
@@ -994,7 +1013,8 @@ page is played up to each text step; the layer is taken as a screenshot over bla
 **Without the beat** steady light and the looks' sway may take one of the 3 between them, so there is no dim and no energy ramp at the
 None level (a song change is its re-aim, an interval change is its change frame and the energy in it). A
 burst is not taken away by the missing beat: it is the rise in its fixed frame and a decay run, and it
-fits wherever the window has the room (built in #577, gated: the drops at 40 s and 58 s and the
+fits wherever the window has the room, with the burst's hold around it, so steady light and the sway count 0
+in every window that touches it (to be built in #592; "The sway and steady light yield to a burst") (built in #577, gated: the drops at 40 s and 58 s and the
 light-only burst at 80 s at the None level). The cap holds by the table above: 2 frame marks, user
 actions included, and the one 1 of steady light and the sway, with every run a step in a mark already counted (a: a
 ramp into the next mark, the resume ramp into the action's frame). Steady light never waits.
@@ -1034,7 +1054,10 @@ them, and the test asserts as well that no run overlaps a sweep's window, with n
 window that overlaps a sweep counts at most 3 with the sweep as 1, with no exception; that at the Beat level
 and Tempo only no run, its hold or its tail lies in a window that counts the looks' sway, and that every 1 s
 window that overlaps a live span of the sway counts at most 3 with the sway as 1 (one 1 with steady light's
-and a sweep's); that the sway is not live in the 2 s after an unforeseen cause; that after an unforeseen
+and a sweep's); that the sway is not live in the 2 s after an unforeseen cause; that around every burst the motion phase
+and steady light are held from 1 s before its rise to 1 s after its decay, no other run lies in a window that
+touches it, and every such window counts at most 3 (a fixed case: a light-only burst at the None level with
+the sway live and a user action 500 ms after the rise, as at 80 s); that after an unforeseen
 cause no beam turns and no steady light moves for 2 s of class-clock time, a run in progress ends in the
 cause's P2-placed frame, and no run ends less than 1 s before the turn; that every unforeseen mark is placed by
 P2. The timelines generate a change at the cause between **every ordered pair of link states** the link can
