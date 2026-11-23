@@ -103,10 +103,9 @@ test("the wall's chase travels: a comb with a lit dot every 6 columns, so any re
   assert.deepEqual([0, 1, 2, 3].map((c) => Number(comb(c, 0).toFixed(3))), [1, 0.333, 0, 0], "a tooth and its sides");
 });
 
-test("the flash budget's tokens: the spec's values until tokens.css holds them, a value there only ever stricter, and the names pending are visible", () => {
+test("the flash budget's tokens: tokens.css holds them with the spec's values, a value there only ever stricter, and nothing is pending", () => {
   assert.deepEqual([tokens.liftCap, tokens.holdBeforeMs, tokens.holdAfterMs, tokens.lensFlash], [BUDGET_TOKEN_DEFAULTS.liftCap, 250, 300, 0.25]);
-  const names = ["--scene-lift-cap", "--scene-hold", "--scene-lens-flash"];
-  assert.ok(tokens.pending.every((n) => names.includes(n)), "only the flash budget's tokens may be pending");
+  assert.deepEqual(tokens.pending, [], "tokens.css holds every budget token");
   assert.deepEqual(tokens.missing, [], "and nothing else is missing");
   const css = styleFromCss(readFileSync(TOKENS_CSS, "utf8"));
   const given = (v: Record<string, string>) => readSceneTokens({ getPropertyValue: (n) => v[n] ?? css.getPropertyValue(n) });

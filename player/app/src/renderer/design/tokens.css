@@ -83,6 +83,9 @@
   --scene-turn-max: 30deg; /* per second: the fastest any beam turns (S7) */
   --scene-reaim: 3.5s; /* the longest a re-aim, phrase flip, gather or fan may take */
   --scene-lift-max: 3; /* per second: the beat lift's highest rate */
+  --scene-lift-cap: 0.05; /* largest run any beat-like light may make alone in any region, share of its larger end (S6) */
+  --scene-hold: 250ms 300ms; /* beat-like light held at rest before, after a scheduled run (S6) */
+  --scene-lens-flash: 0.25; /* white share the lens flash adds to a lens (S6) */
   --scene-tempo-pulse: 0.12; /* tempo pulse depth without anchors */
   --score-ahead: 8min; /* score look-ahead (6 at 3:2 and narrower) */
   --score-now: 10vw; /* where "now" is */
