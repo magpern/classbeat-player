@@ -18,4 +18,11 @@ describe("classMixOf", () => {
       assert.equal(classMixOf(music), null, JSON.stringify(music));
     }
   });
+  it("accepts a 64-character id and refuses a dot, an empty id and 65 characters", () => {
+    const of = (id: string) => classMixOf({ swedebeat_mix: { id, length_ms: 1 } });
+    assert.equal(of("a".repeat(64))?.id, "a".repeat(64));
+    assert.equal(of("a.b"), null);
+    assert.equal(of(""), null);
+    assert.equal(of("a".repeat(65)), null);
+  });
 });
