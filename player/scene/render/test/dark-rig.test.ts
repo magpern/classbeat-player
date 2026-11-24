@@ -61,6 +61,8 @@ test("the sway's phase and steady light's clock are held from 1 s before the off
   const held = frames.filter((f) => f.ms > span!.offMs - 990 && f.ms < span!.onMs + 990);
   assert.ok(held.every((f) => f.seconds === held[0]!.seconds), "steady light's clock stands still");
   assert.ok(at(span!.offMs - 1200).seconds !== held[0]!.seconds, "and ran before it");
+  const inSpan = frames.filter((f) => f.ms >= span!.offMs && f.ms < span!.onMs);
+  assert.ok(inSpan.length > 0 && inSpan.every((f) => f.seconds === at(span!.offMs - 100).seconds), "the clock stands from the off-step's own frame, not only from 1 s before it");
   const after = frames.filter((f) => f.ms > span!.onMs + 1100);
   assert.ok(after[5]!.seconds > after[0]!.seconds, "and runs after it, from where it stopped");
   assert.ok(Math.abs(after[0]!.seconds - held[0]!.seconds) < 0.1 + 1.2, "never catching up to the class clock");

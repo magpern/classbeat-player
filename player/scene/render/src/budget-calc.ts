@@ -92,7 +92,7 @@ export class RunBudget {
     return this.skipLog;
   }
 
-  /** The light-only bursts left out because their B8 on-step lies in the hold planned without them (the owner's decision on #622). */
+  /** The light-only bursts left out because their B8 on-step lies in the hold planned without them (#618 comment 7134670843: placed, it makes the cut gate count 2). */
   holdSkips(): readonly string[] {
     return this.holdSkipLog;
   }

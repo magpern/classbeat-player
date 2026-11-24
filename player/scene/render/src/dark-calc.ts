@@ -80,7 +80,7 @@ export function swayNearDecay(w: SongAt, spans: readonly DarkSpan[], decay: { re
 /**
  * A light-only burst whose cut is a B8 (a turn starts under 1 s after its decay): the on-step comes 1 s + 1 frame or more after the decay, inside the hold
  * planned without the burst (1 s either side of the span), where steady light resumes within the second after it and adds a second change; the burst gives
- * way, at every level, and is recorded (the owner's decision on #622). The hold is not extended: no direction depends on a burst (rule 4).
+ * way, at every level, and is recorded (#618 comment 7134670843: placing it adds a second change in the second after its on-step, which the cut gate counts as 2). The hold is not extended: no direction depends on a burst (rule 4).
  */
 export function lightB8InHold(spans: readonly DarkSpan[], decay: { readonly fromMs: number; readonly toMs: number }, frameMs: number): boolean {
   return spans.some((s) => cutSpan({ offMs: s.offMs, onMs: s.onMs }, decay, frameMs).kind === "b8");
