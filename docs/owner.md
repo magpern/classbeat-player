@@ -58,16 +58,20 @@ with other work; nothing in the development loop waits for an answer.
   Agents do not loosen a guard, so this is yours, as the desktop's live connection was (#173).
   Proposal, like option 1 there: one file (`BackendTransport.kt`) may use `HttpsURLConnection`, only
   to the backend address fixed in the build, with no redirects, a 64 KiB answer limit and a 10 s
-  timeout; every other file keeps the full check, and a test pins it. Until you decide, the app is
-  built with a stand-in that fails every backend call as offline, so pairing shows its offline
-  state; nothing else waits.
+  timeout; every other file keeps the full check, and a test pins it. Rider mode (#633) needs the
+  same for the rider's join call and, in one more file, a WebSocket to the same fixed address for
+  the rider connection. Until you decide, the app is built with stand-ins that fail every backend
+  call and the rider connection as offline, so pairing and joining show their offline states;
+  nothing else waits.
 - **The phone app's music follower and the Kotlin audio and Spotify guard (#632, #653, 2026-11-24).**
   ADR 0011 (section 6) has the app follow Spotify by reading its media session (the song and
   whether it plays, never the audio). The guard added in #637 bans every `android.media` and
   `MediaSession` name and the word "spotify" in all the app's Kotlin code, so the reader cannot be
   written without an exception. Proposal, like #173: one file (`SpotifySessionReader.kt`) may name
-  the media-session and metadata types and the package `com.spotify.music`; every other pattern
-  (audio playback and recording, players, the network) stays checked in that file, every other
+  only the media-session types it reads (the session manager, `MediaController`, `MediaMetadata`,
+  `PlaybackState` and its `TransportControls`) and the package `com.spotify.music`. Everything
+  else stays banned in that file too: audio playback and recording (`MediaPlayer`, `AudioTrack`,
+  `AudioRecord`), players and the network; every other
   file keeps the full check, and a test pins it. New guards come with it: the notification listener
   stays empty, the package filter comes before any read, and no Spotify SDK or `spotify:` link.
   Until you decide, the app is built with a stand-in reader that reports "unavailable", so the
