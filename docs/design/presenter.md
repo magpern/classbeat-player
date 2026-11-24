@@ -12,6 +12,9 @@ A class runs on one screen from the room screen's own controls ([room-2d.md](roo
 display it keeps everything below. With one display the room screen fills the display and this
 window lies behind it (class-list.md, "Where the room window goes").
 
+**Sensors** (ADR 0012): the sensors row above the riders row, its drawer and the room screen's strip for one
+display are specified in [sensors.md](sensors.md); until the owner decides, the row says "Not available yet".
+
 **Riders** (ADR 0007): the riders row at the foot of the right column and its drawer (count, nicknames,
 Remove, Lock joining, New code) are specified in [riders-panel.md](riders-panel.md).
 

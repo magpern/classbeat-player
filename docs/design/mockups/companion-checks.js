@@ -8,6 +8,7 @@ const FLOORS = {
   gel: [0.085, 0.155, 54],
   hero: [0.08, 0.135, 48],
   value: [0.034, 0.06, 21],
+  read: [0.046, 0.074, 29], // a sensor reading (sensors.md, S1)
   text: [0.026, 0.045, 16.5],
   textmin: [0.021, 0.037, 13.5],
   minor: [0.019, 0.034, 12.5],

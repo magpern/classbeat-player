@@ -22,7 +22,8 @@ sweat and a bouncing view, as the companion is.
 The page **sends nothing after it has joined** (ADR 0007 section 1): its only WebSocket message is
 `hello`. It has no remote, no key that moves the class, no chat, no reaction. It shows no cue and no
 song (`rider_state` carries neither). It **never controls a bike or any equipment** (rule 2) and
-connects to no sensor (PL9 comes later, in its own spec).
+reads a sensor only as [sensors.md](sensors.md) says (PL9): the rider's own readings stay on the phone and are
+shown as numbers and a gauge; the page still sends nothing after `hello`.
 
 ## What stays on the phone
 
@@ -318,7 +319,7 @@ stay at least 5 % over its floor there.
 | R9. Motion | With reduced motion, no transition or animation lasts longer than 0; nothing repeats faster than three times a second |
 | R10. Coverage and tokens | Every text is inside a checked element; every colour comes from tokens.css; the fonts are the two of system.md, loaded from the page's own files |
 | R11. Visible at once | In every connected class state: the gel's number and name, the countdown, the effort rows, the next rows and My numbers, all inside the screen |
-| R12. No rider on the page | No canvas, picture, ring, bar, count, ranking or list of riders (rules 6, 13, 15) |
+| R12. No rider on the page | No canvas, picture, ring, bar, count, ranking or list of riders (rules 6, 13, 15). The straight gauge of [sensors.md](sensors.md) is the rider's own reading against their own plan, never a rider |
 
 **Guards the screens issue adds** (ADR 0007 section 6): no request body or message from the page
 holds FTP or maximum heart rate (a test over the recorded messages and the join body); the page
@@ -330,7 +331,7 @@ rendered as text only; the page sends `hello` and nothing else after joining.
 | Rule | How this page keeps it |
 |---|---|
 | 1. A finished class only | No editing, no choice of song or zone; it shows the class as written |
-| 2. Software only, no equipment | No Bluetooth, no sensor, no command; the five actions of R5 |
+| 2. Software only, no equipment | Sensors are only read ([sensors.md](sensors.md)); no equipment command; the actions of R5 |
 | 3. Spotify's music stays in Spotify's app | No audio, no song |
 | 4, 5. No road, world or moving viewpoint | Nothing travelled along; no strip, no scene |
 | 6. None of MOWL's look | No ring trio, no row of class bars, no circle or bar per rider (R12); our gel and palette |
