@@ -55,12 +55,22 @@ the nickname. After the join, rider.md's states hold, with no mode strip.
 
 ## What "Remember on this phone" keeps
 
-With "Remember on this phone" on, the app keeps the nickname and the FTP on the phone (max heart
-rate with them, as rider.md has it), so step 2 comes up filled. They never leave the device: the
-join still sends only the code and the nickname. They are **cleared** when the rider leaves the
-class (the "Leave" key of "Leave the class?"), and when the app changes mode, in either direction
-(switching ends the rider's session, app-modes.md). The switch is Off after a clear. Settled in
-issue #633.
+The nickname is **never remembered**: the rider types it again each class, and step 2 always
+opens with the nickname empty and in focus (ADR 0007 section 1, rider.md). With "Remember on this
+phone" on, only the FTP and the maximum heart rate are kept, on the phone only, so those two
+fields come up filled. They never leave the device: the join still sends only the code and the
+nickname.
+
+They are **cleared** (the fields come up empty and the switch is Off) when:
+
+- the rider leaves the class (the "Leave" key of "Leave the class?");
+- the app changes mode, in either direction (switching ends the rider's session, app-modes.md);
+- the class ends;
+- the rider is dropped from the session (removed by the instructor, or the token dropped).
+
+Each of the four endings returns to step 1, so the next rider on a shared phone sees nothing of
+the last one. No mock-up pre-fills the nickname; the join mock-ups show the nickname empty and
+Remember Off. Settled in issue #633; ADR 0007 and rider.md win.
 
 ## Motion and reduced motion
 
