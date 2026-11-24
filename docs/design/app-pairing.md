@@ -55,6 +55,12 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | Pairing could not be kept | `app-pair-save-failed` | Plate "The pairing could not be kept. / The Android Keystore did not keep it, so the pairing was undone. Start again." (the desktop's `save_failed`; the app asks the server to drop the record it made). Same keys as Refused |
 | Unpaired on the website | `app-pair-revoked` | Shown at the next start in instructor mode, or at once if the app is open, after a 401 that means the device was removed: plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused |
 
+The desktop's `no_server` ("no server address is set") and `unpaired` ("no longer paired")
+notices have no phone state, on purpose. The app's server address is fixed in the native build (ADR 0011 section 2), so there
+is never a missing address to report, and a device removed on the website already shows "Unpaired
+on the website" above, which covers `unpaired` and `revoked_on_site`. The phone never shows either
+desktop notice.
+
 The three new plates use the same mode tag, title, plate and keys as Refused, so each has one mock-up and the same two sizes. "Cancel" and "Rider mode" go back to rider mode's start page; the code is dropped. Back is
 "Cancel". A pairing screen never shows the device token, any part of it or the account's
 password.

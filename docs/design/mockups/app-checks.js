@@ -56,6 +56,10 @@ function pageChecks(arg) {
   // The mode strip is on a start page only: never during a class, never while joined.
   const strip = document.querySelector('.strip');
   rows.push(['no mode switch during a class', strip && document.querySelector('.count, .run') ? 'FAIL strip shown with the class' : 'ok']);
+  // A9: the mode tag, where a page has one, names the mode in words and nothing else.
+  const tag = [...document.querySelectorAll('.mode')];
+  const wrong = tag.filter((t) => !/^(Rider|Instructor) mode$/.test(t.textContent.trim()));
+  rows.push(['mode tag reads "Rider mode" or "Instructor mode"', wrong.length ? 'FAIL ' + wrong.map((t) => t.textContent.trim()).join(', ') : 'ok']);
   // The class screen: what must be visible at once (play.md), with "Follow the music" in the band.
   if (document.body.classList.contains('app-room') && !document.querySelector('.idle')) {
     const inView = (q) => { const el = document.querySelector(q); if (!el || !shown(el)) return false; const r = el.getBoundingClientRect(); return r.top >= -0.5 && r.bottom <= innerHeight + 0.5 && r.left >= -0.5 && r.right <= innerWidth + 0.5; };
