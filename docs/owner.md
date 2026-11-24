@@ -138,7 +138,7 @@ with other work; nothing in the development loop waits for an answer.
   them on the room screen.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); installed Android and iOS apps with two modes, Android first (decision
-  15, above); riders' sensors from the web page, with Bluefy on iPhone; no external hardware such
+  15, above); riders' sensors from the web page, on iPhone through the installed app's rider mode (Bluefy dropped, 2026-11-24); no external hardware such
   as lighting.
 
 ## Tasks only the owner can run

@@ -493,13 +493,18 @@ installed application.) Amended (owner, 2026-11-15): the instructor's installed 
 apps of phase PL12 read sensors natively; riders still join from the web page, so a rider on an
 iPhone still uses Bluefy. The app's rider mode (owner, 2026-11-15; ADR 0011, section 1) is a
 second way in for riders; until it reads sensors, a rider's sensor goes through the web page.
+**Amended (owner, 2026-11-24): Bluefy is dropped.** A rider on an iPhone or iPad connects a
+sensor through the installed app's rider mode, which reads it natively; the web page on an iPhone
+gives the targets and the timing and points to the app for sensors. The iOS app therefore starts
+now rather than "later" (PL12), built and tested in CI on the iOS simulator and run by the owner
+on an Apple silicon Mac; checks on a real iPhone stay owner items.
 
 | Device | Can a web page read Bluetooth sensors? |
 |---|---|
 | The desktop player (Windows, macOS, Linux) | Yes, built in |
 | Android phone or tablet, in Chrome | Yes |
 | A computer's Chrome or Edge browser | Yes |
-| **iPhone and iPad** | **Only in the Bluefy browser** (owner's decision, 2026-11-12). Safari, Chrome, Edge and Firefox all run on Safari's engine there and have no Web Bluetooth. An iPhone user who wants their sensor installs Bluefy, a free browser that adds it, and opens the link there; the page says so when it sees an iPhone without Bluetooth support. Without Bluefy an iPhone still gets the targets and the timing |
+| **iPhone and iPad** | **No; sensors through the installed app's rider mode** (owner, 2026-11-24, replacing Bluefy of 2026-11-12). Safari, Chrome, Edge and Firefox all run on Safari's engine there and have no Web Bluetooth. An iPhone user who wants their sensor uses the installed app's rider mode; the page says so when it sees an iPhone without Bluetooth support. Without Bluefy an iPhone still gets the targets and the timing |
 
 Limits of reading from a web page, on every device:
 
@@ -519,7 +524,7 @@ Limits of reading from a web page, on every device:
 - First step: the instructor's own bike and heart rate on the computer, shown against the target.
 - Second step: each rider's phone reads their own bike or strap, shows it to that rider against
   their target, and sends it to the instructor's screen only (rule 13). Android in Chrome, iPhone
-  in Bluefy.
+  in the installed app's rider mode (owner, 2026-11-24).
 - Treadmills: reading speed and incline is the same work. Controlling a treadmill is out of scope
   for safety.
 
@@ -541,7 +546,7 @@ strong at the scene and weak at the application; web technology is the reverse.
 | Television or any other screen | Anything with a browser | Android TV; no Apple TV | Apple TV, Android TV, consoles | Consoles |
 | Virtual reality later | Yes (WebXR) | Yes | Yes | Yes |
 | A rich 3D scene | Good, built in code; fewer ready-made tools | Full engine with an editor | Full engine, largest ecosystem | Highest fidelity |
-| Bluetooth sensors | Built in on desktop and Android; on iPhone through the Bluefy browser (the instructor's PL12 app reads them natively) | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
+| Bluetooth sensors | Built in on desktop and Android; on iPhone through the installed app (PL12), which reads them natively in both modes (owner, 2026-11-24) | Community plugins; desktop confirmed, phones not confirmed | Third-party plugins | Third-party plugins |
 | Sign-in, forms, lists, the website | Native ground | Awkward | Awkward | Awkward |
 | One code base for the room's screen, the phone and the website | **Yes** | No: phone page and website are separate web code anyway | No | No |
 | Agents can build it, test it and check screenshots | Best | Good (text scenes, headless runs) | Harder (editor licence in CI, heavy asset files) | Poor |
@@ -555,7 +560,7 @@ strong at the scene and weak at the application; web technology is the reverse.
   browser engine to Windows, macOS and Linux and has Bluetooth built in. Tauri is the alternative
   for a much smaller download.
 - On phones it is a web page. No phone app of our own is planned (owner, 2026-11-12); iPhone
-  users who want their sensor use the Bluefy browser.
+  users who want their sensor use the installed app (owner, 2026-11-24, replacing Bluefy).
   **Amended (owner, 2026-11-15):** the instructor's player also ships as an installed Android
   app and an installed iOS app (phase PL12): the same screens in a thin native shell, with a
   native music follower and native Bluetooth. Riders still join from a web page with nothing to
@@ -679,10 +684,10 @@ stronger developer and reviewer, as in classbeat.
 | **PL6** | The 3D scene, in the technology spike 2 confirmed: design direction, the light show and the score, beat pulse, quality levels, reduced motion | About 6 to 8 | Reviews the design |
 | **PL7** | Release: signing, notarisation, updater, release workflow, download page, deploy runbook | About 5 | Signing accounts; domain; the first deploy |
 | **PL8** | Live sessions. First **the handlebar companion**: the instructor's phone as teleprompter and remote (section 3). Then riders: join by code, the rider's view in step with the room. Also the player as a web app on a phone or tablet | About 10 | |
-| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome, iPhone in Bluefy; the instructor's own phone app reads them natively from PL12) | About 6 | A bike to test on; an Android phone and an iPhone with Bluefy |
+| **PL9** | Sensors: the instructor's heart rate, cadence, power and FTMS bike on the computer; then riders' phones sending theirs to the session, from the web page (Android in Chrome; on iPhone the installed app's rider mode, owner 2026-11-24; the phone app reads them natively from PL12) | About 6 | A bike to test on; an Android phone and an iPhone with the installed app |
 | **PL10** | Running classes and treadmill reading | About 3 | A treadmill to test on |
 | **PL11** | Swedebeat playback: play a mix while downloading it to an encrypted cache on the device; exact timing | About 6 | Swedebeat's agreement and a sanctioned source of the audio; its own ADR |
-| **PL12** | Installed phone and tablet apps (owner, 2026-11-15). **Android first**, as an APK built in CI and signed with the project's own key, installed by hand outside any store (owner, 2026-11-15). Android installs an update only when it is signed with the same key, so the key never changes; the owner adds it as a CI secret, and until then CI signs with a throwaway debug key whose builds are for testing only. First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. **Amended (owner, 2026-11-24):** the app is built without waiting for the owner's spike 3 run; the run becomes a later check, and fixes it finds are new issues. The shell is Capacitor (owner, 2026-11-15; ADR 0011). Then the Android app: the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected. **One app, two modes** (owner, 2026-11-15): instructor and rider. Rider mode runs the bundled rider page with no account and keeps rules 13 to 15; the music link and notification access are instructor mode only; the mode is held in native code, the app reopens in the last mode used, and entering instructor mode on a paired device always needs the phone's screen lock (ADR 0011, section 1). **iOS later**, once the owner has an iPhone or iPad: the same app, with the manual clock unless decision 15 clears a follower | About 8 to 10, 1 spike | An Android phone with Spotify for spike 3 and one live check; later an iOS device, the Apple Developer membership (decision 9) and decision 15 |
+| **PL12** | Installed phone and tablet apps (owner, 2026-11-15). **Android first**, as an APK built in CI and signed with the project's own key, installed by hand outside any store (owner, 2026-11-15). Android installs an update only when it is signed with the same key, so the key never changes; the owner adds it as a CI secret, and until then CI signs with a throwaway debug key whose builds are for testing only. First **spike 3**: a throwaway Android follower measured against spike 1's criteria on a real phone. **Amended (owner, 2026-11-24):** the app is built without waiting for the owner's spike 3 run; the run becomes a later check, and fixes it finds are new issues. The shell is Capacitor (owner, 2026-11-15; ADR 0011). Then the Android app: the same screens, a music link follower through the system's media sessions, native Bluetooth, keep-awake, an external display when one is connected. **One app, two modes** (owner, 2026-11-15): instructor and rider. Rider mode runs the bundled rider page with no account and keeps rules 13 to 15; the music link and notification access are instructor mode only; the mode is held in native code, the app reopens in the last mode used, and entering instructor mode on a paired device always needs the phone's screen lock (ADR 0011, section 1). **iOS now** (owner, 2026-11-24, replacing "later"): built and tested in CI on the iOS simulator and run by the owner on an Apple silicon Mac; checks on a real iPhone or iPad later. The same app, with rider mode reading sensors natively, with the manual clock unless decision 15 clears a follower | About 8 to 10, 1 spike | An Android phone with Spotify for spike 3 and one live check; later an iOS device, the Apple Developer membership (decision 9) and decision 15 |
 | Ruled out | A group display, ranked lists, games, a virtual world (section 3) | | |
 
 **Spike 1 pass criteria** (proposed; fixed in the timing ADR before the spike runs). A throwaway
@@ -746,8 +751,7 @@ reversible defaults.
     format under a permissive open licence, and the player as open source.
 14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
 15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Android first,
-    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS comes later, once the owner has an
-    iOS device. One app with two modes, instructor and rider (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on iOS may
+    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS starts now on the simulator and the owner's Mac, with real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on iOS may
     use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
 
 ## 14. Not verified
@@ -760,8 +764,8 @@ reversible defaults.
   media session and of AppleScript with crossfade on (spike 1 measures both).
 - Whether Sweden qualifies for Microsoft's signing service as an individual, and its price.
 - 3D frame rate on studio-class integrated graphics and on phones: the re-check in ADR 0009.
-- Bluefy on iPhone with bike and heart-rate sensors: not tested. It is a third party's app; if it
-  stops working, iPhone sensors stop with it.
+- The iOS app's native Bluetooth with bike and heart-rate sensors on a real iPhone: not tested
+  (Bluefy was dropped, owner 2026-11-24).
 - Which Bluetooth services each studio bike and treadmill model really exposes.
 - How accurately Android's media sessions report Spotify's position, with crossfade on, and on
   how many phone makers (spike 3 measures it); which Android permission reading them needs and
