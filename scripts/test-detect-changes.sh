@@ -53,15 +53,15 @@ main_tip="$(git rev-parse HEAD)"
 check "PR uses the merge base (main's own web change is ignored)" "player desktop" "$(flags pull_request "$main_tip" "$feature")"
 check "push compares the two tips" "player desktop" "$(flags push "$fork" "$feature")"
 check "push of web only" "web desktop" "$(flags push "$fork" "$main_tip")"
-check "all-zero before means everything" "backend schema player android web desktop" "$(flags push 0000000000000000000000000000000000000000 "$feature")"
-check "unknown base means everything" "backend schema player android web desktop" "$(flags pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$feature")"
+check "all-zero before means everything" "backend schema player android mobile web desktop" "$(flags push 0000000000000000000000000000000000000000 "$feature")"
+check "unknown base means everything" "backend schema player android mobile web desktop" "$(flags pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$feature")"
 commit scripts/other.sh
 check "unrelated file sets no flag" "" "$(flags push "$main_tip" HEAD)"
 commit schema/class-format/v1/x.json
 check "schema change runs backend, schema and desktop" "backend schema desktop" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 before_wf="$(git rev-parse HEAD)"
 commit .github/workflows/ci.yml
-check "workflow change runs backend, schema, player and desktop" "backend schema player android desktop" "$(flags push "$before_wf" HEAD)"
+check "workflow change runs backend, schema, player and desktop" "backend schema player android mobile desktop" "$(flags push "$before_wf" HEAD)"
 before_tok="$(git rev-parse HEAD)"
 commit docs/design/mockups/tokens.css
 check "design token mock-up change alone runs nothing (documentation only, #435)" "" "$(flags push "$before_tok" HEAD)"
@@ -136,6 +136,19 @@ check "an Android spike change runs player, android and desktop (#558)" "player 
 before_android="$(git rev-parse HEAD)"
 commit player/scene/render/src/z.ts
 check "a scene render change also runs android (the APK bundles it)" "player android desktop" "$(flags push "$before_android" HEAD)"
+
+before_mob="$(git rev-parse HEAD)"
+commit player/mobile/android/app/x.kt
+check "a player/mobile change runs player, mobile and desktop (#629)" "player mobile desktop" "$(flags push "$before_mob" HEAD)"
+before_mob="$(git rev-parse HEAD)"
+commit player/app/src/core/y.ts
+check "a change outside player/mobile does not run the mobile job (#629)" "player desktop" "$(flags push "$before_mob" HEAD)"
+before_mob="$(git rev-parse HEAD)"
+commit web/src/design/tokens.css
+check "web tokens.css does not run the mobile job (#629)" "player android web desktop" "$(flags push "$before_mob" HEAD)"
+before_mob="$(git rev-parse HEAD)"
+commit docs/design/z.md
+check "documentation only does not run the mobile job (#629)" "" "$(flags push "$before_mob" HEAD)"
 
 before_tok="$(git rev-parse HEAD)"
 commit web/src/design/tokens.css

@@ -61,6 +61,10 @@ flag player '^(player/|\.github/workflows/|scripts/package-desktop\.sh|web/src/|
 # The Android spike's APK bundles the scene demo (player/scene/render) and its tokens.css and fonts, so a change
 # there rebuilds it too (#558, #579).
 flag android '^(player/spikes/android-follower/|player/scene/render/|web/src/design/(tokens\.css|fonts/)|\.github/workflows/)'
+# The phone and tablet app (player/mobile/, ADR 0011 section 8, #629): its own job builds the APK. Only its own
+# files and the workflow (so a CI change is exercised) run it; the player flag already covers player/mobile/ for
+# the Node tests.
+flag mobile '^(player/mobile/|\.github/workflows/)'
 # The web tests also read files outside web/: the design specs and mock-ups under docs/design/
 # (docs/design/mockups/tokens.css is compared with web/src/design/tokens.css, the checks are ported
 # from docs/design/mockups/*.js), the live-session schema and examples under schema/live/, and

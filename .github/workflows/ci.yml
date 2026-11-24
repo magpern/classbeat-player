@@ -26,6 +26,7 @@ jobs:
       schema: ${{ steps.detect.outputs.schema }}
       player: ${{ steps.detect.outputs.player }}
       android: ${{ steps.detect.outputs.android }}
+      mobile: ${{ steps.detect.outputs.mobile }}
       web: ${{ steps.detect.outputs.web }}
       desktop: ${{ steps.detect.outputs.desktop }}
       code: ${{ steps.detect.outputs.code }}
@@ -63,6 +64,7 @@ jobs:
           bash scripts/test-worktree.sh
           bash scripts/test-node-packages.sh
           bash scripts/test-build-mac.sh
+          bash scripts/test-check-apk-manifest.sh
       # Backend deploy files (issue #95): `docker compose config` with placeholder secret files,
       # the roles, the secrets and the purge scheduler. Reads files only; starts nothing.
       - name: Backend deploy files
@@ -350,9 +352,82 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # The phone and tablet app (player/mobile/, ADR 0011 section 9, #629): the web view's tests, the JVM
+  # unit tests of both variants (each reads its variant's merged manifest), the debug and the unsigned
+  # release-configured APKs, and a check of the BUILT APKs' manifests (scripts/check-apk-manifest.sh).
+  # Runs only for player/mobile/ (and workflow changes, like every lane job). JDK 21 and the Android SDK
+  # come from the runner image, so no setup action is added. No device and no emulator. Only npm, Gradle,
+  # Maven and SDK package downloads happen, during setup; no test touches the network. The APK is signed
+  # with Gradle's throwaway debug key only: there is no signing secret and no release is published.
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/mobile/package-lock.json
+      - name: JDK 21 and Android SDK from the runner image
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >>"$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >>"$GITHUB_PATH"
+          # compileSdk 36 and AGP 8.13.0's default build tools (app/build.gradle.kts, build.gradle.kts).
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Install, lint, type-check and test the web view (fakes only)
+        working-directory: player/mobile
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+      - name: Build the bundled page
+        working-directory: player/mobile
+        run: npm run build
+      - name: JVM unit tests and both APKs
+        working-directory: player/mobile/android
+        run: ./gradlew --no-daemon testDebugUnitTest testReleaseUnitTest assembleDebug assembleRelease
+      - name: Check the built APKs
+        run: |
+          set -euo pipefail
+          out=player/mobile/android/app/build/outputs/apk
+          debug="$out/debug/app-debug.apk"
+          release="$out/release/app-release-unsigned.apk"
+          AAPT2="${ANDROID_HOME}/build-tools/36.0.0/aapt2"
+          export AAPT2
+          bash scripts/check-apk-manifest.sh debug "$debug"
+          bash scripts/check-apk-manifest.sh release "$release"
+          # Each check can fail: the same checks run on the wrong build must be refused.
+          if bash scripts/check-apk-manifest.sh release "$debug" 2>/dev/null; then
+            echo "the debuggable-off check accepted the debug APK" >&2
+            exit 1
+          fi
+          if bash scripts/check-apk-manifest.sh debug "$release" 2>/dev/null; then
+            echo "the debuggable-on check accepted the release APK" >&2
+            exit 1
+          fi
+          # The debug APK carries the throwaway debug key and nothing else; the release one is unsigned.
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$debug" | tee /tmp/certs.txt
+          grep -q 'CN=Android Debug' /tmp/certs.txt
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$release" 2>/dev/null; then
+            echo "the release APK is signed" >&2
+            exit 1
+          fi
+      - name: Keep the debug APK (test build)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-mobile-debug-TEST-BUILD
+          path: player/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
+
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend, android]
+    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend, android, mobile]
     if: always()
     runs-on: ubuntu-latest
     steps:
