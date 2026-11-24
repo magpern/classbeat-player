@@ -22,6 +22,26 @@ export function isLoopbackHost(host: string | undefined | null): boolean {
 
 let installed = false;
 
+/** Node's own test for "this string is a pipe or socket path, not a port" (net.isPipeName). */
+const isPipeName = (v: unknown): boolean => typeof v === "string" && !(+v >= 0);
+
+/** The dns exports that touch no network: everything else that is a function is refused. */
+const DNS_LOCAL = new Set(["lookup", "getServers", "setServers", "setLocalAddress", "cancel", "getDefaultResultOrder", "setDefaultResultOrder", "Resolver", "promises", "constructor"]);
+
+function refuseResolvers(target: object): void {
+  for (const name of Object.getOwnPropertyNames(target)) {
+    if (DNS_LOCAL.has(name)) continue;
+    const d = Object.getOwnPropertyDescriptor(target, name);
+    if (d === undefined || typeof d.value !== "function" || !d.configurable) continue;
+    Object.defineProperty(target, name, {
+      ...d,
+      value: () => {
+        throw new NetGuardError("a name lookup");
+      },
+    });
+  }
+}
+
 export function installNetGuard(): void {
   if (installed) return;
   installed = true;
@@ -34,9 +54,8 @@ export function installNetGuard(): void {
     if (first !== null && typeof first === "object") {
       const o = first as { host?: string; path?: string };
       if (o.path === undefined && !isLoopbackHost(o.host)) throw new NetGuardError("connect");
-    } else if (typeof first === "string") {
-      // connect(path) is a socket path; connect(port, host) has a number first.
-    } else if (typeof first === "number") {
+    } else if (!isPipeName(first)) {
+      // connect(port, host): a number or numeric string port; no host means localhost.
       const host = rest[1];
       if (typeof host === "string" && !isLoopbackHost(host)) throw new NetGuardError("connect");
     }
@@ -56,13 +75,8 @@ export function installNetGuard(): void {
     refuseLookup(host);
     return realPromisesLookup(host, ...rest);
   };
-  // Resolver calls go to a name server, not the loopback: all refused.
-  for (const name of ["resolve", "resolve4", "resolve6", "resolveAny", "resolveCname", "resolveMx", "resolveNs", "resolveSrv", "resolveTxt", "reverse"] as const) {
-    (dns as unknown as Record<string, unknown>)[name] = () => {
-      throw new NetGuardError("a name lookup");
-    };
-    (dns.promises as unknown as Record<string, unknown>)[name] = () => {
-      throw new NetGuardError("a name lookup");
-    };
-  }
+  // Every other resolver call (resolve*, reverse, lookupService, and any a later Node adds) goes to a
+  // name server, not the loopback: refused on the module, the promises API and both Resolver classes.
+  // Instances made later read these prototypes, so they are covered too.
+  for (const target of [dns, dns.promises, dns.Resolver.prototype, dns.promises.Resolver.prototype]) refuseResolvers(target);
 }

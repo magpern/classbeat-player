@@ -49,14 +49,15 @@ export interface ModeInput {
 
 /**
  * `mix`: play the mix; class time = audio position - `offset_ms`.
- * `manual`: the manual clock, with the reason to show, or null when no mix is involved at all
- * (the class is not a mix class, so there is nothing to explain).
+ * `manual`: a mix class on the manual clock, with the reason to show.
+ * `not_mix`: the class names no mix (Spotify, soundless, or Swedebeat without a mix): this policy
+ * has nothing to say, and the caller keeps what it does today (a Spotify class follows its music link).
  */
-export type ModeResult = { readonly mode: "mix" } | { readonly mode: "manual"; readonly reason: FallbackReason | null };
+export type ModeResult = { readonly mode: "mix" } | { readonly mode: "manual"; readonly reason: FallbackReason } | { readonly mode: "not_mix" };
 
 export function modePolicy(i: ModeInput): ModeResult {
   // Only a Swedebeat class that names a mix can use one; anything else is today's behaviour.
-  if (i.musicSource !== "swedebeat" || !i.hasMix) return { mode: "manual", reason: null };
+  if (i.musicSource !== "swedebeat" || !i.hasMix) return { mode: "not_mix" };
   if (!i.sourceAvailable) return { mode: "manual", reason: "disabled" };
   if (!i.keychainUsable) return { mode: "manual", reason: "no_keychain" };
   if (!i.hasToken) return { mode: "manual", reason: "not_connected" };
@@ -73,5 +74,5 @@ export function modePolicy(i: ModeInput): ModeResult {
 
 /** The words to show for a result, or null when there is no reason. */
 export function reasonWords(r: ModeResult): string | null {
-  return r.mode === "manual" && r.reason !== null ? REASON_WORDS[r.reason] : null;
+  return r.mode === "manual" ? REASON_WORDS[r.reason] : null;
 }

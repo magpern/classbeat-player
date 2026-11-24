@@ -2,6 +2,7 @@
 // synthetic violation. The guard is installed by the --import in package.json, so these tests also
 // prove that every test file runs under it.
 import assert from "node:assert/strict";
+import dgram from "node:dgram";
 import dns from "node:dns";
 import net from "node:net";
 import { describe, it } from "node:test";
@@ -21,6 +22,8 @@ describe("netguard", () => {
     assert.throws(() => net.connect(80, NON_LOOPBACK_IP), NetGuardError);
     assert.throws(() => net.connect({ host: NON_LOOPBACK_NAME, port: 80 }), NetGuardError);
     assert.throws(() => new net.Socket().connect(80, NON_LOOPBACK_IP), NetGuardError);
+    // A numeric string is a port to Node, not a socket path.
+    assert.throws(() => new net.Socket().connect("80" as unknown as number, NON_LOOPBACK_IP), NetGuardError);
   });
 
   it("throws on a name lookup other than localhost", async () => {
@@ -29,9 +32,44 @@ describe("netguard", () => {
     assert.throws(() => dns.promises.lookup(NON_LOOPBACK_NAME), NetGuardError);
   });
 
-  it("makes fetch to a non-loopback address fail", async () => {
-    await assert.rejects(fetch(`http://${NON_LOOPBACK_IP}/`));
-    await assert.rejects(fetch(`http://${NON_LOOPBACK_NAME}/`));
+  it("refuses every resolver method, on the module, the promises API and both Resolver classes", async () => {
+    const methods = Object.getOwnPropertyNames(dns).filter((n) => /^resolve|^reverse$|^lookupService$/.test(n) && typeof (dns as unknown as Record<string, unknown>)[n] === "function");
+    for (const m of ["resolveCaa", "resolveNaptr", "resolvePtr", "resolveSoa", "resolve4", "reverse", "lookupService"]) assert.ok(methods.includes(m), m);
+    const call = (o: object, m: string): unknown => (o as Record<string, (...a: unknown[]) => unknown>)[m]!(NON_LOOPBACK_NAME, 80, () => {});
+    for (const m of methods) {
+      assert.throws(() => call(dns, m), NetGuardError, `dns.${m}`);
+      if (m in dns.Resolver.prototype) assert.throws(() => call(new dns.Resolver(), m), NetGuardError, `Resolver ${m}`);
+    }
+    for (const m of Object.getOwnPropertyNames(dns.promises).filter((n) => /^resolve|^reverse$|^lookupService$/.test(n))) {
+      assert.throws(() => call(dns.promises, m), NetGuardError, `dns.promises.${m}`);
+      if (m in dns.promises.Resolver.prototype) assert.throws(() => call(new dns.promises.Resolver(), m), NetGuardError, `promises Resolver ${m}`);
+    }
+    assert.throws(() => dns.lookupService(NON_LOOPBACK_IP, 80, () => {}), NetGuardError);
+    assert.throws(() => dns.promises.lookupService(NON_LOOPBACK_IP, 80), NetGuardError);
+    assert.throws(() => new dns.promises.Resolver().resolve4(NON_LOOPBACK_NAME), NetGuardError);
+  });
+
+  it("keeps the resolver's local settings usable", () => {
+    const r = new dns.Resolver();
+    r.setServers(["127.0.0.1"]);
+    assert.ok(Array.isArray(r.getServers()));
+  });
+
+  it("makes fetch to a non-loopback address fail because of the guard", async () => {
+    for (const url of [`http://${NON_LOOPBACK_IP}/`, `http://${NON_LOOPBACK_NAME}/`]) {
+      await assert.rejects(fetch(url), (e: unknown) => (e as { cause?: unknown }).cause instanceof NetGuardError, url);
+    }
+  });
+
+  it("refuses a UDP send to a non-loopback address (dgram goes through the patched lookup)", () => {
+    for (const host of [NON_LOOPBACK_IP, NON_LOOPBACK_NAME]) {
+      const sock = dgram.createSocket("udp4"); // one socket per send: a second send would queue behind the first's bind
+      try {
+        assert.throws(() => sock.send("x", 9, host), NetGuardError, host);
+      } finally {
+        sock.close();
+      }
+    }
   });
 
   it("still allows loopback", async () => {

@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test:unit": "node --import tsx --import ./test/unit/netguard-preload.ts --test \"test/unit/*.test.ts\"",
-    "test:e2e": "npm run build && node --import tsx --test --test-concurrency=1 --test-timeout=300000 \"test/e2e/*.test.ts\"",
+    "test:e2e": "npm run build && node --import tsx --import ./test/unit/netguard-preload.ts --test --test-concurrency=1 --test-timeout=300000 \"test/e2e/*.test.ts\"",
     "test": "bash ci.sh",
     "test:shots": "npm run build && node --import tsx --test --test-concurrency=1 \"test/shots/*.test.ts\""
   },

@@ -5,7 +5,8 @@ import { modePolicy, reasonWords, REASON_WORDS, SHORT_REASON_WORDS } from "../..
 import type { FallbackReason, MixReadiness, ModeInput, ModeResult } from "../../src/core/mix/mode-policy.ts";
 
 const BASE: ModeInput = { musicSource: "swedebeat", hasMix: true, sourceAvailable: true, keychainUsable: true, hasToken: true, readiness: "ready" };
-const manual = (reason: FallbackReason | null): ModeResult => ({ mode: "manual", reason });
+const manual = (reason: FallbackReason): ModeResult => ({ mode: "manual", reason });
+const NOT_MIX: ModeResult = { mode: "not_mix" };
 const MIX: ModeResult = { mode: "mix" };
 
 const cases: ReadonlyArray<readonly [string, Partial<ModeInput>, ModeResult]> = [
@@ -20,11 +21,11 @@ const cases: ReadonlyArray<readonly [string, Partial<ModeInput>, ModeResult]> = 
   ["the sound would catch up with the download", { readiness: "downloading" }, manual("downloading")],
   ["a chunk or the length failed its check", { readiness: "not_checked" }, manual("not_checked")],
   ["the account may not play it", { readiness: "not_allowed" }, manual("not_allowed")],
-  ["a Swedebeat class with no mix named", { hasMix: false }, manual(null)],
-  ["a Swedebeat class with no mix and no source", { hasMix: false, sourceAvailable: false }, manual(null)],
-  ["a Spotify class", { musicSource: "spotify", hasMix: false }, manual(null)],
-  ["a Spotify class, even with every mix condition and a mix named", { musicSource: "spotify" }, manual(null)],
-  ["a soundless class, even with every mix condition and a mix named", { musicSource: "none" }, manual(null)],
+  ["a Swedebeat class with no mix named", { hasMix: false }, NOT_MIX],
+  ["a Swedebeat class with no mix and no source", { hasMix: false, sourceAvailable: false }, NOT_MIX],
+  ["a Spotify class", { musicSource: "spotify", hasMix: false }, NOT_MIX],
+  ["a Spotify class, even with every mix condition and a mix named", { musicSource: "spotify" }, NOT_MIX],
+  ["a soundless class, even with every mix condition and a mix named", { musicSource: "none" }, NOT_MIX],
 ];
 
 describe("mode policy", () => {
@@ -53,7 +54,7 @@ describe("mode policy", () => {
 
   it("words a result: the reason for a fall-back, nothing otherwise", () => {
     assert.equal(reasonWords(MIX), null);
-    assert.equal(reasonWords(manual(null)), null);
+    assert.equal(reasonWords(NOT_MIX), null);
     assert.equal(reasonWords(manual("disabled")), "Swedebeat playback is off");
   });
 });
