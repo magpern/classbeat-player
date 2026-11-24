@@ -25,7 +25,7 @@ flags() { # flags <event> <base> <head>: the true flags, space separated
   local o="$tmp.out"
   : >"$o"
   GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
-  { grep '=true' "$o" | grep -v '^code=' | grep -v '^scene_spec=' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
+  { grep '=true' "$o" | grep -v '^code=' | grep -v '^scene_spec=' | grep -v '^scene_shots=' || true; } | sed 's/=true//' | tr '\n' ' ' | sed 's/ $//'
 }
 codeflag() { # codeflag <event> <base> <head>: the `code` output (true or false)
   local o="$tmp.out"
@@ -181,5 +181,30 @@ check "an unknown base sets scene_spec" "true" "$(scenefn pull_request deadbeefd
 before_scene="$(git rev-parse HEAD)"
 commit web/src/y.ts
 check "a web change alone does not set scene_spec" "false" "$(scenefn push "$before_scene" HEAD)"
+
+# scene_shots (#644): the scene's browser shots run for the scene, its tokens and fonts, and the workflow.
+shotsfn() { # shotsfn <event> <base> <head>: the `scene_shots` output (true or false)
+  local o="$tmp.out"
+  : >"$o"
+  GITHUB_OUTPUT="$o" EVENT="$1" BASE_SHA="$2" BEFORE_SHA="$2" HEAD_SHA="$3" bash "$here/detect-changes.sh"
+  grep '^scene_shots=' "$o" | sed 's/^scene_shots=//'
+}
+b="$(git rev-parse HEAD)"; commit player/scene/render/src/x.ts
+check "a scene change runs the shots (#644)" "true" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit web/src/design/tokens.css
+check "tokens.css runs the shots (#644)" "true" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit web/src/design/fonts/f.woff2
+check "a design font runs the shots (#644)" "true" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit .github/workflows/ci.yml
+check "a workflow change runs the shots (#644)" "true" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit player/app/src/x.ts
+check "a change outside the scene does not run the shots (#644)" "false" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit player/mobile/x.ts
+check "player/mobile does not run the shots (#644)" "false" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit web/src/y2.ts
+check "another web file does not run the shots (#644)" "false" "$(shotsfn push "$b" HEAD)"
+b="$(git rev-parse HEAD)"; commit docs/design/scene.md
+check "docs alone do not run the shots (#644)" "false" "$(shotsfn push "$b" HEAD)"
+check "an unknown base runs the shots (#644)" "true" "$(shotsfn pull_request deadbeefdeadbeefdeadbeefdeadbeefdeadbeef HEAD)"
 
 exit "$fail"

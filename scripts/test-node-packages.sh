@@ -65,4 +65,22 @@ mkdir -p "$r/player"
 PATH="$bin:$PATH" bash "$here/run-node-packages.sh" "$r" >/dev/null
 check "no packages: passes, runs nothing" "0" "$(grep -c . "$LOG" || true)"
 
+# The scene renderer (#644): its `test` script ends with test:shots, which the scene-shots job runs.
+# Here only the rest runs, and only while the script is exactly what run-node-packages.sh expects.
+rm -rf "$r/player"
+mkpkg "$r/player/scene/render" '{"scripts":{"test":"npm run lint && npm run typecheck && npm run test:unit && npm run test:shots"}}'
+cat >"$bin/npm" <<'F'
+#!/usr/bin/env bash
+echo "npm $* in $(basename "$PWD")" >>"$LOG"
+exit 0
+F
+: >"$LOG"
+PATH="$bin:$PATH" bash "$here/run-node-packages.sh" "$r" >/dev/null
+check "scene render: lint, typecheck and unit tests run" "3" "$(grep -cE '^npm run (lint|typecheck|test:unit) ' "$LOG")"
+check "scene render: the shots do not run in node-packages" "0" "$(grep -c 'test:shots' "$LOG" || true)"
+check "scene render: npm test is not run" "0" "$(grep -c '^npm test' "$LOG" || true)"
+printf '%s\n' '{"scripts":{"test":"npm run lint && npm run test:shots && npm run extra"}}' >"$r/player/scene/render/package.json"
+if PATH="$bin:$PATH" bash "$here/run-node-packages.sh" "$r" >/dev/null 2>&1; then rc=0; else rc=$?; fi
+check "scene render: a changed test script fails the run (nothing runs unseen)" "1" "$rc"
+
 exit "$fail"

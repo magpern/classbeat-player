@@ -31,6 +31,7 @@ jobs:
       desktop: ${{ steps.detect.outputs.desktop }}
       code: ${{ steps.detect.outputs.code }}
       scene_spec: ${{ steps.detect.outputs.scene_spec }}
+      scene_shots: ${{ steps.detect.outputs.scene_shots }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -77,6 +78,8 @@ jobs:
   # Runs `npm ci && npm test` in every package under player/ that has a package.json and a
   # package-lock.json (found by scripts/list-node-packages.sh, never listed by hand).
   # Also runs for a change to docs/design/scene.md, whose tables player/scene/model tests parse (#527).
+  # scene/render runs lint, types and unit tests here but not `test:shots`, which takes about 40 minutes
+  # and has its own job, `scene-shots` below (#644; scripts/run-node-packages.sh fails if the split drifts).
   node-packages:
     needs: changes
     if: needs.changes.outputs.player == 'true' || needs.changes.outputs.scene_spec == 'true'
@@ -109,11 +112,36 @@ jobs:
           path: player/app/screenshots/
           if-no-files-found: error
           retention-days: 14
-      # The scene renderer's `npm run test:shots` (run by `npm test` above) writes the PNGs to
-      # screenshots/ and the frame log to artifacts/ (#544). Only those files are named here, so no
-      # env file, token or other output can be swept in. always() keeps the failing shots on red runs.
+
+  # The scene renderer's browser shots (`npm run test:shots`, #644): headless Chrome through SwiftShader
+  # on the built demo, about 40 minutes, so it runs beside node-packages instead of inside it. Runs when
+  # player/scene/, the tokens and fonts the demo copies in, or the workflow change (scene_shots in
+  # scripts/detect-changes.sh). `ci` fails when it did not succeed while scene_shots is true, so a shot
+  # that fails, is cancelled or is skipped cannot merge. The runner's own Chrome is used (CHROME_PATH
+  # overrides), so there is no browser to download or cache; npm packages are cached by setup-node.
+  # The shots are one sequential script that shares one page, so they are not sharded here.
+  scene-shots:
+    needs: changes
+    if: needs.changes.outputs.scene_shots == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: player/scene/render
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/scene/render/package-lock.json
+      - run: npm ci
+      - name: Scene shots and frame log
+        run: npm run test:shots
+      # The PNGs go to screenshots/ and the frame log to artifacts/ (#544). Only those files are named,
+      # so no env file, token or other output can be swept in. always() keeps the failing shots on red runs.
       - name: Keep the scene screenshots and frame log
-        if: always() && hashFiles('player/scene/render/tools/shots.ts') != ''
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: scene-screenshots
@@ -427,7 +455,7 @@ jobs:
 
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, desktop-app, web, web-specs, schema, backend, android, mobile]
+    needs: [changes, repo-checks, node-packages, scene-shots, desktop-app, web, web-specs, schema, backend, android, mobile]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -449,6 +477,16 @@ jobs:
         run: |
           if [ "$WEB_CHANGED" = "true" ] && [ "$WEB_SPECS" != "success" ]; then
             echo "web changed but web-specs is '$WEB_SPECS'" >&2
+            exit 1
+          fi
+      # The same for the scene shots (#644): a scene change with no passing shot run cannot be merged.
+      - name: Fail if the scene shots did not run when the scene changed
+        env:
+          SHOTS_CHANGED: ${{ needs.changes.outputs.scene_shots }}
+          SHOTS: ${{ needs.scene-shots.result }}
+        run: |
+          if [ "$SHOTS_CHANGED" = "true" ] && [ "$SHOTS" != "success" ]; then
+            echo "the scene changed but scene-shots is '$SHOTS'" >&2
             exit 1
           fi
 
