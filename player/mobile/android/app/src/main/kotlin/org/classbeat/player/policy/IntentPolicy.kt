@@ -3,8 +3,8 @@ package org.classbeat.player.policy
 // The named intents the web view may call, split by mode (ADR 0011 section 3, issue #630). Pure:
 // no Android import. Each intent belongs to one mode and takes a fixed set of arguments; a call
 // from the other mode, while the app is between modes, or with any argument the intent does not
-// name is refused before native code acts on it. Later issues add their intents here: the rider's
-// join, send and leave (#633) and the instructor's live session.
+// name is refused before native code acts on it. Later issues add their intents here, such as the
+// instructor's live session.
 
 object IntentPolicy {
     /** The type an argument must have, as the bridge hands it over (org.json values). */
@@ -18,6 +18,13 @@ object IntentPolicy {
         "instructorWay" to Spec(Mode.RIDER, emptyMap()),
         // Rider mode: "Switch to instructor mode" pressed. Native code decides what follows.
         "askInstructorMode" to Spec(Mode.RIDER, emptyMap()),
+        // Rider mode (#633): join with the class code and a nickname, open the live link, wait for
+        // what comes in (one call at a time) and leave. Native code holds the rider token and sends
+        // `hello` itself; the page never sends a frame and never sees the token.
+        "join" to Spec(Mode.RIDER, mapOf("session" to Arg.STRING, "nickname" to Arg.STRING)),
+        "open" to Spec(Mode.RIDER, emptyMap()),
+        "receive" to Spec(Mode.RIDER, emptyMap()),
+        "leave" to Spec(Mode.RIDER, emptyMap()),
         // Instructor mode: "Switch to rider mode" pressed. Native code asks the question.
         "askRiderMode" to Spec(Mode.INSTRUCTOR, emptyMap()),
         // Instructor mode (#631): the cached classes, a sync now, one class by its id, unpairing

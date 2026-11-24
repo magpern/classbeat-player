@@ -39,6 +39,10 @@ class ModeController(
     lateinit var instructor: InstructorBridge
         private set
 
+    /** Rider mode's live intents (#633). */
+    lateinit var rider: RiderBridge
+        private set
+
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
 
@@ -52,7 +56,7 @@ class ModeController(
         override fun handleOnBackPressed() = stay()
     }
 
-    fun start(holder: ModeHolder, locked: BridgeLockdown.Locked, webView: WebView, parts: InstructorParts) {
+    fun start(holder: ModeHolder, locked: BridgeLockdown.Locked, webView: WebView, parts: InstructorParts, rider: RiderBridge) {
         this.holder = holder
         this.locked = locked
         this.webView = webView
@@ -60,6 +64,9 @@ class ModeController(
         parts.pairing.changed = pairing::changed
         instructor = InstructorBridge(parts.intents) { current }
         intents = parts.intents
+        this.rider = rider
+        // Added first, so a native screen's Back (added last) runs before the rider's.
+        activity.onBackPressedDispatcher.addCallback(activity, rider.back)
         activity.onBackPressedDispatcher.addCallback(activity, back)
         holder.start()
     }
