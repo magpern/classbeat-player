@@ -57,6 +57,42 @@ const rules: Stage = async (f) => {
 };
 const state = (open: StateDef["open"], ...stages: Stage[]): StateDef => ({ open, stage: then(...stages, rules) });
 const sheet = (open: StateDef["open"], ...stages: Stage[]): StateDef => ({ ...state(open, ...stages), form: true });
+/**
+ * Sets the class up with the screen turned, then turns it back to the shot's size: the next rows give
+ * way again for the height the readings now have (sensors.md, "Fitting"). They give way exactly as far
+ * as they must: one step less spills over, and the step they are at does not (or it is the last).
+ */
+const turned = (...stages: Stage[]): Stage => async (f) => {
+  const size = f.page.viewportSize()!;
+  await f.page.setViewportSize({ width: size.height, height: size.width });
+  await then(...stages)(f);
+  // The browser sends resize at its next frame; a listener added after the page's own one says it has.
+  await f.page.evaluate(() => addEventListener("resize", () => document.documentElement.setAttribute("data-turned", ""), { once: true }));
+  await f.page.setViewportSize(size);
+  await f.page.waitForFunction(() => document.documentElement.hasAttribute("data-turned"), null, { polling: 50, timeout: 10_000 });
+  await f.page.evaluate(() => document.documentElement.removeAttribute("data-turned"));
+  const r = await f.page.evaluate(() => {
+    const [root, effort, coming] = ["main.run", ".effort", ".coming"].map((s) => document.querySelector<HTMLElement>(s)!);
+    const steps = [[], ["fit-L2", "fit-P2"], ["fit-L2", "fit-P2", "fit-L1", "fit-P1"]];
+    const over = (): boolean => root.scrollHeight > root.clientHeight || effort.scrollHeight > effort.clientHeight;
+    const set = (k: number): void => {
+      coming.classList.remove(...steps[2]);
+      coming.classList.add(...steps[k]);
+    };
+    const now = [...coming.classList].filter((c) => c.startsWith("fit-")).length / 2;
+    const fits = now === 2 || !over();
+    let less = true;
+    if (now > 0) {
+      set(now - 1);
+      less = over();
+      set(now);
+    }
+    return { now, fits, less };
+  });
+  assert.ok(r.fits, `the readings spill over at step ${r.now} after the turn`);
+  assert.ok(r.less, `the next rows gave way to step ${r.now} with room for one step less after the turn`);
+};
+
 const SHEET_WORDS = ["Sensors", "Readings stay on this phone. Nothing is sent, saved or compared.", "Connect another sensor", "Done"];
 
 const STATES: Readonly<Record<string, StateDef>> = {
@@ -71,11 +107,13 @@ const STATES: Readonly<Record<string, StateDef>> = {
   "sensors-failed": state(IN, inClass(RUN), press("sensors"), async (f) => refuse(f.page), tick(), words(["Could not connect", "Check that Bluetooth is on and the sensor is awake.", "Connect a sensor"])),
   "sensors-closed": state(IN, inClass(RUN), press("sensors"), async (f) => cancel(f.page), tick(), words(["Connect a sensor"], ["Choose your sensor", "Could not connect"])),
   "sensors-worst": state(IN, inClass(WORST, true, NICK24), connect(GARMIN), another(WIDE), heart(GARMIN, 230), ride(WIDE, 1999, 199), tick(), words(["230", "1999", "199", "Standing"])),
+  // The same, set up with the screen turned and then turned back.
+  "sensors-worst-turned": state(IN, turned(inClass(WORST, true, NICK24), connect(GARMIN), another(WIDE), heart(GARMIN, 230), ride(WIDE, 1999, 199), tick()), words(["230", "1999", "199", "Standing"])),
   // The sheets (portrait).
   "sensors-sheet": sheet(IN, inClass(RUN), connect(STRAP), another(BIKE), press("sensors"), words([...SHEET_WORDS, STRAP.name, "Heart rate, connected", BIKE.name, "Power and cadence, connected", "Disconnect"])),
   "sensors-sheet-lost": sheet(IN, inClass(RUN), connect(STRAP), another(BIKE), press("sensors"), async (f) => drop(f.page, BIKE.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), words([...SHEET_WORDS, "Power and cadence, lost", "Reconnect", "Heart rate, connected"])),
   "sensors-unsupported": sheet({ ...IN, sensors: "none" }, inClass(RUN), words(["Connect a sensor"]), press("sensors"), words(["This browser cannot connect to a sensor", "Open this page in Chrome on an Android phone.", "Done"], ["Bluefy"])),
-  "sensors-unsupported-iphone": sheet({ ...IN, sensors: "none", userAgent: IPHONE_UA }, inClass(RUN), press("sensors"), words(["This browser cannot connect to a sensor", "On an iPhone, this page gives you the targets and the timing.", "Sensors on an iPhone need the classbeat Player app.", "Done"], ["Chrome", "Bluefy"])),
+  "sensors-unsupported-iphone": sheet({ ...IN, sensors: "none", userAgent: IPHONE_UA }, inClass(RUN), press("sensors"), words(["This browser cannot connect to a sensor", "On an iPhone this page gives the targets and the timing.", "Sensors need the installed classbeat Player app (rider mode).", "Done"], ["Chrome", "Bluefy"])),
   "sensors-worst-sheet": sheet(IN, inClass(WORST, true, NICK24), connect(GARMIN), another(WIDE), press("sensors"), async (f) => drop(f.page, WIDE.id), tick(), words([...SHEET_WORDS, WIDE.name, GARMIN.name, "Power and cadence, lost", "Heart rate, connected"])),
 };
 

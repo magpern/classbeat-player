@@ -79,6 +79,12 @@ export class RiderApp {
     };
     setInterval(() => this.tick(), TICK_MS);
     addEventListener("hashchange", () => this.onHash());
+    // A resize or a turn of the phone changes the height the readings have: the next rows fit again.
+    const refit = (): void => {
+      if (this.shown === "run") this.run?.fit();
+    };
+    addEventListener("resize", refit);
+    matchMedia("(orientation: portrait)").addEventListener("change", refit);
     const token = loadToken();
     if (token) this.connect(token);
     this.draw();

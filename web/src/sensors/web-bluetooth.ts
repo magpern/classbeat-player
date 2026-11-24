@@ -47,12 +47,29 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
   const listeners = new Listeners();
   const devices = new Map<string, Device>();
   const leaving = new Set<string>();
+  // One set of characteristic listeners per device: a new subscribe ends the last one's, so a
+  // reconnect or a second pick of the same sensor never doubles its readings.
+  const subscriptions = new Map<string, AbortController>();
+  // Each device object gets one "gattserverdisconnected" listener, however often it is picked.
+  const watched = new WeakSet<Device>();
+  // Bumped when the rider leaves (disconnectAll): a pick or a connection that finishes after that
+  // belongs to a page that let go of its sensors, so it is disconnected and nothing is emitted.
+  let epoch = 0;
   const now = (): number => win.performance.now();
+  /** A connection that finished after the page let go of it (left, removed or superseded). */
+  class Left extends Error {}
 
-  const subscribe = async (d: Device): Promise<void> => {
+  const subscribe = async (d: Device, at: number): Promise<void> => {
     const server = d.gatt;
     if (!server) throw new Error("no server");
+    subscriptions.get(d.id)?.abort();
+    const sub = new AbortController();
+    subscriptions.set(d.id, sub);
+    const still = (): void => {
+      if (epoch !== at || sub.signal.aborted) throw new Left();
+    };
     await server.connect();
+    still();
     const gives = new Set<Measure>();
     const cranks = new Map<Kind, Stamped<Crank>>();
     for (const r of READS) {
@@ -62,24 +79,41 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
       } catch {
         continue; // the device does not have this service
       }
-      ch.addEventListener("characteristicvaluechanged", () => {
+      still();
+      const read = (): void => {
         if (!ch.value) return;
-        const at = now();
-        const out = decode(r.kind, ch.value, cranks.get(r.kind) ?? null, at);
+        const t = now();
+        const out = decode(r.kind, ch.value, cranks.get(r.kind) ?? null, t);
         if (out.crank) cranks.set(r.kind, out.crank);
-        for (const x of out.readings) listeners.emit({ type: "sample", id: d.id, measure: x.measure, value: x.value, at });
-      });
+        for (const x of out.readings) listeners.emit({ type: "sample", id: d.id, measure: x.measure, value: x.value, at: t });
+      };
+      ch.addEventListener("characteristicvaluechanged", read, { signal: sub.signal });
       await ch.startNotifications();
+      still();
       r.gives.forEach((m) => gives.add(m));
     }
     if (!gives.size) throw new Error("nothing to read");
     listeners.emit({ type: "connected", id: d.id, name: d.name?.trim() || "Sensor", gives: [...gives], at: now() });
   };
 
+  /** Lets go of a device the page does not keep: its listeners end and it is disconnected. */
+  const release = (d: Device): void => {
+    leaving.add(d.id);
+    subscriptions.get(d.id)?.abort();
+    subscriptions.delete(d.id);
+    d.gatt?.disconnect();
+    devices.delete(d.id);
+  };
+
+  /** After a Left: disconnect the device unless a newer connection of this page now holds it. */
+  const settle = (d: Device, at: number): void => {
+    if (epoch !== at || !devices.has(d.id)) release(d);
+  };
+
   const drop = (id: string): void => {
+    const d = devices.get(id);
+    if (d) release(d);
     leaving.add(id);
-    devices.get(id)?.gatt?.disconnect();
-    devices.delete(id);
     listeners.emit({ type: "removed", id });
   };
 
@@ -88,10 +122,14 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     failDetail: "Check that Bluetooth is on and the sensor is awake.",
     now,
     connect() {
+      const at = epoch;
       listeners.emit({ type: "choosing" });
       api.requestDevice({ filters: ALL_SERVICES.map((s) => ({ services: [s] })), optionalServices: ALL_SERVICES }).then(
         async (d) => {
-          if (!devices.has(d.id)) {
+          if (epoch !== at) return release(d); // picked after the rider left
+          if (devices.has(d.id) && d.gatt?.connected) return listeners.emit({ type: "closed" }); // already read
+          if (!watched.has(d)) {
+            watched.add(d);
             d.addEventListener("gattserverdisconnected", () => {
               if (leaving.has(d.id) || !devices.has(d.id)) return;
               listeners.emit({ type: "lost", id: d.id });
@@ -100,25 +138,28 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
           devices.set(d.id, d);
           leaving.delete(d.id);
           try {
-            await subscribe(d);
-          } catch {
-            leaving.add(d.id);
-            d.gatt?.disconnect();
-            devices.delete(d.id);
+            await subscribe(d, at);
+          } catch (e) {
+            if (e instanceof Left) return settle(d, at);
+            release(d);
             listeners.emit({ type: "failed" });
           }
         },
-        (err: unknown) => listeners.emit({ type: (err as { name?: string } | null)?.name === "NotFoundError" ? "closed" : "failed" }),
+        (err: unknown) => {
+          if (epoch === at) listeners.emit({ type: (err as { name?: string } | null)?.name === "NotFoundError" ? "closed" : "failed" });
+        },
       );
     },
     reconnect(id) {
       const d = devices.get(id);
       if (!d) return;
       listeners.emit({ type: "retry", id });
-      subscribe(d).catch(() => listeners.emit({ type: "lost", id }));
+      const at = epoch;
+      subscribe(d, at).catch((e: unknown) => (e instanceof Left ? settle(d, at) : listeners.emit({ type: "lost", id })));
     },
     disconnect: drop,
     disconnectAll() {
+      epoch += 1;
       [...devices.keys()].forEach(drop);
     },
     listen: (cb) => listeners.add(cb),

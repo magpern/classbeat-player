@@ -76,13 +76,15 @@ describe("the guard catches each", () => {
     ["member 16-bit UUID", "const U = 0xFEC3;", "control-point UUID"],
     ["eight-digit string", '"00002ad9"', "control-point UUID"],
     ["decimal GATT number in a sensor file", "getCharacteristic(10840)", "control-point UUID"],
+    ["decimal GATT service in a file that names no sensor", "export const RSC = 6164;", "control-point UUID"],
+    ["decimal GATT number with separators, anywhere", "const LENGTH_S = 11_093;", "control-point UUID"],
+    ["decimal GATT number that looks like watts", "const watts = 6200;", "control-point UUID"],
   ];
   for (const [label, src, name] of cases) it(label, () => assert.ok(violations(src).includes(name)));
 
   it("lets the allowed characteristics through", () => {
     assert.deepEqual(violations("const a = 0x2A37, b = 0x2A5B, c = 0x2A63, d = 0x2AD2, e = 0x180d, f = 0x00002a37;"), []);
     assert.deepEqual(violations('const ms = 8601, y = "2024", k = 7200;'), []);
-    assert.deepEqual(violations("const watts = 6200, ms = 11000;"), []);
     assert.deepEqual(violations('"00002a37-0000-1000-8000-00805f9b34fb"; getCharacteristic(10807); getPrimaryService(6157)'), []);
   });
 });

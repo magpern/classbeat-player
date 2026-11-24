@@ -12,7 +12,7 @@ export const SHEET_NOTE = "Readings stay on this phone. Nothing is sent, saved o
 export const UNSUPPORTED = {
   head: "This browser cannot connect to a sensor",
   android: "Open this page in Chrome on an Android phone.",
-  iphone: "On an iPhone, this page gives you the targets and the timing. Sensors on an iPhone need the classbeat Player app.",
+  iphone: "On an iPhone this page gives the targets and the timing. Sensors need the installed classbeat Player app (rider mode).",
 } as const;
 
 const label = (text: string, cls: string, lines = 1): HTMLElement => el("span", { class: cls, tier: "label", lines, text });

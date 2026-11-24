@@ -157,12 +157,21 @@ describe("the browser's sensor code reaches only the rider web page", () => {
     const pkg = JSON.parse(readFileSync(join(WEB_DIR, "package.json"), "utf8")) as { imports?: Record<string, string> };
     assert.deepEqual(pkg.imports, { "#browser-sensors": "./src/sensors/web-bluetooth.ts" });
   });
+  // Any string naming the module counts, so a dynamic import, a re-export, a require or a relative
+  // path to the file is caught as well as a static import.
+  const NAMES_IT = /["'`](#browser-sensors|[^"'`\n]*\/web-bluetooth(\.ts|\.js)?)["'`]/;
+  it("the pin catches every way to reach the module", () => {
+    for (const src of ['import { b } from "#browser-sensors";', 'await import("#browser-sensors")', "import('#browser-sensors')", 'export * from "#browser-sensors";', 'require("#browser-sensors")', 'import("../sensors/web-bluetooth.ts")', 'import "./web-bluetooth";']) {
+      assert.match(src, NAMES_IT, src);
+    }
+    assert.doesNotMatch('import { unavailableSource } from "../sensors/source.ts";', NAMES_IT);
+  });
   it("only src/rider/main.ts takes it", async () => {
     const { readdirSync } = await import("node:fs");
     const users: string[] = [];
     for (const f of readdirSync(join(WEB_DIR, "src"), { recursive: true, encoding: "utf8" })) {
-      if (!/\.(ts|js|mjs)$/.test(f)) continue;
-      if (readFileSync(join(WEB_DIR, "src", f), "utf8").includes('from "#browser-sensors"')) users.push(f.replaceAll("\\", "/"));
+      if (!/\.(ts|js|mjs|cjs)$/.test(f) || f.replaceAll("\\", "/") === "sensors/web-bluetooth.ts") continue;
+      if (NAMES_IT.test(readFileSync(join(WEB_DIR, "src", f), "utf8"))) users.push(f.replaceAll("\\", "/"));
     }
     assert.deepEqual(users, ["rider/main.ts"]);
   });

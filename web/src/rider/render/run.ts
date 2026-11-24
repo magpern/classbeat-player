@@ -114,9 +114,10 @@ export class RiderRun {
 
   /**
    * The next rows give way when the readings need the height (docs/design/sensors.md, "Fitting"):
-   * three rows, then two, then one; the effort and the readings never do.
+   * three rows, then two, then one; the effort and the readings never do. The page calls it again when
+   * the screen is resized or turned, since the room the readings have changes with it.
    */
-  private fit(): void {
+  fit(): void {
     const coming = this.shown.get("coming")?.node;
     if (!coming) return;
     coming.classList.remove(...FITS.flat());
