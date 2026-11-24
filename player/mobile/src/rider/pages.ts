@@ -6,6 +6,7 @@ import { shownWhileTyping } from "../../../../web/src/companion/core/codes.ts";
 import type { Form } from "../../../../web/src/rider/core/join.ts";
 import { joinPage } from "../../../../web/src/rider/render/form.ts";
 import type { FormHandlers } from "../../../../web/src/rider/render/form.ts";
+import { refusedPage } from "../../../../web/src/rider/render/pages.ts";
 import { plate } from "../../../../web/src/rider/render/parts.ts";
 import { el } from "../../../../web/src/room/dom.ts";
 import { h1, key, modeTag, page, para } from "../modes/view.ts";
@@ -80,9 +81,24 @@ export function detailsPage(f: Form, h: FormHandlers, back: () => void): HTMLEle
   root.querySelector(".lead")?.prepend(modeTag(RIDER.tag));
   const duo = root.querySelector(".duo");
   if (duo && !f.busy) {
-    duo.prepend(key("key", "cancel", "Back", back));
+    const backKey = key("key", "cancel", "Back", back);
+    const join = duo.querySelector('[data-action="join"]');
+    const forget = duo.querySelector('[data-action="forget"]');
+    if (join && forget) {
+      // Three keys do not fit one row: Join the class, the main key, gets its own full line, with
+      // Back and Forget side by side under it (app-rider-join.md, step 2 with remembered numbers).
+      duo.replaceChildren(join, backKey, forget);
+      duo.classList.add("trio");
+    } else duo.prepend(backKey);
     duo.classList.remove("solo");
   }
+  return root;
+}
+
+/** "Could not join" and "No connection", with the mode tag first as on every page outside a class (A9). */
+export function refusedWithTag(kind: "not_joined" | "no_connection", code: string | null, retry: () => void): HTMLElement {
+  const root = refusedPage(kind, code, retry);
+  root.querySelector(".lead")?.prepend(modeTag(RIDER.tag));
   return root;
 }
 

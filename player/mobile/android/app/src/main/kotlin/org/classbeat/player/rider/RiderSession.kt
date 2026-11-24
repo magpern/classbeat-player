@@ -133,9 +133,18 @@ class RiderSession(private val transport: RiderTransport) {
             waiting = null
             return deliver(event, w)
         }
-        if (queue.size >= MAX_QUEUED) queue.removeFirst()
+        if (queue.size >= MAX_QUEUED) {
+            // A full queue loses its oldest passing event, never an ending (a close or `ended`): the
+            // page must still hear how the class ended. With none to lose, a passing event is not kept.
+            val old = queue.indexOfFirst { !terminal(it) }
+            if (old >= 0) queue.removeAt(old) else if (!terminal(event)) return
+        }
         queue.addLast(event)
     }
+
+    /** A close of the link, or the class's `ended`: what the page must hear to show the ending. */
+    private fun terminal(event: Map<String, Any?>): Boolean =
+        event["kind"] == "closed" || (event["kind"] == "frame" && (Json.tryParse(event["text"] as? String ?: "").getOrNull() as? Map<*, *>)?.get("type") == "ended")
 
     private fun deliver(event: Map<String, Any?>, reply: RiderReply) =
         reply(if (AnswerPolicy.mayAnswer(event, listOfNotNull(token))) event else null)

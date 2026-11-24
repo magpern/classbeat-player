@@ -13,16 +13,17 @@ import type { FieldName } from "../../../../web/src/rider/core/join.ts";
 import { liveView } from "../../../../web/src/rider/core/view.ts";
 import { numbersSheet } from "../../../../web/src/rider/render/form.ts";
 import type { FormHandlers } from "../../../../web/src/rider/render/form.ts";
-import { refusedPage, waitingPage } from "../../../../web/src/rider/render/pages.ts";
+import { waitingPage } from "../../../../web/src/rider/render/pages.ts";
 import { RiderRun } from "../../../../web/src/rider/render/run.ts";
 import type { RiderModePlugin } from "../modes/bridge.ts";
+import { endIfOver } from "./ending.ts";
 import { ENDING_WORDS, backToCode, continueCode, ended, joinAnswered, joinPressed, keepRiding, onEvent, retry, start } from "./flow.ts";
 import type { Flow } from "./flow.ts";
 import { NativeLink } from "./link.ts";
 import { parseJoinReply } from "./native.ts";
 import type { NativeEvent } from "./native.ts";
 import { Numbers } from "./numbers.ts";
-import { codePage, detailsPage, leavePage, notice } from "./pages.ts";
+import { codePage, detailsPage, leavePage, notice, refusedWithTag } from "./pages.ts";
 import { ModeStrip } from "./strip.ts";
 
 const TICK_MS = 250;
@@ -65,16 +66,15 @@ export class RiderModeApp {
   private set(f: Flow, focus?: string): void {
     const was = this.flow;
     this.flow = f;
-    if (was.live && !f.live) this.over();
+    if (endIfOver(was, f, this.numbers)) this.over();
     this.draw();
     if (focus) this.focus(focus);
   }
 
-  /** The class is over for this page (any ending): no link, no wake lock, no remembered numbers. */
+  /** The class is over for this page (any ending): no link, no wake lock (ending.ts deleted the numbers). */
   private over(): void {
     this.link?.stop();
     this.link = null;
-    this.numbers.forget();
     this.wake.want(false);
     this.sheet = false;
   }
@@ -216,7 +216,7 @@ export class RiderModeApp {
       case "not_joined":
       case "no_connection": {
         const kind = f.screen;
-        return this.mount(`refused:${kind}`, () => refusedPage(kind, form.code, () => this.set(retry(this.flow))), force);
+        return this.mount(`refused:${kind}`, () => refusedWithTag(kind, form.code, () => this.set(retry(this.flow))), force);
       }
       case "leave":
         return this.mount("leave", () => leavePage(() => void this.leave(), () => this.set(keepRiding(this.flow))), force);

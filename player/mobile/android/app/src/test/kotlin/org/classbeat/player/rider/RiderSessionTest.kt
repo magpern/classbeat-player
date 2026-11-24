@@ -143,6 +143,27 @@ class RiderSessionTest {
     }
 
     @Test
+    fun `a full queue drops passing events, never a close or the class's ended`() {
+        joined()
+        opened().listener.closed(1006)
+        val link = opened()
+        val status = example("host-status", "connected.json")
+        repeat(RiderSession.MAX_QUEUED * 2) { link.listener.text(status) }
+        link.listener.text(example("ended", "host-ended.json"))
+        while (true) {
+            val before = toPage.size
+            session.receive(reply)
+            if (toPage.size == before || toPage.last() == "refused") break
+        }
+        // The join's and the opens' own answers have no "kind"; only the events do.
+        val events = toPage.filter { it != "refused" }.map { Json.tryParse(it).getOrNull() as Map<*, *> }.filter { "kind" in it }
+        assertEquals(RiderSession.MAX_QUEUED, events.size)
+        assertEquals(mapOf("kind" to "closed", "code" to 1006.0), events.first { it["kind"] == "closed" })
+        val last = Json.tryParse(events.last()["text"] as String).getOrNull() as Map<*, *>
+        assertEquals("ended", last["type"])
+    }
+
+    @Test
     fun `leaving closes the link, drops the token and refuses what comes later`() {
         joined()
         val link = opened()
