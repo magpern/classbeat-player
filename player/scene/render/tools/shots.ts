@@ -115,7 +115,7 @@ async function screenshots(browser: Browser): Promise<void> {
     await page.screenshot({ path: join(SHOTS, `${shot.name}-${w}x${h}.png`) });
     if (w === 1920) means.set(shot.name, b.mean);
     assert.deepEqual([...problems, ...(await violations(page))], [], `${shot.name}: ${problems.join("; ")}`);
-    assert.ok(b.lit > (shot.minLit ?? 0.01), `${shot.name} at ${w}x${h} is blank (${b.lit} of the pixels lit)`);
+    assert.ok(b.lit > (shot.minLit ?? 2), `${shot.name} at ${w}x${h} is blank (${b.lit} of the pixels lit)`);
     await page.close();
   }
   const m = (n: string) => means.get(n)!;
