@@ -95,6 +95,22 @@ const rider = (name, w, h) => ({
   save: (w === 390 && h === 844) || (w === 844 && h === 390) || (name === 'running' && w === 360 && h === 640),
 });
 
+// The rider page's sensor states (sensors.md): the same sizes and checks as the rider page. The
+// sheets are forms (they may scroll down) and are checked in portrait only.
+const { NAMES: SENSOR_NAMES, FORMS: SENSOR_FORMS } = require('./sensors-pages');
+const sensorShot = (name, w, h) => ({
+  file: `sensors-${name}.html`, png: `sensors-${name}-${w}x${h}.png`, w, h, room: false, rider: true, form: SENSOR_FORMS.includes(name),
+  save: (w === 390 && h === 844) || (w === 844 && h === 390),
+});
+
+// The presenter's sensor panel and the room screen's sensor strip (sensors.md): the window client
+// sizes of presenter.md (1000x720 kept, 1280x800 for the open drawer), the strip at every room size.
+const { NAMES: SP_NAMES } = require('./sensors-presenter-pages');
+const sensorsPresenter = (name, w, h) => ({
+  file: `sensors-presenter-${name}.html`, png: `sensors-presenter-${name}-${w}x${h}.png`, w, h, room: false, presenter: true,
+  save: w === 1000 || ['open', 'closed'].includes(name),
+});
+
 // The presenter window with the riders panel (riders-panel.md): the window client sizes of
 // presenter.md, 1000x720 (the smallest; every state kept) and 1280x800 (the open drawer and the row kept).
 const { NAMES: PR_NAMES } = require('./presenter-riders-pages');
@@ -173,6 +189,10 @@ const SHOTS = [
   ...SIZES.map(([w, h]) => room('join-worst', w, h, KEEP_JOIN.has(`join-worst-${w}x${h}`))),
   ...PR_NAMES.flatMap((n) => [[1000, 720], [1280, 800]].map(([w, h]) => presenterRiders(n, w, h))),
   ...RIDER_NAMES.flatMap((n) => COMPANION_SIZES.filter(([w, h]) => !RIDER_FORMS.includes(n) || h > w).map(([w, h]) => rider(n, w, h))),
+  ...SENSOR_NAMES.flatMap((n) => COMPANION_SIZES.filter(([w, h]) => !SENSOR_FORMS.includes(n) || h > w).map(([w, h]) => sensorShot(n, w, h))),
+  ...SP_NAMES.flatMap((n) => [[1000, 720], [1280, 800]].map(([w, h]) => sensorsPresenter(n, w, h))),
+  room('sensors-strip', 1920, 1080), room('sensors-strip', 1024, 768), room('sensors-strip-missing', 1920, 1080, false),
+  ...SIZES.map(([w, h]) => room('sensors-strip-worst', w, h, ['1920x1080', '1024x768'].includes(`${w}x${h}`))),
   ...PLAY_NAMES.flatMap((n) => PLAY_SIZES.map(([w, h]) => playRoom(n, w, h))),
   ...PLAY_SMALL.flatMap((n) => [[360, 640], [640, 360]].map(([w, h]) => playRoom(n, w, h, n === 'running'))),
   playRoom('running', 390, 664), // the browser's bars showing: full screen not available

@@ -48,6 +48,8 @@ column on the right ([mockups/presenter.html](mockups/presenter.html)), at its t
 **1000 × 720** (the smallest; the preview drops to 560 px) and **1280 × 800**. Sizes here are in
 pixels, not shares of the height: the presenter is read at arm's length (presenter.md).
 
+The sensors row of [sensors.md](sensors.md) sits above the riders row; only one drawer is open at a time.
+
 The panel lives in the **right column** and has two forms. The status lines and a resync notice
 (with Undo) are **never covered**.
 

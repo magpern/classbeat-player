@@ -852,6 +852,7 @@ clicker sends, so a clicker in the instructor's hand works as Previous and Next.
 | F5, Shift+F5 | A presentation clicker's "start the show" key: Start, only before the start; after it, nothing, so a clicker that sends F5 and Esc by turns never pauses a running class | No |
 | B, . (period) | A clicker's "black screen" keys: nothing. The room screen never goes blank | No |
 | J | Opens or closes the join sheet with both QR codes ([room-join.md](room-join.md)); nothing when there is no code | No |
+| S | One display only: shows or hides the instructor's own sensor strip over the score's box ([sensors.md](sensors.md)); off by default, every class. Nothing with two displays, with the sensor panel unavailable or with no sensor connected. **Owner gate:** it depends on the instructor's sensors on the computer, which wait for the owner (ADR 0012 section 6; docs/owner.md); until then the panel is "Not available yet" and S does nothing | No |
 | F | Follow the music (`follow`), when the music could be followed; otherwise nothing. Named in the rail while the clock is manual ("Back to following the music") | No: the rail names it |
 | Tab, Shift+Tab | Shows the band and moves through its buttons | |
 | Enter | The focused button | |
@@ -906,7 +907,7 @@ The state with the band hidden is the state mock-up itself (for example
 | 2. Software only, never controls equipment | No control of resistance, incline, brake or speed anywhere; "Standing" and "Seated" are words for the rider. The band's buttons reach only the class clock and the music app's play, pause and next |
 | 3. Spotify's music stays in Spotify's app | The screen only names the song and shows the link state; nothing here plays, stores or downloads audio |
 | 4. No road, ribbon, track, terrain or world | The score is a flat strip of equal-height blocks moving sideways like a music editor; no block has a height, slope or shape from an interval; no perspective, no horizon, nothing travelled along |
-| 5. No viewpoint or rider moving through a scene | Nothing moves at a speed from data; no sensor data is shown in this version |
+| 5. No viewpoint or rider moving through a scene | Nothing moves at a speed from data; the instructor's own sensor strip ([sensors.md](sensors.md); owner-gated, ADR 0012 section 6, so not built until decided) is off by default and shows numbers and a gauge, changing in a step at most once a second |
 | 6. None of MOWL's look | No ring trio or ring of any kind, no row of class bars along the top, no grid of rider circles, no bar per rider against a target, no owl, flames, player or game names; our own palette (system.md) |
 | 7. Colour means the planned zone | Hue only on things that stand for a planned zone; every state, plate, control and the QR code is white, grey or black (check C6) |
 | 8. No hand-position icons, no "adjust by your heart rate" | Position is a word; no hand icon; no heart-rate instruction |

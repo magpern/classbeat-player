@@ -114,4 +114,4 @@ if (require.main === module) {
   for (const n of NAMES) fs.writeFileSync(path.join(__dirname, `presenter-riders-${n}.html`), html(n));
   console.log(`${NAMES.length} mock-ups written`);
 }
-module.exports = { NAMES };
+module.exports = { NAMES, esc, L, M, B, STATUS, NOTICE, NEXTSONG, CONTROLS, row };

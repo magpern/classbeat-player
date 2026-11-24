@@ -9,7 +9,7 @@ function pageChecks(arg) {
   const KEY_MIN = 64, KEY_GAP = 12;
   // The rider sends nothing after joining but hello (ADR 0007 section 1); these are the page's own
   // actions, none of which sends a command, and none touches equipment (rule 2).
-  const ACTIONS = ['join', 'forget', 'remember', 'my_numbers', 'done', 'retry'];
+  const ACTIONS = ['join', 'forget', 'remember', 'my_numbers', 'done', 'retry', 'sensors', 'sensors_add', 'reconnect_sensor', 'disconnect_sensor'];
   const rows = [];
   const shown = (el) => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return c.display !== 'none' && c.visibility !== 'hidden' && r.width > 0 && r.height > 0; };
   const targets = [...document.querySelectorAll('.key, .input')].filter(shown);

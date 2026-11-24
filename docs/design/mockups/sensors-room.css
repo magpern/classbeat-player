@@ -1,0 +1,27 @@
+/* The room screen's sensor strip (docs/design/sensors.md): the instructor's own readings, one
+   display only, off by default. Reference mock-up only. The strip lies exactly over the score's box
+   and covers nothing else (as the control band does); the mock-up hides the score under it.
+   Sizes are shares of the screen height, as the room screen's. White, grey and black; hue only on
+   the planned band, which stands for the zone. */
+body.strip .score { visibility: hidden; }
+.sstrip {
+  position: absolute; left: 0; right: 0; padding: 0 var(--safe-x, 5vw); top: 79.5vh; height: 15.5vh;
+  background: var(--stage); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 3vw; align-items: center;
+}
+.cell { display: grid; grid-template-columns: auto auto; justify-content: start; column-gap: 1.4vw; row-gap: 1.2vh; align-items: center; min-width: 0; }
+.cell .gauge { grid-column: 1 / -1; }
+.cell .tx { display: flex; flex-direction: column; gap: 0.5vh; white-space: nowrap; }
+.cell .pl { color: var(--light-2); }
+.cell .rv { display: inline-flex; align-items: baseline; gap: 0.5vw; white-space: nowrap; }
+.cell .rv .v { font-size: var(--t-value); line-height: 0.92; }
+.cell .rv .u { font-family: var(--face-number); font-weight: 600; font-size: var(--t-minor); color: var(--light-2); line-height: 1; }
+.cell .rv.none .v { color: var(--light-2); }
+.gauge { position: relative; height: 1.6vh; background: var(--stage-raised); border: 0.2vh solid var(--stage-line); border-radius: 0.3vh; min-width: 3vw; }
+.gauge.none { visibility: hidden; }
+.gauge .band { position: absolute; top: 0; bottom: 0; background: var(--zone); }
+.gauge .mark { position: absolute; top: -0.5vh; bottom: -0.5vh; width: 0.5vh; margin-left: -0.25vh; background: var(--light-1); box-shadow: 0 0 0 0.25vh var(--stage); }
+@media (max-aspect-ratio: 3/2) {
+  .sstrip { top: 83vh; height: 12vh; column-gap: 0.6vw; }
+  .cell { column-gap: 0.6vw; }
+  .cell { row-gap: 1vh; }
+}

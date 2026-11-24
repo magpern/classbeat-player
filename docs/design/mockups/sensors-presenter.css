@@ -1,0 +1,58 @@
+/* The presenter's sensors row and drawer (docs/design/sensors.md). Reference mock-up only. Added to
+   presenter-riders.css; pixel sizes, as the presenter's. White, grey and black; hue only on the
+   planned band of a gauge, which stands for the interval's zone (rule 7). A reading never takes a colour. */
+
+body { grid-template-columns: var(--pw) minmax(0, 1fr); }
+.side { min-width: 0; }
+
+/* The sensors row sits above the riders row; the pair is pinned to the foot. */
+.sensors-row { margin-top: auto; border-top: 1px solid var(--stage-line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.sensors-row + .foot { margin-top: 0; }
+.sensors-row .head { display: flex; align-items: center; gap: 14px; min-height: 44px; }
+.sensors-row .what, .drawer.sensors .what { font-size: 17px; font-weight: 700; }
+.sensors-row .tag, .drawer.sensors .tag { font-size: 15px; color: var(--light-2); }
+.sensors-row .head button, .drawer.sensors .head button { margin-left: auto; }
+.sensors-row .line { display: flex; align-items: baseline; gap: 22px; min-height: 30px; flex-wrap: wrap; }
+.sensors-row .line > [data-tier=label] { font-size: 15px; color: var(--light-2); line-height: 1.3; }
+
+/* A reading: the number (26 px, cap 18 px) and its unit. White; a dash in grey when there is none. */
+.rd { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.rd .v { font-size: 26px; line-height: 1; font-weight: 800; }
+.rd .u { font-size: 15px; color: var(--light-2); }
+.rd.none .v { color: var(--light-2); }
+
+/* The drawer: the fixed readings, then a list that scrolls inside it. */
+.drawer.sensors { gap: 8px; }
+.drawer.sensors .head { min-height: 44px; }
+.reads { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--stage-line); padding-top: 8px; }
+.mr { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+.mr .lab, .mr .plan { font-size: 15px; line-height: 1.2; }
+.mr .lab span, .mr .plan span { font-size: 15px; color: var(--light-3); }
+.mr .plan { text-align: right; }
+.mr .plan span { color: var(--light-2); }
+.mr .gl { grid-column: 1; }
+.mr .rd { grid-column: 2; justify-self: end; }
+.mr .rd .v { font-size: 30px; }
+.gauge { position: relative; height: 10px; background: var(--stage-raised); border: 1px solid var(--stage-line); border-radius: 2px; }
+.gauge.none { visibility: hidden; }
+.gauge .band { position: absolute; top: 0; bottom: 0; background: var(--zone); }
+.gauge .mark { position: absolute; top: -5px; bottom: -5px; width: 6px; margin-left: -3px; background: var(--light-1); border-radius: 1px; box-shadow: 0 0 0 2px var(--stage); }
+.roomsw { border-top: 1px solid var(--stage-line); padding-top: 8px; }
+.roomsw button { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.roomsw .sub { font-size: 14px; font-weight: 400; color: var(--light-2); }
+.roomsw button.on { border-color: var(--light-1); border-width: 2px; }
+.names .dev { gap: 12px; }
+.names .dev .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.names .dev .who > span:first-child { font-size: 17px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.names .dev .st { display: flex; align-items: center; gap: 8px; }
+.names .dev .st span { font-size: 15px; color: var(--light-2); }
+.names .dev .st::before { content: ""; width: 10px; height: 10px; flex: none; border: 2px solid var(--light-1); background: var(--light-1); }
+.names .dev.lost .st::before { background: none; border-style: dashed; }
+.names li.note { padding: 10px 0; border-bottom: 0; }
+.names li.note span { font-size: 15px; color: var(--light-2); line-height: 1.3; display: block; }
+.names li.act { padding: 8px 0; }
+.names li.act button { width: 100%; }
+.names li.nums { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 10px 0; }
+.fld { display: flex; flex-direction: column; gap: 4px; }
+.fld span:first-child span { font-size: 15px; color: var(--light-3); }
+.fld .box { font-size: 17px; font-weight: 700; min-height: 44px; border: 1px solid var(--light-3); border-radius: 6px; padding: 10px 12px; }
