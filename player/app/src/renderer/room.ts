@@ -42,6 +42,9 @@ const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-r
 const screen = window.classbeatRoom.mount(document.body, { reducedMotion });
 // The 3D scene under the text and the band (docs/design/scene.md): none with reduced motion, no WebGL or a failure, where the plain
 // screen above, which stays mounted and keeps drawing the same frames, is what shows (S10, S11). The scene's own join is player/scene/render/join/.
+// After the plain screen in the document, so a query for its parts (`.gel`, `.intro`) finds the plain screen's first, as before the scene.
+const sceneRoot = document.getElementById("scene-join");
+if (sceneRoot) document.body.append(sceneRoot);
 const scene = mountScene({ reducedMotion, visible: () => !document.hidden });
 
 // One display unless the system says the desktop spans more than one (the Window Management

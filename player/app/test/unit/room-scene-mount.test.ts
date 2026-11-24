@@ -21,3 +21,7 @@ test("room.ts starts the join with the plain screen's own reduced-motion value a
   assert.match(ts, /mountScene\(\{ reducedMotion, visible:/);
   assert.match(ts, /screen\.update\(frame\);\s*scene\.push\(frame\);/);
 });
+
+test("the scene's root goes after the plain screen in the document, so the plain screen's parts are found first", () => {
+  assert.match(ts, /document\.body\.append\(sceneRoot\)/);
+});
