@@ -18,6 +18,7 @@ ADR that changes a decision says which one it replaces.
 | [0010](0010-sign-in-with-classbeat.md) | Instructors sign in with their classbeat account | Proposed |
 | [0011](0011-the-phone-app-is-built-with-capacitor.md) | The phone and tablet app is built with Capacitor | Proposed |
 | [0012](0012-sensors.md) | Sensors: reading Bluetooth heart rate, cadence and power | Proposed |
+| [0013](0013-swedebeat-playback.md) | Swedebeat playback: sign-in, an encrypted mix cache and exact timing | Proposed |
 
 ## Template
 
