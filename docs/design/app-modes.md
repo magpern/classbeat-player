@@ -67,9 +67,11 @@ window with no scroll at 390x844, 844x390, 360x780, 360x640 and 640x360.
 with three classes must fit at all six sizes. With the "Pair again" plate and three classes at
 360x640 the page runs 25 px over (strip key bottom 665, window 640) and scrolls; that is allowed. The mock-up `app-instructor-start-expired` shows two classes so that it fits at all six sizes.
 
-Where the app starts: in the last mode used; on a first launch, in rider mode. A restart in rider
-mode never skips the screen lock. Instructor mode with a class open stays on the class; Back on the
-class screen goes to the class list, never to rider mode.
+Where the app starts: always in rider mode, on a first launch and on every reopen. If the last
+mode used was instructor mode (and the phone is still paired and has a secure screen lock), the
+screen lock is asked again at once; a reopen never skips it, and nothing of instructor mode shows
+before it passes. Instructor mode then opens on the class list, never on a class that was open
+before; Back on the class screen goes to the class list, never to rider mode.
 
 No question guards the way **into** instructor mode: the screen-lock prompt is that question.
 

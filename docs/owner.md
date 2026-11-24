@@ -23,11 +23,24 @@ with other work; nothing in the development loop waits for an answer.
   installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
   with Spotify on it. Before the first APK that studios keep: an Android signing key, made once
   and added as a repository secret (agents never hold it; the runbook will give the commands).
-  Losing it means users must uninstall to update. iOS later: an iPhone or iPad and the Apple
-  Developer membership above.
+  Losing it means users must uninstall to update. iOS after the Android app (owner, 2026-11-24): the owner's Apple silicon Mac to run
+  it; later an iPhone or iPad and the Apple Developer membership above.
 
 ## Decisions waiting
 
+- **Swedebeat playback (PL11, ADR 0013, 2026-11-24).** Built and tested on a fake source; the
+  shipped player has no real source until you answer these:
+  - **Where the real audio comes from (plan, section 13, decision 11).** The two routes there: ask
+    Swedebeat for an agreement and a source of the audio (recommended), or get the audio through
+    the user's MOWL account. Either way the audio goes from the provider straight to the device,
+    never through a server of ours. Until you name a source, `UnavailableMixSource` stays the
+    default and classes designed with a mix play on the manual clock. Issue 7 (the real source
+    client) is not opened until then.
+  - **Whether your SwedeBeat gateway has any part in it.** ADR 0013 does not accept it as a route.
+    If you propose it, you decide with it how the audio still goes from the provider straight to
+    the device, how a player outside your network reaches it, and that it is `https:`.
+  - **How long a cached mix may be played offline.** Default agents picked: 90 days since it was
+    last played, at most 4 GiB per account, least recently played evicted first. Change either.
 - **The looks' sway and the steady-light budget (2026-11-23).** Default agents picked, which you
   may change: the looks' slow sway is not held to the 3 % a second steady-light budget, because
   meeting it in zones 6 and 7 would need the beams at about 1/8 of their light. The sway stays
@@ -138,7 +151,7 @@ with other work; nothing in the development loop waits for an answer.
   them on the room screen.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); installed Android and iOS apps with two modes, Android first (decision
-  15, above); riders' sensors from the web page, with Bluefy on iPhone; no external hardware such
+  15, above); riders' sensors from the web page, on iPhone through the installed app's rider mode (Bluefy dropped, 2026-11-24); no external hardware such
   as lighting.
 
 ## Tasks only the owner can run

@@ -6,27 +6,12 @@
 // shipped, so no tool rewrites the locked config. Run with tsx (npm run build) to read page.ts.
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
+import { buildOptions } from "./build-config.mjs";
 import { PAGES, pageHtml } from "./src/page.ts";
 
 const out = "android/app/src/main/assets/public";
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-await build({
-  // One bundle per mode's page (issue #630): rider.js, instructor.js and the room screen's main.js.
-  entryPoints: ["src/main.ts", "src/rider.ts", "src/instructor.ts"],
-  outdir: out,
-  bundle: true,
-  sourcemap: false,
-  logLevel: "warning",
-  legalComments: "none",
-  platform: "browser",
-  format: "iife",
-  // Android System WebView follows Chrome; the app's minimum (Android 9) updates it from the store.
-  target: "chrome130",
-  // The room window's script mounts the scene (player/scene), whose three.js resolves from this package.
-  nodePaths: ["node_modules"],
-  loader: { ".woff2": "file" },
-  assetNames: "fonts/[name]",
-});
+await build(buildOptions(out));
 for (const name of Object.keys(PAGES)) writeFileSync(`${out}/${name}`, pageHtml(name));

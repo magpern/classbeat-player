@@ -169,7 +169,7 @@ and 640 × 360 too. The state names are the `SensorSource`'s (ADR 0012 section 3
 | Sensors sheet | **Sensors** pressed | The devices, **Connect another sensor**, **Done**; "Readings stay on this phone. Nothing is sent, saved or compared." | [html](mockups/sensors-sheet.html), [portrait](mockups/sensors-sheet-390x844.png) |
 | Sheet, one lost | As above, one device lost | The dashed marker and "lost"; its row's key is **Reconnect** | [html](mockups/sensors-sheet-lost.html), [portrait](mockups/sensors-sheet-lost-390x844.png) |
 | No Web Bluetooth | `unsupported` (Safari, Firefox, most desktop browsers) | **Connect a sensor** opens a sheet: "This browser cannot connect to a sensor." and "Open this page in Chrome on an Android phone." | [html](mockups/sensors-unsupported.html), [portrait](mockups/sensors-unsupported-390x844.png) |
-| No Web Bluetooth, iPhone | `unsupported` on an iPhone or iPad | The same sheet: "On an iPhone, open this page in Bluefy." (plan section 7) | [html](mockups/sensors-unsupported-iphone.html), [portrait](mockups/sensors-unsupported-iphone-390x844.png) |
+| No Web Bluetooth, iPhone | `unsupported` on an iPhone or iPad | The same sheet: "On an iPhone this page gives the targets and the timing. Sensors need the installed classbeat Player app (rider mode)." (plan section 7) | [html](mockups/sensors-unsupported-iphone.html), [portrait](mockups/sensors-unsupported-iphone-390x844.png) |
 | Worst case | The longest content | Four-digit power, three-digit plan, the 80-character zone name, 58:58, three 80-character next names; and a sheet with a 32-character device name and three devices | [html](mockups/sensors-worst.html), [portrait](mockups/sensors-worst-390x844.png), [sheet](mockups/sensors-worst-sheet-390x844.png) |
 
 A sensor state **never uses the top line** (it carries the connection plates of rider.md: "Waiting
@@ -317,7 +317,7 @@ the real screens' screenshots. S2's text contrast is in both; the gauge's 3 : 1 
 "one reading a second" half of S8 are **build-time only** (unit tests on `gauge_calc` and on the
 display rate). S9 is **build-time only** (a test over the screens' strings).
 
-[shoot.js](mockups/shoot.js) and [measure.js](mockups/measure.js) run these on every `sensors-*` and
+[shoot.js](mockups/shoot.js) and [measure.js](mockups/measure.js) run the mock-up checks above (S1, S3, S4, S5, S6, S7 and the reduced-motion half of S8) on every `sensors-*` and
 `room-sensors-*` shot (`ONLY=sensors- node shoot.js`; the rider and presenter checks are
 [rider-checks.js](mockups/rider-checks.js), whose list of the page's own actions gains
 `sensors`, `sensors_add`, `reconnect_sensor` and `disconnect_sensor`, none of which sends a command

@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "paths": { "three": ["./node_modules/@types/three/index.d.ts"] }
   },
-  "include": ["src", "test", "build.mjs", "eslint.config.js"]
+  "include": ["src", "test", "build.mjs", "build-config.mjs", "eslint.config.js"]
 }

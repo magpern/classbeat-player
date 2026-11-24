@@ -29,6 +29,19 @@ function checkMusic(doc: Doc, out: Violation[]): void {
   if ("spotify_playlist" in music && music.source !== "spotify") {
     out.push(["playlist_without_spotify_source", "/music/spotify_playlist"]);
   }
+  const mix = music.swedebeat_mix;
+  if (mix === undefined) return;
+  if (music.source !== "swedebeat") {
+    out.push(["swedebeat_mix_without_swedebeat_source", "/music/swedebeat_mix"]);
+    return; // the other mix rules say nothing about a mix that has no place here
+  }
+  const offset = mix.offset_ms ?? 0;
+  if (offset + doc.class.length_ms > mix.length_ms) {
+    out.push(["swedebeat_mix_too_short", "/music/swedebeat_mix/length_ms"]);
+  }
+  (doc.songs as Doc[]).forEach((s, i) => {
+    if (offset + s.end_ms > mix.length_ms) out.push(["song_outside_mix", `/songs/${i}/end_ms`]);
+  });
 }
 
 function checkPoints(points: Doc[], length: number, base: string, kind: string, out: Violation[]): void {
