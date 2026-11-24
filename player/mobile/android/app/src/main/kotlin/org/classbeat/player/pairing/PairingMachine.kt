@@ -19,7 +19,8 @@ object PairingMachine {
 
         data class Unpaired(override val attempt: Int, val notice: Notice?) : State()
 
-        data class Starting(override val attempt: Int, val origin: String) : State()
+        /** [back] is the expired pairing a "pair again" started from: kept, and returned to if this one ends. */
+        data class Starting(override val attempt: Int, val origin: String, val back: Paired? = null) : State()
 
         class Waiting(
             override val attempt: Int,
@@ -31,14 +32,22 @@ object PairingMachine {
             val intervalMs: Long,
             /** True while a poll is out: never two at once. */
             val polling: Boolean,
+            val back: Paired? = null,
         ) : State() {
             fun copy(intervalMs: Long = this.intervalMs, polling: Boolean = this.polling) =
-                Waiting(attempt, origin, deviceCode, userCode, page, expiresAt, intervalMs, polling)
+                Waiting(attempt, origin, deviceCode, userCode, page, expiresAt, intervalMs, polling, back)
 
             override fun toString() = "Waiting($attempt, $userCode, polling=$polling)"
         }
 
-        data class Paired(override val attempt: Int, val record: PairingRecord, val deviceName: String?, val expired: Boolean) : State()
+        /** [notice] says why a "pair again" ended without a new pairing; the expired one is still held. */
+        data class Paired(
+            override val attempt: Int,
+            val record: PairingRecord,
+            val deviceName: String?,
+            val expired: Boolean,
+            val notice: Notice? = null,
+        ) : State()
     }
 
     sealed class Effect {
@@ -96,6 +105,15 @@ object PairingMachine {
 
     private fun unpaired(attempt: Int, notice: Notice?, effects: List<Effect> = emptyList()) = Step(State.Unpaired(attempt, notice), effects)
 
+    /**
+     * A pairing attempt ended without a token. A "pair again" goes back to the expired pairing it
+     * started from (its cached classes still play); a first pairing to unpaired.
+     */
+    private fun ended(s: State, attempt: Int, notice: Notice?): Step {
+        val back = (s as? State.Starting)?.back ?: (s as? State.Waiting)?.back
+        return if (back == null) unpaired(attempt, notice) else Step(back.copy(attempt = attempt, notice = notice))
+    }
+
     /** The next poll, after [waitMs] and the margin, but never past the pairing's end. */
     private fun wait(s: State.Waiting, now: Long, waitMs: Long): Step {
         val at = minOf(now + waitMs + POLL_MARGIN_MS, s.expiresAt)
@@ -109,27 +127,27 @@ object PairingMachine {
                 Step(State.Paired(s.attempt, record, null, false), listOf(Effect.Save(s.attempt, record)))
             }
             is Poll.Retry -> wait(s, now, maxOf(s.intervalMs, minOf(answer.afterMs ?: 0L, MAX_INTERVAL_MS)))
-            is Poll.Unexpected -> unpaired(s.attempt, Notice.UNEXPECTED)
+            is Poll.Unexpected -> ended(s, s.attempt, Notice.UNEXPECTED)
             is Poll.Refused -> when (answer.code) {
                 PairingProtocol.PENDING -> wait(s, now, s.intervalMs)
                 PairingProtocol.SLOW_DOWN -> {
                     val interval = minOf(s.intervalMs + SLOW_DOWN_STEP_MS, MAX_INTERVAL_MS)
                     wait(s.copy(intervalMs = interval), now, interval)
                 }
-                PairingProtocol.DENIED -> unpaired(s.attempt, Notice.DENIED)
-                PairingProtocol.EXPIRED -> unpaired(s.attempt, Notice.CODE_EXPIRED)
-                else -> unpaired(s.attempt, Notice.UNEXPECTED)
+                PairingProtocol.DENIED -> ended(s, s.attempt, Notice.DENIED)
+                PairingProtocol.EXPIRED -> ended(s, s.attempt, Notice.CODE_EXPIRED)
+                else -> ended(s, s.attempt, Notice.UNEXPECTED)
             }
         }
 
     private fun started(s: State.Starting, answer: Start, now: Long): Step {
         val ok = when (answer) {
             is Start.Started -> answer
-            Start.TooMany -> return unpaired(s.attempt, Notice.TOO_MANY)
-            Start.Unreachable -> return unpaired(s.attempt, Notice.UNREACHABLE)
-            Start.Unexpected -> return unpaired(s.attempt, Notice.UNEXPECTED)
+            Start.TooMany -> return ended(s, s.attempt, Notice.TOO_MANY)
+            Start.Unreachable -> return ended(s, s.attempt, Notice.UNREACHABLE)
+            Start.Unexpected -> return ended(s, s.attempt, Notice.UNEXPECTED)
         }
-        val waiting = State.Waiting(s.attempt, s.origin, ok.deviceCode, ok.userCode, ok.page, now + ok.expiresInMs, ok.intervalMs, false)
+        val waiting = State.Waiting(s.attempt, s.origin, ok.deviceCode, ok.userCode, ok.page, now + ok.expiresInMs, ok.intervalMs, false, s.back)
         val next = wait(waiting, now, waiting.intervalMs)
         return Step(next.state, listOf(Effect.OpenPage(ok.page)) + next.effects)
     }
@@ -153,7 +171,7 @@ object PairingMachine {
             is Event.Started -> if (s is State.Starting && s.attempt == e.attempt) started(s, e.answer, now) else Step(s)
             is Event.PollDue -> when {
                 s !is State.Waiting || s.attempt != e.attempt || s.polling -> Step(s)
-                now >= s.expiresAt -> unpaired(s.attempt, Notice.CODE_EXPIRED)
+                now >= s.expiresAt -> ended(s, s.attempt, Notice.CODE_EXPIRED)
                 else -> Step(s.copy(polling = true), listOf(Effect.PollCall(s.attempt, s.origin, s.deviceCode)))
             }
             is Event.Polled ->
@@ -162,14 +180,15 @@ object PairingMachine {
                 else Step(s)
             is Event.Saved ->
                 if (s !is State.Paired || s.attempt != e.attempt || e.ok) Step(s)
-                // The token could not be kept: it is given back, so no device row waits for a holder.
-                else unpaired(s.attempt, Notice.SAVE_FAILED, listOf(Effect.Revoke(s.record)))
+                // The token could not be kept: it is given back, so no device row waits for a holder, and
+                // whatever the store still holds (an older pairing, after a "pair again") is deleted too.
+                else unpaired(s.attempt, Notice.SAVE_FAILED, listOf(Effect.Forget, Effect.Revoke(s.record)))
             is Event.Checked -> checked(s, e)
             Event.Unpair -> when (s) {
                 is State.Unpaired -> Step(s)
                 // Deleted here first, then given back to the backend; offline, it is deleted all the same.
                 is State.Paired -> unpaired(s.attempt + 1, Notice.UNPAIRED, listOf(Effect.Forget, Effect.Revoke(s.record)))
-                else -> unpaired(s.attempt + 1, null)
+                else -> ended(s, s.attempt + 1, null)
             }
         }
 
@@ -177,10 +196,11 @@ object PairingMachine {
         // A working pairing is ended with Unpair first; one the backend no longer takes may pair again.
         if (s is State.Starting || s is State.Waiting || (s is State.Paired && !s.expired)) return Step(s)
         val attempt = s.attempt + 1
-        if (e.origin == null) return unpaired(attempt, Notice.NO_SERVER)
+        val back = (s as? State.Paired)?.copy(notice = null)
+        if (e.origin == null) return ended(State.Starting(attempt, "", back), attempt, Notice.NO_SERVER)
         // No Keystore, no pairing: the token is never kept where it could be read in the clear.
-        if (!e.keystore) return unpaired(attempt, Notice.NO_KEYSTORE)
-        return Step(State.Starting(attempt, e.origin), listOf(Effect.StartCall(attempt, e.origin)))
+        if (!e.keystore) return ended(State.Starting(attempt, "", back), attempt, Notice.NO_KEYSTORE)
+        return Step(State.Starting(attempt, e.origin, back), listOf(Effect.StartCall(attempt, e.origin)))
     }
 
     private fun checked(s: State, e: Event.Checked): Step {
