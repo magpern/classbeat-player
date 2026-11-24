@@ -317,7 +317,7 @@ the real screens' screenshots. S2's text contrast is in both; the gauge's 3 : 1 
 "one reading a second" half of S8 are **build-time only** (unit tests on `gauge_calc` and on the
 display rate). S9 is **build-time only** (a test over the screens' strings).
 
-[shoot.js](mockups/shoot.js) and [measure.js](mockups/measure.js) run these on every `sensors-*` and
+[shoot.js](mockups/shoot.js) and [measure.js](mockups/measure.js) run the mock-up checks above (S1, S3, S4, S5, S6, S7 and the reduced-motion half of S8) on every `sensors-*` and
 `room-sensors-*` shot (`ONLY=sensors- node shoot.js`; the rider and presenter checks are
 [rider-checks.js](mockups/rider-checks.js), whose list of the page's own actions gains
 `sensors`, `sensors_add`, `reconnect_sensor` and `disconnect_sensor`, none of which sends a command
