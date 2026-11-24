@@ -16,9 +16,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * The three native screens of docs/design/app-modes.md: "A screen lock is needed", "Switch to rider
- * mode?" and the switching screen. Native, so nothing on them is the page's and the page cannot
- * press their keys. Sizes follow the spec's text floors (A1) as a share of the window height, keys
+ * The three native screens of docs/design/app-modes.md ("A screen lock is needed", "Switch to rider
+ * mode?" and the switching screen) and the pairing screens of app-pairing.md ([screen]). Native, so
+ * nothing on them is the page's and the page cannot press their keys. Sizes follow the spec's text floors (A1) as a share of the window height, keys
  * are at least 64dp high and 12dp apart, and the screens fade in over 200ms, or not at all when
  * Android's "Remove animations" is on. One screen shows at a time, over the web view.
  */
@@ -28,23 +28,27 @@ class ModeScreens(private val activity: Activity) {
 
     private var shown: View? = null
 
+    /** The lines showing and their views, in order: [retext] changes their words. */
+    private var shownLines: List<ScreenLine> = emptyList()
+    private val lineViews = mutableListOf<View>()
+
     val showing: Boolean get() = shown != null
 
     fun noLock(setLock: () -> Unit, stay: () -> Unit) = show(
         lead = listOf(
-            Line.Tag("Rider mode"),
-            Line.Title("A screen lock is needed"),
-            Line.Text("Instructor mode opens only after this phone's screen lock: a PIN, pattern or password."),
-            Line.Note("This phone has no screen lock. Your classes and the pairing stay on it, locked away until you set one."),
+            ScreenLine.Tag("Rider mode"),
+            ScreenLine.Title("A screen lock is needed"),
+            ScreenLine.Text("Instructor mode opens only after this phone's screen lock: a PIN, pattern or password."),
+            ScreenLine.Note("This phone has no screen lock. Your classes and the pairing stay on it, locked away until you set one."),
         ),
         keys = listOf(Key("Set a screen lock", true, setLock), Key("Stay in rider mode", false, stay)),
     )
 
     fun riderQuestion(stay: () -> Unit, switch: () -> Unit) = show(
         lead = listOf(
-            Line.Tag("Instructor mode"),
-            Line.Title("Switch to rider mode?"),
-            Line.Text(
+            ScreenLine.Tag("Instructor mode"),
+            ScreenLine.Title("Switch to rider mode?"),
+            ScreenLine.Text(
                 "The class list closes and the music is no longer followed. " +
                     "Coming back to instructor mode needs your screen lock.",
             ),
@@ -54,12 +58,27 @@ class ModeScreens(private val activity: Activity) {
         side = true,
     )
 
+    /** Instructor mode's "Unpair this phone": the native question before anything is deleted. */
+    fun unpairQuestion(stay: () -> Unit, unpair: () -> Unit) = show(
+        lead = listOf(
+            ScreenLine.Tag("Instructor mode"),
+            ScreenLine.Title("Unpair this phone?"),
+            ScreenLine.Text(
+                "The classes saved on this phone are removed and instructor mode closes. " +
+                    "Teaching from it again needs a new pairing.",
+            ),
+        ),
+        // As the rider question: "Stay" first, the safe answer, with the focus.
+        keys = listOf(Key("Stay", true, stay), Key("Unpair", false, unpair)),
+        side = true,
+    )
+
     /** [rider] is the target: the spec's screen is the switch to rider mode; the other way mirrors it. */
     fun switching(rider: Boolean) = show(
         lead = listOf(
-            Line.Tag(if (rider) "Rider mode" else "Instructor mode"),
-            Line.Title(if (rider) "Switching to rider mode" else "Switching to instructor mode"),
-            Line.Working(if (rider) "Closing instructor mode" else "Closing rider mode"),
+            ScreenLine.Tag(if (rider) "Rider mode" else "Instructor mode"),
+            ScreenLine.Title(if (rider) "Switching to rider mode" else "Switching to instructor mode"),
+            ScreenLine.Working(if (rider) "Closing instructor mode" else "Closing rider mode"),
         ),
         keys = emptyList(),
     )
@@ -67,17 +86,25 @@ class ModeScreens(private val activity: Activity) {
     fun hide() {
         shown?.let { (it.parent as? ViewGroup)?.removeView(it) }
         shown = null
+        lineViews.clear()
+        shownLines = emptyList()
     }
 
-    private sealed class Line(val words: String) {
-        class Tag(words: String) : Line(words)
-        class Title(words: String) : Line(words)
-        class Text(words: String) : Line(words)
-        class Note(words: String) : Line(words)
-        class Working(words: String) : Line(words)
+    /** A screen of lines and keys, as the pairing screens build it; [act] goes with the keys (the steps). */
+    fun screen(lead: List<ScreenLine>, act: List<ScreenLine>, keys: List<Key>) = show(lead, keys, act = act)
+
+    /**
+     * Changes the words of the screen showing, in place (the countdown), keeping its keys and focus.
+     * False when the lines are not the same kinds as those showing: the caller shows the screen anew.
+     */
+    fun retext(lines: List<ScreenLine>): Boolean {
+        if (shown == null || lines.size != lineViews.size || lines.zip(shownLines).any { (a, b) -> a::class != b::class }) return false
+        lines.forEachIndexed { i, l -> (lineViews[i] as? TextView)?.let { if (l is ScreenLine.Code) it.text = l.code else it.text = words(l) } }
+        shownLines = lines
+        return true
     }
 
-    private fun show(lead: List<Line>, keys: List<Key>, side: Boolean = false) {
+    private fun show(lead: List<ScreenLine>, keys: List<Key>, side: Boolean = false, act: List<ScreenLine> = emptyList()) {
         hide()
         val landscape = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val size = Sizes(activity, landscape)
@@ -89,6 +116,8 @@ class ModeScreens(private val activity: Activity) {
         val leadColumn = column()
         lead.forEach { leadColumn.addView(line(it, size)) }
         val actColumn = column().apply { gravity = if (landscape) Gravity.CENTER_VERTICAL else Gravity.BOTTOM }
+        act.forEach { actColumn.addView(line(it, size)) }
+        shownLines = lead + act
         val keyBox = if (side) LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL } else actColumn
         keys.forEachIndexed { i, key ->
             val params = if (side) {
@@ -125,24 +154,67 @@ class ModeScreens(private val activity: Activity) {
 
     private fun column() = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 
-    private fun line(line: Line, size: Sizes): View = TextView(activity).apply {
-        text = when (line) {
-            is Line.Tag -> "●  ${line.words}"
-            is Line.Note -> "□  ${line.words}"
-            // The hollow working marker, still: it does not spin (spec, motion).
-            is Line.Working -> "○  ${line.words}"
-            else -> line.words
+    private fun line(line: ScreenLine, size: Sizes): View {
+        val view = when (line) {
+            is ScreenLine.Code -> panel(STAGE_RAISED, size).also { box ->
+                box.addView(text("Code", size.label, LIGHT_2, false, size))
+                // The number face at more than the value tier: the largest text on the screen, never wrapped.
+                val code = text(line.code, size.value * CODE_SCALE, LIGHT_1, true, size).apply {
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                    letterSpacing = 0.15f
+                    maxLines = 1
+                }
+                box.addView(code)
+                lineViews += code
+            }
+            is ScreenLine.Plate -> panel(LIGHT_1, size).also { box ->
+                box.addView(text(line.head, size.text, INK, true, size))
+                box.addView(text(line.body, size.text, INK, false, size))
+                lineViews += box
+            }
+            else -> {
+                val (px, color, bold) = when (line) {
+                    is ScreenLine.Tag, is ScreenLine.Note -> Triple(size.label, LIGHT_2, line is ScreenLine.Tag)
+                    is ScreenLine.Title -> Triple(size.value, LIGHT_1, true)
+                    else -> Triple(size.text, LIGHT_1, false)
+                }
+                text(words(line), px, color, bold, size).also { lineViews += it }
+            }
         }
-        val (px, color, bold) = when (line) {
-            is Line.Tag -> Triple(size.label, LIGHT_2, true)
-            is Line.Title -> Triple(size.value, LIGHT_1, true)
-            is Line.Text, is Line.Working -> Triple(size.text, LIGHT_1, false)
-            is Line.Note -> Triple(size.label, LIGHT_2, false)
-        }
+        return view
+    }
+
+    private fun words(line: ScreenLine): String = when (line) {
+        is ScreenLine.Tag -> "●  ${line.words}"
+        is ScreenLine.Note -> "□  ${line.words}"
+        // The hollow working marker, still: it does not spin (spec, motion).
+        is ScreenLine.Working -> "○  ${line.words}"
+        is ScreenLine.Title -> line.words
+        is ScreenLine.Text -> line.words
+        is ScreenLine.Step -> "${line.number}.  ${line.words}"
+        is ScreenLine.Code -> line.code
+        is ScreenLine.Plate -> "${line.head}\n${line.body}"
+    }
+
+    private fun text(words: String, px: Float, color: Int, bold: Boolean, size: Sizes) = TextView(activity).apply {
+        text = words
         setTextSize(TypedValue.COMPLEX_UNIT_PX, px)
         setTextColor(color)
         if (bold) setTypeface(typeface, Typeface.BOLD)
         setPadding(0, 0, 0, size.dp(12f))
+    }
+
+    private fun panel(color: Int, size: Sizes) = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        val pad = size.dp(16f)
+        setPadding(pad, pad, pad, pad - size.dp(12f))
+        background = GradientDrawable().apply {
+            cornerRadius = size.dp(8f).toFloat()
+            setColor(color)
+        }
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = size.dp(12f)
+        }
     }
 
     private fun key(key: Key, size: Sizes): Button = Button(activity).apply {
@@ -179,6 +251,9 @@ class ModeScreens(private val activity: Activity) {
 
     private companion object {
         const val FADE_MS = 200L
+
+        /** The code over the value tier, so it is the largest text on the pairing screen. */
+        const val CODE_SCALE = 1.25f
 
         // docs/design tokens: stage, stage-raised, light-1, light-2, light-3, ink.
         val STAGE = Color.parseColor("#000000")

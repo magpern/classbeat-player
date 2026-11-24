@@ -11,6 +11,9 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import org.classbeat.player.BridgeLockdown
 import org.classbeat.player.PageGate
+import org.classbeat.player.classes.InstructorIntents
+import org.classbeat.player.pairing.PairingPorts
+import org.classbeat.player.pairing.PairingService
 import org.classbeat.player.policy.Mode
 import org.classbeat.player.policy.ModePolicy
 import org.classbeat.player.policy.NavigationPolicy
@@ -30,19 +33,33 @@ class ModeController(
     private lateinit var webView: WebView
     private val screens = ModeScreens(activity)
     private val opener = PageOpener(this)
+    private lateinit var pairing: PairingUi
+
+    /** Instructor mode's class intents. */
+    lateinit var instructor: InstructorBridge
+        private set
 
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
+
+    /** The "Unpair this phone?" question shows. */
+    private var unpairing = false
+
+    private lateinit var intents: InstructorIntents
 
     /** Back while a native screen shows answers it as "Stay", never as the page's Back. */
     private val back = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = stay()
     }
 
-    fun start(holder: ModeHolder, locked: BridgeLockdown.Locked, webView: WebView) {
+    fun start(holder: ModeHolder, locked: BridgeLockdown.Locked, webView: WebView, parts: InstructorParts) {
         this.holder = holder
         this.locked = locked
         this.webView = webView
+        pairing = PairingUi(screens, parts.pairing, parts.ports) { holder.secureLock }
+        parts.pairing.changed = pairing::changed
+        instructor = InstructorBridge(parts.intents) { current }
+        intents = parts.intents
         activity.onBackPressedDispatcher.addCallback(activity, back)
         holder.start()
     }
@@ -70,6 +87,8 @@ class ModeController(
 
     override fun closeBridge() {
         expose(null)
+        pairing.drop()
+        unpairing = false
         // The page that asked is being replaced: its question ends here, with the one refused word.
         waiting?.reject(REFUSED)
         waiting = null
@@ -101,11 +120,31 @@ class ModeController(
         call.resolve(JSObject().put("way", if (holder.paired) "lock" else "pair"))
 
     fun askInstructorMode(call: PluginCall) {
+        if (pairing.showing) return call.reject(REFUSED)
         when (holder.askInstructor()) {
             null -> call.reject(REFUSED)
-            ModePolicy.Entry.PAIR -> call.resolve(result("unpaired"))
+            // N3: on an unpaired phone the strip's key starts pairing, on the native pairing screen.
+            ModePolicy.Entry.PAIR -> {
+                waiting = call
+                showScreen { pairing.open(instructor = false, leave = ::pairingLeft) }
+            }
             ModePolicy.Entry.NO_LOCK, ModePolicy.Entry.ASK_LOCK -> waiting = call
         }
+    }
+
+    /** Instructor mode's "Pair again" (the pairing expired): the same native screen. */
+    fun pairAgain(call: PluginCall) {
+        if (waiting != null || pairing.showing) return call.reject(REFUSED)
+        waiting = call
+        showScreen { pairing.open(instructor = true, leave = ::pairingLeft) }
+    }
+
+    /** Instructor mode's "Unpair this phone": asks first; only "Unpair" deletes anything. */
+    fun unpair(call: PluginCall) {
+        if (waiting != null || pairing.showing || holder.pending != null || current != Mode.INSTRUCTOR) return call.reject(REFUSED)
+        waiting = call
+        unpairing = true
+        showScreen { screens.unpairQuestion(stay = ::stay, unpair = ::unpairConfirmed) }
     }
 
     fun askRiderMode(call: PluginCall) {
@@ -123,6 +162,7 @@ class ModeController(
 
     /** Back in the app, from the security settings or anywhere else: the lock may have been set meanwhile. */
     fun resumed() {
+        pairing.resumed()
         if (holder.pending != ModeHolder.Pending.NO_LOCK) return
         holder.noLockReturned()
         // No longer paired: nothing to ask, so the screen goes and the page hears so.
@@ -134,16 +174,37 @@ class ModeController(
 
     /** Leaving the app while the question shows means "Stay". */
     fun stopped() {
-        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION) stay()
+        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing) stay()
     }
 
     private fun openSettings() {
         activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
     }
 
+    /** The pairing screen went. In rider mode a pairing made goes on to the screen lock, as the key now would. */
+    private fun pairingLeft(made: Boolean) {
+        back.isEnabled = false
+        if (!made || current != Mode.RIDER) return settle(if (made) "paired" else "stayed")
+        when (holder.askInstructor()) {
+            ModePolicy.Entry.NO_LOCK, ModePolicy.Entry.ASK_LOCK -> Unit
+            else -> settle("stayed")
+        }
+    }
+
+    /** "Unpair": the page hears first, then the token and the classes go and instructor mode closes. */
+    private fun unpairConfirmed() {
+        if (!unpairing) return
+        unpairing = false
+        hideScreen()
+        settle("unpaired")
+        intents.unpair()
+    }
+
     private fun stay() {
         // Between modes (the switching screen): Back does nothing, and the screen stays.
         if (current == null) return
+        if (pairing.showing) return pairing.back()
+        unpairing = false
         when (holder.pending) {
             ModeHolder.Pending.NO_LOCK -> holder.noLockStay()
             ModeHolder.Pending.RIDER_QUESTION -> holder.riderAnswered(false)
@@ -175,3 +236,6 @@ class ModeController(
         const val REFUSED = "refused"
     }
 }
+
+/** What instructor mode and the pairing screen run on, built by the activity. */
+class InstructorParts(val pairing: PairingService, val ports: PairingPorts, val intents: InstructorIntents)

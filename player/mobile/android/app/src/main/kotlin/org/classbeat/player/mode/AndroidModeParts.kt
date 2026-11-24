@@ -22,19 +22,23 @@ class PrefsModeStore(context: Context) : ModeStore {
         check(prefs.edit().putString(KEY, value).commit()) { "the mode was not written" }
     }
 
+    override fun wipePending(): Boolean = prefs.getBoolean(WIPE, false)
+
+    override fun setWipePending(pending: Boolean) {
+        check(prefs.edit().putBoolean(WIPE, pending).commit()) { "the wipe flag was not written" }
+    }
+
     private companion object {
         const val FILE = "mode"
         const val KEY = "last"
+        const val WIPE = "wipe_pending"
     }
 }
 
-/** Whether this device is paired with an instructor's account (ADR 0011 section 5). */
+/** Whether this device is paired with an instructor's account (ADR 0011 section 5): PairingService.paired. */
 fun interface Pairing {
     fun paired(): Boolean
 }
-
-/** No pairing exists yet: it comes with issue #631, which replaces this. Every device is unpaired. */
-val NO_PAIRING = Pairing { false }
 
 /**
  * The device as the holder sees it. The screen lock is Android's own answer each time it is

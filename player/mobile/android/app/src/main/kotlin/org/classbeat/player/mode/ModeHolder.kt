@@ -9,6 +9,12 @@ interface ModeStore {
 
     /** Writes the mode durably before returning; throws if it could not. */
     fun write(value: String)
+
+    /** True while a switch's drops have started and not all finished: the next start wipes first. */
+    fun wipePending(): Boolean
+
+    /** Writes the flag durably before returning; throws if it could not. */
+    fun setWipePending(pending: Boolean)
 }
 
 /** What the holder asks the device. Read again at every decision, never cached. */
@@ -81,14 +87,34 @@ class ModeHolder(
     /** Whether "Switch to instructor mode" goes to pairing or to the screen lock, for the strip's lead line. */
     val paired: Boolean get() = device.paired
 
-    /** Opens the app in the last mode used (ModePolicy.startMode) and loads its start page. */
+    val secureLock: Boolean get() = device.secureLock
+
+    /**
+     * Opens the app in the last mode used (ModePolicy.startMode) and loads its start page. A switch
+     * the app was stopped in the middle of (killed while the storage wipe ran) is finished first:
+     * every part is dropped again before any page loads, so nothing the last page left survives.
+     */
     fun start(): Mode {
         val mode = ModePolicy.startMode(store.read(), device.paired, device.secureLock)
+        if (store.wipePending()) {
+            switchTo(mode)
+            return mode
+        }
         // Rider mode is written back so a value that did not open instructor mode is gone.
         if (mode == Mode.RIDER) store.write(Mode.RIDER.stored)
         current = mode
         effects.open(mode)
         return mode
+    }
+
+    /**
+     * The pairing ended (unpaired here, or revoked on the website): instructor mode closes at once,
+     * with no question, as any switch does. Elsewhere nothing changes.
+     */
+    fun unpaired() {
+        if (current != Mode.INSTRUCTOR) return
+        pending = null
+        switchTo(Mode.RIDER)
     }
 
     /** "Switch to instructor mode" in rider mode. Returns the way it went, or null if refused. */
@@ -157,6 +183,8 @@ class ModeHolder(
         effects.showSwitching(target)
         val failed = mutableListOf<String>()
         if (target == Mode.RIDER) runCatching { store.write(Mode.RIDER.stored) }.onFailure { failed += STORE }
+        // Before the first drop: a switch cut short from here is finished at the next start.
+        runCatching { store.setWipePending(true) }.onFailure { if (STORE !in failed) failed += STORE }
         var left = parts.size
         var stopped = false
         parts.forEach { part ->
@@ -184,6 +212,8 @@ class ModeHolder(
             effects.fatal(failed)
             return false
         }
+        // Every part is dropped: the next start need not wipe. If this write fails, it only wipes again.
+        runCatching { store.setWipePending(false) }
         current = target
         effects.open(target)
         return true

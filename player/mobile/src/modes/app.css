@@ -16,6 +16,15 @@
 @media (orientation: landscape) { .key.row { padding: 1vh 1.6vw; } }
 .status { display: flex; align-items: center; gap: 0.6em; font-size: var(--c-label); }
 .status .ok { color: var(--light-1); font-weight: 700; display: inline-flex; align-items: center; gap: 0.5em; }
+.status .ok[hidden] { display: none; }
+/* "Unpair this phone": a small outlined key at the row's end, not a class row and not the strip. */
+.status .key.quiet { margin-left: auto; flex: none; width: auto; white-space: nowrap; min-height: 64px; padding: 0 1em; background: transparent; border-color: var(--stage-line); }
+/* A phone held upright has no room beside the status line: the key takes its own line, full width. */
+@media (orientation: portrait) {
+  .status { flex-wrap: wrap; }
+  .status .key.quiet { flex: 1 0 100%; margin-left: 0; }
+}
+.status .key.quiet .kl { font-size: var(--c-minor); font-weight: 700; color: var(--light-2); }
 .status .ok::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-1); flex: none; }
 
 /* A tablet held sideways (4:3, 16:10): the companion's landscape sizes are capped by the width for
