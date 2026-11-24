@@ -13,6 +13,7 @@ class FormatVersion(Enum):
     field_1_0 = '1.0'
     field_1_1 = '1.1'
     field_1_2 = '1.2'
+    field_1_3 = '1.3'
 
 
 class Ms(RootModel[int]):
@@ -62,21 +63,23 @@ class Source(Enum):
     none = 'none'
 
 
-class Music(BaseModel):
+class SwedebeatMix(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    source: Source
-    design_crossfade_ms: Annotated[int, Field(ge=0, le=30000)]
-    song_timing: Quality
-    spotify_playlist: Annotated[
-        str | None,
+    id: Annotated[
+        str,
         Field(
-            description="Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
-            max_length=22,
-            min_length=22,
-            pattern='^[A-Za-z0-9]{22}$',
+            description="The provider's opaque mix id as classbeat holds it (letters, digits, underscore, hyphen; 1 to 64). Never a token or a link. A trailing newline is refused (Python's $ allows one before the end), so a mix id cannot smuggle a line break.",
+            max_length=64,
+            min_length=1,
+            pattern='^[A-Za-z0-9_-]+$',
         ),
+    ]
+    length_ms: PositiveMs
+    offset_ms: Annotated[
+        Ms | None,
+        Field(description='The mix position at class time 0; absent means 0.'),
     ] = None
 
 
@@ -248,6 +251,25 @@ class Song(BaseModel):
     ids: Ids | None = None
     beat_anchors: BeatAnchors | None = None
     moments: Moments | None = None
+
+
+class Music(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    source: Source
+    design_crossfade_ms: Annotated[int, Field(ge=0, le=30000)]
+    song_timing: Quality
+    spotify_playlist: Annotated[
+        str | None,
+        Field(
+            description="Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).",
+            max_length=22,
+            min_length=22,
+            pattern='^[A-Za-z0-9]{22}$',
+        ),
+    ] = None
+    swedebeat_mix: SwedebeatMix | None = None
 
 
 class Class(BaseModel):

@@ -14,5 +14,5 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "build.mjs", "eslint.config.js"]
+  "include": ["src", "test", "build.mjs", "build-config.mjs", "eslint.config.js"]
 }

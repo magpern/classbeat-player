@@ -82,6 +82,7 @@
   --scene-anticipate: 10s; /* next colour comes in this long before a change */
   --scene-turn-max: 30deg; /* per second: the fastest any beam turns (S7) */
   --scene-reaim: 3.5s; /* the longest a re-aim, phrase flip, gather or fan may take */
+  --scene-sweep-window: 4.15s; /* the longest a sweep's window lasts per turn: --scene-reaim plus TURN_DELAY_MS (650 ms) */
   --scene-lift-max: 3; /* per second: the beat lift's highest rate */
   --scene-lift-cap: 0.05; /* largest run any beat-like light may make alone in any region, share of its larger end (S6) */
   --scene-hold: 250ms 300ms; /* beat-like light held at rest before, after a scheduled run (S6) */

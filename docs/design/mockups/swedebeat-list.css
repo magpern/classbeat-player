@@ -1,0 +1,22 @@
+/* Connect Swedebeat and the mix states on the class list (docs/design/swedebeat.md).
+   Loaded after class-list.css. Reference mock-up only. No hue: states are words and shapes. */
+
+/* The Swedebeat line, under the sync status. */
+.status.sw { margin-top: 6px; min-height: 44px; }
+.status.sw .dt { margin-top: 1px; }
+
+/* The mix on a row: a marker and its words, and for a download a bar with the number in the words. */
+.row .m .mix { display: inline-flex; align-items: center; gap: 8px; color: var(--light-1); font-size: 16px; }
+.row .m .mix .mark { width: 11px; height: 11px; transform: none; }
+.row .m .mix.manual { color: var(--light-2); }
+.row .m .mix.manual .mark { border-color: var(--light-2); }
+.bar { display: inline-block; width: 96px; height: 8px; border: 1px solid var(--light-2); border-radius: 4px; overflow: hidden; background: var(--stage); }
+.bar > i { display: block; height: 100%; background: var(--light-1); }
+
+/* The sign-in form: one field per credential the source declares. */
+.fields { display: grid; gap: 12px; width: 100%; max-width: 440px; }
+.field-box { display: grid; gap: 4px; }
+.field-box .in { background: var(--stage-raised); border: 1px solid var(--stage-line); border-radius: 6px; padding: 9px 12px; font-size: 18px; min-height: 44px; display: flex; align-items: center; color: var(--light-1); letter-spacing: 0.02em; }
+.field-box .in.focus { outline: 3px solid var(--light-1); outline-offset: 2px; }
+.field-box .in .ph { color: var(--light-2); }
+.panel p.fine { font-size: 16px; color: var(--light-2); max-width: 34em; }
