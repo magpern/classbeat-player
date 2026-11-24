@@ -19,7 +19,10 @@ export interface InstructorModePlugin {
   listClasses(): Promise<unknown>;
   /** Syncs now with the paired account, then answers as listClasses. Native code makes the call. */
   syncNow(): Promise<unknown>;
-  /** Unpairs this phone: native code revokes the token, deletes it and the saved classes, then leaves. */
+  /**
+   * Asks the native question "Unpair this phone?". On "Unpair" native code deletes the token and the
+   * saved classes, gives the token back and leaves; on "Stay" it answers "stayed".
+   */
   unpair(): Promise<unknown>;
   /** Opens the native pairing screen again once the pairing ran out. */
   pairAgain(): Promise<unknown>;

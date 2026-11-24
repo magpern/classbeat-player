@@ -17,13 +17,15 @@ const native = instructorMode();
 let busy = false;
 
 const line = el("span", { class: "ok", tier: "label", lines: 2, text: STATUS_WORDS.syncing.line });
-const status = el("div", { class: "status" }, [line]);
-status.setAttribute("role", "status");
+line.setAttribute("role", "status");
+// "Unpair this phone" sits on the status row, small and plain, so it costs the list no height and
+// never reads as a class. It only asks: the native "Unpair this phone?" question decides.
+const unpairKey = key("key quiet", "unpair", UNPAIR, () => void once(() => native.unpair()));
+const status = el("div", { class: "status" }, [line, unpairKey]);
 const rows = el("div", { class: "rows" }, []);
-const unpairKey = key("key full", "unpair", UNPAIR, () => void once(() => native.unpair()));
 let shownPlate: HTMLElement | null = null;
 const s = strip(INSTRUCTOR.key, () => void once(() => native.askRiderMode()));
-document.body.append(page([modeTag(INSTRUCTOR.tag), h1(INSTRUCTOR.title), status], [rows, unpairKey, s.nav]));
+document.body.append(page([modeTag(INSTRUCTOR.tag), h1(INSTRUCTOR.title), status], [rows, s.nav]));
 
 // The saved list at once, then a sync now; each answer replaces the list.
 void native.listClasses().then(show, () => undefined).then(() => native.syncNow().then(show, () => undefined));
@@ -37,6 +39,8 @@ function show(reply: unknown): void {
 function render(list: ClassList): void {
   const words = STATUS_WORDS[list.status];
   line.textContent = words.line;
+  // A plate carries the same words as its head, so the line steps aside and the plate stands alone.
+  line.hidden = words.plate !== undefined;
   shownPlate?.remove();
   shownPlate = null;
   if (words.plate !== undefined) {

@@ -17,7 +17,7 @@ fun backendOrigin(debug: Boolean): String {
     val given = providers.gradleProperty("classbeat.backendOrigin").orNull?.trim()
     val value = given ?: if (debug) "http://127.0.0.1:8000" else ""
     val https = Regex("^https://[a-z0-9-]+(\\.[a-z0-9-]+)*(:[1-9][0-9]{0,4})?$")
-    val loopback = Regex("^http://(127\\.0\\.0\\.1|localhost)(:[1-9][0-9]{0,4})?$")
+    val loopback = Regex("^http://(127\\.0\\.0\\.1|localhost|\\[::1\\])(:[1-9][0-9]{0,4})?$")
     require(value.isEmpty() || https.matches(value) || (debug && loopback.matches(value))) {
         "classbeat.backendOrigin must be an https origin (or loopback http in a debug build)"
     }

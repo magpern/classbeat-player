@@ -90,6 +90,9 @@ object PairingMachine {
 
         /** Unpair when paired; Cancel while starting or waiting. */
         object Unpair : Event()
+
+        /** The notice was shown and the screen left: it is not shown again. */
+        object Seen : Event()
     }
 
     data class Step(val state: State, val effects: List<Effect> = emptyList())
@@ -184,6 +187,7 @@ object PairingMachine {
                 // whatever the store still holds (an older pairing, after a "pair again") is deleted too.
                 else unpaired(s.attempt, Notice.SAVE_FAILED, listOf(Effect.Forget, Effect.Revoke(s.record)))
             is Event.Checked -> checked(s, e)
+            Event.Seen -> if (s is State.Unpaired && s.notice != null) Step(s.copy(notice = null)) else Step(s)
             Event.Unpair -> when (s) {
                 is State.Unpaired -> Step(s)
                 // Deleted here first, then given back to the backend; offline, it is deleted all the same.

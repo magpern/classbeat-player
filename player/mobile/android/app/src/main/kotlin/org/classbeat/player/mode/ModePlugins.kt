@@ -79,7 +79,7 @@ class InstructorModePlugin : ModePlugin(Mode.INSTRUCTOR) {
     fun getClass(call: PluginCall) = handle(call) { c, k -> c.instructor.getClass(k) }
 
     @PluginMethod
-    fun unpair(call: PluginCall) = handle(call) { c, k -> c.instructor.unpair(k) }
+    fun unpair(call: PluginCall) = handle(call) { c, k -> c.unpair(k) }
 
     @PluginMethod
     fun pairAgain(call: PluginCall) = handle(call) { c, k -> c.pairAgain(k) }

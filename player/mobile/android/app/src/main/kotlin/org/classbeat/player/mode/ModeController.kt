@@ -42,6 +42,11 @@ class ModeController(
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
 
+    /** The "Unpair this phone?" question shows. */
+    private var unpairing = false
+
+    private lateinit var intents: InstructorIntents
+
     /** Back while a native screen shows answers it as "Stay", never as the page's Back. */
     private val back = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = stay()
@@ -54,6 +59,7 @@ class ModeController(
         pairing = PairingUi(screens, parts.pairing, parts.ports) { holder.secureLock }
         parts.pairing.changed = pairing::changed
         instructor = InstructorBridge(parts.intents) { current }
+        intents = parts.intents
         activity.onBackPressedDispatcher.addCallback(activity, back)
         holder.start()
     }
@@ -82,6 +88,7 @@ class ModeController(
     override fun closeBridge() {
         expose(null)
         pairing.drop()
+        unpairing = false
         // The page that asked is being replaced: its question ends here, with the one refused word.
         waiting?.reject(REFUSED)
         waiting = null
@@ -132,6 +139,14 @@ class ModeController(
         showScreen { pairing.open(instructor = true, leave = ::pairingLeft) }
     }
 
+    /** Instructor mode's "Unpair this phone": asks first; only "Unpair" deletes anything. */
+    fun unpair(call: PluginCall) {
+        if (waiting != null || pairing.showing || holder.pending != null || current != Mode.INSTRUCTOR) return call.reject(REFUSED)
+        waiting = call
+        unpairing = true
+        showScreen { screens.unpairQuestion(stay = ::stay, unpair = ::unpairConfirmed) }
+    }
+
     fun askRiderMode(call: PluginCall) {
         if (holder.askRider()) waiting = call else call.reject(REFUSED)
     }
@@ -159,7 +174,7 @@ class ModeController(
 
     /** Leaving the app while the question shows means "Stay". */
     fun stopped() {
-        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION) stay()
+        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing) stay()
     }
 
     private fun openSettings() {
@@ -176,10 +191,20 @@ class ModeController(
         }
     }
 
+    /** "Unpair": the page hears first, then the token and the classes go and instructor mode closes. */
+    private fun unpairConfirmed() {
+        if (!unpairing) return
+        unpairing = false
+        hideScreen()
+        settle("unpaired")
+        intents.unpair()
+    }
+
     private fun stay() {
         // Between modes (the switching screen): Back does nothing, and the screen stays.
         if (current == null) return
         if (pairing.showing) return pairing.back()
+        unpairing = false
         when (holder.pending) {
             ModeHolder.Pending.NO_LOCK -> holder.noLockStay()
             ModeHolder.Pending.RIDER_QUESTION -> holder.riderAnswered(false)

@@ -20,12 +20,6 @@ class InstructorBridge(private val intents: InstructorIntents, private val curre
     /** The id was checked as a string by IntentPolicy; InstructorIntents checks its form. */
     fun getClass(call: PluginCall) = intents.getClass(call.getString("id") ?: "", reply(call))
 
-    /** Answered first: unpairing closes instructor mode, and its page with it. */
-    fun unpair(call: PluginCall) {
-        call.resolve(JSObject().put("result", "unpaired"))
-        intents.unpair()
-    }
-
     private fun reply(call: PluginCall): Reply = { data ->
         val answer = if (data == null || current() != Mode.INSTRUCTOR) null else runCatching { JSObject(CanonicalJson.write(data)) }.getOrNull()
         if (answer == null) call.reject(ModePlugin.REFUSED) else call.resolve(answer)

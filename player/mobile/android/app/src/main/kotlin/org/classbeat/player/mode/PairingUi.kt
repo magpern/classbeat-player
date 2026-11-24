@@ -38,7 +38,8 @@ class PairingUi(
         returned = false
         shown = null
         showing = true
-        service.begin()
+        // A notice (unpaired on the website, say) stays on its plate; "Start again" begins.
+        if (PairingScreenModel.begins(service.view())) service.begin()
         render()
     }
 
@@ -61,6 +62,7 @@ class PairingUi(
     fun drop() {
         if (!showing) return
         service.cancel()
+        service.seen()
         showing = false
         handler.removeCallbacks(tick)
     }
@@ -81,6 +83,7 @@ class PairingUi(
         if (!showing) return
         // Stops an attempt that is still running; a pairing already made is kept.
         service.cancel()
+        service.seen()
         showing = false
         handler.removeCallbacks(tick)
         screens.hide()

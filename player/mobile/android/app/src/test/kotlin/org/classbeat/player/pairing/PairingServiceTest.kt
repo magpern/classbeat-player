@@ -7,6 +7,7 @@ import org.classbeat.player.fake.FakeBackend.Companion.ORIGIN
 import org.classbeat.player.fake.FakePorts
 import org.classbeat.player.fake.FakeStore
 import org.classbeat.player.fake.Secrets
+import org.classbeat.player.mode.ScreenLine
 import org.classbeat.player.pairing.PairingMachine.Notice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -132,6 +133,54 @@ class PairingServiceTest {
             assertEquals(1, ports.cacheForgets)
             assertEquals(1, gone)
         }
+    }
+
+    @Test
+    fun `the revoked plate is held when the pairing screen opens, and only Start again begins`() {
+        store.text = PairingRecord(ORIGIN, Secrets.token(), null).text()
+        backend.route = { r -> if (r.path == "/api/player/device") FakeBackend.error(401, "token_revoked") else FakeBackend.started() }
+        val s = service()
+        s.load()
+        backend.flush()
+        // What PairingUi.open reads: no begin, and the plate with "Start again" first.
+        val view = s.view()
+        assertFalse(PairingScreenModel.begins(view))
+        val plate = PairingScreenModel.screen(view, 0, true, false, false)
+        assertTrue(plate.lines.any { it is ScreenLine.Plate && it.head == "Unpaired on the website." })
+        assertEquals(PairingScreenModel.Action.START_AGAIN, plate.keys.first { it.main }.action)
+        assertTrue(backend.sent.none { it.path == "/api/pairing/start" })
+        // "Start again" begins.
+        s.begin()
+        backend.flush()
+        assertTrue(s.view() is PairingView.Waiting)
+    }
+
+    @Test
+    fun `a plate seen and left is not shown again`() {
+        store.text = PairingRecord(ORIGIN, Secrets.token(), null).text()
+        backend.route = { FakeBackend.error(401, "token_revoked") }
+        val s = service()
+        s.load()
+        backend.flush()
+        s.cancel()
+        s.seen()
+        assertEquals(PairingView.Unpaired(null), s.view())
+        assertTrue(PairingScreenModel.begins(s.view()))
+        assertTrue(PairingScreenModel.begins(PairingView.Unpaired(Notice.UNPAIRED)))
+    }
+
+    @Test
+    fun `a pair again holds the expired token as a secret too`() {
+        store.text = PairingRecord(ORIGIN, Secrets.token(), null).text()
+        backend.route = { r -> if (r.path == "/api/player/device") FakeBackend.error(401, "token_expired") else FakeBackend.started() }
+        val s = service()
+        s.load()
+        backend.flush()
+        s.begin()
+        assertEquals(listOf(Secrets.token()), s.secrets())
+        backend.flush()
+        assertTrue(s.view() is PairingView.Waiting)
+        assertEquals(listOf(Secrets.deviceCode(), Secrets.token()), s.secrets())
     }
 
     @Test

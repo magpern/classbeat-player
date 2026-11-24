@@ -26,6 +26,12 @@ object PairingScreenModel {
      * [returned] is true once the app came back from the browser while the code showed; [instructor]
      * is true for "pair again" from instructor mode, where no screen lock is asked after pairing.
      */
+    /**
+     * Whether opening the screen starts a pairing at once. A notice (revoked on the website, a code run out, a
+     * failure) is held instead, and only "Start again" begins; "Unpaired" by this phone asks as usual.
+     */
+    fun begins(view: PairingView): Boolean = view !is PairingView.Unpaired || view.notice == null || view.notice == Notice.UNPAIRED
+
     fun screen(view: PairingView, now: Long, secureLock: Boolean, returned: Boolean, instructor: Boolean): Screen = when (view) {
         is PairingView.Starting -> asking()
         // Unpaired here (the page's unpair) is no ending to report: the screen opens to pair anew.

@@ -58,6 +58,21 @@ class ModeScreens(private val activity: Activity) {
         side = true,
     )
 
+    /** Instructor mode's "Unpair this phone": the native question before anything is deleted. */
+    fun unpairQuestion(stay: () -> Unit, unpair: () -> Unit) = show(
+        lead = listOf(
+            ScreenLine.Tag("Instructor mode"),
+            ScreenLine.Title("Unpair this phone?"),
+            ScreenLine.Text(
+                "The classes saved on this phone are removed and instructor mode closes. " +
+                    "Teaching from it again needs a new pairing.",
+            ),
+        ),
+        // As the rider question: "Stay" first, the safe answer, with the focus.
+        keys = listOf(Key("Stay", true, stay), Key("Unpair", false, unpair)),
+        side = true,
+    )
+
     /** [rider] is the target: the spec's screen is the switch to rider mode; the other way mirrors it. */
     fun switching(rider: Boolean) = show(
         lead = listOf(

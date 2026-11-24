@@ -83,6 +83,9 @@ class PairingService(
         if (state is State.Starting || state is State.Waiting) dispatch(Event.Unpair)
     }
 
+    /** The pairing screen closed: a notice it showed is not shown again. */
+    fun seen() = dispatch(Event.Seen)
+
     /** A player call was refused with a 401 that ends or pauses the pairing (sync, list). */
     fun refused(refusal: PairingProtocol.Refusal) {
         val s = state as? State.Paired ?: return
@@ -98,11 +101,12 @@ class PairingService(
         return s.record.takeIf { !s.expired && it.origin == origin }
     }
 
-    /** Every secret this phone holds now, for the answer guard: the token and the device code. */
+    /** Every secret this phone holds now, for the answer guard: the tokens (one kept in `back`) and the device code. */
     fun secrets(): List<String> = when (val s = state) {
         is State.Paired -> listOf(s.record.token)
-        is State.Waiting -> listOf(s.deviceCode)
-        else -> emptyList()
+        is State.Waiting -> listOfNotNull(s.deviceCode, s.back?.record?.token)
+        is State.Starting -> listOfNotNull(s.back?.record?.token)
+        is State.Unpaired -> emptyList()
     }
 
     fun view(): PairingView = when (val s = state) {
