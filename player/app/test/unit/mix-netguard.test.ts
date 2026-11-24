@@ -61,11 +61,13 @@ describe("netguard", () => {
     }
   });
 
-  it("refuses a UDP send to a non-loopback address (dgram goes through the patched lookup)", () => {
+  it("refuses a UDP send to a non-loopback address (checked directly, not through the lookup)", () => {
     for (const host of [NON_LOOPBACK_IP, NON_LOOPBACK_NAME]) {
       const sock = dgram.createSocket("udp4"); // one socket per send: a second send would queue behind the first's bind
       try {
         assert.throws(() => sock.send("x", 9, host), NetGuardError, host);
+        assert.throws(() => sock.send(Buffer.from("x"), 0, 1, 9, host), NetGuardError, host);
+        assert.throws(() => sock.connect(9, host), NetGuardError, host);
       } finally {
         sock.close();
       }

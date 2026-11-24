@@ -3,6 +3,7 @@
 // `localhost` throws before anything is sent. No test is exempt and there is no switch to turn it
 // off. Installed for every unit test by netguard-preload.ts (`npm run test:unit` passes it with
 // --import). Unix-socket and pipe paths are not network and pass.
+import dgram from "node:dgram";
 import dns from "node:dns";
 import net from "node:net";
 
@@ -61,6 +62,21 @@ export function installNetGuard(): void {
     }
     return realConnect.apply(this, args);
   } as typeof net.Socket.prototype.connect;
+
+  // UDP: Node 22 sends through dns.lookup, newer Node skips the lookup for an address literal, so the
+  // destination is checked here and the guard does not depend on that detail.
+  const realSend = dgram.Socket.prototype.send as (...a: unknown[]) => void;
+  dgram.Socket.prototype.send = function (this: dgram.Socket, ...args: unknown[]): void {
+    // send(msg, port[, address][, cb]) or send(msg, offset, length, port[, address][, cb])
+    const address = typeof args[1] === "number" && typeof args[2] === "number" ? args[4] : args[2];
+    if (typeof address === "string" && !isLoopbackHost(address)) throw new NetGuardError("a UDP send");
+    return realSend.apply(this, args);
+  } as typeof dgram.Socket.prototype.send;
+  const realDgramConnect = dgram.Socket.prototype.connect as (...a: unknown[]) => void;
+  dgram.Socket.prototype.connect = function (this: dgram.Socket, ...args: unknown[]): void {
+    if (typeof args[1] === "string" && !isLoopbackHost(args[1])) throw new NetGuardError("a UDP connect");
+    return realDgramConnect.apply(this, args);
+  } as typeof dgram.Socket.prototype.connect;
 
   const refuseLookup = (host: unknown): void => {
     if (typeof host !== "string" || !isLoopbackHost(host)) throw new NetGuardError("a name lookup");
