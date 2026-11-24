@@ -8,7 +8,7 @@ import type { RoomWindow } from "../room/room-window.ts";
 import { createMixPlayer } from "./mix-player.ts";
 import type { MixPlayer } from "./mix-player.ts";
 import type { Plays } from "./plays.ts";
-import { handleMixScheme } from "./scheme.ts";
+import { handleMixScheme } from "../hardening.ts";
 import type { MixSetup } from "./setup.ts";
 
 export function setupPlayback(mix: MixSetup, plays: Plays, controller: Pick<Controller, "watch" | "align">, room: Pick<RoomWindow, "trusted" | "sendMix">): MixPlayer {

@@ -71,13 +71,15 @@ test("the cbp-mix: scheme has exactly its four privileges, never bypassCSP", () 
   assert.deepEqual(Object.entries(MIX_SCHEME_PRIVILEGES).sort(), [["secure", true], ["standard", true], ["stream", true], ["supportFetchAPI", true]]);
   assert.ok(Object.isFrozen(MIX_SCHEME_PRIVILEGES));
   // The registration passes exactly this object, and nothing in the source names bypassCSP or another privileged scheme.
-  const scheme = readFileSync(join(APP, "src", "main", "mix", "scheme.ts"), "utf8");
+  const scheme = readFileSync(join(APP, "src", "main", "hardening.ts"), "utf8");
   assert.match(scheme, /registerSchemesAsPrivileged\(\[\{ scheme: MIX_SCHEME, privileges: \{ \.\.\.MIX_SCHEME_PRIVILEGES \} \}\]\)/);
   assert.equal(scheme.match(/registerSchemesAsPrivileged/g)?.length, 1);
+  assert.equal(scheme.match(/protocol\.handle\(/g)?.length, 1);
+  assert.doesNotMatch(scheme, /protocol\.(register\w*Protocol|intercept\w*)\(/);
   for (const f of walk(join(APP, "src"))) {
     const text = readFileSync(f, "utf8");
     assert.doesNotMatch(text, /bypassCSP|corsEnabled|allowServiceWorkers/, f);
-    if (!f.endsWith(join("mix", "scheme.ts"))) assert.doesNotMatch(text, /registerSchemesAsPrivileged|protocol\.(handle|register\w*Protocol|intercept\w*)\(/, f);
+    if (!f.endsWith(join("main", "hardening.ts"))) assert.doesNotMatch(text, /registerSchemesAsPrivileged|protocol\.(handle|register\w*Protocol|intercept\w*)\(/, f);
   }
 });
 
