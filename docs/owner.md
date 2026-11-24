@@ -23,8 +23,8 @@ with other work; nothing in the development loop waits for an answer.
   installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
   with Spotify on it. Before the first APK that studios keep: an Android signing key, made once
   and added as a repository secret (agents never hold it; the runbook will give the commands).
-  Losing it means users must uninstall to update. iOS later: an iPhone or iPad and the Apple
-  Developer membership above.
+  Losing it means users must uninstall to update. iOS after the Android app (owner, 2026-11-24): the owner's Apple silicon Mac to run
+  it; later an iPhone or iPad and the Apple Developer membership above.
 
 ## Decisions waiting
 
@@ -138,7 +138,7 @@ with other work; nothing in the development loop waits for an answer.
   them on the room screen.
 - The decisions in [plan.md](plan.md), section 13. Decided so far: the backend stack (Python,
   FastAPI, PostgreSQL); installed Android and iOS apps with two modes, Android first (decision
-  15, above); riders' sensors from the web page, with Bluefy on iPhone; no external hardware such
+  15, above); riders' sensors from the web page, on iPhone through the installed app's rider mode (Bluefy dropped, 2026-11-24); no external hardware such
   as lighting.
 
 ## Tasks only the owner can run
