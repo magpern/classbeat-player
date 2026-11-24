@@ -1,6 +1,7 @@
 // A small import graph over source text, for the guards that keep two kinds of module apart.
 // Type-only imports are erased by the build and carry nothing at run time, so they are not edges.
-import { dirname, join, normalize } from "node:path";
+import { posix } from "node:path";
+const { dirname, join, normalize } = posix; // keys are forward-slash paths on every system
 
 export type Files = ReadonlyMap<string, string>;
 
