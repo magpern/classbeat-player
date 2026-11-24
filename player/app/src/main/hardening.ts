@@ -5,6 +5,7 @@ import type { WebContents } from "electron";
 import { refuse, refuseLoose } from "./refuse-loose.ts";
 import type { RefusableRenderer, RefuseDeps } from "./refuse-loose.ts";
 import { isAllowedRequest } from "./web-preferences.ts";
+import type { LivePlay } from "./web-preferences.ts";
 
 // Every renderer, however it was made (a window, a view, window.open), is compared with
 // secureWebPreferences as it is created, and again as each navigation starts, loadFile and reload
@@ -37,13 +38,16 @@ export function enableSandboxUnlessTest(): void {
   if (!app.commandLine.hasSwitch("no-sandbox")) app.enableSandbox();
 }
 
-/** Call once the app is ready, before the first window. `preloads`: the only preload paths a renderer may have. */
-export function hardenSession(appDirUrl: string, preloads: readonly string[]): void {
+/**
+ * Call once the app is ready, before the first window. `preloads`: the only preload paths a renderer
+ * may have. `livePlay`: whether a `cbp-mix:` play id is live for the requesting renderer.
+ */
+export function hardenSession(appDirUrl: string, preloads: readonly string[], livePlay?: LivePlay): void {
   const ses = session.defaultSession;
   // No dictionaries are downloaded and nothing is checked; every renderer is refused if it is back on.
   ses.setSpellCheckerEnabled(false);
   ses.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !isAllowedRequest(details.url, appDirUrl) });
+    callback({ cancel: !isAllowedRequest(details.url, appDirUrl, details.webContentsId, livePlay) });
   });
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   ses.setPermissionCheckHandler(() => false);

@@ -1,5 +1,6 @@
 // The hardening settings of every window, kept free of Electron imports so a unit test can check
 // them. The e2e test reads the same values back from the running windows.
+import { MIX_SCHEME, playIdOf } from "../core/mix/scheme-policy.ts";
 
 /**
  * The presenter page's Content Security Policy; presenter.html carries it as its first meta tag.
@@ -27,11 +28,13 @@ export const CSP = [
 export const LIST_CSP = CSP.replace("font-src 'none'", "font-src 'self'");
 
 /**
- * The room screen's policy (room.html): the class list's. The room screen's style sheet and fonts
+ * The room screen's policy (room.html): the class list's, and media from `cbp-mix:` only, for the
+ * <audio> that plays a cached mix (ADR 0013 section 5; the scheme is registered without the
+ * privilege that bypasses a CSP, so this is the only page that can load it). The room screen's style sheet and fonts
  * are the application's own files; it sets no inline style (only through the CSSOM) and runs no
  * inline script.
  */
-export const ROOM_CSP = LIST_CSP;
+export const ROOM_CSP = LIST_CSP.replace("media-src 'none'", `media-src ${MIX_SCHEME}:`);
 
 export interface SecureWebPreferences {
   readonly preload: string;
@@ -129,7 +132,17 @@ export function looseExtras(seen: RendererExtras, allowed: readonly string[]): s
   return out;
 }
 
-/** Only the application's own files may load. Everything else (http, https, ws, data, ...) is cancelled. */
-export function isAllowedRequest(url: string, appDirUrl: string): boolean {
-  return url.startsWith(appDirUrl);
+/** Whether `id` is the live play of the renderer `webContentsId` (main/mix/plays.ts). */
+export type LivePlay = (id: string, webContentsId: number) => boolean;
+
+/**
+ * Exactly two kinds of request load; everything else (http, https, ws, data, other files, ...) is
+ * cancelled. The application's own files, from anywhere. A `cbp-mix:` play URL, only from the
+ * renderer the play is bound to (the room window) and only while that play is live.
+ */
+export function isAllowedRequest(url: string, appDirUrl: string, webContentsId?: number, livePlay?: LivePlay): boolean {
+  if (url.startsWith(appDirUrl)) return true;
+  const id = playIdOf(url);
+  if (id === null || livePlay === undefined || typeof webContentsId !== "number") return false;
+  return livePlay(id, webContentsId) === true;
 }

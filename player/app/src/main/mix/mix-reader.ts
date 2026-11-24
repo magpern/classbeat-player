@@ -19,6 +19,8 @@ export interface MixReader {
   /** Plaintext length of chunk `i`. */
   chunkLength(i: number): number;
   readChunk(i: number): Promise<ChunkRead>;
+  /** How many whole chunks are on disk now (the download's progress); 0 when the entry is gone. */
+  written(): Promise<number>;
 }
 
 /** A reader for the mix, or null when it is not cached (or its header does not verify, or it is bad). */
@@ -68,6 +70,19 @@ export function openReader(c: AccountCache, mixId: string): MixReader | null {
         return writing ? { ok: false, reason: "pending" } : bad();
       } finally {
         await file.close();
+      }
+    },
+    async written() {
+      if (sameEntry() === null) return 0;
+      try {
+        const file = await c.folder.openData(tag, false);
+        try {
+          return wholeChunks(h.byteLength, (await file.stat()).size);
+        } finally {
+          await file.close();
+        }
+      } catch {
+        return 0;
       }
     },
   };

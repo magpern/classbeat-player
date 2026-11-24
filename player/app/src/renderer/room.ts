@@ -1,7 +1,8 @@
 // The room screen's window: the plain 2D room screen (web/, docs/design/room-2d.md) drawn from what
 // the shell sends, and the room screen's own controls over the score (room-band.ts). The screen is
 // the web lane's; this page mounts it, passes it frames, and sends only the room's fixed commands
-// through its preload (room-preload.ts).
+// through its preload (room-preload.ts). The page's one <audio> plays a Swedebeat mix as the shell
+// cues it (room-mix.ts), and its reports go back through the preload.
 import "../../../../web/src/main.ts";
 import "./room-band.css";
 import "./room-join.css";
@@ -11,6 +12,7 @@ import { REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import type { ClockStatus } from "../core/room/band-view.ts";
 import { mountBand } from "./room-band.ts";
+import { mountMix } from "./room-mix.ts";
 import { createMarks } from "./room-marks.ts";
 import { mountSheet } from "./room-join.ts";
 
@@ -32,6 +34,8 @@ interface RoomApi {
   remoteState(): Answer<RemoteView>;
   startRemote(): Answer<RemoteView>;
   onRemote(cb: (slot: RemoteView) => void): void;
+  onMix(cb: (cue: unknown) => void): void;
+  mixReport(seq: number, positionMs: number, playing: boolean, failed: boolean): Answer<true>;
 }
 
 const api = (window as unknown as { room: RoomApi }).room;
@@ -96,3 +100,6 @@ void api.state().then((frame) => {
 });
 api.onRemote(remote);
 void api.remoteState().then(remote);
+// The mix's <audio>: cued by the shell only, and its reports go back through the one fixed call.
+const mix = mountMix(document.getElementById("mix") as HTMLAudioElement, (seq, positionMs, playing, failed) => void api.mixReport(seq, positionMs, playing, failed));
+api.onMix((cue) => mix.cue(cue));

@@ -9,10 +9,11 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "../../src/core/channels.ts";
+import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_MIX, CH_ROOM_MIX_REPORT, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "../../src/core/channels.ts";
 import { isRoomSender, pageOf, ROOM_CHANNELS, ROOM_PUSH_CHANNELS } from "../../src/core/ipc-policy.ts";
 import { NO_REMOTE } from "../../src/core/room/remote.ts";
 import { roomFrameOf } from "../../src/core/room/frame.ts";
+import type { MixLine } from "../../src/core/mix/mix-line.ts";
 import type { Snapshot } from "../../src/core/snapshot.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
@@ -60,14 +61,17 @@ const SNAP = {
 } as unknown as Snapshot;
 
 test("a frame carries the class, the clock view, the link view and the band's routes, and nothing else of the snapshot", () => {
-  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "pattern", "playlistNotLoaded", "view"]);
-  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null, pattern: null, playlistNotLoaded: false });
+  assert.deepEqual(Object.keys(roomFrameOf(SNAP)).sort(), ["band", "doc", "link", "mix", "pattern", "playlistNotLoaded", "view"]);
+  assert.deepEqual(roomFrameOf(SNAP), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: null, pattern: null, playlistNotLoaded: false, mix: null });
   // The routes are rebuilt from closed values: nothing else the snapshot holds there goes along.
   const pattern = { position: "standing", beat: 3, beatsLeft: 6, nextPosition: "seated", secret: "QQQQ-QQQQ" };
   assert.deepEqual(roomFrameOf({ ...SNAP, pattern } as unknown as Snapshot).pattern, { position: "standing", beat: 3, beatsLeft: 6, nextPosition: "seated" });
   const band = { start: "music", pause: "handover", resume: "clock", next: "music", previous: "nope", extra: "QQQQ-QQQQ" };
   const framed = roomFrameOf({ ...SNAP, band } as unknown as Snapshot);
   assert.deepEqual(framed.band, { start: "music", pause: "handover", resume: "clock", next: "music", previous: "clock" });
+  // The mix line is a closed copy too: its words and shape only.
+  const mix = { text: "Playing the mix", shape: "dot", url: "cbp-mix://play/00", account: "QQQQ" } as unknown as MixLine;
+  assert.deepEqual(roomFrameOf(SNAP, mix).mix, { text: "Playing the mix", shape: "dot" });
 });
 
 function rig() {
@@ -102,14 +106,16 @@ test("the room preload exposes exactly the room's functions, and uses only the r
   const src = code(read("src", "preload", "room-preload.ts"));
   assert.deepEqual(
     [...src.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]).sort(),
-    ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"],
+    ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"],
   );
   const invoked = [...src.matchAll(/ipcRenderer\.invoke\((\w+)/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(invoked)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"]);
-  assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE"]);
+  assert.deepEqual([...new Set(invoked)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_MIX_REPORT", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"]);
+  assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_MIX"]);
+  // The one function that takes values from the page sends exactly the report's four fields, rebuilt.
+  assert.match(src, /invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true \}\)/);
   assert.doesNotMatch(src, /ipcRenderer\.(send|sendSync|postMessage|addListener|once)\b/);
-  assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP]);
-  assert.deepEqual(ROOM_PUSH_CHANNELS, [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE]);
+  assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP, CH_ROOM_MIX_REPORT]);
+  assert.deepEqual(ROOM_PUSH_CHANNELS, [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE, CH_ROOM_MIX]);
   // The presenter's preload knows nothing of the room.
   assert.doesNotMatch(code(read("src", "preload", "preload.ts")), /CH_ROOM_|room:/);
   assert.equal(new Set([...ROOM_CHANNELS, ...ROOM_PUSH_CHANNELS]).size, ROOM_CHANNELS.length + ROOM_PUSH_CHANNELS.length);
@@ -120,18 +126,21 @@ test("room.html carries exactly the room's policy, before any script, and no inl
   const m = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html);
   assert.ok(m, "CSP meta tag missing");
   assert.equal(m[1], ROOM_CSP);
-  assert.equal(ROOM_CSP, LIST_CSP);
+  assert.equal(ROOM_CSP, LIST_CSP.replace("media-src 'none'", "media-src cbp-mix:"));
   assert.ok(html.indexOf("Content-Security-Policy") < html.indexOf("<script"));
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)|<style|\sstyle=|\son[a-z]+=/i);
   assert.doesNotMatch(ROOM_CSP, /unsafe-inline|unsafe-eval|https?:|data:|blob:|\*/);
-  for (const k of ["connect-src", "media-src", "object-src", "frame-src", "worker-src", "img-src"]) assert.match(ROOM_CSP, new RegExp(`${k} 'none'`), k);
+  for (const k of ["connect-src", "object-src", "frame-src", "worker-src", "img-src"]) assert.match(ROOM_CSP, new RegExp(`${k} 'none'`), k);
+  assert.match(ROOM_CSP, /(^|; )media-src cbp-mix:(;|$)/);
+  // The one <audio>, with no source in the page: main gives it the play URL.
+  assert.deepEqual([...html.matchAll(/<(audio|video|source|track)\b[^>]*>/g)].map((x) => x[0]), ['<audio id="mix" preload="auto">']);
 });
 
 test("the room page uses only the room's fixed calls (issue #198: the band's commands, End class, the phone remote)", () => {
   const src = code(read("src", "renderer", "room.ts"));
   const used = [...new Set([...src.matchAll(/api\.(\w+)/g)].map((m) => m[1]))].sort();
-  assert.deepEqual(used, ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
-  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
+  assert.deepEqual(used, ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
 });
 
 test("the preload is reached once, by name, in room.ts only: no other way round the list of calls", () => {
@@ -140,6 +149,6 @@ test("the preload is reached once, by name, in room.ts only: no other way round 
   assert.deepEqual([...room.matchAll(/\.room\b|\["room"\]|\['room'\]/g)].map((m) => m[0]), [".room"]);
   assert.deepEqual([...room.matchAll(/\bapi\b(?!\.\w)/g)].length, 1);
   assert.match(room, /const api = \(window as unknown as \{ room: RoomApi \}\)\.room;/);
-  for (const f of ["room.ts", "room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, f);
-  for (const f of ["room-band.ts", "room-qr.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, f);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, f);
+  for (const f of ["room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, f);
 });

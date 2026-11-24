@@ -223,15 +223,15 @@ test("the preload bridge: the same four functions, those of pairing (#74), of th
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "room:mix", "room:mix-report", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code"],
   );
   // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
 });
 
-test("the room preload bridge: exactly its functions, and none takes an argument from the page; every one sends fixed text", () => {
+test("the room preload bridge: exactly its functions; none takes an argument from the page but the mix report, rebuilt from four values; every other one sends fixed text", () => {
   const preload = src("preload/room-preload.ts");
   const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
-  assert.deepEqual(exposed, ["state", "onUpdate", "start", "pause", "resume", "previous", "next", "forward", "back", "undo", "follow", "endClass", "remoteState", "startRemote", "stopRemote", "onRemote"]);
+  assert.deepEqual(exposed, ["state", "onUpdate", "start", "pause", "resume", "previous", "next", "forward", "back", "undo", "follow", "endClass", "remoteState", "startRemote", "stopRemote", "onRemote", "onMix", "mixReport"]);
   const invoke = (name: string, args: string): RegExp => new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${args}\\),$`, "m");
   // The clock commands: one fixed object each, the 5 s steps with the clock's own JUMP_MS.
   assert.equal(JUMP_MS, 5000);
@@ -256,6 +256,18 @@ test("the room preload bridge: exactly its functions, and none takes an argument
   // The two pushes take only a callback, and pass the page only what the shell sent.
   assert.match(preload, /^ {2}onUpdate: \(cb: \(frame: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_UPDATE, \(_e, frame: unknown\) => cb\(frame\)\);\n {2}\},$/m);
   assert.match(preload, /^ {2}onRemote: \(cb: \(slot: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_REMOTE_UPDATE, \(_e, slot: unknown\) => cb\(slot\)\);\n {2}\},$/m);
+  // The mix cue's push takes only a callback; the report is the one function with arguments, and
+  // it sends a new object of a number, a number and two flags (#693), never what the page passed.
+  assert.match(preload, /^ {2}onMix: \(cb: \(cue: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_MIX, \(_e, cue: unknown\) => cb\(cue\)\);\n {2}\},$/m);
+  assert.match(
+    preload,
+    /^ {2}mixReport: \(seq: unknown, positionMs: unknown, playing: unknown, failed: unknown\): Promise<unknown> =>\n {4}ipcRenderer\.invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true \}\),$/m,
+  );
+  assert.deepEqual(
+    exposed.filter((name) => new RegExp(`^ {2}${name}: \\((?!\\)|cb: )`, "m").test(preload)),
+    ["mixReport"],
+    "only the report takes values from the page",
+  );
   // Every ipcRenderer call is one of the lines above.
   assert.equal([...preload.matchAll(/ipcRenderer\./g)].length, exposed.length);
 });
