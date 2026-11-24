@@ -55,6 +55,14 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
   // Bumped when the rider leaves (disconnectAll): a pick or a connection that finishes after that
   // belongs to a page that let go of its sensors, so it is disconnected and nothing is emitted.
   let epoch = 0;
+  // Devices on their FIRST connection (a count: a stale attempt may still end after a new pick).
+  // Only a connected device is kept for reconnect; one that drops or is removed before that must
+  // clear the page's "choosing", which "lost" and "removed" do not.
+  const connecting = new Map<string, number>();
+  // Devices the page has listed (they reached "connected"). One of these stays registered when a
+  // pick or reconnect of it ends badly: its row stays "lost" and Reconnect keeps working
+  // (docs/design/sensors.md: a lost sensor stays lost until Reconnect; "the list stays").
+  const shown = new Set<string>();
   const now = (): number => win.performance.now();
   /** A connection that finished after the page let go of it (left, removed or superseded). */
   class Left extends Error {}
@@ -68,6 +76,18 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     const still = (): void => {
       if (epoch !== at || sub.signal.aborted) throw new Left();
     };
+    // A failure after the page let go of this connection (removed, left, lost or superseded) is
+    // not news: it becomes a Left, so no "failed" follows "removed" or "lost".
+    try {
+      await connectAndRead(d, server, sub, still);
+    } catch (e) {
+      if (e instanceof Left) throw e;
+      still();
+      throw e;
+    }
+  };
+
+  const connectAndRead = async (d: Device, server: Server, sub: AbortController, still: () => void): Promise<void> => {
     await server.connect();
     still();
     const gives = new Set<Measure>();
@@ -94,12 +114,14 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     }
     still(); // the last lookup may have failed after a removal: no "connected" after "removed"
     if (!gives.size) throw new Error("nothing to read");
+    shown.add(d.id);
     listeners.emit({ type: "connected", id: d.id, name: d.name?.trim() || "Sensor", gives: [...gives], at: now() });
   };
 
   /** Lets go of a device the page does not keep: its listeners end and it is disconnected. */
   const release = (d: Device): void => {
     leaving.add(d.id);
+    shown.delete(d.id);
     subscriptions.get(d.id)?.abort();
     subscriptions.delete(d.id);
     d.gatt?.disconnect();
@@ -116,6 +138,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     if (d) release(d);
     leaving.add(id);
     listeners.emit({ type: "removed", id });
+    if (connecting.has(id)) listeners.emit({ type: "closed" }); // the pick it belonged to ends here
   };
 
   const source: SensorSource = {
@@ -133,17 +156,33 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
             watched.add(d);
             d.addEventListener("gattserverdisconnected", () => {
               if (leaving.has(d.id) || !devices.has(d.id)) return;
+              if (!shown.has(d.id)) {
+                // Dropped before it ever connected: let go of it and clear "choosing" (the page
+                // ignores "lost" for a device it never showed), so the rider can pick again.
+                release(d);
+                return listeners.emit({ type: "failed" });
+              }
+              subscriptions.get(d.id)?.abort(); // a lookup still running must not say "connected" after "lost"
               listeners.emit({ type: "lost", id: d.id });
+              // A pick of a listed (lost) sensor that drops again ends here: the row stays lost,
+              // Reconnect still works, and "choosing" clears.
+              if (connecting.has(d.id)) listeners.emit({ type: "failed" });
             });
           }
           devices.set(d.id, d);
           leaving.delete(d.id);
+          connecting.set(d.id, (connecting.get(d.id) ?? 0) + 1);
           try {
             await subscribe(d, at);
           } catch (e) {
             if (e instanceof Left) return settle(d, at);
-            release(d);
+            if (shown.has(d.id)) subscriptions.get(d.id)?.abort(); // a listed sensor stays, lost, for Reconnect
+            else release(d);
             listeners.emit({ type: "failed" });
+          } finally {
+            const n = (connecting.get(d.id) ?? 1) - 1;
+            if (n > 0) connecting.set(d.id, n);
+            else connecting.delete(d.id);
           }
         },
         (err: unknown) => {

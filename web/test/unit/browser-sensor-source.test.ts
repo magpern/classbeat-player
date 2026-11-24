@@ -3,21 +3,32 @@
 // or second pick of the same sensor ever doubles its listeners or its readings.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { SensorEvent } from "../../src/sensors/core/readings.ts";
+import { NO_SENSORS, step, type SensorEvent } from "../../src/sensors/core/readings.ts";
 import { webBluetoothSource } from "#browser-sensors";
 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 10; i += 1) await new Promise((r) => setImmediate(r));
 };
-const gate = (): { promise: Promise<void>; open: () => void } => {
+const gate = (): { promise: Promise<void>; open: () => void; fail: () => void } => {
   let open = (): void => {};
-  const promise = new Promise<void>((r) => (open = r));
-  return { promise, open };
+  let fail = (): void => {};
+  const promise = new Promise<void>((resolve, reject) => {
+    open = resolve;
+    fail = () => reject(new DOMException("failed", "NetworkError"));
+  });
+  return { promise, open, fail };
 };
 
 /** A heart rate strap whose characteristic is one object, as the browser gives it. */
 function strap(id = "strap") {
-  const ch = Object.assign(new EventTarget(), { value: undefined as DataView | undefined, startNotifications: async () => ch });
+  let notifyHold: Promise<void> | null = null;
+  const ch = Object.assign(new EventTarget(), {
+    value: undefined as DataView | undefined,
+    startNotifications: async () => {
+      if (notifyHold) await notifyHold;
+      return ch;
+    },
+  });
   let hold: Promise<void> | null = null;
   let lookupHold: Promise<void> | null = null;
   const log: string[] = [];
@@ -47,6 +58,7 @@ function strap(id = "strap") {
   return {
     device,
     log,
+    holdNotify: (p: Promise<void> | null) => void (notifyHold = p),
     holdLookup: (p: Promise<void> | null) => void (lookupHold = p),
     holdConnect: (p: Promise<void> | null) => void (hold = p),
     beat: (bpm: number) => {
@@ -73,7 +85,8 @@ function page() {
   };
   const types = (): string[] => events.map((e) => e.type);
   const samples = (): number => events.filter((e) => e.type === "sample").length;
-  return { source, events, pick, types, samples };
+  const state = () => events.reduce(step, NO_SENSORS);
+  return { source, events, pick, types, samples, state };
 }
 
 describe("a sensor after the rider left", () => {
@@ -130,8 +143,180 @@ describe("a sensor after the rider left", () => {
     g.open();
     await flush();
     assert.ok(!p.types().includes("connected"), p.types().join());
-    assert.equal(p.types().at(-1), "removed");
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
     assert.equal(s.device.gatt.connected, false);
+  });
+
+  it("removed while connecting, then the connection fails: no failed after removed", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    g.fail();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
+  });
+
+  it("removed while notifications start, then they fail: no failed after removed", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdNotify(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    g.fail();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
+  });
+
+  it("left while connecting, then the connection fails: nothing said", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnectAll();
+    g.fail();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
+  });
+
+  it("a sensor that fails while the rider is still here says failed", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    g.fail();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "failed"]);
+  });
+
+  it("dropped during the first connection: failed, released, no stuck choosing, can pick again", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    g.open();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "failed"]);
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 0);
+    p.source.reconnect(s.device.id); // not kept: nothing to reconnect
+    s.holdLookup(null);
+    p.source.connect();
+    await p.pick(s.device);
+    assert.equal(p.types().at(-1), "connected");
+    assert.equal(p.state().choosing, false);
+  });
+
+  it("removed during the first connection: choosing is cleared", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    g.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+  });
+
+  it("lost during a reconnect's lookups: no connected after lost, and it can reconnect again", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.reconnect(s.device.id);
+    await flush();
+    s.lose();
+    g.open();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "connected", "lost", "retry", "lost"]);
+    s.holdLookup(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.types().at(-1), "connected");
+    s.beat(120);
+    assert.equal(p.samples(), 1);
+  });
+
+  it("a lost sensor picked again drops during the lookups: the row stays lost and Reconnect works", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    g.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 1);
+    assert.equal(p.state().devices[0]!.lost, true);
+    s.holdLookup(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.state().devices[0]!.lost, false);
+    s.beat(120);
+    assert.equal(p.samples(), 1);
+  });
+
+  it("a lost sensor picked again fails to connect: the row stays lost and Reconnect works", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    g.fail();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().failed, true);
+    assert.equal(p.state().devices[0]!.lost, true);
+    s.holdConnect(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.state().devices[0]!.lost, false);
+  });
+
+  it("two picks of one sensor, the first superseded: removed during the second still clears choosing", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    const l = gate();
+    s.holdConnect(g.promise);
+    s.holdLookup(l.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.connect();
+    await p.pick(s.device);
+    g.open();
+    await flush();
+    p.source.disconnect(s.device.id);
+    l.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 0);
   });
 
   it("a new pick after leaving still connects", async () => {
