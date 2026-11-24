@@ -15,7 +15,7 @@ export const LOOPBACK_HOSTS: readonly string[] = ["localhost", "127.0.0.1"];
 
 /** The host of an origin, or null when the text is not an http(s) origin. */
 export function originHost(origin: string): string | null {
-  const m = /^https?:\/\/([^/?#:@\s]+)(?::\d{1,5})?\/?$/i.exec(origin);
+  const m = origin.match(/^https?:\/\/([^/?#:@\s]+)(?::\d{1,5})?\/?$/i);
   return m ? m[1]!.toLowerCase() : null;
 }
 
