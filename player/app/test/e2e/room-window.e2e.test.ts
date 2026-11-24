@@ -114,7 +114,7 @@ test("the room window is hardened: its own policy and preload, no Node, no netwo
     player: typeof (window as unknown as { player?: unknown }).player,
     api: Object.keys((window as unknown as { room: object }).room).sort(),
   }));
-  assert.deepEqual(r, { require: "undefined", process: "undefined", player: "undefined", api: ["back", "endClass", "follow", "forward", "next", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"] });
+  assert.deepEqual(r, { require: "undefined", process: "undefined", player: "undefined", api: ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"] });
   assert.equal(await room.evaluate(async () => fetch("https://example.invalid/").then(() => "fetched", () => "blocked")), "blocked");
   const fonts = await room.evaluate(async () => {
     await document.fonts.ready;
@@ -146,7 +146,7 @@ test("the room page's channel answers only the room window: the same preload and
   assert.equal(got, null);
   const own = await roomPage()!.evaluate(() => (window as unknown as { room: { state(): Promise<{ doc: { class: { title: string } } } | null> } }).room.state());
   assert.equal(own?.doc.class.title, TITLE);
-  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "pattern", "playlistNotLoaded", "view"], "a frame, not the presenter's snapshot");
+  assert.deepEqual(Object.keys(own ?? {}).sort(), ["band", "doc", "link", "mix", "pattern", "playlistNotLoaded", "view"], "a frame, not the presenter's snapshot");
 });
 
 test("the room window is on the display the rule picks, and the presenter keeps its window", async () => {

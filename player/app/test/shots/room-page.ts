@@ -45,6 +45,9 @@ const STUB = `
     startRemote: () => { window.__calls.push("startRemote"); return copy(window.__remote); },
     stopRemote: () => { window.__calls.push("stopRemote"); return copy(window.__remote); },
     onRemote: (cb) => { window.__pushRemote = cb; },
+    // No mix in the screenshots: the cue never comes, and nothing is reported.
+    onMix: () => {},
+    mixReport: () => Promise.resolve(null),
   };
 `;
 
