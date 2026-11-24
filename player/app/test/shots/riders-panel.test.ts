@@ -5,7 +5,7 @@
 // network. Needs `npm run build`.
 //   npm run test:shots            (SHOTS_ONLY=<regex> limits it to matching "<state>-<w>x<h>")
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Browser, BrowserContext, Page } from "playwright-core";
@@ -121,19 +121,31 @@ async function open(size: readonly [number, number], s: Shot, clock = false): Pr
   return { page, context, external, errors, calls: () => page.evaluate(() => (window as unknown as { __calls: unknown[][] }).__calls) };
 }
 
-/** No colour anywhere in the panel: every colour and background is a grey. */
+/** The design tokens' whites, greys and black (tokens.css, "never a hue"), as `r,g,b`. */
+const GREYS: readonly string[] = (() => {
+  const css = readFileSync(join(APP_DIR, "src/renderer/design/tokens.css"), "utf8");
+  return ["stage", "stage-raised", "stage-line", "light-1", "light-2", "light-3", "ink"].map((name) => {
+    const hex = new RegExp(`--${name}:\\s*#([0-9a-f]{6});`).exec(css)?.[1];
+    assert.ok(hex, `token --${name}`);
+    return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(",");
+  });
+})();
+
+/** No colour anywhere in the panel: every colour and background is a pure grey or one of the
+ *  tokens' own whites and greys (#682: the presenter is styled with them). */
 const hues = (page: Page): Promise<string[]> =>
-  page.evaluate(() => {
+  page.evaluate((greys) => {
     const out: string[] = [];
     for (const el of [document.getElementById("riders")!, ...document.querySelectorAll("#riders *")]) {
       const cs = getComputedStyle(el);
       for (const c of [cs.color, cs.backgroundColor, cs.borderTopColor]) {
         const m = c.match(/[\d.]+/g)?.map(Number) ?? [];
-        if (m.length >= 3 && (Math.abs(m[0]! - m[1]!) > 2 || Math.abs(m[1]! - m[2]!) > 2)) out.push(`${el.id || el.tagName} ${c}`);
+        if (m.length < 3 || greys.includes(m.slice(0, 3).join(","))) continue;
+        if (Math.abs(m[0]! - m[1]!) > 2 || Math.abs(m[1]! - m[2]!) > 2) out.push(`${el.id || el.tagName} ${c}`);
       }
     }
     return out;
-  });
+  }, GREYS);
 
 let browser: Browser;
 let shots: Shot[];

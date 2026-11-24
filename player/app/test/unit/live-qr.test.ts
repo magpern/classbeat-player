@@ -106,7 +106,7 @@ test("the QR code is the presenter's alone: the room's page, preload and script 
     assert.doesNotMatch(source, /live-qr|core\/qr\/|controlLink/, f);
   }
   const presenter = readFileSync(join(app, "renderer", "presenter.html"), "utf8");
-  assert.match(presenter, /style-src 'none'/);
   assert.match(presenter, /img-src 'none'/);
+  assert.doesNotMatch(presenter, /unsafe-inline|<style|\sstyle=/);
   assert.match(presenter, /id="live-qr" hidden/);
 });
