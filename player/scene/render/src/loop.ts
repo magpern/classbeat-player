@@ -109,6 +109,7 @@ export class RigLoop {
   private readonly darkGate = new DarkGate();
   private spans: DarkSpan[] = [];
   private spansKey = "";
+  private buildHeldMs = 0;
 
   private readonly tokens: LoopTokens;
   private holdPhase = false;
@@ -192,7 +193,9 @@ export class RigLoop {
     const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
     const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;
     // The lit fixtures and the haze's gain change on a planned mark only: a change between marks waits for the next one.
-    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build, beatMs);
+    // Below the Beat level the build's haze rises as steady light, 3 % a second: its clock is held round a dark span like the drift's, and resumes where it stopped.
+    this.buildHeldMs = build === null ? 0 : this.buildHeldMs + (spanHeld && beatMs === null ? dtSeconds * 1000 : 0);
+    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build - this.buildHeldMs, beatMs);
     const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
     const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`, this.bursts.budget.runs);
     if (held.mark !== null) this.clock.note(held.mark);

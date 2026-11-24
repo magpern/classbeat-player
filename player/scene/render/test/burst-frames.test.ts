@@ -53,8 +53,8 @@ test("a song change is a sweep, known from the song before it and from the song 
   assert.equal(new RunBudget().admit("a", "lightBurst", inside, before), false, "seen ahead, from the song's length");
   assert.equal(new RunBudget().admit("a", "lightBurst", inside, { ...before, classMs: 60_400, songIndex: 1, songPosMs: 400 }), false, "seen from the new song");
   const b8 = new RunBudget();
-  assert.equal(b8.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), true);
-  assert.deepEqual(b8.cuts().map((c) => [c.planned.fromMs, c.kind, Math.round(c.offMs)]), [[60_000, "b8", 59_003]], "the turn starts 0.8 s after the decay: the beams go dark in the rise frame");
+  assert.equal(b8.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), false, "B8: the turn starts 0.8 s after the decay, and the sway stops 1 s before it, in the decay's second");
+  assert.deepEqual([b8.nearSway(), b8.cuts()], [["a"], []], "the skip is recorded");
   const after = new RunBudget();
   assert.equal(after.admit("a", "lightBurst", [{ fromMs: 64_300, toMs: 64_500 }], { ...before, classMs: 63_500, songIndex: 1, songPosMs: 3_500 }), true);
   assert.deepEqual(after.cuts(), [], "clear of the song change's span");
@@ -72,9 +72,12 @@ test("a burst moves a step near its decay into its rise frame (B7, B8), is skipp
   assert.equal(clear.admit("light@80000", "lightBurst", [{ fromMs: 80_017, toMs: 80_250 }], song1), true);
   assert.deepEqual(clear.cuts(), [], "song 1's flip at 75 s is dark to about 77.6 s, 2.4 s before the rise: nothing is cut");
   const b7 = new RunBudget();
-  assert.equal(b7.admit("light@93000", "lightBurst", [{ fromMs: 93_100, toMs: 93_240 }], { ...song1, classMs: 92_000, songPosMs: 32_000 }), true);
-  const [cut] = b7.cuts();
-  assert.deepEqual([cut?.kind, cut?.planned.fromMs, Math.round(cut?.onMs ?? 0)], ["b7", 90_000, 93_083], "the flip at 90 s would be back 0.15 s before the decay: it comes on in the rise frame");
+  assert.equal(b7.admit("light@93000", "lightBurst", [{ fromMs: 93_100, toMs: 93_240 }], { ...song1, classMs: 92_000, songPosMs: 32_000 }), false, "B7 after a flip: the look is at rest and the sway resumes 1 s after the on-step, 0.85 s before the decay's end");
+  assert.deepEqual([b7.nearSway(), b7.cuts()], [["light@93000"], []], "the skip is recorded, no step moved");
+  const gather = new RunBudget();
+  const collide: Where = { cls: VARIANTS.collide!.cls, classMs: 39_000, songIndex: 0, songPosMs: 39_000, level: "None" };
+  assert.equal(gather.admit("drop@40400", "dropBurst", [{ fromMs: 40_017, toMs: 40_250 }], collide), true, "B7 after a gather: its aim takes no phase, the burst is placed");
+  assert.deepEqual(gather.cuts().map((c) => [c.kind, Math.round(c.onMs)]), [["b7", 40_000]], "and the gather's light comes on in the rise frame");
 });
 
 function sources(dir: string): string[] {

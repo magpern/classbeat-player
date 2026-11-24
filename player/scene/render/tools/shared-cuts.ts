@@ -2,7 +2,7 @@
 // kind with its decay less than 1 s + 1 frame after the on-step of a phrase flip, a song change or a gather (0.1, 0.5 and 0.9 s: B7, the light comes on
 // in the rise frame), and less than 1 s before one's turn (B8: the beams go dark in the rise frame). Each is a generated class (demo/generated.ts) with
 // the times worked out from the plan of the dark spans (render/src/dark-calc.ts), in class-clock milliseconds. Pure apart from the loop `placedBy` runs.
-import { LOOKS, cutSpan } from "../../model/src/index.ts";
+import { LOOKS, cutSpan, swayNearCut } from "../../model/src/index.ts";
 import type { DarkSpan } from "../../model/src/index.ts";
 import { genName } from "../demo/generated.ts";
 import type { GenSpec } from "../demo/generated.ts";
@@ -35,6 +35,8 @@ export interface CutCase {
   readonly span: { readonly offMs: number; readonly onMs: number };
   /** What the burst does to the span the case is built around. */
   readonly step: "b7" | "b8" | "clear" | "overlaps";
+  /** The scheduler skips the burst, and records it: the step would go into the rise frame with the sway resuming or stopping within 1 s of the decay (steps e and f). */
+  readonly swaySkip: boolean;
 }
 
 /**
@@ -86,11 +88,12 @@ export function cutCase(kind: BurstKind, cause: CutCause, gapMs: number, f: Fact
     around = next + 500;
   }
   const decay = { fromMs: frameMs + FRAME_MS, toMs: frameMs + DECAY_MS };
-  const span = spanAt(plan(spec, around), around) ?? { offMs: around, onMs: around + 1000 };
-  const cut = cutSpan(span, decay, FRAME_MS);
+  const found = spanAt(plan(spec, around), around); // none at Tempo only: no anchors, no flips
+  const span = found ?? { offMs: around, onMs: around + 1000 };
+  const cut = found === undefined ? { kind: "clear" as const } : cutSpan(span, decay, FRAME_MS);
   const shown = cut.kind === "b7" ? { offMs: span.offMs, onMs: cut.onMs } : cut.kind === "b8" ? { offMs: cut.offMs, onMs: cut.onMs } : { offMs: span.offMs, onMs: span.onMs };
   const [lo, hi] = [Math.min(decay.fromMs, shown.offMs), Math.max(decay.toMs, shown.onMs)];
-  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind };
+  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind, swaySkip: found !== undefined && swayNearCut(span, decay, FRAME_MS) };
 }
 
 /** Whether the rig's own loop places the case's burst in `state` (no browser): what the S6 report says of a generated class. */

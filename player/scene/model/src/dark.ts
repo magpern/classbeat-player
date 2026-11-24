@@ -11,6 +11,8 @@ export interface Turn {
   readonly arrivalMs: number;
   /** A gather's beams hold still 1 s before the drop: the light is back by then, on target or not ("never later than its hold-still"). */
   readonly capMs?: number;
+  /** The look is at rest on its target after the turn, so the sway is live again once the hold ends: false for a gather and a fan, whose aims do not take the phase. */
+  readonly swayAfter?: boolean;
 }
 export interface DarkSpan {
   /** The off-step: the first turn's first frame. */
@@ -21,6 +23,8 @@ export interface DarkSpan {
   readonly lastStartMs: number;
   /** Set where every turn of the span is capped: the on-step is then fixed, on target or not. */
   readonly forceOnMs?: number;
+  /** The last turn of the span leaves the look at rest (see `Turn.swayAfter`). */
+  readonly swayAfter?: boolean;
 }
 export interface Decay { readonly fromMs: number; readonly toMs: number }
 
@@ -45,8 +49,8 @@ export function planSpans(turns: readonly Turn[], frameMs: number): DarkSpan[] {
     const last = out.at(-1);
     if (last !== undefined && t.startMs - last.onMs < least - EPS) {
       const force = last.forceOnMs !== undefined && capped ? Math.max(last.forceOnMs, on) : undefined;
-      out[out.length - 1] = { offMs: last.offMs, onMs: Math.max(last.onMs, on, last.offMs + least), lastStartMs: Math.max(last.lastStartMs, t.startMs), ...(force === undefined ? {} : { forceOnMs: force }) };
-    } else out.push({ offMs: t.startMs, onMs: on, lastStartMs: t.startMs, ...(capped ? { forceOnMs: on } : {}) });
+      out[out.length - 1] = { offMs: last.offMs, onMs: Math.max(last.onMs, on, last.offMs + least), lastStartMs: Math.max(last.lastStartMs, t.startMs), ...(force === undefined ? {} : { forceOnMs: force }), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) };
+    } else out.push({ offMs: t.startMs, onMs: on, lastStartMs: t.startMs, ...(capped ? { forceOnMs: on } : {}), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) });
   }
   return out;
 }
@@ -70,4 +74,14 @@ export function cutSpan(span: { readonly offMs: number; readonly onMs: number },
   if (span.onMs <= rise + EPS && decay.fromMs - span.onMs < minDarkMs(frameMs) - EPS) return { kind: "b7", onMs: rise };
   if (span.offMs >= decay.toMs - EPS && span.offMs - decay.toMs < 1000 - EPS) return { kind: "b8", offMs: rise, onMs: Math.max(span.onMs, decay.toMs + minDarkMs(frameMs)) };
   return { kind: "clear" };
+}
+
+/**
+ * Whether a burst's decay must be skipped for the step a cut would move into its rise frame (scene.md steps e and f): the sway (and steady light) is
+ * held by the span as planned without any burst, never moved (rule 4), so after a B7 it resumes 1 s after the on-step, and before a B8 it stops 1 s
+ * before the off-step: within 1 s of the decay. Not where the look is not at rest after a B7 (a gather's and a fan's aims do not take the phase).
+ */
+export function swayNearCut(span: { readonly offMs: number; readonly onMs: number; readonly swayAfter?: boolean }, decay: Decay, frameMs: number): boolean {
+  const c = cutSpan(span, decay, frameMs);
+  return c.kind === "b8" || (c.kind === "b7" && span.swayAfter !== false);
 }

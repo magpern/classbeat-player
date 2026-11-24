@@ -9,7 +9,7 @@
 // keeps every other run 1 s away, and moves a step of a span that would come near it into its own rise frame. Without the beat there is no ramp and no dim (a burst fits where the count has room); with a count running there are no runs at all. A run
 // that does not fit is a step in a mark (a ramp) or is skipped (a burst, a dim). Times are milliseconds. Pure.
 
-import { HOLD_AROUND_MS, cutSpan } from "./dark.ts";
+import { HOLD_AROUND_MS, cutSpan, swayNearCut } from "./dark.ts";
 import { SWEEP_WINDOW_MS } from "./sweeps.ts";
 
 /** The most counted changes in any 1 s window (S6). */
@@ -28,11 +28,9 @@ const SECOND_MS = 1000;
 export const STEADY_PER_WINDOW = 1;
 /** A sweep is the beams turning at the turn limit from a known moment (a phrase flip, a song change, a build's gather, a drop's fan, a re-aim). A turn's part is at most 4.15 s (`--scene-sweep-window`); `sweeps` plans each as that long a span. */
 export const SWEEP_MS = SWEEP_WINDOW_MS;
-
 export interface Span { readonly fromMs: number; readonly toMs: number }
 /** A burst's decay is a ramp inside the shared 1 of steady light, the sway and the sweeps; a burst adds its rise (a mark). */
 export const isBurstKind = (kind: RunKind): boolean => kind === "lightBurst" || kind === "dropBurst";
-/** The scheduler's steps: ramps (c, d), the light-only burst (e), the drop burst (f), the dim (g). */
 export type RunKind = "ramp" | "lightBurst" | "dropBurst" | "dim";
 /** A ramp and a dim need the beat (without it the energy is in the change frame and a song change is its re-aim); a burst only needs room in the count. */
 const needsBeat = (kind: RunKind): boolean => kind === "ramp" || kind === "dim";
@@ -69,13 +67,15 @@ export interface PlacedRun { readonly wish: RunWish; readonly pieces: readonly S
 /** A planned span a placed burst moved a step of: B7 (`onMs` is the burst's rise frame) or B8 (`offMs` is the rise frame, `onMs` 1 s + 1 frame after the decay, or the arrival). Only light moves. */
 export interface CutRecord { readonly id: string; readonly planned: PlannedWindow; readonly kind: "b7" | "b8"; readonly offMs: number; readonly onMs: number }
 /** A planned span: its off-step and on-step, and the cause that planned it where the caller knows it (`Sweep`). */
-export interface PlannedWindow extends Span { readonly cause?: string }
+export interface PlannedWindow extends Span { readonly cause?: string; readonly swayAfter?: boolean }
 export interface RunPlan {
   readonly runs: readonly PlacedRun[];
   /** The planned spans each placed burst moved a step of. */
   readonly cuts: readonly CutRecord[];
   /** Ramps that did not fit: a step in a mark that adds nothing. */
   readonly steps: readonly RunWish[];
+  /** Bursts left out for a step that would go into their rise frame beside the sway (steps e and f); also in `skipped`. */
+  readonly nearSway: readonly string[];
   /** Bursts and dims that did not fit: left out. */
   readonly skipped: readonly RunWish[];
 }
@@ -93,7 +93,6 @@ export function maxInASecond(items: readonly Span[]): number {
   });
   return most;
 }
-
 const overlaps = (a: Span, b: Span): boolean => a.fromMs < b.toMs - EPS && b.fromMs < a.toMs - EPS;
 const point = (t: number): Span => ({ fromMs: t, toMs: t });
 
@@ -103,12 +102,13 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const planned: PlannedWindow[] = [...(room.sweeps ?? []).map((t) => ({ fromMs: t, toMs: t + SWEEP_MS })), ...(room.sweepWindows ?? [])];
   const unforeseen: Span[] = (room.unforeseenTurns ?? []).map((t) => ({ fromMs: t - TURN_CLEAR_MS, toMs: t + SWEEP_MS }));
   const cuts: CutRecord[] = [];
+  const nearSway = new Set<string>();
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
   const near = (a: Span, b: Span): boolean => a.fromMs < b.toMs + HOLD_AROUND_MS - EPS && b.fromMs < a.toMs + HOLD_AROUND_MS - EPS;
   const held = (w: Span): Span => ({ fromMs: w.fromMs - HOLD_AROUND_MS, toMs: w.toMs + HOLD_AROUND_MS });
-  const fits = (pieces: readonly Span[], kind: RunKind): boolean => {
+  const fits = (pieces: readonly Span[], kind: RunKind, id = ""): boolean => {
     const beatNeeded = needsBeat(kind);
     const burst = isBurstKind(kind);
     const whole = (p: Span) => room.beat.some((b) => b.fromMs <= p.fromMs + EPS && b.toMs >= p.toMs - EPS);
@@ -117,6 +117,8 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
     if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))) || unforeseen.some((w) => overlaps(p, w)))) return false;
     // A planned span is closed to every run, and 1 s either side of its steps; a burst's decay may come near a step (the step goes into its rise frame), never inside the span.
     if (pieces.some((p) => planned.some((w) => (burst ? cutSpan({ offMs: w.fromMs, onMs: w.toMs }, p, room.frameMs).kind === "overlaps" : overlaps(p, held(w)))))) return false;
+    // A step moved into the rise frame leaves the sway resuming, or stopping, within 1 s of the decay: the burst is skipped, and recorded (steps e and f).
+    if (burst && pieces.some((p) => planned.some((w) => swayNearCut({ offMs: w.fromMs, onMs: w.toMs, ...(w.swayAfter === undefined ? {} : { swayAfter: w.swayAfter }) }, p, room.frameMs)))) { nearSway.add(id); return false; }
     // No other run lies within 1 s of a burst's decay, whichever was placed first (steps e and f).
     if (pieces.some((p) => runs.some((r) => (burst || isBurstKind(r.wish.kind)) && r.pieces.some((q) => near(p, q))))) return false;
     // The decay is inside the shared 1, so it is not counted beside it: the rise is a mark, already among the marks.
@@ -127,17 +129,16 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   for (const w of [...wishes].sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.pieces[0]?.fromMs ?? 0) - (b.pieces[0]?.fromMs ?? 0))) {
     const start = w.pieces[0]?.fromMs ?? 0;
     const tries = [0, ...(w.waits ? marks.filter((m) => m > start).slice(0, MAX_WAITS).map((m) => m + room.frameMs - start) : [])];
-    const by = tries.find((d) => fits(shifted(w, d), w.kind));
+    const by = tries.find((d) => fits(shifted(w, d), w.kind, w.id));
     if (by !== undefined) {
       runs.push({ wish: w, pieces: shifted(w, by) });
       if (isBurstKind(w.kind)) for (const win of planned) for (const p of shifted(w, by)) {
         const c = cutSpan({ offMs: win.fromMs, onMs: win.toMs }, p, room.frameMs);
-        if (c.kind === "b7") cuts.push({ id: w.id, planned: win, kind: "b7", offMs: win.fromMs, onMs: c.onMs });
-        else if (c.kind === "b8") cuts.push({ id: w.id, planned: win, kind: "b8", offMs: c.offMs, onMs: c.onMs });
+        if (c.kind === "b7" || c.kind === "b8") cuts.push({ id: w.id, planned: win, kind: c.kind, offMs: c.kind === "b8" ? c.offMs : win.fromMs, onMs: c.onMs });
       }
     } else (w.kind === "ramp" ? steps : skipped).push(w);
   }
-  return { runs, cuts, steps, skipped };
+  return { runs, cuts, nearSway: [...nearSway], steps, skipped };
 }
 
 /** The window in which beat-like light is held at rest around a run (`--scene-hold`): 250 ms before its start until 300 ms after its end. */

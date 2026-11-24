@@ -53,7 +53,7 @@ const light: RunWish = { id: "light@80000", kind: "lightBurst", pieces: [{ fromM
 const win = (fromMs: number, toMs: number) => ({ fromMs, toMs });
 
 test("the scheduler places the burst and records the step it moved into the rise frame; the span stays closed to every other run", () => {
-  const flip = win(75_000, 79_150); // dark from 75.0 s to its on-step at 79.15 s: 0.87 s before the decay
+  const flip = { ...win(75_000, 79_150), swayAfter: false }; // a gather's: dark from 75.0 s to its on-step at 79.15 s, 0.87 s before the decay
   const plan = fitRuns([light], room({ sweepWindows: [flip] }));
   assert.deepEqual(plan.runs.map((r) => r.wish.id), ["light@80000"]);
   assert.equal(plan.cuts.length, 1);
@@ -72,4 +72,15 @@ test("no run lies in a span or within 1 s of its steps: a ramp 1 s after the on-
   const span = win(10_000, 12_000);
   const ids = (at: number) => fitRuns([ramp(at)], room({ marks: [], beat, sweepWindows: [span] })).runs.length;
   assert.deepEqual([ids(12_900), ids(13_000), ids(8_701), ids(8_700)], [0, 1, 0, 1]);
+});
+
+test("steps e and f: a burst whose cut would leave the sway resuming, or stopping, within 1 s of its decay is skipped and recorded; no cut, or a gather's, is not", () => {
+  const skipped = (w: { fromMs: number; toMs: number; swayAfter?: boolean }) => fitRuns([light], room({ sweepWindows: [w] }));
+  const b7 = skipped({ ...win(75_000, 79_150), swayAfter: true });
+  assert.deepEqual([b7.runs.length, b7.nearSway], [0, ["light@80000"]], "B7 after a flip: the look is at rest, the sway resumes 1 s after the on-step");
+  const b8 = skipped(win(80_700, 83_000));
+  assert.deepEqual([b8.runs.length, b8.nearSway], [0, ["light@80000"]], "B8: the sway stops 1 s before the off-step, in the decay's second");
+  assert.equal(skipped({ ...win(75_000, 79_150), swayAfter: false }).runs.length, 1, "B7 after a gather: placed");
+  assert.equal(skipped({ ...win(75_000, 77_600), swayAfter: true }).runs.length, 1, "no step near the decay: placed");
+  assert.deepEqual(skipped(win(79_000, 80_100)).nearSway, [], "a decay inside a span is skipped for that, not recorded as the sway's");
 });

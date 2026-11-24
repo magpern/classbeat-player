@@ -112,7 +112,9 @@ async function cutCases(open: Open, results: Result[], pool: readonly Factors[])
       const name = `${kind} burst, decay ${gapMs} ms ${cause === "turn after" ? "before the turn" : `after the ${cause}'s window`} (${f.look}, zone ${f.zone}, ${f.bpm} bpm)`;
       if (!wanted(name)) continue;
       const predicted = placedBy(c, state);
-      const asserted = kind === "drop" || state.name === "coasting"; // a light-only burst on a change is skipped beside a ramp, at the Beat level and at Tempo only
+      // A light-only burst on a change is skipped beside a ramp, at the Beat level and at Tempo only; one whose cut would leave the sway beside its decay is skipped and recorded.
+      const asserted = !c.swaySkip && (kind === "drop" || state.name === "coasting");
+      if (c.swaySkip) assert.equal(predicted, false, `${name}, ${state.name}: a burst the cut would leave beside the sway is placed`);
       const played = await play(open, { className: genName(c.spec), query: state.query, quality: f.quality, fromMs: c.fromMs, toMs: c.toMs });
       const frames = burstFrames(played.wall, played.burst);
       assert.equal(frames !== null, predicted, `${name}, ${state.name}: the page and the loop disagree on the burst`);

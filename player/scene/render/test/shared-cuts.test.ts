@@ -39,31 +39,37 @@ test("the generated cases cover both burst kinds, the four causes and the three 
   assert.deepEqual([...new Set(cases.map((c) => c.gapMs))].sort(), [...GAPS_MS]);
 });
 
-test("every cut case places its burst and moves the step it names into the rise frame: B7 for a flip, a song change and a gather, B8 for a turn that follows", () => {
+test("every cut case is placed with its step moved into the rise frame, or skipped and recorded where the sway would resume or stop within 1 s of the decay", () => {
   const seen: Record<string, number> = {};
   for (const c of cases) {
     const { placed, budget } = admitted(c);
     const name = `${c.kind} ${c.cause} ${c.gapMs} ms`;
-    assert.equal(placed, true, `${name}: the burst is placed`);
-    seen[c.step] = (seen[c.step] ?? 0) + 1;
-    assert.notEqual(c.step, "overlaps", `${name}: the decay is not in a span`);
     const rise = c.decay.fromMs - 1000 / 60;
-    const mine = budget.cuts().filter((cut) => (cut.kind === "b7" ? Math.abs(cut.onMs - rise) < 1e-6 : Math.abs(cut.offMs - rise) < 1e-6));
-    assert.equal(mine.length > 0, c.step !== "clear", `${name}: the scheduler's cut agrees with the plan (${c.step}: ${JSON.stringify(budget.cuts())})`);
-    if (c.step !== "clear") assert.equal(mine[0]!.kind, c.step, name);
+    assert.notEqual(c.step, "overlaps", `${name}: the decay is not in a span`);
     if (c.cause === "turn after") assert.equal(c.step, "b8", `${name}: a turn that follows is B8`);
     else assert.notEqual(c.step, "b8", `${name}: a step before the decay is B7`);
-    assert.ok(c.span.onMs > c.span.offMs, `${name}: the dark span has length`);
+    if (c.swaySkip) {
+      assert.equal(placed, false, `${name}: skipped`);
+      assert.deepEqual([budget.nearSway(), budget.cuts()], [["x"], []], `${name}: the skip is recorded, no step moved`);
+      seen.skipped = (seen.skipped ?? 0) + 1;
+      continue;
+    }
+    assert.equal(placed, true, `${name}: placed`);
+    assert.deepEqual(budget.nearSway(), [], name);
+    const mine = budget.cuts().filter((cut) => Math.abs((cut.kind === "b7" ? cut.onMs : cut.offMs) - rise) < 1e-6);
+    assert.equal(mine.length > 0, c.step !== "clear", `${name}: the scheduler's cut agrees with the plan (${c.step})`);
+    seen[c.step] = (seen[c.step] ?? 0) + 1;
   }
-  assert.ok((seen.b7 ?? 0) >= 12 && (seen.b8 ?? 0) === 6, `B7 and B8 both built: ${JSON.stringify(seen)}`);
+  assert.ok((seen.skipped ?? 0) >= 10 && (seen.b7 ?? 0) >= 2, `skips and placed cuts both built: ${JSON.stringify(seen)}`);
 });
 
-test("a drop's burst is placed in every state, the light-only burst coasting; a light-only burst on a change is skipped only beside a ramp that has the room", () => {
+test("a drop's burst is placed in every state, the light-only burst coasting, unless the sway skips it; where a ramp has the room a light-only burst on a change is skipped", () => {
   const skipped: string[] = [];
   for (const c of cases) for (const state of STATES) {
     const here = cutCase(c.kind, c.cause, c.gapMs, c.factors, state.tempoOnly);
     const placed = placedBy(here, state);
-    if (c.kind === "drop" || state.name === "coasting") assert.equal(placed, true, `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}: skipped`);
+    if (here.swaySkip) assert.equal(placed, false, `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}: placed beside the sway`);
+    else if (c.kind === "drop" || state.name === "coasting") assert.equal(placed, true, `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}: skipped`);
     else if (!placed) skipped.push(`${c.cause} ${c.gapMs} ${state.name}`);
   }
   assert.ok(skipped.length < 12, `light-only bursts skipped beside their ramp: ${skipped.join("; ")}`);

@@ -5,7 +5,7 @@
 // scheduler (budget-calc.ts) keeps every run out of it. Pure: the class and the time come in, nothing is read.
 
 import type { DarkSpan, Direction, Sweep, Turn } from "../../model/src/index.ts";
-import { MAX_DEG_PER_SECOND, angleBetween, planSpans, sceneFrame, songChangeSweep, songSweeps } from "../../model/src/index.ts";
+import { HOLD_AROUND_MS, MAX_DEG_PER_SECOND, TURN_DELAY_MS, angleBetween, fanTurnStartMs, fanWindowMs, planSpans, sceneFrame, songChangeSweep, songSweeps } from "../../model/src/index.ts";
 import type { SceneClass } from "../../model/src/index.ts";
 import { FRAME_MS, REACH_MS } from "./marks-calc.ts";
 import { nth } from "./lookup.ts";
@@ -40,7 +40,7 @@ export function songTurns(w: SongAt, reach = REACH_MS): Turn[] {
   const [lo, hi] = [w.classMs - reach, w.classMs + reach];
   const next = nth(w.cls.songs, w.songIndex + 1);
   const prev = nth(w.cls.songs, w.songIndex - 1);
-  const turn = (s: Sweep, from: readonly Direction[], to: readonly Direction[], capMs?: number): Turn => ({ startMs: s.fromMs, arrivalMs: s.fromMs + turnMs(from, to), ...(capMs === undefined ? {} : { capMs }) });
+  const turn = (s: Sweep, from: readonly Direction[], to: readonly Direction[], capMs?: number): Turn => ({ startMs: s.fromMs, arrivalMs: s.fromMs + turnMs(from, to), ...(capMs === undefined ? {} : { capMs }), swayAfter: s.cause !== "gather" && s.cause !== "fan" });
   const holdStill = (s: Sweep): number | undefined => (s.cause === "gather" ? s.holdStillMs : undefined);
   const own = songSweeps(song, offset, lo, hi).map((s) => turn(s, targets(w.cls, w.songIndex, s.fromMs - offset - 1), targets(w.cls, w.songIndex, s.fromMs - offset), holdStill(s)));
   const into = w.songIndex > 0 && prev !== undefined ? [turn(songChangeSweep(offset), targets(w.cls, w.songIndex - 1, prev.lengthMs ?? 0), targets(w.cls, w.songIndex, 0))] : [];
@@ -50,3 +50,29 @@ export function songTurns(w: SongAt, reach = REACH_MS): Turn[] {
 
 /** The planned dark spans around the moment: the song's turns, joined. */
 export const songSpans = (w: SongAt, reach = REACH_MS): DarkSpan[] => planSpans(songTurns(w, reach), FRAME_MS);
+
+/**
+ * Whether the looks' sway is live at `t`: the look is at rest on its target and the phase runs. Not in a hold round a dark span, and not while the
+ * beams hold a gather's or a fan's aim (they take no phase): from a build's turn to the fan's, or to the song's end where there is none, and the fan's.
+ */
+export function swayLiveAt(w: SongAt, spans: readonly DarkSpan[], t: number): boolean {
+  if (spans.some((s) => t >= s.offMs - HOLD_AROUND_MS && t < s.onMs + HOLD_AROUND_MS)) return false;
+  const song = nth(w.cls.songs, w.songIndex);
+  const bpm = song?.bpm;
+  if (song === undefined || bpm === undefined || !(bpm > 0)) return true;
+  const [offset, beat] = [w.classMs - w.songPosMs, 60_000 / bpm];
+  const end = song.lengthMs === undefined ? Infinity : offset + song.lengthMs;
+  return !(song.moments ?? []).some((m) => {
+    if (m.kind === "build") return t >= offset + m.at_ms + TURN_DELAY_MS && t < offset + m.at_ms + 8 * beat + TURN_DELAY_MS;
+    if (m.kind !== "drop") return false;
+    const fan = fanTurnStartMs(m.at_ms, song.lengthMs);
+    const gather = offset + m.at_ms - 8 * beat + TURN_DELAY_MS;
+    return (t >= gather && t < (fan === null ? end : offset + fan)) || (fan !== null && t >= offset + fan && t < offset + m.at_ms + fanWindowMs(bpm) + TURN_DELAY_MS);
+  });
+}
+
+/** Whether the sway is live anywhere within 1 s of a decay (sampled every 50 ms): at the Beat level and Tempo only the burst is skipped there (steps e and f). */
+export function swayNearDecay(w: SongAt, spans: readonly DarkSpan[], decay: { readonly fromMs: number; readonly toMs: number }): boolean {
+  for (let t = decay.fromMs - 1000; t <= decay.toMs + 1000; t += 50) if (swayLiveAt(w, spans, t)) return true;
+  return false;
+}

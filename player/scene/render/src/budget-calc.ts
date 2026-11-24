@@ -6,7 +6,7 @@
 
 import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
 import type { CutRecord, DarkSpan, PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
-import { songSpans } from "./dark-calc.ts";
+import { songSpans, swayNearDecay } from "./dark-calc.ts";
 import { FRAME_MS, REACH_MS, nearby, planMarks } from "./marks-calc.ts";
 import type { Where } from "./marks-calc.ts";
 import { readPattern } from "./pattern-light-calc.ts";
@@ -39,6 +39,7 @@ export class RunBudget {
   private placed: PlacedRun[] = [];
   private spansSeen: DarkSpan[] = [];
   private readonly cutLog: CutRecord[] = [];
+  private readonly skipLog: string[] = [];
   private readonly hold: { readonly before: number; readonly after: number };
 
   private readonly off: boolean;
@@ -72,13 +73,21 @@ export class RunBudget {
     const seen = new Set(heard.map((s) => Math.round(s.offMs)));
     const allSpans = [...heard, ...this.spansSeen.filter((s) => !seen.has(Math.round(s.offMs)))];
     this.spansSeen = allSpans.filter((s) => s.onMs > lo);
+    // At the Beat level and Tempo only the looks' sway runs wherever the look is at rest: a burst whose decay lies within 1 s of it is skipped, and recorded (steps e and f).
+    if ((kind === "lightBurst" || kind === "dropBurst") && w.level !== "None" && pieces.some((p) => swayNearDecay(w, allSpans, p))) { this.skipLog.push(id); this.decided.set(id, false); return false; }
     const beatMs = song?.bpm !== undefined && song.bpm > 0 ? 60_000 / song.bpm : 500;
-    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSpans.map((x) => ({ fromMs: x.offMs, toMs: x.onMs })) });
+    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSpans.map((x) => ({ fromMs: x.offMs, toMs: x.onMs, ...(x.swayAfter === undefined ? {} : { swayAfter: x.swayAfter }) })) });
     const run = plan.runs.find((r) => r.wish.id === id);
     if (run) { this.placed.push(run); this.cutLog.push(...plan.cuts); }
+    else if (plan.nearSway.includes(id)) this.skipLog.push(id);
     this.decided.set(id, run !== undefined);
     this.placed = this.placed.filter((r) => (r.pieces.at(-1)?.toMs ?? 0) > w.classMs - 4000);
     return run !== undefined;
+  }
+
+  /** The bursts left out because the sway or steady light resumes within 1 s of their decay beside a step the burst would have moved (steps e and f). */
+  nearSway(): readonly string[] {
+    return this.skipLog;
   }
 
   /** The planned sweep windows the placed bursts have cut so far: only their counted length changed, never a turn. */
