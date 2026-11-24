@@ -48,6 +48,11 @@ export interface MixCache {
   played(account: string, mixId: string): void;
   /** Deletes leftovers, then what the eviction policy chooses. Returns how many mixes went. */
   evict(account: string, opts: EvictOptions): Promise<number>;
+  /**
+   * Sign-out: stops the account's running download, drops the ones waiting, and resolves once none
+   * is left, so its folder can be removed with nothing still writing to it.
+   */
+  cancel(account: string): Promise<void>;
 }
 
 const validId = (id: string): boolean => typeof id === "string" && MIX_ID.test(id);
@@ -64,6 +69,13 @@ export function createMixCache(d: MixCacheDeps): MixCache {
       if (queues.get(account) === tail) queues.delete(account);
     });
     return run;
+  };
+  // One abort per account for the jobs queued until the next cancel.
+  const aborts = new Map<string, AbortController>();
+  const abortOf = (account: string): AbortSignal => {
+    let a = aborts.get(account);
+    if (a === undefined) aborts.set(account, (a = new AbortController()));
+    return a.signal;
   };
   const cacheOf = (account: string, create: boolean): AccountCache | null => {
     let key: Buffer | null;
@@ -98,15 +110,17 @@ export function createMixCache(d: MixCacheDeps): MixCache {
 
   return {
     download(account, mixId, keep = []) {
+      const signal = abortOf(account);
       return queued(account, async (): Promise<CacheOutcome> => {
+        if (signal.aborted) return "signed_out";
         if (!validId(mixId)) return "not_found";
         const token = tokenOf(account);
         if (token === null) return "signed_out";
         const c = cacheOf(account, true);
         if (c === null) return "no_key";
-        const out = await downloadMix(c, { source: d.source, token, mixId, now: d.now(), capBytes: cap, ...(d.idleMs === undefined ? {} : { idleMs: d.idleMs }) });
+        const out = await downloadMix(c, { source: d.source, token, mixId, now: d.now(), capBytes: cap, signal, ...(d.idleMs === undefined ? {} : { idleMs: d.idleMs }) });
         if (out === "token_invalid") d.onTokenInvalid?.(account);
-        if (out === "complete") await evictNow(account, { keep: [...keep, mixId] });
+        if (out === "complete" && !signal.aborted) await evictNow(account, { keep: [...keep, mixId] });
         return out;
       });
     },
@@ -124,7 +138,13 @@ export function createMixCache(d: MixCacheDeps): MixCache {
       if (h !== null && h.state !== "bad") saveHeader(c, { ...h, usedAt: d.now() });
     },
     evict(account, opts) {
-      return queued(account, () => evictNow(account, opts));
+      const signal = abortOf(account);
+      return queued(account, async () => (signal.aborted ? 0 : evictNow(account, opts)));
+    },
+    async cancel(account) {
+      aborts.get(account)?.abort();
+      aborts.delete(account);
+      await (queues.get(account) ?? Promise.resolve());
     },
   };
 }

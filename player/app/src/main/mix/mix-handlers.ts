@@ -18,8 +18,8 @@ export function registerMixHandlers(bus: IpcBus, trusted: () => Trusted, mix: Mi
     const done = await mix.signIn(raw);
     return done === null ? null : list.view();
   });
-  bus.handle(CH_MIX_SIGN_OUT, (e, raw) => {
+  bus.handle(CH_MIX_SIGN_OUT, async (e, raw) => {
     if (!onList(e) || raw !== undefined) return null;
-    return mix.signOut() === null ? null : list.view();
+    return (await mix.signOut()) === null ? null : list.view();
   });
 }

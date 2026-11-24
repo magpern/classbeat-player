@@ -18,7 +18,7 @@ export function setupMix(paired: PairingService): MixService {
   });
   // Unpairing and deleting the account both end here: key, token, then the mixes, for every account.
   paired.watch((change) => {
-    if (change === "forgotten") service.forgotten();
+    if (change === "forgotten") void service.forgotten();
   });
   service.sweep();
   return service;

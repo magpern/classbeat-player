@@ -27,6 +27,8 @@ export interface DownloadInput {
   readonly capBytes: number;
   /** A stream that sends nothing for this long is dropped; the download resumes later. */
   readonly idleMs?: number;
+  /** Aborted at sign-out: the download stops at once, as if the stream had ended early. */
+  readonly signal?: AbortSignal;
 }
 
 export const DOWNLOAD_IDLE_MS = 60_000;
@@ -99,7 +101,13 @@ async function writeChunk(p: Progress, plain: Buffer): Promise<boolean> {
     if (p.torn.length > sealed.length || !sealed.subarray(0, p.torn.length).equals(p.torn)) return false;
     p.torn = Buffer.alloc(0);
   }
-  await p.file.write(sealed, 0, sealed.length, sealedStart(p.next));
+  // A write may take fewer bytes than asked; the rest is written until the chunk is whole.
+  let done = 0;
+  while (done < sealed.length) {
+    const { bytesWritten } = await p.file.write(sealed, done, sealed.length - done, sealedStart(p.next) + done);
+    if (bytesWritten <= 0) throw new Error("write made no progress");
+    done += bytesWritten;
+  }
   p.hash.update(plain);
   p.next++;
   return true;
@@ -108,13 +116,20 @@ async function writeChunk(p: Progress, plain: Buffer): Promise<boolean> {
 type Fill = "done" | "short" | "restart" | "bad" | "token_invalid" | "unavailable" | "not_found";
 
 /** The next piece of the stream, or "idle" when none came for `idleMs`. */
-async function nextPiece(it: AsyncIterator<Uint8Array>, idleMs: number): Promise<IteratorResult<Uint8Array> | "idle"> {
+async function nextPiece(it: AsyncIterator<Uint8Array>, idleMs: number, signal?: AbortSignal): Promise<IteratorResult<Uint8Array> | "idle"> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const idle = new Promise<"idle">((resolve) => (timer = setTimeout(() => resolve("idle"), idleMs)));
+  let onAbort: (() => void) | undefined;
+  const idle = new Promise<"idle">((resolve) => {
+    timer = setTimeout(() => resolve("idle"), idleMs);
+    onAbort = () => resolve("idle");
+    if (signal?.aborted === true) resolve("idle");
+    else signal?.addEventListener("abort", onAbort, { once: true });
+  });
   try {
     return await Promise.race([it.next(), idle]);
   } finally {
     clearTimeout(timer);
+    if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -133,8 +148,8 @@ async function fill(p: Progress, d: DownloadInput): Promise<Fill> {
   try {
     it = r.bytes[Symbol.asyncIterator]();
     for (;;) {
-      const step = await nextPiece(it, d.idleMs ?? DOWNLOAD_IDLE_MS);
-      if (step === "idle") return "short";
+      const step = await nextPiece(it, d.idleMs ?? DOWNLOAD_IDLE_MS, d.signal);
+      if (step === "idle" || d.signal?.aborted === true) return "short";
       if (step.done === true) {
         ended = true;
         break;
@@ -202,9 +217,11 @@ export async function downloadMix(c: AccountCache, d: DownloadInput): Promise<Do
       dropBad(c, p.header);
       return "bad";
     }
-    // A play while downloading may have moved its last use on; that is kept.
+    // The entry may have been evicted or replaced while the last chunk was written: then it is not
+    // brought back. A play while downloading may have moved its last use on; that is kept.
     const now = loadHeader(c, tag);
-    saveHeader(c, { ...p.header, state: "complete", usedAt: now?.fileId === p.header.fileId ? now.usedAt : p.header.usedAt });
+    if (now === null || now.fileId !== p.header.fileId) return "interrupted";
+    saveHeader(c, { ...p.header, state: "complete", usedAt: now.usedAt });
     return "complete";
   }
   return "bad";

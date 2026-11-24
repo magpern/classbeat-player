@@ -3,7 +3,7 @@
 // mix bad and deletes it; a chunk not yet written while the download goes on is "pending". The
 // plaintext is returned to the caller in the main process only and is never written anywhere.
 import { mixTag, openChunk } from "../../core/mix/cache-crypto.ts";
-import { chunkCount, plainLength, sealedEnd, sealedStart } from "../../core/mix/cache-layout.ts";
+import { chunkCount, plainLength, sealedEnd, sealedStart, wholeChunks } from "../../core/mix/cache-layout.ts";
 import type { MixHeader } from "../../core/mix/cache-header.ts";
 import { dropBad, keysOf, loadHeader } from "./cache-entry.ts";
 import type { AccountCache } from "./cache-entry.ts";
@@ -62,7 +62,10 @@ export function openReader(c: AccountCache, mixId: string): MixReader | null {
         const sealed = Buffer.alloc(end - sealedStart(i));
         const { bytesRead } = await file.read(sealed, 0, sealed.length, sealedStart(i));
         const plain = bytesRead === sealed.length ? openChunk({ key: keys.chunkKey, fileId: keys.fileId, tag: keys.tag, index: i, final: i === count - 1 }, sealed) : null;
-        return plain === null ? bad() : { ok: true, plain };
+        if (plain !== null) return { ok: true, plain };
+        // The last chunk on disk of a download still going may be mid-write: that is not damage yet.
+        const writing = now.state === "downloading" && i === wholeChunks(h.byteLength, st.size) - 1;
+        return writing ? { ok: false, reason: "pending" } : bad();
       } finally {
         await file.close();
       }
