@@ -19,11 +19,12 @@
 .status .ok[hidden] { display: none; }
 /* "Unpair this phone": a small outlined key at the row's end, not a class row and not the strip. */
 .status .key.quiet { margin-left: auto; flex: none; width: auto; white-space: nowrap; min-height: 64px; padding: 0 1em; background: transparent; border-color: var(--stage-line); }
-/* A phone held upright has no room beside the status line: the key takes its own line, full width. */
-@media (orientation: portrait) {
-  .status { flex-wrap: wrap; }
-  .status .key.quiet { flex: 1 0 100%; margin-left: 0; }
-}
+/* The row wraps in both orientations, so the status words never share a line with a key too wide
+   for them ("Up to date" stays on one line; at 1024x768 the key drops to its own line instead of
+   squeezing the words or overlapping the first class). Upright, the key always has its own line. */
+.status { flex-wrap: wrap; }
+.status .ok { white-space: nowrap; }
+@media (orientation: portrait) { .status .key.quiet { flex: 1 0 100%; margin-left: 0; } }
 .status .key.quiet .kl { font-size: var(--c-minor); font-weight: 700; color: var(--light-2); }
 .status .ok::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-1); flex: none; }
 
