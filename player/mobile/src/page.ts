@@ -1,8 +1,9 @@
 // The bundled pages' HTML (build.mjs). Their Content Security Policy is the desktop room screen's,
 // imported, never copied, so the two cannot drift (issue #627; a test compares them).
 // Each mode has its own pages (issue #630, ModePolicy.kt): rider.html in rider mode; instructor.html
-// and the room screen, room.html, in instructor mode. index.html is blank: native code loads a
-// mode's page only once it holds the mode, and never shows index.html.
+// and the room screen, room.html, in instructor mode. index.html is blank, with no script of ours:
+// native code loads it between modes, behind the switching screen, so the last mode's page is gone
+// before the next mode's plugin goes on the bridge (PageOpener.kt).
 import { ROOM_CSP } from "../../app/src/main/web-preferences.ts";
 
 export const MOBILE_CSP = ROOM_CSP;

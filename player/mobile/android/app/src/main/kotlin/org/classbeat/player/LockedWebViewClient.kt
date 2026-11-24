@@ -18,7 +18,8 @@ import org.classbeat.player.policy.NavigationPolicy
 interface PageGate {
     fun mayShow(path: String): Boolean
 
-    fun shown(view: WebView)
+    /** A main-frame page at [path] committed. */
+    fun shown(path: String)
 }
 
 /**
@@ -40,7 +41,14 @@ class LockedWebViewClient(
 
     override fun onPageCommitVisible(view: WebView, url: String) {
         super.onPageCommitVisible(view, url)
-        gate.shown(view)
+        gate.shown(Uri.parse(url).path.orEmpty())
+    }
+
+    // Also when it finished: a page that draws nothing may never report a visible commit. Telling
+    // the gate twice is harmless (PageOpener moves on once per page).
+    override fun onPageFinished(view: WebView, url: String) {
+        super.onPageFinished(view, url)
+        gate.shown(Uri.parse(url).path.orEmpty())
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

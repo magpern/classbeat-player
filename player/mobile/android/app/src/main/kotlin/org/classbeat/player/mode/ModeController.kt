@@ -24,20 +24,15 @@ import org.classbeat.player.policy.PluginPolicy
 class ModeController(
     private val activity: ComponentActivity,
     private val lockPrompt: ActivityResultLauncher<Intent>,
-) : ModeEffects, PageGate {
+) : ModeEffects, PageGate, PageSteps {
     private lateinit var holder: ModeHolder
     private lateinit var locked: BridgeLockdown.Locked
     private lateinit var webView: WebView
     private val screens = ModeScreens(activity)
+    private val opener = PageOpener(this)
 
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
-
-    /** The next page to commit is a mode's start page: its history starts there. */
-    private var fresh = false
-
-    /** Android's security settings were opened from the no-lock screen. */
-    private var inSettings = false
 
     /** Back while a native screen shows answers it as "Stay", never as the page's Back. */
     private val back = object : OnBackPressedCallback(false) {
@@ -56,25 +51,32 @@ class ModeController(
 
     // PageGate: the web view client asks before any page loads or commits.
 
-    override fun mayShow(path: String): Boolean = ModePolicy.mayShow(current, path)
+    override fun mayShow(path: String): Boolean = opener.mayShow(path) ?: ModePolicy.mayShow(current, path)
 
-    override fun shown(view: WebView) {
-        if (!fresh) return
-        fresh = false
-        view.clearHistory()
+    override fun shown(path: String) = opener.committed(path)
+
+    // PageSteps: the opener's steps.
+
+    override fun expose(mode: Mode?) = PluginPolicy.expose(locked.table, locked.kept, mode?.plugin)
+
+    override fun load(path: String) = webView.loadUrl(NavigationPolicy.APP_ORIGIN + path)
+
+    override fun ready() {
+        webView.clearHistory()
         hideScreen()
     }
 
     // ModeEffects.
 
-    override fun closeBridge() = PluginPolicy.expose(locked.table, locked.kept, null)
-
-    override fun open(mode: Mode) {
+    override fun closeBridge() {
+        expose(null)
+        // The page that asked is being replaced: its question ends here, with the one refused word.
+        waiting?.reject(REFUSED)
         waiting = null
-        PluginPolicy.expose(locked.table, locked.kept, mode.plugin)
-        fresh = true
-        webView.loadUrl(NavigationPolicy.APP_ORIGIN + ModePolicy.startPage(mode))
     }
+
+    /** Through the blank page: the mode's plugin goes on only once the last page is gone (PageOpener). */
+    override fun open(mode: Mode) = opener.open(mode)
 
     override fun askLock() {
         val keyguard = activity.getSystemService(KeyguardManager::class.java)
@@ -119,9 +121,9 @@ class ModeController(
         settle("notConfirmed")
     }
 
+    /** Back in the app, from the security settings or anywhere else: the lock may have been set meanwhile. */
     fun resumed() {
-        if (!inSettings) return
-        inSettings = false
+        if (holder.pending != ModeHolder.Pending.NO_LOCK) return
         holder.noLockReturned()
         // No longer paired: nothing to ask, so the screen goes and the page hears so.
         if (holder.pending == null) {
@@ -136,11 +138,12 @@ class ModeController(
     }
 
     private fun openSettings() {
-        inSettings = true
         activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
     }
 
     private fun stay() {
+        // Between modes (the switching screen): Back does nothing, and the screen stays.
+        if (current == null) return
         when (holder.pending) {
             ModeHolder.Pending.NO_LOCK -> holder.noLockStay()
             ModeHolder.Pending.RIDER_QUESTION -> holder.riderAnswered(false)

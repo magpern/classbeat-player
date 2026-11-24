@@ -38,6 +38,8 @@ test("each page loads only its own mode's bundle, and index.html loads nothing",
     assert.deepEqual(refs, expected[name], name);
     assert.doesNotMatch(html, /:\/\//, name);
   }
+  // The blank page shown between modes (PageOpener.kt) runs nothing: no script at all.
+  assert.doesNotMatch(pageHtml("index.html"), /<script|\bon\w+=/i);
 });
 
 type Config = {

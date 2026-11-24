@@ -17,15 +17,19 @@ interface Device {
     val secureLock: Boolean
 }
 
-/** One thing a switch drops (ModePolicy.TEARDOWN names them). */
-class Teardown(val name: String, val drop: () -> Unit)
+/**
+ * One thing a switch drops (ModePolicy.TEARDOWN names them). [drop] starts the drop and calls its
+ * `done` once it has finished, with null, or with what went wrong; it may also throw. A drop that
+ * finishes later (the web view's storage) holds the switch until it does.
+ */
+class Teardown(val name: String, val drop: (done: (Throwable?) -> Unit) -> Unit)
 
 /** What the holder has the screen and the bridge do. The Android edge implements it (ModeController). */
 interface ModeEffects {
     /** Takes every intent off the bridge: the page can call nothing until [open]. */
     fun closeBridge()
 
-    /** Puts [mode]'s intents, and only those, on the bridge, and loads its start page fresh. */
+    /** Loads [mode]'s start page fresh, and puts its intents, and only those, on the bridge once no other page is left (PageOpener). */
     fun open(mode: Mode)
 
     /** Opens the system's screen-lock confirmation; its answer comes back through [ModeHolder.lockAnswered]. */
@@ -143,8 +147,9 @@ class ModeHolder(
 
     /**
      * Rider mode is written first, so a switch cut short opens in rider mode next time; instructor
-     * mode only after everything was dropped. Every part is dropped in both directions; if any
-     * fails the page is not opened and the app stops.
+     * mode only after everything was dropped. Every part is dropped in both directions, and the
+     * page opens only once every drop has finished; if any fails the page is not opened and the app
+     * stops. Returns false if the switch stopped; true if it opened or is still dropping.
      */
     private fun switchTo(target: Mode): Boolean {
         current = null
@@ -152,7 +157,26 @@ class ModeHolder(
         effects.showSwitching(target)
         val failed = mutableListOf<String>()
         if (target == Mode.RIDER) runCatching { store.write(Mode.RIDER.stored) }.onFailure { failed += STORE }
-        parts.forEach { part -> runCatching(part.drop).onFailure { failed += part.name } }
+        var left = parts.size
+        var stopped = false
+        parts.forEach { part ->
+            var finished = false
+            val done = { error: Throwable? ->
+                // A second answer from the same drop counts for nothing.
+                if (!finished) {
+                    finished = true
+                    if (error != null) failed += part.name
+                    left -= 1
+                    if (left == 0) stopped = !finish(target, failed)
+                }
+            }
+            runCatching { part.drop(done) }.onFailure(done)
+        }
+        return !stopped
+    }
+
+    /** Every drop has finished: open [target], or stop. Returns false if the switch stopped. */
+    private fun finish(target: Mode, failed: MutableList<String>): Boolean {
         if (target == Mode.INSTRUCTOR && failed.isEmpty()) {
             runCatching { store.write(Mode.INSTRUCTOR.stored) }.onFailure { failed += STORE }
         }

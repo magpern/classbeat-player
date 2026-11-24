@@ -39,13 +39,25 @@ class ModeHolderTest {
     private val state = ModePolicy.TEARDOWN.associateWith { mutableListOf("left") }
     private val failing = mutableSetOf<String>()
 
+    /** Parts whose drop finishes only when the test says so, as the web view's storage wipe does. */
+    private val later = mutableSetOf<String>()
+    private val unfinished = mutableMapOf<String, (Throwable?) -> Unit>()
+
     private val parts = ModePolicy.TEARDOWN.map { name ->
-        Teardown(name) {
+        Teardown(name) { done ->
             if (name in failing) error("stuck")
-            state.getValue(name).clear()
             log += "drop $name"
+            val finish = { error: Throwable? ->
+                if (error == null) state.getValue(name).clear()
+                log += "dropped $name"
+                done(error)
+            }
+            if (name in later) unfinished[name] = finish else finish(null)
         }
     }
+
+    /** Every drop, started and finished, in TEARDOWN order. */
+    private fun drops() = ModePolicy.TEARDOWN.flatMap { listOf("drop $it", "dropped $it") }
 
     private fun holder(stored: String?, paired: Boolean, lock: Boolean, store: Store = Store(stored, log)): Pair<ModeHolder, FakeDevice> {
         val device = FakeDevice(paired, lock)
@@ -158,7 +170,7 @@ class ModeHolderTest {
         assertTrue(h.riderAnswered(true))
         assertEquals(Mode.RIDER, h.current)
         assertTrue(state.values.all { it.isEmpty() })
-        val expected = listOf("close", "switching RIDER", "write rider") + ModePolicy.TEARDOWN.map { "drop $it" } + "open RIDER"
+        val expected = listOf("close", "switching RIDER", "write rider") + drops() + "open RIDER"
         assertEquals(expected, log.drop(1))
     }
 
@@ -171,7 +183,7 @@ class ModeHolderTest {
         h.askInstructor()
         h.lockAnswered(true)
         assertTrue(state.values.all { it.isEmpty() })
-        val expected = listOf("askLock", "close", "switching INSTRUCTOR") + ModePolicy.TEARDOWN.map { "drop $it" } +
+        val expected = listOf("askLock", "close", "switching INSTRUCTOR") + drops() +
             listOf("write instructor", "open INSTRUCTOR")
         assertEquals(expected, log)
     }
@@ -249,8 +261,54 @@ class ModeHolderTest {
     fun `the holder refuses to start without exactly the teardown parts`() {
         val store = Store(null, log)
         val device = FakeDevice(paired = false, secureLock = false)
-        for (bad in listOf(parts.drop(1), parts.reversed(), parts + Teardown("extra") {}, parts.filter { it.name != "riderNumbers" })) {
+        for (bad in listOf(parts.drop(1), parts.reversed(), parts + Teardown("extra") { it(null) }, parts.filter { it.name != "riderNumbers" })) {
             assertThrows(IllegalArgumentException::class.java) { ModeHolder(store, device, Effects(), bad) }
         }
+    }
+
+    @Test
+    fun `the page opens only after a drop that finishes later has finished`() {
+        later += "webStorage"
+        val h = instructor()
+        h.askRider()
+        assertTrue(h.riderAnswered(true))
+        // Still dropping: between modes, nothing opened, nothing can be asked.
+        assertNull(h.current)
+        assertFalse(log.any { it.startsWith("open") })
+        assertFalse(h.askRider())
+        assertNull(h.askInstructor())
+        assertEquals(listOf("left", "instructor"), state.getValue("webStorage"))
+        unfinished.getValue("webStorage")(null)
+        assertEquals(Mode.RIDER, h.current)
+        assertEquals(listOf("dropped webStorage", "open RIDER"), log.takeLast(2))
+        assertTrue(state.values.all { it.isEmpty() })
+    }
+
+    @Test
+    fun `instructor mode is written only after a drop that finishes later has finished`() {
+        later += "webStorage"
+        val store = Store("rider", log)
+        val (h, _) = holder("rider", paired = true, lock = true, store = store)
+        h.start()
+        h.askInstructor()
+        assertTrue(h.lockAnswered(true))
+        assertEquals("rider", store.value)
+        unfinished.getValue("webStorage")(null)
+        assertEquals("instructor", store.value)
+        assertEquals(listOf("dropped webStorage", "write instructor", "open INSTRUCTOR"), log.takeLast(3))
+    }
+
+    @Test
+    fun `a drop that fails later stops the app, and a second answer from it counts for nothing`() {
+        later += "webStorage"
+        val h = instructor()
+        h.askRider()
+        h.riderAnswered(true)
+        val finish = unfinished.getValue("webStorage")
+        finish(IllegalStateException("left"))
+        assertEquals("fatal [webStorage]", log.last())
+        finish(null)
+        assertNull(h.current)
+        assertFalse(log.any { it.startsWith("open") })
     }
 }

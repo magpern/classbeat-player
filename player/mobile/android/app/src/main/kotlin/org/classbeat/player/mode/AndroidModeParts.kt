@@ -5,6 +5,8 @@ import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
+import androidx.webkit.WebStorageCompat
+import androidx.webkit.WebViewFeature
 
 /**
  * The last mode used, in the app's private preferences (MODE_PRIVATE): native storage the web
@@ -51,22 +53,48 @@ class AndroidDevice(context: Context, private val pairing: Pairing) : Device {
  * connections and the rider's session and numbers do not exist yet; the issues that add them
  * (#631, #633 and the follower's) put their drop here. The web view's storage exists now: local and
  * session storage, IndexedDB, cookies, the cache and the history all go, so the next page starts
- * with nothing the last mode's page left.
+ * with nothing the last mode's page left. Android wipes storage and cookies in the background, so
+ * the drop is done only when both say they have finished (Join); the next page waits for it.
  */
 fun teardownParts(webView: () -> WebView): List<Teardown> = listOf(
-    Teardown("follower") {},
-    Teardown("connections") {},
-    Teardown("instructorState") {},
-    Teardown("riderSession") {},
-    Teardown("riderNumbers") {},
-    Teardown("webStorage") {
+    now("follower") {},
+    now("connections") {},
+    now("instructorState") {},
+    now("riderSession") {},
+    now("riderNumbers") {},
+    Teardown("webStorage") { done ->
         val view = webView()
         view.stopLoading()
-        WebStorage.getInstance().deleteAllData()
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
         view.clearCache(true)
         view.clearFormData()
         view.clearHistory()
+        val wipe = Join(done)
+        wipeStorage(wipe.part())
+        val cookies = wipe.part()
+        CookieManager.getInstance().removeAllCookies {
+            CookieManager.getInstance().flush()
+            cookies(null)
+        }
+        wipe.started()
     },
 )
+
+/** A drop that is over when it returns. */
+private fun now(name: String, drop: () -> Unit) = Teardown(name) { done -> drop(); done(null) }
+
+/**
+ * Local and session storage, IndexedDB and the rest of the web view's site data, answering once the
+ * wipe has finished. Where the web view cannot say so (DELETE_BROWSING_DATA missing), the older
+ * wipe runs and the stored origins are read back after it: any left means the wipe failed.
+ */
+private fun wipeStorage(done: (Throwable?) -> Unit) {
+    val storage = WebStorage.getInstance()
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)) {
+        WebStorageCompat.deleteBrowsingData(storage) { done(null) }
+        return
+    }
+    storage.deleteAllData()
+    storage.getOrigins { origins ->
+        done(if (origins.isNullOrEmpty()) null else IllegalStateException("web storage was left"))
+    }
+}
