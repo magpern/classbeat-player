@@ -254,6 +254,71 @@ describe("a sensor after the rider left", () => {
     assert.equal(p.samples(), 1);
   });
 
+  it("a lost sensor picked again drops during the lookups: the row stays lost and Reconnect works", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    g.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 1);
+    assert.equal(p.state().devices[0]!.lost, true);
+    s.holdLookup(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.state().devices[0]!.lost, false);
+    s.beat(120);
+    assert.equal(p.samples(), 1);
+  });
+
+  it("a lost sensor picked again fails to connect: the row stays lost and Reconnect works", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    g.fail();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().failed, true);
+    assert.equal(p.state().devices[0]!.lost, true);
+    s.holdConnect(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.state().devices[0]!.lost, false);
+  });
+
+  it("two picks of one sensor, the first superseded: removed during the second still clears choosing", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    const l = gate();
+    s.holdConnect(g.promise);
+    s.holdLookup(l.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.connect();
+    await p.pick(s.device);
+    g.open();
+    await flush();
+    p.source.disconnect(s.device.id);
+    l.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 0);
+  });
+
   it("a new pick after leaving still connects", async () => {
     const p = page();
     p.source.connect();
