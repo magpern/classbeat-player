@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-24 (after #623; `main` at cafa787).
+Updated 2026-11-24 (after #635; `main` at 443c754).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -147,18 +147,25 @@ the control band and join sheet under the strict measure (#585, #600), the room 
 #620) and the 1 s cap on how far ahead an action joins a fixed frame (#608, #623).
 
 **Known rule gap (S6):** the sweep and sway windows (#618) do not yet fit the strict whole-frame
-gate in every case. Draft #622 fails its sweep, cut and one sway case; the Designer is revising
-the sweep and sway spec within the rules (docs only), and #622 resumes on that spec. #592 (steady
-light at its cap) closes when #618 merges.
+gate in every case. The revised sweep and sway spec is merged (#635: a turning beam moves in black,
+near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened);
+#622 is being rebuilt on it. #592 (steady light at its cap) closes when #618 merges.
 
-Open: #618 (draft #622), #624 (the player's state-rate test made deterministic).
+Also merged: the player's state-rate test made deterministic (#624, #626).
+
+Open: #618 (#622).
 
 ## PL12: installed phone and tablet apps
 
 Merged: the plan (#551), ADR 0011 (Capacitor, #553), spike 3 (an Android media-session follower
 and frame-rate logger, #555) with its CI build (#560) and guard hardening (#561, #566, #568,
 #573). The owner decided on 2026-11-15 that the app has two modes, instructor and rider
-(ADR 0011 section 1, amended). Spike 3 waits for the owner's run on a phone (owner.md).
+(ADR 0011 section 1, amended), and on 2026-11-24 that the app is built without waiting for the
+spike 3 run (#634). Since then: the app's own screens in the spec (#628, #636).
+
+Open: the locked-down Capacitor shell with its rule guards (#627, in progress), then the CI debug
+APK (#629), the mode holder (#630), pairing and the Keystore token (#631), the music follower
+(#632) and rider mode (#633), in that order.
 
 ## Infra
 
