@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-24 (after #635; `main` at 443c754).
+Updated 2026-11-24 (after #645; `main` at c180037).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -161,11 +161,12 @@ Merged: the plan (#551), ADR 0011 (Capacitor, #553), spike 3 (an Android media-s
 and frame-rate logger, #555) with its CI build (#560) and guard hardening (#561, #566, #568,
 #573). The owner decided on 2026-11-15 that the app has two modes, instructor and rider
 (ADR 0011 section 1, amended), and on 2026-11-24 that the app is built without waiting for the
-spike 3 run (#634). Since then: the app's own screens in the spec (#628, #636).
+spike 3 run (#634). Since then: the app's own screens in the spec (#628, #636, #639, #640,
+#641), the locked-down Capacitor shell with its rule guards (#627, #637) and the CI debug APK with
+the mobile tests (#629, #642).
 
-Open: the locked-down Capacitor shell with its rule guards (#627, in progress), then the CI debug
-APK (#629), the mode holder (#630), pairing and the Keystore token (#631), the music follower
-(#632) and rider mode (#633), in that order.
+Open: the mode holder (#630, in review as #643), then pairing and the Keystore token (#631), the
+music follower (#632) and rider mode (#633), in that order.
 
 ## Infra
 
@@ -177,7 +178,9 @@ the shared design tokens and the request policy (#268, #271); the backend image 
 check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326); the
 backend image ships `web/dist/j` too, with its contents checked (#387, #388); the web spec
 checks run in five parallel shards (about 8 minutes instead of 27) and a change to documentation
-only runs no tests (#435, #437; follow-ups #438, #439).
+only runs no tests (#435, #437; follow-ups #438, #439); the scene's screenshot tests run in their own job, only when
+the scene can change, so the other Node package tests take about 8 minutes instead of 46 (#644,
+#645).
 
 ## Scene spike
 
