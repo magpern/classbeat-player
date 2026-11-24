@@ -37,6 +37,8 @@ export interface CutCase {
   readonly step: "b7" | "b8" | "clear" | "overlaps";
   /** At the Beat level and Tempo only the looks' sway is live within 1 s of the decay: steps e and f skip the burst there, and record it (the spec's own skip; at the None level none). */
   readonly swayNear: boolean;
+  /** A light-only burst whose cut is a B8 gives way at every level: its on-step is in the hold planned without it (`lightB8InHold`). */
+  readonly holdSkip: boolean;
 }
 
 /**
@@ -101,7 +103,7 @@ export function cutCase(kind: BurstKind, cause: CutCause, gapMs: number, f: Fact
   const cut = found === undefined ? { kind: "clear" as const } : cutSpan(span, decay, FRAME_MS);
   const shown = cut.kind === "b7" ? { offMs: span.offMs, onMs: cut.onMs } : cut.kind === "b8" ? { offMs: cut.offMs, onMs: cut.onMs } : { offMs: span.offMs, onMs: span.onMs };
   const [lo, hi] = [Math.min(decay.fromMs, shown.offMs), Math.max(decay.toMs, shown.onMs)];
-  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind, swayNear: swayNearAt(spec, decay) };
+  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind, swayNear: swayNearAt(spec, decay), holdSkip: kind === "light" && cut.kind === "b8" };
 }
 
 /** Whether the rig's own loop places the case's burst in `state` (no browser): what the S6 report says of a generated class. */

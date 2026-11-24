@@ -5,7 +5,7 @@
 // scheduler (budget-calc.ts) keeps every run out of it. Pure: the class and the time come in, nothing is read.
 
 import type { DarkSpan, Direction, Sweep, Turn } from "../../model/src/index.ts";
-import { HOLD_AROUND_MS, MAX_DEG_PER_SECOND, TURN_DELAY_MS, angleBetween, fanTurnStartMs, fanWindowMs, planSpans, sceneFrame, songChangeSweep, songSweeps } from "../../model/src/index.ts";
+import { HOLD_AROUND_MS, cutSpan, MAX_DEG_PER_SECOND, TURN_DELAY_MS, angleBetween, fanTurnStartMs, fanWindowMs, planSpans, sceneFrame, songChangeSweep, songSweeps } from "../../model/src/index.ts";
 import type { SceneClass } from "../../model/src/index.ts";
 import { FRAME_MS, REACH_MS } from "./marks-calc.ts";
 import { nth } from "./lookup.ts";
@@ -75,4 +75,13 @@ export function swayLiveAt(w: SongAt, spans: readonly DarkSpan[], t: number): bo
 export function swayNearDecay(w: SongAt, spans: readonly DarkSpan[], decay: { readonly fromMs: number; readonly toMs: number }): boolean {
   for (let t = decay.fromMs - 1000; t <= decay.toMs + 1000; t += 50) if (swayLiveAt(w, spans, t)) return true;
   return false;
+}
+
+/**
+ * A light-only burst whose cut is a B8 (a turn starts under 1 s after its decay): the on-step comes 1 s + 1 frame or more after the decay, inside the hold
+ * planned without the burst (1 s either side of the span), where steady light resumes within the second after it and adds a second change; the burst gives
+ * way, at every level, and is recorded (the owner's decision on #622). The hold is not extended: no direction depends on a burst (rule 4).
+ */
+export function lightB8InHold(spans: readonly DarkSpan[], decay: { readonly fromMs: number; readonly toMs: number }, frameMs: number): boolean {
+  return spans.some((s) => cutSpan({ offMs: s.offMs, onMs: s.onMs }, decay, frameMs).kind === "b8");
 }

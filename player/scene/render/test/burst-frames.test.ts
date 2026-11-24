@@ -53,10 +53,12 @@ test("a song change is a sweep, known from the song before it and from the song 
   assert.equal(new RunBudget().admit("a", "lightBurst", inside, before), false, "seen ahead, from the song's length");
   assert.equal(new RunBudget().admit("a", "lightBurst", inside, { ...before, classMs: 60_400, songIndex: 1, songPosMs: 400 }), false, "seen from the new song");
   const b8 = new RunBudget();
-  assert.equal(b8.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), true, "B8 at the None level: placed, the turn starts 0.8 s after the decay");
+  assert.equal(b8.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), false, "a light-only B8 gives way: its on-step is in the hold planned without it");
+  assert.deepEqual([b8.holdSkips(), b8.cuts().length], [["a"], 0], "and the skip is recorded");
+  assert.equal(b8.admit("d", "dropBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), true, "a drop's B8 at the None level: placed, the turn starts 0.8 s after the decay");
   assert.deepEqual(b8.cuts().map((c) => [c.planned.fromMs, c.kind, Math.round(c.offMs)]), [[60_000, "b8", 59_003]], "the beams go dark in the rise frame");
   const beat = new RunBudget();
-  assert.equal(beat.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], { ...before, level: "Beat" }), true, "at the Beat level too: the 58 s drop's aim is held to the song change, the sway is not live near the decay");
+  assert.equal(beat.admit("a", "dropBurst", [{ fromMs: 59_020, toMs: 59_200 }], { ...before, level: "Beat" }), true, "at the Beat level too: the 58 s drop's aim is held to the song change, the sway is not live near the decay");
   assert.deepEqual([beat.nearSway(), beat.cuts().length], [[], 1]);
   const after = new RunBudget();
   assert.equal(after.admit("a", "lightBurst", [{ fromMs: 64_300, toMs: 64_500 }], { ...before, classMs: 63_500, songIndex: 1, songPosMs: 3_500 }), true);
