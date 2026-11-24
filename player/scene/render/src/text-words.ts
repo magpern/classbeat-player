@@ -57,7 +57,7 @@ export function barsText(bars: number, last: boolean): string {
 }
 
 /** The link plate: quiet while following, white (alert) when the music is not followed (ADR 0001). */
-export function linkWords(link: LinkInput, cls: Pick<TextClass, "following">): { text: string; alert: boolean } {
+export function linkWords(link: LinkInput, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
   if (link.held === true) return { text: "Until the next song", alert: false };
   switch (link.state) {
     case "Paused": return { text: "Music paused", alert: true };
@@ -65,6 +65,7 @@ export function linkWords(link: LinkInput, cls: Pick<TextClass, "following">): {
     case "Off the list": return { text: "Not a class song", alert: true };
     case "Ambiguous": return { text: "Song is in twice", alert: true };
     case "Manual": return { text: "Manual clock", alert: false };
-    default: return { text: cls.following, alert: false };
+    // "Playlist not loaded" (scene.md, the states table; room-2d.md): white, in the place of "Following ...", and never in place of a link fault above.
+    default: return playlistNotLoaded ? { text: "Playlist not loaded", alert: true } : { text: cls.following, alert: false };
   }
 }

@@ -62,6 +62,8 @@ export interface TextInput {
   readonly songPosMs: number;
   readonly link: LinkInput;
   readonly reducedMotion: boolean;
+  /** The shell's notice that the class playlist did not load (30 s after Start): the link plate says so while the music is followed. Absent counts as false. */
+  readonly playlistNotLoaded?: boolean;
   /** Window width over height. */
   readonly aspect: number;
 }

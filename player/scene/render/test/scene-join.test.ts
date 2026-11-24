@@ -17,7 +17,7 @@ const doc = {
   songs: [{ title: "A", artist: "B", length_ms: 120_000, start_ms: 0, end_ms: 120_000, bpm: 120, beat_anchors: { quality: "measured", anchors: [{ at_ms: 0, bpm: 120 }] } }],
 } as unknown as Class;
 const frame = (over: Partial<JoinFrame["view"] & object> = {}, link: Partial<NonNullable<JoinFrame["link"]>> = {}): JoinFrame => ({
-  doc, view: { status: "running", classMs: 10_000, songIndex: null, ...over },
+  doc, playlistNotLoaded: false, view: { status: "running", classMs: 10_000, songIndex: null, ...over },
   link: { mode: "following", state: "Locked", held: false, songIndex: null, ...link },
 });
 
@@ -181,7 +181,7 @@ test("the feed: song, link and stage come from the frame; nothing else does", ()
   assert.equal(out.feed.stage, "before");
   assert.deepEqual(out.feed.link, { state: "Locked", held: true });
   assert.equal(out.feed.songPosMs, 0);
-  assert.deepEqual(Object.keys(out.feed).sort(), ["classMs", "cls", "link", "reducedMotion", "songIndex", "songPosMs", "stage"]);
+  assert.deepEqual(Object.keys(out.feed).sort(), ["classMs", "cls", "link", "playlistNotLoaded", "reducedMotion", "songIndex", "songPosMs", "stage"]);
   assert.deepEqual(feedOf(frame({}, { mode: "manual", state: "Locked" }), 0, false)!.feed.link, { state: "Manual" });
   assert.equal(out.text.intervals[1]!.pattern?.startOn, "interval_start");
   assert.deepEqual(out.text.intervals[0]!.cadence, "beat");
@@ -190,6 +190,6 @@ test("the feed: song, link and stage come from the frame; nothing else does", ()
 });
 
 test("the feed: no class, no clock or no songs means the plain screen", () => {
-  assert.equal(feedOf({ doc: null, view: null, link: null }, 0, false), null);
+  assert.equal(feedOf({ doc: null, playlistNotLoaded: false, view: null, link: null }, 0, false), null);
   assert.equal(feedOf({ ...frame(), doc: { ...doc, songs: [] } as Class }, 0, false), null);
 });

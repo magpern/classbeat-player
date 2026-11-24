@@ -32,6 +32,9 @@ export interface JoinOptions {
   readonly stillRig?: boolean;
 }
 
+/** The class a frame is of, and whether it is a fresh start of it: a scene given up on stays down for the rest of that class (scene.md, Plain: "does not come back in that class") and is tried again for the next. */
+const classKey = (f: JoinFrame): string => (f.doc === null ? "" : `${f.doc.class.title}|${f.doc.class.length_ms}|${f.doc.intervals.length}|${f.doc.songs.length}`);
+
 /** A killed scene shows the plain screen within 2 s (S10): the watchdog looks every 500 ms and gives up on a frame that is 1.2 s late, so at most 1.7 s pass. */
 export const WATCH_EVERY_MS = 500;
 export const STALL_MS = 1200;
@@ -53,37 +56,43 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
   let handle: SceneHandle | null = null;
   let cancelTick: (() => void) | null = null;
   let cancelWatch: (() => void) | null = null;
+  /** The class and run state the scene was given up on in; null while it runs or was never asked for. */
+  let downIn: { readonly key: string; readonly ready: boolean } | null = null;
+  let lastFrameAt = ports.now();
+  let stopped = false;
 
   const set = (next: JoinMode): void => {
     if (next === mode) return;
     mode = next;
     ports.show(next);
   };
-  /** The scene is gone for the rest of this window: it does not come back (scene.md, Plain). */
   const kill = (reason: string): void => {
     why = reason;
     cancelTick?.();
     cancelWatch?.();
     const gone = handle;
     handle = null;
+    const f = latest?.frame ?? null;
+    downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready" };
     set("plain");
     try { gone?.dispose(); } catch { /* the plain screen is already showing; a failed dispose has nothing left to lose */ }
   };
 
   const still = options.stillRig === true;
   const reducedMotion = options.reducedMotion || still;
-  if (options.reducedMotion && !still) {
-    why = "reduced motion";
-  } else {
+
+  const boot = (): void => {
     try {
       handle = ports.create(() => kill("context lost"));
     } catch {
       why = "no WebGL";
+      const f = latest?.frame ?? null;
+      downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready" };
+      return;
     }
-  }
-
-  let lastFrameAt = ports.now();
-  if (handle !== null) {
+    why = null;
+    downIn = null;
+    lastFrameAt = ports.now();
     const tick = (nowMs: number): void => {
       if (handle === null) return;
       const pack = latest === null ? null : feedOf(latest.frame, nowMs - latest.at, reducedMotion);
@@ -110,12 +119,19 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
       cancelWatch = ports.later(watch, WATCH_EVERY_MS);
     };
     cancelWatch = ports.later(watch, WATCH_EVERY_MS);
-  }
+  };
+
+  if (options.reducedMotion && !still) why = "reduced motion";
+  else boot();
 
   return {
-    push(frame) { latest = { frame, at: ports.now() }; },
+    push(frame) {
+      latest = { frame, at: ports.now() };
+      // A new class, or a fresh run of it, is another chance for a scene that was given up on (never with reduced motion).
+      if (!stopped && downIn !== null && !(options.reducedMotion && !still) && handle === null && frame.view !== null && (classKey(frame) !== downIn.key || (frame.view.status === "ready" && !downIn.ready))) boot();
+    },
     get mode() { return mode; },
     get why() { return why; },
-    stop() { kill("stopped"); },
+    stop() { stopped = true; kill("stopped"); },
   };
 }

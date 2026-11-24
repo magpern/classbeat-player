@@ -52,7 +52,7 @@ function createHandle(canvas: HTMLCanvasElement, onLost: () => void): SceneHandl
       shown = s;
       if (dirty) {
         dirty = false;
-        layer.update(textView({ cls: mergedOf(text), classMs: s.classMs, songIndex: s.songIndex, songPosMs: s.songPosMs, link: s.link, reducedMotion: s.reducedMotion, aspect: window.innerWidth / Math.max(1, window.innerHeight) }));
+        layer.update(textView({ cls: mergedOf(text), classMs: s.classMs, songIndex: s.songIndex, songPosMs: s.songPosMs, link: s.link, reducedMotion: s.reducedMotion, playlistNotLoaded: s.playlistNotLoaded === true, aspect: window.innerWidth / Math.max(1, window.innerHeight) }));
         const next = layer.boxes();
         if (next !== boxes) { boxes = next; renderer.setTextBoxes(next); }
       }

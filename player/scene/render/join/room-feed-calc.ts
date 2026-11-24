@@ -10,6 +10,8 @@ import type { Cadence, TextClass, TextInterval, TextZone } from "../src/text-typ
 /** The fields of the shell's room frame the join reads (player/app/src/core/room/frame.ts); nothing else reaches it. */
 export interface JoinFrame {
   readonly doc: Class | null;
+  /** True exactly while the "Playlist not loaded" plate is due (RoomFrame.playlistNotLoaded). */
+  readonly playlistNotLoaded: boolean;
   readonly view: {
     readonly status: "ready" | "running" | "paused" | "ended";
     readonly classMs: number;
@@ -118,7 +120,7 @@ export function feedOf(frame: JoinFrame, sinceMs: number, reducedMotion: boolean
   const link: LinkInput = frame.link === null || frame.link.mode === "manual" ? { state: "Manual" } : { state: frame.link.state, held: frame.link.held };
   const before = frame.view.status === "ready" && classMs <= 0;
   const feed: Feed = {
-    cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion,
+    cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion, playlistNotLoaded: frame.playlistNotLoaded,
     ...(before ? { stage: "before" as const } : {}),
   };
   return { feed, text: made.text };

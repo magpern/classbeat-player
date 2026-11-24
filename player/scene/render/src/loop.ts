@@ -32,6 +32,8 @@ export interface Feed {
   readonly link: LinkInput;
   /** Reduced motion: the still rig (scene.md "Motion and reduced motion"). */
   readonly reducedMotion: boolean;
+  /** The shell's "Playlist not loaded" notice: text only (the plate in the link slot); nothing in the rig reads it. */
+  readonly playlistNotLoaded?: boolean;
   /** "before" while the clock is ready and not started (the house look before the start); absent means running. */
   readonly stage?: Stage;
 }
@@ -121,7 +123,7 @@ export class RigLoop {
 
   /** The text for this frame (the host calls it before the frame to paint the text; the same feed asked again gives the same answer). */
   shown(feed: Feed): Shown {
-    return this.clock.step({ cls: this.merged(feed.cls), classMs: feed.classMs, songIndex: feed.songIndex, songPosMs: feed.songPosMs, link: feed.link, reducedMotion: feed.reducedMotion });
+    return this.clock.step({ cls: this.merged(feed.cls), classMs: feed.classMs, songIndex: feed.songIndex, songPosMs: feed.songPosMs, link: feed.link, reducedMotion: feed.reducedMotion, playlistNotLoaded: feed.playlistNotLoaded === true });
   }
 
   private merged(cls: SceneClass): SceneClass {

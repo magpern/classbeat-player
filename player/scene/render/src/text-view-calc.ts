@@ -27,6 +27,7 @@ function intervalIndex(ivs: readonly TextInterval[], classMs: number): number {
 
 export function textView(input: TextInput): TextView {
   const { cls, classMs, songIndex, songPosMs, link, reducedMotion, aspect } = input;
+  const notLoaded = input.playlistNotLoaded === true;
   const layout = layoutFor(aspect);
   const at = intervalIndex(cls.intervals, classMs);
   const iv = cls.intervals.at(at);
@@ -39,7 +40,7 @@ export function textView(input: TextInput): TextView {
   const remaining = Math.max(0, iv.startMs + iv.lengthMs - classMs);
   const last = nextIv === null;
   const zone = zoneInfo(cls.zones, iv.zone);
-  const plate = linkWords(link, cls);
+  const plate = linkWords(link, cls, notLoaded);
   const state = patternState({ iv, song, level, classMs, songPosMs });
 
   const gel: GelView = { zone: iv.zone, look: paused ? "down" : "zone", numeral: String(iv.zone), name: zone.name, nameSmall: nameSmall(zone.name, layout, aspect), targets: zone.targets };
