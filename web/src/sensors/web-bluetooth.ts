@@ -92,6 +92,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
       still();
       r.gives.forEach((m) => gives.add(m));
     }
+    still(); // the last lookup may have failed after a removal: no "connected" after "removed"
     if (!gives.size) throw new Error("nothing to read");
     listeners.emit({ type: "connected", id: d.id, name: d.name?.trim() || "Sensor", gives: [...gives], at: now() });
   };
