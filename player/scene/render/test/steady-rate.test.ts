@@ -47,3 +47,11 @@ test("a window that overlaps a sweep is not read, and a run that reads none says
   assert.ok(worstRate(s.t, s.y).windows > 0);
   assert.equal(worstRate(s.t, s.y, s.t.map(() => true)).windows, 0);
 });
+
+test("the frames of a dark span and its two steps excuse a one-frame jump; the same jump on an unmarked frame outside a span still fails the gate", () => {
+  const level = Array.from({ length: 40 }, (_, i) => (i < 10 ? 1 : i < 30 ? 0.4 : 1)); // a beam out at frame 10 and back at frame 30: two one-frame steps
+  const span = level.map((_, i) => i >= 9 && i <= 31); // the dark span's frames, the frame of each step and the one after the step out
+  assert.deepEqual(withoutSteps(level, [], span).unnamed, [], "inside a dark span: excused");
+  assert.deepEqual(withoutSteps(level, [], level.map((_, i) => i >= 9 && i <= 20)).unnamed, [30], "the jump at frame 30 is outside any span: the gate names it and fails");
+  assert.deepEqual(withoutSteps(level).unnamed, [10, 30], "with nothing marked both fail: the span's flag cannot hide a jump elsewhere");
+});
