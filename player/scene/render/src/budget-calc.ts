@@ -79,7 +79,6 @@ export class RunBudget {
     const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSpans.map((x) => ({ fromMs: x.offMs, toMs: x.onMs, ...(x.swayAfter === undefined ? {} : { swayAfter: x.swayAfter }) })) });
     const run = plan.runs.find((r) => r.wish.id === id);
     if (run) { this.placed.push(run); this.cutLog.push(...plan.cuts); }
-    else if (plan.nearSway.includes(id)) this.skipLog.push(id);
     this.decided.set(id, run !== undefined);
     this.placed = this.placed.filter((r) => (r.pieces.at(-1)?.toMs ?? 0) > w.classMs - 4000);
     return run !== undefined;

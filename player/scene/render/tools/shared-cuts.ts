@@ -2,12 +2,12 @@
 // kind with its decay less than 1 s + 1 frame after the on-step of a phrase flip, a song change or a gather (0.1, 0.5 and 0.9 s: B7, the light comes on
 // in the rise frame), and less than 1 s before one's turn (B8: the beams go dark in the rise frame). Each is a generated class (demo/generated.ts) with
 // the times worked out from the plan of the dark spans (render/src/dark-calc.ts), in class-clock milliseconds. Pure apart from the loop `placedBy` runs.
-import { LOOKS, cutSpan, swayNearCut } from "../../model/src/index.ts";
+import { LOOKS, cutSpan } from "../../model/src/index.ts";
 import type { DarkSpan } from "../../model/src/index.ts";
 import { genName } from "../demo/generated.ts";
 import type { GenSpec } from "../demo/generated.ts";
 import { VARIANTS, feedAt } from "../demo/scenario.ts";
-import { songSpans } from "../src/dark-calc.ts";
+import { songSpans, swayNearDecay } from "../src/dark-calc.ts";
 import { RigLoop } from "../src/loop.ts";
 import { SONG_START_MS, phraseMs, phraseStartMs, specOf } from "./shared-cases.ts";
 import type { Factors, STATES } from "./shared-cases.ts";
@@ -35,8 +35,8 @@ export interface CutCase {
   readonly span: { readonly offMs: number; readonly onMs: number };
   /** What the burst does to the span the case is built around. */
   readonly step: "b7" | "b8" | "clear" | "overlaps";
-  /** The scheduler skips the burst, and records it: the step would go into the rise frame with the sway resuming or stopping within 1 s of the decay (steps e and f). */
-  readonly swaySkip: boolean;
+  /** At the Beat level and Tempo only the looks' sway is live within 1 s of the decay: steps e and f skip the burst there, and record it (the spec's own skip; at the None level none). */
+  readonly swayNear: boolean;
 }
 
 /**
@@ -45,6 +45,14 @@ export interface CutCase {
  * (S6); these cases isolate what the burst does to a dark span.
  */
 const nextZone = (zone: number): number => zone;
+
+/** Whether the sway is live within 1 s of a decay in a spec's class (at the Beat level and Tempo only the burst is skipped there). */
+function swayNearAt(spec: GenSpec, decay: { fromMs: number; toMs: number }): boolean {
+  const variant = VARIANTS[genName(spec)]!;
+  const feed = feedAt(decay.fromMs, { variant });
+  const w = { cls: variant.cls, songIndex: feed.songIndex, songPosMs: feed.songPosMs, classMs: decay.fromMs };
+  return swayNearDecay(w, songSpans(w), decay);
+}
 
 /** The spans the plan gives for a spec, around `atMs`. */
 function plan(spec: GenSpec, atMs: number): DarkSpan[] {
@@ -93,7 +101,7 @@ export function cutCase(kind: BurstKind, cause: CutCause, gapMs: number, f: Fact
   const cut = found === undefined ? { kind: "clear" as const } : cutSpan(span, decay, FRAME_MS);
   const shown = cut.kind === "b7" ? { offMs: span.offMs, onMs: cut.onMs } : cut.kind === "b8" ? { offMs: cut.offMs, onMs: cut.onMs } : { offMs: span.offMs, onMs: span.onMs };
   const [lo, hi] = [Math.min(decay.fromMs, shown.offMs), Math.max(decay.toMs, shown.onMs)];
-  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind, swaySkip: found !== undefined && swayNearCut(span, decay, FRAME_MS) };
+  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind, swayNear: swayNearAt(spec, decay) };
 }
 
 /** Whether the rig's own loop places the case's burst in `state` (no browser): what the S6 report says of a generated class. */

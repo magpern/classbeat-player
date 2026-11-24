@@ -76,7 +76,6 @@ function check(seed: number, t: Timeline, before: State, after: State): RunPlan 
     for (const o of others) assert.ok(!(o.fromMs < w.toMs + 1000 - TOL && w.fromMs - 1000 < o.toMs - TOL), `${name}: a run ${o.fromMs} to ${o.toMs} in the span ${w.fromMs} to ${w.toMs} or 1 s beside its steps`);
     for (const { id, d } of decays) {
       const c = cutSpan({ offMs: w.fromMs, onMs: w.toMs }, d, t.frameMs);
-      assert.ok(c.kind === "clear" || (c.kind === "b7" && !w.swayAfter), `${name}: a placed burst has no step to move beside the sway: ${c.kind}`);
       assert.notEqual(c.kind, "overlaps", `${name}: the decay of ${id} lies in a span ${w.fromMs} to ${w.toMs}`);
       const cut = p.cuts.find((x) => x.id === id && x.planned === w);
       assert.equal(cut?.kind, c.kind === "clear" ? undefined : c.kind, `${name}: a step ${w.fromMs}/${w.toMs} near the decay ${d.fromMs}: ${c.kind}`);
@@ -93,7 +92,7 @@ function check(seed: number, t: Timeline, before: State, after: State): RunPlan 
   // A burst is skipped only for a cause.
   for (const w of p.skipped.filter(isBurst)) {
     const decay = w.pieces[0]!;
-    const caused = p.nearSway.includes(w.id) || t.windows.some((x) => cutSpan({ offMs: x.fromMs, onMs: x.toMs }, decay, t.frameMs).kind === "overlaps") || (before !== after && decay.toMs > t.switchAt + 1000 - TOL && decay.fromMs < t.switchAt + 2000 + 4150 + TOL)
+    const caused = t.windows.some((x) => cutSpan({ offMs: x.fromMs, onMs: x.toMs }, decay, t.frameMs).kind === "overlaps") || (before !== after && decay.toMs > t.switchAt + 1000 - TOL && decay.fromMs < t.switchAt + 2000 + 4150 + TOL)
       || others.some((o) => gap(o, decay) < 1000) || decays.some((x) => gap(x.d, decay) < 0) || t.marks.some((m) => m > decay.fromMs + TOL && m <= decay.toMs + TOL);
     assert.ok(caused, `${name}: ${w.id} is skipped for no cause`);
   }

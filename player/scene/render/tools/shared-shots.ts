@@ -112,9 +112,12 @@ async function cutCases(open: Open, results: Result[], pool: readonly Factors[])
       const name = `${kind} burst, decay ${gapMs} ms ${cause === "turn after" ? "before the turn" : `after the ${cause}'s window`} (${f.look}, zone ${f.zone}, ${f.bpm} bpm)`;
       if (!wanted(name)) continue;
       const predicted = placedBy(c, state);
-      // A light-only burst on a change is skipped beside a ramp, at the Beat level and at Tempo only; one whose cut would leave the sway beside its decay is skipped and recorded.
-      const asserted = !c.swaySkip && (kind === "drop" || state.name === "coasting");
-      if (c.swaySkip) assert.equal(predicted, false, `${name}, ${state.name}: a burst the cut would leave beside the sway is placed`);
+      // e and f place every burst with its step in the rise frame; they skip one only where the spec lets them: a light-only burst on a change beside a ramp, and, at the Beat level
+      // and Tempo only, one whose decay lies within 1 s of the live sway (recorded). At the None level nothing is skipped; any other skip fails the run.
+      const asserted = state.name === "coasting" || (kind === "drop" && !c.swayNear);
+      if (state.name === "coasting") assert.equal(predicted, true, `${name}: skipped at the None level, where e and f place every cut case`);
+      else if (c.swayNear) assert.equal(predicted, false, `${name}, ${state.name}: placed beside the live sway`);
+      else if (kind === "drop") assert.equal(predicted, true, `${name}, ${state.name}: skipped with the sway not near`);
       const played = await play(open, { className: genName(c.spec), query: state.query, quality: f.quality, fromMs: c.fromMs, toMs: c.toMs });
       const frames = burstFrames(played.wall, played.burst);
       assert.equal(frames !== null, predicted, `${name}, ${state.name}: the page and the loop disagree on the burst`);

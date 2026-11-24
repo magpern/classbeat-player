@@ -15,7 +15,7 @@ import { tokensFromFile } from "../tools/tokens-file.ts";
 
 const tokens = tokensFromFile();
 const F = 1000 / 60;
-interface Frame { lift: number; haze: number; ms: number; /** The frame's own time: frame number x the refresh period, the wall time a viewer lives through (a seek or a pause moves the class clock, never this). */ wall: number; dark: boolean; beams: number[]; lens: number[]; seconds: number; drawn: string }
+interface Frame { targets: string; lift: number; haze: number; ms: number; /** The frame's own time: frame number x the refresh period, the wall time a viewer lives through (a seek or a pause moves the class clock, never this). */ wall: number; dark: boolean; beams: number[]; lens: number[]; seconds: number; drawn: string }
 
 function play(make: (ms: number) => Feed, from: number, to: number, budgetOff = false): Frame[] {
   const [loop, rig] = [new RigLoop(tokens, budgetOff), new SceneRig(tokens)];
@@ -23,7 +23,7 @@ function play(make: (ms: number) => Feed, from: number, to: number, budgetOff = 
   for (let ms = from, n = 0; ms < to; n++) {
     const d: Draw = loop.step(make(ms), n === 0 ? 0 : 1 / 60, "High");
     rig.apply(d, "High");
-    out.push({ lift: d.lift, haze: d.hazeGain, ms, wall: n * F, dark: d.dark, beams: rig.beamLevels(), lens: rig.lensLevels(), seconds: d.seconds, drawn: JSON.stringify(d.drawn) });
+    out.push({ targets: JSON.stringify(d.frame.directions), lift: d.lift, haze: d.hazeGain, ms, wall: n * F, dark: d.dark, beams: rig.beamLevels(), lens: rig.lensLevels(), seconds: d.seconds, drawn: JSON.stringify(d.drawn) });
     ms += d.dtSeconds * 1000;
   }
   return out;
@@ -122,4 +122,15 @@ test("a drop's gather holds the beat-like light with the sway: no lift or pulse 
     assert.ok(frames.filter((f) => f.ms > gather.onMs + 1100 && f.ms < gather.onMs + 3000).some((f) => f.lift > 0.01), `${name}: and the lift is back after it`);
     assert.ok(frames.filter((f) => f.ms < gather.offMs - 1100 && f.ms > 33_500).some((f) => f.lift > 0.01), `${name}: it ran before it`);
   }
+});
+
+test("the sway's motion phase is held round a dark span: the looks' targets stand still from just after the flip to 1 s after the on-step, and move before and after", () => {
+  const frames = play(demo, 86_500, 98_500); // song 1's flip at 90 s
+  const [span] = episodes(frames);
+  const held = frames.filter((f) => f.ms > span!.offMs + 50 && f.ms < span!.onMs + 990);
+  assert.ok(held.length > 100 && held.every((f) => f.targets === held[0]!.targets), "no target moves in the hold: the phase stands still");
+  const lead = frames.filter((f) => f.ms > span!.offMs - 990 - 1000 && f.ms < span!.offMs - 1000);
+  assert.ok(new Set(lead.map((f) => f.targets)).size > 10, "and it ran before the hold");
+  const after = frames.filter((f) => f.ms > span!.onMs + 1100 && f.ms < span!.onMs + 2100);
+  assert.ok(new Set(after.map((f) => f.targets)).size > 10, "and runs after it, from where it stopped");
 });

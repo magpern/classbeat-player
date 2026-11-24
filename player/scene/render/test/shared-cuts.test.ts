@@ -22,11 +22,11 @@ for (const kind of ["drop", "light"] as const satisfies readonly BurstKind[]) fo
   cases.push(cutCase(kind, cause, gapMs, mine[(n++ * 11 + 4) % mine.length]!, false));
 }
 
-function admitted(c: CutCase): { placed: boolean; budget: RunBudget } {
+function admitted(c: CutCase, level: Where["level"] = "None"): { placed: boolean; budget: RunBudget } {
   const variant = VARIANTS[genName(c.spec)]!;
   const classMs = c.decay.fromMs - 500;
   const feed = feedAt(classMs, { variant });
-  const where: Where = { cls: variant.cls, classMs, songIndex: feed.songIndex, songPosMs: feed.songPosMs, level: "Beat" };
+  const where: Where = { cls: variant.cls, classMs, songIndex: feed.songIndex, songPosMs: feed.songPosMs, level };
   const budget = new RunBudget();
   const kind = c.kind === "drop" ? "dropBurst" : "lightBurst";
   return { placed: budget.admit("x", kind, [c.decay], where), budget };
@@ -39,40 +39,48 @@ test("the generated cases cover both burst kinds, the four causes and the three 
   assert.deepEqual([...new Set(cases.map((c) => c.gapMs))].sort(), [...GAPS_MS]);
 });
 
-test("every cut case is placed with its step moved into the rise frame, or skipped and recorded where the sway would resume or stop within 1 s of the decay", () => {
+test("at the None level every cut case is placed with its step moved into the rise frame, B7 for a flip, a song change and a gather, B8 for a turn that follows", () => {
   const seen: Record<string, number> = {};
   for (const c of cases) {
-    const { placed, budget } = admitted(c);
+    const { placed, budget } = admitted(c, "None");
     const name = `${c.kind} ${c.cause} ${c.gapMs} ms`;
     const rise = c.decay.fromMs - 1000 / 60;
     assert.notEqual(c.step, "overlaps", `${name}: the decay is not in a span`);
     if (c.cause === "turn after") assert.equal(c.step, "b8", `${name}: a turn that follows is B8`);
     else assert.notEqual(c.step, "b8", `${name}: a step before the decay is B7`);
-    if (c.swaySkip) {
-      assert.equal(placed, false, `${name}: skipped`);
-      assert.deepEqual([budget.nearSway(), budget.cuts()], [["x"], []], `${name}: the skip is recorded, no step moved`);
-      seen.skipped = (seen.skipped ?? 0) + 1;
-      continue;
-    }
-    assert.equal(placed, true, `${name}: placed`);
-    assert.deepEqual(budget.nearSway(), [], name);
+    assert.equal(placed, true, `${name}: e and f place it at the None level`);
+    assert.deepEqual(budget.nearSway(), [], `${name}: no skip at the None level`);
     const mine = budget.cuts().filter((cut) => Math.abs((cut.kind === "b7" ? cut.onMs : cut.offMs) - rise) < 1e-6);
     assert.equal(mine.length > 0, c.step !== "clear", `${name}: the scheduler's cut agrees with the plan (${c.step})`);
     seen[c.step] = (seen[c.step] ?? 0) + 1;
   }
-  assert.ok((seen.skipped ?? 0) >= 10 && (seen.b7 ?? 0) >= 2, `skips and placed cuts both built: ${JSON.stringify(seen)}`);
+  assert.ok((seen.b7 ?? 0) >= 6 && (seen.b8 ?? 0) === 6, `B7 and B8 both built and placed: ${JSON.stringify(seen)}`);
 });
 
-test("a drop's burst is placed in every state, the light-only burst coasting, unless the sway skips it; where a ramp has the room a light-only burst on a change is skipped", () => {
-  const skipped: string[] = [];
+test("at the Beat level and Tempo only a burst is skipped, and recorded, only where its decay lies within 1 s of the live sway; elsewhere a drop's is placed", () => {
+  let skipped = 0;
+  for (const c of cases) {
+    const { placed, budget } = admitted(c, "Beat");
+    const name = `${c.kind} ${c.cause} ${c.gapMs} ms`;
+    if (c.swayNear) {
+      assert.equal(placed, false, `${name}: skipped beside the sway`);
+      assert.deepEqual(budget.nearSway(), ["x"], `${name}: the skip is recorded`);
+      skipped++;
+    } else if (c.kind === "drop") assert.equal(placed, true, `${name}: placed where the sway is not near`);
+    assert.ok(c.swayNear || budget.nearSway().length === 0, name);
+  }
+  assert.ok(skipped >= 1, "the skip is exercised");
+});
+
+test("the loop places every cut case at the None level and, at the Beat level and Tempo only, every drop away from the sway; none is skipped for another reason", () => {
   for (const c of cases) for (const state of STATES) {
     const here = cutCase(c.kind, c.cause, c.gapMs, c.factors, state.tempoOnly);
     const placed = placedBy(here, state);
-    if (here.swaySkip) assert.equal(placed, false, `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}: placed beside the sway`);
-    else if (c.kind === "drop" || state.name === "coasting") assert.equal(placed, true, `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}: skipped`);
-    else if (!placed) skipped.push(`${c.cause} ${c.gapMs} ${state.name}`);
+    const name = `${c.kind} ${c.cause} ${c.gapMs} ms, ${state.name}`;
+    if (state.name === "coasting") assert.equal(placed, true, `${name}: skipped at the None level`);
+    else if (here.swayNear) assert.equal(placed, false, `${name}: placed beside the live sway`);
+    else if (c.kind === "drop") assert.equal(placed, true, `${name}: skipped with the sway not near`);
   }
-  assert.ok(skipped.length < 12, `light-only bursts skipped beside their ramp: ${skipped.join("; ")}`);
 });
 
 test("no beam differs from the same sweep drawn without the burst: the drawn directions are the same with every burst placed and with none", () => {

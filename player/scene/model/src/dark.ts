@@ -80,12 +80,3 @@ export function cutSpan(span: { readonly offMs: number; readonly onMs: number },
   return { kind: "clear" };
 }
 
-/**
- * Whether a burst's decay must be skipped for the step a cut would move into its rise frame (scene.md steps e and f): the sway (and steady light) is
- * held by the span as planned without any burst, never moved (rule 4), so after a B7 it resumes 1 s after the on-step, and before a B8 it stops 1 s
- * before the off-step: within 1 s of the decay. Not where the look is not at rest after a B7 (a gather's and a fan's aims do not take the phase).
- */
-export function swayNearCut(span: { readonly offMs: number; readonly onMs: number; readonly swayAfter?: boolean }, decay: Decay, frameMs: number): boolean {
-  const c = cutSpan(span, decay, frameMs);
-  return c.kind === "b8" || (c.kind === "b7" && span.swayAfter !== false);
-}

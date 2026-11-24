@@ -74,13 +74,14 @@ test("no run lies in a span or within 1 s of its steps: a ramp 1 s after the on-
   assert.deepEqual([ids(12_900), ids(13_000), ids(8_701), ids(8_700)], [0, 1, 0, 1]);
 });
 
-test("steps e and f: a burst whose cut would leave the sway resuming, or stopping, within 1 s of its decay is skipped and recorded; no cut, or a gather's, is not", () => {
-  const skipped = (w: { fromMs: number; toMs: number; swayAfter?: boolean }) => fitRuns([light], room({ sweepWindows: [w] }));
-  const b7 = skipped({ ...win(75_000, 79_150), swayAfter: true });
-  assert.deepEqual([b7.runs.length, b7.nearSway], [0, ["light@80000"]], "B7 after a flip: the look is at rest, the sway resumes 1 s after the on-step");
-  const b8 = skipped(win(80_700, 83_000));
-  assert.deepEqual([b8.runs.length, b8.nearSway], [0, ["light@80000"]], "B8: the sway stops 1 s before the off-step, in the decay's second");
-  assert.equal(skipped({ ...win(75_000, 79_150), swayAfter: false }).runs.length, 1, "B7 after a gather: placed");
-  assert.equal(skipped({ ...win(75_000, 77_600), swayAfter: true }).runs.length, 1, "no step near the decay: placed");
-  assert.deepEqual(skipped(win(79_000, 80_100)).nearSway, [], "a decay inside a span is skipped for that, not recorded as the sway's");
+test("steps e and f place a burst with its step in the rise frame whatever follows the span: a B7 after a flip or a gather, a B8 before a turn (the sway skip is the budget's, at the Beat level and Tempo only)", () => {
+  const plan = (w: { fromMs: number; toMs: number; swayAfter?: boolean }) => fitRuns([light], room({ sweepWindows: [w] }));
+  for (const swayAfter of [true, false]) {
+    const b7 = plan({ ...win(75_000, 79_150), swayAfter });
+    assert.deepEqual([b7.runs.length, b7.cuts.map((c) => c.kind)], [1, ["b7"]], `B7, sway after ${swayAfter}`);
+  }
+  const b8 = plan(win(80_700, 83_000));
+  assert.deepEqual([b8.runs.length, b8.cuts.map((c) => c.kind)], [1, ["b8"]], "B8: the beams go dark in the rise frame");
+  assert.equal(plan(win(75_000, 77_600)).cuts.length, 0, "no step near the decay: nothing moves");
+  assert.equal(plan(win(79_000, 80_100)).skipped.length, 1, "a decay inside a span is skipped for that");
 });

@@ -9,7 +9,7 @@
 // keeps every other run 1 s away, and moves a step of a span that would come near it into its own rise frame. Without the beat there is no ramp and no dim (a burst fits where the count has room); with a count running there are no runs at all. A run
 // that does not fit is a step in a mark (a ramp) or is skipped (a burst, a dim). Times are milliseconds. Pure.
 
-import { HOLD_AROUND_MS, cutSpan, swayNearCut } from "./dark.ts";
+import { HOLD_AROUND_MS, cutSpan } from "./dark.ts";
 import { SWEEP_WINDOW_MS } from "./sweeps.ts";
 
 /** The most counted changes in any 1 s window (S6). */
@@ -74,8 +74,6 @@ export interface RunPlan {
   readonly cuts: readonly CutRecord[];
   /** Ramps that did not fit: a step in a mark that adds nothing. */
   readonly steps: readonly RunWish[];
-  /** Bursts left out for a step that would go into their rise frame beside the sway (steps e and f); also in `skipped`. */
-  readonly nearSway: readonly string[];
   /** Bursts and dims that did not fit: left out. */
   readonly skipped: readonly RunWish[];
 }
@@ -102,13 +100,12 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const planned: PlannedWindow[] = [...(room.sweeps ?? []).map((t) => ({ fromMs: t, toMs: t + SWEEP_MS })), ...(room.sweepWindows ?? [])];
   const unforeseen: Span[] = (room.unforeseenTurns ?? []).map((t) => ({ fromMs: t - TURN_CLEAR_MS, toMs: t + SWEEP_MS }));
   const cuts: CutRecord[] = [];
-  const nearSway = new Set<string>();
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
   const near = (a: Span, b: Span): boolean => a.fromMs < b.toMs + HOLD_AROUND_MS - EPS && b.fromMs < a.toMs + HOLD_AROUND_MS - EPS;
   const held = (w: Span): Span => ({ fromMs: w.fromMs - HOLD_AROUND_MS, toMs: w.toMs + HOLD_AROUND_MS });
-  const fits = (pieces: readonly Span[], kind: RunKind, id = ""): boolean => {
+  const fits = (pieces: readonly Span[], kind: RunKind): boolean => {
     const beatNeeded = needsBeat(kind);
     const burst = isBurstKind(kind);
     const whole = (p: Span) => room.beat.some((b) => b.fromMs <= p.fromMs + EPS && b.toMs >= p.toMs - EPS);
@@ -117,8 +114,6 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
     if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))) || unforeseen.some((w) => overlaps(p, w)))) return false;
     // A planned span is closed to every run, and 1 s either side of its steps; a burst's decay may come near a step (the step goes into its rise frame), never inside the span.
     if (pieces.some((p) => planned.some((w) => (burst ? cutSpan({ offMs: w.fromMs, onMs: w.toMs }, p, room.frameMs).kind === "overlaps" : overlaps(p, held(w)))))) return false;
-    // A step moved into the rise frame leaves the sway resuming, or stopping, within 1 s of the decay: the burst is skipped, and recorded (steps e and f).
-    if (burst && pieces.some((p) => planned.some((w) => swayNearCut({ offMs: w.fromMs, onMs: w.toMs, ...(w.swayAfter === undefined ? {} : { swayAfter: w.swayAfter }) }, p, room.frameMs)))) { nearSway.add(id); return false; }
     // No other run lies within 1 s of a burst's decay, whichever was placed first (steps e and f).
     if (pieces.some((p) => runs.some((r) => (burst || isBurstKind(r.wish.kind)) && r.pieces.some((q) => near(p, q))))) return false;
     // The decay is inside the shared 1, so it is not counted beside it: the rise is a mark, already among the marks.
@@ -129,7 +124,7 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   for (const w of [...wishes].sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.pieces[0]?.fromMs ?? 0) - (b.pieces[0]?.fromMs ?? 0))) {
     const start = w.pieces[0]?.fromMs ?? 0;
     const tries = [0, ...(w.waits ? marks.filter((m) => m > start).slice(0, MAX_WAITS).map((m) => m + room.frameMs - start) : [])];
-    const by = tries.find((d) => fits(shifted(w, d), w.kind, w.id));
+    const by = tries.find((d) => fits(shifted(w, d), w.kind));
     if (by !== undefined) {
       runs.push({ wish: w, pieces: shifted(w, by) });
       if (isBurstKind(w.kind)) for (const win of planned) for (const p of shifted(w, by)) {
@@ -138,7 +133,7 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
       }
     } else (w.kind === "ramp" ? steps : skipped).push(w);
   }
-  return { runs, cuts, nearSway: [...nearSway], steps, skipped };
+  return { runs, cuts, steps, skipped };
 }
 
 /** The window in which beat-like light is held at rest around a run (`--scene-hold`): 250 ms before its start until 300 ms after its end. */
