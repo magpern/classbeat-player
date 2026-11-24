@@ -60,11 +60,50 @@ tr[aria-current="true"] td { background: var(--stage-raised); font-weight: 700; 
 #live-slots { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 #live-slots li { display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 700; }
 
+/* ---------- The sensors row: above the riders row, at most 100 px closed (sensors.md part 2) ---------- */
+#sensors { margin-top: auto; gap: 6px; border-top: 1px solid var(--stage-line); padding-top: 8px; min-height: 0; }
+#sensors + #riders { margin-top: 0; }
+#sensors-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 44px; }
+#sensors-title { font-size: 17px; font-weight: 700; }
+#sensors-state { font-size: 15px; font-weight: 400; color: var(--light-2); }
+#sensors-connect, #sensors-toggle { margin-left: auto; }
+#sensors-connect:not([hidden]) + #sensors-toggle { margin-left: 0; }
+#sensors-line, #sensors-no-numbers, #sensors-failed, #sensors-looking, #sensors-note { font-size: 15px; color: var(--light-2); }
+#sensors-live { font-family: var(--face-count); font-weight: 800; font-size: 26px; line-height: 1.1; white-space: pre-wrap; }
+/* The open drawer: the head and the readings stay; the list scrolls inside it. The riders row and its
+   count stay in view under it; the pairing and phone-remote panels give way, as for the riders drawer. */
+#side:has(#sensors-drawer:not([hidden])) > :not(#sensors):not(#riders) { display: none; }
+#sensors:has(#sensors-drawer:not([hidden])) { flex: 1; }
+#sensors-drawer { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+#sensors-measures { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+#sensors-measures li > p:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 15px; }
+#sensors-measures li > p:first-child span { color: var(--light-2); }
+#sensors-measures li > p + p { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--light-2); }
+#sensors-measures svg { flex: 1; min-width: 0; height: 12px; }
+#sensors-measures output { font-family: var(--face-count); font-weight: 800; font-size: 30px; line-height: 1; color: var(--light-1); }
+#sensors-list { flex: 1; min-height: 96px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--stage-line); padding-top: 8px; }
+#sensors-devices, #sensors-nearby { list-style: none; display: flex; flex-direction: column; }
+#sensors-devices li, #sensors-nearby li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 4px 0; min-height: 52px; border-bottom: 1px solid var(--stage-line); }
+#sensors-devices li > span[dir], #sensors-nearby li > span[dir] { flex: 1 1 100%; min-width: 0; font-weight: 700; }
+#sensors-devices li > span:not([dir]), #sensors-nearby li > span:not([dir]) { flex: 1; font-size: 15px; color: var(--light-2); }
+#sensors-chooser { display: flex; flex-direction: column; gap: 8px; }
+#sensors-list label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 15px; color: var(--light-2); }
+#sensors-list label + label { margin-top: 8px; }
+#sensors-list p:has(> label) { display: flex; flex-direction: column; }
+input {
+  font: inherit; font-size: 17px; font-weight: 700; color: var(--light-1); background: var(--stage-raised);
+  border: 1px solid var(--stage-line); border-radius: 6px; padding: 8px 10px; min-height: 44px; width: 7em;
+}
+input:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }
+
 /* ---------- The riders row: the last thing in the right column (riders-panel.md) ---------- */
 #riders { margin-top: auto; gap: 12px; border-top: 1px solid var(--stage-line); padding-top: 10px; min-height: 0; }
-/* The open drawer takes the whole column, over the pairing and phone-remote panels, as it runs over
-   the controls in riders-panel.md; the class status stays in the left column, never covered. */
-#side:has(#riders-drawer:not([hidden])) > :not(#riders) { display: none; }
+/* The open drawer takes the column, over the pairing and phone-remote panels, as it runs over the
+   controls in riders-panel.md; the class status stays in the left column, never covered. The sensors
+   row's head stays, so its Show still opens the other drawer (one drawer at a time); its numbers
+   give way to the list. */
+#side:has(#riders-drawer:not([hidden])) > :not(#riders):not(#sensors) { display: none; }
+#side:has(#riders-drawer:not([hidden])) #sensors-live { display: none; }
 #riders:has(#riders-drawer:not([hidden])) { flex: 1; margin-top: 0; }
 #riders-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 56px; font-weight: 700; }
 #riders-count { font-family: var(--face-count); font-weight: 800; font-size: 30px; line-height: 1; }
