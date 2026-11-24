@@ -299,6 +299,66 @@ describe("a sensor after the rider left", () => {
     assert.equal(p.state().devices[0]!.lost, false);
   });
 
+  it("a lost sensor picked again fails to start notifications: its link is closed and Reconnect works", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdNotify(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    const before = s.log.filter((l) => l === "disconnect").length;
+    g.fail();
+    await flush();
+    assert.equal(s.log.filter((l) => l === "disconnect").length, before + 1);
+    assert.equal(s.device.gatt.connected, false);
+    assert.equal(p.state().devices[0]!.lost, true);
+    s.holdNotify(null);
+    p.source.reconnect(s.device.id);
+    await flush();
+    assert.equal(p.state().devices[0]!.lost, false);
+  });
+
+  it("a lost sensor whose reconnect fails to start notifications: its link is closed", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdNotify(g.promise);
+    p.source.reconnect(s.device.id);
+    await flush();
+    const before = s.log.filter((l) => l === "disconnect").length;
+    g.fail();
+    await flush();
+    assert.equal(s.log.filter((l) => l === "disconnect").length, before + 1);
+    assert.equal(p.state().devices[0]!.lost, true);
+  });
+
+  it("removed, picked again, dropped before it connects: released, failed, not kept where the page cannot see it", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    g.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 0);
+    assert.equal(p.types().filter((t) => t === "lost").length, 0);
+    p.source.reconnect(s.device.id); // no longer registered: nothing happens
+    await flush();
+    assert.equal(p.types().includes("retry"), false);
+  });
+
   it("two picks of one sensor, the first superseded: removed during the second still clears choosing", async () => {
     const p = page();
     const s = strap();

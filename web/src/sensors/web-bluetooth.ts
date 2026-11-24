@@ -128,6 +128,14 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     devices.delete(d.id);
   };
 
+  /** A listed sensor whose connection failed: its listeners end and its link closes (the row says
+   * lost, so the link must not stay open, or a new pick would find it connected and do nothing),
+   * but it stays registered for Reconnect. */
+  const hold = (d: Device): void => {
+    subscriptions.get(d.id)?.abort();
+    d.gatt?.disconnect();
+  };
+
   /** After a Left: disconnect the device unless a newer connection of this page now holds it. */
   const settle = (d: Device, at: number): void => {
     if (epoch !== at || !devices.has(d.id)) release(d);
@@ -176,7 +184,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
             await subscribe(d, at);
           } catch (e) {
             if (e instanceof Left) return settle(d, at);
-            if (shown.has(d.id)) subscriptions.get(d.id)?.abort(); // a listed sensor stays, lost, for Reconnect
+            if (shown.has(d.id)) hold(d); // a listed sensor stays, lost, for Reconnect
             else release(d);
             listeners.emit({ type: "failed" });
           } finally {
@@ -195,7 +203,11 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
       if (!d) return;
       listeners.emit({ type: "retry", id });
       const at = epoch;
-      subscribe(d, at).catch((e: unknown) => (e instanceof Left ? settle(d, at) : listeners.emit({ type: "lost", id })));
+      subscribe(d, at).catch((e: unknown) => {
+        if (e instanceof Left) return settle(d, at);
+        hold(d);
+        listeners.emit({ type: "lost", id });
+      });
     },
     disconnect: drop,
     disconnectAll() {
