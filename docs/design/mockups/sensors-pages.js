@@ -98,8 +98,8 @@ add('unsupported', 'Rider: no Web Bluetooth', 'State: the browser has no Web Blu
   page(h1('This browser cannot connect to a sensor') + p('Open this page in Chrome on an Android phone.') + SHEET_NOTE,
     `<div class="duo solo">${key('done', 'Done', { main: true })}</div>`, 'form'));
 
-add('unsupported-iphone', 'Rider: no Web Bluetooth, iPhone', 'State: an iPhone or iPad without Web Bluetooth. The same sheet names Bluefy, the browser that has it.',
-  page(h1('This browser cannot connect to a sensor') + p('On an iPhone, open this page in Bluefy.') + SHEET_NOTE,
+add('unsupported-iphone', 'Rider: no Web Bluetooth, iPhone', 'State: an iPhone or iPad without Web Bluetooth. The same sheet says the page gives the targets and the timing, and that sensors need the installed classbeat Player app (rider mode).',
+  page(h1('This browser cannot connect to a sensor') + p('On an iPhone this page gives the targets and the timing. Sensors need the installed classbeat Player app (rider mode).') + SHEET_NOTE,
     `<div class="duo solo">${key('done', 'Done', { main: true })}</div>`, 'form'));
 
 // ---------- Worst case ----------
