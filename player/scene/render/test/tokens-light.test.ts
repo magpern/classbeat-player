@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BUILD_LIFT, ENERGY_BY_ZONE, QUALITY, TEMPO_PULSE, ZONES, beatLevel, sceneFrame } from "../../model/src/index.ts";
 import { DEMO_CLASS } from "../demo/scenario.ts";
-import { beatLift, beatStride, burstEnvelope, fixturesLit, litMask, masterLevel, wallDot } from "../src/light-calc.ts";
+import { CHASE_AMPLITUDE, beatLift, beatStride, burstEnvelope, fixturesLit, litMask, masterLevel, wallDot } from "../src/light-calc.ts";
 import { SCENE_TOKEN_DEFAULTS, parseHex, readSceneTokens } from "../src/tokens.ts";
 import { TOKENS_CSS, styleFromCss, tokensFromFile } from "../tools/tokens-file.ts";
 
@@ -79,7 +79,7 @@ test("tempo only: a 4 % pulse and nothing at None; no wall chase without the bea
   assert.ok(beatLift({ frame: f, bpm: 120, beats: null, songPosMs: 5_000, reduced: false }) <= TEMPO_PULSE);
   assert.ok(Math.abs(beatLift({ frame: f, bpm: 120, beats: null, songPosMs: 5_040, reduced: false }) - TEMPO_PULSE) < 1e-9, "40 ms into the pulse");
   assert.ok(wallDot(10, 3, "beat chase", null, 5, false) < 0.31);
-  assert.ok(wallDot(0, 3, "beat chase", 0, 5, false) > 0.6); // a tooth of the chase, with the beat known
+  assert.ok(wallDot(0, 3, "beat chase", 0, 5, false) > wallDot(0, 3, "beat chase", null, 5, false) + CHASE_AMPLITUDE - 1e-9); // a tooth of the chase, with the beat known: its whole height over the wave
   assert.ok(wallDot(0, 3, "beat chase", 1, 5, false) < wallDot(1, 3, "beat chase", 1, 5, false), "the comb moved on by a column");
   assert.equal(wallDot(10, 3, "beat chase", 2, 5, true), 0.2); // the still rig's wall does not move
 });

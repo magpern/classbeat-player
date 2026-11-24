@@ -134,7 +134,7 @@ test("a change that gets a mark of its own reports it, on the frame it lands and
 test("the runs already placed are counted beside a mark of its own (S6): with two runs just before it, it moves later", () => {
   const first = ownMarkCase();
   const free = first.frames.find((f) => f.mark !== null)!.mark!;
-  const run = (id: string, fromMs: number) => ({ wish: { id, kind: "lightBurst" as const, pieces: [{ fromMs, toMs: fromMs + 50 }] }, pieces: [{ fromMs, toMs: fromMs + 50 }] });
+  const run = (id: string, fromMs: number) => ({ wish: { id, kind: "ramp" as const, pieces: [{ fromMs, toMs: fromMs + 50 }] }, pieces: [{ fromMs, toMs: fromMs + 50 }] });
   const runs = [run("a", first.wanted - 300), run("b", first.wanted - 200)];
   const crowded = ownMarkCase(runs).frames.find((f) => f.mark !== null);
   assert.ok(crowded !== undefined && crowded.mark! > free, "the window already holds two runs, so the mark waits for it to clear");

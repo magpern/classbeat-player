@@ -5,10 +5,12 @@
 // directions are the model's drawn directions, the moments are the model's gated ones, and a burst,
 // the cross and the energy ramp are brightness and colour only.
 
-import type { Direction, Energy, Frame, LinkInput, QualityLevel, RigHue, RigState, SceneClass } from "../../model/src/index.ts";
-import { ANTICIPATION_MS, START_STATE, beatLevel, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, momentsAllowed, rigFrozen, stepRig } from "../../model/src/index.ts";
+import type { DarkSpan, Direction, Energy, Frame, LinkInput, QualityLevel, RigHue, RigState, SceneClass } from "../../model/src/index.ts";
+import { ANTICIPATION_MS, START_STATE, angleBetween, holdEnd, beatLevel, buildElapsedMs, mergeIntervals, buildHaze, energyFor, beatsAt, intervalIndexAt, momentsAllowed, rigFrozen, stepRig } from "../../model/src/index.ts";
 import { RAMP_MS, dropFrame } from "./budget-calc.ts";
 import { BurstTracker } from "./bursts.ts";
+import { DarkGate } from "./dark-gate.ts";
+import { songSpans } from "./dark-calc.ts";
 import { CROSS_MS, CrossGate, NO_CROSS, crossLook } from "./cross-calc.ts";
 import type { CrossLook } from "./cross-calc.ts";
 import { beatLift, beatStride, fixturesLit, liftAgeMs } from "./light-calc.ts";
@@ -58,6 +60,8 @@ export interface Draw {
   readonly burst: number;
   readonly reduced: boolean;
   readonly stage: Stage;
+  /** The beams move in black: a turn's light is 0 and its lens at its fixed level, from the off-step to the on-step ("A sweep moves in black"). */
+  readonly dark: boolean;
   /** The two tokens in play: the planned zone's, and the next zone's from the start of the anticipation until the change. */
   readonly tokens: { readonly current: RigHue; readonly next: RigHue | null };
   /** The hue cross and the energy ramp at an interval change (none in the still rig, a frozen rig, or after a seek). */
@@ -102,6 +106,9 @@ export class RigLoop {
   private readonly bursts: BurstTracker;
   private readonly gate = new CrossGate();
   private seconds = 0;
+  private readonly darkGate = new DarkGate();
+  private spans: DarkSpan[] = [];
+  private spansKey = "";
 
   private readonly tokens: LoopTokens;
   private holdPhase = false;
@@ -140,7 +147,11 @@ export class RigLoop {
     const cls = this.merged(feed.cls); // interval changes under 1 s apart are one change frame (P1)
     const stage = stageOf(feed.stage);
     const still = reduced;
-    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase && !this.first ? 0 : movementScale(stage, link), noMusic: stage === "before" });
+    // The sway's phase and steady light's clock are held round a dark span as planned without any burst, from the song alone.
+    const spanKey = `${songIndex}:${Math.round(classMs - songPosMs)}:${Math.floor(classMs / 3000)}`;
+    if (spanKey !== this.spansKey) { this.spansKey = spanKey; this.spans = songSpans({ cls, songIndex, songPosMs, classMs }); }
+    const spanHeld = !still && stage !== "before" && this.darkGate.held(classMs, this.spans);
+    const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase && !this.first ? 0 : movementScale(stage, link), noMusic: stage === "before", phaseHeld: spanHeld });
     this.state = stepped.state;
     this.first = false;
     const { frame, dtSeconds } = stepped;
@@ -157,7 +168,9 @@ export class RigLoop {
     const rampPlaced = t0 !== undefined && msToChange !== null && msToChange <= RAMP_HOLD_MS && !quiet && !rigFrozen(link) &&
       this.bursts.budget.admit(`ramp@${t0}`, "ramp", [{ fromMs: t0 - RAMP_MS, toMs: t0 - FRAME_MS }], { cls, classMs, songIndex, songPosMs, level: frame.level });
     const { burst, dim, lens } = this.bursts.update({ cls, classMs, songIndex, songPosMs, link, level: frame.level, dtMs: dtSeconds * 1000, decayMs: this.tokens.burstMs, still: quiet });
-    if (!still && link.state !== "Paused" && link.held !== true) this.seconds += dtSeconds;
+    if (!still && link.state !== "Paused" && link.held !== true && !spanHeld) this.seconds += dtSeconds;
+    const onTarget = stepped.drawn.every((d, i) => angleBetween(d, nth(frame.directions, i) ?? d) < 1e-6);
+    const dark = !still && stage !== "before" && this.darkGate.step({ classMs, spans: this.spans, cuts: this.bursts.budget.cuts(), onTarget, cause: stepped.cause === null ? null : { turnStartMs: holdEnd(classMs) } });
     const startMs = nth(cls.intervals, at)?.startMs ?? 0;
     const asked = still || stage === "before" || rigFrozen(link) ? NO_CROSS : crossLook(msToChange, classMs - startMs, CROSS_MS);
     const cross = this.gate.filter(classMs, asked);
@@ -184,7 +197,7 @@ export class RigLoop {
     const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`, this.bursts.budget.runs);
     if (held.mark !== null) this.clock.note(held.mark);
     return {
-      drawn: stepped.drawn, frame, dtSeconds, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
+      drawn: stepped.drawn, frame, dtSeconds, dark, lift, burst, reduced: still, stage, seconds: this.seconds, beamLevel: still ? NO_PATTERN_LIGHT.level : pattern.level, lens,
       hazeGain: held.haze,
       heldMark: held.mark,
       energyRamp: rampPlaced ? cross.ramp : 0,

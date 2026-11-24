@@ -22,6 +22,8 @@ export const TAN_H = Math.tan((25 * Math.PI) / 180);
 const BEAM_GAIN = 0.2;
 const LENS_UNLIT = 0.04;
 const LENS_LIT = 0.9;
+/** A dark span's lens, as a share of its facing peak: fixed, not a function of direction (scene.md "A sweep moves in black"). */
+export const DARK_LENS = 0.5;
 const WALL_LEVEL = 0.4; // the wall is a back layer, well under the beams (a deep, dark room)
 const WALL_MODES = { "slow wave": 0, "wave and beat": 1, "beat chase": 1, "beat chase both ways": 2 } as const;
 
@@ -122,10 +124,13 @@ export class SceneRig {
       aimQuaternion(nth(draw.drawn, i) ?? { pan: 0, tilt: 0 }, fx.pivot.quaternion);
       const now = nth(draw.lit, i) === true ? 1 : 0;
       const lit = draw.ahead ? now + ((nth(draw.ahead.lit, i) === true ? 1 : 0) - now) * ramp : now;
+      // The zone 7 row's beams carry a lower share against the haze (a brightness, never a shape); the ramp mixes the two rows' shares as it mixes their light.
+      const share7 = draw.ahead ? mix(energy.beamShare, draw.ahead.energy.beamShare) : energy.beamShare;
+      // Moving in black: a turning beam throws nothing (no shaft, no scatter, no spot) and its lens sits at one level per fixture, 0.5 of its facing peak.
       return {
         dir: BEAM_AXIS.clone().applyQuaternion(fx.pivot.quaternion),
-        beam: BEAM_GAIN * fx.gain * (0.55 + 0.45 * e) * lift * draw.master * lit * draw.beamLevel,
-        lens: (LENS_UNLIT + (LENS_LIT * lift - LENS_UNLIT) * lit) * draw.master,
+        beam: draw.dark ? 0 : BEAM_GAIN * fx.gain * (0.55 + 0.45 * e) * lift * draw.master * lit * draw.beamLevel * share7,
+        lens: draw.dark ? (LENS_UNLIT + (DARK_LENS * LENS_LIT - LENS_UNLIT) * lit) * draw.master : (LENS_UNLIT + (LENS_LIT * lift - LENS_UNLIT) * lit) * draw.master,
         next: this.takesNext(fx, draw) ? 1 : 0,
       };
     });

@@ -54,6 +54,8 @@ export interface StepInput {
   readonly noMusic?: boolean;
   /** A cause the host knows and the step cannot see (a reload that kept the state, a jump the host names); a seek, a lost or regained lock and a resume are seen by the step itself. */
   readonly cause?: UnforeseenCause;
+  /** The motion phase is held (not the beams): 1 s before a dark span's off-step to 1 s after its on-step ("A sweep moves in black"), and resumes from where it stopped. */
+  readonly phaseHeld?: boolean;
 }
 
 export interface Stepped {
@@ -92,7 +94,7 @@ export function stepRig(state: RigState, input: StepInput): Stepped {
   const held = isHeld(holdUntil, classMs);
   const stopped = frozen || held;
   const zone = cls.intervals[intervalIndexAt(cls, classMs)]?.zone ?? 1;
-  const phaseDeg = stopped || still ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone, motion);
+  const phaseDeg = stopped || still || input.phaseHeld === true ? state.phaseDeg : advancePhase(state.phaseDeg, dtSeconds, zone, motion);
   const frame = sceneFrame({ cls, classMs, songIndex, songPosMs, phaseDeg, link: still || noMusic ? STILL_LINK : link });
   const drawn = turnToward(state.drawn, frame.directions, dtSeconds, stopped);
   return { state: { phaseDeg, drawn, holdUntilMs: held ? holdUntil : null, lastClassMs: classMs, lastLink: link }, frame, drawn, dtSeconds, held, cause };

@@ -4,11 +4,13 @@
 // light's possible change included. Steady light is counted as one change in every 1 s window, beat or no beat: the gated
 // runs show it moving a region over 10 % with the beat running (a phrase flip's sweep, a drifting haze), so it is never
 // counted as 0. A sweep (the beams' turn after a phrase flip, a song change, a build's gather, a drop's fan) takes the runs away, its
-// planned window up to 4.15 s. The sweeps, the looks' sway and a burst's decay are all inside that one change: a burst counts only its
-// rise (a mark), keeps every other run 1 s away, and cuts the length of a planned window that would come within 1 s of it. Without the beat there is no ramp and no dim (a burst fits where the count has room); with a count running there are no runs at all. A run
+// planned span (the beams move in black from the turn's first frame to the on-step, "A sweep moves in black") takes the runs away, and 1 s
+// either side of it. The sweeps, the looks' sway and a burst's decay are all inside that one change: a burst counts only its rise (a mark),
+// keeps every other run 1 s away, and moves a step of a span that would come near it into its own rise frame. Without the beat there is no ramp and no dim (a burst fits where the count has room); with a count running there are no runs at all. A run
 // that does not fit is a step in a mark (a ramp) or is skipped (a burst, a dim). Times are milliseconds. Pure.
 
-import { DECAY_CLEAR_MS, SWEEP_WINDOW_MS, cutByDecay } from "./sweeps.ts";
+import { HOLD_AROUND_MS, cutSpan } from "./dark.ts";
+import { SWEEP_WINDOW_MS } from "./sweeps.ts";
 
 /** The most counted changes in any 1 s window (S6). */
 export const CAP = 3;
@@ -24,7 +26,7 @@ const SECOND_MS = 1000;
 
 /** Steady light, counted in every 1 s window with the beat or without it (scene.md, `--scene-steady-max`; measured, #590). */
 export const STEADY_PER_WINDOW = 1;
-/** A sweep is the beams turning at the turn limit from a known moment (a phrase flip, a song change, a build's gather, a drop's fan, a re-aim). No run is placed in its window, which is planned for the full 4.15 s (`--scene-sweep-window`). */
+/** A sweep is the beams turning at the turn limit from a known moment (a phrase flip, a song change, a build's gather, a drop's fan, a re-aim). A turn's part is at most 4.15 s (`--scene-sweep-window`); `sweeps` plans each as that long a span. */
 export const SWEEP_MS = SWEEP_WINDOW_MS;
 
 export interface Span { readonly fromMs: number; readonly toMs: number }
@@ -56,7 +58,7 @@ export interface Room {
   readonly frameMs: number;
   /** The moments (class clock, ms) a sweep starts; a run does not overlap the 4.15 s after each. */
   readonly sweeps?: readonly number[];
-  /** Planned sweep windows (`songSweeps`): a gather's ends where the beams hold still. A run does not overlap one; a burst may cut its length. */
+  /** Planned dark spans (`planSpans`: off-step to on-step, joined). A run does not overlap one or come within 1 s of its steps; a burst moves a near step into its rise frame. */
   readonly sweepWindows?: readonly PlannedWindow[];
   /** The moments (class clock, ms) the turn after an unforeseen cause starts (the cause's time plus 2 s): a sweep, and no new run ends less than 1 s before it either. */
   readonly unforeseenTurns?: readonly number[];
@@ -64,13 +66,13 @@ export interface Room {
   readonly placed?: readonly PlacedRun[];
 }
 export interface PlacedRun { readonly wish: RunWish; readonly pieces: readonly Span[] }
-/** A planned sweep window cut by a placed burst's decay: only its counted length changes (null: nothing is left of it). */
-export interface CutRecord { readonly id: string; readonly planned: PlannedWindow; readonly counted: Span | null }
-/** A planned sweep window: its span, and the cause that planned it where the caller knows it (`Sweep`). */
+/** A planned span a placed burst moved a step of: B7 (`onMs` is the burst's rise frame) or B8 (`offMs` is the rise frame, `onMs` 1 s + 1 frame after the decay, or the arrival). Only light moves. */
+export interface CutRecord { readonly id: string; readonly planned: PlannedWindow; readonly kind: "b7" | "b8"; readonly offMs: number; readonly onMs: number }
+/** A planned span: its off-step and on-step, and the cause that planned it where the caller knows it (`Sweep`). */
 export interface PlannedWindow extends Span { readonly cause?: string }
 export interface RunPlan {
   readonly runs: readonly PlacedRun[];
-  /** The planned windows each placed burst cut. */
+  /** The planned spans each placed burst moved a step of. */
   readonly cuts: readonly CutRecord[];
   /** Ramps that did not fit: a step in a mark that adds nothing. */
   readonly steps: readonly RunWish[];
@@ -104,7 +106,8 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
   const runs: PlacedRun[] = [...(room.placed ?? [])];
   const [steps, skipped]: [RunWish[], RunWish[]] = [[], []];
   const marks = [...room.marks].sort((a, b) => a - b);
-  const near = (a: Span, b: Span): boolean => a.fromMs < b.toMs + DECAY_CLEAR_MS - EPS && b.fromMs < a.toMs + DECAY_CLEAR_MS - EPS;
+  const near = (a: Span, b: Span): boolean => a.fromMs < b.toMs + HOLD_AROUND_MS - EPS && b.fromMs < a.toMs + HOLD_AROUND_MS - EPS;
+  const held = (w: Span): Span => ({ fromMs: w.fromMs - HOLD_AROUND_MS, toMs: w.toMs + HOLD_AROUND_MS });
   const fits = (pieces: readonly Span[], kind: RunKind): boolean => {
     const beatNeeded = needsBeat(kind);
     const burst = isBurstKind(kind);
@@ -112,8 +115,8 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
     if ((beatNeeded && !pieces.every(whole)) || pieces.some((p) => room.count.some((c) => overlaps(p, c)))) return false;
     if (pieces.some((p) => marks.some((m) => m > p.fromMs + EPS && m <= p.toMs + EPS))) return false;
     if (pieces.some((p) => runs.some((r) => r.pieces.some((q) => overlaps(p, q))) || unforeseen.some((w) => overlaps(p, w)))) return false;
-    // A planned window is closed to every run; a burst's decay may come within 1 s of one (it cuts the window's length), never inside it.
-    if (pieces.some((p) => planned.some((w) => (burst ? cutByDecay(w, p).kind === "overlaps" : overlaps(p, w))))) return false;
+    // A planned span is closed to every run, and 1 s either side of its steps; a burst's decay may come near a step (the step goes into its rise frame), never inside the span.
+    if (pieces.some((p) => planned.some((w) => (burst ? cutSpan({ offMs: w.fromMs, onMs: w.toMs }, p, room.frameMs).kind === "overlaps" : overlaps(p, held(w)))))) return false;
     // No other run lies within 1 s of a burst's decay, whichever was placed first (steps e and f).
     if (pieces.some((p) => runs.some((r) => (burst || isBurstKind(r.wish.kind)) && r.pieces.some((q) => near(p, q))))) return false;
     // The decay is inside the shared 1, so it is not counted beside it: the rise is a mark, already among the marks.
@@ -127,7 +130,11 @@ export function fitRuns(wishes: readonly RunWish[], room: Room): RunPlan {
     const by = tries.find((d) => fits(shifted(w, d), w.kind));
     if (by !== undefined) {
       runs.push({ wish: w, pieces: shifted(w, by) });
-      if (isBurstKind(w.kind)) for (const win of planned) for (const p of shifted(w, by)) { const c = cutByDecay(win, p); if (c.kind === "cut") cuts.push({ id: w.id, planned: win, counted: c.counted }); }
+      if (isBurstKind(w.kind)) for (const win of planned) for (const p of shifted(w, by)) {
+        const c = cutSpan({ offMs: win.fromMs, onMs: win.toMs }, p, room.frameMs);
+        if (c.kind === "b7") cuts.push({ id: w.id, planned: win, kind: "b7", offMs: win.fromMs, onMs: c.onMs });
+        else if (c.kind === "b8") cuts.push({ id: w.id, planned: win, kind: "b8", offMs: c.offMs, onMs: c.onMs });
+      }
     } else (w.kind === "ramp" ? steps : skipped).push(w);
   }
   return { runs, cuts, steps, skipped };

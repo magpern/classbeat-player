@@ -4,8 +4,9 @@
 // does not fit is a step in the change frame, a burst or a dim that does not fit is left out, and beat-like light is
 // held at rest around every run that is placed. Pure: the class and the time come in, nothing is read.
 
-import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, fitRuns, inHold, patternCountRuns, songChangeSweep, songSweeps } from "../../model/src/index.ts";
-import type { CutRecord, PlacedRun, RunKind, RunWish, Span, Sweep } from "../../model/src/index.ts";
+import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
+import type { CutRecord, DarkSpan, PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
+import { songSpans } from "./dark-calc.ts";
 import { FRAME_MS, REACH_MS, nearby, planMarks } from "./marks-calc.ts";
 import type { Where } from "./marks-calc.ts";
 import { readPattern } from "./pattern-light-calc.ts";
@@ -36,7 +37,7 @@ export function dropFrame(w: Where, dropClassMs: number): number {
 export class RunBudget {
   private readonly decided = new Map<string, boolean>();
   private placed: PlacedRun[] = [];
-  private sweepsSeen: Sweep[] = [];
+  private spansSeen: DarkSpan[] = [];
   private readonly cutLog: CutRecord[] = [];
   private readonly hold: { readonly before: number; readonly after: number };
 
@@ -64,21 +65,15 @@ export class RunBudget {
     const beat: Span[] = w.level === "None" ? [] : [{ fromMs: -FAR_MS, toMs: FAR_MS }];
     const wish: RunWish = { id, kind, pieces, waits };
     const song = nth(w.cls.songs, w.songIndex);
-    const offset = w.classMs - w.songPosMs; // where the song starts, on the class clock
-    // Where the beams start a sweep, planned from the song alone (phrase flips, a build's gather, the fan's turn, the song change): the same at every
-    // level, since the plan is a function of the song, not of the link. Seen ones are kept: a sweep outlives its song.
-    const [lo, hi] = [w.classMs - REACH_MS, w.classMs + REACH_MS];
-    const next = nth(w.cls.songs, w.songIndex + 1);
-    const heard = [
-      ...songSweeps(song, offset, lo, hi),
-      ...(w.songIndex > 0 ? [songChangeSweep(offset)] : []),
-      ...(next !== undefined && song?.lengthMs !== undefined ? [songChangeSweep(offset + song.lengthMs)] : []),
-    ].filter((s) => s.toMs > lo && s.fromMs < hi);
-    const seen = new Set(heard.map((s) => `${s.cause}@${s.fromMs}`));
-    const allSweeps = [...heard, ...this.sweepsSeen.filter((s) => !seen.has(`${s.cause}@${s.fromMs}`))];
-    this.sweepsSeen = allSweeps.filter((s) => s.toMs > w.classMs - REACH_MS);
+    // The dark spans, planned from the song alone (phrase flips, a build's gather, the fan's turn, the song change), the same at every level:
+    // the plan is a function of the song, not of the link. Seen ones are kept: a span outlives its song.
+    const [lo] = [w.classMs - REACH_MS];
+    const heard = songSpans(w);
+    const seen = new Set(heard.map((s) => Math.round(s.offMs)));
+    const allSpans = [...heard, ...this.spansSeen.filter((s) => !seen.has(Math.round(s.offMs)))];
+    this.spansSeen = allSpans.filter((s) => s.onMs > lo);
     const beatMs = song?.bpm !== undefined && song.bpm > 0 ? 60_000 / song.bpm : 500;
-    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSweeps });
+    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSpans.map((x) => ({ fromMs: x.offMs, toMs: x.onMs })) });
     const run = plan.runs.find((r) => r.wish.id === id);
     if (run) { this.placed.push(run); this.cutLog.push(...plan.cuts); }
     this.decided.set(id, run !== undefined);

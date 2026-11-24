@@ -34,11 +34,11 @@ function play(make: Make, fromMs: number, toMs: number, dt = 1 / 60, budgetOff =
 // and 100 s) and song 2's breakdown (120 s) across the interval changes.
 const through = (link: Feed["link"], reducedMotion = false): Make => (ms) => feedAt(ms, { link, reducedMotion });
 
-test("locked: the build gathers, the drop fans, the 58 s drop (away from a change) bursts, the 40 s drop (on a change, beside the ramp) does not, the breakdown runs", () => {
-  // At the Beat level the 40 s drop's frame is the interval change's: the ramp (step c) takes the room, so its burst is skipped (step f) and the fan is the drop's frame.
+test("locked: the build gathers, the drop fans, both drops burst (the 40 s drop's ramp waits for the gather's dark span, so the change frame is a step and its burst has the room), the breakdown runs", () => {
+  // At the Beat level the 40 s drop's frame is the interval change's: the gather's span (dark to 39.0 s, closed to runs 1 s past it) holds its ramp, so the ramp is a step in the change frame (step d).
   const a = play(through({ state: "Locked" }), 30_000, 59_500);
   assert.ok(a.gather > 0 && a.fan > 0);
-  assert.equal(a.bursts, 1, "the 58 s drop");
+  assert.equal(a.bursts, 2, "the drops at 40 s and 58 s");
   assert.equal(play(through({ state: "Locked" }), 30_000, 59_500, 1 / 60, true).bursts, 2, "budget off: both drops burst, 18 s apart");
   const b = play(through({ state: "Locked" }), 110_000, 128_000);
   assert.ok(b.breakdown > 0);
@@ -133,10 +133,10 @@ test("a song change away from an interval change has no dim where step g says so
   for (const link of [{ state: "Locked" }, { state: "Coasting" }] as const) assert.equal(Math.min(...playMasters(DEMO_CLASS, 69_000, 72_000, 70_000, link)), 1, link.state);
 });
 
-test("Tempo only (bpm, no anchors) is as the Beat level: the ramp runs, so a drop away from a change bursts, a drop on a change and a no-moments change do not (the gap, as built)", () => {
+test("Tempo only (bpm, no anchors) is as the Beat level: both drops burst, a no-moments change at 80 s (its ramp has the room) does not", () => {
   const tempo: Feed["cls"] = { ...DEMO_CLASS, songs: DEMO_CLASS.songs.map((song) => Object.fromEntries(Object.entries(song).filter(([k]) => k !== "anchors")) as typeof song) };
   const make: Make = (ms) => ({ ...feedAt(ms, { link: { state: "Locked" } }), cls: tempo });
-  assert.equal(play(make, 30_000, 59_500).bursts, 1, "the 58 s drop bursts, the 40 s drop on a change does not");
+  assert.equal(play(make, 30_000, 59_500).bursts, 2, "the 58 s drop bursts, and the 40 s drop on a change, its ramp a step beside the gather's span");
   assert.equal(play(make, 70_000, 98_000).bursts, 0, "no moments, a change at 80 s: no light-only burst");
 });
 

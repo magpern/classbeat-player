@@ -14,7 +14,8 @@ import { fitRuns, maxInASecond } from "../src/flash-runs.ts";
 import type { RunPlan, RunWish, Span } from "../src/flash-runs.ts";
 import { FAN_TURN_DELAY_MS } from "../src/fan-turn.ts";
 import type { SceneSong } from "../src/frame.ts";
-import { cutByDecay, songChangeSweep, songSweeps } from "../src/sweeps.ts";
+import { cutSpan, minDarkMs, planSpans } from "../src/dark.ts";
+import { songChangeSweep, songSweeps } from "../src/sweeps.ts";
 import { turningMoments } from "../src/turn-moments.ts";
 
 const STATES = ["locked", "coasting", "tempo only"] as const;
@@ -50,7 +51,9 @@ function timeline(seed: number): Timeline {
     const kind = f.drops.length > 0 ? "dropBurst" : f.change && drops.length === 0 ? "lightBurst" : null;
     if (kind !== null && f.atMs - lastBurst >= 10_000) { wishes.push({ id: `burst${i}`, kind, pieces: [{ fromMs: f.atMs + frameMs, toMs: f.atMs + 250 }] }); lastBurst = f.atMs; }
   });
-  const windows = [...songSweeps(song, 0, -10_000, lengthMs + 10_000), songChangeSweep(lengthMs)];
+  // The beams are dark from each turn's first frame until they arrive (up to 3.5 s later, here a random arrival), at least 1 s + 1 frame; near turns join.
+  const turns = [...songSweeps(song, 0, -10_000, lengthMs + 10_000), songChangeSweep(lengthMs)].map((s) => ({ startMs: s.fromMs, arrivalMs: s.fromMs + r.int(0, 3500) }));
+  const windows = planSpans(turns, frameMs).map((s) => ({ fromMs: s.offMs, toMs: s.onMs }));
   return { song, frameMs, wishes, marks: fixed.map((f) => f.atMs), windows, beatMs: 60_000 / bpm, lengthMs, switchAt: r.int(10_000, lengthMs - 5000) };
 }
 
@@ -68,15 +71,18 @@ function check(seed: number, t: Timeline, before: State, after: State): RunPlan 
   const p = plan(t, before, after);
   const decays = p.runs.filter((x) => isBurst(x.wish)).flatMap((x) => x.pieces.map((d) => ({ id: x.wish.id, d })));
   const others = p.runs.filter((x) => !isBurst(x.wish)).flatMap((x) => x.pieces);
+  const least = minDarkMs(t.frameMs);
   for (const w of t.windows) {
-    for (const o of others) assert.ok(!(o.fromMs < w.toMs - TOL && w.fromMs < o.toMs - TOL), `${name}: a run ${o.fromMs} to ${o.toMs} in the window ${w.fromMs} to ${w.toMs}`);
+    for (const o of others) assert.ok(!(o.fromMs < w.toMs + 1000 - TOL && w.fromMs - 1000 < o.toMs - TOL), `${name}: a run ${o.fromMs} to ${o.toMs} in the span ${w.fromMs} to ${w.toMs} or 1 s beside its steps`);
     for (const { id, d } of decays) {
-      assert.notEqual(cutByDecay(w, d).kind, "overlaps", `${name}: the decay of ${id} lies in a window ${w.fromMs} to ${w.toMs}`);
-      const cut = p.cuts.find((c) => c.id === id && c.planned === w);
-      if (gap(w, d) < 1000 - TOL) assert.ok(cut !== undefined, `${name}: a window ${gap(w, d)} ms from a decay is not cut`);
-      if (cut !== undefined) {
-        assert.deepEqual(cut.planned, w, `${name}: only the length is cut, the planned window is kept`);
-        if (cut.counted !== null) assert.ok(gap(cut.counted, d) >= 1000 - TOL, `${name}: the cut window is ${gap(cut.counted, d)} ms from the decay`);
+      const c = cutSpan({ offMs: w.fromMs, onMs: w.toMs }, d, t.frameMs);
+      assert.notEqual(c.kind, "overlaps", `${name}: the decay of ${id} lies in a span ${w.fromMs} to ${w.toMs}`);
+      const cut = p.cuts.find((x) => x.id === id && x.planned === w);
+      assert.equal(cut?.kind, c.kind === "clear" ? undefined : c.kind, `${name}: a step ${w.fromMs}/${w.toMs} near the decay ${d.fromMs}: ${c.kind}`);
+      if (cut === undefined) assert.ok(w.toMs <= d.fromMs - least + TOL || w.fromMs >= d.toMs + 1000 - TOL, `${name}: a step within 1 s of a decay is not moved`);
+      else {
+        assert.deepEqual(cut.planned, w, `${name}: only light moves, the planned span is kept`);
+        assert.ok(Math.abs((cut.kind === "b7" ? cut.onMs : cut.offMs) - (d.fromMs - t.frameMs)) < TOL, `${name}: the step goes into the rise frame`);
       }
     }
   }
@@ -86,14 +92,14 @@ function check(seed: number, t: Timeline, before: State, after: State): RunPlan 
   // A burst is skipped only for a cause.
   for (const w of p.skipped.filter(isBurst)) {
     const decay = w.pieces[0]!;
-    const caused = t.windows.some((x) => cutByDecay(x, decay).kind === "overlaps") || (before !== after && decay.toMs > t.switchAt + 1000 - TOL && decay.fromMs < t.switchAt + 2000 + 4150 + TOL)
+    const caused = t.windows.some((x) => cutSpan({ offMs: x.fromMs, onMs: x.toMs }, decay, t.frameMs).kind === "overlaps") || (before !== after && decay.toMs > t.switchAt + 1000 - TOL && decay.fromMs < t.switchAt + 2000 + 4150 + TOL)
       || others.some((o) => gap(o, decay) < 1000) || decays.some((x) => gap(x.d, decay) < 0) || t.marks.some((m) => m > decay.fromMs + TOL && m <= decay.toMs + TOL);
     assert.ok(caused, `${name}: ${w.id} is skipped for no cause`);
   }
   return p;
 }
 
-test(`link-state pairs: ${SEEDS} random songs through all 9 pairs keep every run out of the sweeps' windows, cut what a decay comes near, and skip a burst only for a cause`, () => {
+test(`link-state pairs: ${SEEDS} random songs through all 9 pairs keep every run out of the dark spans and 1 s from their steps, move a step near a decay into its rise frame, and skip a burst only for a cause`, () => {
   let placed = 0;
   let cut = 0;
   let skipped = 0;

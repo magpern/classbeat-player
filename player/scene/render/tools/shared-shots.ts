@@ -13,7 +13,7 @@ import { frameTimes } from "./luminance-steps.ts";
 import { SHARED_MAX, burstFrames, decayCount, mostAround, wholeRun, worstRegion } from "./shared-one.ts";
 import type { Worst } from "./shared-one.ts";
 import { CUT_CAUSES, GAPS_MS, cutCase, placedBy } from "./shared-cuts.ts";
-import { CAUSE_STATES, overlapCase, overlapOffsets, sweepCases } from "./shared-sweeps.ts";
+import { CAUSE_STATES, firstSpanMs, overlapCase, overlapOffsets, sweepCases } from "./shared-sweeps.ts";
 import { STATES, lookByZone, missing, phraseStartMs, specOf } from "./shared-cases.ts";
 import type { Factors, StateName } from "./shared-cases.ts";
 import type { Open } from "./text-shots.ts";
@@ -118,7 +118,8 @@ async function cutCases(open: Open, results: Result[], pool: readonly Factors[])
       assert.equal(frames !== null, predicted, `${name}, ${state.name}: the page and the loop disagree on the burst`);
       if (frames === null) { record(results, { gate: "cut", name, state: state.name, most: 0, region: "", burst: { placed: false, asserted } }); continue; }
       const at = (ms: number) => played.wall[0]! + (ms - c.fromMs); // the frames' wall times start at the run's first frame
-      const count = (changes: Parameters<typeof mostAround>[0]) => Math.max(mostAround(changes, frames.decay, frames.riseMs), mostAround(changes, { fromMs: at(c.away.fromMs), toMs: at(c.away.toMs) }, frames.riseMs));
+      // The windows holding a frame of the decay or of the dark span (as the burst leaves it) count at most 1 beside the rise.
+      const count = (changes: Parameters<typeof mostAround>[0]) => Math.max(mostAround(changes, frames.decay, frames.riseMs), mostAround(changes, { fromMs: at(c.span.offMs), toMs: at(c.span.onMs) }, frames.riseMs));
       const w = worstRegion(names, played.wall, played.regions, count);
       record(results, { gate: "cut", name, state: state.name, most: w.most, region: w.region, changes: relative(w, frames.riseMs), burst: { placed: true, asserted } });
     }
@@ -131,7 +132,7 @@ async function sweepMatrix(open: Open, results: Result[]): Promise<void> {
   const holes = missing(cases.map((c) => ({ ...c.factors, state: c.state, cause: c.cause })), { causes: Object.keys(CAUSE_STATES), states: STATES.map((s) => s.name) });
   assert.deepEqual(holes, [], `the sweep matrix has no case for: ${holes.join(", ")}`);
   const pick = lookByZone().find((f) => f.look === "circle" && f.zone === 4)!;
-  const overlaps = overlapOffsets().flatMap((o) => [overlapCase(o, false, pick), overlapCase(o, true, pick)]);
+  const overlaps = overlapOffsets(firstSpanMs(pick)).flatMap((o) => [overlapCase(o, false, pick), overlapCase(o, true, pick)]);
   for (const c of [...cases, ...overlaps].filter((x) => wanted(x.name))) {
     const state = STATES.find((s) => s.name === c.state)!;
     const played = await play(open, { className: genName(c.spec), query: c.startsCoasting === true ? "&state=coasting" : state.query, quality: c.factors.quality, fromMs: c.fromMs, toMs: c.toMs, events: c.events });

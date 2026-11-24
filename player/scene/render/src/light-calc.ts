@@ -86,6 +86,12 @@ export const WALL_COLUMNS = 56;
 /** The wall's chase is a comb that travels: a lit dot every `COMB` columns, one column on a beat, so any region holds the same number of them. */
 export const COMB = 6;
 export const COMB_HALF_WIDTH = 1.5;
+/**
+ * The chase tooth's height over the wall's slow wave (it was 0.6): the beat-like light lever of scene.md "If a gated run fails", a lower amplitude.
+ * With the beams dark in a sweep the wall is most of a region's light, and a step of the comb on a beat moved a dark region 30 % between two
+ * beats (fan turn, zone 7, 120 bpm, Medium, locked at 0.35, and 0.45 for the sway at 200 bpm): 0.2 keeps each step under the strict measure's 10 %.
+ */
+export const CHASE_AMPLITUDE = 0.2;
 /** 0 to 1: how near a column is to a tooth of the comb at `head`, as a triangle. */
 export function comb(col: number, head: number): number {
   const d = Math.abs(((((col - head) % COMB) + COMB * 1.5) % COMB) - COMB / 2);
@@ -102,5 +108,5 @@ export function wallDot(col: number, row: number, mode: WallMode, chaseStep: num
   if (mode === "slow wave" || chaseStep === null) return wave;
   const head = chaseStep % COMB;
   const lit = mode === "beat chase both ways" ? Math.max(comb(col, head), comb(WALL_COLUMNS - 1 - col, head)) : comb(col, head);
-  return wave + 0.6 * lit;
+  return wave + CHASE_AMPLITUDE * lit;
 }

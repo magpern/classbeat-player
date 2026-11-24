@@ -160,9 +160,10 @@ test("runs: a fourth change in a 1 s window is never made, steady light's one in
 
 test("steady light is counted as one change in every window with the beat running or not, and a sweep (a phrase flip, a gather, a fan) takes the runs away", () => {
   assert.deepEqual(ids(fitRuns([ramp("a", 10_000, 700 - F)], room({ marks: [10_700] }))), [["a"], [], []], "a ramp, its change frame and steady light: 3");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000] }))), [[], ["a"], []], "inside the 2.5 s sweep of a flip");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000 - SWEEP_MS - 800] }))), [["a"], [], []], "after it");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_000] }))), [["a"], [], []], "a flip after the run");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000] }))), [[], ["a"], []], "inside the span of a flip");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000 - SWEEP_MS - 1_000 - 100] }))), [["a"], [], []], "after it and the 1 s beside its on-step");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_800] }))), [["a"], [], []], "a flip 1 s and more after the run's end");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_000] }))), [[], ["a"], []], "a flip within 1 s of the run's end: its off-step would share a second with the run");
   assert.equal(maxInASecond([{ fromMs: 999, toMs: 999 }, { fromMs: 0, toMs: 1 }]), 2);
   assert.equal(maxInASecond([{ fromMs: 0, toMs: 0 }, { fromMs: 1000, toMs: 1000 }]), 1, "a window of 1 s holds one of two marks 1 s apart");
 });

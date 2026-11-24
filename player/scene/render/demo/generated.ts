@@ -29,9 +29,10 @@ export const genName = (spec: GenSpec): string => GEN + JSON.stringify(spec);
 function generated(spec: GenSpec): Variant {
   const anchors = spec.tempoOnly === true ? undefined : [{ at_ms: 0, bpm: spec.bpm }];
   const song: SceneSong = { bpm: spec.bpm, ...(anchors === undefined ? {} : { anchors }), ...(spec.moments === undefined ? {} : { moments: spec.moments }), ...(spec.lengthMs === undefined ? {} : { lengthMs: spec.lengthMs }) };
-  const filler: SceneSong = { bpm: spec.bpm, ...(anchors === undefined ? {} : { anchors }) };
-  const songs = Array.from({ length: spec.songIndex + 1 }, (_, i) => (i === spec.songIndex ? song : filler));
-  const starts = songs.map((_, i) => (i === spec.songIndex ? spec.startMs : i * 1000));
+  // The songs before it play 1 s each, the last until the case's song starts, so the song change into it is known from the song before it.
+  const starts = Array.from({ length: spec.songIndex + 1 }, (_, i) => (i === spec.songIndex ? spec.startMs : i * 1000));
+  const filler = (i: number): SceneSong => ({ bpm: spec.bpm, ...(anchors === undefined ? {} : { anchors }), lengthMs: (starts[i + 1] ?? spec.startMs) - (starts[i] ?? 0) });
+  const songs = Array.from({ length: spec.songIndex + 1 }, (_, i) => (i === spec.songIndex ? song : filler(i)));
   const intervals = [{ startMs: 0, zone: spec.zone }, ...(spec.changes ?? []).map((c) => ({ startMs: c.atMs, zone: c.zone }))].sort((a, b) => a.startMs - b.startMs);
   const cls: SceneClass = { songs, intervals, endMs: spec.startMs + (spec.lengthMs ?? 600_000) + 600_000 };
   return { cls, starts };

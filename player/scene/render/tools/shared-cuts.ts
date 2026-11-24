@@ -1,10 +1,13 @@
-// The cut cases of the burst-decay gate (scene.md "The CI gate for a burst's decay", "the cut window"): a burst of each kind with its decay
-// less than 1 s after the planned window of a phrase flip, a song change or a gather (0.1, 0.5 and 0.9 s), and less than 1 s before one's
-// turn. Each is a generated class (demo/generated.ts) with the times worked out here, in class-clock milliseconds. Pure.
-import { LOOKS } from "../../model/src/index.ts";
+// The cut cases of the burst-decay gate (scene.md "The CI gate for a burst's decay", "the cut window", "A burst cuts a sweep's window"): a burst of each
+// kind with its decay less than 1 s + 1 frame after the on-step of a phrase flip, a song change or a gather (0.1, 0.5 and 0.9 s: B7, the light comes on
+// in the rise frame), and less than 1 s before one's turn (B8: the beams go dark in the rise frame). Each is a generated class (demo/generated.ts) with
+// the times worked out from the plan of the dark spans (render/src/dark-calc.ts), in class-clock milliseconds. Pure apart from the loop `placedBy` runs.
+import { LOOKS, cutSpan } from "../../model/src/index.ts";
+import type { DarkSpan } from "../../model/src/index.ts";
 import { genName } from "../demo/generated.ts";
 import type { GenSpec } from "../demo/generated.ts";
 import { VARIANTS, feedAt } from "../demo/scenario.ts";
+import { songSpans } from "../src/dark-calc.ts";
 import { RigLoop } from "../src/loop.ts";
 import { SONG_START_MS, phraseMs, phraseStartMs, specOf } from "./shared-cases.ts";
 import type { Factors, STATES } from "./shared-cases.ts";
@@ -15,69 +18,75 @@ export type CutCause = "phrase flip" | "song change" | "gather" | "turn after";
 export const CUT_CAUSES: readonly CutCause[] = ["phrase flip", "song change", "gather", "turn after"];
 export const GAPS_MS = [100, 500, 900] as const;
 const FRAME_MS = 1000 / 60;
-/** `--scene-sweep-window` and the decay's own length, as the scheduler has them (model/src/sweeps.ts, render/src/budget-calc.ts). */
-const WINDOW_MS = 4150;
 const DECAY_MS = 250;
 const GATHER_BEATS = 8;
-const HOLD_STILL_MS = 1000;
 
 export interface CutCase {
   readonly kind: BurstKind;
   readonly cause: CutCause;
   readonly gapMs: number;
-  /** The time between the planned window and the decay that the case builds: the gap itself, or 1 s less it for a gather (the drop is `gapMs` after its frame). */
-  readonly windowGapMs: number;
   readonly factors: Factors;
   readonly spec: GenSpec;
   /** The page plays from here to there (class clock, ms). */
   readonly fromMs: number;
   readonly toMs: number;
-  /** The burst's decay (first and last frame), and the frames of the turn the cut took out of the counted window. */
+  /** The burst's decay (first and last frame), the rise frame before it, and the dark span as the burst leaves it (B7: off-step to the rise frame; B8: the rise frame to the on-step). */
   readonly decay: { readonly fromMs: number; readonly toMs: number };
-  readonly away: { readonly fromMs: number; readonly toMs: number };
+  readonly span: { readonly offMs: number; readonly onMs: number };
+  /** What the burst does to the span the case is built around. */
+  readonly step: "b7" | "b8" | "clear" | "overlaps";
 }
 
 /** The zone an interval change goes to: the next row, or the one below the last, as a class steps (never from 7 to 1). */
 const nextZone = (zone: number): number => (zone === 7 ? 6 : zone + 1);
 
-/** The burst's frame for a decay that starts at `decayFromMs`: a drop's own moment, or the interval change a light-only burst rises on. */
-function burstAt(kind: BurstKind, frameMs: number, f: Factors, startMs: number, tempoOnly: boolean, extra: Partial<GenSpec> = {}): GenSpec {
-  const zone2 = nextZone(f.zone);
+/** The spans the plan gives for a spec, around `atMs`. */
+function plan(spec: GenSpec, atMs: number): DarkSpan[] {
+  const variant = VARIANTS[genName(spec)]!;
+  const feed = feedAt(atMs, { variant });
+  return songSpans({ cls: variant.cls, songIndex: feed.songIndex, songPosMs: feed.songPosMs, classMs: atMs });
+}
+const spanAt = (spans: readonly DarkSpan[], atMs: number): DarkSpan | undefined => spans.find((s) => s.offMs <= atMs + 1 && atMs < s.onMs + 1);
+
+function burstSpec(kind: BurstKind, frameMs: number, f: Factors, startMs: number, tempoOnly: boolean): GenSpec {
   return kind === "drop"
-    ? specOf(f, tempoOnly, { startMs, moments: [{ at_ms: frameMs - startMs, kind: "drop" }], lengthMs: 400_000, ...extra })
-    : specOf(f, tempoOnly, { startMs, changes: [{ atMs: frameMs, zone: zone2 }], lengthMs: 400_000, ...extra });
+    ? specOf(f, tempoOnly, { startMs, moments: [{ at_ms: frameMs - startMs, kind: "drop" }], lengthMs: 400_000 })
+    : specOf(f, tempoOnly, { startMs, changes: [{ atMs: frameMs, zone: nextZone(f.zone) }], lengthMs: 400_000 });
 }
 
 export function cutCase(kind: BurstKind, cause: CutCause, gapMs: number, f: Factors, tempoOnly: boolean): CutCase {
   const beat = 60_000 / f.bpm;
+  const flip = SONG_START_MS + phraseStartMs(f);
   let frameMs: number; // the burst's frame (the rise); its decay runs from the next frame for 250 ms
   let startMs = SONG_START_MS;
-  let away: { fromMs: number; toMs: number };
-  const flip = SONG_START_MS + phraseStartMs(f);
-  if (cause === "phrase flip") {
-    frameMs = flip + WINDOW_MS + gapMs - FRAME_MS;
-    away = { fromMs: frameMs + FRAME_MS - 1000, toMs: flip + WINDOW_MS };
-  } else if (cause === "song change") {
-    startMs = SONG_START_MS + phraseStartMs(f); // a song of its own, started where the phrase would flip
-    frameMs = startMs + WINDOW_MS + gapMs - FRAME_MS;
-    away = { fromMs: frameMs + FRAME_MS - 1000, toMs: startMs + WINDOW_MS };
+  let spec: GenSpec;
+  let around: number; // a time inside the span the case is built around
+  if (cause === "phrase flip" || cause === "song change") {
+    if (cause === "song change") startMs = flip; // a song of its own, started where the phrase would flip
+    const base = specOf(f, tempoOnly, { startMs, lengthMs: 400_000 });
+    const on = spanAt(plan(base, flip + 500), flip + 500)?.onMs ?? flip + 3500;
+    frameMs = on + gapMs - FRAME_MS; // the decay's first frame is `gapMs` after the on-step
+    spec = burstSpec(kind, frameMs, f, startMs, tempoOnly);
+    around = flip + 500;
   } else if (cause === "gather") {
-    // A drop merged onto an interval change `gapMs` before it: the gather's window ends 1 s before the moment, the frame is the change's.
-    const moment = flip + WINDOW_MS + GATHER_BEATS * beat + 500;
+    // A drop merged onto an interval change `gapMs` before it: the gather's beams hold still, and the light is back, 1 s before the moment.
+    const moment = flip + 3500 + GATHER_BEATS * beat + 500;
     frameMs = moment - gapMs;
-    away = { fromMs: frameMs + FRAME_MS - 1000, toMs: moment - HOLD_STILL_MS };
+    spec = specOf(f, tempoOnly, { moments: [{ at_ms: moment - SONG_START_MS, kind: "drop" }], changes: [{ atMs: frameMs, zone: nextZone(f.zone) }], lengthMs: 400_000 });
+    around = moment - 8 * beat + 1000;
   } else {
-    // The next phrase flip starts `gapMs` after the decay's last frame.
+    // The next phrase flip starts `gapMs` after the decay's last frame (B8).
     const next = flip + phraseMs(f.bpm);
     frameMs = next - gapMs - DECAY_MS;
-    away = { fromMs: next, toMs: frameMs + DECAY_MS + 1000 };
+    spec = burstSpec(kind, frameMs, f, startMs, tempoOnly);
+    around = next + 500;
   }
-  const spec = cause === "gather"
-    ? { ...specOf(f, tempoOnly, { moments: [{ at_ms: frameMs + gapMs - SONG_START_MS, kind: "drop" }], changes: [{ atMs: frameMs, zone: nextZone(f.zone) }], lengthMs: 400_000 }) }
-    : burstAt(kind, frameMs, f, startMs, tempoOnly);
   const decay = { fromMs: frameMs + FRAME_MS, toMs: frameMs + DECAY_MS };
-  const [lo, hi] = [Math.min(decay.fromMs, away.fromMs), Math.max(decay.toMs, away.toMs)];
-  return { kind, cause, gapMs, windowGapMs: cause === "gather" ? 1000 - gapMs + FRAME_MS : gapMs, factors: f, spec, fromMs: Math.round(lo - 1500), toMs: Math.round(hi + 1500), decay, away };
+  const span = spanAt(plan(spec, around), around) ?? { offMs: around, onMs: around + 1000 };
+  const cut = cutSpan(span, decay, FRAME_MS);
+  const shown = cut.kind === "b7" ? { offMs: span.offMs, onMs: cut.onMs } : cut.kind === "b8" ? { offMs: cut.offMs, onMs: cut.onMs } : { offMs: span.offMs, onMs: span.onMs };
+  const [lo, hi] = [Math.min(decay.fromMs, shown.offMs), Math.max(decay.toMs, shown.onMs)];
+  return { kind, cause, gapMs, factors: f, spec, fromMs: Math.round(lo - 2500), toMs: Math.round(hi + 2500), decay, span: shown, step: cut.kind };
 }
 
 /** Whether the rig's own loop places the case's burst in `state` (no browser): what the S6 report says of a generated class. */

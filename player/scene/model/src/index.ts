@@ -16,6 +16,7 @@ export * from "./moments.ts";
 export * from "./phase.ts";
 export * from "./quality.ts";
 export * from "./step.ts";
+export * from "./dark.ts";
 export * from "./sweeps.ts";
 export * from "./turn-moments.ts";
 export * from "./turn.ts";

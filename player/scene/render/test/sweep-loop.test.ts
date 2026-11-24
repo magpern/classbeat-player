@@ -55,7 +55,7 @@ test("every burst S6 asserts is placed in the states it asserts, and the Beat le
   assert.equal(bursts("demo", 54_000, 59_000, locked, true), 1, "the 58 s drop, Tempo only");
   assert.equal(bursts("demo", 54_000, 59_000, coasting), 1, "the 58 s drop, coasting");
   assert.equal(bursts("demo", 78_500, 83_000, coasting), 1, "the light-only burst at 80 s, coasting");
-  assert.equal(bursts("demo", 38_500, 44_000, locked), 0, "the ramp has the room at 40 s: no burst");
+  assert.equal(bursts("demo", 38_500, 44_000, locked), 1, "the 40 s drop locked: the gather's span holds its ramp, the change frame is a step, the burst has the room (c = 1 in the decay gate)");
   assert.equal(bursts("demo", 78_500, 83_000, locked), 0, "and at 80 s");
 });
 
@@ -66,7 +66,7 @@ test("the 58 s drop has no fan turn: its beams hold the gather's aim from 0.65 s
   const fan = frames(40_800, 44_000);
   const turned = fan.findIndex((f) => f.drawn !== fan[0]!.drawn);
   assert.ok(Math.abs(fan[turned]!.ms - 42_250) < 40, `the fan's turn starts at ${fan[turned]!.ms} ms, 2250 ms after the drop`);
-  assert.ok(frames(61_000, 62_000).some((f, i, all) => f.drawn !== all[0]!.drawn), "the song change's own turn follows");
+  assert.ok(frames(59_500, 60_600).some((f, i, all) => f.drawn !== all[0]!.drawn), "the song change's own turn follows at 60 s");
 });
 
 test("a placed burst changes no beam (rule 4, S7): the beams are drawn the same with every burst placed (budget off) and with the scheduler's own", () => {

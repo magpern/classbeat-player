@@ -73,9 +73,9 @@ test("off the list the movement is halved: the phase advances at half the zone's
   const travel = (options: FeedOptions) => {
     const loop = new RigLoop(tokens);
     let [sum, prev] = [0, null as readonly { pan: number; tilt: number }[] | null];
-    for (let ms = 62_000, n = 0; ms < 79_000; n++) { // zone 5 in the song with no moments: no gather, fan or burst either way
+    for (let ms = 99_000, n = 0; ms < 118_000; n++) { // zone 7 in the song with a breakdown at 120 s: no gather, fan or burst, and no dark span after the song change at 100 s (its hold ends by 103 s)
       const d = loop.step(feedAt(ms, options), n === 0 ? 0 : 1 / 60, "High");
-      if (prev && ms > 66_000) sum += d.drawn.reduce((a, x, i) => a + angleBetween(prev![i]!, x), 0);
+      if (prev && ms > 103_000) sum += d.drawn.reduce((a, x, i) => a + angleBetween(prev![i]!, x), 0);
       prev = d.drawn;
       ms += d.dtSeconds * 1000;
     }

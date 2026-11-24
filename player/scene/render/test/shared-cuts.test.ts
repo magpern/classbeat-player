@@ -39,19 +39,23 @@ test("the generated cases cover both burst kinds, the four causes and the three 
   assert.deepEqual([...new Set(cases.map((c) => c.gapMs))].sort(), [...GAPS_MS]);
 });
 
-test("every cut case places its burst and cuts the window it names to 1 s from the decay, the planned window kept", () => {
+test("every cut case places its burst and moves the step it names into the rise frame: B7 for a flip, a song change and a gather, B8 for a turn that follows", () => {
+  const seen: Record<string, number> = {};
   for (const c of cases) {
     const { placed, budget } = admitted(c);
     const name = `${c.kind} ${c.cause} ${c.gapMs} ms`;
     assert.equal(placed, true, `${name}: the burst is placed`);
-    const hit = budget.cuts().filter((cut) => (c.cause === "turn after" ? Math.abs(cut.planned.fromMs - (c.decay.toMs + c.windowGapMs)) < 40 : Math.abs(cut.planned.toMs - (c.decay.fromMs - c.windowGapMs)) < 40));
-    assert.ok(hit.length >= 1, `${name}: the window ${c.windowGapMs} ms from the decay is cut (${JSON.stringify(budget.cuts())})`);
-    for (const cut of hit) {
-      if (c.cause === "turn after") assert.ok(cut.counted === null || Math.abs(cut.counted.fromMs - (c.decay.toMs + 1000)) < 1e-6, `${name}: cut to start 1 s after the decay`);
-      else assert.ok(cut.counted === null || Math.abs(cut.counted.toMs - (c.decay.fromMs - 1000)) < 1e-6, `${name}: cut to end 1 s before the decay`);
-    }
-    assert.ok(c.away.toMs > c.away.fromMs, `${name}: the cut took frames of the turn out of the counted window`);
+    seen[c.step] = (seen[c.step] ?? 0) + 1;
+    assert.notEqual(c.step, "overlaps", `${name}: the decay is not in a span`);
+    const rise = c.decay.fromMs - 1000 / 60;
+    const mine = budget.cuts().filter((cut) => (cut.kind === "b7" ? Math.abs(cut.onMs - rise) < 1e-6 : Math.abs(cut.offMs - rise) < 1e-6));
+    assert.equal(mine.length > 0, c.step !== "clear", `${name}: the scheduler's cut agrees with the plan (${c.step}: ${JSON.stringify(budget.cuts())})`);
+    if (c.step !== "clear") assert.equal(mine[0]!.kind, c.step, name);
+    if (c.cause === "turn after") assert.equal(c.step, "b8", `${name}: a turn that follows is B8`);
+    else assert.notEqual(c.step, "b8", `${name}: a step before the decay is B7`);
+    assert.ok(c.span.onMs > c.span.offMs, `${name}: the dark span has length`);
   }
+  assert.ok((seen.b7 ?? 0) >= 12 && (seen.b8 ?? 0) === 6, `B7 and B8 both built: ${JSON.stringify(seen)}`);
 });
 
 test("a drop's burst is placed in every state, the light-only burst coasting; a light-only burst on a change is skipped only beside a ramp that has the room", () => {
