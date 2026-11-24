@@ -60,7 +60,12 @@ test("a malformed version string is an invalid class, not a newer one", () => {
 const invalidDir = join(EXAMPLES, "invalid");
 // Invalid only for producers: a reader ignores unknown fields and accepts a later minor
 // (ADR 0003 section 7). The player never shows an unknown field, so a source's games stay out.
-const STRICT_ONLY = new Set(["schema-strict-refuses-minor-1-3.json", "schema-unknown-field-games.json", "schema-unknown-nested-field-colour.json"]);
+const STRICT_ONLY = new Set([
+  "schema-strict-refuses-minor-1-4.json",
+  "schema-swedebeat-mix-unknown-field.json",
+  "schema-unknown-field-games.json",
+  "schema-unknown-nested-field-colour.json",
+]);
 for (const name of [...STRICT_ONLY]) {
   test(`reader accepts, writer refuses: ${name}`, () => {
     const t = text(join(invalidDir, name));
