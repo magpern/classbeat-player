@@ -96,6 +96,9 @@ with other work; nothing in the development loop waits for an answer.
   only at the None level and away from a change. Changing it needs the ramp to give way to the
   burst (a spec change), or steady light to stop counting as a change (#592). Say if you want
   either.
+  Two more skips, from #622 (2026-11-24): a light-only burst on an interval change that falls
+  inside a beam-turn hold is skipped at every level, because placing it would put 2 changes in
+  1 s; and at the Beat and Tempo-only levels a burst is skipped within 1 s of the looks' sway.
 - **FYI: the beat dot is gone from the plain 2D screen (#584).** Under the strict flash measure
   it moved a region 12.4 to 14.4 % at 4:3 and 5:4, so the Designer removed it. Riders lose a
   per-beat cue on the 2D screen; the 3D scene keeps its beat lift. Say if you want a cue back.

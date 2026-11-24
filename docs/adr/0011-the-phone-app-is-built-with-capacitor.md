@@ -124,6 +124,9 @@ intents** with checked arguments and answers, never a general channel. In partic
   the rider token), "send the rider's message" and "receive the rider's messages" over the rider
   socket native code opens with that token, and "leave". The rider's messages are still built and
   checked by the shared TypeScript; native code carries them as opaque text, as for the host.
+  *As built (#666):* rider mode has "join", "open", "receive" and "leave". "Send the rider's
+  message" is not built: in PL8 a rider sends only its `hello` (ADR 0007). The intent comes with
+  the first rider message the web view builds, with its own argument test.
 - Every intent has a test that rejects unexpected arguments.
 
 ### 4. The web view is locked down
