@@ -37,8 +37,12 @@ export interface CutCase {
   readonly step: "b7" | "b8" | "clear" | "overlaps";
 }
 
-/** The zone an interval change goes to: the next row, or the one below the last, as a class steps (never from 7 to 1). */
-const nextZone = (zone: number): number => (zone === 7 ? 6 : zone + 1);
+/**
+ * The zone an interval change goes to: the same row. A step to another zone brings the hue wipe of its anticipation (10 s of it, S5: constant
+ * luminance by design, a few percent on a dark region) and its energy, scheduled changes of their own that the strict whole-frame gate holds
+ * (S6); these cases isolate what the burst does to a dark span.
+ */
+const nextZone = (zone: number): number => zone;
 
 /** The spans the plan gives for a spec, around `atMs`. */
 function plan(spec: GenSpec, atMs: number): DarkSpan[] {
