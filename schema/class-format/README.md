@@ -189,8 +189,47 @@ ignores the field.
 Vectors: `valid/class-spotify-playlist.json`, `invalid/schema-spotify-playlist-malformed`,
 `invalid/schema-spotify-playlist-in-format-1-0`, `invalid/schema-spotify-playlist-in-format-1-1`,
 `invalid/playlist-without-spotify-source`; the strict future-minor vector is now
-`schema-strict-refuses-minor-1-3`. The reference converter writes the field (format 1.2) when
+`schema-strict-refuses-minor-1-4` (it was 1.3 until minor 1.3 existed). The reference converter writes the field (format 1.2) when
 the fixture has a playlist id (`converter/fixtures/class-30min-spotify-playlist.*`).
+
+## Format 1.3: Swedebeat mix (issue #689, contract part; ADR 0013 section 4)
+
+Minor 1.3 is additive (ADR 0003 section 7): it adds one optional field, `music.swedebeat_mix`,
+and nothing else. Every 1.0 to 1.2 document is a valid 1.3 document and is unchanged; an older
+reader accepts a 1.3 document by the reader rules and ignores the field.
+
+```json
+"music": { "source": "swedebeat", "design_crossfade_ms": 9000, "song_timing": "estimated",
+           "swedebeat_mix": { "id": "mix_2024-11-01-Ride_45", "length_ms": 3000000, "offset_ms": 120000 } }
+```
+
+1. **Fields.** `id`: 1 to 64 characters of `[A-Za-z0-9_-]`, opaque, never a token or a link (a
+   URL, a space or a trailing newline is a schema error at `/music/swedebeat_mix/id`). `length_ms`:
+   whole milliseconds, 1 or more, required. `offset_ms`: whole milliseconds, 0 or more, default 0
+   (the mix position at class time 0). No other field.
+2. **Id alphabet, from evidence.** The pattern is classbeat's own `MIX_ID`
+   (`^[0-9A-Za-z_-]{1,64}$`, `backend/src/classbeat/operations/swedebeat.py`, also its
+   `classes/duplicate_music.py`). ADR 0013 section 4 also lists `.`; classbeat never accepts it
+   (an id with a dot is dropped from its mix listing), so the contract is the narrower set. A
+   class classbeat writes therefore always validates. Widening later is a new minor.
+3. **Strict producers must write `"1.3"` to use it.** A `"1.0"`, `"1.1"` or `"1.2"` label that
+   carries the field is a schema error in both modes (pointer `/music`).
+4. **Only with source `swedebeat`:** semantic rule `swedebeat_mix_without_swedebeat_source` at
+   `/music/swedebeat_mix` (no other mix rule is reported for such a document).
+5. **The mix covers the class:** `swedebeat_mix_too_short` at `/music/swedebeat_mix/length_ms` when
+   `offset_ms + class.length_ms > length_ms`; `song_outside_mix` at `/songs/<i>/end_ms` when
+   `offset_ms + end_ms > length_ms`. (The last window ends at the class length, so
+   `song_outside_mix` only fires together with `swedebeat_mix_too_short`; it is kept because
+   ADR 0013 names it.)
+6. **Data only.** `songs[].ids.swedebeat_mix` is unchanged. The field names a mix; the player
+   decides what to do with it (ADR 0013).
+
+Vectors: `valid/class-swedebeat-mix`, `valid/class-swedebeat-mix-no-offset-exact-fit`,
+`invalid/schema-swedebeat-mix-*` (labels 1.0 and 1.2, length 0, offset negative or fractional,
+id empty, 65 characters, URL, trailing newline, missing length, unknown field),
+`invalid/swedebeat-mix-with-spotify-source`, `-with-source-none`, `-too-short-for-class`,
+`-offset-pushes-past-end`. The reference converter writes the field (format 1.3) for
+`converter/fixtures/class-30min-swedebeat-mix.*`.
 
 ## Where each ADR rule is enforced
 
@@ -203,7 +242,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s1 types generated; stale types fail CI | `generate.sh`, `check-generated.sh` | edit-without-regenerating check; `tests/test_generated.py`, `test/generated-types.test.ts` (round trip) |
 | s2 times are whole milliseconds | S (`integer`) | `schema-time-not-integer` |
 | s2 cue at most 120 characters, names at most 80 | S | `schema-cue-over-120-chars`, `schema-title-over-80-chars` |
-| s3 `format_version` `"1.0"`, `"1.1"` or `"1.2"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-3`, `reader/` |
+| s3 `format_version` `"1.0"` to `"1.3"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-4`, `reader/` |
 | s3 required top-level fields, no unknown fields (no games, no colour) | S | `schema-missing-required-music`, `schema-unknown-field-games`, `schema-unknown-nested-field-colour` |
 | s3 sport, music source, `design_crossfade_ms` at least 0, `song_timing` values | S | `schema-sport-unknown`, `schema-source-none-timing-not-missing` |
 | s3 zone scale: unique numbers, ranges | S, V | `zone-scale-duplicate`, `zone-scale-range-inverted`, `schema-zone-out-of-1-to-7` |
@@ -225,6 +264,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | 1.2 `music.spotify_playlist`: 22-character id, no URI, URL or newline | S | `schema-spotify-playlist-malformed`, `-uri`, `-url`, `-21-chars`, `-23-chars`, `-trailing-newline`, `-colons-22`, `-quote-22`, `-space-22` (exactly 22 characters, not all letters or digits) |
 | 1.2 playlist only with a 1.2 label | S (strict and reader) | `schema-spotify-playlist-in-format-1-0`, `-1-1`; `test_playlist_document_is_1_2_and_older_labels_are_refused` |
 | 1.2 playlist only with source `spotify` | V (`playlist_without_spotify_source`) | `playlist-without-spotify-source`, `playlist-with-swedebeat-source` |
+| 1.3 `music.swedebeat_mix`: id, bounds, label, source, covers class | S, V | see "Format 1.3" above; `test_swedebeat_mix_*` |
 | s6 repeat, stale, removal marker (and the carried cases) | P (`sequence`) | `sequences.json` |
 | s7 producers strict, readers lax, any minor of a known major | `check` modes | `reader/accepted-future-minor-unknown-fields`, `test_producer_is_strict_where_reader_is_lax` |
 | s7 unknown major refused | `check` reader mode | `reader/rejected-unknown-major` |

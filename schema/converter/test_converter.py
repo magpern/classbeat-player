@@ -133,3 +133,34 @@ def test_playlist_on_a_soundless_class_is_dropped() -> None:
     doc = convert(fixture)
     assert doc["format_version"] == "1.0"
     assert "spotify_playlist" not in doc["music"]
+
+
+def test_swedebeat_mix_is_carried_and_makes_the_document_1_3() -> None:
+    doc = convert(load(FIXTURES / "class-30min-swedebeat-mix.input.json"))
+    assert doc["format_version"] == "1.3"
+    assert doc["music"]["source"] == "swedebeat"
+    assert doc["music"]["swedebeat_mix"] == {
+        "id": "mix_2024-11-01-Ride_30",
+        "length_ms": 2100000,
+        "offset_ms": 90000,
+    }
+    assert all(s["ids"] == {"swedebeat_mix": "mix_2024-11-01-Ride_30"} for s in doc["songs"])
+    assert check_document(SCHEMA, doc, "strict") == []
+
+
+def test_swedebeat_mix_offset_defaults_to_zero_and_replaces_the_playlist() -> None:
+    fixture = load(FIXTURES / "class-30min-swedebeat-mix.input.json")
+    del fixture["music"]["swedebeat_mix"]["offset_sec"]
+    fixture["music"]["spotify_playlist"] = "37i9dQZF1DXcBWIGoYBM5M"
+    doc = convert(fixture)
+    assert doc["music"]["swedebeat_mix"]["offset_ms"] == 0
+    assert "spotify_playlist" not in doc["music"]
+    assert check_document(SCHEMA, doc, "strict") == []
+
+
+def test_swedebeat_mix_on_a_soundless_class_is_dropped() -> None:
+    fixture = load(FIXTURES / "class-30min-swedebeat-mix.input.json")
+    fixture["music"]["songs"] = []
+    doc = convert(fixture)
+    assert doc["format_version"] == "1.0"
+    assert "swedebeat_mix" not in doc["music"]

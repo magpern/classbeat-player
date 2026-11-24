@@ -10,10 +10,13 @@ Input:
                                                    "standing"?, "game"?, "ftp_test"?, "cue"?}]}],
      "music"?: {"crossfade_sec": number,
                 "spotify_playlist"?: "<22-character id>",
-                "songs": [{"spotify_id", "title", "artist", "bpm"?, "length_sec"}]}}
+                "swedebeat_mix"?: {"id", "length_sec", "offset_sec"?},
+                "songs": [{"spotify_id"?, "title", "artist", "bpm"?, "length_sec"}]}}
 A class without "music" (or with no songs) is a soundless class. A playlist id on a class with
 songs is written as music.spotify_playlist and the document is then format 1.2; without it the
-document stays 1.0.
+document stays 1.0. A Swedebeat mix on a class with songs makes the source swedebeat, writes
+music.swedebeat_mix, gives each song ids.swedebeat_mix (the mix id; no Spotify id is used) and the
+document is format 1.3; a playlist id is then not written (it needs source spotify).
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from typing import Any
 
 FORMAT_VERSION = "1.0"
 FORMAT_VERSION_WITH_PLAYLIST = "1.2"
+FORMAT_VERSION_WITH_MIX = "1.3"
 MAX_TITLE = 80  # the format's name limit (classbeat's class names go to 100)
 
 # The zone scale travels with the class (ADR 0003 section 3). classbeat has zones 1 to 7 and no
@@ -69,7 +73,9 @@ def _interval(src: dict[str, Any], start_ms: int, running: bool) -> dict[str, An
     return out
 
 
-def _songs(songs: list[dict[str, Any]], crossfade_ms: int, class_ms: int) -> list[dict[str, Any]]:
+def _songs(
+    songs: list[dict[str, Any]], crossfade_ms: int, class_ms: int, mix_id: str | None = None
+) -> list[dict[str, Any]]:
     """Windows from the lengths and the crossfade: each song starts `crossfade` before the
     previous one ends; the last window ends at the class end."""
     out: list[dict[str, Any]] = []
@@ -90,7 +96,7 @@ def _songs(songs: list[dict[str, Any]], crossfade_ms: int, class_ms: int) -> lis
         bpm = s.get("bpm")
         if bpm is not None and 30 <= bpm <= 300:  # outside the format's range: unknown
             song["bpm"] = bpm
-        song["ids"] = {"spotify_track": s["spotify_id"]}
+        song["ids"] = {"swedebeat_mix": mix_id} if mix_id else {"spotify_track": s["spotify_id"]}
         out.append(song)
         start = end
     return out
@@ -126,16 +132,23 @@ def convert(fixture: dict[str, Any]) -> dict[str, Any]:
     songs_in = music_in.get("songs") or []
     crossfade_ms = _ms(music_in.get("crossfade_sec", 0))
     soundless = not songs_in
-    music = {
-        "source": "none" if soundless else "spotify",
+    mix_in = None if soundless else music_in.get("swedebeat_mix")
+    music: dict[str, Any] = {
+        "source": "none" if soundless else ("swedebeat" if mix_in else "spotify"),
         "design_crossfade_ms": 0 if soundless else crossfade_ms,
         # Windows are computed from lengths, never measured against audio.
         "song_timing": "missing" if soundless else "estimated",
     }
 
-    playlist = None if soundless else music_in.get("spotify_playlist")
+    playlist = None if soundless or mix_in else music_in.get("spotify_playlist")
     if playlist:
         music["spotify_playlist"] = playlist
+    if mix_in:
+        music["swedebeat_mix"] = {
+            "id": mix_in["id"],
+            "length_ms": _ms(mix_in["length_sec"]),
+            "offset_ms": _ms(mix_in.get("offset_sec", 0)),
+        }
 
     klass: dict[str, Any] = {"title": _text(fixture["name"])[:MAX_TITLE].strip()}
     if fixture.get("description"):
@@ -143,7 +156,13 @@ def convert(fixture: dict[str, Any]) -> dict[str, Any]:
     klass.update({"sport": sport, "length_ms": at})
 
     return {
-        "format_version": FORMAT_VERSION_WITH_PLAYLIST if playlist else FORMAT_VERSION,
+        "format_version": (
+            FORMAT_VERSION_WITH_MIX
+            if mix_in
+            else FORMAT_VERSION_WITH_PLAYLIST
+            if playlist
+            else FORMAT_VERSION
+        ),
         "class": klass,
         "music": music,
         "zone_scale": [{"zone": z, **ZONE_SCALE[z]} for z in sorted(time_in_zone)],
@@ -153,5 +172,7 @@ def convert(fixture: dict[str, Any]) -> dict[str, Any]:
         },
         "segments": segments,
         "intervals": intervals,
-        "songs": [] if soundless else _songs(songs_in, crossfade_ms, at),
+        "songs": []
+        if soundless
+        else _songs(songs_in, crossfade_ms, at, mix_in["id"] if mix_in else None),
     }
