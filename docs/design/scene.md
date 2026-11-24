@@ -632,7 +632,7 @@ the beat and coasting, on every gated moment:
   offset). Every burst S6 asserts stays placed; one dark span ends in a rise frame and one fan turn falls away, no turn moves:
   - *40 s drop* (coasting): gather's window ends 39.0 s, decay 40.0 to 40.25 s, fan turn 42.25 s: no cut.
   - *40.4 s drop* (`COLLIDE_CLASS`, coasting; frame merged onto 40.0 s): the gather's on-step at its
-    hold-still, 39.4 s, would be 0.6 s before the decay, under 1 s + 1 frame, so the beams stay dark and come
+    arrival, about 39.2 s (83° at 30°/s from 36.4 s), would be 0.8 s before the decay, under 1 s + 1 frame, so the beams stay dark and come
     on in the **rise frame at 40.0 s** (B7); fan turn 42.65 s, 2.4 s after the decay.
   - *58 s drop* (locked and coasting): gather's window ends 57.0 s; fan turn would be 60.25 s, after the song
     change at 60 s, so the drop has **no fan turn** ("Moment windows"); the song change's turn is 1.75 s or more
@@ -652,18 +652,19 @@ the beat and coasting, on every gated moment:
   has no case. A burst's decay is measured by its own gate ("The CI gate for a burst's decay"), not here. If the light
   levers of "If a gated run fails" (the turn limit, the movement rates and the looks stay) cannot bring a case
   to 1, #592 stops and reports it to the Orchestrator; the spec does not plan for it.
-- **The zone 7 row's beams are wider and softer** (#618, the first light lever of "If a gated run fails").
-  #622's one failing sway case (the fan, zone 7, 200 bpm, locked, parity 1, Medium) is one beam crossing one
-  region: up 12.7 % at 0.33 s and down at 1.1 s, 0.77 s apart, so a 1 s window holds both. The movement rate
-  (30°/s) and the look stay, so the gap is set by the width the beam sweeps over: about the larger of the
-  beam's width and the region's, over its speed. In the zone 7 row every fixture's spread is **1.4 times** its
-  other rows' (front 0.084, floor 0.07, back 0.098), the same light over the wider cone, so its edge is softer
-  and its peak in a region no higher: the gap becomes 0.77 × 1.4 = **1.08 s**, over 1 s + 1 frame (1.017 s at
-  60 frames a second), and no 1 s window holds the up and the down: **c = 1**. The check above stays the
-  authority. Where it finds the gap set by the region's width instead (widening then does not lengthen it),
-  the next lever in order applies: a lower share of the beams against the haze in that row, until no run of
-  the crossing passes 10 % (at most 0.79 of today's share, since 12.7 % × 0.79 = 10.0 %; the run's share of its
-  larger end falls by no more than the beams' share does, so the gate finds the value).
+- **The zone 7 row's beams carry a lower share against the haze** (#618, the energy lever of "If a gated run
+  fails"). #622's one failing sway case (the fan, zone 7, 200 bpm, locked, parity 1, Medium) is one beam
+  crossing one region: up 12.7 % at 0.33 s and down at 1.1 s, 0.77 s apart, so a 1 s window holds both. The
+  movement rate (30°/s), the look and the beams' shape stay: a cone's spread is its shape, and the zone
+  never drives a shape ("What drives what"), so no row widens its beams. The zone does drive brightness (the
+  ambient glow and the fixtures lit, "Energy by zone"), so the lever is a brightness scalar of the zone 7
+  row: every beam's thrown light, shaft and scatter, at a share **k = 0.75** of today's, the haze glow, the
+  lens, the wall and the text unchanged. Neither run of the crossing may pass 10 %. With the beams' light B
+  and the rest H in the region, a run of Δ = 12.7 % of (H + B) becomes kΔ over H + kB, at least k × 12.7 %,
+  so **k must be below 10 / 12.7 = 0.787**; 0.75 gives at least 9.5 %, and whether it gives at most 10 %
+  depends on H, which the check measures. The sway check above stays the authority: if the crossing still
+  counts 2 at 0.75, the share goes down in steps of 0.05, then fewer lit fixtures in that row, the order of
+  "If a gated run fails"; a crossing whose two runs are each 10 % or less counts 0, so **c ≤ 1**.
 - **Marks beside the sway: gated, not argued.** A window that counts the sway holds at most 2 marks (the
   invariant) and, with the beat, no run. As with a sweep, a mark's step can split one of the sway's runs and c
   is measured without the marks, so the **strict whole-frame gate** holds it: every gated moment at a look at
@@ -686,7 +687,8 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
 2 s hold of "How a beam turns", item 1.
 
 - **The window** starts on the turn's first frame and ends on the frame every beam's drawn direction has
-  reached its target, or where the beams hold still before a drop; moving in black (below), it is the dark
+  reached its target (a gather's included: its arrival, at its hold-still 1 s before the drop at the latest;
+  held on target after it, the gather is not a sweep); moving in black (below), it is the dark
   span, which ends at its on-step, at least 1 s + 1 frame after its off-step. A turn's part is at most **4.15 s**
   (`--scene-sweep-window`: the longest turn, 3.5 s, `--scene-reaim`, plus `TURN_DELAY_MS`, 650 ms) of
   **class-clock time**, so a pause that freezes a turn freezes its window with it. Where the turn is foreseen
@@ -707,15 +709,24 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
   thrown light, its shaft, its haze scatter and any spot it lands, steps to 0 in one frame, and its lens steps
   to one level fixed per fixture (0.5 of its facing peak), not a function of direction. The beams then turn
   **dark**, at the limiter's rate, unchanged (S7). In one frame at the **on-step**, at the later of the frame
-  every beam is on its target (its arrival, or the hold-still before a drop) and **the off-step plus 1 s +
+  every beam is on its target (its arrival, a gather's included, never later than its hold-still) and **the off-step plus 1 s +
   1 frame**, the light steps back to what the frame then draws. The **dark span** runs from the off-step to the
   on-step and is the sweep's window.
-  - **Why it counts 1.** The off-step only lowers light in a region and the on-step only raises it, so each
-    is one monotone run, one change, in every region; the beat lift around a step is a share of at most
+  - **Why it counts 1.** Each step is a single frame, so it is one monotone run, one change, in every region,
+    whichever way that region moves (most go down at the off-step, but a region where a lens was dimmer than
+    its fixed level goes up); the beat lift around a step is a share of at most
     4.5 % of what is lit, so it only extends that run or stays under the 10 % threshold. Inside the span the
     turning beams throw nothing and the lens does not depend on their direction, so they make **0** changes.
     The steps are at least 1 s + 1 frame apart, so no 1 s window holds both: **at most 1 in any 1 s**, for any
     look, zone row, tempo, quality level, parity or cause.
+  - **Near turns share one span too.** Where one span's on-step would come less than 1 s + 1 frame before the
+    next span's off-step (a flip arriving 0.5 s before a song change or a gather starts), two steps would
+    share a 1 s window: 2, and 4 with 2 marks. So the two **join**: the beams stay dark from the first
+    off-step to the last on-step, and the hold runs from 1 s before the one to 1 s after the other. Spans
+    that stay apart have the first's on-step and the second's off-step at least 1 s + 1 frame apart, so no
+    1 s window holds both. Joined or apart, every 1 s window holds at most one step: **1**. The join is
+    decided on the spans as planned without any burst, from the song's moments and the unforeseen causes,
+    so no direction depends on it (rule 4); each join lengthens the dark by less than 1 s + 1 frame.
   - **Overlaps share one span.** Turns that overlap (a phrase flip with a gather, a song change with a flip)
     share one dark span: one off-step on the first turn's first frame, one on-step after the last arrival.
     Each turn still starts on its own frame and runs at its own rate (rule 4), so neither waits; the overlap
@@ -724,8 +735,13 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
   - **The sway and steady light hold around the span.** The motion phase and steady light's clock (the
     haze's drift and the wall's slow wave) are held from **1 s before the off-step to 1 s after the on-step**,
     and resume from where they stopped, never catching up, as in the unforeseen cause's hold (item 1 of "How
-    a beam turns"). Every 1 s window that overlaps a dark span lies inside that hold, so the sway and steady
-    light count **0** in it, and the sweep's 1 is the whole shared 1 there. The hold is placed on the span as
+    a beam turns"). Every 1 s window that overlaps a planned dark span lies inside that hold, so the sway and
+    steady light count **0** in it, and the sweep's 1 is the whole shared 1 there. A cut ("A burst cuts a
+    sweep's window") moves a step into the rise frame but not the hold: in B7 the hold may end before the
+    rise, and in B8 the beams go dark up to 1.25 s + 1 frame before the hold starts. The windows of those cut
+    parts hold a decay frame or lie beside one, and are covered by "The CI gate for a burst's decay" (the
+    decay, the sway and steady light in one shared 1) and by e and f's skip where a decay would lie near the
+    sway at the Beat level and Tempo only, never by this hold. The hold is placed on the span as
     planned without any burst, a function of the song's moments and the unforeseen causes only, so a
     direction never depends on an interval (rule 4). A held phase keeps every target still, so the turn
     converges on a fixed target and its arrival is a function of the song's order, anchors and moments: the
@@ -733,7 +749,15 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
   - **Length.** A turn's part is still at most **4.15 s** from its moment (`--scene-sweep-window`); the dark
     span of one turn is at most 3.5 s from its first frame (the longest turn) and at least 1 s + 1 frame. A
     cut ("A burst cuts a sweep's window") lengthens it by less than 1 s + 1 frame before a decay, or starts it
-    at most 2.25 s early after one.
+    at most 1.25 s + 1 frame early after one (the turn starts less than 1 s after the decay's last frame, and
+    the decay lasts 250 ms).
+  - **An unforeseen cause inside a dark span.** A seek or a jump, a reload, a lost or regained lock or a
+    resume that comes while the beams are dark **keeps them dark**: no step in the cause's frame (its mark
+    is P2's, as everywhere), the 2 s hold, then the new turn from 2 s after the cause, still dark, and one
+    on-step at the later of its arrival and the span's off-step plus 1 s + 1 frame. The span is one span from
+    its first off-step, the motion phase and steady light stay held through it until 1 s after that on-step,
+    and the counts above hold unchanged: one off-step, one on-step, **1**. A pause freezes the span with the
+    class clock.
   - **What it costs.** The beams vanish for at least 1 s at every re-aim: a phrase flip blinks the rig's
     shafts out and back, as a moving head is moved in black on a stage, and the sway stops for 1 s either
     side. The haze glow, the wall and the text stay; the zone's colour, number and name never leave the
@@ -794,8 +818,10 @@ lock** (entering the Beat level, or Tempo only, mid-phrase) and **a resume**. Th
   matrix**, locked with the beat and coasting: every look (fan, cross, sweep, circle, split), every zone's row
   (zones 1 to 7), both phrase parities (and so either half leading), the tempos **60, 90, 120, 150, 180 and
   200 bpm** (where the lifts fall against the turn, and a gather's 8 beats, depend on it), **every quality
-  level** (High, Medium, Low: the fixtures lit), and for two turns that overlap, every offset between their
-  first frames in steps of **at most 250 ms** across the window; it also holds a case of every cause in the
+  level** (High, Medium, Low: the fixtures lit), and for two turns that overlap **or nearly meet**, every
+  offset between their first frames in steps of **at most 250 ms** across the first's window and on to its
+  on-step plus 2 s (so the offsets where the spans join, at a gap under 1 s + 1 frame, and where they stay
+  apart, at 1 s + 1 frame and over, are both measured, and a frame step of 1/60 s each side of the join); it also holds a case of every cause in the
   list above. It **fails if any case counts more than 1**, and **fails if a cause has no
   measured case**. If the light levers of "If a gated run fails" (the turn limit, the movement rates and the
   looks stay) cannot bring a case to 1, #592 stops and reports it to the Orchestrator; the spec does not plan
@@ -1220,7 +1246,7 @@ that finds a fourth change is fixed by a rule here, never by an exception.
 
 **If a gated run fails,** the fix is in the light or the schedule, never in the measure and never
 by an exception: for beat-like light, a lower amplitude; for steady light, a slower haze drift and wall wave; for the looks' sway and for a sweep, wider and softer
-beams, a lower share of the beams against the haze, then fewer lit fixtures in that zone's row, in
+beams in every row alike (the zone never drives a shape), a lower share of the beams against the haze, then fewer lit fixtures in that zone's row, in
 that order (the turn limit, the movement rates and the looks stay); for scheduled changes, the
 scheduler's order above. A pull request reports every gated run, by moment and state, with its
 worst region and the kind of light that made each change.
