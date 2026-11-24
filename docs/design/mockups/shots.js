@@ -122,6 +122,16 @@ const playSite = (name, w) => ({
   file: `play-${name}.html`, png: `play-${name}-${w}.png`, w, h: 0, auto: true, room: false, presenter: true, site: true, save: w === 390 || w === 1024,
 });
 
+// The Android app's own screens (app.md): every page and class-screen state at the reference
+// phone each way up (kept), and at the smallest phone and a tablet each way up (checked). A form
+// state is checked in portrait only, as the rider page's. The external display at two room sizes (kept).
+const { NAMES: APP_NAMES, FORMS: APP_FORMS, ROOMS: APP_ROOMS, DISPLAYS: APP_DISPLAYS } = require('./app-pages');
+const APP_SIZES = [[390, 844], [844, 390], [360, 640], [640, 360], [768, 1024], [1024, 768]];
+const appShot = (name, w, h) => ({
+  file: `app-${name}.html`, png: `app-${name}-${w}x${h}.png`, w, h, room: false, app: true, appRoom: APP_ROOMS.includes(name),
+  display: APP_DISPLAYS.includes(name), form: APP_FORMS.includes(name), save: APP_DISPLAYS.includes(name) || (w === 390 && h === 844) || (w === 844 && h === 390),
+});
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -168,6 +178,8 @@ const SHOTS = [
   playRoom('running', 390, 664), // the browser's bars showing: full screen not available
   playRoom('running-band', 390, 844, false, 'reduce'), // the band appears and goes at once
   ...PLAY_SITE.flatMap((n) => [390, 768, 844, 1024].map((w) => playSite(n, w))),
+  ...APP_NAMES.filter((n) => !APP_DISPLAYS.includes(n)).flatMap((n) => APP_SIZES.filter(([w, h]) => !APP_FORMS.includes(n) || h > w).map(([w, h]) => appShot(n, w, h))),
+  ...APP_DISPLAYS.flatMap((n) => [[1920, 1080], [1280, 720]].map(([w, h]) => appShot(n, w, h))),
 ].filter((s) => !ONLY || ONLY.test(s.png));
 
 module.exports = { SHOTS, STATES, MORE, SIZES, WORST, CONTROLS, FOLLOW };

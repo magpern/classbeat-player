@@ -1,0 +1,55 @@
+/* The Android app's own screens (docs/design/app.md): what they add to companion.css and rider.css.
+   Reference mock-up only. Native screens (data-layer="native") are drawn by Kotlin with these
+   tokens and the bundled fonts; the web view's pages are the rider page's pages.
+   Colours: tokens.css only. Hue only on things that stand for a zone: none here. */
+
+/* The mode tag: which mode the app is in, in words, at the top of a page. */
+.page p.mode { font-size: var(--c-label); color: var(--light-2); font-weight: 700; display: flex; align-items: center; gap: 0.5em; }
+.page p.mode::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-2); flex: none; }
+
+/* The mode strip: under a line, the last thing on a start page. One key names the other mode. */
+.strip { display: flex; flex-direction: column; gap: max(12px, 1.4vh); border-top: 2px solid var(--stage-line); padding-top: max(12px, 2vh); margin-top: max(12px, 1vh); }
+.strip .sl { font-size: var(--c-label); color: var(--light-2); line-height: 1.2; }
+
+/* The pairing code: big enough to copy from at arm's length. */
+.pcode { display: flex; flex-direction: column; gap: 0.6vh; background: var(--stage-raised); border: 2px solid var(--stage-line); border-radius: 8px; padding: 1.4vh 4vw; }
+@media (orientation: landscape) { .pcode { padding: 1.6vh 1.6vw; } }
+.pcode .lab { font-size: var(--c-label); color: var(--light-2); font-weight: 700; }
+.pcode .v { font-size: var(--c-value); letter-spacing: 0.12em; line-height: 1; white-space: nowrap; }
+.pcode.dim .v { color: var(--light-2); }
+.page .left { font-size: var(--c-label); color: var(--light-2); }
+
+/* Numbered steps. */
+.steps { list-style: none; display: flex; flex-direction: column; gap: max(8px, 1.2vh); margin: 0; padding: 0; }
+.steps li { display: grid; grid-template-columns: 1.6em minmax(0, 1fr); column-gap: 0.6em; align-items: baseline; font-size: var(--c-label); }
+.steps .sn { font-size: var(--c-minor); line-height: 1; }
+.steps .st { font-size: var(--c-label); line-height: 1.25; }
+
+/* A grey note with the square marker: a fact or a choice, not a fault. */
+.page p.anote { font-size: var(--c-label); color: var(--light-2); display: flex; gap: 0.6em; align-items: baseline; line-height: 1.25; }
+.page p.anote::before { content: ""; width: 0.7em; height: 0.7em; flex: none; border: 2px solid currentColor; }
+
+/* Two keys stacked: the main one first. */
+.stack { display: flex; flex-direction: column; gap: var(--c-key-gap); }
+
+/* A key that has the focus when the screen opens (the safe answer). */
+.key.focus { outline: 3px solid var(--light-1); outline-offset: 3px; }
+
+/* The class list in the app, laid out for the phone: one key per class. */
+.rows { display: flex; flex-direction: column; gap: var(--c-key-gap); }
+.key.row { align-items: flex-start; text-align: left; padding: 1vh 4vw; gap: 0.4vh; }
+@media (orientation: landscape) { .key.row { padding: 1vh 1.6vw; } }
+.status { display: flex; align-items: center; gap: 0.6em; font-size: var(--c-label); }
+.status .ok { color: var(--light-1); font-weight: 700; display: inline-flex; align-items: center; gap: 0.5em; }
+.status .ok::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-1); flex: none; }
+/* A status line in the minor tier (pair-done). */
+.status.m { font-size: var(--c-minor); }
+
+/* A tablet held sideways (4:3, 16:10): the companion's landscape sizes are capped by the width for
+   a 2:1 phone, which leaves them under the landscape floors here. The heights alone set them. */
+@media (orientation: landscape) and (max-aspect-ratio: 8/5) {
+  :root { --c-value: 7.6vh; --c-text: 7.2vh; --c-text-min: 5.8vh; --c-minor: 5.4vh; --c-label: 4.3vh; }
+}
+
+/* The focus ring stands 6 px outside a field: keep the label under it clear of the ring. */
+.page.form .field:has(.input.focus) { margin-bottom: 8px; }
