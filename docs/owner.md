@@ -83,7 +83,8 @@ with other work; nothing in the development loop waits for an answer.
   services, with no write to any sensor and the app's own device chooser; (2) one live message,
   `rider_reading`, from a rider to the instructor's computer only, with heart rate, cadence and
   power at most once a second, shown in the presenter window only, in join order and never
-  ranked, and never stored. The phone app's native sensors would follow (1). Until you decide, the
+  ranked, and never stored. With one display (the usual studio), riders' readings would not be
+  shown at all. The phone app's native sensors would follow (1). Until you decide, the
   instructor's sensor panel shows "unavailable" and riders' readings stay on their own phones.
   Built now: the rider page reads the rider's own sensor and shows it to that rider only.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
