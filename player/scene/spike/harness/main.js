@@ -5,6 +5,7 @@ const { app, BrowserWindow, ipcMain, protocol, screen, session } = require('elec
 const fs = require('node:fs');
 const path = require('node:path');
 const { createClock } = require('./clock');
+const { createStatePump } = require('./state-pump');
 const { CLASS_DEF, ZONES } = require('./class-def');
 const { createRecovery } = require('./recovery');
 const { parseCommand } = require('./commands');
@@ -278,11 +279,11 @@ app.whenReady().then(() => {
   createWindows();
   if (process.env.SPIKE_START_AT_S) clock.seek(Number(process.env.SPIKE_START_AT_S) * 1000); // test/screenshots only
   if (process.env.SPIKE_AUTOSTART === '1') clock.start();
-  setInterval(() => {
+  createStatePump({ send: () => {
     const s = state();
     for (const w of [presenter, overlay, room]) if (live(w) && !w.webContents.isCrashed()) w.webContents.send('state', s);
     if (native) native.send(sceneState());
-  }, 100);
+  } }).start();
   if (TEST) process.spikeTest = { getNative: () => native, getNativeBounds: () => nativeBounds, restartNativeIfMoved, getTextH: () => textH, clock, getRoom: () => room, getRoomMode: () => roomMode, command, state, getController: () => presenter || overlay || room, getOverlay: () => overlay, isOneScreen: () => oneScreen };
   app.on('window-all-closed', () => app.quit());
 });
