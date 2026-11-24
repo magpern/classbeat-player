@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The locked shell (issue #627). No permission is asked for here: the page is bundled and served
      from the app's assets, so the app needs no INTERNET either. ManifestTest checks the merged
-     manifest against PermissionPolicy's allowlist. Backup and cleartext are off. -->
+     manifest against PermissionPolicy's allowlist. Backup and cleartext are off. The notification
+     listener (issue #632) is not a permission the app asks for: only the system may bind it, and
+     it is disabled until the instructor turns following on in instructor mode. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -26,5 +28,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Empty: it reads no notification (FollowListener.kt). Only the system can bind it. -->
+        <service
+            android:name=".follow.FollowListener"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

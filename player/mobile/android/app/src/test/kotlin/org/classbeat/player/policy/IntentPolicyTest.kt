@@ -23,6 +23,11 @@ class IntentPolicyTest {
             "getClass" to Mode.INSTRUCTOR,
             "unpair" to Mode.INSTRUCTOR,
             "pairAgain" to Mode.INSTRUCTOR,
+            "followAccess" to Mode.INSTRUCTOR,
+            "openFollowSetting" to Mode.INSTRUCTOR,
+            "follow" to Mode.INSTRUCTOR,
+            "unfollow" to Mode.INSTRUCTOR,
+            "reading" to Mode.INSTRUCTOR,
         )
         assertEquals(expected, IntentPolicy.INTENTS.mapValues { it.value.mode })
     }
@@ -32,7 +37,10 @@ class IntentPolicyTest {
         val rider = IntentPolicy.of(Mode.RIDER)
         val instructor = IntentPolicy.of(Mode.INSTRUCTOR)
         assertEquals(setOf("instructorWay", "askInstructorMode"), rider)
-        assertEquals(setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain"), instructor)
+        assertEquals(
+            setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain", "followAccess", "openFollowSetting", "follow", "unfollow", "reading"),
+            instructor,
+        )
         assertTrue(rider.intersect(instructor).isEmpty())
         assertEquals(IntentPolicy.INTENTS.keys, rider + instructor)
     }
@@ -79,6 +87,18 @@ class IntentPolicyTest {
 
     @Test
     fun `pairAgain rejects an unexpected argument`() = rejectsExtra("pairAgain")
+
+    @Test
+    fun `the follow intents take no argument, so the page names no app, session or package`() {
+        for (name in listOf("followAccess", "openFollowSetting", "follow", "unfollow", "reading")) {
+            rejectsExtra(name)
+            for (extra in listOf("package", "app", "session", "token")) {
+                assertEquals("$name $extra", Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(Mode.INSTRUCTOR, Mode.INSTRUCTOR, name, mapOf(extra to "x")))
+            }
+            // Notification access is asked for only in instructor mode: never from rider mode's plugin or page.
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(Mode.RIDER, Mode.RIDER, name, emptyMap()))
+        }
+    }
 
     @Test
     fun `getClass takes one id, a string, and nothing else`() {

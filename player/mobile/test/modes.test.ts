@@ -61,5 +61,10 @@ test("the bridge names exactly the native intents, none taking an argument", () 
     ["syncNow", ""],
     ["unpair", ""],
     ["pairAgain", ""],
+    ["followAccess", ""],
+    ["openFollowSetting", ""],
+    ["follow", ""],
+    ["unfollow", ""],
+    ["reading", ""],
   ]);
 });

@@ -63,7 +63,7 @@ class ManifestTest {
     }
 
     @Test
-    fun `only the launcher activity and the DUMP-guarded profile receiver are exported`() {
+    fun `only the launcher activity, the DUMP-guarded profile receiver and the system-bound listener are exported`() {
         val exported = listOf("activity", "activity-alias", "service", "receiver", "provider")
             .flatMap(::elements)
             .filter { it.attr("exported") == "true" }
@@ -72,8 +72,19 @@ class ManifestTest {
             mapOf(
                 "org.classbeat.player.MainActivity" to null,
                 "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
+                // Only the system holds this permission, so only the system can bind the listener.
+                "org.classbeat.player.follow.FollowListener" to "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
             ),
             exported,
         )
+    }
+
+    @Test
+    fun `the notification listener is the only service, starts disabled and takes only the listener action`() {
+        val service = elements("service").single()
+        assertEquals("org.classbeat.player.follow.FollowListener", service.attr("name"))
+        assertEquals("false", service.attr("enabled"))
+        val actions = service.getElementsByTagName("action").let { n -> (0 until n.length).map { (n.item(it) as Element).attr("name") } }
+        assertEquals(listOf("android.service.notification.NotificationListenerService"), actions)
     }
 }
