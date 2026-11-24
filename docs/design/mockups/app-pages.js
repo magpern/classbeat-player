@@ -47,13 +47,25 @@ add('no-lock', 'app-modes.md', 'App: a screen lock is needed', 'State: "Switch t
 
 const CLASSES = [['Tempo builder', '45 min · 11 songs'], ['Hill repeats', '50 min · 12 songs'], ['Friday recovery ride', '30 min · 8 songs']];
 const row = ([t, f]) => `<button class="key row" data-action="open_class"><span class="kl" data-tier="minor" data-lines="2">${A.esc(t)}</span><span class="kh" data-tier="label">${A.esc(f)}</span></button>`;
-add('instructor-start', 'app-modes.md', 'App: instructor mode', 'State: instructor mode after the screen lock, the class list (class-list.md, laid out for the phone) and the mode strip. No strip while a class is open.',
-  page(mode('Instructor mode') + h1('Classes') + `<div class="status">${T('label', 'Up to date', 1, ' class="ok"')}</div>`,
+// "Unpair this phone": an outlined key (64 px high, words at --c-minor) on the status row.
+const unpairKey = '<button class="key quiet" data-action="unpair"><span class="kl" data-tier="minor" data-lines="2">Unpair this phone</span></button>';
+add('instructor-start', 'app-modes.md', 'App: instructor mode', 'State: instructor mode after the screen lock, the class list (class-list.md, laid out for the phone) and the mode strip. "Unpair this phone" is on the status row. No strip while a class is open.',
+  page(mode('Instructor mode') + h1('Classes') + `<div class="status">${T('label', 'Up to date', 1, ' class="ok"')}${unpairKey}</div>`,
+    `<div class="rows">${CLASSES.map(row).join('')}</div>` + strip('Switch to rider mode')));
+
+// The pairing ran out (class-list.md "Pairing ran out"): the plate stands in for the status line.
+add('instructor-start-expired', 'app-modes.md', 'App: instructor mode, pairing ran out', 'State: the saved classes stay; the server said the token expired. The plate carries the words and "Pair again"; the status line is hidden. At 360x640 with three classes the page may scroll (A8).',
+  page(mode('Instructor mode') + h1('Classes') + `<div class="status">${unpairKey}</div>`
+    + plate('The pairing has run out', 'Pair again to get new and changed classes. Saved classes still play.').replace(/<\/div>$/, key('pair_again', 'Pair again') + '</div>'),
     `<div class="rows">${CLASSES.map(row).join('')}</div>` + strip('Switch to rider mode')));
 
 add('to-rider-ask', 'app-modes.md', 'App: switch to rider mode?', 'State: "Switch to rider mode" pressed in instructor mode. Native question; "Stay" has the focus. Back or no answer is "Stay".',
   native(page(mode('Instructor mode') + h1('Switch to rider mode?') + p('The class list closes and the music is no longer followed. Coming back to instructor mode needs your screen lock.'),
     duo(key('stay', 'Stay', { main: true }), key('switch_mode', 'Switch')).replace('class="key main"', 'class="key main focus"'))));
+
+add('unpair-ask', 'app-modes.md', 'App: unpair this phone?', 'State: "Unpair this phone" pressed in instructor mode. Native question; "Stay" has the focus. Back or leaving the app is "Stay". "Unpair" removes the saved classes and goes to the switching screen, then rider mode.',
+  native(page(mode('Instructor mode') + h1('Unpair this phone?') + p('The classes saved on this phone are removed and instructor mode closes. Teaching from it again needs a new pairing.'),
+    duo(key('stay', 'Stay', { main: true }), key('unpair', 'Unpair')).replace('class="key main"', 'class="key main focus"'))));
 
 add('switching', 'app-modes.md', 'App: switching to rider mode', 'State: "Switch" pressed. Native screen while the follower stops, the connections close and the web view reloads fresh (ADR 0011 section 1). Under a second.',
   native(page(mode('Rider mode') + h1('Switching to rider mode') + work('Closing instructor mode'), '')));
