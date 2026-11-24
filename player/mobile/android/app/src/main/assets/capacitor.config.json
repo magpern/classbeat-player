@@ -1,0 +1,20 @@
+{
+  "appId": "org.classbeat.player",
+  "appName": "classbeat",
+  "webDir": "public",
+  "loggingBehavior": "debug",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false,
+    "resolveServiceWorkerRequests": false
+  },
+  "plugins": {
+    "CapacitorCookies": { "enabled": false },
+    "CapacitorHttp": { "enabled": false }
+  }
+}

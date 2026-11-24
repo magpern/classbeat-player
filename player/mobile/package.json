@@ -1,0 +1,30 @@
+{
+  "name": "classbeat-player-mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The phone and tablet app's locked Capacitor shell (ADR 0011, issue #627): the bundled room screen on fakes.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node --import tsx build.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "classformat": "file:../../schema/ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "esbuild": "0.28.1",
+    "eslint": "10.13.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

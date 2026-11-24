@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Capacitor reads its Cordova preferences from here. DisableDeploy keeps the bridge from serving a
+     web bundle from app storage (its live-update path): the page is always the one in the APK.
+     No <feature>: no Cordova plugin is declared. -->
+<widget version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+    <preference name="DisableDeploy" value="true" />
+</widget>

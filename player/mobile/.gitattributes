@@ -1,0 +1,4 @@
+# The Gradle wrapper is spike 3's, byte for byte: checkouts must not change its line endings.
+android/gradlew text eol=lf
+android/gradle/wrapper/gradle-wrapper.properties text eol=lf
+android/gradlew.bat -text

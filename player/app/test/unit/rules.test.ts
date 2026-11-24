@@ -2,7 +2,7 @@
 // Rule 2: no equipment control. Rule 3: no audio playback, no Spotify interface.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { REPO } from "./fixtures.ts";
 
@@ -111,4 +111,115 @@ test("source files stay under about 300 lines (150 for the clock and link rule m
 test("nothing is imported from the spikes", () => {
   const hits = sources.filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path);
   assert.deepEqual(hits, []);
+});
+
+// The phone shell (player/mobile, issue #627) is held to the same rules: its TypeScript to the
+// list above, with no exception, and its Kotlin to the list below. Installed packages, build
+// output and the bundled page (built from the sources checked here) are not sources. They are
+// skipped by their exact paths, so a source folder that happens to be called "build" or "public"
+// elsewhere is still checked.
+const MOBILE = join(REPO, "player", "mobile");
+const MOBILE_SKIP = new Set(
+  ["node_modules", "android/.gradle", "android/.kotlin", "android/build", "android/app/build", "android/app/src/main/assets/public"].map((p) => join(...p.split("/"))),
+);
+function mobileFiles(dir: string, ext: RegExp): string[] {
+  return readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n);
+    if (statSync(p).isDirectory()) return MOBILE_SKIP.has(relative(MOBILE, p)) ? [] : mobileFiles(p, ext);
+    return ext.test(n) ? [p] : [];
+  });
+}
+const mobileSource = (ext: RegExp) => mobileFiles(MOBILE, ext).map((p) => ({ path: relative(MOBILE, p), text: readFileSync(p, "utf8") }));
+const mobileTs = mobileSource(/\.(ts|mjs|js|html)$/);
+const mobileKt = mobileSource(/\.(kt|kts|java)$/);
+const MANIFEST = join(MOBILE, "android", "app", "src", "main", "AndroidManifest.xml");
+
+test("the phone shell has TypeScript and Kotlin sources to check", () => {
+  assert.ok(mobileTs.some((s) => s.path === join("src", "main.ts")));
+  assert.ok(mobileKt.some((s) => s.path.endsWith("BridgeLockdown.kt")));
+  assert.ok(![...mobileTs, ...mobileKt].some((s) => [...MOBILE_SKIP].some((skip) => s.path.startsWith(skip + sep))));
+  // Only those exact paths are skipped: the same names one level away are sources.
+  for (const near of ["build", "public", join("android", "app", "src", "main", "build"), join("src", "public")]) {
+    assert.ok(!MOBILE_SKIP.has(near), near);
+  }
+});
+
+for (const [what, re] of FORBIDDEN) {
+  test(`no ${what} anywhere in the phone shell's TypeScript`, () => {
+    const hits = mobileTs.filter((s) => re.test(code(s.text))).map((s) => s.path);
+    assert.deepEqual(hits, []);
+  });
+}
+
+// The Kotlin counterparts of the desktop's checks above: audio in or out (the desktop's audio
+// elements, AudioContext and MediaSource; issue #627 names AudioRecord), any Spotify SDK, the
+// camera (rule 12; the manifest test also bars its permission), equipment control and the network.
+const KOTLIN_FORBIDDEN: readonly [string, RegExp][] = [
+  [
+    "audio playback or recording (rule 3)",
+    /\bandroidx?\.media3?\b|\bMediaPlayer\b|\bexoplayer\w*|\bAudioTrack\b|\bAudioRecord\b|\bMediaRecorder\b|\bSoundPool\b|\bMediaSession\w*|\bAudioManager\b|\bJetPlayer\b|\bAsyncPlayer\b|\bToneGenerator\b|\bRingtone\w*|\bVideoView\b|\bMediaCodec\b|\bMediaExtractor\b|\bAAudio\b|\boboe\b/i,
+  ],
+  ["a Spotify interface (rule 3)", /spotify/i],
+  ["the camera (rule 12)", /\bandroid\.hardware\.camera2?\b|\bandroidx\.camera\b|\bCameraManager\b|\bCameraDevice\b|\bACTION_IMAGE_CAPTURE\b|\bACTION_VIDEO_CAPTURE\b/],
+  ["equipment control (rule 2)", /\bwriteCharacteristic\b|\bBluetoothGatt\b|\bBluetoothSocket\b|\bUsbManager\b|\bandroid\.hardware\.usb\b|\bresistance\b|\bincline\b|\bsetSpeed\b|\bbrake\b/i],
+  [
+    "a network request",
+    /\bHttpURLConnection\b|\bHttpsURLConnection\b|\bURLConnection\b|\bopenConnection\b|\bopenStream\b|\bokhttp3?\b|\bjava\.net\.(Socket|URL|http)\b|\bDatagramSocket\b|\bHttpClient\b|\bWebSocket\b|\bktor\b|\bretrofit2?\b|\bvolley\b|\bcronet\b|\bDownloadManager\b/i,
+  ],
+];
+
+for (const [what, re] of KOTLIN_FORBIDDEN) {
+  test(`no ${what} anywhere in the phone shell's Kotlin`, () => {
+    const hits = mobileKt.filter((s) => re.test(code(s.text))).map((s) => s.path);
+    assert.deepEqual(hits, []);
+  });
+}
+
+test("the Kotlin guard catches what it looks for, and not comments or java.net.URI", () => {
+  const samples: readonly string[][] = [
+    [
+      "val p = MediaPlayer()",
+      "val r = android.media.AudioRecord(1, 44100, 16, 2, 1024)",
+      "val r = AudioRecord.Builder().build()",
+      "val m = MediaRecorder(context)",
+      "import android.media.MediaRecorder",
+      "val t = AudioTrack.Builder().build()",
+      "import androidx.media3.exoplayer.ExoPlayer",
+      "import com.google.android.exoplayer2.SimpleExoPlayer",
+      "val s = MediaSessionCompat(c, \"x\")",
+      "val tone = ToneGenerator(0, 100)",
+      "val pool = SoundPool.Builder().build()",
+    ],
+    ["import com.spotify.android.appremote.api.SpotifyAppRemote"],
+    ["import android.hardware.camera2.CameraManager", "import androidx.camera.core.ImageCapture", "Intent(MediaStore.ACTION_IMAGE_CAPTURE)"],
+    ["gatt.writeCharacteristic(c)", "socket: BluetoothSocket", "import android.hardware.usb.UsbDevice"],
+    ["URL(u).openConnection()", "URL(u).openStream()", "import java.net.http.HttpClient", "DatagramSocket()", "import okhttp3.OkHttpClient"],
+  ];
+  assert.equal(samples.length, KOTLIN_FORBIDDEN.length);
+  KOTLIN_FORBIDDEN.forEach(([what, re], i) => {
+    for (const sample of samples[i]) assert.match(code(sample), re, `${what}: ${sample}`);
+  });
+  for (const [what, re] of KOTLIN_FORBIDDEN) {
+    assert.doesNotMatch(code("// a MediaPlayer or spotify or writeCharacteristic is never used"), re, what);
+    assert.doesNotMatch(code("import java.net.URI\nval u = URI(url).normalize()"), re, what);
+  }
+});
+
+test("the phone shell's Android manifest asks for no permission", () => {
+  assert.doesNotMatch(code(readFileSync(MANIFEST, "utf8")), /<uses-permission/);
+  assert.match(code('<uses-permission android:name="android.permission.CAMERA" />'), /<uses-permission/);
+});
+
+test("the phone shell imports nothing from the spikes", () => {
+  const hits = [...mobileTs, ...mobileKt].filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path);
+  assert.deepEqual(hits, []);
+});
+
+test("the phone shell's source files stay under about 300 lines (150 for its policy modules)", () => {
+  const isTest = (p: string): boolean => p.startsWith(`test${sep}`) || p.includes(`${sep}src${sep}test${sep}`);
+  for (const s of [...mobileTs, ...mobileKt].filter((f) => !isTest(f.path))) {
+    const lines = s.text.split("\n").length;
+    const cap = s.path.includes(`${sep}policy${sep}`) ? 150 : 300;
+    assert.ok(lines <= cap, `${s.path}: ${lines} lines`);
+  }
 });

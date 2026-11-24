@@ -1,0 +1,14 @@
+node_modules/
+.gradle/
+.kotlin/
+build/
+local.properties
+# The bundled page is built by `npm run build` (build.mjs), never committed.
+android/app/src/main/assets/public/
+*.apk
+*.aab
+# Never commit signing material: builds are debug-signed with Gradle's default key, or unsigned.
+*.jks
+*.keystore
+*.p12
+.env
