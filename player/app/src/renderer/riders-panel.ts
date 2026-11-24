@@ -4,6 +4,7 @@
 // number, no time, no colour and no figure per rider, and rows are never sorted or numbered. The
 // drawer opens and closes on the instructor's press only. This panel is the presenter window's
 // alone; the room window has no part of it.
+import { DRAWER_OPENED } from "./drawers.ts";
 import type { LivePanelView } from "../core/live/panel-view.ts";
 import { RIDERS_EMPTY, RIDERS_NOTE } from "../core/live/riders-view.ts";
 import type { RiderRow, RidersView } from "../core/live/riders-view.ts";
@@ -170,6 +171,13 @@ export function mountRiders(api: RidersApi): void {
   current = api;
   $("riders-toggle").addEventListener("click", () => {
     ui.open = !ui.open;
+    if (ui.open) document.dispatchEvent(new CustomEvent(DRAWER_OPENED, { detail: "riders" }));
+    rerender();
+  });
+  // Only one drawer is open at a time: the sensors drawer opening closes this one.
+  document.addEventListener(DRAWER_OPENED, (e) => {
+    if ((e as CustomEvent<string>).detail === "riders") return;
+    ui.open = false;
     rerender();
   });
   $("riders-on").addEventListener("click", () => void api.startLive().then(() => api.riders().then(render)));

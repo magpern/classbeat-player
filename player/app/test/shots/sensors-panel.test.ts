@@ -252,3 +252,64 @@ test("the panel's buttons call the source and nothing else; typed numbers give t
   }
 });
 
+
+test("a fresh copy of the snapshot every 100 ms rebuilds nothing: the focused button keeps its focus and a press lands", { timeout: 60_000 }, async () => {
+  const o = await harness([1000, 720]);
+  try {
+    const { page } = o;
+    await page.waitForSelector("#sensors");
+    await drive(page, SHOTS[5]!);
+    await page.click("#sensors-toggle");
+    const button = '[aria-label="Reconnect Polar H10 A1B2C3"]';
+    await page.evaluate((sel) => {
+      const b = document.querySelector(sel) as HTMLButtonElement;
+      (b as unknown as { mark: number }).mark = 1;
+      b.focus();
+    }, button);
+    // What the shell sends: the same interval and zone as a new object, ten times a second.
+    await page.evaluate(
+      ({ iv, zone }) => {
+        const w = window as unknown as { __sensors: { setPlan(p: unknown): void } };
+        setInterval(() => w.__sensors.setPlan(JSON.parse(JSON.stringify({ interval: iv, zone }))), 100);
+      },
+      { iv: IV, zone: ZONE },
+    );
+    await page.waitForTimeout(1000);
+    const kept = await page.evaluate((sel) => {
+      const b = document.querySelector(sel) as HTMLButtonElement | null;
+      return { same: (b as unknown as { mark?: number } | null)?.mark === 1, focused: document.activeElement === b };
+    }, button);
+    assert.deepEqual(kept, { same: true, focused: true }, "the same button, still focused");
+    await page.click(button);
+    const calls = await page.evaluate(() => (window as unknown as { __fake: { calls: string[] } }).__fake.calls);
+    assert.deepEqual(calls, ["reconnect h"]);
+    assert.deepEqual(o.errors, []);
+  } finally {
+    await o.close();
+  }
+});
+
+test("only one drawer is open at a time: the sensors drawer and the riders drawer", { timeout: 60_000 }, async () => {
+  const o = await harness([1000, 720]);
+  try {
+    const { page } = o;
+    await page.waitForSelector("#sensors");
+    const view = { shown: true, on: true, count: "2", word: null, line: null, dim: false, active: true, locked: false, lockText: "Lock joining", lockSub: "Joining is open", canNewCode: true, newCodeSub: "Old code stops working", canTurnOn: false, offLine: null, rows: [{ id: "r1", nickname: "Anna" }, { id: "r2", nickname: "Bo" }] };
+    await page.evaluate((v) => void ((window as unknown as { __riders: unknown }).__riders = v), view);
+    await drive(page, SHOTS[3]!);
+    await page.waitForSelector("#riders-toggle:not([hidden])");
+    const open = async () => ({ riders: await page.isVisible("#riders-drawer"), sensors: await page.isVisible("#sensors-drawer") });
+    await page.click("#riders-toggle");
+    assert.deepEqual(await open(), { riders: true, sensors: false });
+    await page.click("#sensors-toggle");
+    assert.deepEqual(await open(), { riders: false, sensors: true }, "opening sensors closes riders");
+    await page.waitForTimeout(700);
+    assert.deepEqual(await open(), { riders: false, sensors: true }, "and the riders refresh does not reopen it");
+    assert.equal(await page.isVisible("#riders-row"), true, "the riders row and count stay in view");
+    await page.click("#riders-toggle");
+    assert.deepEqual(await open(), { riders: true, sensors: false }, "opening riders closes sensors");
+    assert.deepEqual(o.errors, []);
+  } finally {
+    await o.close();
+  }
+});
