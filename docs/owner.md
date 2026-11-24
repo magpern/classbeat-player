@@ -51,6 +51,16 @@ with other work; nothing in the development loop waits for an answer.
   music" is not on the class list; and a rider's nickname is never remembered (ADR 0007), while FTP
   and maximum heart rate are kept only with "Remember on this phone" and are cleared when the
   rider leaves, the app changes mode, the class ends or the rider is dropped (#633).
+- **The phone app's backend calls and the Kotlin network guard (#631, #649, 2026-11-24).** ADR 0011
+  (sections 3 and 5) has the app's native code make the fixed backend calls (pairing, the device
+  check, the class list and sync) with the device token, because the web view can reach no network.
+  The guard added in #637 forbids every network call in the app's Kotlin code, with no exception.
+  Agents do not loosen a guard, so this is yours, as the desktop's live connection was (#173).
+  Proposal, like option 1 there: one file (`BackendTransport.kt`) may use `HttpsURLConnection`, only
+  to the backend address fixed in the build, with no redirects, a 64 KiB answer limit and a 10 s
+  timeout; every other file keeps the full check, and a test pins it. Until you decide, the app is
+  built with a stand-in that fails every backend call as offline, so pairing shows its offline
+  state; nothing else waits.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
