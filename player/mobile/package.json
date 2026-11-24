@@ -21,8 +21,10 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.1",
+    "@types/three": "0.170.0",
     "esbuild": "0.28.1",
     "eslint": "10.13.0",
+    "three": "0.170.0",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1"
