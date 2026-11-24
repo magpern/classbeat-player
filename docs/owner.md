@@ -61,6 +61,17 @@ with other work; nothing in the development loop waits for an answer.
   timeout; every other file keeps the full check, and a test pins it. Until you decide, the app is
   built with a stand-in that fails every backend call as offline, so pairing shows its offline
   state; nothing else waits.
+- **The phone app's music follower and the Kotlin audio and Spotify guard (#632, #653, 2026-11-24).**
+  ADR 0011 (section 6) has the app follow Spotify by reading its media session (the song and
+  whether it plays, never the audio). The guard added in #637 bans every `android.media` and
+  `MediaSession` name and the word "spotify" in all the app's Kotlin code, so the reader cannot be
+  written without an exception. Proposal, like #173: one file (`SpotifySessionReader.kt`) may name
+  the media-session and metadata types and the package `com.spotify.music`; every other pattern
+  (audio playback and recording, players, the network) stays checked in that file, every other
+  file keeps the full check, and a test pins it. New guards come with it: the notification listener
+  stays empty, the package filter comes before any read, and no Spotify SDK or `spotify:` link.
+  Until you decide, the app is built with a stand-in reader that reports "unavailable", so the
+  phone runs on the manual clock; nothing else waits.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
