@@ -11,6 +11,7 @@ import { contentHash } from "classformat/src/index.ts";
 import { screenOf } from "../../src/core/list/screen.ts";
 import type { PairingView } from "../../src/core/pairing/view.ts";
 import { EMPTY_SNAPSHOT } from "../../src/core/snapshot.ts";
+import { MIX_DISABLED } from "../../src/core/mix/view.ts";
 import type { HttpAnswer } from "../../src/core/pairing/protocol.ts";
 import { createListController } from "../../src/main/list/list-controller.ts";
 import { classCache, CLASSES_DIR } from "../../src/main/sync/cache.ts";
@@ -57,7 +58,7 @@ test("Ann's classes are never shown to Bob, before or after sync has wiped them"
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => EMPTY_SNAPSHOT });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => EMPTY_SNAPSHOT, mix: () => MIX_DISABLED });
   /** Everything the window is sent and everything it would paint at this moment. */
   const shown = (): string => {
     const v = list.view();
@@ -106,7 +107,7 @@ test("Ann plays a class, the server removes it, then Bob pairs: nothing of Ann's
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never, mix: () => MIX_DISABLED });
   const shown = (): string => {
     const v = list.view();
     return JSON.stringify([v, screenOf(v, { filter: "", selectedId: null, lastStartedId: null }, NOW)]);
@@ -160,7 +161,7 @@ test("a newer version of the class being played applies once it ends", async () 
     setTimer: () => undefined,
     clearTimer: () => undefined,
   });
-  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never });
+  const list = createListController({ sync, pairing: { view: () => pairing }, account: () => credential?.account ?? null, open: () => ({ ...EMPTY_SNAPSHOT, doc: { class: {} } }) as never, mix: () => MIX_DISABLED });
   sync.start();
   await settle();
   list.view();

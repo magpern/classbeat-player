@@ -109,3 +109,17 @@ button.primary[disabled] { background: var(--stage-raised); color: var(--light-3
 .status .st, .plate .st, .status .dt, .plate .dt { display: block; }
 button { min-height: 44px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Swedebeat on the class list (docs/design/swedebeat.md, docs/design/mockups/swedebeat-list.css). No hue: states are words and shapes. */
+.status.sw { margin-top: 6px; min-height: 44px; }
+.status.sw .dt { margin-top: 1px; }
+.row .m .mix { display: inline-flex; align-items: center; gap: 8px; color: var(--light-1); font-size: 16px; }
+.row .m .mix .mark { width: 11px; height: 11px; transform: none; }
+.row .m .mix.manual { color: var(--light-2); }
+.row .m .mix.manual .mark { border-color: var(--light-2); }
+.plate .row-btns { display: flex; gap: 12px; flex: none; }
+.fields { display: grid; gap: 12px; width: 100%; max-width: 440px; }
+.field-box { display: grid; gap: 4px; }
+.field-box input.in { font: inherit; font-size: 18px; width: 100%; min-height: 44px; background: var(--stage-raised); color: var(--light-1); border: 1px solid var(--stage-line); border-radius: 6px; padding: 9px 12px; letter-spacing: 0.02em; }
+.field-box input.in:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }
+.panel p.fine { font-size: 16px; color: var(--light-2); max-width: 34em; }

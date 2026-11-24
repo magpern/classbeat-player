@@ -8,6 +8,7 @@ import { listRows, snapshotOf } from "../../core/list/rows.ts";
 import type { RowSnapshot } from "../../core/list/rows.ts";
 import type { ClassRow } from "../../core/sync/class-list.ts";
 import type { FileErrorView, ListView } from "../../core/list/view.ts";
+import type { MixView } from "../../core/mix/view.ts";
 import type { PairingService } from "../pairing/service.ts";
 import type { SyncService } from "../sync/service.ts";
 
@@ -18,6 +19,8 @@ export interface ListDeps {
   readonly account: () => string | null;
   /** Opens a class's document for play (the clock's own open); the snapshot carries the error, if any. */
   readonly open: (name: string, text: string) => Snapshot;
+  /** The Swedebeat sign-in state (main/mix/service.ts); never a token. */
+  readonly mix: () => MixView;
 }
 
 export interface ListController {
@@ -62,11 +65,13 @@ export function createListController(d: ListDeps): ListController {
         cached = d.sync.list();
         fresh = true;
       }
-      return { sync, pairing, rows: listRows(cached, sync.pinned, snapshot), fileError };
+      return { sync, pairing, rows: listRows(cached, sync.pinned, snapshot), fileError, mix: d.mix() };
     },
     start(id, hash) {
       // One class at a time: the shell refuses, whatever the page shows.
       if (d.sync.view().pinned !== null) return false;
+      // Not while a sign-out is deleting the account's mixes.
+      if (d.mix().signingOut) return false;
       // Only a row the instructor was shown; the pin then checks that it is still that version.
       const row = cached.find((r) => r.id === id && r.hash === hash);
       const document = row === undefined ? null : d.sync.pin(id, hash);

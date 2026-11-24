@@ -92,6 +92,14 @@ export function rowEl(r: RowModel, select: (id: string) => void): HTMLElement {
   main.append(h("div", "t", r.title));
   const meta = h("div", "m", "");
   meta.append(h("span", null, r.meta));
+  if (r.mix !== null) {
+    // The mix's state on a Swedebeat row (docs/design/swedebeat.md): a marker and its words.
+    const mix = h("span", "mix manual");
+    const mark = h("span", `mark ${r.mix.marker}`);
+    mark.setAttribute("aria-hidden", "true");
+    mix.append(mark, h("span", null, r.mix.text));
+    meta.append(mix);
+  }
   for (const t of r.tags) meta.append(h("span", "tag", t));
   main.append(meta);
   row.append(main, h("span", "len", r.length), h("span", "upd", r.updated ?? ""));

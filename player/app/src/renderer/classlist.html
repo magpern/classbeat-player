@@ -14,6 +14,7 @@
     <button type="button" id="open-file"><span>Open a class file…</span> <span class="kbd" id="open-key">Ctrl+O</span></button>
   </header>
   <div id="status-slot" class="slot"></div>
+  <div id="mix-slot" class="slot"></div>
   <div id="file-slot" class="slot"></div>
   <div class="filter" id="filter" hidden>
     <label for="filter-input" class="lbl">Find a class</label>
@@ -23,5 +24,7 @@
   <div id="body" class="slot"></div>
   <p id="live" role="status" class="visually-hidden"></p>
 </div>
+<!-- A Swedebeat sign-in field (docs/design/swedebeat.md, "The form"): nothing the browser keeps, suggests or checks. -->
+<template id="mix-field"><input class="in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="256"></template>
 </body>
 </html>

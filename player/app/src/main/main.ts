@@ -10,6 +10,8 @@ import { registerIpc } from "./ipc.ts";
 import { createListController } from "./list/list-controller.ts";
 import type { ListController } from "./list/list-controller.ts";
 import { registerListHandlers } from "./list/list-handlers.ts";
+import { registerMixHandlers } from "./mix/mix-handlers.ts";
+import { setupMix } from "./mix/setup.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
@@ -176,7 +178,9 @@ if (!app.requestSingleInstanceLock()) {
     pairing = paired;
     // Keeps the account's classes offline, and the class list shows them.
     sync = setupSync(paired);
-    list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text) });
+    // Swedebeat sign-in on the class list page; the token stays in the keychain and this process.
+    const mix = setupMix(paired);
+    list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text), mix: () => mix.view() });
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
     // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
     controller.onEnded(() => list?.release());
@@ -203,6 +207,7 @@ if (!app.requestSingleInstanceLock()) {
     registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
+    registerMixHandlers(ipcMain, trusted, mix, list);
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();

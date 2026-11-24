@@ -18,6 +18,8 @@ import {
   CH_LIVE_RIDERS,
   CH_LIVE_START,
   CH_LIVE_VIEW,
+  CH_MIX_SIGN_IN,
+  CH_MIX_SIGN_OUT,
   CH_OPEN_DROPPED,
   CH_PAIRING_REOPEN,
   CH_PAIRING_START,
@@ -47,6 +49,10 @@ contextBridge.exposeInMainWorld("player", {
   openClassFile: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_OPEN_FILE),
   dismissFileError: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_DISMISS),
   backToClass: (): Promise<unknown> => ipcRenderer.invoke(CH_LIST_BACK),
+  // Swedebeat (class list only): what was typed crosses once, to be used once; the answer is the
+  // list, never a token or a value typed. Sign out takes nothing.
+  mixSignIn: (credentials: unknown): Promise<unknown> => ipcRenderer.invoke(CH_MIX_SIGN_IN, credentials),
+  mixSignOut: (): Promise<unknown> => ipcRenderer.invoke(CH_MIX_SIGN_OUT),
   // The phone remote (presenter only): what the panel shows, start, end, a control code, Drop a
   // phone's place (1 or 2). The answer never holds the host token.
   liveView: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_VIEW),
