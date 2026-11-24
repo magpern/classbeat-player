@@ -56,7 +56,7 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | Unpaired on the website | `app-pair-revoked` | Shown at the next start in instructor mode, or at once if the app is open, after a 401 that means the device was removed: plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused |
 
 The desktop's `no_server` ("no server address is set") and `unpaired` ("no longer paired")
-notices have no phone state, on purpose. The app's server address is fixed in the native build (ADR 0011 section 2), so there
+notices have no phone state, on purpose. The app's server address is fixed in the native build (ADR 0011 section 3), so there
 is never a missing address to report, and a device removed on the website already shows "Unpaired
 on the website" above, which covers `unpaired` and `revoked_on_site`. The phone never shows either
 desktop notice.
