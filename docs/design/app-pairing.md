@@ -14,7 +14,7 @@ confirming happens on the website, and say what each ending means. Every pairing
 
 ## Content, in priority order
 
-1. The mode tag "Pairing" and the title "Pair this phone".
+1. The mode tag "Instructor mode" (app-modes.md allows only "Rider mode" and "Instructor mode"; pairing is the way into instructor mode, so every pairing page carries it) and the title "Pair this phone".
 2. The **code**, `XXXX-XXXX` in the number face at the value tier with wide letter spacing, on a
    raised panel labelled "Code". It is the largest thing on the page.
 3. How long it lasts: "The code runs out in 9:41", counting down once a second (ten minutes from
@@ -50,9 +50,12 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | Code ran out | `app-pair-code-expired` | Plate "The code ran out. / It was not confirmed in time. Start again for a new code." Same keys |
 | Server unreachable | `app-pair-unreachable` | Plate "The server could not be reached. / Check the connection, then start again." Same keys |
 | No Keystore | `app-pair-no-keystore` | Plate "This phone cannot be paired. / It has no Android Keystore, so there is no safe place for the pairing. Rider mode works without it." One key, "Back to rider mode". There is no plain-text fallback (ADR 0011 section 5) |
+| Too many pairings | `app-pair-too-many` | Plate "Too many pairings were started. / Try again in an hour." (the desktop's `too_many`, from this network). Same keys as Refused; "Start again" asks again, and the server may still refuse until the hour has passed |
+| Answer not understood | `app-pair-unexpected` | Plate "The answer was not understood. / The app could not read the server's answer. Try again later." (the desktop's `unexpected`). Same keys as Refused. Nothing was kept |
+| Pairing could not be kept | `app-pair-save-failed` | Plate "The pairing could not be kept. / The Android Keystore did not keep it, so the pairing was undone. Start again." (the desktop's `save_failed`; the app asks the server to drop the record it made). Same keys as Refused |
 | Unpaired on the website | `app-pair-revoked` | Shown at the next start in instructor mode, or at once if the app is open, after a 401 that means the device was removed: plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused |
 
-"Cancel" and "Rider mode" go back to rider mode's start page; the code is dropped. Back is
+The three new plates use the same mode tag, title, plate and keys as Refused, so each has one mock-up and the same two sizes. "Cancel" and "Rider mode" go back to rider mode's start page; the code is dropped. Back is
 "Cancel". A pairing screen never shows the device token, any part of it or the account's
 password.
 

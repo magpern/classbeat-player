@@ -53,6 +53,13 @@ On the **follow sheet** (native, over the class screen):
 | Access taken away during a class | `app-follow-lost` | The clock goes on by hand at once. For 30 s the link slot says "Following stopped" in white (room-2d.md's hand-over), then "Manual clock". No plate, no sound: nothing is wrong |
 | Running on the manual clock | `app-follow-manual` | The link slot "Manual clock"; the band with Follow, Previous, Pause, Next, End. Follow opens the sheet again |
 
+**Start with a playlist stays off.** ADR 0001 (amendment, #486) lets Start ask Spotify to play the
+class's playlist. In the app it is off until a phone run shows it works (ADR 0011, amendment of
+2026-11-24). So Start never opens a `spotify:playlist:` link: it plays what Spotify has loaded, and
+the class screen shows room-2d.md's white plate "Playlist not loaded" for every class, with or
+without a playlist in it. Nothing in the follow sheet or the band offers a playlist; this spec adds
+no key or word for it. When a phone run shows it works, a later spec change turns it on.
+
 The sheet never opens by itself: only Follow opens it. Access is asked for once per press, never at
 start-up, never in rider mode, never with no class open.
 

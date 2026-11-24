@@ -53,6 +53,15 @@ the nickname. After the join, rider.md's states hold, with no mode strip.
 | Joined | rider.md | The rider page's class view |
 | Leave the class? | `app-leave-ask` | Back while joined: "Leave the class?", "To join again, type the class code again.", keys "Leave" and "Keep riding" (main, has the focus). Leaving closes the rider socket, drops the rider token and returns to step 1 |
 
+## What "Remember on this phone" keeps
+
+With "Remember on this phone" on, the app keeps the nickname and the FTP on the phone (max heart
+rate with them, as rider.md has it), so step 2 comes up filled. They never leave the device: the
+join still sends only the code and the nickname. They are **cleared** when the rider leaves the
+class (the "Leave" key of "Leave the class?"), and when the app changes mode, in either direction
+(switching ends the rider's session, app-modes.md). The switch is Off after a clear. Settled in
+issue #633.
+
 ## Motion and reduced motion
 
 app.md; rider.md for the class view.
