@@ -312,7 +312,7 @@ stay at least 5 % over its floor there.
 | R2. Contrast | WCAG 2 ratio between the text colour and the worst rendered background pixel in its ink: **at least 7 : 1 for every text**, labels included |
 | R3. No collisions | No two texts overlap; nothing wraps beyond its slot or is cut, except a designed ellipsis (the nickname in the top line, a long next name, a typed value) |
 | R4. Touch targets | Every key, switch and field at least **64 × 64 CSS px**, at least **12 px** apart |
-| R5. Actions | Every `data-action` is one of the page's own (`join`, `forget`, `remember`, `my_numbers`, `done`, `retry`); **none sends a command**, and none touches equipment (rule 2). No key moves the class |
+| R5. Actions | Every `data-action` is one of the page's own (`join`, `forget`, `remember`, `my_numbers`, `done`, `retry`, and the sensors' `sensors`, `sensors_add`, `reconnect_sensor`, `disconnect_sensor`); **none sends a command**, and none touches equipment (rule 2). No key moves the class |
 | R6. One screen | No sideways scroll anywhere. Every class state and every ending state fits the screen with no vertical scroll; a form (the Join states and My numbers) may scroll down, since the keyboard covers much of a phone. Forms are checked in portrait |
 | R7. Zone | The gel and every next chip carry the zone number; the gel and the next rows carry the name. No zone colour without its number. The effort rows carry no zone colour |
 | R8. Hue | Hue only inside an element that stands for a zone. The plates, the switch, the fields, the keys and every state are white, grey and black (rule 7) |

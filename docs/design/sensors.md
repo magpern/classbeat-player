@@ -27,9 +27,10 @@ movement through a scene; readings are never ranked or compared; room-distance r
 the design system.
 
 Out of this spec: **riders' readings on the instructor's screen** (`rider_reading`, ADR 0012
-section 6, waiting for the owner). It gets its own spec when the owner decides. What it must keep
-is already fixed: the presenter window only, never the room screen, join order, no ranking, no
-sorting by a value, no bar or colour per rider, nothing with one display (rules 6 and 13).
+section 6, waiting for the owner). It gets its own spec when the owner decides. What the
+ADR proposes for it (not decided; owner-blocked, built on stand-ins) is the presenter window only,
+never the room screen, join order, no ranking, no sorting by a value, no bar or colour per rider,
+nothing with one display. Rules 6 and 13 hold whatever the owner decides.
 
 ## What a reading is
 
@@ -37,7 +38,7 @@ sorting by a value, no bar or colour per rider, nothing with one display (rules 
 |---|---|---|---|---|
 | Heart rate | "Heart rate" | bpm | Heart Rate | The zone's share of the maximum heart rate, in bpm when the person gave one (`hrmaxPct`) |
 | Power | "Power" | W | Cycling Power, Fitness Machine | The zone's share of FTP, in watts when the person gave one (`ftpPct`) |
-| Cadence | "Cadence" | rpm | Cycling Speed and Cadence, Cycling Power, Fitness Machine | The interval's cadence target, if the contract gives one (gap, below). Otherwise a number only |
+| Cadence | "Cadence" | rpm | Cycling Speed and Cadence, Cycling Power, Fitness Machine | The interval's cadence target. **Instructor's panel and room strip:** from the class file, with a gauge. **Rider page:** `rider_state` carries none today (gap, below), so a number only |
 
 - A reading is a **whole number**: heart rate 30 to 250, cadence 0 to 250, power 0 to 2000. A
   value outside its range is not a reading (the pure parser drops it).
@@ -46,7 +47,10 @@ sorting by a value, no bar or colour per rider, nothing with one display (rules 
   step (no easing, no counting up).
 - **One source per measure.** If two connected sensors give the same measure, the one connected
   first is used and the other's row in the sensors list says "connected, not used". Nothing is
-  averaged or compared.
+  averaged or compared. **If the one in use is lost while the other is still connected**, the
+  measure shows a dash and the lost plate (no silent switch to the other, which would be a
+  different sensor's number); pressing **Reconnect**, or **Disconnect** on the lost one, lets the
+  other take the measure at once.
 - **Where the unit does not match, there is no gauge.** The gauge needs the plan in the reading's
   own unit: watts for power (the person gave an FTP), bpm for heart rate (a maximum heart rate).
   Without the number the plan is shown as a percentage, the reading is a number alone, and one line
@@ -60,7 +64,8 @@ rule 7), and **one white tick** for the reading, 2 px outlined in black so it re
 
 - **Scale** (`gauge_calc`, a pure function with table tests): the track runs from one band width
   below the plan to one band width above it; the band width is the plan's width or 15 % of its top
-  end, whichever is larger. The band is therefore always the middle third or more. The tick is
+  end, whichever is larger. The band is a third of the track when the plan is at least 15 % of its top end wide, and
+  narrower otherwise (20.3 % for the mock-ups' heart rate band, 157 to 170). The tick is
   clamped to the track; at an end it stays on the end, and the number says the rest.
 - **The tick is white wherever it stands.** No change of colour, weight, shape or words inside or
   outside the band: nothing says "too high", "too low", "in range" or "go up" (rules 8 and 11). The
@@ -240,13 +245,15 @@ At 1000 × 720 with the notice showing, the head, the readings and the room swit
 scroll and the first device row shows; with more, the list scrolls. **Without the instructor's FTP
 and maximum heart rate** the plan is a percentage, the readings are numbers with no gauge, and a
 line says where to type them ([no numbers](mockups/sensors-presenter-no-numbers-1000x720.png)). The
-fields are the only inputs; they are not remembered between runs (a default, reversible: rule 11
-keeps anything from a past session out of the screen).
+fields are the only inputs; they are not remembered between runs (a privacy default, reversible; it
+is not a rule 11 matter, which is about generating from past sessions).
 
 ### Choosing
 
 **Connect a sensor** (in the row, the drawer or the list) opens, in the same list area, **the app's
-own list of nearby devices** (ADR 0012 section 6: the main process answers the chooser): a line
+own list of nearby devices** (ADR 0012 section 6, **a proposal waiting for the owner**: until it is decided the player has only the
+"Not available yet" state and this list is a **stand-in** built on a fake source; the main process
+would answer the chooser): a line
 "Looking for sensors. Wake yours.", each device that offers one of the four services by the name it
 gives and the service in words, **Connect** on each, and **Cancel**. Nothing is chosen by itself and
 nothing is listed that offers no allowed service. A failed connection shows one line ("Could not
@@ -292,8 +299,7 @@ instructor's choice and it is **off by default, every class** (never remembered)
   gauge under them, as wide as they are. A missing reading
   is a dash; a cell with no sensor is not drawn. No title, no rider, no count: **only the
   instructor's own sensors, never a rider's reading** (rule 13).
-- Plan and gauge follow the part-2 rule: with no instructor's numbers the strip shows the readings
-  alone.
+- With no instructor's FTP or maximum heart rate those two cells show the readings alone; cadence keeps its target and gauge (rpm needs no number from the person).
 - **Motion:** the numbers and the tick change in a step at most once a second, as a step of the
   room's flash budget (room-2d.md, "Motion"): no more than the 500 ms between marks it already allows.
 
@@ -304,6 +310,12 @@ instructor's choice and it is **off by default, every class** (never remembered)
 | Worst case (checked at all ten room sizes) | [html](mockups/room-sensors-strip-worst.html), [16:9](mockups/room-sensors-strip-worst-1920x1080.png), [4:3](mockups/room-sensors-strip-worst-1024x768.png) |
 
 ## Measurable criteria (stated as numbers)
+
+Which tool checks what: **the mock-up tools** (shoot.js, measure.js) check S1, S3, S4, S5, S6, S7
+and the reduced-motion half of S8 on the mock-ups, and **the same checks run in the build's CI** on
+the real screens' screenshots. S2's text contrast is in both; the gauge's 3 : 1 and the
+"one reading a second" half of S8 are **build-time only** (unit tests on `gauge_calc` and on the
+display rate). S9 is **build-time only** (a test over the screens' strings).
 
 [shoot.js](mockups/shoot.js) and [measure.js](mockups/measure.js) run these on every `sensors-*` and
 `room-sensors-*` shot (`ONLY=sensors- node shoot.js`; the rider and presenter checks are
@@ -341,7 +353,7 @@ displays).
 |---|---|
 | 1. A finished class only | Readings change nothing about the class: no edit, no skipped interval, no suggested change |
 | 2. Software only, no equipment | Sensors are read: connect and switch on notifications, nothing more. No control of resistance, speed, incline or a brake; no control point is named (ADR 0012 section 1); no button of these screens sends a command |
-| 3. Spotify's music stays in Spotify's app | No audio, no song |
+| 3. Spotify's music stays in Spotify's app | No audio, no song. **A reading never reaches the music link** (ADR 0012 section 4): nothing is chosen, stretched or shifted from cadence or any reading. Build check: no sensor module is imported by the music-link code and none of it by a sensor module (an import-graph test); it lands with #664 |
 | 4. No road, ribbon, track, terrain or world | The gauge is a straight line with a band; it is not travelled along |
 | 5. No viewpoint or rider moving through a scene | A number and a gauge, changing in a step at most once a second; nothing moves because of a reading |
 | 6. None of MOWL's look | No ring, no row of class bars, no circle or bar per rider: one straight gauge for one's own reading, never for several riders; our palette |
@@ -358,9 +370,10 @@ displays).
 ## Contract gaps, defaults and open questions
 
 - **Cadence has no plan in `rider_state` today** (`effort` carries `ftpPct`, `hrmaxPct`, `rpe`). The
-  mock-ups show cadence as a number with no gauge. If the owner or the contract adds a cadence
-  range per interval (the class file has one for the room screen), the gauge appears with the same
-  rules; a contract-lane change.
+  **rider page** shows cadence as a number with no gauge for that reason only. The **instructor's
+  panel and the room strip** read the class file, which has a cadence target per interval (the room
+  screen shows it), and show it with a gauge. If the contract adds the range to `rider_state` the
+  rider page gets the gauge with the same rules; a contract-lane change.
 - **The instructor's FTP and maximum heart rate** have no home in the player yet; this spec types
   them in the drawer and keeps them in the window's memory only. Reversible.
 - **One display, the room strip** is a default made here (the issue says "off by default"):
@@ -370,4 +383,10 @@ displays).
 - **Reconnect by tap only** and **first connected source wins** are defaults, reversible.
 - **Reading ranges** (heart rate 30 to 250, cadence 0 to 250, power 0 to 2000) are defaults of the
   pure parser; a change is a design pull request.
+- **The instructor's own sensors on the computer** (ADR 0012 section 6: `navigator.bluetooth` in one
+  renderer file, the main process answering the chooser) **wait for the owner**. Part 2 is a
+  stand-in until then: the shipped state is "Not available yet", and the drawer, the chooser list
+  and the room strip are specified so they can be built on a fake source and switched on when the
+  owner decides.
+- **The room strip and its S key** depend on that decision; room-2d.md's S row carries the same gate.
 - **Riders' readings on the presenter** wait for the owner's decision in ADR 0012 section 6.

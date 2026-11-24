@@ -42,7 +42,7 @@ const NOTE = '<li class="note">' + L('Readings stay on this computer. Nothing is
 const NUMS = `<li class="nums">${nofield('Your FTP, in watts', '250')}${nofield('Your max heart rate, in bpm', '185')}</li>`;
 const open = (o, notice = true) => STATUS + (notice ? NOTICE : '') + drawer(o) + row({ count: '12', button: R.B('Show list', { action: 'riders_show' }) });
 
-const READ3 = mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, 142, 4), 142, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'No plan', '', 92, 'rpm');
+const READ3 = mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, 142, 4), 142, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'Plan 90–100 rpm', gauge(90, 100, 92, 4), 92, 'rpm');
 const DEVS = dev('Polar H10 A1B2C3', 'Heart rate, connected') + dev('Wahoo KICKR 4F2E', 'Power and cadence, connected');
 
 add('unavailable', 'Presenter: sensors unavailable', 'State: the stand-in source (ADR 0012 section 6): reading sensors on this computer is not set up. The row says so in words; it has no button and no drawer. This is the state the player ships in until the owner decides.',
@@ -60,13 +60,13 @@ add('open-one-display', 'Presenter: sensors drawer, one display', 'State: as ope
 add('open-one-display-on', 'Presenter: sensors drawer, on the room screen', 'State: one display, the switch on. The state says what it covers and which key turns it off.',
   open({ tag: 'Connected', fixed: READ3, room: ROOM(true), list: DEVS + NUMS + NOTE }));
 add('open-missing', 'Presenter: sensors drawer, no reading', 'State: the strap is connected but sent no value for 3 s: a dash and no tick, never the last number.',
-  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, null, 4), null, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'No plan', '', 92, 'rpm'),
+  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, null, 4), null, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'Plan 90–100 rpm', gauge(90, 100, 92, 4), 92, 'rpm'),
     list: dev('Polar H10 A1B2C3', 'Heart rate, no reading') + dev('Wahoo KICKR 4F2E', 'Power and cadence, connected') + NUMS + NOTE }));
 add('open-lost', 'Presenter: sensors drawer, one lost', 'State: the strap is lost: a dashed marker and the words say so, and its row offers Reconnect (a press; nothing retries by itself).',
-  open({ tag: 'Sensor lost', fixed: mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, null, 4), null, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'No plan', '', 92, 'rpm'),
+  open({ tag: 'Sensor lost', fixed: mrow('Heart rate', 'Plan 157–170 bpm', gauge(157, 170, null, 4), null, 'bpm') + mrow('Power', 'Plan 220–235 W', gauge(220, 235, 238, 4), 238, 'W') + mrow('Cadence', 'Plan 90–100 rpm', gauge(90, 100, 92, 4), 92, 'rpm'),
     list: dev('Polar H10 A1B2C3', 'Heart rate, lost', true, 'Reconnect') + dev('Wahoo KICKR 4F2E', 'Power and cadence, connected') + NUMS + NOTE }));
 add('no-numbers', 'Presenter: sensors drawer, no FTP', 'State: the instructor has typed no FTP and no max heart rate. The plan is in percentages, so the readings are numbers with no gauge, and a line says where to type them.',
-  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 85–92% max', '', 142, 'bpm') + mrow('Power', 'Plan 88–94% FTP', '', 238, 'W') + mrow('Cadence', 'No plan', '', 92, 'rpm'),
+  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 85–92% max', '', 142, 'bpm') + mrow('Power', 'Plan 88–94% FTP', '', 238, 'W') + mrow('Cadence', 'Plan 90–100 rpm', gauge(90, 100, 92, 4), 92, 'rpm'),
     list: `<li class="note">${L('Type your FTP and max heart rate below to see the gauge.', '', 2)}</li>` + DEVS + `<li class="nums">${nofield('Your FTP, in watts', '')}${nofield('Your max heart rate, in bpm', '')}</li>` + NOTE }));
 add('choosing', 'Presenter: choosing a sensor', 'State: Connect a sensor pressed. The app’s own list of nearby devices (ADR 0012 section 6): the names the devices give, each with Connect, and Cancel. Only devices that offer a heart rate, cycling power, cycling speed and cadence or fitness machine service are listed.',
   open({ tag: 'Choosing', list: `<li class="note">${L('Looking for sensors. Wake yours.', '', 2)}</li>` + dev('Polar H10 A1B2C3', 'Heart rate', false, 'Connect') + dev('Wahoo KICKR 4F2E', 'Power and cadence', false, 'Connect')
@@ -75,7 +75,7 @@ add('failed', 'Presenter: could not connect', 'State: the chosen device would no
   open({ tag: 'Could not connect', list: `<li class="note">${L('Could not connect to Polar H10 A1B2C3. Check that it is awake.', '', 2)}</li>` + dev('Polar H10 A1B2C3', 'Heart rate', false, 'Connect') + dev('Wahoo KICKR 4F2E', 'Power and cadence', false, 'Connect')
     + `<li class="act">${B('Cancel', { action: 'sensor_cancel' })}</li>` }));
 add('worst', 'Presenter: sensors, worst case', 'Worst case: four-digit power (1999 W) against a three-digit plan, three-digit heart rate and cadence, a 32-character device name, five devices.',
-  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 184–230 bpm', gauge(184, 230, 188, 7), 188, 'bpm') + mrow('Power', 'Plan 675–900 W', gauge(675, 900, 1999, 7), 1999, 'W') + mrow('Cadence', 'No plan', '', 188, 'rpm'),
+  open({ tag: 'Connected', fixed: mrow('Heart rate', 'Plan 184–230 bpm', gauge(184, 230, 188, 7), 188, 'bpm') + mrow('Power', 'Plan 675–900 W', gauge(675, 900, 1999, 7), 1999, 'W') + mrow('Cadence', 'Plan 100–110 rpm', gauge(100, 110, 188, 7), 188, 'rpm'),
     room: ROOM(true), list: dev('WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW', 'Power and cadence, connected') + dev('Polar H10 A1B2C3', 'Heart rate, lost', true, 'Reconnect') + dev('Garmin HRM-Pro 0042', 'Heart rate, connected') + NUMS + NOTE }));
 
 const NAMES = Object.keys(pages);
@@ -119,11 +119,11 @@ function room(cells, comment, title) {
 }
 const RG = (lo, hi, v) => gauge(lo, hi, v, 4);
 const ROOMS = {
-  'sensors-strip': [[cell('Heart rate', 'Plan 157–170', RG(157, 170, 142), 142, 'bpm'), cell('Power', 'Plan 220–235', RG(220, 235, 238), 238, 'W'), cell('Cadence', 'No plan', '<div class="gauge none"></div>', 92, 'rpm')],
+  'sensors-strip': [[cell('Heart rate', 'Plan 157–170', RG(157, 170, 142), 142, 'bpm'), cell('Power', 'Plan 220–235', RG(220, 235, 238), 238, 'W'), cell('Cadence', 'Plan 90–100', RG(90, 100, 92), 92, 'rpm')],
     'State: one display, the instructor turned the strip on (S, or the switch in the presenter’s sensors drawer). It lies exactly over the score’s box and covers nothing else; the band, when shown, covers it as it covers the score. Off by default. Never shows a rider’s reading.', 'Room screen: your sensors'],
-  'sensors-strip-missing': [[cell('Heart rate', 'Plan 157–170', RG(157, 170, null), null, 'bpm'), cell('Power', 'Plan 220–235', RG(220, 235, 238), 238, 'W'), cell('Cadence', 'No plan', '<div class="gauge none"></div>', 92, 'rpm')],
+  'sensors-strip-missing': [[cell('Heart rate', 'Plan 157–170', RG(157, 170, null), null, 'bpm'), cell('Power', 'Plan 220–235', RG(220, 235, 238), 238, 'W'), cell('Cadence', 'Plan 90–100', RG(90, 100, 92), 92, 'rpm')],
     'State: the strap sent no value for 3 s: a dash and no tick; the unit stays.', 'Room screen: your sensors, no reading'],
-  'sensors-strip-worst': [[cell('Heart rate', 'Plan 184–230', RG(184, 230, 188), 188, 'bpm'), cell('Power', 'Plan 675–900', RG(675, 900, 1999), 1999, 'W'), cell('Cadence', 'No plan', '<div class="gauge none"></div>', 188, 'rpm')],
+  'sensors-strip-worst': [[cell('Heart rate', 'Plan 184–230', RG(184, 230, 188), 188, 'bpm'), cell('Power', 'Plan 675–900', RG(675, 900, 1999), 1999, 'W'), cell('Cadence', 'Plan 100–110', RG(100, 110, 188), 188, 'rpm')],
     'Worst case: four-digit power against a three-digit plan, three-digit heart rate and cadence.', 'Room screen: your sensors, worst case'],
 };
 const ROOM_NAMES = Object.keys(ROOMS);
