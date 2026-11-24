@@ -12,7 +12,7 @@ import { TEXT } from "../core/sensors/strings.ts";
 import type { SensorSource } from "../core/sensors/types.ts";
 import { buildView, freshValues } from "../core/sensors/view.ts";
 import type { PlanInput } from "../core/sensors/view.ts";
-import { DRAWER_OPENED } from "./drawers.ts";
+import { announceDrawer, onDrawerOpened } from "./drawers.ts";
 import { deviceItem, liveText, measureItem, nearbyItem } from "./sensors-draw.ts";
 
 /** How often the panel looks at the source; a shown number still steps at most once a second. */
@@ -58,7 +58,7 @@ export function mountSensors(source: SensorSource, now: () => number = () => per
     if (!v.canOpen && !v.choosing) open = false;
     const drawer = open || v.choosing;
     // Only one drawer is open at a time (sensors.md, part 2): opening this one closes the riders'.
-    if (drawer && !wasOpen) document.dispatchEvent(new CustomEvent(DRAWER_OPENED, { detail: "sensors" }));
+    if (drawer && !wasOpen) announceDrawer("sensors");
     wasOpen = drawer;
     const toggle = $("sensors-toggle");
     toggle.hidden = !v.canOpen;
@@ -102,8 +102,8 @@ export function mountSensors(source: SensorSource, now: () => number = () => per
   };
   $("sensors-ftp").addEventListener("input", read);
   $("sensors-hrmax").addEventListener("input", read);
-  document.addEventListener(DRAWER_OPENED, (e) => {
-    if ((e as CustomEvent<string>).detail === "sensors") return;
+  onDrawerOpened((name) => {
+    if (name === "sensors") return;
     open = false;
     render();
   });
