@@ -504,7 +504,7 @@ simulator and run by the owner on an Apple silicon Mac; checks on a real iPhone 
 | The desktop player (Windows, macOS, Linux) | Yes, built in |
 | Android phone or tablet, in Chrome | Yes |
 | A computer's Chrome or Edge browser | Yes |
-| **iPhone and iPad** | **No; sensors through the installed app's rider mode** (owner, 2026-11-24, replacing Bluefy of 2026-11-12). Safari, Chrome, Edge and Firefox all run on Safari's engine there and have no Web Bluetooth. An iPhone user who wants their sensor uses the installed app's rider mode; the page says so when it sees an iPhone without Bluetooth support. Without Bluefy an iPhone still gets the targets and the timing |
+| **iPhone and iPad** | **No; sensors through the installed app's rider mode** (owner, 2026-11-24, replacing Bluefy of 2026-11-12). Safari, Chrome, Edge and Firefox all run on Safari's engine there and have no Web Bluetooth. An iPhone user who wants their sensor uses the installed app's rider mode; the page says so when it sees an iPhone without Bluetooth support. Without the app an iPhone still gets the targets and the timing |
 
 Limits of reading from a web page, on every device:
 
