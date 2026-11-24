@@ -8,7 +8,7 @@
 export const ALLOWED_GATT: ReadonlySet<number> = new Set([0x180d, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a5b, 0x2a63, 0x2ad2]);
 
 const BANNED: readonly [string, RegExp][] = [
-  ["navigator.bluetooth", /\bbluetooth\b/i],
+  ["the browser Bluetooth entry", /\bbluetooth\b/i],
   ["requestDevice", /\brequestDevice\b|\brequestLEScan\b/],
   ["a GATT write call", /\bwriteValue\w*|\bwriteCharacteristic\w*|\bwriteDescriptor\w*|\bBluetoothGatt\w*|\bBluetoothRemoteGATT\w*/],
   ["a GATT connection", /\bgatt\b|\bgetPrimaryService\w*|\bstartNotifications\b/i],

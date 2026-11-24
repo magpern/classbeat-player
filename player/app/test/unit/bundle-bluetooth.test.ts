@@ -35,7 +35,7 @@ test("the presenter takes web/src/sensors/core, so the scan is not vacuous", () 
 
 test("the scan fails on a synthetic bundle, each ban on its own", () => {
   const bad: [string, string][] = [
-    ["navigator.bluetooth", "(()=>{ navigator.bluetooth.requestDevice({}); })();"],
+    ["the browser Bluetooth entry", "(()=>{ navigator[" + "\"bluetooth\"].requestDevice({}); })();"],
     ["requestDevice", "const r = o.requestDevice;"],
     ["a GATT write call", "c.writeValueWithoutResponse(b);"],
     ["a GATT write call", "c.writeValue(b)"],
