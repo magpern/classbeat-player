@@ -65,11 +65,11 @@ add('switching', 'app-modes.md', 'App: switching to rider mode', 'State: "Switch
 const URL = 'https://player.example/pair';
 const PAIR_STEPS = steps([`Open ${URL}: the button below opens it in your browser`, 'Sign in and type the code', 'Confirm only if this phone shows the same code']);
 // The steps sit with the keys: beside the code in landscape, under it in portrait.
-const pairing = (lead, o = {}) => native(page(mode('Pairing') + h1('Pair this phone') + lead,
+const pairing = (lead, o = {}) => native(page(mode('Instructor mode') + h1('Pair this phone') + lead,
   PAIR_STEPS + duo(key('cancel', 'Cancel'), key('open_site', o.again ? 'Open the page again' : 'Open the site', { main: true }))));
 
 add('pair-asking', 'app-pairing.md', 'App: asking for a code', 'State: "Switch to instructor mode" on an unpaired phone; the app asks the server for a code (ADR 0002). Cancel goes back to rider mode.',
-  native(page(mode('Pairing') + h1('Pair this phone') + work('Asking the server for a code'), duo(key('cancel', 'Cancel')))));
+  native(page(mode('Instructor mode') + h1('Pair this phone') + work('Asking the server for a code'), duo(key('cancel', 'Cancel')))));
 
 add('pair-code', 'app-pairing.md', 'App: the pairing code', 'State: a code is shown, 9:41 left. "Open the site" opens the pair page in a Custom Tab (or the browser); the code can also be typed on another device.',
   pairing(code('WDJB-MJHT') + T('label', 'The code runs out in 9:41', 1, ' class="left"')));
@@ -82,16 +82,19 @@ add('pair-waiting', 'app-pairing.md', 'App: waiting for the approval', 'State: b
   pairing(work('Not yet confirmed on the website') + code('WDJB-MJHT') + T('label', 'The code runs out in 6:12', 1, ' class="left"'), { again: true }));
 
 add('pair-done', 'app-pairing.md', 'App: paired', 'State: the approval came and the token is kept under the Android Keystore. Next: the system screen-lock prompt, then the class list.',
-  native(page(mode('Pairing') + h1('This phone is paired') + `<div class="status m">${T('minor', 'Paired as anna@example.com', 2, ' class="ok"')}</div>`
+  native(page(mode('Instructor mode') + h1('This phone is paired') + `<div class="status m">${T('minor', 'Paired as anna@example.com', 2, ' class="ok"')}</div>`
     + p('Confirm your screen lock to open instructor mode.', true), duo(key('continue', 'Continue', { main: true })))));
 
 // A pairing notice: NOTICE_TEXT (core/pairing/view.ts) in the app's words, on a plate.
 const notice = (name, title, text, detail, again = true) => add(`pair-${name}`, 'app-pairing.md', `App: pairing, ${title}`, `State: pairing ended with ${name.replace('-', '_')}. The plate carries the notice; ${again ? '"Start again" asks for a new code' : 'there is nothing to try again'}.`,
-  native(page(mode('Pairing') + h1('Pair this phone') + plate(text, detail), again ? duo(key('stay_rider', 'Rider mode'), key('pair_again', 'Start again', { main: true })) : duo(key('stay_rider', 'Back to rider mode', { main: true })))));
+  native(page(mode('Instructor mode') + h1('Pair this phone') + plate(text, detail), again ? duo(key('stay_rider', 'Rider mode'), key('pair_again', 'Start again', { main: true })) : duo(key('stay_rider', 'Back to rider mode', { main: true })))));
 notice('denied', 'refused', 'Refused on the website.', 'Nothing was kept on this phone.');
 notice('code-expired', 'code ran out', 'The code ran out.', 'It was not confirmed in time. Start again for a new code.');
 notice('unreachable', 'no server', 'The server could not be reached.', 'Check the connection, then start again.');
 notice('no-keystore', 'no Keystore', 'This phone cannot be paired.', 'It has no Android Keystore, so there is no safe place for the pairing. Rider mode works without it.', false);
+notice('too-many', 'too many pairings', 'Too many pairings were started.', 'Try again in an hour.');
+notice('unexpected', 'answer not understood', 'The answer was not understood.', "The app could not read the server's answer. Try again later.");
+notice('save-failed', 'not kept', 'The pairing could not be kept.', 'The Android Keystore did not keep it, so the pairing was undone. Start again.');
 notice('revoked', 'unpaired on the site', 'Unpaired on the website.', 'The classes saved on this phone were removed.');
 
 // ---------- Following the music (app-follow.md) ----------
