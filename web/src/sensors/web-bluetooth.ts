@@ -68,6 +68,18 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     const still = (): void => {
       if (epoch !== at || sub.signal.aborted) throw new Left();
     };
+    // A failure after the page let go of this connection (removed, left, lost or superseded) is
+    // not news: it becomes a Left, so no "failed" follows "removed" or "lost".
+    try {
+      await connectAndRead(d, server, sub, still);
+    } catch (e) {
+      if (e instanceof Left) throw e;
+      still();
+      throw e;
+    }
+  };
+
+  const connectAndRead = async (d: Device, server: Server, sub: AbortController, still: () => void): Promise<void> => {
     await server.connect();
     still();
     const gives = new Set<Measure>();
@@ -133,6 +145,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
             watched.add(d);
             d.addEventListener("gattserverdisconnected", () => {
               if (leaving.has(d.id) || !devices.has(d.id)) return;
+              subscriptions.get(d.id)?.abort(); // a lookup still running must not say "connected" after "lost"
               listeners.emit({ type: "lost", id: d.id });
             });
           }
