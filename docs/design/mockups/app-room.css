@@ -1,0 +1,22 @@
+/* The app's class screen (docs/design/app-follow.md, app-room-display.md): the /play room screen
+   of play.css, plus "Follow the music" in the band and the external display's dark stage.
+   Reference mock-up only. Colours: tokens.css only. */
+
+/* Follow the music: at the left of the band, apart from the transport and End. */
+.app-room .controls > .btn.follow { margin-right: auto; }
+.app-room .controls > .btn.follow ~ .btn.quit { margin-left: 0; }
+
+/* Portrait: the band takes two rows, Follow alone on the first, full width. */
+@media (orientation: portrait) {
+  .app-room .controls { flex-wrap: wrap; align-content: center; row-gap: 12px; }
+  .app-room .controls > .btn.follow { flex: 1 0 100%; margin-right: 0; flex-direction: row; gap: 0.5em; }
+}
+/* Portrait with "Follow the music": the band's box holds two rows of 64 px keys and their gap;
+   the cue gives up the height. */
+@media (max-aspect-ratio: 1/1) {
+  .app-room:has(.controls [data-action=follow]) { --score-h: max(19vh, 156px); }
+}
+
+/* The external display with no class open: the dark stage and one line in the middle. */
+.app-room .idle { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; background: var(--stage); }
+.app-room .idle [data-tier] { font-family: var(--face-text); font-size: 6vh; color: var(--light-2); text-align: center; line-height: 1.2; max-width: 70vw; }
