@@ -127,7 +127,9 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
     needs.
 - **Product call:** when Spotify is paused while a browser plays other music, the player shows
   "Off the list". Say if you want something else.
-- **Spike 3 (Android music follower).** Ready to run on an Android phone or tablet with Spotify:
+- **Spike 3 (Android music follower).** No longer blocks PL12 (owner, 2026-11-24): the app is built
+  on fakes and the CI emulator, and this run becomes a later check; what it finds becomes new
+  issues. Ready to run on an Android phone or tablet with Spotify:
   the debug APK (CI artifact `android-follower-debug-TEST-BUILD`, kept 3 days after a CI run
   that changes the spike; to be renamed for the two-mode app) or a build of your own following
   `player/spikes/android-follower/README.md`. It is a test build signed with a throwaway debug

@@ -238,6 +238,13 @@ Spotify account, so it runs only with the owner's authorization, on the owner's 
 following fails, the app ships on the manual clock and the rest of this ADR stands. If the 3D scene
 is too slow, the app shows the plain 2D screen.
 
+**Amended (owner, 2026-11-24): the app is built before spike 3 runs.** The owner decided not to
+wait for the spike 3 run on a phone. The app is built and tested on fakes and in CI; the follower
+works as section 6 says, and Start with a playlist stays off until a phone run shows it works. The
+owner's run of spike 3 (and then of the app) becomes a later check. If following fails there, the
+app falls back to the manual clock as above; if the scene is too slow, it shows the plain 2D
+screen. Both fallbacks need no change to the rest of this ADR.
+
 ## Alternatives
 
 - **Flutter or React Native:** every screen and the 3D scene would be written again in a second
