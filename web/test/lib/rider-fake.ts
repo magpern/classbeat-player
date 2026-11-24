@@ -11,6 +11,8 @@ import type { Browser, BrowserContext, Page, WebSocketRoute } from "playwright-c
 import { DIST } from "./browser.ts";
 import { ASSET_RULE, isAssetPathBy } from "./control-rule.ts";
 import type { Reply, Seen } from "./companion-fake.ts";
+import { installSensorApi } from "./sensor-fake.ts";
+import type { SensorApi } from "./sensor-fake.ts";
 
 export { launchOffline } from "./companion-fake.ts";
 export const ORIGIN = "https://site.test";
@@ -83,6 +85,9 @@ export interface RiderOptions {
   readonly welcome?: boolean | null;
   readonly clock?: boolean;
   readonly wake?: "granted" | "absent";
+  /** The browser's sensor API: scripted (default) or absent (sensor-fake.ts). */
+  readonly sensors?: SensorApi;
+  readonly userAgent?: string;
 }
 
 // Runs in the page before its own script; the init script is not subject to the page's CSP.
@@ -148,9 +153,10 @@ function serveFile(path: string): { status: number; body: Buffer | string; conte
 }
 
 export async function openRider(browser: Browser, o: RiderOptions): Promise<RiderFake> {
-  const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, hasTouch: false });
+  const context = await browser.newContext({ viewport: { width: o.width, height: o.height }, deviceScaleFactor: 1, hasTouch: false, ...(o.userAgent && { userAgent: o.userAgent }) });
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(instrument, { stored: o.stored ?? null, remembered: o.remembered ?? null, noStorage: o.noStorage ?? false, wake: o.wake ?? "granted", tokenKey: TOKEN_KEY, numbersKey: NUMBERS_KEY });
+  await context.addInitScript(installSensorApi, { api: o.sensors ?? "fake" });
   const page = await context.newPage();
   const api: Seen[] = [];
   const external: string[] = [];

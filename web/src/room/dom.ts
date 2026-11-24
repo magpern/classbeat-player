@@ -3,7 +3,7 @@
 export interface Attrs {
   readonly class?: string;
   /** Type tier: the checks (docs/design/room-2d.md, C1 to C4) read it. */
-  readonly tier?: "hero" | "gel" | "value" | "count" | "text" | "minor" | "label";
+  readonly tier?: "hero" | "gel" | "value" | "read" | "count" | "text" | "minor" | "label";
   /** The element may take up to this many lines (default: one). */
   readonly lines?: number;
   /** The element ends in an ellipsis after this many lines by design. */
