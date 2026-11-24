@@ -7,6 +7,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import androidx.webkit.WebStorageCompat
 import androidx.webkit.WebViewFeature
+import org.classbeat.player.follow.Follower
 
 /**
  * The last mode used, in the app's private preferences (MODE_PRIVATE): native storage the web
@@ -53,15 +54,15 @@ class AndroidDevice(context: Context, private val pairing: Pairing) : Device {
 }
 
 /**
- * Everything a switch drops (ModePolicy.TEARDOWN, in its order). The instructor's follower and
- * connections and the rider's session and numbers do not exist yet; the issues that add them
- * (#631, #633 and the follower's) put their drop here. The web view's storage exists now: local and
+ * Everything a switch drops (ModePolicy.TEARDOWN, in its order). The follower (#632) stops its
+ * source and disables the notification listener. The instructor's connections and the rider's
+ * session and numbers do not exist yet; the issues that add them (#631, #633) put their drop here. The web view's storage exists now: local and
  * session storage, IndexedDB, cookies, the cache and the history all go, so the next page starts
  * with nothing the last mode's page left. Android wipes storage and cookies in the background, so
  * the drop is done only when both say they have finished (Join); the next page waits for it.
  */
-fun teardownParts(webView: () -> WebView): List<Teardown> = listOf(
-    now("follower") {},
+fun teardownParts(follower: Follower, webView: () -> WebView): List<Teardown> = listOf(
+    now("follower") { follower.drop() },
     now("connections") {},
     now("instructorState") {},
     now("riderSession") {},

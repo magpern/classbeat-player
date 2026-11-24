@@ -83,6 +83,21 @@ class InstructorModePlugin : ModePlugin(Mode.INSTRUCTOR) {
 
     @PluginMethod
     fun pairAgain(call: PluginCall) = handle(call) { c, k -> c.pairAgain(k) }
+
+    @PluginMethod
+    fun followAccess(call: PluginCall) = handle(call) { c, k -> c.follow.followAccess(k) }
+
+    @PluginMethod
+    fun openFollowSetting(call: PluginCall) = handle(call) { c, k -> c.follow.openFollowSetting(k) }
+
+    @PluginMethod
+    fun follow(call: PluginCall) = handle(call) { c, k -> c.follow.follow(k) }
+
+    @PluginMethod
+    fun unfollow(call: PluginCall) = handle(call) { c, k -> c.follow.unfollow(k) }
+
+    @PluginMethod
+    fun reading(call: PluginCall) = handle(call) { c, k -> c.follow.reading(k) }
 }
 
 /** The activity that holds the mode controller. */

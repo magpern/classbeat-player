@@ -12,6 +12,7 @@ import com.getcapacitor.PluginCall
 import org.classbeat.player.BridgeLockdown
 import org.classbeat.player.PageGate
 import org.classbeat.player.classes.InstructorIntents
+import org.classbeat.player.follow.Follower
 import org.classbeat.player.pairing.PairingPorts
 import org.classbeat.player.pairing.PairingService
 import org.classbeat.player.policy.Mode
@@ -39,6 +40,10 @@ class ModeController(
     lateinit var instructor: InstructorBridge
         private set
 
+    /** Instructor mode's follow intents (issue #632). */
+    lateinit var follow: FollowBridge
+        private set
+
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
 
@@ -59,6 +64,7 @@ class ModeController(
         pairing = PairingUi(screens, parts.pairing, parts.ports) { holder.secureLock }
         parts.pairing.changed = pairing::changed
         instructor = InstructorBridge(parts.intents) { current }
+        follow = FollowBridge(parts.follower, parts.pairing::secrets) { current }
         intents = parts.intents
         activity.onBackPressedDispatcher.addCallback(activity, back)
         holder.start()
@@ -238,4 +244,4 @@ class ModeController(
 }
 
 /** What instructor mode and the pairing screen run on, built by the activity. */
-class InstructorParts(val pairing: PairingService, val ports: PairingPorts, val intents: InstructorIntents)
+class InstructorParts(val pairing: PairingService, val ports: PairingPorts, val intents: InstructorIntents, val follower: Follower)

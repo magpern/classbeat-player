@@ -1,7 +1,7 @@
 // The interface every follower of a music app implements (ADR 0001: "One interface, one module
 // per follower"). The macOS reader is main/macos-reader.ts, the Windows reader
-// main/readers/windows-reader.ts and the Linux reader main/linux-reader.ts; the manual reader
-// reads nothing. What the three share (when they run, which reading they hold, when a command may
+// main/readers/windows-reader.ts, the Linux reader main/linux-reader.ts and the phone's reader
+// player/mobile/src/follow/android-reader.ts; the manual reader reads nothing. What the three share (when they run, which reading they hold, when a command may
 // go) is reader-lifecycle.ts. A reader only reports what the music app says: no method here
 // plays, fetches, stores or controls anything (plan section 3, rule 3).
 import type { Observation } from "./types.ts";
@@ -10,7 +10,7 @@ import type { Observation } from "./types.ts";
 export type NoReadingReason = "not-running" | "not-permitted" | "waiting-for-permission" | "not-answering" | "script-failed";
 
 export interface MusicReader {
-  readonly kind: "manual" | "macos" | "windows" | "linux" | "fake";
+  readonly kind: "manual" | "macos" | "windows" | "linux" | "android" | "fake";
   /**
    * The latest reading, or null when the music app is closed or has nothing loaded, when the
    * reader's helper was lost, or when nothing was read since following began. A reader that goes

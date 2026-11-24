@@ -4,12 +4,16 @@ import android.app.Activity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.activity.result.contract.ActivityResultContracts
 import com.getcapacitor.BridgeActivity
 import org.classbeat.player.backend.OfflineTransport
 import org.classbeat.player.classes.ClassSync
 import org.classbeat.player.classes.FileClassCache
 import org.classbeat.player.classes.InstructorIntents
+import org.classbeat.player.follow.AndroidListenerAccess
+import org.classbeat.player.follow.Follower
+import org.classbeat.player.follow.UnavailableSource
 import org.classbeat.player.mode.AndroidDevice
 import org.classbeat.player.mode.InstructorModePlugin
 import org.classbeat.player.mode.InstructorParts
@@ -61,12 +65,16 @@ class MainActivity : BridgeActivity(), ModeHost {
         val ports = AndroidPairingPorts(this, cache)
         val pairing = PairingService(origin, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, transport, KeystoreSecretStore(this), ports)
         val intents = InstructorIntents(pairing, cache, ClassSync(transport, cache, pairing::credential, pairing::refused))
-        val holder = ModeHolder(PrefsModeStore(this), AndroidDevice(this, Pairing { pairing.paired() }), controller, teardownParts { webView })
+        // Following stays on the manual clock until the real reader (#653): the source is the stand-in.
+        val follower = Follower(UnavailableSource, AndroidListenerAccess(this), SystemClock::elapsedRealtime)
+        // Nothing follows at start-up, whichever mode opens: the listener stays off until asked for.
+        follower.drop()
+        val holder = ModeHolder(PrefsModeStore(this), AndroidDevice(this, Pairing { pairing.paired() }), controller, teardownParts(follower) { webView })
         // The token was deleted (unpaired, revoked or unknown): instructor mode closes at once.
         pairing.forgotten = holder::unpaired
         pairing.load()
         modes = controller
-        controller.start(holder, locked, webView, InstructorParts(pairing, ports, intents))
+        controller.start(holder, locked, webView, InstructorParts(pairing, ports, intents, follower))
     }
 
     override fun onResume() {
