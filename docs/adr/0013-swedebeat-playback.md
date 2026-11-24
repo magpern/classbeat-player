@@ -64,7 +64,9 @@ is that ADR. It rests on:
   plain-text fallback.
 - The token stays in the main process. No renderer, preload, IPC answer, log line, error text or
   status message carries it, or the source's origin and paths. Renderers see only a state:
-  `off`, `signed_out`, `signing_in`, `signed_in`, `refused`, `unavailable`.
+  `disabled`, `signed_out`, `signing_in`, `signed_in`, `refused`. (As built: the design spec's `off` is
+  `disabled` in code, `MixState` in `core/mix/view.ts`, and `unavailable` is a refusal reason, not a
+  state.)
 - **One key lifetime.** The account's cache key (section 3) lives from the account's first mix
   until **sign-out of Swedebeat, unpairing that account, or the account's deletion reaching the
   device**, and only those end it. Each of them deletes, in this order: the cache key from the
@@ -180,7 +182,7 @@ A contract pull request adds, as format minor `"1.3"` under ADR 0003 section 7:
 
 | Field | Meaning |
 |---|---|
-| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
+| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. (As built: the class schema's `swedebeatMix.id` is `^[A-Za-z0-9_-]+$`, 1 to 64, with no newline; the player's own reader, `MIX_ID` in `core/mix/class-mix.ts`, also accepts a dot. A class the schema allows is always read; a dotted id never passes the schema.) `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
 
 The validator adds:
 
@@ -309,3 +311,25 @@ as its fall back. ADR 0003 gains minor 1.3 through issue 2.
   gateway as a route. If it is proposed, the owner decides with it how the bytes still go from
   the provider straight to the device (rule 3), how a player outside the owner's network reaches
   it, and that it is `https:`.
+
+## Amendment: the mix cache as built (PL11, #710)
+
+Records code already reviewed, as built. It replaces the section 3 text "the file is truncated to
+the end of the last whole sealed chunk, so a torn chunk is dropped" and the issue's "a torn chunk
+is truncated first".
+
+- **Resume and torn records.** A chunk index is sealed under one file key only from a source that
+  states the same length and SHA-256 or version as the header. On resume every whole record is
+  authenticated again; a torn record still on disk is overwritten only if the new sealed chunk
+  begins with exactly its bytes, otherwise the file is dropped and the download starts over under a
+  new file id (at most twice).
+- **Header MAC key.** Derived with HKDF with info `cbp-mix-hdr-v1` followed by the mix tag
+  (`core/mix/cache-crypto.ts`).
+- **`usedAt`** is part of the authenticated header; eviction reads it from there.
+- **Stall.** `DOWNLOAD_IDLE_MS` is 60 s; a stream that sends nothing for that long ends the
+  download as `interrupted`, which resumes later.
+- **Lost key.** `createKey` replaces a key file it cannot read (`vault.ts`), so the old cache can no
+  longer be opened and is lost, not leaked.
+- **Plaintext scan.** The test looks for the mix's aligned 32-byte blocks in every file under the
+  cache folder; any run of 64 or more plaintext bytes contains at least one whole aligned block, so
+  it is found.

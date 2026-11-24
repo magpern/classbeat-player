@@ -123,7 +123,7 @@ own panels.
 
 | State | Data (`MixView`) | Swedebeat line | Body | Mock-up |
 |---|---|---|---|---|
-| Playback is off | `off` | Hollow square, "Swedebeat playback is off", detail "Swedebeat classes play on the manual clock." **No button, no field** | List as before. Footer detail for a Swedebeat class ends "Manual clock: Swedebeat playback is off" | [off](mockups/class-list-swedebeat-off.html) |
+| Playback is off | `off` (code: `disabled`) | Hollow square, "Swedebeat playback is off", detail "Swedebeat classes play on the manual clock." **No button, no field** | List as before. Footer detail for a Swedebeat class ends "Manual clock: Swedebeat playback is off" | [off](mockups/class-list-swedebeat-off.html) |
 | Not connected | `signed_out` | Hollow square, "Swedebeat is not connected", detail "Swedebeat classes play on the manual clock. Connect to play the mixes.", key "Connect Swedebeat" | Each Swedebeat row: hollow square "Manual clock". Footer detail ends "Manual clock: Swedebeat is not connected" | [not connected](mockups/class-list-swedebeat-signed-out.html) |
 | The form | `signed_out`, form open | Not shown | Panel "Connect Swedebeat": the sentence "Type the details you use for Swedebeat. They are used once to connect and are not kept.", the fields, "Connect", "Cancel", and "Your password is not kept." | [form](mockups/class-list-swedebeat-form.html) |
 | Connecting | `signing_in` | Hollow circle, "Connecting to Swedebeat…", detail "Your details were sent and have been cleared from this page" | Panel "One moment": "Swedebeat classes can start on the manual clock meanwhile." No fields, no key | [connecting](mockups/class-list-swedebeat-connecting.html) |
@@ -174,7 +174,7 @@ the ADR leaves unworded.
 
 | Reason | Words | When (`mode-policy.ts`) | Where it shows |
 |---|---|---|---|
-| `off` | Swedebeat playback is off | The source is `UnavailableMixSource` | Swedebeat line, footer, room link |
+| `off` (code: `disabled`) | Swedebeat playback is off | The source is `UnavailableMixSource` | Swedebeat line, footer, room link |
 | `not_connected` | Swedebeat is not connected | No token (never connected, signed out, or the token went invalid) | Same |
 | `downloading` | The mix is still downloading | A chunk the sound needs is not yet written and 10 s passed: during the class, or when the sound would catch up with the download | Footer, room link (during the class) |
 | `not_checked` | The mix could not be checked | A chunk or the length failed its check, or the decoded length is more than 1 000 ms from `length_ms`, or the source would not describe it | Row, footer, room link |
@@ -231,7 +231,7 @@ The renderer holds a view built field by field, as `SyncView` and `PairingView` 
 
 | Element | Source |
 |---|---|
-| The Swedebeat line | `MixView.state`: `off`, `signed_out`, `signing_in`, `signed_in`, `refused`, `unavailable` (ADR 0013 section 1), plus `refusal` (`bad_credentials`, `rate_limited`, `unavailable`), `needsReconnect`, `keychainUsable`, `signingOut` |
+| The Swedebeat line | `MixView.state`: `disabled` (this spec's `off`), `signed_out`, `signing_in`, `signed_in`, `refused` (ADR 0013 section 1; `unavailable` is a refusal reason only), plus `refusal` (`bad_credentials`, `rate_limited`, `unavailable`), `needsReconnect`, `keychainUsable`, `signingOut` |
 | The fields | `MixView.fields`: `[{id, label, secret}]` from `credentialFields()`. Never a value |
 | A row's mix | The row's `mix`: `{state: waiting, downloading, ready, bad, none, percent}`, built from the cache header's state and bytes. Never a mix id, tag or path |
 | The footer's reason | `modePolicy` result: `mix` or a reason of the table above |
