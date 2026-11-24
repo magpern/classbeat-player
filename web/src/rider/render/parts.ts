@@ -2,7 +2,7 @@
 // Every key is one of the page's own actions (check R5): none sends a command or touches equipment.
 import { el } from "../../room/dom.ts";
 
-export type PageAction = "join" | "forget" | "remember" | "my_numbers" | "done" | "retry";
+export type PageAction = "join" | "forget" | "remember" | "my_numbers" | "done" | "retry" | "sensors" | "sensors_add" | "reconnect_sensor" | "disconnect_sensor";
 
 export function pageKey(action: PageAction, label: string, o: { main?: boolean; dis?: boolean; full?: boolean } = {}, onPress?: () => void): HTMLButtonElement {
   const cls = ["key", o.full !== false && "full", o.main && "main", o.dis && "dis"].filter(Boolean).join(" ");

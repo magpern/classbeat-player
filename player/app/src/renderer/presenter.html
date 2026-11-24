@@ -2,15 +2,50 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'none'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Class player</title>
+<link rel="stylesheet" href="presenter.css">
 <script src="presenter.js" defer></script>
 </head>
 <body>
+<main id="main">
 <h1 id="title">No class open</h1>
 <p id="hint">Open a class with File, Open Class, or drop a class file on this window.</p>
 <p id="error" role="alert" hidden></p>
 <ul id="error-details" hidden></ul>
+<section id="clock" hidden>
+  <p>Status: <output id="status"></output></p>
+  <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>
+  <p>Interval <output id="interval-number"></output>: <output id="interval-left"></output> left</p>
+  <p>Crossfade: planned <output id="crossfade"></output><span id="crossfade-measured" hidden>, measured <output id="crossfade-measured-value"></output><span id="crossfade-differs" hidden> (differs from the plan)</span></span></p>
+  <section id="link" aria-label="Music link">
+    <p>Music link: <output id="link-state"></output><span id="link-unavailable" hidden> (following the music is unavailable on this computer)</span><span id="link-guess" hidden> (the clock is guessing)</span><span id="link-hold" hidden>, holding at the end of the song</span></p>
+    <p id="link-reason" role="status" hidden></p>
+    <p id="link-announcement" role="status" hidden></p>
+    <div id="link-playlist" role="status" hidden><p id="link-playlist-notice">Playlist not loaded</p><p id="link-playlist-detail" class="detail">Start played what Spotify had loaded</p></div>
+    <p id="link-pick" hidden>Which one is playing? <span id="link-pick-buttons"></span></p>
+    <p>
+      <button type="button" id="undo" hidden>Undo</button>
+      <button type="button" id="follow">Follow the music</button>
+      <button type="button" id="manual">Manual clock</button>
+    </p>
+  </section>
+  <p>
+    <button type="button" id="start">Start</button>
+    <button type="button" id="pause">Pause</button>
+    <button type="button" id="resume">Resume</button>
+    <button type="button" id="previous">Previous interval</button>
+    <button type="button" id="next">Next interval</button>
+    <button type="button" id="back5">Back 5 s</button>
+    <button type="button" id="forward5">Forward 5 s</button>
+  </p>
+  <table>
+    <thead><tr><th>Now</th><th>#</th><th>Start</th><th>Length</th><th>Zone</th><th>Target</th><th>Cue</th></tr></thead>
+    <tbody id="intervals"></tbody>
+  </table>
+</section>
+</main>
+<aside id="side">
 <section id="pairing" aria-label="Pairing">
   <p>Pairing: <output id="pairing-status">Not paired</output></p>
   <p id="pairing-wait" hidden>Your code is <output id="pairing-code"></output>. Type it on <output id="pairing-page"></output> (opened in your browser). It works for <output id="pairing-left"></output> more.</p>
@@ -50,6 +85,7 @@
   <div id="sensors-drawer" hidden>
     <ul id="sensors-measures"></ul>
     <p id="sensors-no-numbers" hidden></p>
+    <div id="sensors-list">
     <ul id="sensors-devices"></ul>
     <div id="sensors-chooser" role="group" aria-labelledby="sensors-looking" hidden>
       <p id="sensors-looking"></p>
@@ -61,6 +97,7 @@
     <p><label><span id="sensors-ftp-label"></span> <input type="number" id="sensors-ftp" min="50" max="600" step="1" inputmode="numeric"></label>
     <label><span id="sensors-hrmax-label"></span> <input type="number" id="sensors-hrmax" min="80" max="230" step="1" inputmode="numeric"></label></p>
     <p id="sensors-note"></p>
+    </div>
   </div>
 </section>
 <section id="riders" aria-label="Riders" hidden>
@@ -82,36 +119,6 @@
     <ul id="riders-list"></ul>
   </div>
 </section>
-<section id="clock" hidden>
-  <p>Status: <output id="status"></output></p>
-  <p>Class time: <output id="class-time"></output> of <output id="class-length"></output>, <output id="class-left"></output> left</p>
-  <p>Interval <output id="interval-number"></output>: <output id="interval-left"></output> left</p>
-  <p>Crossfade: planned <output id="crossfade"></output><span id="crossfade-measured" hidden>, measured <output id="crossfade-measured-value"></output><span id="crossfade-differs" hidden> (differs from the plan)</span></span></p>
-  <section id="link" aria-label="Music link">
-    <p>Music link: <output id="link-state"></output><span id="link-unavailable" hidden> (following the music is unavailable on this computer)</span><span id="link-guess" hidden> (the clock is guessing)</span><span id="link-hold" hidden>, holding at the end of the song</span></p>
-    <p id="link-reason" role="status" hidden></p>
-    <p id="link-announcement" role="status" hidden></p>
-    <div id="link-playlist" role="status" hidden><p id="link-playlist-notice">Playlist not loaded</p><p id="link-playlist-detail" class="detail">Start played what Spotify had loaded</p></div>
-    <p id="link-pick" hidden>Which one is playing? <span id="link-pick-buttons"></span></p>
-    <p>
-      <button type="button" id="undo" hidden>Undo</button>
-      <button type="button" id="follow">Follow the music</button>
-      <button type="button" id="manual">Manual clock</button>
-    </p>
-  </section>
-  <p>
-    <button type="button" id="start">Start</button>
-    <button type="button" id="pause">Pause</button>
-    <button type="button" id="resume">Resume</button>
-    <button type="button" id="previous">Previous interval</button>
-    <button type="button" id="next">Next interval</button>
-    <button type="button" id="back5">Back 5 s</button>
-    <button type="button" id="forward5">Forward 5 s</button>
-  </p>
-  <table>
-    <thead><tr><th>Now</th><th>#</th><th>Start</th><th>Length</th><th>Zone</th><th>Target</th><th>Cue</th></tr></thead>
-    <tbody id="intervals"></tbody>
-  </table>
-</section>
+</aside>
 </body>
 </html>

@@ -1,0 +1,61 @@
+/* The rider page's sensor readings (docs/design/sensors.md), ported from the reference mock-up
+   docs/design/mockups/sensors.css. White, grey and black; hue only on the planned band of a gauge,
+   which stands for the interval's zone (rule 7). A reading never takes a colour. */
+
+/* The reading tier: the largest number the page draws after the countdown and the zone numeral. */
+:root { --c-read: min(7.2dvh, 15vw); }
+@media (orientation: landscape) { :root { --c-read: min(11dvh, 6.2vw); } }
+
+/* Two keys in the foot row: My numbers and the sensors key, 12 px apart. */
+.rider .keys.two { grid-template-columns: 1fr 1fr; }
+.rider .keys.two .key { grid-column: auto; }
+
+/* The effort block with readings: one measure is a label, the planned value, a gauge and the
+   reading. Portrait: two lines (label and plan, then gauge and reading). Landscape: one line. */
+.effort.sens { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 0.7dvh; align-items: center; }
+.effort.sens .m { display: contents; }
+.effort.sens .m > .lbl { grid-column: 1; }
+.effort.sens .m > .ev { grid-column: 2 / -1; }
+.effort.sens .gauge { grid-column: 1 / 3; margin-bottom: 0.9dvh; }
+.effort.sens .gauge.none { visibility: hidden; }
+.effort.sens .rd { grid-column: 3; display: flex; align-items: baseline; gap: 0.3em; justify-content: flex-end; white-space: nowrap; margin-bottom: 0.9dvh; }
+.effort.sens .rd.solo { grid-column: 1 / -1; justify-content: flex-start; gap: 3vw; margin-bottom: 0; }
+.effort.sens .rd .n { font-size: var(--c-read); line-height: 0.9; }
+.effort.sens .rd .u { font-family: var(--face-number); font-weight: 600; font-size: var(--c-minor); color: var(--light-2); line-height: 1; }
+.effort.sens .rd.none .n { color: var(--light-2); }
+.effort.sens > .hint, .effort.sens > .splate { grid-column: 1 / -1; }
+@media (orientation: landscape) {
+  .effort.sens { grid-template-columns: auto auto minmax(0, 1fr) auto; column-gap: 1.4vw; row-gap: 1.2dvh; }
+  .effort.sens .m > .ev { grid-column: 2; }
+  .effort.sens .gauge { grid-column: 3; margin-bottom: 0; }
+  .effort.sens .rd { grid-column: 4; margin-bottom: 0; }
+  .effort.sens .rd.solo { grid-column: 3 / -1; }
+}
+
+/* The gauge: a line, the planned band (the zone's colour) and one white tick for the reading.
+   The tick is white wherever it stands: no colour change inside or outside the band (rules 7, 8, 11). */
+.gauge { position: relative; height: max(10px, 1.5dvh); background: var(--stage-raised); border: 1px solid var(--stage-line); border-radius: 2px; min-width: 0; }
+.gauge .band { position: absolute; top: 0; bottom: 0; background: var(--zone); }
+.gauge .mark { position: absolute; top: -45%; bottom: -45%; width: max(5px, 0.9vw); margin-left: calc(max(5px, 0.9vw) / -2); background: var(--light-1); border-radius: 1px; box-shadow: 0 0 0 2px var(--stage); }
+
+/* A sensor plate: white, with a square marker, like every other plate of the page. */
+.splate { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 1dvh 3vw; display: flex; flex-direction: column; gap: 0.4dvh; }
+.splate .h { font-size: var(--c-minor); font-weight: 700; display: flex; gap: 0.5em; align-items: baseline; line-height: 1.1; }
+.splate .h::before { content: ""; width: 0.7em; height: 0.7em; flex: none; border: 2px solid currentColor; }
+.splate .dt { font-size: var(--c-label); line-height: 1.15; }
+
+/* The sensors sheet. */
+.devs { display: flex; flex-direction: column; gap: max(12px, 1.4dvh); }
+.dev { display: flex; align-items: center; gap: 3vw; border: 2px solid var(--stage-line); border-radius: 8px; padding: 1dvh 3vw; min-width: 0; }
+.dev .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5dvh; }
+.dev .who [data-tier=minor] { font-size: var(--c-minor); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.dev .st { font-size: var(--c-label); display: flex; align-items: center; gap: 0.5em; color: var(--light-2); }
+.dev .st::before { content: ""; width: 0.7em; height: 0.7em; flex: none; border: 2px solid var(--light-1); background: var(--light-1); }
+.dev.lost .st::before { background: none; border-style: dashed; }
+.dev .key { width: auto; min-width: 30vw; flex: none; }
+
+/* The next rows give way when the readings need the height: the effort and the readings never do.
+   run.ts sets a step only when the view overflows, so a tall portrait screen takes one too when it
+   must (the worst case at 390 x 844), not only the short one the mock-up's query names. */
+@media (orientation: landscape) { .fit-L1 > :nth-child(n+3) { display: none; } .fit-L2 > :nth-child(n+5) { display: none; } }
+@media (orientation: portrait) { .fit-P1 > :nth-child(n+3) { display: none; } .fit-P2 > :nth-child(n+5) { display: none; } }

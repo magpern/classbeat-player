@@ -6,8 +6,8 @@ import ts from "typescript";
 
 /** Other core modules, the room's pure formatting, and the contract's generated types. */
 const ALLOWED = /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/;
-/** The rider's core: as the companion's, plus the companion's pure code, shape and answer modules. */
-export const RIDER_ALLOWED = /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|\.\.\/\.\.\/companion\/core\/(codes|shape|answer)\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/;
+/** The rider's core: as the companion's, plus the companion's pure code, shape and answer modules and the sensors' pure core. */
+export const RIDER_ALLOWED = /^(\.\/[\w-]+\.ts|\.\.\/\.\.\/room\/format\.ts|\.\.\/\.\.\/companion\/core\/(codes|shape|answer)\.ts|\.\.\/\.\.\/sensors\/core\/[\w-]+\.ts|(\.\.\/){4}schema\/generated\/ts\/[\w-]+\.d\.ts)$/;
 
 /** Globals that reach the page, the network, storage, time or the machine. */
 export const BANNED_GLOBALS = new Set([

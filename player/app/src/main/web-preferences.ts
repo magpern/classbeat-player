@@ -1,11 +1,16 @@
 // The hardening settings of every window, kept free of Electron imports so a unit test can check
 // them. The e2e test reads the same values back from the running windows.
 
-/** The presenter page's Content Security Policy; presenter.html carries it as its first meta tag. */
+/**
+ * The presenter page's Content Security Policy; presenter.html carries it as its first meta tag.
+ * Style comes only from the application's own style sheet (presenter.css, bundled into dist/; the
+ * request filter below confines 'self' to the application's folder): no inline style, no style
+ * attribute, no other origin (#682). Fonts stay off: the page names only the system's faces.
+ */
 export const CSP = [
   "default-src 'none'",
   "script-src 'self'",
-  "style-src 'none'",
+  "style-src 'self'",
   "img-src 'none'",
   "font-src 'none'",
   "connect-src 'none'",
@@ -18,8 +23,8 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 
-/** The class list page's policy: the presenter's, and the page's own style sheet and fonts. */
-export const LIST_CSP = CSP.replace("style-src 'none'", "style-src 'self'").replace("font-src 'none'", "font-src 'self'");
+/** The class list page's policy: the presenter's, and the application's own fonts. */
+export const LIST_CSP = CSP.replace("font-src 'none'", "font-src 'self'");
 
 /**
  * The room screen's policy (room.html): the class list's. The room screen's style sheet and fonts
