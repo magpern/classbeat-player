@@ -19,7 +19,7 @@ await Promise.all([
   build({ ...common, entryPoints: ["src/renderer/classlist.ts"], outdir: "dist", platform: "browser", format: "iife", target: "chrome130", loader: { ".woff2": "file" }, assetNames: "fonts/[name]" }),
   // The room screen: web/src/main.ts with its tokens, style and fonts, under their own folder so the
   // two pages' font files never race for one name.
-  build({ ...common, entryPoints: ["src/renderer/room.ts"], outdir: "dist", platform: "browser", format: "iife", target: "chrome130", loader: { ".woff2": "file" }, assetNames: "room-fonts/[name]" }),
+  build({ ...common, entryPoints: ["src/renderer/room.ts"], outdir: "dist", nodePaths: ["node_modules"], platform: "browser", format: "iife", target: "chrome130", loader: { ".woff2": "file" }, assetNames: "room-fonts/[name]" }),
 ]);
 copyFileSync("src/renderer/presenter.html", "dist/presenter.html");
 copyFileSync("src/renderer/classlist.html", "dist/classlist.html");

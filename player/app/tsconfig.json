@@ -12,7 +12,8 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": { "three": ["./node_modules/@types/three/index.d.ts"] }
   },
   "include": ["src", "test", "build.mjs", "eslint.config.js"]
 }
