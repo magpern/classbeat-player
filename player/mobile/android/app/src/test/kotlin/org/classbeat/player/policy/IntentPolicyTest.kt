@@ -18,6 +18,11 @@ class IntentPolicyTest {
             "instructorWay" to Mode.RIDER,
             "askInstructorMode" to Mode.RIDER,
             "askRiderMode" to Mode.INSTRUCTOR,
+            "listClasses" to Mode.INSTRUCTOR,
+            "syncNow" to Mode.INSTRUCTOR,
+            "getClass" to Mode.INSTRUCTOR,
+            "unpair" to Mode.INSTRUCTOR,
+            "pairAgain" to Mode.INSTRUCTOR,
         )
         assertEquals(expected, IntentPolicy.INTENTS.mapValues { it.value.mode })
     }
@@ -27,7 +32,7 @@ class IntentPolicyTest {
         val rider = IntentPolicy.of(Mode.RIDER)
         val instructor = IntentPolicy.of(Mode.INSTRUCTOR)
         assertEquals(setOf("instructorWay", "askInstructorMode"), rider)
-        assertEquals(setOf("askRiderMode"), instructor)
+        assertEquals(setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain"), instructor)
         assertTrue(rider.intersect(instructor).isEmpty())
         assertEquals(IntentPolicy.INTENTS.keys, rider + instructor)
     }
@@ -36,10 +41,11 @@ class IntentPolicyTest {
     fun `each intent runs only from its own mode's plugin while the app is in that mode`() {
         for ((name, spec) in IntentPolicy.INTENTS) {
             val mode = spec.mode
-            assertNull(name, IntentPolicy.check(mode, mode, name, emptyMap()))
-            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(mode, other.getValue(mode), name, emptyMap()))
-            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(other.getValue(mode), mode, name, emptyMap()))
-            assertEquals(name, Refusal.SWITCHING, IntentPolicy.check(null, mode, name, emptyMap()))
+            val args = good(spec)
+            assertNull(name, IntentPolicy.check(mode, mode, name, args))
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(mode, other.getValue(mode), name, args))
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(other.getValue(mode), mode, name, args))
+            assertEquals(name, Refusal.SWITCHING, IntentPolicy.check(null, mode, name, args))
         }
     }
 
@@ -48,7 +54,7 @@ class IntentPolicyTest {
         val extras = listOf("mode" to "instructor", "unlock" to true, "x" to null, "" to 1, "__proto__" to "{}")
         for ((name, spec) in IntentPolicy.INTENTS) {
             for (extra in extras) {
-                assertEquals("$name $extra", Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(spec.mode, spec.mode, name, mapOf(extra)))
+                assertEquals("$name $extra", Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(spec.mode, spec.mode, name, good(spec) + extra))
             }
         }
     }
@@ -62,9 +68,43 @@ class IntentPolicyTest {
     @Test
     fun `askRiderMode rejects an unexpected argument`() = rejectsExtra("askRiderMode")
 
+    @Test
+    fun `listClasses rejects an unexpected argument`() = rejectsExtra("listClasses")
+
+    @Test
+    fun `syncNow rejects an unexpected argument`() = rejectsExtra("syncNow")
+
+    @Test
+    fun `unpair rejects an unexpected argument`() = rejectsExtra("unpair")
+
+    @Test
+    fun `pairAgain rejects an unexpected argument`() = rejectsExtra("pairAgain")
+
+    @Test
+    fun `getClass takes one id, a string, and nothing else`() {
+        fun check(args: Map<String, Any?>) = IntentPolicy.check(Mode.INSTRUCTOR, Mode.INSTRUCTOR, "getClass", args)
+        assertNull(check(mapOf("id" to "00000000-0000-4000-8000-000000000001")))
+        assertEquals(Refusal.MISSING_ARGUMENT, check(emptyMap()))
+        assertEquals(Refusal.WRONG_TYPE, check(mapOf("id" to 1)))
+        assertEquals(Refusal.WRONG_TYPE, check(mapOf("id" to null)))
+        // The page names no address, path or token: there is no argument to carry one.
+        for (extra in listOf("url", "path", "origin", "token", "headers")) {
+            assertEquals(extra, Refusal.UNEXPECTED_ARGUMENT, check(mapOf("id" to "x", extra to "x")))
+        }
+    }
+
+    /** Arguments of the right names and types for [spec]. */
+    private fun good(spec: Spec): Map<String, Any?> = spec.args.mapValues { (_, type) ->
+        when (type) {
+            Arg.STRING -> "x"
+            Arg.BOOLEAN -> true
+            Arg.NUMBER -> 1
+        }
+    }
+
     private fun rejectsExtra(name: String) {
         val mode = IntentPolicy.INTENTS.getValue(name).mode
-        assertEquals(Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(mode, mode, name, mapOf("mode" to "instructor")))
+        assertEquals(Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(mode, mode, name, good(IntentPolicy.INTENTS.getValue(name)) + ("mode" to "instructor")))
     }
 
     @Test

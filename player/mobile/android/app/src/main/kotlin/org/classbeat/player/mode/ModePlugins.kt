@@ -68,6 +68,21 @@ class InstructorModePlugin : ModePlugin(Mode.INSTRUCTOR) {
 
     @PluginMethod
     fun askRiderMode(call: PluginCall) = handle(call) { c, k -> c.askRiderMode(k) }
+
+    @PluginMethod
+    fun listClasses(call: PluginCall) = handle(call) { c, k -> c.instructor.listClasses(k) }
+
+    @PluginMethod
+    fun syncNow(call: PluginCall) = handle(call) { c, k -> c.instructor.syncNow(k) }
+
+    @PluginMethod
+    fun getClass(call: PluginCall) = handle(call) { c, k -> c.instructor.getClass(k) }
+
+    @PluginMethod
+    fun unpair(call: PluginCall) = handle(call) { c, k -> c.instructor.unpair(k) }
+
+    @PluginMethod
+    fun pairAgain(call: PluginCall) = handle(call) { c, k -> c.pairAgain(k) }
 }
 
 /** The activity that holds the mode controller. */

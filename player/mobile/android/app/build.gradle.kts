@@ -7,6 +7,23 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+/**
+ * The backend the app calls, fixed in the build (ADR 0011 §3): `-Pclassbeat.backendOrigin=…`. A
+ * release takes only an HTTPS origin and has none by default, so it pairs with nothing until one
+ * is given; a debug build defaults to loopback. Anything else fails the build. OriginPolicy checks
+ * the value again at run time.
+ */
+fun backendOrigin(debug: Boolean): String {
+    val given = providers.gradleProperty("classbeat.backendOrigin").orNull?.trim()
+    val value = given ?: if (debug) "http://127.0.0.1:8000" else ""
+    val https = Regex("^https://[a-z0-9-]+(\\.[a-z0-9-]+)*(:[1-9][0-9]{0,4})?$")
+    val loopback = Regex("^http://(127\\.0\\.0\\.1|localhost)(:[1-9][0-9]{0,4})?$")
+    require(value.isEmpty() || https.matches(value) || (debug && loopback.matches(value))) {
+        "classbeat.backendOrigin must be an https origin (or loopback http in a debug build)"
+    }
+    return value
+}
+
 android {
     namespace = "org.classbeat.player"
     compileSdk = 36
@@ -22,9 +39,11 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
+            buildConfigField("String", "BACKEND_ORIGIN", "\"${backendOrigin(debug = true)}\"")
         }
         release {
             isDebuggable = false
+            buildConfigField("String", "BACKEND_ORIGIN", "\"${backendOrigin(debug = false)}\"")
             // Off: the lockdown reads Capacitor's plugin table by its field name (BridgeLockdown.kt).
             isMinifyEnabled = false
         }

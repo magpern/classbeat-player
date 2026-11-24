@@ -87,6 +87,8 @@ class ModeHolder(
     /** Whether "Switch to instructor mode" goes to pairing or to the screen lock, for the strip's lead line. */
     val paired: Boolean get() = device.paired
 
+    val secureLock: Boolean get() = device.secureLock
+
     /**
      * Opens the app in the last mode used (ModePolicy.startMode) and loads its start page. A switch
      * the app was stopped in the middle of (killed while the storage wipe ran) is finished first:

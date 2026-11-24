@@ -53,5 +53,13 @@ test("the bridge names exactly the native intents, none taking an argument", () 
   assert.deepEqual(plugins, ["RiderMode", "InstructorMode"]);
   // The intents of IntentPolicy.kt, each declared with an empty parameter list.
   const intents = [...bridge.matchAll(/^\s+(\w+)\((\w*)\): Promise<unknown>;$/gm)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(intents, [["instructorWay", ""], ["askInstructorMode", ""], ["askRiderMode", ""]]);
+  assert.deepEqual(intents, [
+    ["instructorWay", ""],
+    ["askInstructorMode", ""],
+    ["askRiderMode", ""],
+    ["listClasses", ""],
+    ["syncNow", ""],
+    ["unpair", ""],
+    ["pairAgain", ""],
+  ]);
 });

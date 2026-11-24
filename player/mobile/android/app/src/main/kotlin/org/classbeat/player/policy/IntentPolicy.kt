@@ -4,7 +4,7 @@ package org.classbeat.player.policy
 // no Android import. Each intent belongs to one mode and takes a fixed set of arguments; a call
 // from the other mode, while the app is between modes, or with any argument the intent does not
 // name is refused before native code acts on it. Later issues add their intents here: the rider's
-// join, send and leave (#633) and the instructor's class list and live session (#631).
+// join, send and leave (#633) and the instructor's live session.
 
 object IntentPolicy {
     /** The type an argument must have, as the bridge hands it over (org.json values). */
@@ -20,6 +20,14 @@ object IntentPolicy {
         "askInstructorMode" to Spec(Mode.RIDER, emptyMap()),
         // Instructor mode: "Switch to rider mode" pressed. Native code asks the question.
         "askRiderMode" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        // Instructor mode (#631): the cached classes, a sync now, one class by its id, unpairing
+        // this phone, and pairing again once the pairing expired. Native code picks each backend
+        // call and adds the device token; the page names no path, address or token.
+        "listClasses" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "syncNow" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "getClass" to Spec(Mode.INSTRUCTOR, mapOf("id" to Arg.STRING)),
+        "unpair" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "pairAgain" to Spec(Mode.INSTRUCTOR, emptyMap()),
     )
 
     /** The intents [mode] has, and only those. */

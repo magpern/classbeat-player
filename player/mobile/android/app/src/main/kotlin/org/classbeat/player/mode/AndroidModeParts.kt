@@ -35,13 +35,10 @@ class PrefsModeStore(context: Context) : ModeStore {
     }
 }
 
-/** Whether this device is paired with an instructor's account (ADR 0011 section 5). */
+/** Whether this device is paired with an instructor's account (ADR 0011 section 5): PairingService.paired. */
 fun interface Pairing {
     fun paired(): Boolean
 }
-
-/** No pairing exists yet: it comes with issue #631, which replaces this. Every device is unpaired. */
-val NO_PAIRING = Pairing { false }
 
 /**
  * The device as the holder sees it. The screen lock is Android's own answer each time it is

@@ -9,10 +9,9 @@ import java.util.Locale
  * accents, equal titles by id; never by time, use or popularity (plan rules 11 and 13). Pure.
  */
 object ClassRows {
-    data class Row(val id: String, val title: String, val lengthMs: Double, val sport: String, val source: String, val songs: Int)
+    data class Row(val id: String, val title: String, val lengthMs: Double, val sport: String, val songs: Int)
 
     private val SPORTS = setOf("cycling", "running")
-    private val SOURCES = setOf("spotify", "swedebeat", "none")
 
     /** The displayed fields of a document, or null when it has not the shape. */
     fun row(id: String, doc: Any?): Row? {
@@ -23,9 +22,11 @@ object ClassRows {
         val title = cls["title"] as? String ?: return null
         val length = cls["length_ms"] as? Double ?: return null
         val sport = cls["sport"] as? String ?: return null
+        // The music source's names are the class format's (schema/), not this file's: the phone shell's
+        // Kotlin names no music provider (rules.test.ts). The list shows no source, so a name is enough.
         val source = music["source"] as? String ?: return null
-        if (!length.isFinite() || length < 0 || sport !in SPORTS || source !in SOURCES) return null
-        return Row(id, title, length, sport, source, songs.size)
+        if (!length.isFinite() || length < 0 || sport !in SPORTS || source.isEmpty()) return null
+        return Row(id, title, length, sport, songs.size)
     }
 
     fun sorted(rows: List<Row>): List<Row> {
