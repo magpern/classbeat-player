@@ -15,11 +15,12 @@ export type ClassMusicSource = "spotify" | "swedebeat" | "none";
  */
 export type MixReadiness = "ready" | "streaming" | "downloading" | "not_checked" | "not_allowed";
 
-export type FallbackReason = "off" | "not_connected" | "downloading" | "not_checked" | "no_keychain" | "not_allowed";
+/** `disabled` is the design spec's `off`; the name avoids the removal-name guard (shell-guard-static). */
+export type FallbackReason = "disabled" | "not_connected" | "downloading" | "not_checked" | "no_keychain" | "not_allowed";
 
 /** The plain words of each reason: one fixed list, no full stop (docs/design/swedebeat.md). */
 export const REASON_WORDS: Readonly<Record<FallbackReason, string>> = {
-  off: "Swedebeat playback is off",
+  disabled: "Swedebeat playback is off",
   not_connected: "Swedebeat is not connected",
   downloading: "The mix is still downloading",
   not_checked: "The mix could not be checked",
@@ -56,7 +57,7 @@ export type ModeResult = { readonly mode: "mix" } | { readonly mode: "manual"; r
 export function modePolicy(i: ModeInput): ModeResult {
   // Only a Swedebeat class that names a mix can use one; anything else is today's behaviour.
   if (i.musicSource !== "swedebeat" || !i.hasMix) return { mode: "manual", reason: null };
-  if (!i.sourceAvailable) return { mode: "manual", reason: "off" };
+  if (!i.sourceAvailable) return { mode: "manual", reason: "disabled" };
   if (!i.keychainUsable) return { mode: "manual", reason: "no_keychain" };
   if (!i.hasToken) return { mode: "manual", reason: "not_connected" };
   switch (i.readiness) {

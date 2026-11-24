@@ -36,7 +36,7 @@ describe("UnavailableMixSource, the default", () => {
     const source = chooseMixSource();
     for (const readiness of ["ready", "streaming", "downloading", "not_checked", "not_allowed"] as const) {
       const r = modePolicy({ musicSource: "swedebeat", hasMix: true, sourceAvailable: source.kind === "available", keychainUsable: true, hasToken: true, readiness });
-      assert.deepEqual(r, { mode: "manual", reason: "off" });
+      assert.deepEqual(r, { mode: "manual", reason: "disabled" });
     }
   });
   it("is imported by nothing the shipped bundles load", () => {

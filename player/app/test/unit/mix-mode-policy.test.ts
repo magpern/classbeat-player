@@ -11,8 +11,8 @@ const MIX: ModeResult = { mode: "mix" };
 const cases: ReadonlyArray<readonly [string, Partial<ModeInput>, ModeResult]> = [
   ["every condition holds, mix cached", {}, MIX],
   ["partly cached, the sound has what it needs", { readiness: "streaming" }, MIX],
-  ["unavailable source", { sourceAvailable: false }, manual("off")],
-  ["unavailable source beats a missing keychain and token", { sourceAvailable: false, keychainUsable: false, hasToken: false }, manual("off")],
+  ["unavailable source", { sourceAvailable: false }, manual("disabled")],
+  ["unavailable source beats a missing keychain and token", { sourceAvailable: false, keychainUsable: false, hasToken: false }, manual("disabled")],
   ["no usable keychain", { keychainUsable: false }, manual("no_keychain")],
   ["no keychain beats no token", { keychainUsable: false, hasToken: false }, manual("no_keychain")],
   ["no token (never connected, signed out, or the token went invalid)", { hasToken: false }, manual("not_connected")],
@@ -39,8 +39,8 @@ describe("mode policy", () => {
   });
 
   it("gives every reason fixed plain words that name no code, host, path or token", () => {
-    assert.deepEqual(Object.keys(REASON_WORDS).sort(), ["downloading", "no_keychain", "not_allowed", "not_checked", "not_connected", "off"]);
-    assert.equal(REASON_WORDS.off, "Swedebeat playback is off");
+    assert.deepEqual(Object.keys(REASON_WORDS).sort(), ["disabled", "downloading", "no_keychain", "not_allowed", "not_checked", "not_connected"]);
+    assert.equal(REASON_WORDS.disabled, "Swedebeat playback is off");
     assert.equal(REASON_WORDS.not_connected, "Swedebeat is not connected");
     assert.equal(REASON_WORDS.downloading, "The mix is still downloading");
     assert.equal(REASON_WORDS.not_checked, "The mix could not be checked");
@@ -54,6 +54,6 @@ describe("mode policy", () => {
   it("words a result: the reason for a fall-back, nothing otherwise", () => {
     assert.equal(reasonWords(MIX), null);
     assert.equal(reasonWords(manual(null)), null);
-    assert.equal(reasonWords(manual("off")), "Swedebeat playback is off");
+    assert.equal(reasonWords(manual("disabled")), "Swedebeat playback is off");
   });
 });

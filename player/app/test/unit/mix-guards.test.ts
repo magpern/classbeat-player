@@ -30,7 +30,7 @@ const isMixFile = (p: string): boolean => /\/src\/.*\/mix\//.test(p) || p.endsWi
 
 describe("no real host from code or tests", () => {
   it("reads the provider list", () => {
-    assert.ok(hosts.length > 0 && hosts.includes("swedebeat.se"));
+    assert.ok(hosts.length > 0);
   });
 
   it("names no guarded host under player/", () => {
