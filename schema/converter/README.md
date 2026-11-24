@@ -24,7 +24,7 @@ dropped and a 20 minute FTP test that is kept).
 ```
 { name, description?, sport?: "cycling" | "running",
   segments: [ { name, kind, intervals: [ { sec, zone, rpm | gradient, standing?, game?, ftp_test?, cue? } ] } ],
-  music?: { crossfade_sec, spotify_playlist?, songs: [ { spotify_id, title, artist, bpm?, length_sec } ] } }
+  music?: { crossfade_sec, spotify_playlist?, swedebeat_mix?: { id, length_sec, offset_sec? }, songs: [ { spotify_id?, title, artist, bpm?, length_sec } ] } }
 ```
 
 ## Mapping: each classbeat field and what happens to it
@@ -48,6 +48,7 @@ dropped and a 20 minute FTP test that is kept).
 | sum of interval lengths | `class.length_ms` and `totals.length_ms` | s4 |
 | `music.crossfade_sec` | `music.design_crossfade_ms`, seconds x 1000 | s3, ADR 0001 |
 | `music.spotify_playlist` | `music.spotify_playlist` (22-character id), only with songs; the document is then format `"1.2"` (without it, `"1.0"`) | s3, s7 |
+| `music.swedebeat_mix` `{id, length_sec, offset_sec?}` | `music.source: "swedebeat"` and `music.swedebeat_mix {id, length_ms, offset_ms}` (`offset_sec` defaults to 0), each song gets `ids.swedebeat_mix` = the mix id, no `spotify_playlist`; the document is then format `"1.3"`. Only with songs | s3, s7, ADR 0013 s4 |
 | song `spotify_id` | `songs[].ids.spotify_track` | s3 |
 | song `title`, `artist` | same, whitespace collapsed | s3 |
 | song `length_sec` | `length_ms` | s2 |

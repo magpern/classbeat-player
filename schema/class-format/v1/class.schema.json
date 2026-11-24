@@ -29,6 +29,13 @@
       "then": { "properties": { "music": { "not": { "required": ["spotify_playlist"] } } } }
     },
     {
+      "if": {
+        "properties": { "format_version": { "enum": ["1.0", "1.1", "1.2"] } },
+        "required": ["format_version"]
+      },
+      "then": { "properties": { "music": { "not": { "required": ["swedebeat_mix"] } } } }
+    },
+    {
       "if": { "properties": { "music": { "properties": { "source": { "const": "none" } } } } },
       "then": {
         "properties": {
@@ -60,7 +67,7 @@
     }
   ],
   "$defs": {
-    "formatVersion": { "enum": ["1.0", "1.1", "1.2"] },
+    "formatVersion": { "enum": ["1.0", "1.1", "1.2", "1.3"] },
     "ms": { "type": "integer", "minimum": 0 },
     "positiveMs": { "type": "integer", "minimum": 1 },
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
@@ -96,7 +103,26 @@
           "minLength": 22,
           "maxLength": 22,
           "pattern": "^[A-Za-z0-9]{22}$"
-        }
+        },
+        "swedebeat_mix": { "$ref": "#/$defs/swedebeatMix" }
+      }
+    },
+    "swedebeatMix": {
+      "description": "Format 1.3. The one Swedebeat mix the class was designed against (ADR 0013 section 4). Only with music source swedebeat (semantic rule swedebeat_mix_without_swedebeat_source); the mix must cover the class (swedebeat_mix_too_short) and every song window (song_outside_mix).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "length_ms"],
+      "properties": {
+        "id": {
+          "description": "The provider's opaque mix id as classbeat holds it (letters, digits, underscore, hyphen; 1 to 64). Never a token or a link. A trailing newline is refused (Python's $ allows one before the end), so a mix id cannot smuggle a line break.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "not": { "pattern": "\\n" }
+        },
+        "length_ms": { "$ref": "#/$defs/positiveMs" },
+        "offset_ms": { "description": "The mix position at class time 0; absent means 0.", "$ref": "#/$defs/ms" }
       }
     },
     "zoneDef": {

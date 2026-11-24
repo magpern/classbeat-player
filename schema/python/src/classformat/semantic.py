@@ -48,6 +48,18 @@ def _check_music(doc: dict[str, Any], out: list[Violation]) -> None:
     music = doc["music"]
     if "spotify_playlist" in music and music["source"] != "spotify":
         out.append(("playlist_without_spotify_source", "/music/spotify_playlist"))
+    mix = music.get("swedebeat_mix")
+    if mix is None:
+        return
+    if music["source"] != "swedebeat":
+        out.append(("swedebeat_mix_without_swedebeat_source", "/music/swedebeat_mix"))
+        return  # the other mix rules say nothing about a mix that has no place here
+    offset = mix.get("offset_ms", 0)
+    if offset + doc["class"]["length_ms"] > mix["length_ms"]:
+        out.append(("swedebeat_mix_too_short", "/music/swedebeat_mix/length_ms"))
+    for i, s in enumerate(doc["songs"]):
+        if offset + s["end_ms"] > mix["length_ms"]:
+            out.append(("song_outside_mix", f"/songs/{i}/end_ms"))
 
 
 def _check_points(
