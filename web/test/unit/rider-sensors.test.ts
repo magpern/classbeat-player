@@ -140,6 +140,13 @@ describe("words", () => {
   });
 });
 
+describe("the iPhone sheet (owner, 2026-11-24)", () => {
+  it("names the classbeat Player app and no other browser", () => {
+    assert.match(UNSUPPORTED.iphone, /classbeat Player app/);
+    assert.doesNotMatch(UNSUPPORTED.iphone, /Bluefy|browser/i);
+  });
+});
+
 describe("platform", () => {
   it("iPhone", () => assert.equal(isIphone({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", maxTouchPoints: 5 }), true));
   it("Android", () => assert.equal(isIphone({ userAgent: "Mozilla/5.0 (Linux; Android 15)", maxTouchPoints: 5 }), false));

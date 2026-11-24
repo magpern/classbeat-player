@@ -75,7 +75,7 @@ const STATES: Readonly<Record<string, StateDef>> = {
   "sensors-sheet": sheet(IN, inClass(RUN), connect(STRAP), another(BIKE), press("sensors"), words([...SHEET_WORDS, STRAP.name, "Heart rate, connected", BIKE.name, "Power and cadence, connected", "Disconnect"])),
   "sensors-sheet-lost": sheet(IN, inClass(RUN), connect(STRAP), another(BIKE), press("sensors"), async (f) => drop(f.page, BIKE.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), words([...SHEET_WORDS, "Power and cadence, lost", "Reconnect", "Heart rate, connected"])),
   "sensors-unsupported": sheet({ ...IN, sensors: "none" }, inClass(RUN), words(["Connect a sensor"]), press("sensors"), words(["This browser cannot connect to a sensor", "Open this page in Chrome on an Android phone.", "Done"], ["Bluefy"])),
-  "sensors-unsupported-iphone": sheet({ ...IN, sensors: "none", userAgent: IPHONE_UA }, inClass(RUN), press("sensors"), words(["This browser cannot connect to a sensor", "On an iPhone, open this page in Bluefy.", "Done"], ["Chrome"])),
+  "sensors-unsupported-iphone": sheet({ ...IN, sensors: "none", userAgent: IPHONE_UA }, inClass(RUN), press("sensors"), words(["This browser cannot connect to a sensor", "On an iPhone, this page gives you the targets and the timing.", "Sensors on an iPhone need the classbeat Player app.", "Done"], ["Chrome", "Bluefy"])),
   "sensors-worst-sheet": sheet(IN, inClass(WORST, true, NICK24), connect(GARMIN), another(WIDE), press("sensors"), async (f) => drop(f.page, WIDE.id), tick(), words([...SHEET_WORDS, WIDE.name, GARMIN.name, "Power and cadence, lost", "Heart rate, connected"])),
 };
 
