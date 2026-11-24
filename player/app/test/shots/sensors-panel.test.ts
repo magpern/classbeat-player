@@ -4,7 +4,7 @@
 // network, no Bluetooth. Needs `npm run build`.
 //   npm run test:shots            (SHOTS_ONLY=<regex> limits it to matching "<state>-<w>x<h>")
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -12,6 +12,7 @@ import { build } from "esbuild";
 import type { Browser, Page } from "playwright-core";
 import { ZONE_HUES } from "../../src/core/sensors/zone-hue.ts";
 import { TICK_FILL, TRACK_FILL } from "../../src/renderer/sensors-draw.ts";
+import { CAP_READING, CONTROL_HEIGHT, measure } from "./floors.ts";
 import { APP_DIR, launchChrome, SHOT_DIR } from "./page.ts";
 
 const SIZES: readonly (readonly [number, number])[] = [[1000, 720], [1280, 800]];
@@ -52,6 +53,9 @@ const SHOTS: readonly Shot[] = [
   },
 ];
 
+/** A riders view for the harness: two riders, the row closed. */
+const RIDERS = { shown: true, on: true, count: "2", word: null, line: null, dim: false, active: true, locked: false, lockText: "Lock joining", lockSub: "Joining is open", canNewCode: true, newCodeSub: "Old code stops working", canTurnOn: false, offLine: null, rows: [{ id: "r1", nickname: "Anna" }, { id: "r2", nickname: "Bo" }] };
+
 let browser: Browser;
 let dir: string;
 const only = process.env.SHOTS_ONLY ? new RegExp(process.env.SHOTS_ONLY) : null;
@@ -61,6 +65,8 @@ before(async () => {
   dir = mkdtempSync(join(tmpdir(), "sensors-harness-"));
   await build({ entryPoints: [join(APP_DIR, "test", "shots", "sensors-harness.ts")], outfile: join(dir, "sensors-harness.js"), bundle: true, platform: "browser", format: "iife", target: "chrome130", logLevel: "warning" });
   const html = readFileSync(join(APP_DIR, "src", "renderer", "presenter.html"), "utf8").replace("presenter.js", "sensors-harness.js");
+  // The page's one style sheet, which its policy allows from beside it (style-src 'self', #682).
+  copyFileSync(join(APP_DIR, "dist", "presenter.css"), join(dir, "presenter.css"));
   writeFileSync(join(dir, "sensors.html"), html);
   browser = await launchChrome();
 });
@@ -102,7 +108,10 @@ test("the panel in each state: numbers and a gauge against the plan, no hue but 
       try {
         const { page } = o;
         await page.waitForSelector("#sensors");
+        // The riders row under it, closed, as in a class (sensors.md part 2).
+        await page.evaluate((v) => void ((window as unknown as { __riders: unknown }).__riders = v), RIDERS);
         await drive(page, s);
+        await page.waitForSelector("#riders-toggle:not([hidden])");
         for (const sel of s.act) await page.click(sel);
         // The two numbers are typed in the drawer, when it shows.
         if (s.numbers && (await page.isVisible("#sensors-ftp"))) {
@@ -140,6 +149,38 @@ test("the panel in each state: numbers and a gauge against the plan, no hue but 
         assert.equal(d.other, 0, `${name}: one straight gauge, no ring, no style`);
         assert.equal(d.storage, 0, `${name}: nothing stored`);
         assert.ok(d.names, `${name}: names are text only`);
+        // S1 to S6 on the styled page (#682): the floors, the row above the riders row and at most
+        // 100 px closed; open, the head and the readings in view and the riders row still showing.
+        const m = await measure(page);
+        assert.deepEqual(m.cap, [], `${name}: S1 cap heights`);
+        assert.deepEqual(m.contrast, [], `${name}: S2 contrast`);
+        assert.equal(m.sideways, false, `${name}: S3 no sideways scroll`);
+        assert.deepEqual(m.cut, [], `${name}: S3 no cut text`);
+        assert.deepEqual(m.hue, [], `${name}: S5 no hue outside the gauge`);
+        assert.deepEqual(m.short, [], `${name}: S6 buttons at least ${CONTROL_HEIGHT} px`);
+        assert.ok(m.sensors.bottom <= m.riders.top + 0.5, `${name}: the sensors row above the riders row`);
+        const r = await page.evaluate(() => {
+          const ctx = document.createElement("canvas").getContext("2d")!;
+          const cap = (e: Element): number => {
+            const cs = getComputedStyle(e);
+            ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return ctx.measureText("8").actualBoundingBoxAscent;
+          };
+          const live = document.getElementById("sensors-live")!;
+          const fixed = document.getElementById("sensors-measures")!.getBoundingClientRect();
+          return {
+            readings: [...document.querySelectorAll("#sensors-measures output"), ...(live.hidden ? [] : [live])].map(cap),
+            fixedFoot: fixed.height > 0 ? fixed.bottom : 0,
+            rowFoot: document.getElementById("riders-row")!.getBoundingClientRect().bottom,
+          };
+        });
+        assert.ok(r.readings.every((h) => h >= CAP_READING), `${name}: S1 readings ${r.readings.map((h) => h.toFixed(1))}`);
+        if (m.sensors.open) {
+          assert.ok(r.fixedFoot <= size[1], `${name}: S4 the drawer's head and readings in view`);
+          assert.ok(r.rowFoot <= size[1] + 0.5, `${name}: S4 the riders row in view`);
+        } else {
+          assert.ok(m.sensors.bottom - m.sensors.top <= 100, `${name}: the closed row at most 100 px (${m.sensors.bottom - m.sensors.top})`);
+        }
         assert.deepEqual(o.external, [], `${name}: requests left the file system`);
         assert.deepEqual(o.errors, [], `${name}: page errors (the page has no shell bridge)`);
       } finally {
@@ -294,8 +335,7 @@ test("only one drawer is open at a time: the sensors drawer and the riders drawe
   try {
     const { page } = o;
     await page.waitForSelector("#sensors");
-    const view = { shown: true, on: true, count: "2", word: null, line: null, dim: false, active: true, locked: false, lockText: "Lock joining", lockSub: "Joining is open", canNewCode: true, newCodeSub: "Old code stops working", canTurnOn: false, offLine: null, rows: [{ id: "r1", nickname: "Anna" }, { id: "r2", nickname: "Bo" }] };
-    await page.evaluate((v) => void ((window as unknown as { __riders: unknown }).__riders = v), view);
+    await page.evaluate((v) => void ((window as unknown as { __riders: unknown }).__riders = v), RIDERS);
     await drive(page, SHOTS[3]!);
     await page.waitForSelector("#riders-toggle:not([hidden])");
     const open = async () => ({ riders: await page.isVisible("#riders-drawer"), sensors: await page.isVisible("#sensors-drawer") });

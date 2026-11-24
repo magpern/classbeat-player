@@ -22,7 +22,7 @@ async function built(extra: Partial<BuildOptions> = {}, options: readonly BuildO
 
 test("no build of the desktop app holds Bluetooth code, in its modules, output or numbers", async () => {
   const results = await built();
-  assert.equal(results.length, 6);
+  assert.equal(results.length, 7); // six scripts and the presenter's style sheet (#682), all scanned
   assert.deepEqual(results.flatMap((r) => buildFindings(r, APP)), []);
 });
 
