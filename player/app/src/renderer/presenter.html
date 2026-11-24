@@ -78,6 +78,26 @@
     <button type="button" id="live-end" hidden>End phone remote</button>
   </p>
 </section>
+<section id="sensors" aria-label="Sensors" data-state="unavailable">
+  <p id="sensors-row"><strong id="sensors-title">Sensors</strong> <output id="sensors-state"></output> <button type="button" id="sensors-connect" hidden></button> <button type="button" id="sensors-toggle" aria-controls="sensors-drawer" aria-expanded="false" hidden>Show</button></p>
+  <p id="sensors-line" role="status" hidden></p>
+  <p id="sensors-live" hidden></p>
+  <div id="sensors-drawer" hidden>
+    <ul id="sensors-measures"></ul>
+    <p id="sensors-no-numbers" hidden></p>
+    <ul id="sensors-devices"></ul>
+    <div id="sensors-chooser" role="group" aria-labelledby="sensors-looking" hidden>
+      <p id="sensors-looking"></p>
+      <ul id="sensors-nearby"></ul>
+      <p><button type="button" id="sensors-cancel"></button></p>
+    </div>
+    <p id="sensors-failed" role="status" hidden></p>
+    <p><button type="button" id="sensors-another" hidden></button></p>
+    <p><label><span id="sensors-ftp-label"></span> <input type="number" id="sensors-ftp" min="50" max="600" step="1" inputmode="numeric"></label>
+    <label><span id="sensors-hrmax-label"></span> <input type="number" id="sensors-hrmax" min="80" max="230" step="1" inputmode="numeric"></label></p>
+    <p id="sensors-note"></p>
+  </div>
+</section>
 <section id="riders" aria-label="Riders" hidden>
   <p id="riders-row"><output id="riders-count">–</output> Riders <output id="riders-word" hidden></output> <button type="button" id="riders-toggle" aria-controls="riders-drawer" aria-expanded="false" hidden>Show list</button> <button type="button" id="riders-on" hidden>Turn on join codes</button></p>
   <p id="riders-off" hidden></p>

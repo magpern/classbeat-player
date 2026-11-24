@@ -9,6 +9,9 @@ import { mountLive } from "./live-panel.ts";
 import type { LiveApi } from "./live-panel.ts";
 import { mountPairing } from "./pairing-panel.ts";
 import { mountRiders } from "./riders-panel.ts";
+import { mountSensors } from "./sensors-panel.ts";
+import { planInputOf } from "../core/sensors/plan-input.ts";
+import { UNAVAILABLE_SOURCE } from "../core/sensors/unavailable-source.ts";
 import type { RidersApi } from "./riders-panel.ts";
 
 interface PlayerApi extends LiveApi, RidersApi {
@@ -30,6 +33,9 @@ const $ = (id: string): HTMLElement => {
 const setText = (id: string, text: string): void => {
   $(id).textContent = text;
 };
+
+// The sensor panel reads a source and never the shell: the shipped source is the unavailable stand-in.
+const sensors = mountSensors(UNAVAILABLE_SOURCE);
 
 let shownLoad = -1;
 
@@ -108,6 +114,7 @@ function renderLink(s: Snapshot): void {
 
 function render(s: Snapshot | null): void {
   if (!s) return;
+  sensors.setPlan(planInputOf(s));
   setText("title", s.doc ? s.doc.class.title : "No class open");
   const err = $("error");
   err.hidden = s.error === null;
