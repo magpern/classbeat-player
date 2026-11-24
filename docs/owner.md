@@ -46,6 +46,10 @@ with other work; nothing in the development loop waits for an answer.
   lock set the app stays out of instructor mode; switching to rider mode first ends everything of
   instructor mode; the Spotify music link and notification access are instructor mode only;
   rider mode keeps rules 13 to 15 and gives riders no control.
+- **The app's screens: defaults agents picked (#636, 2026-11-24).** You may change any: the app
+  does not open from the room's QR code or an App Link, so a rider types the room code; "Follow the
+  music" is not on the class list; and a shared tablet forgets a rider's remembered nickname and
+  FTP when the rider leaves the class or the app changes mode (#633).
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
@@ -134,6 +138,10 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
   that changes the spike; to be renamed for the two-mode app) or a build of your own following
   `player/spikes/android-follower/README.md`. It is a test build signed with a throwaway debug
   key. Hand back the log file the README names.
+- **Android 13 and later, "Allow restricted settings".** When the app asks for notification
+  access, Android 13+ may first make you allow restricted settings in the app's system page. The
+  words on that page differ between phone makers; on your phone, note the exact words and steps
+  so the app's help text (docs/design/app-follow.md) can match them.
 - **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
   mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
   mode first (#447).
