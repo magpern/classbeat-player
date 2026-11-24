@@ -1,7 +1,8 @@
 // Rule guards (plan section 3) and code structure rules (CLAUDE.md), checked on the source.
 // Rule 2: no equipment control. Rule 3: no audio playback, no Spotify interface.
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { REPO } from "./fixtures.ts";
@@ -122,10 +123,10 @@ const MOBILE = join(REPO, "player", "mobile");
 const MOBILE_SKIP = new Set(
   ["node_modules", "android/.gradle", "android/.kotlin", "android/build", "android/app/build", "android/app/src/main/assets/public"].map((p) => join(...p.split("/"))),
 );
-function mobileFiles(dir: string, ext: RegExp): string[] {
+function mobileFiles(dir: string, ext: RegExp, root = MOBILE): string[] {
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) return MOBILE_SKIP.has(relative(MOBILE, p)) ? [] : mobileFiles(p, ext);
+    if (statSync(p).isDirectory()) return MOBILE_SKIP.has(relative(root, p)) ? [] : mobileFiles(p, ext, root);
     return ext.test(n) ? [p] : [];
   });
 }
@@ -148,6 +149,25 @@ test("the phone shell has TypeScript and Kotlin sources to check", () => {
   // Only those exact paths are skipped: the same names one level away are sources.
   for (const near of ["build", "public", join("android", "app", "src", "main", "build"), join("src", "public")]) {
     assert.ok(!MOBILE_SKIP.has(near), near);
+  }
+});
+
+test("the phone shell's walk skips a folder by its exact path, never by its name", () => {
+  // The walk itself, on a tree of its own (#668): the set above alone cannot show it.
+  const root = mkdtempSync(join(tmpdir(), "mobile-walk-"));
+  try {
+    const put = (path: string) => {
+      const p = join(root, ...path.split("/"));
+      mkdirSync(join(p, ".."), { recursive: true });
+      writeFileSync(p, "");
+    };
+    const skipped = ["node_modules/a.ts", "android/app/build/b.kt", "android/app/src/main/assets/public/c.js"];
+    const scanned = ["src/node_modules/d.ts", "src/build/e.ts", "src/public/f.ts", "android/app/src/main/build/G.kt", "build/h.ts"];
+    for (const p of [...skipped, ...scanned]) put(p);
+    const found = mobileFiles(root, /\.(ts|js|kt)$/, root).map((p) => relative(root, p).split(sep).join("/"));
+    assert.deepEqual(found.sort(), [...scanned].sort());
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

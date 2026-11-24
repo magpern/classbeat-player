@@ -1,8 +1,7 @@
 // The interface every follower of a music app implements (ADR 0001: "One interface, one module
-// per follower"). The macOS reader is main/macos-reader.ts, the Windows reader
-// main/readers/windows-reader.ts, the Linux reader main/linux-reader.ts and the phone's reader
-// player/mobile/src/follow/android-reader.ts; the manual reader reads nothing. What the three share (when they run, which reading they hold, when a command may
-// go) is reader-lifecycle.ts. A reader only reports what the music app says: no method here
+// per follower"): the macOS, Windows, Linux and phone readers (main/, and the phone's
+// player/mobile/src/follow/android-reader.ts); the manual reader reads nothing. What the four
+// share is reader-lifecycle.ts. A reader only reports what the music app says: no method here
 // plays, fetches, stores or controls anything (plan section 3, rule 3).
 import type { Observation } from "./types.ts";
 
