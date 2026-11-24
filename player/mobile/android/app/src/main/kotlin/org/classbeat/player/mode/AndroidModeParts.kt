@@ -22,9 +22,16 @@ class PrefsModeStore(context: Context) : ModeStore {
         check(prefs.edit().putString(KEY, value).commit()) { "the mode was not written" }
     }
 
+    override fun wipePending(): Boolean = prefs.getBoolean(WIPE, false)
+
+    override fun setWipePending(pending: Boolean) {
+        check(prefs.edit().putBoolean(WIPE, pending).commit()) { "the wipe flag was not written" }
+    }
+
     private companion object {
         const val FILE = "mode"
         const val KEY = "last"
+        const val WIPE = "wipe_pending"
     }
 }
 

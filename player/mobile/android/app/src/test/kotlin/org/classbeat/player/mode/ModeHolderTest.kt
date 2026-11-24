@@ -21,6 +21,17 @@ class ModeHolderTest {
             this.value = value
             log += "write $value"
         }
+
+        /** The wipe flag; not logged, so the logs above stay exact. */
+        var wipe = false
+        var flagFails = false
+
+        override fun wipePending() = wipe
+
+        override fun setWipePending(pending: Boolean) {
+            if (flagFails) error("disk full")
+            wipe = pending
+        }
     }
 
     private class FakeDevice(override var paired: Boolean, override var secureLock: Boolean) : Device
@@ -310,5 +321,87 @@ class ModeHolderTest {
         finish(null)
         assertNull(h.current)
         assertFalse(log.any { it.startsWith("open") })
+    }
+
+    @Test
+    fun `a start after a switch cut short drops everything before any page loads`() {
+        for (stored in listOf("rider", "instructor")) {
+            log.clear()
+            state.values.forEach { it.clear(); it += "left" }
+            val store = Store(stored, log).apply { wipe = true }
+            val (h, _) = holder(stored, paired = true, lock = true, store = store)
+            val mode = h.start()
+            assertTrue(stored, state.values.all { it.isEmpty() })
+            val opened = log.indexOfFirst { it.startsWith("open") }
+            assertTrue(stored, opened > log.indexOf("dropped ${ModePolicy.TEARDOWN.last()}"))
+            assertEquals(stored, "open $mode", log.last())
+            assertFalse(stored, store.wipe)
+        }
+    }
+
+    @Test
+    fun `a switch the app was killed in leaves the flag, and the next start finishes the wipe`() {
+        later += "webStorage"
+        val store = Store("instructor", log)
+        val (h, _) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        state.values.forEach { it += "instructor" }
+        h.askRider()
+        h.riderAnswered(true)
+        // Killed here: webStorage never finished.
+        assertTrue(store.wipe)
+        assertEquals("rider", store.value)
+        later.clear()
+        state.getValue("webStorage").add("still here")
+        log.clear()
+        val (next, _) = holder("rider", paired = true, lock = true, store = store)
+        assertEquals(Mode.RIDER, next.start())
+        assertTrue(state.getValue("webStorage").isEmpty())
+        assertTrue(log.indexOf("dropped webStorage") < log.indexOf("open RIDER"))
+        assertFalse(store.wipe)
+    }
+
+    @Test
+    fun `a flag that cannot be written stops the switch`() {
+        val store = Store("instructor", log)
+        val (h, _) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        log.clear()
+        store.flagFails = true
+        h.askRider()
+        assertFalse(h.riderAnswered(true))
+        assertEquals("rider", store.value)
+        assertEquals("fatal [${ModeHolder.STORE}]", log.last())
+        assertFalse(log.any { it.startsWith("open") })
+    }
+
+    @Test
+    fun `a second answer from one drop opens nothing while another drop is still pending`() {
+        later += listOf("webStorage", "follower")
+        val h = instructor()
+        h.askRider()
+        assertTrue(h.riderAnswered(true))
+        val web = unfinished.getValue("webStorage")
+        web(null)
+        web(null)
+        assertNull(h.current)
+        assertFalse(log.any { it.startsWith("open") })
+        unfinished.getValue("follower")(null)
+        assertEquals(Mode.RIDER, h.current)
+        assertEquals(1, log.count { it.startsWith("open") })
+    }
+
+    @Test
+    fun `unpairing in instructor mode switches to rider mode with no question`() {
+        val h = instructor()
+        h.unpaired()
+        assertEquals(Mode.RIDER, h.current)
+        assertFalse(log.contains("question"))
+        assertTrue(state.values.all { it.isEmpty() })
+        val (r, _) = holder("rider", paired = true, lock = true)
+        r.start()
+        log.clear()
+        r.unpaired()
+        assertTrue(log.isEmpty())
     }
 }
