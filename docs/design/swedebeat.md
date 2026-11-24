@@ -130,7 +130,7 @@ own panels.
 | Details refused | `refused` (`bad_credentials`) | **Plate** "Swedebeat did not accept those details", detail "Check them and type them again. Nothing was kept." | The form again, fields empty | [refused](mockups/class-list-swedebeat-refused.html) |
 | Too many tries | `refused` (`rate_limited`) | **Plate** "Too many tries", detail "Wait a few minutes, then type your details again. Nothing was kept." No number of minutes | The form again, empty | [too many](mockups/class-list-swedebeat-rate-limited.html) |
 | Could not be reached | `refused` (`unavailable`) | **Plate** "Swedebeat could not be reached", detail "Check the connection, then try again. Swedebeat classes play on the manual clock.", key "Try again" (opens the form) | List; rows "Manual clock" | [unreachable](mockups/class-list-swedebeat-unreachable.html) |
-| Connected | `signed_in` | Filled circle, "Swedebeat is connected", detail "Mixes download in the background and play from this computer", key "Sign out of Swedebeat" | List; each Swedebeat row shows its mix (below). Footer detail "Starting plays the mix and opens the room screen and the presenter window" when the selected mix is ready, otherwise the reason (Fall-back reasons) | [connected](mockups/class-list-swedebeat-signed-in.html) |
+| Connected | `signed_in` | Filled circle, "Swedebeat is connected", detail "Mixes download in the background and play from this computer", key "Sign out of Swedebeat" | List; each Swedebeat row shows its mix (below). Footer detail "Starting plays the mix and opens the room screen and the presenter window" when the selected mix is ready, otherwise the reason (Fall-back reasons); while the mix downloads and has not been caught up, "Starting plays the mix while it downloads" | [connected](mockups/class-list-swedebeat-signed-in.html) |
 | Connect again | `signed_out` after an invalid token (the token only was deleted) | **Plate** "Swedebeat needs you to connect again", detail "The mixes saved on this computer are kept. Swedebeat classes play on the manual clock.", key "Connect Swedebeat again" (opens the form) | List; rows "Manual clock" | [connect again](mockups/class-list-swedebeat-reconnect.html) |
 | No safe place | `keychainUsable` false | Hollow square, "Swedebeat cannot be connected here", detail "This computer has no safe place to keep the sign-in. Swedebeat classes play on the manual clock." No key | List; rows "Manual clock" | [no keychain](mockups/class-list-swedebeat-no-keychain.html) |
 | Sign out, asked | `signed_in`, key pressed | **Plate** "Sign out of Swedebeat?", detail "The mixes saved on this computer are removed. Swedebeat classes play on the manual clock.", keys "Sign out" and "Keep connected" (Esc; has the focus) | List as it was | [sign out asked](mockups/class-list-swedebeat-sign-out-ask.html) |
@@ -159,6 +159,7 @@ Notes:
 | Before the start, mix ready | White dot, white: "Mix ready" | [ready](mockups/room-mix-ready.html) |
 | Before the start, mix downloading | Hollow circle, grey: "Downloading the mix 63%". Start works: the mix plays while it downloads | [downloading](mockups/room-mix-downloading.html) |
 | Before the start, manual clock | Grey square: "Press Start · *reason*" | [fall-back](mockups/room-mix-fallback.html) |
+| Before the start, longest reason | Grey square: "Press Start · Swedebeat cannot be connected here"; checked at 1920×1080, 1280×1024 and 1024×768 | [longest](mockups/room-mix-fallback-longest.html) |
 | Running on the mix | White dot, white: "Playing the mix". No bar count and no "Music not heard": the clock is the audio | [playing](mockups/room-mix-playing.html) |
 | Fell back during the class | White square for 30 s with the short reason ("Mix still downloading"), then grey "Manual clock". The clock continues from where it was; the audio has stopped | [fell back](mockups/room-mix-fell-back.html) |
 
@@ -175,7 +176,7 @@ the ADR leaves unworded.
 |---|---|---|---|
 | `off` | Swedebeat playback is off | The source is `UnavailableMixSource` | Swedebeat line, footer, room link |
 | `not_connected` | Swedebeat is not connected | No token (never connected, signed out, or the token went invalid) | Same |
-| `downloading` | The mix is still downloading | A chunk the sound needs is not yet written and 10 s passed | Footer, room link (before the start, or during the class) |
+| `downloading` | The mix is still downloading | A chunk the sound needs is not yet written and 10 s passed: during the class, or when the sound would catch up with the download | Footer, room link (during the class) |
 | `not_checked` | The mix could not be checked | A chunk or the length failed its check, or the decoded length is more than 1 000 ms from `length_ms`, or the source would not describe it | Row, footer, room link |
 | `no_keychain` | Swedebeat cannot be connected here | `keychainUsable` is false | Swedebeat line, footer, room link |
 | `not_allowed` | This account cannot play this mix | `describe` says the account may not play it | Footer, room link |
@@ -193,7 +194,7 @@ The focus ring is class-list.md's: 3 px `--light-1`.
 
 ## Measurable criteria
 
-Checked by `mockups/measure.js` on every state below at the three window sizes (class list) and the
+Checked by `mockups/measure.js` (in the repository; run `ONLY='swedebeat|room-mix' node docs/design/mockups/shoot.js`, which shoots and checks the fixtures of `swedebeat-pages.js`) on every state below at the three window sizes (class list) and the
 three room sizes (room); the product's CI screenshots are held to the same numbers.
 
 | # | Check | Number |

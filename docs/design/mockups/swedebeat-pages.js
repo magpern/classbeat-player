@@ -122,6 +122,8 @@ const doc = (name) => {
 <div class="app">
 ${body}
 </div>
+<script>/* The selected row is scrolled into view, as the product does. */
+var r = document.querySelector(".row.sel"); if (r) r.scrollIntoView({ block: "nearest" });</script>
 </body>
 </html>
 `;
@@ -135,6 +137,8 @@ const ROOMS = {
     'State: before the start, the mix is on its way. Hollow dot, grey, the number in the words. Start still works: the mix plays while it downloads, and falls back (below) only if the sound would catch up with the download.'],
   'fallback': ['room-before-start-manual.html', '<span class="link manual" data-tier="label">Press Start</span>', '<span class="link manual" data-tier="label">Press Start · Swedebeat is not connected</span>',
     'State: before the start, the class is a Swedebeat class and plays on the manual clock. Grey square (a choice, not a fault: no plate); the reason follows "Press Start".'],
+  'fallback-longest': ['room-before-start-manual.html', '<span class="link manual" data-tier="label">Press Start</span>', '<span class="link manual" data-tier="label">Press Start · Swedebeat cannot be connected here</span>',
+    'State: before the start, the longest reason (no safe place for the sign-in). Checked at every room size.'],
   'playing': ['room-running.html', '<span class="link" data-tier="label">Following Spotify</span>', '<span class="link ready" data-tier="label">Playing the mix</span>',
     'State: running on the mix. The class clock is the audio position, so there is no "following", no bar count to lose and no link to lose.'],
   'fell-back': ['room-running.html', '<span class="link" data-tier="label">Following Spotify</span>', '<span class="link manual handover" data-tier="label">Mix still downloading</span>',
