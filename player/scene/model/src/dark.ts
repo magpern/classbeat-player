@@ -13,6 +13,8 @@ export interface Turn {
   readonly capMs?: number;
   /** The look is at rest on its target after the turn, so the sway is live again once the hold ends: false for a gather and a fan, whose aims do not take the phase. */
   readonly swayAfter?: boolean;
+  /** A drop's gather: the beat-like light (the lift, the tempo pulse, the build's haze step) is held with the sway for the span's hold. */
+  readonly holdsBeat?: boolean;
 }
 export interface DarkSpan {
   /** The off-step: the first turn's first frame. */
@@ -25,6 +27,8 @@ export interface DarkSpan {
   readonly forceOnMs?: number;
   /** The last turn of the span leaves the look at rest (see `Turn.swayAfter`). */
   readonly swayAfter?: boolean;
+  /** One of the span's turns is a drop's gather (see `Turn.holdsBeat`). */
+  readonly holdsBeat?: boolean;
 }
 export interface Decay { readonly fromMs: number; readonly toMs: number }
 
@@ -49,8 +53,8 @@ export function planSpans(turns: readonly Turn[], frameMs: number): DarkSpan[] {
     const last = out.at(-1);
     if (last !== undefined && t.startMs - last.onMs < least - EPS) {
       const force = last.forceOnMs !== undefined && capped ? Math.max(last.forceOnMs, on) : undefined;
-      out[out.length - 1] = { offMs: last.offMs, onMs: Math.max(last.onMs, on, last.offMs + least), lastStartMs: Math.max(last.lastStartMs, t.startMs), ...(force === undefined ? {} : { forceOnMs: force }), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) };
-    } else out.push({ offMs: t.startMs, onMs: on, lastStartMs: t.startMs, ...(capped ? { forceOnMs: on } : {}), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) });
+      out[out.length - 1] = { offMs: last.offMs, onMs: Math.max(last.onMs, on, last.offMs + least), lastStartMs: Math.max(last.lastStartMs, t.startMs), ...(force === undefined ? {} : { forceOnMs: force }), ...(t.holdsBeat === true || last.holdsBeat === true ? { holdsBeat: true } : {}), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) };
+    } else out.push({ offMs: t.startMs, onMs: on, lastStartMs: t.startMs, ...(capped ? { forceOnMs: on } : {}), ...(t.holdsBeat === true ? { holdsBeat: true } : {}), ...(t.swayAfter === undefined ? {} : { swayAfter: t.swayAfter }) });
   }
   return out;
 }

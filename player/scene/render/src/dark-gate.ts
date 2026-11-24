@@ -45,6 +45,11 @@ export class DarkGate {
     return this.all(spans).some((s) => classMs >= s.offMs - HOLD_AROUND_MS && classMs < (this.plain.get(key(s.offMs)) ?? s.onMs + GIVE_UP_MS) + HOLD_AROUND_MS);
   }
 
+  /** The beat-like light (lift, pulse, build haze step) is held with the sway round a drop's gather: from 1 s before its off-step to 1 s after its on-step, as planned without any burst. */
+  beatHeld(classMs: number, spans: readonly DarkSpan[]): boolean {
+    return this.all(spans).some((s) => s.holdsBeat === true && classMs >= s.offMs - HOLD_AROUND_MS && classMs < (this.plain.get(key(s.offMs)) ?? s.onMs + GIVE_UP_MS) + HOLD_AROUND_MS);
+  }
+
   /** Whether the beams are dark on this frame. */
   step(f: GateFrame): boolean {
     const t = f.classMs;

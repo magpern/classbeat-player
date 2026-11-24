@@ -40,7 +40,7 @@ export function songTurns(w: SongAt, reach = REACH_MS): Turn[] {
   const [lo, hi] = [w.classMs - reach, w.classMs + reach];
   const next = nth(w.cls.songs, w.songIndex + 1);
   const prev = nth(w.cls.songs, w.songIndex - 1);
-  const turn = (s: Sweep, from: readonly Direction[], to: readonly Direction[], capMs?: number): Turn => ({ startMs: s.fromMs, arrivalMs: s.fromMs + turnMs(from, to), ...(capMs === undefined ? {} : { capMs }), swayAfter: s.cause !== "gather" && s.cause !== "fan" });
+  const turn = (s: Sweep, from: readonly Direction[], to: readonly Direction[], capMs?: number): Turn => ({ startMs: s.fromMs, arrivalMs: s.fromMs + turnMs(from, to), ...(capMs === undefined ? {} : { capMs }), swayAfter: s.cause !== "gather" && s.cause !== "fan", ...(s.cause === "gather" && s.holdStillMs !== undefined ? { holdsBeat: true } : {}) });
   const holdStill = (s: Sweep): number | undefined => (s.cause === "gather" ? s.holdStillMs : undefined);
   const own = songSweeps(song, offset, lo, hi).map((s) => turn(s, targets(w.cls, w.songIndex, s.fromMs - offset - 1), targets(w.cls, w.songIndex, s.fromMs - offset), holdStill(s)));
   const into = w.songIndex > 0 && prev !== undefined ? [turn(songChangeSweep(offset), targets(w.cls, w.songIndex - 1, prev.lengthMs ?? 0), targets(w.cls, w.songIndex, 0))] : [];

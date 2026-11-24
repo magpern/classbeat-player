@@ -152,6 +152,8 @@ export class RigLoop {
     const spanKey = `${songIndex}:${Math.round(classMs - songPosMs)}:${Math.floor(classMs / 3000)}`;
     if (spanKey !== this.spansKey) { this.spansKey = spanKey; this.spans = songSpans({ cls, songIndex, songPosMs, classMs }); }
     const spanHeld = !still && stage !== "before" && this.darkGate.held(classMs, this.spans);
+    // A drop's gather holds the beat-like light too (the lift, the tempo pulse and the build's haze step): it resumes with the next beat, no change spent catching up.
+    const beatHeld = !still && stage !== "before" && this.darkGate.beatHeld(classMs, this.spans);
     const stepped = stepRig(this.state, { cls, classMs, songIndex, songPosMs, link, rawDtSeconds, still, motion: this.holdPhase && !this.first ? 0 : movementScale(stage, link), noMusic: stage === "before", phaseHeld: spanHeld });
     this.state = stepped.state;
     this.first = false;
@@ -188,14 +190,16 @@ export class RigLoop {
     const started = (ageMs: number | null) => (ageMs === null ? classMs : classMs - ageMs);
     const accent = pattern.accent > 0;
     const skipped = this.bursts.budget.held(started(accent ? pattern.ageMs : liftAgeMs(input)));
-    const lift = skipped ? 0 : Math.min(this.tokens.liftCap, accent ? pattern.accent : beatLift(input));
+    const lift = skipped || beatHeld ? 0 : Math.min(this.tokens.liftCap, accent ? pattern.accent : beatLift(input));
     const chase = !still && frame.level === "Beat" && beats !== null && song?.bpm !== undefined;
     const build = buildElapsedMs(song?.moments, song?.bpm, songPosMs);
     const beatMs = frame.level === "Beat" && song?.bpm !== undefined && song.bpm > 0 ? (60_000 / song.bpm) * beatStride(song.bpm) : null;
     // The lit fixtures and the haze's gain change on a planned mark only: a change between marks waits for the next one.
     // Below the Beat level the build's haze rises as steady light, 3 % a second: its clock is held round a dark span like the drift's, and resumes where it stopped.
-    this.buildHeldMs = build === null ? 0 : this.buildHeldMs + (spanHeld && beatMs === null ? dtSeconds * 1000 : 0);
-    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(build - this.buildHeldMs, beatMs);
+    this.buildHeldMs = build === null ? 0 : this.buildHeldMs + ((spanHeld && beatMs === null) || beatHeld ? dtSeconds * 1000 : 0);
+    // At the Beat level the held time counts in whole beats, so the steps stay on the beat grid and resume at the next beat.
+    const shift = beatMs === null ? this.buildHeldMs : Math.floor(this.buildHeldMs / beatMs) * beatMs;
+    const haze = still || !frame.moments.gather || build === null ? 1 : buildHaze(beatHeld && beatMs !== null ? Math.max(0, build - this.buildHeldMs) : build - shift, beatMs);
     const lit = stageLit(stage) ?? fixturesLit(lightMoments(frame, { cls, classMs, songIndex, songPosMs, link }), quality);
     const held = this.hold.step({ lit, haze }, { cls, classMs, songIndex, songPosMs, level: frame.level }, `${quality}|${stage}|${link.state}|${link.held === true}|${still}`, this.bursts.budget.runs);
     if (held.mark !== null) this.clock.note(held.mark);

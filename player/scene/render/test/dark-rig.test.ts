@@ -15,7 +15,7 @@ import { tokensFromFile } from "../tools/tokens-file.ts";
 
 const tokens = tokensFromFile();
 const F = 1000 / 60;
-interface Frame { ms: number; /** The frame's own time: frame number x the refresh period, the wall time a viewer lives through (a seek or a pause moves the class clock, never this). */ wall: number; dark: boolean; beams: number[]; lens: number[]; seconds: number; drawn: string }
+interface Frame { lift: number; haze: number; ms: number; /** The frame's own time: frame number x the refresh period, the wall time a viewer lives through (a seek or a pause moves the class clock, never this). */ wall: number; dark: boolean; beams: number[]; lens: number[]; seconds: number; drawn: string }
 
 function play(make: (ms: number) => Feed, from: number, to: number, budgetOff = false): Frame[] {
   const [loop, rig] = [new RigLoop(tokens, budgetOff), new SceneRig(tokens)];
@@ -23,7 +23,7 @@ function play(make: (ms: number) => Feed, from: number, to: number, budgetOff = 
   for (let ms = from, n = 0; ms < to; n++) {
     const d: Draw = loop.step(make(ms), n === 0 ? 0 : 1 / 60, "High");
     rig.apply(d, "High");
-    out.push({ ms, wall: n * F, dark: d.dark, beams: rig.beamLevels(), lens: rig.lensLevels(), seconds: d.seconds, drawn: JSON.stringify(d.drawn) });
+    out.push({ lift: d.lift, haze: d.hazeGain, ms, wall: n * F, dark: d.dark, beams: rig.beamLevels(), lens: rig.lensLevels(), seconds: d.seconds, drawn: JSON.stringify(d.drawn) });
     ms += d.dtSeconds * 1000;
   }
   return out;
@@ -108,4 +108,18 @@ test("two turns whose gap is under 1 s + 1 frame join into one dark span, a fram
   assert.equal(count(join + F), 2, "a frame over it: two");
   assert.equal(count(0), 1, "turns that start together: one span");
   assert.equal(count(span / 2), 1, "overlapping turns: one span");
+});
+
+test("a drop's gather holds the beat-like light with the sway: no lift or pulse and a standing build haze from 1 s before its off-step to 1 s after its on-step, then the lift again", () => {
+  const tempo = { ...VARIANTS.demo!, cls: { ...VARIANTS.demo!.cls, songs: VARIANTS.demo!.cls.songs.map((song) => Object.fromEntries(Object.entries(song).filter(([k]) => k !== "anchors")) as typeof song) } };
+  for (const [name, make] of [["locked", demo], ["tempo only", (ms: number) => feedAt(ms, { link: { state: "Locked" }, variant: tempo })]] as const) {
+    const frames = play(make, 33_000, 44_000);
+    const gather = episodes(frames).find((e) => e.offMs > 36_000 && e.offMs < 37_500)!;
+    assert.ok(gather !== undefined, `${name}: the gather is dark`);
+    const hold = frames.filter((f) => f.ms >= gather.offMs - 990 && f.ms < gather.onMs + 990);
+    assert.ok(hold.length > 100 && hold.every((f) => f.lift === 0), `${name}: no lift or pulse in the hold`);
+    assert.ok(hold.every((f) => f.haze === hold[0]!.haze), `${name}: the build's haze stands still in the hold`);
+    assert.ok(frames.filter((f) => f.ms > gather.onMs + 1100 && f.ms < gather.onMs + 3000).some((f) => f.lift > 0.01), `${name}: and the lift is back after it`);
+    assert.ok(frames.filter((f) => f.ms < gather.offMs - 1100 && f.ms > 33_500).some((f) => f.lift > 0.01), `${name}: it ran before it`);
+  }
 });
