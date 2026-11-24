@@ -45,7 +45,7 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | The code | `app-pair-code` | As above, 9:41 left |
 | The code, no screen lock | `app-pair-code-no-lock` | The same with a grey note: "This phone has no screen lock. Instructor mode will need one: set it before or after pairing." Pairing goes on |
 | Back from the browser, not yet confirmed | `app-pair-waiting` | The working line "Not yet confirmed on the website" above the code; the main key becomes "Open the page again" |
-| Paired | `app-pair-done` | "This phone is paired", the status line "Paired as <account e-mail>", "Confirm your screen lock to open instructor mode.", and "Continue", which opens the screen-lock prompt (or app-modes.md's no-lock screen) |
+| Paired | `app-pair-done` | "This phone is paired", the status line "Paired as <account e-mail>", "Confirm your screen lock to open instructor mode.", and "Continue", which opens the screen-lock prompt (or app-modes.md's no-lock screen). Reached from "Pair again" in instructor mode, the screen has **no screen-lock line**: the phone is already in instructor mode, so "Continue" returns to the class list |
 | Refused | `app-pair-denied` | A white plate "Refused on the website. / Nothing was kept on this phone." Keys "Rider mode" and "Start again" (main) |
 | Code ran out | `app-pair-code-expired` | Plate "The code ran out. / It was not confirmed in time. Start again for a new code." Same keys |
 | Server unreachable | `app-pair-unreachable` | Plate "The server could not be reached. / Check the connection, then start again." Same keys |
@@ -53,7 +53,8 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | Too many pairings | `app-pair-too-many` | Plate "Too many pairings were started. / Try again in an hour." (the desktop's `too_many`, from this network). Same keys as Refused; "Start again" asks again, and the server may still refuse until the hour has passed |
 | Answer not understood | `app-pair-unexpected` | Plate "The answer was not understood. / The app could not read the server's answer. Try again later." (the desktop's `unexpected`). Same keys as Refused. Nothing was kept |
 | Pairing could not be kept | `app-pair-save-failed` | Plate "The pairing could not be kept. / The Android Keystore did not keep it, so the pairing was undone. Start again." (the desktop's `save_failed`; the app asks the server to drop the record it made). Same keys as Refused |
-| Unpaired on the website | `app-pair-revoked` | Shown at the next start in instructor mode, or at once if the app is open, after a 401 that means the device was removed: plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused |
+| Unpaired on the website | `app-pair-revoked` | Plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused. Instructor mode closes to rider mode **at once, with no plate**. The plate shows when pairing next opens **in the same run**, and only "Start again" begins then. A plate that was shown is cleared and is not shown again. It is not kept across a restart (the next pairing opens on "Asking for a code") |
+| Server unreachable, no server address | `app-pair-unreachable` | A release built with no server address (the build's `NO_SERVER`) shows the same plate as Server unreachable. "Start again" cannot succeed there: it shows the plate again until a build with an address is installed |
 
 The desktop's `no_server` ("no server address is set") and `unpaired` ("no longer paired")
 notices have no phone state, on purpose. The app's server address is fixed in the native build (ADR 0011 section 3), so there

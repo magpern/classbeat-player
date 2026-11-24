@@ -42,6 +42,14 @@
 .status { display: flex; align-items: center; gap: 0.6em; font-size: var(--c-label); }
 .status .ok { color: var(--light-1); font-weight: 700; display: inline-flex; align-items: center; gap: 0.5em; }
 .status .ok::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-1); flex: none; }
+/* "Unpair this phone": an outlined key, at least 64 px high, words at --c-minor. Upright it has its
+   own full-width line; sideways it sits at the end of the status row. */
+.status .key.quiet { margin-left: auto; flex: none; width: auto; white-space: nowrap; min-height: 64px; padding: 0 1em; background: transparent; border-color: var(--stage-line); }
+/* The row wraps in both orientations, so the status words never share a line with a key too wide for them. */
+.status { flex-wrap: wrap; }
+.status .ok { white-space: nowrap; }
+@media (orientation: portrait) { .status .key.quiet { flex: 1 0 100%; margin-left: 0; } }
+.status .key.quiet .kl { font-size: var(--c-minor); font-weight: 700; color: var(--light-2); }
 /* A status line in the minor tier (pair-done). */
 .status.m { font-size: var(--c-minor); }
 

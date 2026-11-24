@@ -25,7 +25,7 @@ function pageChecks(arg) {
   const KEY_MIN = 64, KEY_GAP = 12;
   // Every action the app's screens have. None sends an equipment command (rule 2); the rider's
   // send nothing but the join (ADR 0007 section 1). Nothing scans or opens the camera (rule 12).
-  const ACTIONS = ['switch_mode', 'stay', 'set_lock', 'stay_rider', 'open_class', 'cancel', 'open_site', 'continue', 'pair_again',
+  const ACTIONS = ['switch_mode', 'stay', 'set_lock', 'stay_rider', 'open_class', 'cancel', 'open_site', 'continue', 'pair_again', 'unpair',
     'open_setting', 'not_now', 'follow', 'join', 'remember', 'leave', 'keep_riding', 'start', 'pause', 'resume', 'previous', 'next', 'end'];
   const BANNED = /scan|camera|qr/i;
   const rows = [];
