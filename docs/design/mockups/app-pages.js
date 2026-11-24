@@ -54,10 +54,10 @@ add('instructor-start', 'app-modes.md', 'App: instructor mode', 'State: instruct
     `<div class="rows">${CLASSES.map(row).join('')}</div>` + strip('Switch to rider mode')));
 
 // The pairing ran out (class-list.md "Pairing ran out"): the plate stands in for the status line.
-add('instructor-start-expired', 'app-modes.md', 'App: instructor mode, pairing ran out', 'State: the saved classes stay; the server said the token expired. The plate carries the words and "Pair again"; the status line is hidden. At 360x640 with three classes the page may scroll (A8).',
+add('instructor-start-expired', 'app-modes.md', 'App: instructor mode, pairing ran out', 'State: the saved classes stay; the server said the token expired. The plate carries the words and "Pair again"; the status line is hidden. The mock-up shows two classes so that it fits at every size; with three classes at 360x640 the page scrolls (app-modes.md, A8 note).',
   page(mode('Instructor mode') + h1('Classes') + `<div class="status">${unpairKey}</div>`
     + plate('The pairing has run out', 'Pair again to get new and changed classes. Saved classes still play.').replace(/<\/div>$/, key('pair_again', 'Pair again') + '</div>'),
-    `<div class="rows">${CLASSES.map(row).join('')}</div>` + strip('Switch to rider mode')));
+    `<div class="rows">${CLASSES.slice(0, 2).map(row).join('')}</div>` + strip('Switch to rider mode')));
 
 add('to-rider-ask', 'app-modes.md', 'App: switch to rider mode?', 'State: "Switch to rider mode" pressed in instructor mode. Native question; "Stay" has the focus. Back or no answer is "Stay".',
   native(page(mode('Instructor mode') + h1('Switch to rider mode?') + p('The class list closes and the music is no longer followed. Coming back to instructor mode needs your screen lock.'),

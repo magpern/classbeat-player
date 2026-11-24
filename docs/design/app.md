@@ -106,7 +106,7 @@ its floor there.
 
 ## Mock-ups
 
-`node docs/design/mockups/app-pages.js` writes the 30 `app-*.html` files; `ONLY='^app-' node
+`node docs/design/mockups/app-pages.js` writes the 35 `app-*.html` files; `ONLY='^app-' node
 docs/design/mockups/shoot.js` shoots and checks them. Each spec lists its own.
 
 ## What the app never shows or does (plan section 3)

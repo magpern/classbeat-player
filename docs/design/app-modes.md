@@ -65,7 +65,7 @@ window with no scroll at 390x844, 844x390, 360x780, 360x640 and 640x360.
 
 **A8 note.** The instructor start page may scroll once the list outgrows the window. Up to date
 with three classes must fit at all six sizes. With the "Pair again" plate and three classes at
-360x640 the page runs 25 px over (strip key bottom 665, window 640) and scrolls; that is allowed.
+360x640 the page runs 25 px over (strip key bottom 665, window 640) and scrolls; that is allowed. The mock-up `app-instructor-start-expired` shows two classes so that it fits at all six sizes.
 
 Where the app starts: in the last mode used; on a first launch, in rider mode. A restart in rider
 mode never skips the screen lock. Instructor mode with a class open stays on the class; Back on the
