@@ -14,21 +14,47 @@ import com.getcapacitor.BridgeWebViewClient
 import java.io.ByteArrayInputStream
 import org.classbeat.player.policy.NavigationPolicy
 
+/** Which bundled pages the current mode may show in the main frame (ModePolicy.mayShow), and when one has shown. */
+interface PageGate {
+    fun mayShow(path: String): Boolean
+
+    /** A main-frame page at [path] committed. */
+    fun shown(path: String)
+}
+
 /**
  * Capacitor's web view client, narrowed (issue #627): it serves the bundle's own files and
  * nothing else, and replaces Capacitor's launchIntent, which lets data: and blob: pages load and
- * hands any other URL of any scheme to the system. Decisions are NavigationPolicy's.
+ * hands any other URL of any scheme to the system. Decisions are NavigationPolicy's. On top of
+ * that (issue #630), the main frame shows only the current mode's pages ([PageGate]).
  */
-class LockedWebViewClient(bridge: Bridge, private val context: Context) : BridgeWebViewClient(bridge) {
+class LockedWebViewClient(
+    bridge: Bridge,
+    private val context: Context,
+    private val gate: PageGate,
+) : BridgeWebViewClient(bridge) {
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
         if (!NavigationPolicy.serves(request.url.toString())) return refused()
+        if (request.isForMainFrame && !gate.mayShow(request.url.path.orEmpty())) return refused()
         return super.shouldInterceptRequest(view, request) ?: notFound()
+    }
+
+    override fun onPageCommitVisible(view: WebView, url: String) {
+        super.onPageCommitVisible(view, url)
+        gate.shown(Uri.parse(url).path.orEmpty())
+    }
+
+    // Also when it finished: a page that draws nothing may never report a visible commit. Telling
+    // the gate twice is harmless (PageOpener moves on once per page).
+    override fun onPageFinished(view: WebView, url: String) {
+        super.onPageFinished(view, url)
+        gate.shown(Uri.parse(url).path.orEmpty())
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
         return when (NavigationPolicy.navigate(url, request.isForMainFrame, request.hasGesture())) {
-            NavigationPolicy.Decision.LOAD -> false
+            NavigationPolicy.Decision.LOAD -> request.isForMainFrame && !gate.mayShow(request.url.path.orEmpty())
             NavigationPolicy.Decision.BROWSER -> {
                 openInBrowser(url)
                 true

@@ -1,0 +1,60 @@
+package org.classbeat.player.policy
+
+// The named intents the web view may call, split by mode (ADR 0011 section 3, issue #630). Pure:
+// no Android import. Each intent belongs to one mode and takes a fixed set of arguments; a call
+// from the other mode, while the app is between modes, or with any argument the intent does not
+// name is refused before native code acts on it. Later issues add their intents here: the rider's
+// join, send and leave (#633) and the instructor's class list and live session (#631).
+
+object IntentPolicy {
+    /** The type an argument must have, as the bridge hands it over (org.json values). */
+    enum class Arg { STRING, BOOLEAN, NUMBER }
+
+    data class Spec(val mode: Mode, val args: Map<String, Arg>)
+
+    /** Every intent, by the method name its mode's plugin carries. */
+    val INTENTS: Map<String, Spec> = mapOf(
+        // Rider mode: which way "Switch to instructor mode" goes, for the strip's lead line.
+        "instructorWay" to Spec(Mode.RIDER, emptyMap()),
+        // Rider mode: "Switch to instructor mode" pressed. Native code decides what follows.
+        "askInstructorMode" to Spec(Mode.RIDER, emptyMap()),
+        // Instructor mode: "Switch to rider mode" pressed. Native code asks the question.
+        "askRiderMode" to Spec(Mode.INSTRUCTOR, emptyMap()),
+    )
+
+    /** The intents [mode] has, and only those. */
+    fun of(mode: Mode, intents: Map<String, Spec> = INTENTS): Set<String> =
+        intents.filterValues { it.mode == mode }.keys
+
+    /** Why a call was refused. The page sees only a fixed word, never the arguments. */
+    enum class Refusal { UNKNOWN, OTHER_MODE, SWITCHING, UNEXPECTED_ARGUMENT, MISSING_ARGUMENT, WRONG_TYPE }
+
+    /**
+     * Checks a call to [name] with [args] from [plugin]'s mode while the app is in [current] (null
+     * while switching). Null means the call may run; anything else is why it may not.
+     */
+    fun check(
+        current: Mode?,
+        plugin: Mode,
+        name: String,
+        args: Map<String, Any?>,
+        intents: Map<String, Spec> = INTENTS,
+    ): Refusal? {
+        val spec = intents[name] ?: return Refusal.UNKNOWN
+        if (spec.mode != plugin) return Refusal.OTHER_MODE
+        if (current == null) return Refusal.SWITCHING
+        if (current != plugin) return Refusal.OTHER_MODE
+        if (args.keys.any { it !in spec.args }) return Refusal.UNEXPECTED_ARGUMENT
+        for ((key, type) in spec.args) {
+            if (key !in args) return Refusal.MISSING_ARGUMENT
+            if (!fits(args[key], type)) return Refusal.WRONG_TYPE
+        }
+        return null
+    }
+
+    private fun fits(value: Any?, type: Arg): Boolean = when (type) {
+        Arg.STRING -> value is String
+        Arg.BOOLEAN -> value is Boolean
+        Arg.NUMBER -> value is Number
+    }
+}

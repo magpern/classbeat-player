@@ -6,24 +6,40 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ROOM_CSP } from "../../app/src/main/web-preferences.ts";
-import { indexHtml, MOBILE_CSP } from "../src/page.ts";
+import { MOBILE_CSP, PAGES, pageHtml } from "../src/page.ts";
+import type { PageName } from "../src/page.ts";
+
+const NAMES = Object.keys(PAGES) as PageName[];
 
 const ASSETS = join(dirname(fileURLToPath(import.meta.url)), "..", "android", "app", "src", "main", "assets");
 const json = (name: string): unknown => JSON.parse(readFileSync(join(ASSETS, name), "utf8"));
 
-test("the page's CSP is the desktop room screen's, word for word", () => {
+test("every page's CSP is the desktop room screen's, word for word", () => {
   assert.equal(MOBILE_CSP, ROOM_CSP);
-  const html = indexHtml();
-  const metas = [...html.matchAll(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/g)].map((m) => m[1]);
-  assert.deepEqual(metas, [ROOM_CSP]);
+  for (const name of NAMES) {
+    const metas = [...pageHtml(name).matchAll(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/g)].map((m) => m[1]);
+    assert.deepEqual(metas, [ROOM_CSP], name);
+  }
   assert.doesNotMatch(ROOM_CSP, /"/, "the policy fits in a double-quoted attribute");
 });
 
-test("the page loads only its own bundled script and style", () => {
-  const html = indexHtml();
-  const refs = [...html.matchAll(/\b(?:src|href)="([^"]*)"/g)].map((m) => m[1]);
-  assert.deepEqual(refs, ["main.css", "main.js"]);
-  assert.doesNotMatch(html, /:\/\//);
+test("each page loads only its own mode's bundle, and index.html loads nothing", () => {
+  // The pages of ModePolicy.kt: rider.html in rider mode; instructor.html and room.html in instructor mode.
+  const expected: Record<PageName, string[]> = {
+    "index.html": [],
+    "rider.html": ["rider.css", "rider.js"],
+    "instructor.html": ["instructor.css", "instructor.js"],
+    "room.html": ["main.css", "main.js"],
+  };
+  assert.deepEqual(NAMES.sort(), Object.keys(expected).sort());
+  for (const name of NAMES) {
+    const html = pageHtml(name);
+    const refs = [...html.matchAll(/\b(?:src|href)="([^"]*)"/g)].map((m) => m[1]);
+    assert.deepEqual(refs, expected[name], name);
+    assert.doesNotMatch(html, /:\/\//, name);
+  }
+  // The blank page shown between modes (PageOpener.kt) runs nothing: no script at all.
+  assert.doesNotMatch(pageHtml("index.html"), /<script|\bon\w+=/i);
 });
 
 type Config = {
