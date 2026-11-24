@@ -182,7 +182,7 @@ A contract pull request adds, as format minor `"1.3"` under ADR 0003 section 7:
 
 | Field | Meaning |
 |---|---|
-| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. (As built: the class schema's `swedebeatMix.id` is `^[A-Za-z0-9_-]+$`, 1 to 64, with no newline; the player's own reader, `MIX_ID` in `core/mix/class-mix.ts`, also accepts a dot. A class the schema allows is always read; a dotted id never passes the schema.) `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
+| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_-]`, never a token or a link. (As built: the class schema's `swedebeatMix.id` is `^[A-Za-z0-9_-]+$`, 1 to 64, with no newline; the player's own reader, `MIX_ID` in `core/mix/class-mix.ts`, accepts exactly that alphabet and length, so a dotted, empty or 65-character id is refused.) `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
 
 The validator adds:
 

@@ -2,8 +2,8 @@
 // length and the offset, and nothing else. The reader keeps unknown fields (for example a link);
 // they are never read, copied or passed on, so a class cannot steer the source with one. Pure.
 
-/** A provider's mix id as the format allows it: 1 to 64 characters of `[A-Za-z0-9_.-]`. */
-export const MIX_ID = /^[A-Za-z0-9_.-]{1,64}$/;
+/** A provider's mix id as the format allows it: 1 to 64 characters of `[A-Za-z0-9_-]` (the schema's `swedebeatMix.id`; no dot). */
+export const MIX_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export interface ClassMix {
   readonly id: string;
