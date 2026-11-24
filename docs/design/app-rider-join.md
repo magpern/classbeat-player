@@ -61,14 +61,20 @@ phone" on, only the FTP and the maximum heart rate are kept, on the phone only, 
 fields come up filled. They never leave the device: the join still sends only the code and the
 nickname.
 
+While something is remembered, step 2 shows **Forget** beside Join, as on the web page
+(rider.md): it deletes both values from the phone, turns the switch Off and clears the two
+fields. It touches only those two values; the nickname is never involved. It has no mock-up of
+its own.
+
 They are **cleared** (the fields come up empty and the switch is Off) when:
 
 - the rider leaves the class (the "Leave" key of "Leave the class?");
 - the app changes mode, in either direction (switching ends the rider's session, app-modes.md);
-- the class ends;
-- the rider is dropped from the session (removed by the instructor, or the token dropped).
+- the class ends (rider.md's **Ended** screen, "The class has ended");
+- the rider is dropped from the session (rider.md's **Removed** screen, "The instructor removed
+  you from this class", or the token dropped).
 
-Each of the four endings returns to step 1, so the next rider on a shared phone sees nothing of
+Each of the four endings, Removed and Ended included, returns to step 1, so the next rider on a shared phone sees nothing of
 the last one. No mock-up pre-fills the nickname; the join mock-ups show the nickname empty and
 Remember Off. Settled in issue #633; ADR 0007 and rider.md win.
 

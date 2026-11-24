@@ -60,6 +60,10 @@ function pageChecks(arg) {
   const tag = [...document.querySelectorAll('.mode')];
   const wrong = tag.filter((t) => !/^(Rider|Instructor) mode$/.test(t.textContent.trim()));
   rows.push(['mode tag reads "Rider mode" or "Instructor mode"', wrong.length ? 'FAIL ' + wrong.map((t) => t.textContent.trim()).join(', ') : 'ok']);
+  // A9, the other half: every page outside a class carries exactly one tag. In a class are the class
+  // screen (body.app-room, the external display too) and the "Leave the class?" question.
+  const inClass = document.body.classList.contains('app-room') || document.querySelector('[data-action=leave], [data-action=keep_riding]');
+  rows.push(['mode tag present on every page outside a class', !inClass && tag.length !== 1 ? `FAIL ${tag.length} mode tags` : 'ok']);
   // The class screen: what must be visible at once (play.md), with "Follow the music" in the band.
   if (document.body.classList.contains('app-room') && !document.querySelector('.idle')) {
     const inView = (q) => { const el = document.querySelector(q); if (!el || !shown(el)) return false; const r = el.getBoundingClientRect(); return r.top >= -0.5 && r.bottom <= innerHeight + 0.5 && r.left >= -0.5 && r.right <= innerWidth + 0.5; };
