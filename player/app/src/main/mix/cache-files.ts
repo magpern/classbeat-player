@@ -91,7 +91,7 @@ export function accountFolder(root: string, account: string): AccountFolder {
         return { tags, strays };
       }
       for (const n of names) {
-        const m = ENTRY.exec(n);
+        const m = n.match(ENTRY);
         if (m === null) {
           strays.push(n);
           continue;
