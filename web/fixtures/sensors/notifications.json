@@ -1,0 +1,20 @@
+{
+  "note": "Recorded-shape notification bytes (hex, little endian) of the four allowed characteristics. t is ms since the start of the replay.",
+  "heartRate": [
+    { "t": 0, "hex": "004b", "bpm": 75 },
+    { "t": 1000, "hex": "014b00", "bpm": 75 },
+    { "t": 2000, "hex": "104c0004", "bpm": 76 }
+  ],
+  "csc": [
+    { "t": 0, "hex": "026400e803", "revs": 100, "time": 1000 },
+    { "t": 1000, "hex": "0265009306", "revs": 101, "time": 1683 }
+  ],
+  "cyclingPower": [
+    { "t": 0, "hex": "2000c8006400e803", "watts": 200, "revs": 100, "time": 1000 },
+    { "t": 1000, "hex": "2000d20065009306", "watts": 210, "revs": 101, "time": 1683 }
+  ],
+  "indoorBike": [
+    { "t": 0, "hex": "4400e803b400fa00", "cadence": 90, "watts": 250 },
+    { "t": 1000, "hex": "4402e803b600fc008c", "cadence": 91, "watts": 252, "bpm": 140 }
+  ]
+}
