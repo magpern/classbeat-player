@@ -7,8 +7,10 @@ import { zoneClass } from "../../design/zones.ts";
 import { digits, el } from "../../room/dom.ts";
 import { HINT } from "../core/effort-calc.ts";
 import type { Effort } from "../core/effort-calc.ts";
+import type { SensorView } from "../core/sensor-view.ts";
 import type { ClockView, GelView, NextRow, RunView, TopView } from "../core/view.ts";
 import { pageKey } from "./parts.ts";
+import { renderSensorBlock } from "./sensors.ts";
 
 export const WAKE_WORDS = "Set your screen to stay on";
 
@@ -62,10 +64,12 @@ function renderComing(rows: readonly NextRow[]): HTMLElement {
 }
 
 function nav(keys: Node[]): HTMLElement {
-  const n = el("nav", {}, keys);
-  n.setAttribute("aria-label", "Your numbers");
+  const n = el("nav", keys.length > 1 ? { class: "two" } : {}, keys);
+  n.setAttribute("aria-label", keys.length > 1 ? "Your numbers and sensors" : "Your numbers");
   return n;
 }
+
+const FITS = [["fit-L2", "fit-P2"], ["fit-L1", "fit-P1"]] as const;
 
 type Part = "top" | "gel" | "clock" | "effort" | "done" | "coming" | "keys";
 const ORDER: readonly Part[] = ["top", "gel", "clock", "effort", "done", "coming", "keys"];
@@ -75,9 +79,12 @@ export class RiderRun {
   readonly root = el("main", { class: "run rider" });
   private readonly shown = new Map<Part, { key: string; node: HTMLElement }>();
   private readonly myNumbers: () => void;
+  private readonly sensors: (() => void) | null;
 
-  constructor(myNumbers: () => void) {
+  /** `sensors`: the second key's press; null where the page has no sensors key. */
+  constructor(myNumbers: () => void, sensors: (() => void) | null = null) {
     this.myNumbers = myNumbers;
+    this.sensors = sensors;
   }
 
   private put(part: Part, value: unknown, draw: () => HTMLElement | null): void {
@@ -105,14 +112,43 @@ export class RiderRun {
     return null;
   }
 
-  update(v: RunView, wakeWorks: boolean): void {
+  /**
+   * The next rows give way when the readings need the height (docs/design/sensors.md, "Fitting"):
+   * three rows, then two, then one; the effort and the readings never do. The page calls it again when
+   * the screen is resized or turned, since the room the readings have changes with it.
+   */
+  fit(): void {
+    const coming = this.shown.get("coming")?.node;
+    if (!coming) return;
+    coming.classList.remove(...FITS.flat());
+    const effort = this.shown.get("effort")?.node;
+    if (!effort?.classList.contains("sens")) return;
+    // The effort sits in a track that may shrink to nothing, so its readings can spill over the next
+    // rows without the page growing: either overflow makes the next rows give way.
+    const over = (): boolean => this.root.scrollHeight > this.root.clientHeight || effort.scrollHeight > effort.clientHeight;
+    for (const step of FITS) {
+      if (!over()) return;
+      coming.classList.add(...step);
+    }
+  }
+
+  update(v: RunView, wakeWorks: boolean, sv: SensorView | null = null): void {
     const wake = wakeWorks || v.done;
+    const before = [this.shown.get("effort")?.key, this.shown.get("coming")?.key];
     this.put("top", [v.top, wake], () => renderTop(v.top, wake));
     this.put("gel", v.gel, () => renderGel(v.gel));
     this.put("clock", v.clock, () => (v.clock ? renderClock(v.clock) : null));
-    this.put("effort", v.effort, () => (v.effort ? renderEffort(v.effort) : null));
+    const block = v.effort ? (sv?.block ?? null) : null;
+    const zone = v.gel.blank ? null : v.gel.zone;
+    this.put("effort", [v.effort, block, block && zone], () => (block ? renderSensorBlock(block, zone) : v.effort ? renderEffort(v.effort) : null));
     this.put("done", v.done, () => (v.done ? el("p", {}, [el("span", { tier: "minor", lines: 2, text: "Thank you for riding." })]) : null));
     this.put("coming", v.coming, () => (v.coming ? renderComing(v.coming) : null));
-    this.put("keys", v.done, () => (v.done ? null : nav([pageKey("my_numbers", "My numbers", {}, () => this.myNumbers())])));
+    const k = this.sensors && sv ? sv.key : null;
+    this.put("keys", [v.done, k], () => {
+      if (v.done) return null;
+      const mine = pageKey("my_numbers", "My numbers", { full: !k }, () => this.myNumbers());
+      return nav(k ? [mine, pageKey(k.action, k.label, { full: false, dis: k.dis }, () => (k.dis ? undefined : this.sensors?.()))] : [mine]);
+    });
+    if (before[0] !== this.shown.get("effort")?.key || before[1] !== this.shown.get("coming")?.key) this.fit();
   }
 }

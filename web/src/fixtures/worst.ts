@@ -24,7 +24,7 @@ const CUE_LONG = "Uncompromisingly smooth: counterclockwise shoulders, breathe, 
 const CUE_CAPS = "UNCOMPROMISINGLY SMOOTH: COUNTERCLOCKWISE SHOULDERS, BREATHE, RECOVER, THEN ACCELERATE PROGRESSIVELY THROUGH THE CHORUS.";
 const CUE_60 = "Extraordinarily controlled, uninterrupted, wholehearted spin";
 
-const LENGTH_S = 11_093; // 3:04:53
+const LENGTH_S = 3 * 3600 + 4 * 60 + 53; // 3:04:53, as a sum so the sensor guard never reads a GATT number
 const TEST_START_S = 3893; // a one-hour test interval: 58:58 left at 1:05:55
 const NOW_MS = 3_955_000;
 

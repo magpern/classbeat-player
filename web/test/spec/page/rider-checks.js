@@ -7,8 +7,9 @@
 export default function riderChecks(arg) {
   const KEY_MIN = 64, KEY_GAP = 12;
   // The page sends nothing after joining but hello (ADR 0007 section 1); these are its own actions,
-  // none of which sends a command, and none touches equipment (rule 2).
-  const ACTIONS = ['join', 'forget', 'remember', 'my_numbers', 'done', 'retry'];
+  // none of which sends a command, and none touches equipment (rule 2). The four sensor actions only
+  // open the browser's list, reconnect or let go of the rider's own sensor (sensors.md).
+  const ACTIONS = ['join', 'forget', 'remember', 'my_numbers', 'done', 'retry', 'sensors', 'sensors_add', 'reconnect_sensor', 'disconnect_sensor'];
   const rows = [];
   const shown = (el) => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return c.display !== 'none' && c.visibility !== 'hidden' && r.width > 0 && r.height > 0; };
   const label = (el) => (el.textContent.trim() || el.id || el.className).slice(0, 16);
@@ -37,6 +38,10 @@ export default function riderChecks(arg) {
     const need = ['.gel .gel-num', '.gel .gel-name', '.count', '.effort', '.next', '[data-action=my_numbers]'];
     const missing = need.filter((q) => { const el = document.querySelector(q); return !el || !shown(el) || el.getBoundingClientRect().bottom > innerHeight; });
     rows.push(['visible at once', missing.length ? 'FAIL missing ' + missing.join(', ') : 'ok']);
+    // Sensors (sensors.md, S4): every reading, every gauge, a plate or a line, and both keys.
+    const sens = [...document.querySelectorAll('.sens .rd, .sens .gauge:not(.none), .sens .splate, .sens .hint, nav [data-action]')];
+    const off = sens.filter((el) => !shown(el) || el.getBoundingClientRect().bottom > innerHeight + 0.5).map((el) => el.className || el.dataset.action);
+    rows.push(['sensors: visible at once', off.length ? 'FAIL missing ' + off.join(', ') : 'ok']);
   }
   // Rules 6 and 13: nothing on the page draws a rider, a count or a list of riders.
   const forbidden = document.querySelectorAll('canvas, svg, img, picture, video, [class*=ring], [class*=rank], [class*=riders], [class*=leader]');

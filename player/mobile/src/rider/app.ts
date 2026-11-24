@@ -15,6 +15,8 @@ import { numbersSheet } from "../../../../web/src/rider/render/form.ts";
 import type { FormHandlers } from "../../../../web/src/rider/render/form.ts";
 import { waitingPage } from "../../../../web/src/rider/render/pages.ts";
 import { RiderRun } from "../../../../web/src/rider/render/run.ts";
+import { SensorPanel } from "../../../../web/src/rider/sensor-panel.ts";
+import type { SensorSource } from "../../../../web/src/sensors/source.ts";
 import type { RiderModePlugin } from "../modes/bridge.ts";
 import { endIfOver } from "./ending.ts";
 import { ENDING_WORDS, backToCode, continueCode, ended, joinAnswered, joinPressed, keepRiding, onEvent, retry, start } from "./flow.ts";
@@ -43,11 +45,14 @@ export class RiderModeApp {
   private readonly numbers = new Numbers(() => localStorage);
   private readonly wake: ScreenWake;
   private readonly handlers: FormHandlers;
+  private readonly sensors: SensorPanel;
 
-  constructor(native: RiderModePlugin, host: HTMLElement) {
+  /** `source`: the rider's own sensors, from the entry point (rider.ts passes the unavailable one). */
+  constructor(native: RiderModePlugin, host: HTMLElement, source: SensorSource) {
     this.native = native;
     this.host = host;
     this.wake = new ScreenWake(() => this.draw(true));
+    this.sensors = new SensorPanel(source, () => this.draw());
     const storage = this.numbers.works();
     this.flow = start(storage, storage ? this.numbers.load() : null);
     this.handlers = {
@@ -77,6 +82,7 @@ export class RiderModeApp {
     this.link = null;
     this.wake.want(false);
     this.sheet = false;
+    this.sensors.stop();
   }
 
   private onTyped(field: FieldName, text: string): void {
@@ -124,7 +130,7 @@ export class RiderModeApp {
 
   private onEvent(link: NativeLink, e: NativeEvent): void {
     if (link !== this.link) return;
-    if (e.kind === "back" && this.sheet) {
+    if (e.kind === "back" && (this.sheet || this.sensors.close())) {
       this.sheet = false;
       return this.draw();
     }
@@ -241,14 +247,18 @@ export class RiderModeApp {
       case "lapsed":
         // flow.ts has already opened step 1 for these; nothing of the class stays on screen.
         return;
-      case "run":
+      case "run": {
+        if (v.done) this.sensors.stop();
+        const s = this.sensors.sheet();
+        if (s) return this.mount(s.key, s.build, force);
         if (this.sheet) return this.mount(formKey("sheet"), () => numbersSheet(f.form, this.handlers), force);
         if (!this.run || this.shown !== "run") {
-          const screen = new RiderRun(() => this.openSheet());
+          const screen = new RiderRun(() => this.openSheet(), () => this.sensors.press());
           this.mount("run", () => screen.root, true);
           this.run = screen;
         }
-        this.run.update(v, this.wake.works);
+        this.run.update(v, this.wake.works, this.sensors.view(v.effort));
+      }
     }
   }
 

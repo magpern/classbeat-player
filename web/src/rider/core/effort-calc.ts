@@ -30,6 +30,8 @@ export interface EffortRow {
   readonly value: string;
   /** "W", "bpm", "FTP", "max", or "" for RPE. */
   readonly unit: string;
+  /** The planned range in the unit, for a gauge; only on a row in watts or bpm. */
+  readonly range?: Range;
 }
 
 export interface Effort {
@@ -50,7 +52,8 @@ export function rangeWords(low: number, high: number): string {
   return low === high ? String(low) : `${low}–${high}`;
 }
 
-const scaled = (base: number, r: Range): string => rangeWords(percentOf(base, r[0]), percentOf(base, r[1]));
+const scaledRange = (base: number, r: Range): Range => [percentOf(base, r[0]), percentOf(base, r[1])];
+const scaledRow = (label: EffortRow["label"], range: Range, unit: string): EffortRow => ({ label, value: rangeWords(range[0], range[1]), unit, range });
 const percent = (r: Range): string => `${rangeWords(r[0], r[1])}%`;
 
 /** The effort rows for a zone and the rider's numbers, in the spec's order: power, heart rate, RPE. */
@@ -58,14 +61,14 @@ export function effortFor(zone: ZoneEffort, mine: MyNumbers): Effort {
   const rows: EffortRow[] = [];
   let hint = false;
   if (zone.ftpPct) {
-    if (mine.ftp !== null) rows.push({ label: "Power", value: scaled(mine.ftp, zone.ftpPct), unit: "W" });
+    if (mine.ftp !== null) rows.push(scaledRow("Power", scaledRange(mine.ftp, zone.ftpPct), "W"));
     else {
       rows.push({ label: "Power", value: percent(zone.ftpPct), unit: "FTP" });
       hint = true;
     }
   }
   if (zone.hrmaxPct) {
-    if (mine.hrmax !== null) rows.push({ label: "Heart rate", value: scaled(mine.hrmax, zone.hrmaxPct), unit: "bpm" });
+    if (mine.hrmax !== null) rows.push(scaledRow("Heart rate", scaledRange(mine.hrmax, zone.hrmaxPct), "bpm"));
     else {
       rows.push({ label: "Heart rate", value: percent(zone.hrmaxPct), unit: "max" });
       hint = true;

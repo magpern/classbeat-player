@@ -1,11 +1,11 @@
-// Rule 2 guard (ADR 0012, section 1): no write call, no control-point UUID and no
-// `navigator.bluetooth` anywhere in web/src. (The rider page's one-file exception comes with its issue.)
+// Rule 2 guard (ADR 0012, section 1): no write call, no UUID off the allowlist and no
+// `navigator.bluetooth` anywhere in web/src, except the one file the rider page reads sensors with.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { describe, it } from "node:test";
 import { WEB_DIR } from "../lib/browser.ts";
-import { violations } from "../lib/sensor-guard.ts";
+import { BLUETOOTH_ALLOWED, violations } from "../lib/sensor-guard.ts";
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -20,8 +20,26 @@ describe("sensor guard over web/src", () => {
   });
 
   it("no write call, control-point name or UUID, or bluetooth", () => {
-    const found = files(join(WEB_DIR, "src")).flatMap((f) => violations(readFileSync(f, "utf8")).map((v) => `${f}: ${v}`));
+    const found = files(join(WEB_DIR, "src")).flatMap((f) => {
+      const rel = relative(WEB_DIR, f).replace(/\\/g, "/");
+      return violations(readFileSync(f, "utf8"), rel).map((v) => `${rel}: ${v}`);
+    });
     assert.deepEqual(found, []);
+  });
+
+  it("allows the word bluetooth in exactly one file, and that file uses it", () => {
+    assert.deepEqual(BLUETOOTH_ALLOWED, ["src/sensors/web-bluetooth.ts"]);
+    const using = files(join(WEB_DIR, "src")).filter((f) => /bluetooth/i.test(readFileSync(f, "utf8"))).map((f) => relative(WEB_DIR, f).replace(/\\/g, "/"));
+    assert.deepEqual(using, ["src/sensors/web-bluetooth.ts"]);
+  });
+
+  it("the allowance is for that file only, and only for the word", () => {
+    const src = "navigator.bluetooth.requestDevice({})";
+    assert.deepEqual(violations(src, "src/sensors/web-bluetooth.ts"), []);
+    for (const other of ["src/rider/app.ts", "src/sensors/web-bluetooth.js", "x/src/sensors/web-bluetooth.ts", "src/sensors/core/web-bluetooth.ts", ""]) {
+      assert.deepEqual(violations(src, other), ["bluetooth"], other);
+    }
+    assert.deepEqual(violations("c.writeValue(x); const u = 0x2AD9;", "src/sensors/web-bluetooth.ts"), ["write call", "control-point UUID"]);
   });
 });
 
@@ -48,11 +66,25 @@ describe("the guard catches each", () => {
     ["optional bracket", 'navigator?.["bluetooth"]', "bluetooth"],
     ["destructured", "const { bluetooth } = navigator;", "bluetooth"],
     ["aliased", "const n = navigator; n.bluetooth.getAvailability()", "bluetooth"],
+    ["short hex with a leading zero", "const U = 0x02ad9;", "control-point UUID"],
+    ["hex with separators", "const U = 0x2a_d9;", "control-point UUID"],
+    ["decimal with separators", "const u = 10_969;", "control-point UUID"],
+    ["vendor UUID (a trainer's private service)", '"a026e005-0a7d-4ab3-97fa-f1500f9feb8b"', "control-point UUID"],
+    ["vendor UART UUID", 'getCharacteristic("6e40fec3-b5a3-f393-e0a9-e50e24dcca9e")', "control-point UUID"],
+    ["UUID without dashes", '"6e40fec3b5a3f393e0a9e50e24dcca9e"', "control-point UUID"],
+    ["allowed number, wrong base", '"00002a37-0000-1000-8000-00805f9b34fc"', "control-point UUID"],
+    ["member 16-bit UUID", "const U = 0xFEC3;", "control-point UUID"],
+    ["eight-digit string", '"00002ad9"', "control-point UUID"],
+    ["decimal GATT number in a sensor file", "getCharacteristic(10840)", "control-point UUID"],
+    ["decimal GATT service in a file that names no sensor", "export const RSC = 6164;", "control-point UUID"],
+    ["decimal GATT number with separators, anywhere", "const LENGTH_S = 11_093;", "control-point UUID"],
+    ["decimal GATT number that looks like watts", "const watts = 6200;", "control-point UUID"],
   ];
   for (const [label, src, name] of cases) it(label, () => assert.ok(violations(src).includes(name)));
 
   it("lets the allowed characteristics through", () => {
     assert.deepEqual(violations("const a = 0x2A37, b = 0x2A5B, c = 0x2A63, d = 0x2AD2, e = 0x180d, f = 0x00002a37;"), []);
     assert.deepEqual(violations('const ms = 8601, y = "2024", k = 7200;'), []);
+    assert.deepEqual(violations('"00002a37-0000-1000-8000-00805f9b34fb"; getCharacteristic(10807); getPrimaryService(6157)'), []);
   });
 });

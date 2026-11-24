@@ -12,6 +12,7 @@
 # To re-balance, edit this file only.
 1 room-checks.test.ts -(1650x1080|1620x1080|1024x768)$
 1 site-checks.test.ts -1280$
+1 rider-sensor-checks.test.ts
 2 room-checks.test.ts *
 2 play-checks.test.ts
 2 site-checks.test.ts *
