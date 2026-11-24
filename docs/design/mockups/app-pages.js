@@ -40,9 +40,6 @@ add('rider-start-paired', 'app-modes.md', 'App: rider mode, paired', 'State: rid
 add('lock-cancelled', 'app-modes.md', 'App: screen lock not confirmed', 'State: "Switch to instructor mode" pressed on a paired phone; the system screen-lock prompt was cancelled or failed. Rider mode stays, nothing changed; a plate says so.',
   riderStart({ paired: true, plate: plate('Still in rider mode', 'Instructor mode opens only after your screen lock.') }), { form: true });
 
-add('lock-locked-out', 'app-modes.md', 'App: screen lock locked for now', 'State: the system prompt answered with a lockout (too many tries). Rider mode stays; the plate says to wait.',
-  riderStart({ paired: true, plate: plate('Too many tries', 'Android has locked the screen lock for now. Try again when it lets you.') }), { form: true });
-
 add('no-lock', 'app-modes.md', 'App: a screen lock is needed', 'State: "Switch to instructor mode" on a paired phone with no secure screen lock (ADR 0011 section 1). Native screen. No instructor mode until one is set.',
   native(page(mode('Rider mode') + h1('A screen lock is needed') + p('Instructor mode opens only after this phone\'s screen lock: a PIN, pattern or password.')
     + note('This phone has no screen lock. Your classes and the pairing stay on it, locked away until you set one.'),
@@ -60,6 +57,9 @@ add('to-rider-ask', 'app-modes.md', 'App: switch to rider mode?', 'State: "Switc
 
 add('switching', 'app-modes.md', 'App: switching to rider mode', 'State: "Switch" pressed. Native screen while the follower stops, the connections close and the web view reloads fresh (ADR 0011 section 1). Under a second.',
   native(page(mode('Rider mode') + h1('Switching to rider mode') + work('Closing instructor mode'), '')));
+
+add('switching-instructor', 'app-modes.md', 'App: switching to instructor mode', 'State: the screen lock passed. Native screen while the rider\'s numbers and the web view\'s storage are dropped and the page reloads fresh (ADR 0011 section 1). Under a second.',
+  native(page(mode('Instructor mode') + h1('Switching to instructor mode') + work('Closing rider mode'), '')));
 
 // ---------- Pairing (app-pairing.md) ----------
 const URL = 'https://player.example/pair';
