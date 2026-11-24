@@ -48,6 +48,11 @@ export class RunBudget {
     this.off = off;
   }
 
+  /** The runs placed so far: what a change the hold places for itself must count beside (S6). */
+  get runs(): readonly PlacedRun[] {
+    return this.placed;
+  }
+
   /** Whether the run fits, decided once and kept: the same answer on every later frame. */
   admit(id: string, kind: RunKind, pieces: readonly Span[], w: Where, waits = false): boolean {
     if (this.off) return true;

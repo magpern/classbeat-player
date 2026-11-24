@@ -11,6 +11,7 @@ import type { Host } from "./host.ts";
 import { RigLoop } from "./loop.ts";
 import type { Draw, Feed } from "./loop.ts";
 import { SceneRig } from "./rig.ts";
+import { steadyOnly } from "./steady-calc.ts";
 import type { Shown } from "./text-clock.ts";
 import type { SceneTokens } from "./tokens.ts";
 import { lookup } from "./lookup.ts";
@@ -23,6 +24,8 @@ export interface RendererOptions {
   readonly textMask?: boolean;
   /** The demo's `budget=off`: every run fits, so a burst the scheduler would skip can be looked at. Never the product. */
   readonly budgetOff?: boolean;
+  /** The demo's `steady=1`: only steady light is drawn (steady-calc.ts), for the gate's per-region rate. Never the product. */
+  readonly steadyOnly?: boolean;
   /** Called after each frame with what was drawn and the rig's measured beam directions. */
   readonly onFrame?: (draw: Draw, measured: ReturnType<SceneRig["measuredDirections"]>, nowMs: number) => void;
 }
@@ -45,6 +48,7 @@ export class SceneRenderer {
     this.quality = options.quality ?? "High";
     this.rig = new SceneRig(options.tokens);
     this.loop = new RigLoop(options.tokens, options.budgetOff === true);
+    if (options.steadyOnly === true) this.loop.holdMotionPhase();
     this.unsubscribe = host.onResize(() => this.resize());
     this.rig.mask.setEnabled(options.textMask !== false);
     this.resize();
@@ -81,7 +85,8 @@ export class SceneRenderer {
   frame(feed: Feed, nowMs: number, draw3d = true): Draw {
     const raw = this.last === null ? 0 : (nowMs - this.last) / 1000;
     this.last = nowMs;
-    const draw = this.loop.step(feed, raw, this.quality);
+    const stepped = this.loop.step(feed, raw, this.quality);
+    const draw = this.options.steadyOnly === true ? steadyOnly(stepped) : stepped;
     this.rig.apply(draw, this.quality);
     if (draw3d) this.host.painter.render(this.rig.scene, this.rig.camera);
     this.options.onFrame?.(draw, this.rig.measuredDirections(), nowMs);

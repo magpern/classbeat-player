@@ -66,6 +66,25 @@ test("P2: an action is placed before the ticks; too late (over 500 ms) it joins 
   assert.deepEqual(placeMarks(fixedFrames([], [], 1), [action(1100)], 1, [1000]).map((p) => [p.how, p.atMs]), [["own", 1500]], "a mark the caller has already shown is an input: the 500 ms rule holds across an action it did not foresee");
 });
 
+test("P2 (#608): at a rate where 500 ms is not whole frames (75 Hz) an action just after a mark takes the next frame, not a fixed frame seconds away", () => {
+  const f75 = 1000 / 75;
+  const run = (fixedAt: number) => placeMarks(fixedFrames([fixedAt], [], f75), [action(10_001)], f75, [frameAt(10_000, f75)])[0]!;
+  const own = run(17_000); // a fixed frame 6.5 s ahead: never joined
+  assert.equal(own.how, "own");
+  assert.ok(own.atMs! - 10_001 <= 500 + f75 && own.atMs! >= 10_500, `${own.atMs}`);
+  // Truly late (its frame is 520 ms after its own, past a fixed frame 26 ms ahead of it): it joins that frame.
+  const late = placeMarks(fixedFrames([10_020], [], f75), [action(10_001)], f75, [10_000])[0]!;
+  assert.equal(late.how, "joined");
+  assert.ok(Math.abs(late.atMs! - frameAt(10_020, f75)) < 1e-6);
+});
+
+test("P2 (#608): an action too late joins a fixed frame only when it is at most 1 s after the action", () => {
+  const marks = [10_000, 10_300]; // shown: the action at 10_100 is pushed to 10_800, 700 ms late
+  const join = (fixedAt: number) => placeMarks(fixedFrames([fixedAt], [], 1), [action(10_100)], 1, marks)[0]!;
+  assert.deepEqual([join(11_100).how, join(11_100).atMs], ["joined", 11_100], "exactly 1 s ahead");
+  assert.equal(join(11_101).how, "own", "over 1 s ahead: not joined");
+});
+
 test("P2: a later action replaces a pending one in its placed frame (the latest state wins)", () => {
   assert.deepEqual(at([action(1000), action(1100), action(1300), action(1450)], [1000]), [["joined", 1000], ["own", 1500], ["replaced", 1500], ["replaced", 1500]]);
   const placed = placeMarks(fixedFrames([], [], 1), [action(0), action(100), action(300)], 1);

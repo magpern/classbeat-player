@@ -8,6 +8,7 @@ import type { JoinSheet } from "../core/room/join-sheet.ts";
 import type { ClockStatus } from "../core/room/band-view.ts";
 import { controlAddress, joinAddress, joinPageText } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
+import type { Marks } from "./room-marks.ts";
 import { sheetQrSvg } from "./room-qr.ts";
 
 export interface Sheet {
@@ -73,7 +74,7 @@ function cards(code: string, site: string | null, plate: boolean): HTMLElement[]
   return out;
 }
 
-export function mountSheet(host: HTMLElement, changed: () => void): Sheet {
+export function mountSheet(host: HTMLElement, changed: () => void, marks: Marks): Sheet {
   const box = el("section", "join");
   box.setAttribute("aria-label", "Join codes");
   box.hidden = true;
@@ -84,16 +85,32 @@ export function mountSheet(host: HTMLElement, changed: () => void): Sheet {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const now = (): number => performance.now();
 
-  function draw(): void {
+  const sheetKey = (): string => (s.open && s.code !== null ? JSON.stringify([s.code, site, plateShown(s, now())]) : "");
+
+  /** The sheet as the model says it is now. Returns whether anything on screen changed. */
+  function paint(): boolean {
     const plate = plateShown(s, now());
-    const key = s.open && s.code !== null ? JSON.stringify([s.code, site, plate]) : "";
-    if (key !== drawn) {
-      if (key === "" || s.code === null) box.replaceChildren();
-      else box.replaceChildren(...cards(s.code, site, plate));
-      box.hidden = key === "";
-      document.body.dataset.join = key === "" ? "closed" : "open";
-      drawn = key;
-    }
+    const key = sheetKey();
+    if (key === drawn) return false;
+    if (key === "" || s.code === null) box.replaceChildren();
+    else box.replaceChildren(...cards(s.code, site, plate));
+    box.hidden = key === "";
+    document.body.dataset.join = key === "" ? "closed" : "open";
+    const visible = key !== "" || drawn !== "";
+    drawn = key;
+    return visible;
+  }
+
+  /**
+   * Appearing, going and the plate's own end are each one step in a frame of its own (room-2d.md, S6): in the
+   * action's frame when J opens it, else a timed or outside change placed like one. Out of sight before and
+   * after, nothing a person sees changes, so no mark is used.
+   */
+  function draw(): void {
+    const key = s.open && s.code !== null ? "open" : "";
+    if (key === "" && drawn === "") marks.cancel("sheet"); // out of sight before and after: nothing to draw, no mark
+    else if (drawn !== sheetKey()) marks.request("sheet", () => void paint());
+    else marks.cancel("sheet");
     clearTimeout(timer);
     const at = sheetWakeAt(s);
     if (at !== null) timer = setTimeout(() => set(sheetTick(s, now())), Math.max(0, at - now()));

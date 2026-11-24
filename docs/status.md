@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-23 (after #590 and #593; `main` green at 3cb1591).
+Updated 2026-11-24 (after #623; `main` at cafa787).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -138,19 +138,20 @@ in the spec (#575), the 2D screen under the strict S6 measure in the spec (#584)
 renderer and the two-hue cross (#586), the house-look beam floor S5b in the spec (#588), and the
 flash budget, its scheduler and the strict S6 gate on the canvas (#590).
 
-**Known rule gaps (S6), with their fixes:**
-- The strict S6 gate measures the canvas only. On the whole frame as shown (the scene and its text
-  layer) S6 is **not met** until #591 puts the text layer on the scheduler and gates the whole
-  frame.
-- Steady light is **not** at its cap of 3 % a second (`--scene-steady-max`): beam sweeps move a
-  region 20 to 40 % a second, haze and wall drift 8 to 12 %. The scheduler counts steady light as
-  one change a second until #592.
-- The plain 2D screen (#583) and the control band and join sheet (#585) are built to the strict
-  measure in their own issues.
+Since then: the flash budget's tokens (#594, #596), the house-look beam floor S5b and its CI
+check (#589, #599), the text layer on the scheduler and the whole-frame S6 gate (#591, #602), the
+plain 2D screen under the strict measure (#583, #601), one mark ledger for the room window (#609),
+the control band and join sheet under the strict measure (#585, #600), the room specs as built
+(#607, #610, #621), steady light and sweeps as two kinds in the budget (#611, #615), beam aims held
+2 s after an unforeseen cause (#617, #619), the haze and wall slowed to the steady-light cap (#616,
+#620) and the 1 s cap on how far ahead an action joins a fixed frame (#608, #623).
 
-Open pull requests: #596 (closes #594, the flash budget's tokens in `tokens.css`). Open, no pull
-request yet: #591 (text layer, whole-frame gate), #589 (S5b beam floor), #583 (plain 2D
-screen), #585 (control band and join sheet). Queued: #592 (after #591).
+**Known rule gap (S6):** the sweep and sway windows (#618) do not yet fit the strict whole-frame
+gate in every case. Draft #622 fails its sweep, cut and one sway case; the Designer is revising
+the sweep and sway spec within the rules (docs only), and #622 resumes on that spec. #592 (steady
+light at its cap) closes when #618 merges.
+
+Open: #618 (draft #622), #624 (the player's state-rate test made deterministic).
 
 ## PL12: installed phone and tablet apps
 

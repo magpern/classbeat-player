@@ -90,8 +90,10 @@ test('Godot dies by itself: plain screen at once', { timeout: 60000 }, async () 
 test('healthy: state reaches Godot, fps and text sizes are logged, capture works, variant switch stops Godot', { timeout: 60000 }, async () => {
   const { app, fpsLog, out } = await start({});
   try {
-    await sleep(2500);
-    assert.ok(Number(fs.readFileSync(out, 'utf8')) >= 15, 'state is sent about 10 times a second');
+    // The rate itself (10 a second) is checked in state-pump.test.js on a fake clock; here only that states arrive.
+    for (let i = 0; i < 100 && !(fs.existsSync(out) && Number(fs.readFileSync(out, 'utf8')) >= 3); i += 1) await sleep(100);
+    assert.ok(Number(fs.readFileSync(out, 'utf8')) >= 3, 'state reaches Godot');
+    await sleep(1500); // the fps line is written once a second
     assert.match(fs.readFileSync(fpsLog, 'utf8'), /fps mode=scene 60\.0/);
     assert.deepEqual(await app.evaluate(() => process.spikeTest.getTextH()), { zone: 0.12, left: 0.3, cadence: 0.14, bpm: 0.14 });
     await app.evaluate(() => process.spikeTest.command({ type: 'capture' }));

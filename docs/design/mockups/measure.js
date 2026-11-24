@@ -28,6 +28,8 @@
 //     per orientation, and pixels), 7 : 1 for all text, and companion-checks.js in the page.
 // 12. The web player page (play.md): the room's floors on a tablet in landscape, the companion's
 //     on a phone or in portrait, its safe area, and play-checks.js in the page.
+// 13. The Android app's own screens (app.md): the companion's floors on its pages, /play's on
+//     its class screen, the room's on an external display, and app-checks.js in the page.
 // Not covered here (say so when this becomes the PL4 CI check): hue in box-shadow and gradients.
 'use strict';
 const path = require('path');
@@ -40,6 +42,7 @@ const { fit } = require('./fit');
 const companion = require('./companion-checks');
 const rider = require('./rider-checks');
 const play = require('./play-checks');
+const app = require('./app-checks');
 
 // Minimums per tier (room-2d.md, "Measurable checks").
 const TIERS = {
@@ -107,9 +110,9 @@ async function check(browser, probe, s) {
   }
   // The presenter window and the room preview are read at arm's length: no room-distance
   // cap heights, and the presenter window has no projector safe area.
-  const preview = !s.companion && !s.rider && !s.play && (s.h < 600 || !s.room);
-  const tiers = s.play ? play.tiersFor(s, TIERS) : s.companion || s.rider ? companion.tiersFor(s) : TIERS;
-  const safe = s.play ? play.safeArea(s) : s.room ? { x: s.w * SAFE, y: s.h * SAFE } : null;
+  const preview = !s.companion && !s.rider && !s.play && !s.app && (s.h < 600 || !s.room);
+  const tiers = s.app ? app.tiersFor(s, TIERS) : s.play ? play.tiersFor(s, TIERS) : s.companion || s.rider ? companion.tiersFor(s) : TIERS;
+  const safe = s.app ? app.safeArea(s) : s.play ? play.safeArea(s) : s.room ? { x: s.w * SAFE, y: s.h * SAFE } : null;
   const rows = [];
   for (const it of items) {
     const t = tiers[it.tier];
@@ -156,6 +159,7 @@ async function check(browser, probe, s) {
   if (s.companion) for (const [text, result] of await page.evaluate(companion.pageChecks)) rows.push({ tier: 'companion', text, lines: '', cap: '', contrast: '', result });
   if (s.play) for (const [text, result] of await page.evaluate(play.pageChecks)) rows.push({ tier: 'play', text, lines: '', cap: '', contrast: '', result });
   if (s.rider) for (const [text, result] of await page.evaluate(rider.pageChecks, { form: !!s.form })) rows.push({ tier: 'rider', text, lines: '', cap: '', contrast: '', result });
+  if (s.app) for (const [text, result] of await page.evaluate(app.pageChecks, { form: !!s.form })) rows.push({ tier: 'app', text, lines: '', cap: '', contrast: '', result });
   // Reduced motion.
   const rm = await browser.newPage({ viewport: { width: s.w, height: s.h }, reducedMotion: 'reduce' });
   await rm.goto('file://' + path.join(__dirname, s.file));
@@ -188,7 +192,7 @@ async function measure(shots) {
   console.table(pal.rows);
   let failed = pal.failed;
   const results = [];
-  for (const s of shots.filter((x) => x.room || x.presenter || x.companion || x.rider || x.play)) {
+  for (const s of shots.filter((x) => x.room || x.presenter || x.companion || x.rider || x.play || x.app)) {
     await fit(browser, s);
     const r = await check(browser, probe, s);
     console.log(`\n${s.png}${r.preview ? " (arm's length: room cap heights not checked)" : ''}`);

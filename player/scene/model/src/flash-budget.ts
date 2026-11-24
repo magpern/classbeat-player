@@ -7,6 +7,8 @@
 export const LIFT_CAP = 0.05;
 /** `--scene-steady-max`: the most steady light moves any region in 1 s. */
 export const STEADY_MAX = 0.03;
+/** Below the Beat level the build's haze rises this share a second (#616: a third of the cap, so the rise and the drift together stay under 2.5 %). */
+export const BUILD_HAZE_RISE = 0.01;
 /** The beat lift's shape: rise, then fall, back at rest before the next lift (at most 3 a second). */
 export const LIFT_RISE_MS = 40;
 export const LIFT_FALL_MS = 200;
@@ -34,12 +36,12 @@ export const lensShape = (ms: number): number => riseFall(ms, LENS_RISE_MS, LENS
 
 /**
  * The haze's gain in a build. At the Beat level it steps up 3 % on each beat, on the lift's 40 ms rise, and stays up
- * (about 1.25 times over 8 beats); below it the haze rises as steady light, at most 3 % a second.
+ * (about 1.25 times over 8 beats); below it the haze rises as steady light, 1 % a second (`BUILD_HAZE_RISE`).
  * `elapsedMs` is the time since the build began; `beatMs` the beat (null where the beat is not known).
  */
 export function buildHaze(elapsedMs: number, beatMs: number | null): number {
   if (!(elapsedMs >= 0)) return 1;
-  if (beatMs === null) return 1 + (STEADY_MAX * elapsedMs) / 1000;
+  if (beatMs === null) return 1 + (BUILD_HAZE_RISE * elapsedMs) / 1000;
   const whole = Math.floor(elapsedMs / beatMs);
   const rise = Math.min(1, (elapsedMs - whole * beatMs) / LIFT_RISE_MS);
   return (1 + BUILD_HAZE_STEP) ** (whole + rise);

@@ -5,7 +5,7 @@
 //   - no 1 s window holds more than 3 counted changes, steady light's possible change included;
 //   - nothing steps inside a run;
 //   - fixed frames never move later (but by P1's merge);
-//   - an action shows at most 500 ms after it, or 1 s when it joins a fixed frame;
+//   - an action shows at most 500 ms after its own frame (so under 500 ms plus one frame after it), or 1 s when it joins a fixed frame;
 //   - beam direction depends only on the song position (S7): merging an interval away moves no beam.
 // The strict 40-region gate on the real running scene (render/tools/flash-shots.ts) stays the final authority.
 import assert from "node:assert/strict";
@@ -21,6 +21,8 @@ import { ZONES } from "../src/energy.ts";
 
 const TIMELINES = 600;
 const TOL = 1e-6;
+/** 30 to 240 Hz; 50, 75 and 144 Hz make 500 ms a non-integer number of frames (#608). */
+const RATES_HZ = [30, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240];
 
 /** A small seeded generator (mulberry32), so a failure names a seed and reruns the same. */
 function rng(seed: number) {
@@ -66,7 +68,7 @@ function brute(items: readonly Span[]): { n: number; held: readonly Span[] } {
 
 function oneTimeline(seed: number): void {
   const r = rng(seed);
-  const frameMs = r.pick([1000 / 60, 1000 / 50, 1000 / 144, 1000 / 30, 1000 / 72, 1]);
+  const frameMs = r.pick(RATES_HZ.map((hz) => 1000 / hz).concat([1]));
   const endMs = r.int(10_000, 80_000);
   const beatMs = r.pick([240, 300, 333, 400, 500, 600, 750, 1000, 1500, 2000]); // 250 to 30 bpm
   const beat = spans(r, endMs);
@@ -109,7 +111,11 @@ function oneTimeline(seed: number): void {
     if (p.atMs === null) { assert.equal(p.want.kind === "action", false, `seed ${seed}: an action is never dropped`); continue; }
     assert.ok(marks.some((m) => Math.abs(m - p.atMs!) < TOL), `seed ${seed}: ${p.how} frame is a mark`);
     if (p.want.kind !== "action") continue;
-    assert.ok(p.atMs - p.want.atMs <= (p.how === "joined" || fixed.some((f) => Math.abs(f.atMs - p.atMs!) < TOL) ? 1000 : 500) + TOL && p.atMs >= p.want.atMs - TOL, `seed ${seed}: action at ${p.want.atMs} shows at ${p.atMs} (${p.how})`);
+    const toFixed = fixed.some((f) => Math.abs(f.atMs - p.atMs!) < TOL);
+    const late = p.atMs - p.want.atMs;
+    assert.ok(p.atMs >= p.want.atMs - TOL, `seed ${seed}: action at ${p.want.atMs} shows before it, at ${p.atMs}`);
+    if (toFixed) assert.ok(late <= 1000 + TOL, `seed ${seed}: action at ${p.want.atMs} joins a fixed frame ${late} ms ahead (${p.how})`);
+    else assert.ok(p.atMs - frameAt(p.want.atMs, frameMs) <= 500 + TOL && late <= 500 + frameMs + TOL, `seed ${seed}: action at ${p.want.atMs} shows at ${p.atMs}, ${late} ms late (${p.how})`);
   }
 
   // Runs: a ramp that ends the frame before every merged change frame, bursts, dims, and ramps that may wait.

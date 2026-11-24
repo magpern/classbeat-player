@@ -35,7 +35,10 @@ interface BandShot {
 }
 
 const showByMove = async (o: RoomOpen): Promise<void> => wiggle(o.page);
-const showByTab = async (o: RoomOpen): Promise<void> => o.page.keyboard.press("Tab");
+const showByTab = async (o: RoomOpen): Promise<void> => {
+  await o.page.keyboard.press("Tab");
+  await o.run(20);
+};
 const AVAILABLE: RemoteView = { slot: "available", note: "none" };
 
 const SHOTS: readonly BandShot[] = [
@@ -85,7 +88,7 @@ for (const shot of SHOTS) {
         if (shot.ask) {
           end = await endBox(o.page);
           await o.page.keyboard.press("End");
-          await o.run(20);
+          await o.run(520); // the question is a change of its own: a frame 500 ms after the band's
         }
         assert.equal(await o.phase(), "shown", name);
         await o.page.screenshot({ path: join(SHOT_DIR, `room-band-${name}.png`) });
