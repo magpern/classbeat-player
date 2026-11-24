@@ -5,9 +5,7 @@ export function parseHeartRate(dv: DataView): { bpm: number } | null {
   if (dv.byteLength < 2) return null;
   const f = dv.getUint8(0);
   const wide = bit(f, 0);
-  const w = walk(dv, 1, [["bpm", true, wide ? 2 : 1], ["energy", bit(f, 3), 2]]);
-  if (!w) return null;
-  const rest = dv.byteLength - w.end; // RR intervals: u16 each
-  if (bit(f, 4) ? rest < 2 || rest % 2 !== 0 : rest !== 0) return null;
+  // RR intervals (u16, one or more) are required when flagged but not read; trailing bytes are ignored.
+  if (!walk(dv, 1, [["bpm", true, wide ? 2 : 1], ["energy", bit(f, 3), 2], ["rr", bit(f, 4), 2]])) return null;
   return { bpm: wide ? dv.getUint16(1, true) : dv.getUint8(1) };
 }

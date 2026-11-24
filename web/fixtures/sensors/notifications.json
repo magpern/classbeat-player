@@ -1,5 +1,5 @@
 {
-  "note": "Recorded-shape notification bytes (hex, little endian) of the four allowed characteristics. t is ms since the start of the replay.",
+  "note": "Hand-built notification bytes, in the layout of a real device's (hex, little endian) of the four allowed characteristics. t is ms since the start of the replay.",
   "heartRate": [
     { "t": 0, "hex": "004b", "bpm": 75 },
     { "t": 1000, "hex": "014b00", "bpm": 75 },

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { WEB_DIR } from "../lib/browser.ts";
-import { crankCadence, fresh, parseCsc, parseCyclingPower, parseHeartRate, parseIndoorBike, CHARACTERISTICS, SERVICES, uuid128 } from "../../src/sensors/core/index.ts";
+import { crankCadence, type Crank, fresh, parseCsc, parseCyclingPower, parseHeartRate, parseIndoorBike, CHARACTERISTICS, SERVICES, uuid128 } from "../../src/sensors/core/index.ts";
 import { hexToView, replay } from "../../src/sensors/fake-replay.ts";
 
 const view = (bytes: number[]): DataView => new DataView(new Uint8Array(bytes).buffer);
@@ -38,7 +38,7 @@ describe("heart rate 0x2A37", () => {
   for (const [n, b, bpm] of ok) it(n, () => assert.deepEqual(parseHeartRate(view(b)), { bpm }));
   const bad: Array<[string, number[]]> = [
     ["empty", []], ["flags only", [0]], ["16-bit cut", [1, 5]], ["energy cut", [8, 90, 1]],
-    ["RR flagged but absent", [0x10, 90]], ["RR odd", [0x10, 90, 1, 2, 3]], ["trailing bytes", [0, 90, 1]],
+    ["RR flagged but absent", [0x10, 90]], ["RR cut", [0x10, 90, 1]],
   ];
   for (const [n, b] of bad) it(`rejects ${n}`, () => assert.equal(parseHeartRate(view(b)), null));
 });
@@ -97,12 +97,39 @@ describe("indoor bike data 0x2AD2", () => {
 });
 
 describe("crank cadence", () => {
-  it("90 rpm from one revolution in 683/1024 s", () => assert.ok(Math.abs(crankCadence({ revs: 100, time: 1000 }, { revs: 101, time: 1683 })! - 90) < 0.1));
-  it("revolution counter wraps", () => assert.ok(Math.abs(crankCadence({ revs: 65535, time: 100 }, { revs: 1, time: 100 + 1365 })! - 90) < 0.1));
-  it("event time wraps", () => assert.ok(Math.abs(crankCadence({ revs: 10, time: 65000 }, { revs: 11, time: 147 })! - 90) < 0.2));
-  it("both wrap", () => assert.ok(Math.abs(crankCadence({ revs: 65535, time: 65500 }, { revs: 0, time: 647 })! - 90) < 0.1));
-  it("no new event is not a cadence", () => assert.equal(crankCadence({ revs: 5, time: 9 }, { revs: 5, time: 9 }), null));
-  it("an absurd step is not a cadence", () => assert.equal(crankCadence({ revs: 0, time: 0 }, { revs: 30000, time: 100 }), null));
+  const at = (revs: number, time: number, t: number) => ({ value: { revs, time }, at: t });
+  const near = (got: number | null, want: number, tol = 0.1) => assert.ok(got !== null && Math.abs(got - want) < tol, String(got));
+  it("90 rpm from one revolution in 683/1024 s", () => near(crankCadence(at(100, 1000, 0), at(101, 1683, 700)), 90));
+  it("revolution counter wraps", () => near(crankCadence(at(65535, 100, 0), at(1, 1465, 1400)), 90));
+  it("event time wraps", () => near(crankCadence(at(10, 65000, 0), at(11, 147, 700)), 90, 0.2));
+  it("both wrap", () => near(crankCadence(at(65535, 65500, 0), at(0, 647, 700)), 90));
+  it("no new event is not a cadence", () => assert.equal(crankCadence(at(5, 9, 0), at(5, 9, 500)), null));
+  it("an absurd step is not a cadence", () => assert.equal(crankCadence(at(0, 0, 0), at(30000, 100, 100)), null));
+  it("a pair further apart than 3 s is not a cadence", () => {
+    near(crankCadence(at(100, 1000, 0), at(101, 1683, 3000)), 90);
+    assert.equal(crankCadence(at(100, 1000, 0), at(101, 1683, 3001)), null);
+    assert.equal(crankCadence(at(100, 1000, 5000), at(101, 1683, 4000)), null);
+  });
+});
+
+describe("trailing bytes are ignored by every parser", () => {
+  it("each", () => {
+    assert.deepEqual(parseHeartRate(view([0, 70, 9, 9, 9])), { bpm: 70 });
+    assert.deepEqual(parseCsc(view([0, 9, 9])), {});
+    assert.deepEqual(parseCyclingPower(view([0, 0, ...u16(50), 9, 9])), { watts: 50 });
+    assert.deepEqual(parseIndoorBike(view([1, 0, 9, 9])), {});
+  });
+  it("heart rate with RR flagged and an odd tail", () => assert.deepEqual(parseHeartRate(view([0x10, 90, 1, 2, 3])), { bpm: 90 }));
+});
+
+describe("cycling power bits that carry no field", () => {
+  // bit 1 (balance reference), bit 3 (torque source), bit 12 (offset compensation) add no bytes
+  for (const [n, flags, len] of [["bit 3", 0x08, 0], ["bit 12", 0x1000, 0], ["bit 1 alone", 0x02, 0], ["bit 1 with balance", 0x03, 1], ["bits 1, 3, 12 with balance", 0x100b, 1]] as Array<[string, number, number]>) {
+    it(n, () => {
+      assert.deepEqual(parseCyclingPower(view([...u16(flags), ...u16(120), ...fill(len)])), { watts: 120 });
+      if (len) assert.equal(parseCyclingPower(view([...u16(flags), ...u16(120)])), null);
+    });
+  }
 });
 
 describe("freshness (3 s)", () => {
@@ -124,7 +151,7 @@ describe("constants", () => {
   });
 });
 
-describe("recorded fixtures through the fake replay", () => {
+describe("hand-built fixtures through the fake replay", () => {
   const fx = JSON.parse(readFileSync(join(WEB_DIR, "fixtures", "sensors", "notifications.json"), "utf8"));
   it("heart rate", () => {
     const got: number[] = [];
@@ -135,7 +162,8 @@ describe("recorded fixtures through the fake replay", () => {
     it(`${key} cadence from the crank`, () => {
       const cranks = fx[key].map((e: { hex: string }) => parse(hexToView(e.hex))!.crank!);
       assert.deepEqual(cranks, fx[key].map((e: { revs: number; time: number }) => ({ revs: e.revs, time: e.time })));
-      assert.ok(Math.abs(crankCadence(cranks[0], cranks[1])! - 90) < 0.1);
+      const stamped = cranks.map((value: Crank, i: number) => ({ value, at: fx[key][i].t }));
+      assert.ok(Math.abs(crankCadence(stamped[0], stamped[1])! - 90) < 0.1);
     });
   }
   it("cycling power watts", () => assert.deepEqual(fx.cyclingPower.map((e: { hex: string }) => parseCyclingPower(hexToView(e.hex))!.watts), [200, 210]));

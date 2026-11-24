@@ -1,5 +1,5 @@
-// A fake that replays recorded notifications (web/fixtures/sensors) for tests and the harness.
-// Nothing here touches Bluetooth; the caller passes the entries and a clock-free `emit`.
+// A fake that replays the hand-built notifications of web/fixtures/sensors for tests and the harness.
+// Nothing here opens a sensor; the caller passes the entries and a clock-free `emit`.
 export interface Recorded {
   readonly t: number;
   readonly hex: string;
