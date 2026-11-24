@@ -142,3 +142,47 @@ def test_publication_sequence(case) -> None:
     i = case["incoming"]
     incoming = Incoming(i["number"], i["removed"], i["content_hash"])
     assert decide(stored, incoming) == case["expect"]
+
+
+def test_swedebeat_mix_document_is_1_3_and_older_labels_are_refused() -> None:
+    doc = load(EXAMPLES / "valid" / "class-swedebeat-mix.json")
+    assert doc["format_version"] == "1.3"
+    for mode in ("strict", "reader"):
+        assert check_document(CLASS_SCHEMA, doc, mode) == []
+    for old in ("1.0", "1.1", "1.2"):
+        doc["format_version"] = old
+        for mode in ("strict", "reader"):
+            assert check_document(CLASS_SCHEMA, doc, mode) != []
+
+
+def test_swedebeat_mix_may_end_exactly_where_the_class_ends_and_offset_defaults() -> None:
+    doc = load(EXAMPLES / "valid" / "class-swedebeat-mix-no-offset-exact-fit.json")
+    assert "offset_ms" not in doc["music"]["swedebeat_mix"]
+    assert doc["music"]["swedebeat_mix"]["length_ms"] == doc["class"]["length_ms"]
+    assert check_document(CLASS_SCHEMA, doc, "strict") == []
+    doc["music"]["swedebeat_mix"]["length_ms"] -= 1
+    assert ("swedebeat_mix_too_short", "/music/swedebeat_mix/length_ms") in check_document(
+        CLASS_SCHEMA, doc, "strict"
+    )
+
+
+@pytest.mark.parametrize("mix_id", ["a", "a" * 64, "Mix_1-b", "0123456789"])
+def test_swedebeat_mix_id_bounds_accepted(mix_id) -> None:
+    doc = load(EXAMPLES / "valid" / "class-swedebeat-mix.json")
+    doc["music"]["swedebeat_mix"]["id"] = mix_id
+    assert check_document(CLASS_SCHEMA, doc, "strict") == []
+
+
+@pytest.mark.parametrize("mix_id", ["", "a" * 65, "a.b", "a b", "a/b", "a\n", "\nabc", "é"])
+def test_swedebeat_mix_id_outside_the_alphabet_refused_in_both_modes(mix_id) -> None:
+    doc = load(EXAMPLES / "valid" / "class-swedebeat-mix.json")
+    doc["music"]["swedebeat_mix"]["id"] = mix_id
+    for mode in ("strict", "reader"):
+        assert ("schema", "/music/swedebeat_mix/id") in check_document(CLASS_SCHEMA, doc, mode)
+
+
+def test_older_reader_ignores_the_mix_in_a_future_minor() -> None:
+    doc = load(EXAMPLES / "valid" / "class-swedebeat-mix.json")
+    doc["format_version"] = "1.4"
+    doc["music"]["swedebeat_mix"]["future"] = 1
+    assert check_document(CLASS_SCHEMA, doc, "reader") == []

@@ -11,7 +11,7 @@
 export type Class = {
   [k: string]: unknown;
 } & {
-  format_version: "1.0" | "1.1" | "1.2";
+  format_version: "1.0" | "1.1" | "1.2" | "1.3";
   class: ClassInfo;
   music: Music;
   /**
@@ -64,6 +64,21 @@ export interface Music {
    * Format 1.2. The 22-character Spotify playlist id of the class's songs, in class order. Only with music source spotify (semantic rule playlist_without_spotify_source).
    */
   spotify_playlist?: string;
+  swedebeat_mix?: SwedebeatMix;
+}
+/**
+ * Format 1.3. The one Swedebeat mix the class was designed against (ADR 0013 section 4). Only with music source swedebeat (semantic rule swedebeat_mix_without_swedebeat_source); the mix must cover the class (swedebeat_mix_too_short) and every song window (song_outside_mix).
+ */
+export interface SwedebeatMix {
+  /**
+   * The provider's opaque mix id as classbeat holds it (letters, digits, underscore, hyphen; 1 to 64). Never a token or a link. A trailing newline is refused (Python's $ allows one before the end), so a mix id cannot smuggle a line break.
+   */
+  id: string;
+  length_ms: number;
+  /**
+   * The mix position at class time 0; absent means 0.
+   */
+  offset_ms?: number;
 }
 export interface ZoneDef {
   zone: number;

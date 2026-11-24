@@ -11,12 +11,6 @@
       "/zone_scale/0"
     ]
   ],
-  "schema-strict-refuses-minor-1-3.json": [
-    [
-      "schema",
-      "/format_version"
-    ]
-  ],
   "schema-missing-required-music.json": [
     [
       "schema",
@@ -513,6 +507,110 @@
     [
       "schema",
       "/music/spotify_playlist"
+    ]
+  ],
+  "schema-swedebeat-mix-in-format-1-2.json": [
+    [
+      "schema",
+      "/music"
+    ]
+  ],
+  "schema-swedebeat-mix-in-format-1-0.json": [
+    [
+      "schema",
+      "/music"
+    ]
+  ],
+  "swedebeat-mix-with-spotify-source.json": [
+    [
+      "swedebeat_mix_without_swedebeat_source",
+      "/music/swedebeat_mix"
+    ]
+  ],
+  "swedebeat-mix-with-source-none.json": [
+    [
+      "swedebeat_mix_without_swedebeat_source",
+      "/music/swedebeat_mix"
+    ]
+  ],
+  "swedebeat-mix-too-short-for-class.json": [
+    [
+      "song_outside_mix",
+      "/songs/11/end_ms"
+    ],
+    [
+      "swedebeat_mix_too_short",
+      "/music/swedebeat_mix/length_ms"
+    ]
+  ],
+  "swedebeat-mix-offset-pushes-past-end.json": [
+    [
+      "song_outside_mix",
+      "/songs/11/end_ms"
+    ],
+    [
+      "swedebeat_mix_too_short",
+      "/music/swedebeat_mix/length_ms"
+    ]
+  ],
+  "schema-swedebeat-mix-length-zero.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/length_ms"
+    ]
+  ],
+  "schema-swedebeat-mix-offset-negative.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/offset_ms"
+    ]
+  ],
+  "schema-swedebeat-mix-offset-not-integer.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/offset_ms"
+    ]
+  ],
+  "schema-swedebeat-mix-id-empty.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/id"
+    ]
+  ],
+  "schema-swedebeat-mix-id-65-chars.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/id"
+    ]
+  ],
+  "schema-swedebeat-mix-id-url.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/id"
+    ]
+  ],
+  "schema-swedebeat-mix-id-trailing-newline.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix/id"
+    ]
+  ],
+  "schema-swedebeat-mix-missing-length.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix"
+    ]
+  ],
+  "schema-swedebeat-mix-unknown-field.json": [
+    [
+      "schema",
+      "/music/swedebeat_mix"
+    ]
+  ],
+  "schema-strict-refuses-minor-1-4.json": [
+    [
+      "schema",
+      "/format_version"
     ]
   ]
 }

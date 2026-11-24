@@ -75,10 +75,21 @@ class ModeHolderTest {
         return ModeHolder(store, device, Effects(), parts) to device
     }
 
+    /** Passes the screen lock a reopen in instructor mode asked for, every drop finishing at once. */
+    private fun enter(h: ModeHolder) {
+        val held = failing.toSet() to later.toSet()
+        failing.clear()
+        later.clear()
+        assertTrue(h.lockAnswered(true))
+        failing += held.first
+        later += held.second
+        assertEquals(Mode.INSTRUCTOR, h.current)
+    }
+
     private fun instructor(): ModeHolder {
         val (h, _) = holder("instructor", paired = true, lock = true)
         h.start()
-        assertEquals(Mode.INSTRUCTOR, h.current)
+        enter(h)
         state.values.forEach { it += "instructor" }
         log.clear()
         return h
@@ -88,15 +99,94 @@ class ModeHolderTest {
     fun `a first launch on an unpaired device is in rider mode`() {
         val store = Store(null, log)
         val (h, _) = holder(null, paired = false, lock = true, store = store)
-        assertEquals(Mode.RIDER, h.start())
+        h.start()
+        assertEquals(Mode.RIDER, h.current)
         assertEquals("rider", store.value)
         assertEquals(listOf("write rider", "open RIDER"), log)
     }
 
     @Test
-    fun `the app reopens in the last mode used`() {
-        assertEquals(Mode.INSTRUCTOR, holder("instructor", paired = true, lock = true).first.start())
-        assertEquals(Mode.RIDER, holder("rider", paired = true, lock = true).first.start())
+    fun `a reopen in instructor mode asks for the screen lock again before anything of it shows`() {
+        val store = Store("instructor", log)
+        val (h, _) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        // Rider mode, the safe one, is open under the prompt; instructor mode is not.
+        assertEquals(Mode.RIDER, h.current)
+        assertEquals(ModeHolder.Pending.LOCK, h.pending)
+        assertEquals(listOf("write rider", "open RIDER", "askLock"), log)
+        assertTrue(h.lockAnswered(true))
+        assertEquals(Mode.INSTRUCTOR, h.current)
+        assertEquals("instructor", store.value)
+        assertEquals(listOf("close", "switching INSTRUCTOR") + drops() + listOf("write instructor", "open INSTRUCTOR"), log.drop(3))
+    }
+
+    @Test
+    fun `a reopen whose lock is refused stays in rider mode, and the next reopen asks nothing`() {
+        val store = Store("instructor", log)
+        val (h, _) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        assertFalse(h.lockAnswered(false))
+        assertEquals(Mode.RIDER, h.current)
+        assertNull(h.pending)
+        assertFalse(log.any { it.contains("INSTRUCTOR") })
+        // A late second answer opens nothing either.
+        assertFalse(h.lockAnswered(true))
+        assertEquals("rider", store.value)
+        log.clear()
+        holder("rider", paired = true, lock = true, store = store).first.start()
+        assertEquals(listOf("write rider", "open RIDER"), log)
+    }
+
+    @Test
+    fun `a reopen in instructor mode with no screen lock, or no pairing, falls back to rider mode`() {
+        for ((paired, lock) in listOf(true to false, false to true)) {
+            log.clear()
+            val (h, _) = holder("instructor", paired = paired, lock = lock)
+            h.start()
+            assertEquals(Mode.RIDER, h.current)
+            assertNull(h.pending)
+            assertEquals(listOf("write rider", "open RIDER"), log)
+        }
+    }
+
+    @Test
+    fun `a reopen in rider mode asks nothing`() {
+        val (h, _) = holder("rider", paired = true, lock = true)
+        h.start()
+        assertEquals(Mode.RIDER, h.current)
+        assertNull(h.pending)
+        assertFalse(log.contains("askLock"))
+    }
+
+    @Test
+    fun `a reopen in instructor mode after a switch cut short asks for the lock only once the wipe has finished`() {
+        later += "webStorage"
+        val store = Store("instructor", log).apply { wipe = true }
+        val (h, _) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        assertNull(h.current)
+        assertFalse(log.contains("askLock"))
+        unfinished.getValue("webStorage")(null)
+        assertEquals(Mode.RIDER, h.current)
+        assertEquals(listOf("dropped webStorage", "open RIDER", "askLock"), log.takeLast(3))
+        assertEquals(ModeHolder.Pending.LOCK, h.pending)
+        later.clear()
+        assertTrue(h.lockAnswered(true))
+        assertEquals(Mode.INSTRUCTOR, h.current)
+    }
+
+    @Test
+    fun `a lock lost while the reopen's wipe ran asks nothing and stays in rider mode`() {
+        later += "webStorage"
+        val store = Store("instructor", log).apply { wipe = true }
+        val (h, device) = holder("instructor", paired = true, lock = true, store = store)
+        h.start()
+        device.secureLock = false
+        unfinished.getValue("webStorage")(null)
+        assertEquals(Mode.RIDER, h.current)
+        assertNull(h.pending)
+        assertEquals("open RIDER", log.last())
+        assertFalse(log.contains("noLock"))
     }
 
     @Test
@@ -249,6 +339,7 @@ class ModeHolderTest {
         val failingStore = Store("instructor", log)
         val (j, _) = holder("instructor", paired = true, lock = true, store = failingStore)
         j.start()
+        enter(j)
         failingStore.fails = true
         j.askRider()
         assertFalse(j.riderAnswered(true))
@@ -288,7 +379,8 @@ class ModeHolderTest {
         assertFalse(log.any { it.startsWith("open") })
         assertFalse(h.askRider())
         assertNull(h.askInstructor())
-        assertEquals(listOf("left", "instructor"), state.getValue("webStorage"))
+        // Entering instructor mode already dropped "left": what is left now is instructor mode's.
+        assertEquals(listOf("instructor"), state.getValue("webStorage"))
         unfinished.getValue("webStorage")(null)
         assertEquals(Mode.RIDER, h.current)
         assertEquals(listOf("dropped webStorage", "open RIDER"), log.takeLast(2))
@@ -330,11 +422,14 @@ class ModeHolderTest {
             state.values.forEach { it.clear(); it += "left" }
             val store = Store(stored, log).apply { wipe = true }
             val (h, _) = holder(stored, paired = true, lock = true, store = store)
-            val mode = h.start()
+            h.start()
             assertTrue(stored, state.values.all { it.isEmpty() })
             val opened = log.indexOfFirst { it.startsWith("open") }
             assertTrue(stored, opened > log.indexOf("dropped ${ModePolicy.TEARDOWN.last()}"))
-            assertEquals(stored, "open $mode", log.last())
+            // Rider mode opens; a reopen toward instructor mode then asks for the lock.
+            val tail = if (stored == "instructor") listOf("open RIDER", "askLock") else listOf("open RIDER")
+            assertEquals(stored, tail, log.takeLast(tail.size))
+            assertEquals(stored, 1, log.count { it.startsWith("open") })
             assertFalse(stored, store.wipe)
         }
     }
@@ -345,6 +440,7 @@ class ModeHolderTest {
         val store = Store("instructor", log)
         val (h, _) = holder("instructor", paired = true, lock = true, store = store)
         h.start()
+        enter(h)
         state.values.forEach { it += "instructor" }
         h.askRider()
         h.riderAnswered(true)
@@ -355,7 +451,8 @@ class ModeHolderTest {
         state.getValue("webStorage").add("still here")
         log.clear()
         val (next, _) = holder("rider", paired = true, lock = true, store = store)
-        assertEquals(Mode.RIDER, next.start())
+        next.start()
+        assertEquals(Mode.RIDER, next.current)
         assertTrue(state.getValue("webStorage").isEmpty())
         assertTrue(log.indexOf("dropped webStorage") < log.indexOf("open RIDER"))
         assertFalse(store.wipe)
@@ -366,6 +463,7 @@ class ModeHolderTest {
         val store = Store("instructor", log)
         val (h, _) = holder("instructor", paired = true, lock = true, store = store)
         h.start()
+        enter(h)
         log.clear()
         store.flagFails = true
         h.askRider()

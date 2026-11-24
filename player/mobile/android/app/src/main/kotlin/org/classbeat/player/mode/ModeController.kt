@@ -28,7 +28,7 @@ import org.classbeat.player.policy.PluginPolicy
 class ModeController(
     private val activity: ComponentActivity,
     private val lockPrompt: ActivityResultLauncher<Intent>,
-) : ModeEffects, PageGate, PageSteps {
+) : ModeEffects, PageGate, PageSteps, UnpairSteps {
     private lateinit var holder: ModeHolder
     private lateinit var locked: BridgeLockdown.Locked
     private lateinit var webView: WebView
@@ -48,11 +48,11 @@ class ModeController(
     lateinit var follow: FollowBridge
         private set
 
-    /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
-    private var waiting: PluginCall? = null
+    /** The page call the open question answers: one at a time, a second is refused (#673). */
+    private val question = PageQuestion<PluginCall>({ call, answer -> call.resolve(result(answer)) }, { it.reject(REFUSED) })
 
-    /** The "Unpair this phone?" question shows. */
-    private var unpairing = false
+    /** The "Unpair this phone?" question. */
+    private val unpairing = UnpairQuestion(this)
 
     private lateinit var intents: InstructorIntents
 
@@ -101,10 +101,9 @@ class ModeController(
     override fun closeBridge() {
         expose(null)
         pairing.drop()
-        unpairing = false
+        unpairing.close()
         // The page that asked is being replaced: its question ends here, with the one refused word.
-        waiting?.reject(REFUSED)
-        waiting = null
+        question.drop()
     }
 
     /** Through the blank page: the mode's plugin goes on only once the last page is gone (PageOpener). */
@@ -132,37 +131,32 @@ class ModeController(
     fun instructorWay(call: PluginCall) =
         call.resolve(JSObject().put("way", if (holder.paired) "lock" else "pair"))
 
-    fun askInstructorMode(call: PluginCall) {
-        if (pairing.showing) return call.reject(REFUSED)
+    // Every question goes through [question]: while one is open, any other ask is refused and the
+    // open one keeps its call, so a rider-mode ask can no longer take the unpair call's place.
+
+    fun askInstructorMode(call: PluginCall) = question.ask(call) {
+        if (pairing.showing) return@ask false
         when (holder.askInstructor()) {
-            null -> call.reject(REFUSED)
+            null -> false
             // N3: on an unpaired phone the strip's key starts pairing, on the native pairing screen.
-            ModePolicy.Entry.PAIR -> {
-                waiting = call
-                showScreen { pairing.open(instructor = false, leave = ::pairingLeft) }
-            }
-            ModePolicy.Entry.NO_LOCK, ModePolicy.Entry.ASK_LOCK -> waiting = call
+            ModePolicy.Entry.PAIR -> true.also { showScreen { pairing.open(instructor = false, leave = ::pairingLeft) } }
+            ModePolicy.Entry.NO_LOCK, ModePolicy.Entry.ASK_LOCK -> true
         }
     }
 
     /** Instructor mode's "Pair again" (the pairing expired): the same native screen. */
-    fun pairAgain(call: PluginCall) {
-        if (waiting != null || pairing.showing) return call.reject(REFUSED)
-        waiting = call
-        showScreen { pairing.open(instructor = true, leave = ::pairingLeft) }
+    fun pairAgain(call: PluginCall) = question.ask(call) {
+        if (pairing.showing) return@ask false
+        true.also { showScreen { pairing.open(instructor = true, leave = ::pairingLeft) } }
     }
 
     /** Instructor mode's "Unpair this phone": asks first; only "Unpair" deletes anything. */
-    fun unpair(call: PluginCall) {
-        if (waiting != null || pairing.showing || holder.pending != null || current != Mode.INSTRUCTOR) return call.reject(REFUSED)
-        waiting = call
-        unpairing = true
-        showScreen { screens.unpairQuestion(stay = ::stay, unpair = ::unpairConfirmed) }
+    fun unpair(call: PluginCall) = question.ask(call) {
+        if (pairing.showing || holder.pending != null || current != Mode.INSTRUCTOR) return@ask false
+        true.also { unpairing.ask() }
     }
 
-    fun askRiderMode(call: PluginCall) {
-        if (holder.askRider()) waiting = call else call.reject(REFUSED)
-    }
+    fun askRiderMode(call: PluginCall) = question.ask(call) { holder.askRider() }
 
     // From the activity.
 
@@ -187,7 +181,7 @@ class ModeController(
 
     /** Leaving the app while the question shows means "Stay". */
     fun stopped() {
-        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing) stay()
+        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing.showing) stay()
     }
 
     private fun openSettings() {
@@ -204,20 +198,23 @@ class ModeController(
         }
     }
 
-    /** "Unpair": the page hears first, then the token and the classes go and instructor mode closes. */
-    private fun unpairConfirmed() {
-        if (!unpairing) return
-        unpairing = false
+    // UnpairSteps: the unpair question's steps. "Unpair": the page hears first, then the token and
+    // the classes go and instructor mode closes.
+
+    override fun showQuestion(stay: () -> Unit, unpair: () -> Unit) = showScreen { screens.unpairQuestion(stay, unpair) }
+
+    override fun answer(result: String) {
         hideScreen()
-        settle("unpaired")
-        intents.unpair()
+        settle(result)
     }
 
-    private fun stay() {
+    override fun unpair() = intents.unpair()
+
+    override fun stay() {
         // Between modes (the switching screen): Back does nothing, and the screen stays.
         if (current == null) return
         if (pairing.showing) return pairing.back()
-        unpairing = false
+        unpairing.close()
         when (holder.pending) {
             ModeHolder.Pending.NO_LOCK -> holder.noLockStay()
             ModeHolder.Pending.RIDER_QUESTION -> holder.riderAnswered(false)
@@ -227,10 +224,7 @@ class ModeController(
         settle("stayed")
     }
 
-    private fun settle(answer: String) {
-        waiting?.resolve(result(answer))
-        waiting = null
-    }
+    private fun settle(answer: String) = question.settle(answer)
 
     private fun showScreen(show: () -> Unit) {
         show()

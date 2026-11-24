@@ -90,21 +90,36 @@ class ModeHolder(
     val secureLock: Boolean get() = device.secureLock
 
     /**
-     * Opens the app in the last mode used (ModePolicy.startMode) and loads its start page. A switch
-     * the app was stopped in the middle of (killed while the storage wipe ran) is finished first:
-     * every part is dropped again before any page loads, so nothing the last page left survives.
+     * Opens the app in rider mode and loads its start page. When the last mode used was instructor
+     * mode (ModePolicy.startMode: still paired, with a secure lock), the screen lock is asked again
+     * at once, as for any entry from rider mode (ADR 0011 section 1): a reopen never skips it, and
+     * nothing of instructor mode shows before it passes. A switch the app was stopped in the middle
+     * of (killed while the storage wipe ran) is finished first: every part is dropped again before
+     * any page loads, so nothing the last page left survives.
      */
-    fun start(): Mode {
-        val mode = ModePolicy.startMode(store.read(), device.paired, device.secureLock)
+    fun start() {
+        reask = ModePolicy.startMode(store.read(), device.paired, device.secureLock) == Mode.INSTRUCTOR
         if (store.wipePending()) {
-            switchTo(mode)
-            return mode
+            switchTo(Mode.RIDER)
+            return
         }
-        // Rider mode is written back so a value that did not open instructor mode is gone.
-        if (mode == Mode.RIDER) store.write(Mode.RIDER.stored)
-        current = mode
-        effects.open(mode)
-        return mode
+        // Written back so a value that did not open instructor mode is gone; the lock writes it again.
+        store.write(Mode.RIDER.stored)
+        current = Mode.RIDER
+        effects.open(Mode.RIDER)
+        askAgain()
+    }
+
+    /** The app reopened toward instructor mode: the lock is asked once rider mode is open. */
+    private var reask = false
+
+    private fun askAgain() {
+        if (!reask) return
+        reask = false
+        // Lost the pairing or the lock meanwhile: the app simply stays in rider mode.
+        if (ModePolicy.entry(device.paired, device.secureLock) != ModePolicy.Entry.ASK_LOCK) return
+        pending = Pending.LOCK
+        effects.askLock()
     }
 
     /**
@@ -216,6 +231,7 @@ class ModeHolder(
         runCatching { store.setWipePending(false) }
         current = target
         effects.open(target)
+        if (target == Mode.RIDER) askAgain()
         return true
     }
 }

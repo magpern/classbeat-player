@@ -148,6 +148,13 @@ const appShot = (name, w, h) => ({
   display: APP_DISPLAYS.includes(name), form: APP_FORMS.includes(name), save: APP_DISPLAYS.includes(name) || (w === 390 && h === 844) || (w === 844 && h === 390),
 });
 
+// Connect Swedebeat and the mix states (swedebeat.md): the class list at its three window sizes
+// (1000x720 kept, the main state also at 1920x1080), and the room link line at three room sizes
+// (1920x1080 kept, 1024x768 kept for the longest line, 1280x1024 checked).
+const { NAMES: SW_NAMES, ROOM_NAMES: SW_ROOMS } = require('./swedebeat-pages');
+const swList = (name, w, h) => ({ file: `class-list-swedebeat-${name}.html`, png: `class-list-swedebeat-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || w === 1280 || (name === 'signed-in' && w === 1920) });
+const SW_ROOM_SIZES = [[1920, 1080], [1280, 1024], [1024, 768]];
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -181,6 +188,8 @@ const SHOTS = [
   // The player's default presenter window (1000x760 with its title bar).
   { file: 'presenter.html', png: 'presenter-1000x720.png', w: 1000, h: 720, room: false, presenter: true, save: true },
   ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
+  ...SW_NAMES.flatMap((n) => LIST_SIZES.map(([w, h]) => swList(n, w, h))),
+  ...SW_ROOMS.flatMap((n) => SW_ROOM_SIZES.map(([w, h]) => room(`mix-${n}`, w, h, true))),
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
   ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),

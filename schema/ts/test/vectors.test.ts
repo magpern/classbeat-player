@@ -143,3 +143,49 @@ for (const c of load(join(EXAMPLES, "sequences.json")) as {
     assert.equal(decide(c.stored, c.incoming), c.expect);
   });
 }
+
+test("a Swedebeat mix document is 1.3 and older labels are refused", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix.json"));
+  assert.equal(doc.format_version, "1.3");
+  for (const mode of ["strict", "reader"] as const) assert.deepEqual(checkDocument(classSchema, doc, mode), []);
+  for (const old of ["1.0", "1.1", "1.2"]) {
+    doc.format_version = old;
+    for (const mode of ["strict", "reader"] as const) assert.notDeepEqual(checkDocument(classSchema, doc, mode), []);
+  }
+});
+
+test("a Swedebeat mix may end exactly where the class ends, and offset defaults", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix-no-offset-exact-fit.json"));
+  assert.equal(doc.music.swedebeat_mix.offset_ms, undefined);
+  assert.equal(doc.music.swedebeat_mix.length_ms, doc.class.length_ms);
+  assert.deepEqual(checkDocument(classSchema, doc, "strict"), []);
+  doc.music.swedebeat_mix.length_ms -= 1;
+  const found = checkDocument(classSchema, doc, "strict").map((v) => v.join(" "));
+  assert.ok(found.includes("swedebeat_mix_too_short /music/swedebeat_mix/length_ms"), `${found}`);
+});
+
+for (const id of ["a", "a".repeat(64), "Mix_1-b", "0123456789"]) {
+  test(`a Swedebeat mix id is accepted: ${id.slice(0, 12)}`, () => {
+    const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix.json"));
+    doc.music.swedebeat_mix.id = id;
+    assert.deepEqual(checkDocument(classSchema, doc, "strict"), []);
+  });
+}
+
+for (const id of ["", "a".repeat(65), "a.b", "a b", "a/b", "a\n", "\nabc", "é"]) {
+  test(`a Swedebeat mix id outside the alphabet is refused in both modes: ${JSON.stringify(id.slice(0, 12))}`, () => {
+    const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix.json"));
+    doc.music.swedebeat_mix.id = id;
+    for (const mode of ["strict", "reader"] as const) {
+      const found = checkDocument(classSchema, doc, mode).map((v) => v.join(" "));
+      assert.ok(found.includes("schema /music/swedebeat_mix/id"), `${mode}: ${found}`);
+    }
+  });
+}
+
+test("an older reader ignores the mix in a future minor", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix.json"));
+  doc.format_version = "1.4";
+  doc.music.swedebeat_mix.future = 1;
+  assert.deepEqual(checkDocument(classSchema, doc, "reader"), []);
+});

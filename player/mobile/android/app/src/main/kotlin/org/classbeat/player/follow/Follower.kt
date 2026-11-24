@@ -18,6 +18,11 @@ class Follower(
     var following = false
         private set
 
+    // Nothing follows from the start, whichever mode opens: the listener is off until asked for.
+    init {
+        drop()
+    }
+
     fun followAccess(): Map<String, Any?> = FollowAnswers.access(access.granted())
 
     /**
@@ -58,7 +63,7 @@ class Follower(
         return FollowAnswers.reading(source.status(), source.latest(), clock())
     }
 
-    /** The teardown on a mode switch, and at start-up: nothing follows and the listener is disabled. */
+    /** The teardown on a mode switch, and at construction: nothing follows and the listener is disabled. */
     fun drop() {
         stopSource()
         access.enable(false)

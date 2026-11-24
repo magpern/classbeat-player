@@ -8,7 +8,7 @@ wait for the owner (docs/owner.md) and are built on stand-ins until then.
 Plan phase PL9 reads Bluetooth sensors: first the instructor's own bike and heart rate on the
 computer, shown against the target; then each rider's phone reads the rider's own bike or strap,
 shows it to that rider against their own target and sends it to the instructor's screen only
-(plan section 7, rule 13). Riders use the web page: Android in Chrome, iPhone in Bluefy.
+(plan section 7, rule 13). Riders use the web page: Android in Chrome; on iPhone, the installed app's rider mode (amended, owner 2026-11-24: Bluefy dropped).
 
 The product rules that bind sensors (plan section 3): rule 2, the product never controls
 equipment (nothing sets resistance, speed, incline or a brake; connecting and switching on
@@ -84,7 +84,7 @@ The rider page (`web/src/rider/`) gets a "Connect a sensor" control. Only one fi
 of section 1; a new web guard pins that and bans every write call in all of `web/src/`. The
 rider page takes its `SensorSource` from its entry point: the web rider page's entry passes the
 Web Bluetooth source, and every other entry passes an "unavailable" source. Where the
-browser has no Web Bluetooth, the page says so, and on an iPhone names Bluefy (plan section 7).
+browser has no Web Bluetooth, the page says so, and on an iPhone points to the installed app (amended, owner 2026-11-24; plan section 7).
 The rider's readings stay on the rider's phone: in this ADR nothing is sent to the session. No
 player bundle contains `web-bluetooth.ts` or any `navigator.bluetooth`: a test builds every
 shipped player bundle, the desktop renderer's and each of `player/mobile/`'s entry points
