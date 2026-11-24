@@ -34,31 +34,48 @@ is that ADR. It rests on:
   section 5**: the player shows a `swedebeat_mix` id and does nothing else with it.
 - **classbeat's precedent** (its ADRs 0035 and 0036): classbeat reaches Swedebeat only through
   the owner's Swedebeat gateway, which holds every Swedebeat secret; agents never call a real
-  gateway, whatever its URL. The same discipline applies here.
+  gateway, whatever its URL. The same discipline applies here: agents and tests never call a
+  real Swedebeat service or gateway. Whether such a gateway has any part in the player is not
+  decided here; it is part of plan decision 11 (section 2 and Consequences).
 
 ## Decision
 
-### 1. Sign-in: the password once, on our own page; the token in the keychain
+### 1. Sign-in: credentials once, on our own page; the token in the keychain
 
-- The player has a "Connect Swedebeat" screen of its own (a local renderer page, not a web page
-  from any server). The user types the Swedebeat username and password there. The renderer hands
-  them to the main process over one IPC channel, `mix:sign-in`, in one call; the main process
-  passes them to the configured `MixSource`'s `signIn` (section 2) and drops them. The password
-  is never written to disk, a log, a crash report, a URL, a setting, the class cache, the backend
-  or any model, and is never sent back to a renderer. The IPC handler holds it in one local
-  variable for the length of the call; the page clears its field on submit, success or failure.
-- What comes back is a **Swedebeat token**, opaque to the player. It is kept only through
-  `safeStorage` (the operating system's keychain), in a file only that user can read, under the
-  classbeat-player account it was connected for. `keychainUsable` decides as for pairing: with no
-  usable keychain the screen says so and does not offer sign-in; there is no plain-text fallback.
+- **Where.** Sign-in is offered only on the class list page (`classlist.html`), never in the room
+  window, which runs the scene, or the presenter window. `core/ipc-policy.ts` admits the new
+  channel `player:mix-sign-in` from the class list page only, as it does for the existing
+  `player:` channels. While the state is `off` (`UnavailableMixSource`, section 2) the page shows
+  no username or password field at all, only "Swedebeat playback is off".
+- **What is typed.** The credentials are defined by the source (section 2): with the fake, a
+  username and a password. The real source's sign-in may need a different form, or no password on
+  the device at all; issue 4's page is therefore provisional, built against the fake, and is
+  revisited with issue 7. The main process refuses input over 256 characters per field, or more
+  fields than the active source declares.
+- **Once, never kept.** The renderer hands the credentials to the main process in one call; the
+  main process passes them to the configured `MixSource`'s `signIn` and drops them. A password is
+  never written to disk, a log, a crash report, a URL, a setting, the class cache, the backend or
+  any model, and is never sent back to a renderer. The IPC handler holds it in one local variable
+  for the length of the call; the page clears its fields on submit, success or failure.
+- **The token.** What comes back is a **Swedebeat token**, opaque to the player. It is kept only
+  through `safeStorage` (the operating system's keychain), in a file only that user can read,
+  under the classbeat-player account it was connected for. `keychainUsable` decides as for
+  pairing: with no usable keychain the page says so and does not offer sign-in; there is no
+  plain-text fallback.
 - The token stays in the main process. No renderer, preload, IPC answer, log line, error text or
   status message carries it, or the source's origin and paths. Renderers see only a state:
   `off`, `signed_out`, `signing_in`, `signed_in`, `refused`, `unavailable`.
-- **Sign out of Swedebeat** deletes the token and that account's mixes (section 3). Unpairing the
-  device account, or the account's deletion reaching the device, does the same. A source answer
-  that the token is no longer valid deletes the token, keeps the mixes unplayable until the user
-  signs in again (section 3, "plays only while signed in") and shows "Connect Swedebeat again".
-- A user signs in again by typing the password again. There is no "remember me", no refresh
+- **One key lifetime.** The account's cache key (section 3) lives from the account's first mix
+  until **sign-out of Swedebeat, unpairing that account, or the account's deletion reaching the
+  device**, and only those end it. Each of them deletes, in this order: the cache key from the
+  keychain, then the token, then the account's mix folder, so a crash between steps leaves only
+  files that can no longer be decrypted, and the next start deletes them.
+- **An invalid token.** A source answer that the token is no longer valid deletes the token only.
+  The cache key and the mixes stay, and nothing plays them, because the mode policy (section 4)
+  selects mix playback only while the account holds a token. The page shows "Connect Swedebeat
+  again"; signing in again makes the kept mixes playable without a new download. Eviction
+  (section 3) still applies meanwhile.
+- A user signs in again by entering the credentials again. There is no "remember me", no refresh
   secret held beyond what the source returns as its one token, and no second copy of the token.
 
 ### 2. A `MixSource` interface; the real source is off and owner-gated
@@ -68,28 +85,42 @@ All access to Swedebeat goes through one interface in `player/app/src/core/mix/s
 
 | Call | What it does |
 |---|---|
-| `signIn(username, password)` | Returns a token or a typed refusal (`bad_credentials`, `unavailable`, `rate_limited`) |
+| `credentialFields()` | The fields the source's sign-in asks for (the fake: username, password); empty when it has no sign-in on the device |
+| `signIn(credentials)` | Returns a token or a typed refusal (`bad_credentials`, `unavailable`, `rate_limited`) |
 | `signOut(token)` | Best effort; the local deletion of section 1 happens whatever it answers |
-| `describe(token, mixId)` | The mix's byte length, its duration in ms as the source states it, an optional SHA-256 of the file, and whether this account may play it |
+| `describe(token, mixId)` | The mix's byte length, its duration in ms as the source states it, an optional SHA-256 of the file or the source's version of it, and whether this account may play it |
 | `read(token, mixId, fromByte)` | A byte stream from `fromByte` to the end |
+
+**Audio path (plan section 3, rule 3).** Whatever source is chosen, the audio bytes go from the
+provider straight to the device. No class audio is ever streamed from, through or by a server of
+ours. A source may at most authorize the device or hand it the provider's own link; a route that
+would need the bytes through a server of ours is not a source under this ADR and goes to
+`docs/owner.md` instead.
 
 Implementations:
 
 - **`FakeMixSource`** (tests, CI, the screenshot harness and the developer build): serves a
   generated, licence-free test tone file from the test fixtures, scripts every refusal, slow
   and stalled reads, a wrong length and a changed file, and records what it was asked.
-- **`UnavailableMixSource`**, the default in every shipped build: `signIn` and `describe` answer
-  `unavailable`. With it the Swedebeat mode is the manual clock, exactly as today.
-- **The real source is not built in PL11.** Which one it is (the owner's Swedebeat gateway, a
-  source Swedebeat provides, or another route the owner sanctions) is plan decision 11's answer.
-  When the owner answers, a separate issue adds that client behind this interface, in the main
-  process, with its origin a setting that defaults to empty (off), `https:` only, the host pinned
-  by the setting and every request built by one module. No credential or key taken from
-  Swedebeat's, MOWL's or any other app is ever used (AGENTS.md section 8).
+- **`UnavailableMixSource`**, the default in every shipped build: `credentialFields` is empty and
+  `signIn` and `describe` answer `unavailable`. With it the Swedebeat mode is the manual clock,
+  exactly as today.
+- **The real source is not chosen or built here.** Which source supplies the audio is plan
+  decision 11's answer, the owner's. When the owner answers, a separate issue adds that client
+  behind this interface, in the main process, with its origin a setting that defaults to empty
+  (off), `https:` only, the host pinned by the setting and every request built by one module. No
+  credential or key taken from Swedebeat's, MOWL's or any other app is ever used (AGENTS.md
+  section 8).
 - **Agents never call a real source.** No test, script, fixture, CI job or developer default names
-  a real Swedebeat or gateway host. A guard test in the player lane fails the build if any file
-  under `player/` sets the mix source origin to anything but empty, `localhost` or `127.0.0.1`
-  outside the settings documentation, and the netguard of the player's unit tests stays as it is.
+  a real Swedebeat or gateway host. Issue 3 adds:
+  - a **network guard** for the player's unit tests (and its end-to-end tests where they run
+    Node code), on the model of `backend/tests/netguard.py`: every non-loopback `connect` and
+    every name lookup other than `localhost` throws before anything is sent; no test is exempt;
+  - a guard test that fails the build if any file under `player/` sets the mix source origin to
+    anything but empty, `localhost` or `127.0.0.1`;
+  - Swedebeat's and the owner's gateway's known hosts in `scripts/provider-guard.txt` (the list
+    only grows), so no tracked file outside `docs/` names them.
+
   Live checks against a real source are the owner's.
 
 ### 3. The encrypted mix cache
@@ -97,41 +128,51 @@ Implementations:
 Where: `<app data>/mixes/<account key>/`, one folder per classbeat-player account, readable by
 that user only, beside the class cache of `main/sync/cache.ts` and wiped with it.
 
-- **Keys.** Each account has a random 256-bit cache key, created on its first mix, kept only
-  through `safeStorage` next to the Swedebeat token, and deleted with it. Each mix file has its
-  own key, `HKDF-SHA256(cache key, salt = the file's random 32-byte id, info = "cbp-mix-v1")`. A
-  new download, including a restart of a failed one, gets a new file id and so a new key.
+- **Keys.** Each account has a random 256-bit cache key, kept only through `safeStorage`, with
+  the lifetime of section 1. From it the player derives a mix tag,
+  `HMAC-SHA256(cache key, "cbp-mix-id" || mix id)`, which names the mix on disk instead of its id.
+  Each mix file has its own key,
+  `HKDF-SHA256(cache key, salt = the file's random 32-byte id, info = "cbp-mix-v1" || mix tag)`,
+  so a file is bound to its mix: renamed or copied under another mix's tag, it fails
+  authentication on its first chunk. A new download, including a restart, gets a new file id and
+  so a new key.
 - **Format.** The plaintext is cut into chunks of 256 KiB. Each chunk is sealed with AES-256-GCM
-  under the file key, nonce = the chunk index as 96 bits, additional data = file id, chunk index,
-  and a final-chunk flag. A chunk is written once and never rewritten under the same key; a
-  resumed download continues after the last whole sealed chunk. A small header file holds, in
-  the clear, only the format version, file id, mix id hash (SHA-256 of account key and mix id,
-  never the mix id or title), chunk count when known, byte length, and the state
-  (`downloading`, `complete`, `bad`).
-- **No plaintext on disk.** Audio exists in plaintext only in memory, one chunk at a time, in the
-  main process. Nothing is written through a temporary file, the browser's media cache or a swap
-  file we control. A test downloads a fake mix with a known byte pattern and scans the cache
-  folder and the app data folder for any 64-byte run of it.
+  under the file key, nonce = the chunk index as 96 bits, additional data = file id, mix tag,
+  chunk index and a final-chunk flag. A small header file holds, in the clear, only the format
+  version, file id, mix tag (never the mix id or title), the source file's identity as
+  `describe` gave it (byte length, and the SHA-256 or the source's version when given), chunk
+  count when known, and the state (`downloading`, `complete`, `bad`).
+- **A nonce is never reused.** Every chunk index is sealed at most once with the same plaintext
+  under a file key. A download resumes only when `describe` now answers the same byte length and
+  the same SHA-256 or version as the header recorded; if the source gave neither, or anything
+  differs, the file is deleted and the download starts over with a new file id. Before resuming,
+  the file is truncated to the end of the last whole sealed chunk, so a torn chunk is dropped
+  and its index is sealed again only from the same source file at the same offset.
+- **No plaintext on disk.** Decrypted audio exists only in the main process's memory, at most a
+  few chunks at a time, while the `cbp-mix:` handler (section 5) serves it to the room window,
+  whose media pipeline then holds the decoded audio in memory as any played file. The player
+  writes no plaintext to a file, a temporary file or a cache; the default session keeps no HTTP
+  cache for `cbp-mix:` answers (they carry `Cache-Control: no-store`). A test downloads a fake
+  mix with a known byte pattern, plays it, and scans the app data folder for any 64-byte run of
+  it.
 - **Integrity.** Every chunk read is authenticated; a failed tag, a missing chunk or a final flag
-  in the wrong place marks the file `bad`, deletes it, and that play falls back (section 5). At
+  in the wrong place marks the file `bad`, deletes it, and that play falls back (section 4). At
   completion the player checks the byte length against `describe`, and the SHA-256 when the
   source gave one; a mismatch marks the file `bad`. Before playing, the player compares the
   duration it decodes with the class's `music.swedebeat_mix.length_ms` (section 4): more than
   1 000 ms apart and the mix is not used for that class.
 - **Play while downloading.** Playback may start before the file is complete. The download
   writes sealed chunks in order; a read for a chunk not yet written waits for it, for at most
-  10 s, then the play falls back as in section 5 while the download carries on.
-- **Per account.** A mix is cached and played only under the account whose class names it and
-  whose Swedebeat token is in the keychain. A cached mix plays offline, but only while that
-  account still has a Swedebeat token; signing out of Swedebeat, unpairing or deletion of the
-  account deletes its folder and key. Two accounts on one studio computer each download their own
-  copy.
+  10 s, then the play falls back as in section 4 while the download carries on.
+- **Per account.** A mix is cached and played only under the account whose class names it, and
+  played only while that account holds a Swedebeat token (section 1). A cached mix plays offline.
+  Two accounts on one studio computer each download their own copy, under their own keys.
 - **Eviction.** A mix is deleted when no class of its account names it any more. The cache has a
   size cap, a setting with a default of 4 GiB per account; above it, the mixes played least
   recently are deleted first, never one that is playing or belongs to a class starting within
   the next 24 hours by the class list's order. A mix not played for 90 days is deleted.
 - **Downloads** start when a class that names a mix is synced to a signed-in account, or when the
-  user opens it, one at a time per account, resumable, in the main process only.
+  user opens it, one at a time per account, resumable as above, in the main process only.
 
 ### 4. The class format marks a class designed with a Swedebeat mix
 
@@ -139,18 +180,24 @@ A contract pull request adds, as format minor `"1.3"` under ADR 0003 section 7:
 
 | Field | Meaning |
 |---|---|
-| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. `length_ms` is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
+| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
 
-The validator adds: `music.swedebeat_mix` only when `music.source` is `swedebeat`; `offset_ms +
-class.length_ms <= length_ms`; when songs are present, song windows read as mix positions minus
-`offset_ms`, so a song's window equals its place in the mix. `songs[].ids.swedebeat_mix` stays as
-it is. classbeat writes the field on its side (its own repository, PL3's converter), and the
-reference converter here gains a fixture for it.
+The validator adds:
+
+- `music.swedebeat_mix` is present only when `music.source` is `swedebeat`;
+- `offset_ms + class.length_ms <= length_ms`;
+- when songs are present, for every song `0 <= start_ms` and `offset_ms + end_ms <= length_ms`
+  (each song's window, read as the mix span `[offset_ms + start_ms, offset_ms + end_ms)`, lies
+  inside the mix). The existing checks of ADR 0003 section 4 (contiguous windows, a window never
+  longer than its song) still apply.
+
+`songs[].ids.swedebeat_mix` stays as it is. classbeat writes the new field on its side (its own
+repository, PL3's converter), and the reference converter here gains a fixture for it.
 
 **What it selects.** The choice is one pure module, `core/mix/mode-policy.ts`:
 
 1. `music.source` is `swedebeat`, `music.swedebeat_mix` is present, the mix source is not
-   `UnavailableMixSource`, the account is signed in to Swedebeat, and the mix is cached or can be
+   `UnavailableMixSource`, the account holds a Swedebeat token, and the mix is cached or can be
    read: **mix playback**. The player plays the mix itself and the class clock is driven by the
    audio position, `class time = position - offset_ms`. Interval timing and beat effects are
    exact (the two accuracy targets of ADR 0001 are met by construction and checked on the fake).
@@ -167,15 +214,29 @@ on the manual clock, announced on screen; the audio stops rather than play out o
 
 ### 5. How the audio reaches the speaker
 
-- The main process registers one privileged scheme, `cbp-mix:`, whose handler answers only the
-  room window, only for the mix of the class that window is playing, with byte-range support,
-  decrypting chunks in memory (section 3). It answers nothing else and never a token, a path or a
-  source URL.
-- The room window plays it with one `<audio>` element. Its Content-Security-Policy changes from
-  `media-src 'none'` to `media-src cbp-mix:` and nothing else; every other window keeps
-  `media-src 'none'`. The hardening tests pin exactly that, as an allowlist.
-- The renderer gets no file system, network or keychain access for this; `connect-src` stays
-  `'none'` everywhere.
+- **The scheme.** The main process registers one scheme, `cbp-mix:`, as standard, secure and
+  supporting fetch and streaming, **without `bypassCSP`**, and answers it with `protocol.handle`.
+- **One play, one URL.** When the room window starts a mix, the main process issues a play id,
+  128 random bits, bound to that window's `webContents` id, the account and the mix tag, and
+  sends the room window `cbp-mix://play/<play id>`. The handler answers only a live play id, with
+  byte-range support, decrypting chunks in memory (section 3), and answers nothing else: never a
+  token, a path, a mix id or a source URL. The play id ends when the play stops, the class
+  changes, the room window closes or the account signs out.
+- **The request filter.** `hardenSession` (`main/hardening.ts`) cancels every request that
+  `isAllowedRequest` (`main/web-preferences.ts`) does not admit. It changes to an allowlist of
+  two cases: the application's own files, as today, for every window; and a `cbp-mix:` URL only
+  when `details.webContentsId` is the room window's id (`roomId` of `core/ipc-policy.ts`) and the
+  play id is live and bound to that window. Every other `cbp-mix:` request, and every other
+  scheme, is cancelled.
+- **The page.** The room window plays it with one `<audio>` element created by the shell's room
+  code (`player/app/src/renderer/`), never by `player/scene/`; the scene gets the clock, not the
+  audio. The room page's Content-Security-Policy changes from `media-src 'none'` to
+  `media-src cbp-mix:` and nothing else; every other window keeps `media-src 'none'`, and
+  `connect-src` stays `'none'` everywhere. The renderer gets no file system, network or keychain
+  access for this.
+- **Pinned by tests.** The hardening tests pin, as allowlists: the scheme's privileges (no
+  `bypassCSP`), the request filter's two cases (a `cbp-mix:` request from any other window, with
+  an unknown or ended play id, or after sign-out, is cancelled), and each page's CSP.
 
 ### 6. Spotify is unchanged
 
@@ -191,11 +252,11 @@ types give it no Spotify id and the mode policy refuses any other source. The pr
 |---|---|---|---|---|
 | 1 | docs | Designer spec: "Connect Swedebeat", mix download and ready states, the fall-back reasons | No; design review | This ADR |
 | 2 | contract | `music.swedebeat_mix`, format minor 1.3: schema, validator, regenerated types, examples, converter fixture | No; rule-sensitive (music) | This ADR |
-| 3 | player | `MixSource` interface, `FakeMixSource`, `UnavailableMixSource` as default, the source setting (empty), the no-real-host guard, `mode-policy.ts` | No; rule-sensitive (music) | 2 |
-| 4 | player | Swedebeat sign-in and sign-out: the page, `mix:sign-in`, the token in the keychain, deletion on sign-out, unpair and account deletion | **Yes** (a provider password and token) | 1, 3 |
-| 5 | player | The encrypted mix cache: keys, chunked AES-GCM, integrity, per-account folders, eviction, resumable download from the fake, the no-plaintext scan | **Yes** (audio cache and its encryption) | 3, 4 |
-| 6 | player | Mix playback: the `cbp-mix:` scheme, the room window's audio and CSP change, the `mix` music link, play while downloading, fall back to the manual clock | **Yes** (shell hardening and its bridge) | 1, 5 |
-| 7 | player | The real source client | **Yes** | Owner: decision 11. Not opened until answered |
+| 3 | player | `MixSource` interface (with `credentialFields`), `FakeMixSource`, `UnavailableMixSource` as default, the source setting (empty), the player's network guard, the no-real-host guard, Swedebeat and gateway hosts in `scripts/provider-guard.txt` (an infra-lane file, so that part may be its own infra pull request), `mode-policy.ts` | No; rule-sensitive (music) | 2 |
+| 4 | player | Swedebeat sign-in and sign-out on the class list page, provisional on the fake: `player:mix-sign-in` in `ipc-policy.ts`, input caps, no fields while `off`, the token in the keychain, the key lifetime and deletion order of section 1 | **Yes** (a provider credential and token) | 1, 3 |
+| 5 | player | The encrypted mix cache: keys and mix tag, chunked AES-GCM, resume only on the same source file, truncation of a torn chunk, integrity, per-account folders, eviction, the no-plaintext scan | **Yes** (audio cache and its encryption) | 3, 4 |
+| 6 | player | Mix playback: the `cbp-mix:` scheme without `bypassCSP`, per-play ids, the request filter's room-window case, the room page's `<audio>` (outside `player/scene/`) and CSP, the hardening tests' allowlists, the `mix` music link, play while downloading, fall back to the manual clock | **Yes** (shell hardening and its bridge) | 1, 5 |
+| 7 | player | The real source client, for the source the owner names; the audio bytes come from the provider straight to the device | **Yes** | Owner: decision 11. Not opened until answered |
 
 Issues 4 to 6 have an Opus Developer and an Opus Reviewer; every one of 2 to 6 is rule-sensitive
 and its Reviewer lists rule 3 and sections 2 and 5 of ADR 0004. Issues 1 and 6 change what a user
@@ -233,11 +294,18 @@ as its fall back. ADR 0003 gains minor 1.3 through issue 2.
   behaves as today, and PL11's code is exercised by the fake.
 - The player holds a second kind of secret (a provider token) and an encrypted media cache;
   reviews of sign-in, the cache and the shell's scheme are top tier.
-- The room window's CSP gains one media scheme; the hardening tests change from "no media" to an
-  exact allowlist.
+- The room window's CSP gains one media scheme and the request filter one window-bound case; the
+  hardening tests change from "no media" to exact allowlists.
 - A studio computer with two accounts may hold the same mix twice; the size cap bounds it.
+- An invalid token leaves encrypted mixes on disk until sign-out or eviction; they cannot play
+  without a token, and the size cap and 90-day rule bound them.
 - Watch: decoded length against `length_ms` on real files (Swedebeat's listed length can be
   wrong, classbeat's experience); memory use of chunk decryption during play; how the real
-  source states validity and expiry, which may change the "plays only while signed in" rule.
-- Owner items: plan decision 11 (the source of the audio), and, if the source is the owner's
-  gateway, how a player outside the owner's network reaches it.
+  source states validity and expiry, which may change the "plays only while signed in" rule;
+  whether the real source gives a SHA-256 or version (without one, an interrupted download
+  always starts over).
+- Owner questions, for `docs/owner.md` under plan decision 11: which source supplies the audio;
+  and whether the owner's Swedebeat gateway has any part in it. This ADR does not accept the
+  gateway as a route. If it is proposed, the owner decides with it how the bytes still go from
+  the provider straight to the device (rule 3), how a player outside the owner's network reaches
+  it, and that it is `https:`.
