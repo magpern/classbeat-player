@@ -19,22 +19,27 @@ import org.classbeat.player.policy.PluginPolicy
  * does not recognise stops the app rather than run with it.
  *
  * - Every plugin is removed from the bridge's table and from its Cordova plugin manager
- *   (PluginPolicy), so the page can call none.
+ *   (PluginPolicy), so the page can call none. The two mode plugins are kept aside, and
+ *   ModeController puts the current mode's back (issue #630).
  * - The two script interfaces Capacitor's cookie and HTTP plugins added are removed, and the
  *   cookie plugin's process-wide cookie handler is taken back.
  * - Capacitor's web view and chrome clients are replaced with locked ones: the bundle only, no
  *   permission ever granted, links out to the system browser.
  * - Web view settings: no file or content access, no geolocation, no windows, no mixed content,
  *   no network loads; service workers get nothing; remote debugging only in a debug build.
- * - Then the first page is loaded again, so it commits with all of the above in place.
+ * - Then the first page is stopped. The mode holder loads its mode's start page, which commits
+ *   with all of the above in place (ModeController).
  */
 object BridgeLockdown {
     /** The interfaces CapacitorCookies and CapacitorHttp add when they load; `androidBridge` stays (it carries no plugin now). */
     val REMOVED_INTERFACES: List<String> = listOf("CapacitorCookiesAndroidInterface", "CapacitorHttpAndroidInterface")
 
-    fun apply(bridge: Bridge, debug: Boolean) {
+    /** The bridge's plugin table, now empty, and the mode plugins taken off it, for ModeController. */
+    class Locked(val table: MutableMap<String, Any?>, val kept: Map<String, Any?>)
+
+    fun apply(bridge: Bridge, debug: Boolean, gate: PageGate): Locked {
         checkConfig(bridge)
-        removePlugins(bridge)
+        val locked = removePlugins(bridge)
         removeCordovaPlugins(bridge)
         val webView = bridge.webView
         REMOVED_INTERFACES.forEach(webView::removeJavascriptInterface)
@@ -42,10 +47,10 @@ object BridgeLockdown {
         harden(webView.settings)
         lockServiceWorkers()
         WebView.setWebContentsDebuggingEnabled(debug)
-        bridge.setWebViewClient(LockedWebViewClient(bridge, webView.context))
+        bridge.setWebViewClient(LockedWebViewClient(bridge, webView.context, gate))
         webView.webChromeClient = LockedChromeClient()
         webView.stopLoading()
-        webView.loadUrl(bridge.appUrl)
+        return locked
     }
 
     private fun checkConfig(bridge: Bridge) {
@@ -58,11 +63,11 @@ object BridgeLockdown {
     }
 
     /** Capacitor keeps its plugins in a private map; it has no public way to remove one. */
-    private fun removePlugins(bridge: Bridge) {
+    private fun removePlugins(bridge: Bridge): Locked {
         val field = Bridge::class.java.getDeclaredField(PLUGIN_TABLE).apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")
         val table = field.get(bridge) as MutableMap<String, Any?>
-        PluginPolicy.lockDown(table)
+        return Locked(table, PluginPolicy.lockDown(table))
     }
 
     /** Capacitor keeps the Cordova web view (and its plugin manager) in a private field too. */

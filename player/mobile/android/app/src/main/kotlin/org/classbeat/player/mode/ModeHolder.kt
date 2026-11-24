@@ -1,0 +1,167 @@
+package org.classbeat.player.mode
+
+import org.classbeat.player.policy.Mode
+import org.classbeat.player.policy.ModePolicy
+
+/** Native storage for the last mode used: the app's private preferences, which the web view cannot reach. */
+interface ModeStore {
+    fun read(): String?
+
+    /** Writes the mode durably before returning; throws if it could not. */
+    fun write(value: String)
+}
+
+/** What the holder asks the device. Read again at every decision, never cached. */
+interface Device {
+    val paired: Boolean
+    val secureLock: Boolean
+}
+
+/** One thing a switch drops (ModePolicy.TEARDOWN names them). */
+class Teardown(val name: String, val drop: () -> Unit)
+
+/** What the holder has the screen and the bridge do. The Android edge implements it (ModeController). */
+interface ModeEffects {
+    /** Takes every intent off the bridge: the page can call nothing until [open]. */
+    fun closeBridge()
+
+    /** Puts [mode]'s intents, and only those, on the bridge, and loads its start page fresh. */
+    fun open(mode: Mode)
+
+    /** Opens the system's screen-lock confirmation; its answer comes back through [ModeHolder.lockAnswered]. */
+    fun askLock()
+
+    /** The native "A screen lock is needed" screen. */
+    fun showNoLock()
+
+    /** The native "Switch to rider mode?" question. */
+    fun askRiderQuestion()
+
+    /** The native switching screen while the switch to [mode] runs. */
+    fun showSwitching(mode: Mode)
+
+    /** A part could not be dropped: the app stops rather than show a page with it left. */
+    fun fatal(failed: List<String>)
+}
+
+/**
+ * Holds the app's mode (ADR 0011 section 1, issue #630). Only native code calls it; nothing the
+ * page sends can select, change or unlock a mode. Not thread-safe: the edge calls it on the main
+ * thread only.
+ */
+class ModeHolder(
+    private val store: ModeStore,
+    private val device: Device,
+    private val effects: ModeEffects,
+    private val parts: List<Teardown>,
+) {
+    init {
+        require(parts.map { it.name } == ModePolicy.TEARDOWN) { "teardown parts are not ModePolicy.TEARDOWN" }
+    }
+
+    /** The name [ModeEffects.fatal] gets when the mode could not be written. */
+    companion object {
+        const val STORE = "store"
+    }
+
+    /** What the holder is waiting for, if anything. */
+    enum class Pending { LOCK, NO_LOCK, RIDER_QUESTION }
+
+    /** The mode the app is in; null while it is between modes, when every intent is refused. */
+    var current: Mode? = null
+        private set
+
+    var pending: Pending? = null
+        private set
+
+    /** Whether "Switch to instructor mode" goes to pairing or to the screen lock, for the strip's lead line. */
+    val paired: Boolean get() = device.paired
+
+    /** Opens the app in the last mode used (ModePolicy.startMode) and loads its start page. */
+    fun start(): Mode {
+        val mode = ModePolicy.startMode(store.read(), device.paired, device.secureLock)
+        // Rider mode is written back so a value that did not open instructor mode is gone.
+        if (mode == Mode.RIDER) store.write(Mode.RIDER.stored)
+        current = mode
+        effects.open(mode)
+        return mode
+    }
+
+    /** "Switch to instructor mode" in rider mode. Returns the way it went, or null if refused. */
+    fun askInstructor(): ModePolicy.Entry? {
+        if (current != Mode.RIDER || pending != null) return null
+        val entry = ModePolicy.entry(device.paired, device.secureLock)
+        when (entry) {
+            ModePolicy.Entry.PAIR -> Unit
+            ModePolicy.Entry.NO_LOCK -> {
+                pending = Pending.NO_LOCK
+                effects.showNoLock()
+            }
+            ModePolicy.Entry.ASK_LOCK -> {
+                pending = Pending.LOCK
+                effects.askLock()
+            }
+        }
+        return entry
+    }
+
+    /** The system screen-lock prompt answered. Returns true if instructor mode opened. */
+    fun lockAnswered(passed: Boolean): Boolean {
+        val asked = pending == Pending.LOCK && current == Mode.RIDER
+        if (pending == Pending.LOCK) pending = null
+        if (!ModePolicy.opensInstructor(asked, passed, device.paired, device.secureLock)) return false
+        return switchTo(Mode.INSTRUCTOR)
+    }
+
+    /** Back from Android's security settings, or the app came back while the no-lock screen showed. */
+    fun noLockReturned() {
+        if (pending != Pending.NO_LOCK) return
+        pending = null
+        askInstructor()
+    }
+
+    /** "Stay in rider mode" (or Back) on the no-lock screen. */
+    fun noLockStay() {
+        if (pending == Pending.NO_LOCK) pending = null
+    }
+
+    /** "Switch to rider mode" in instructor mode. Returns false if refused. */
+    fun askRider(): Boolean {
+        if (current != Mode.INSTRUCTOR || pending != null) return false
+        pending = Pending.RIDER_QUESTION
+        effects.askRiderQuestion()
+        return true
+    }
+
+    /** The question answered: "Switch" is [switch] true; "Stay", Back or leaving the app is false. */
+    fun riderAnswered(switch: Boolean): Boolean {
+        if (pending != Pending.RIDER_QUESTION) return false
+        pending = null
+        if (!switch || current != Mode.INSTRUCTOR) return false
+        return switchTo(Mode.RIDER)
+    }
+
+    /**
+     * Rider mode is written first, so a switch cut short opens in rider mode next time; instructor
+     * mode only after everything was dropped. Every part is dropped in both directions; if any
+     * fails the page is not opened and the app stops.
+     */
+    private fun switchTo(target: Mode): Boolean {
+        current = null
+        effects.closeBridge()
+        effects.showSwitching(target)
+        val failed = mutableListOf<String>()
+        if (target == Mode.RIDER) runCatching { store.write(Mode.RIDER.stored) }.onFailure { failed += STORE }
+        parts.forEach { part -> runCatching(part.drop).onFailure { failed += part.name } }
+        if (target == Mode.INSTRUCTOR && failed.isEmpty()) {
+            runCatching { store.write(Mode.INSTRUCTOR.stored) }.onFailure { failed += STORE }
+        }
+        if (failed.isNotEmpty()) {
+            effects.fatal(failed)
+            return false
+        }
+        current = target
+        effects.open(target)
+        return true
+    }
+}

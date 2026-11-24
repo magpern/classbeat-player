@@ -1,0 +1,72 @@
+package org.classbeat.player.mode
+
+import android.app.KeyguardManager
+import android.content.Context
+import android.webkit.CookieManager
+import android.webkit.WebStorage
+import android.webkit.WebView
+
+/**
+ * The last mode used, in the app's private preferences (MODE_PRIVATE): native storage the web
+ * view cannot reach, and left out of backups (allowBackup is false in the manifest).
+ */
+class PrefsModeStore(context: Context) : ModeStore {
+    private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    override fun read(): String? = prefs.getString(KEY, null)
+
+    override fun write(value: String) {
+        // commit, not apply: the switch goes on only once the mode is on disk.
+        check(prefs.edit().putString(KEY, value).commit()) { "the mode was not written" }
+    }
+
+    private companion object {
+        const val FILE = "mode"
+        const val KEY = "last"
+    }
+}
+
+/** Whether this device is paired with an instructor's account (ADR 0011 section 5). */
+fun interface Pairing {
+    fun paired(): Boolean
+}
+
+/** No pairing exists yet: it comes with issue #631, which replaces this. Every device is unpaired. */
+val NO_PAIRING = Pairing { false }
+
+/**
+ * The device as the holder sees it. The screen lock is Android's own answer each time it is
+ * asked: a PIN, pattern or password set (KeyguardManager.isDeviceSecure), never a cached value.
+ */
+class AndroidDevice(context: Context, private val pairing: Pairing) : Device {
+    private val keyguard = context.getSystemService(KeyguardManager::class.java)
+
+    override val paired: Boolean get() = pairing.paired()
+
+    override val secureLock: Boolean get() = keyguard?.isDeviceSecure == true
+}
+
+/**
+ * Everything a switch drops (ModePolicy.TEARDOWN, in its order). The instructor's follower and
+ * connections and the rider's session and numbers do not exist yet; the issues that add them
+ * (#631, #633 and the follower's) put their drop here. The web view's storage exists now: local and
+ * session storage, IndexedDB, cookies, the cache and the history all go, so the next page starts
+ * with nothing the last mode's page left.
+ */
+fun teardownParts(webView: () -> WebView): List<Teardown> = listOf(
+    Teardown("follower") {},
+    Teardown("connections") {},
+    Teardown("instructorState") {},
+    Teardown("riderSession") {},
+    Teardown("riderNumbers") {},
+    Teardown("webStorage") {
+        val view = webView()
+        view.stopLoading()
+        WebStorage.getInstance().deleteAllData()
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        view.clearCache(true)
+        view.clearFormData()
+        view.clearHistory()
+    },
+)
