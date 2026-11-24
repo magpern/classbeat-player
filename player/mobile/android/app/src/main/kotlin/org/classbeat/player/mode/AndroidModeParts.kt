@@ -8,6 +8,7 @@ import android.webkit.WebView
 import androidx.webkit.WebStorageCompat
 import androidx.webkit.WebViewFeature
 import org.classbeat.player.follow.Follower
+import org.classbeat.player.rider.RiderSession
 
 /**
  * The last mode used, in the app's private preferences (MODE_PRIVATE): native storage the web
@@ -55,17 +56,20 @@ class AndroidDevice(context: Context, private val pairing: Pairing) : Device {
 
 /**
  * Everything a switch drops (ModePolicy.TEARDOWN, in its order). The follower (#632) stops its
- * source and disables the notification listener. The instructor's connections and the rider's
- * session and numbers do not exist yet; the issues that add them (#631, #633) put their drop here. The web view's storage exists now: local and
+ * source and disables the notification listener. The instructor's connections do not exist yet;
+ * the issue that adds them (#631) puts their drop here. The rider's session (#633) closes its live
+ * link and forgets the rider token. The rider's numbers (FTP and maximum heart rate) live only in
+ * the page, in its memory and, with "Remember on this phone" on, in its local storage: nothing
+ * native holds them, and the web storage drop below wipes them. The web view's storage: local and
  * session storage, IndexedDB, cookies, the cache and the history all go, so the next page starts
  * with nothing the last mode's page left. Android wipes storage and cookies in the background, so
  * the drop is done only when both say they have finished (Join); the next page waits for it.
  */
-fun teardownParts(follower: Follower, webView: () -> WebView): List<Teardown> = listOf(
+fun teardownParts(follower: Follower, rider: RiderSession, webView: () -> WebView): List<Teardown> = listOf(
     now("follower") { follower.drop() },
     now("connections") {},
     now("instructorState") {},
-    now("riderSession") {},
+    now("riderSession") { rider.drop() },
     now("riderNumbers") {},
     Teardown("webStorage") { done ->
         val view = webView()

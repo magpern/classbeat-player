@@ -22,12 +22,15 @@ import org.classbeat.player.mode.ModeHolder
 import org.classbeat.player.mode.ModeHost
 import org.classbeat.player.mode.Pairing
 import org.classbeat.player.mode.PrefsModeStore
+import org.classbeat.player.mode.RiderBridge
 import org.classbeat.player.mode.RiderModePlugin
 import org.classbeat.player.mode.teardownParts
 import org.classbeat.player.pairing.AndroidPairingPorts
 import org.classbeat.player.pairing.KeystoreSecretStore
 import org.classbeat.player.pairing.PairingService
 import org.classbeat.player.policy.OriginPolicy
+import org.classbeat.player.rider.OfflineRiderTransport
+import org.classbeat.player.rider.RiderSession
 
 /**
  * The app's one activity: Capacitor's bridge with the bundled pages, locked down before its first
@@ -43,6 +46,9 @@ class MainActivity : BridgeActivity(), ModeHost {
 
     override var modes: ModeController? = null
         private set
+
+    /** The rider's session: the rider token in memory only, dropped when the activity goes. */
+    private var rider: RiderSession? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate: the bridge is built from these, and the lockdown takes both off it.
@@ -69,12 +75,16 @@ class MainActivity : BridgeActivity(), ModeHost {
         val follower = Follower(UnavailableSource, AndroidListenerAccess(this), SystemClock::elapsedRealtime)
         // Nothing follows at start-up, whichever mode opens: the listener stays off until asked for.
         follower.drop()
-        val holder = ModeHolder(PrefsModeStore(this), AndroidDevice(this, Pairing { pairing.paired() }), controller, teardownParts(follower) { webView })
+        // Rider mode's live link waits on the same decision (#649): every join and link is "offline".
+        val rider = RiderSession(OfflineRiderTransport { Handler(Looper.getMainLooper()).post(it) })
+        this.rider = rider
+        val parts = teardownParts(follower, rider) { webView }
+        val holder = ModeHolder(PrefsModeStore(this), AndroidDevice(this, Pairing { pairing.paired() }), controller, parts)
         // The token was deleted (unpaired, revoked or unknown): instructor mode closes at once.
         pairing.forgotten = holder::unpaired
         pairing.load()
         modes = controller
-        controller.start(holder, locked, webView, InstructorParts(pairing, ports, intents, follower))
+        controller.start(holder, locked, webView, InstructorParts(pairing, ports, intents, follower), RiderBridge(rider) { controller.current })
     }
 
     override fun onResume() {
@@ -85,5 +95,12 @@ class MainActivity : BridgeActivity(), ModeHost {
     override fun onStop() {
         modes?.stopped()
         super.onStop()
+    }
+
+    /** Leaving the app for good ends the rider's session: the link closes and the token goes. */
+    override fun onDestroy() {
+        rider?.drop()
+        rider = null
+        super.onDestroy()
     }
 }

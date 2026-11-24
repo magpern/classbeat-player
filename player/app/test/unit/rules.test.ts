@@ -137,6 +137,13 @@ const MANIFEST = join(MOBILE, "android", "app", "src", "main", "AndroidManifest.
 test("the phone shell has TypeScript and Kotlin sources to check", () => {
   assert.ok(mobileTs.some((s) => s.path === join("src", "main.ts")));
   assert.ok(mobileKt.some((s) => s.path.endsWith("BridgeLockdown.kt")));
+  // Rider mode (issue #633): its page, its native session and transport, and its bridge.
+  for (const ts of ["app.ts", "flow.ts", "link.ts", "native.ts", "numbers.ts", "pages.ts", "strip.ts"]) {
+    assert.ok(mobileTs.some((s) => s.path === join("src", "rider", ts)), ts);
+  }
+  for (const kt of ["RiderSession.kt", "RiderTransport.kt", "RiderBridge.kt"]) {
+    assert.ok(mobileKt.some((s) => s.path.endsWith(sep + kt)), kt);
+  }
   assert.ok(![...mobileTs, ...mobileKt].some((s) => [...MOBILE_SKIP].some((skip) => s.path.startsWith(skip + sep))));
   // Only those exact paths are skipped: the same names one level away are sources.
   for (const near of ["build", "public", join("android", "app", "src", "main", "build"), join("src", "public")]) {

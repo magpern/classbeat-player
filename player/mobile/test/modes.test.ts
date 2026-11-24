@@ -47,15 +47,19 @@ test("each mode's page reaches only its own mode's plugin, and only through brid
   assert.doesNotMatch(source("main.ts"), /modes\//);
 });
 
-test("the bridge names exactly the native intents, none taking an argument", () => {
+test("the bridge names exactly the native intents, and only join takes arguments: the code and the nickname", () => {
   const bridge = source("modes/bridge.ts");
   const plugins = [...bridge.matchAll(/registerPlugin<\w+>\("(\w+)"\)/g)].map((m) => m[1]);
   assert.deepEqual(plugins, ["RiderMode", "InstructorMode"]);
-  // The intents of IntentPolicy.kt, each declared with an empty parameter list.
-  const intents = [...bridge.matchAll(/^\s+(\w+)\((\w*)\): Promise<unknown>;$/gm)].map((m) => [m[1], m[2]]);
+  // The intents of IntentPolicy.kt with their parameters: no address, token or number goes native.
+  const intents = [...bridge.matchAll(/^\s+(\w+)\(([^)]*)\): Promise<unknown>;$/gm)].map((m) => [m[1], m[2]]);
   assert.deepEqual(intents, [
     ["instructorWay", ""],
     ["askInstructorMode", ""],
+    ["join", "args: { session: string; nickname: string }"],
+    ["open", ""],
+    ["receive", ""],
+    ["leave", ""],
     ["askRiderMode", ""],
     ["listClasses", ""],
     ["syncNow", ""],

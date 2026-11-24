@@ -17,6 +17,10 @@ class IntentPolicyTest {
         val expected = mapOf(
             "instructorWay" to Mode.RIDER,
             "askInstructorMode" to Mode.RIDER,
+            "join" to Mode.RIDER,
+            "open" to Mode.RIDER,
+            "receive" to Mode.RIDER,
+            "leave" to Mode.RIDER,
             "askRiderMode" to Mode.INSTRUCTOR,
             "listClasses" to Mode.INSTRUCTOR,
             "syncNow" to Mode.INSTRUCTOR,
@@ -36,7 +40,7 @@ class IntentPolicyTest {
     fun `rider mode has no instructor intent and instructor mode has no rider intent`() {
         val rider = IntentPolicy.of(Mode.RIDER)
         val instructor = IntentPolicy.of(Mode.INSTRUCTOR)
-        assertEquals(setOf("instructorWay", "askInstructorMode"), rider)
+        assertEquals(setOf("instructorWay", "askInstructorMode", "join", "open", "receive", "leave"), rider)
         assertEquals(
             setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain", "followAccess", "openFollowSetting", "follow", "unfollow", "reading"),
             instructor,
@@ -87,6 +91,30 @@ class IntentPolicyTest {
 
     @Test
     fun `pairAgain rejects an unexpected argument`() = rejectsExtra("pairAgain")
+
+    @Test
+    fun `open rejects an unexpected argument`() = rejectsExtra("open")
+
+    @Test
+    fun `receive rejects an unexpected argument`() = rejectsExtra("receive")
+
+    @Test
+    fun `leave rejects an unexpected argument`() = rejectsExtra("leave")
+
+    @Test
+    fun `join takes the class code and a nickname, both strings, and nothing else`() {
+        fun check(args: Map<String, Any?>) = IntentPolicy.check(Mode.RIDER, Mode.RIDER, "join", args)
+        val good = mapOf<String, Any?>("session" to "KXPD-RMTB", "nickname" to "Sam")
+        assertNull(check(good))
+        assertEquals(Refusal.MISSING_ARGUMENT, check(good - "session"))
+        assertEquals(Refusal.MISSING_ARGUMENT, check(good - "nickname"))
+        assertEquals(Refusal.WRONG_TYPE, check(good + ("session" to 1)))
+        assertEquals(Refusal.WRONG_TYPE, check(good + ("nickname" to null)))
+        // The rider's numbers never go to native code, and the page names no address or token.
+        for (extra in listOf("ftp", "hrmax", "token", "riderToken", "url", "path")) {
+            assertEquals(extra, Refusal.UNEXPECTED_ARGUMENT, check(good + (extra to "x")))
+        }
+    }
 
     @Test
     fun `the follow intents take no argument, so the page names no app, session or package`() {

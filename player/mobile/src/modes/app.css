@@ -10,6 +10,10 @@
 .strip { display: flex; flex-direction: column; gap: max(12px, 1.4vh); border-top: 2px solid var(--stage-line); padding-top: max(12px, 2vh); margin-top: max(12px, 1vh); }
 .strip .sl { font-size: var(--c-label); color: var(--light-2); line-height: 1.2; }
 
+/* Rider step 2 with remembered numbers: Join the class on its own full line, Back and Forget under it. */
+.duo.trio { grid-template-columns: 1fr 1fr; }
+.duo.trio > :first-child { grid-column: 1 / -1; }
+
 /* The class list in the app, laid out for the phone: one key per class. */
 .rows { display: flex; flex-direction: column; gap: var(--c-key-gap); }
 .key.row { align-items: flex-start; text-align: left; padding: 1vh 4vw; gap: 0.4vh; }

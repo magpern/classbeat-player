@@ -1,6 +1,7 @@
 // The page's only calls into native code (ADR 0011 section 3, issue #630): each mode's plugin and
-// its named intents, none taking an argument (getClass, the one that takes a class id, waits for
-// the room screen to leave its fakes). Only the current mode's plugin is on the bridge, and
+// its named intents. Only rider mode's join takes arguments: the class code and the nickname, both
+// strings, and nothing else (IntentPolicy.kt); getClass, which takes a class id, waits for the room
+// screen to leave its fakes. No intent takes or answers the rider token: native code holds it. Only the current mode's plugin is on the bridge, and
 // native code checks every call again, so a call from the wrong mode is refused there, not here.
 // Nothing here selects, changes or unlocks a mode: the page asks, and native code decides.
 import { registerPlugin } from "@capacitor/core";
@@ -10,6 +11,14 @@ export interface RiderModePlugin {
   instructorWay(): Promise<unknown>;
   /** Starts the way into instructor mode. On a switch the page is replaced and this never settles. */
   askInstructorMode(): Promise<unknown>;
+  /** Joins a class: {result: "joined"}, {result: "unreachable"} or {result: "answer", status, body} (native.ts). */
+  join(args: { session: string; nickname: string }): Promise<unknown>;
+  /** Opens the live link with the token native code holds; what comes in arrives through receive. */
+  open(): Promise<unknown>;
+  /** The next event while joined (native.ts); refused once the rider is no longer in a class. */
+  receive(): Promise<unknown>;
+  /** Leaves the class: native code closes the link and drops the token. */
+  leave(): Promise<unknown>;
 }
 
 export interface InstructorModePlugin {

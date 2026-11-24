@@ -60,6 +60,18 @@ class RiderModePlugin : ModePlugin(Mode.RIDER) {
 
     @PluginMethod
     fun askInstructorMode(call: PluginCall) = handle(call) { c, k -> c.askInstructorMode(k) }
+
+    @PluginMethod
+    fun join(call: PluginCall) = handle(call) { c, k -> c.rider.join(k) }
+
+    @PluginMethod
+    fun open(call: PluginCall) = handle(call) { c, k -> c.rider.open(k) }
+
+    @PluginMethod
+    fun receive(call: PluginCall) = handle(call) { c, k -> c.rider.receive(k) }
+
+    @PluginMethod
+    fun leave(call: PluginCall) = handle(call) { c, k -> c.rider.leave(k) }
 }
 
 @CapacitorPlugin(name = "InstructorMode")
