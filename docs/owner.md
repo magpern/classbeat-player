@@ -28,6 +28,17 @@ with other work; nothing in the development loop waits for an answer.
 
 ## Decisions waiting
 
+- **Swedebeat playback (PL11, ADR 0013, 2026-11-24).** Built and tested on a fake source; the
+  shipped player has no real source until you answer these:
+  - **Where the real audio comes from (plan, section 13, decision 11).** The audio must go from the
+    provider straight to the device, never through a server of ours, so your SwedeBeat gateway is
+    not a route for the audio itself. Until you name a source, `UnavailableMixSource` stays the
+    default and classes designed with a mix play on the manual clock. Issue 7 (the real source
+    client) is not opened until then.
+  - **Your gateway runs over plain HTTP on the local network; ADR 0013 allows https only.** If the
+    source you name needs the gateway for sign-in, it needs TLS first.
+  - **How long a cached mix may be played offline.** Default agents picked: 90 days since it was
+    last played, at most 4 GiB per device, least recently played evicted first. Change either.
 - **The looks' sway and the steady-light budget (2026-11-23).** Default agents picked, which you
   may change: the looks' slow sway is not held to the 3 % a second steady-light budget, because
   meeting it in zones 6 and 7 would need the beams at about 1/8 of their light. The sway stays
