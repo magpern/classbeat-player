@@ -138,7 +138,11 @@ function oneTimeline(seed: number, withFixed = true): void {
   const finalTicks = tickNow.flatMap((t) => (t.frame === null ? [] : [t.frame]));
   const marks = [...fixedAt, ...finalTicks, ...causeFrames.map((c) => c.frameMs)].filter((m, i, all) => all.indexOf(m) === i && !absorbed.some((a) => Math.abs(a - m) < 1e-6 && !finalTicks.includes(m)));
   const counted = marks.map((m) => ({ fromMs: m, toMs: m }));
-  const worst = maxInASecond([...counted, ...pieces]) + STEADY_PER_WINDOW;
+  // A burst's decay is inside the shared 1 (scene.md "A burst's decay is light inside the shared 1"): it is not counted beside it, and no other run lies within 1 s of it.
+  const decays = runs.filter((x) => x.wish.kind.endsWith("Burst")).flatMap((x) => x.pieces);
+  const others = runs.filter((x) => !x.wish.kind.endsWith("Burst")).flatMap((x) => x.pieces);
+  for (const d of decays) for (const o of others) assert.ok(!(o.fromMs < d.toMs + 1000 - 1e-6 && d.fromMs < o.toMs + 1000 - 1e-6), `seed ${seed}: a run ${o.fromMs} to ${o.toMs} within 1 s of a decay ${d.fromMs} to ${d.toMs}`);
+  const worst = maxInASecond([...counted, ...others]) + STEADY_PER_WINDOW;
   assert.ok(worst <= 3, `seed ${seed}: a 1 s window holds ${worst} changes: ${JSON.stringify([...counted.map((c) => [Math.round(c.fromMs), "mark"]), ...pieces.map((p) => [Math.round(p.fromMs), Math.round(p.toMs)])].sort((a, b) => Number(a[0]) - Number(b[0])))} causes ${JSON.stringify(causeFrames.map((c) => [Math.round(c.atMs), Math.round(c.frameMs)]))}`);
 }
 

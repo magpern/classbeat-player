@@ -15,15 +15,15 @@ import { gatedMoments } from "./link-gate.ts";
 import { lookForSong } from "./looks.ts";
 import type { Look } from "./looks.ts";
 import { momentsAt } from "./moments.ts";
+import { turningMoments } from "./turn-moments.ts";
 import type { Moments, SongMoment } from "./moments.ts";
-
-/** The beams' turn follows the song's moments this long after them: the drop's burst has its own second before the fan's turn starts (a function of the moments only, rule 4). */
-export const TURN_DELAY_MS = 650;
 
 export interface SceneSong {
   readonly bpm?: number;
   readonly anchors?: readonly BeatAnchor[];
   readonly moments?: readonly SongMoment[];
+  /** How long the song plays, ms: a drop less than 2.25 s before its end has no fan turn (scene.md "Moment windows"). Unknown: every drop has one. */
+  readonly lengthMs?: number;
 }
 /** An interval as the scene sees it. Only `zone` may matter to the rig (as scalars). */
 export interface SceneInterval {
@@ -72,7 +72,7 @@ export function sceneFrame(input: FrameInput): Frame {
   const level = beatLevel(link, song ?? null);
   const phrase = allowanceFor(level).phrase ? phraseAt(song?.anchors, songPosMs) : FIRST_PHRASE;
   const moments = gatedMoments(link, momentsAt(song?.moments, song?.bpm, songPosMs));
-  const turning = gatedMoments(link, momentsAt(song?.moments, song?.bpm, songPosMs - TURN_DELAY_MS));
+  const turning = gatedMoments(link, turningMoments(song?.moments, song?.bpm, songPosMs, song?.lengthMs));
   const look = lookForSong(songIndex);
   return {
     look, level, phrase, moments,

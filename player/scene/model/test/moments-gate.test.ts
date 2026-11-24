@@ -38,11 +38,15 @@ test("off the list has no gather, no fan and no breakdown, and the beams are not
   assert.notDeepEqual(held.directions, gathered.directions, "no gather: the beams are aimed as without one");
 });
 
-test("the beams' turn follows the moments by 650 ms: the gather's aim is held through the drop's burst, the fan's aim comes after, and the fixtures light at the drop", () => {
+test("the beams' turn follows the moments by 650 ms, and the fan's turn follows the drop by 2250 ms: the gather's aim is held through the drop's burst, the fan's aim comes after, and the fixtures light at the drop", () => {
   const link = { state: "Locked" } as const;
   const pan = (pos: number) => frameAt(link, 0, pos).directions.map((d) => d.pan);
+  assert.deepEqual(pan(36_500), pan(35_900), "the gather's turn follows the build's start by 650 ms");
+  assert.notDeepEqual(pan(36_700), pan(35_900));
   assert.deepEqual(pan(40_300), pan(39_900), "300 ms after the drop the beams still hold the gather's aim");
-  assert.notDeepEqual(pan(40_700), pan(39_900), "650 ms after the drop the fan's aim is the target");
+  assert.deepEqual(pan(40_700), pan(39_900), "650 ms after the drop they still do: the fan's turn is 2250 ms after the moment");
+  assert.deepEqual(pan(42_200), pan(39_900), "2200 ms after it");
+  assert.notDeepEqual(pan(42_300), pan(39_900), "2250 ms after the drop the fan's aim is the target");
   assert.equal(frameAt(link, 0, 40_050).moments.fan, true, "the fixtures light in the drop's frame");
 });
 

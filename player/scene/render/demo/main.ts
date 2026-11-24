@@ -41,6 +41,7 @@ const log = new FrameLog(state.quality);
 let song = 0;
 let lastBurst = 0;
 let lastSweeping = false;
+let wasDark = false;
 let lastMark = "";
 let pendingMark = false;
 let lastFrameMs: number | null = null;
@@ -70,7 +71,10 @@ const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off", steadyOnly: params.get("steady") === "1",
   onFrame: (draw, measured) => {
     lastBurst = draw.burst;
-    lastSweeping = draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
+    // A sweep: a beam off its target, and the frames of its dark span with the step in and the step out ("A sweep moves in black"), the sweep's own one change
+    // each, counted by S6 as drawn (the S6 gate reads every frame) and left out of the steady-light windows as the turning beams are.
+    lastSweeping = draw.dark || wasDark || draw.frame.directions.some((t, i) => { const d = draw.drawn[i]; return d !== undefined && angleBetween(d, t) > 0.01; });
+    wasDark = draw.dark;
     // A frame the scheduler marks: an event of the person (a link state, a quality step, a seek) or a mark `planMarks` places (a change frame, a
     // drop's frame, a text step). The cause is named in the gate's report. Nothing is marked because the draw changed.
     const planned = lastFrameMs !== null && plannedMarkIn({ cls: mergedClass(lastFeed.cls), classMs, songIndex: lastFeed.songIndex, songPosMs: lastFeed.songPosMs, level: draw.frame.level }, lastFrameMs, classMs);

@@ -20,6 +20,7 @@ import { reportS6 } from "./flash-shots.ts";
 import { reportSteady } from "./steady-shots.ts";
 import { settleTransitions } from "./settle.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
+import { reportShared } from "./shared-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
 
 const PAGE = pathToFileURL(join(RENDER_DIR, "dist", "index.html")).href;
@@ -174,6 +175,7 @@ try {
   await reducedMotion(opener, SHOTS);
   await browserFrameLog(browser, "&budget=off", "frame-log-browser"); // every run fits: the beams' speed through every burst the scheduler might skip
   await browserFrameLog(browser, "", "frame-log-browser-budget-on"); // the product's own: the ramps and bursts the scheduler places
+  await reportShared(opener, ARTIFACTS); // the shared 1, last so that every other gate has run: the sway, the sweeps and a burst's decay count at most 1 in any second
   console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 34 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
 } finally {
   await browser.close();

@@ -39,17 +39,53 @@ test("a drop 0.4 s after an interval change goes up in the change's frame, light
 const flip: Where = { cls: DEMO_CLASS, classMs: 31_000, songIndex: 0, songPosMs: 31_000, level: "Beat" };
 const burst = [{ fromMs: 32_100, toMs: 32_300 }];
 
-test("a run wanted just after a phrase flip (32 s) does not fit at the Beat level, where the beams turn; it does where there are no flips", () => {
+test("a run wanted just after a phrase flip (32 s) does not fit: the beams are dark from 32 s to their arrival, at every level, since the plan is the song's, and 1 s beside its steps", () => {
   assert.equal(new RunBudget().admit("a", "lightBurst", burst, flip), false);
-  assert.equal(new RunBudget().admit("a", "lightBurst", burst, { ...flip, level: "Tempo only" }), true);
-  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 34_700, toMs: 34_900 }], flip), true, "after the 2.5 s sweep");
+  assert.equal(new RunBudget().admit("a", "lightBurst", burst, { ...flip, level: "Tempo only" }), false, "the plan does not depend on the link");
+  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 34_700, toMs: 34_900 }], flip), false, "still dark: the flip's turn is about 3 s");
+  assert.equal(new RunBudget().admit("a", "lightBurst", [{ fromMs: 37_100, toMs: 37_300 }], flip), false, "inside the 40 s drop's gather span (36.65 to 39 s)");
+  assert.equal(new RunBudget().admit("r", "ramp", [{ fromMs: 35_500, toMs: 36_100 }], flip), false, "a ramp is a run too: none lies in a span or within 1 s of its on-step");
 });
 
-test("a drop's own gather and fan do not keep its burst away; another drop's sweep still does", () => {
+test("a song change is a sweep, known from the song before it and from the song itself: no burst in its span, a B8 step for one 0.8 s before it, none for one 3 s after", () => {
+  const before: Where = { cls: DEMO_CLASS, classMs: 59_000, songIndex: 0, songPosMs: 59_000, level: "None" };
+  const inside = [{ fromMs: 60_500, toMs: 60_700 }];
+  assert.equal(new RunBudget().admit("a", "lightBurst", inside, before), false, "seen ahead, from the song's length");
+  assert.equal(new RunBudget().admit("a", "lightBurst", inside, { ...before, classMs: 60_400, songIndex: 1, songPosMs: 400 }), false, "seen from the new song");
+  const b8 = new RunBudget();
+  assert.equal(b8.admit("a", "lightBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), false, "a light-only B8 gives way: its on-step is in the hold planned without it");
+  assert.deepEqual([b8.holdSkips(), b8.cuts().length], [["a"], 0], "and the skip is recorded");
+  assert.equal(b8.admit("d", "dropBurst", [{ fromMs: 59_020, toMs: 59_200 }], before), true, "a drop's B8 at the None level: placed, the turn starts 0.8 s after the decay");
+  assert.deepEqual(b8.cuts().map((c) => [c.planned.fromMs, c.kind, Math.round(c.offMs)]), [[60_000, "b8", 59_003]], "the beams go dark in the rise frame");
+  const beat = new RunBudget();
+  assert.equal(beat.admit("a", "dropBurst", [{ fromMs: 59_020, toMs: 59_200 }], { ...before, level: "Beat" }), true, "at the Beat level too: the 58 s drop's aim is held to the song change, the sway is not live near the decay");
+  assert.deepEqual([beat.nearSway(), beat.cuts().length], [[], 1]);
+  const after = new RunBudget();
+  assert.equal(after.admit("a", "lightBurst", [{ fromMs: 64_300, toMs: 64_500 }], { ...before, classMs: 63_500, songIndex: 1, songPosMs: 3_500 }), true);
+  assert.deepEqual(after.cuts(), [], "clear of the song change's span");
+});
+
+test("a burst moves a step near its decay into its rise frame (B7, B8), is skipped where its decay lies in a span, and leaves a step 1 s + 1 frame away alone", () => {
   const near: Where = { cls: DEMO_CLASS, classMs: 57_000, songIndex: 0, songPosMs: 57_000, level: "None" };
-  const decay = [{ fromMs: 58_017, toMs: 58_250 }];
-  assert.equal(new RunBudget().admit("drop@58000", "dropBurst", decay, near), true);
-  assert.equal(new RunBudget().admit("other", "dropBurst", decay, near), false, "no burst inside a drop's fan that is not its own");
+  const own = new RunBudget();
+  assert.equal(own.admit("drop@58000", "dropBurst", [{ fromMs: 58_017, toMs: 58_250 }], near), true, "its own gather is back at its hold-still, 1.017 s before the decay: nothing moves, and it has no fan turn");
+  assert.deepEqual(own.cuts(), []);
+  const inFan: Where = { ...near, classMs: 43_000, songPosMs: 43_000 };
+  assert.equal(new RunBudget().admit("x", "dropBurst", [{ fromMs: 43_017, toMs: 43_250 }], inFan), false, "no burst in the 40 s drop's fan turn");
+  const clear = new RunBudget();
+  const song1: Where = { ...near, classMs: 79_000, songIndex: 1, songPosMs: 19_000 };
+  assert.equal(clear.admit("light@80000", "lightBurst", [{ fromMs: 80_017, toMs: 80_250 }], song1), true);
+  assert.deepEqual(clear.cuts(), [], "song 1's flip at 75 s is dark to about 77.6 s, 2.4 s before the rise: nothing is cut");
+  const b7 = new RunBudget();
+  assert.equal(b7.admit("light@93000", "lightBurst", [{ fromMs: 93_100, toMs: 93_240 }], { ...song1, classMs: 92_000, songPosMs: 32_000 }), true, "B7 after a flip at the None level: placed");
+  assert.deepEqual([b7.nearSway(), b7.cuts().map((c) => [c.kind, c.planned.fromMs])], [[], [["b7", 90_000]]], "the flip's light comes on in the rise frame");
+  const beat7 = new RunBudget();
+  assert.equal(beat7.admit("light@93000", "lightBurst", [{ fromMs: 93_100, toMs: 93_240 }], { ...song1, classMs: 92_000, songPosMs: 32_000, level: "Beat" }), false, "at the Beat level the sway resumes 1 s after the on-step, inside the decay's second: skipped");
+  assert.deepEqual(beat7.nearSway(), ["light@93000"]);
+  const gather = new RunBudget();
+  const collide: Where = { cls: VARIANTS.collide!.cls, classMs: 39_000, songIndex: 0, songPosMs: 39_000, level: "None" };
+  assert.equal(gather.admit("drop@40400", "dropBurst", [{ fromMs: 40_017, toMs: 40_250 }], collide), true, "B7 after a gather: its aim takes no phase, the burst is placed");
+  assert.deepEqual(gather.cuts().map((c) => [c.kind, Math.round(c.onMs)]), [["b7", 40_000]], "and the gather's light comes on in the rise frame");
 });
 
 function sources(dir: string): string[] {

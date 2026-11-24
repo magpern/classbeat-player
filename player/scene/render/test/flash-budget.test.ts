@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BUILD_HAZE_STEP, LIFT_CAP, buildHaze } from "../../model/src/index.ts";
-import { feedAt } from "../demo/scenario.ts";
+import { DEMO_CLASS, SONG_STARTS_MS, feedAt } from "../demo/scenario.ts";
 import type { Draw, Feed } from "../src/loop.ts";
 import { RigLoop } from "../src/loop.ts";
 import { COMB, comb } from "../src/light-calc.ts";
@@ -26,21 +26,27 @@ function play(fromMs: number, toMs: number, make: (ms: number) => Feed = (ms) =>
   return out;
 }
 
-test("the energy ramp is a run the scheduler places: with the beat and no count it ramps over the 700 ms before the change; without the beat, or with a count running, the energy is in the change frame", () => {
+/** The demo class with its change at 20 s moved to 24 s: the phrase flip at 16 s plans its sweep to 20.15 s, so the ramp before 20 s is a step in the change frame and one at 24 s has the room. */
+const MOVED = { cls: { ...DEMO_CLASS, intervals: DEMO_CLASS.intervals.map((iv) => (iv.startMs === 20_000 ? { ...iv, startMs: 24_000 } : iv)) }, starts: SONG_STARTS_MS };
+const movedFeed = (ms: number, link: Feed["link"] = { state: "Locked" }): Feed => feedAt(ms, { link, variant: MOVED });
+
+test("the energy ramp is a run the scheduler places: with the beat and no count it ramps over the 700 ms before the change; without the beat, with a count running, or in a sweep's window, the energy is in the change frame", () => {
   const ramps = (make: (ms: number) => Feed, from: number, to: number) => play(from, to, make).filter((f) => f.d.energyRamp > 0).length;
-  assert.ok(ramps((ms) => feedAt(ms), 19_000, 20_500) >= 38, "locked: about 42 frames of ramp before 20 s");
-  assert.equal(ramps((ms) => feedAt(ms, { link: { state: "Coasting" } }), 19_000, 20_500), 0, "coasting: no runs without the beat");
+  assert.ok(ramps((ms) => movedFeed(ms), 23_000, 24_500) >= 38, "locked: about 42 frames of ramp before 24 s");
+  assert.equal(ramps((ms) => movedFeed(ms, { state: "Coasting" }), 23_000, 24_500), 0, "coasting: no runs without the beat");
   assert.equal(ramps((ms) => feedAt(ms), 139_000, 140_500), 0, "a count runs in the pattern's interval: no runs, the energy is in the change frame (rule 3)");
+  assert.equal(ramps((ms) => feedAt(ms), 19_000, 20_500), 0, "the phrase flip at 16 s plans a sweep to 20.15 s: the ramp before 20 s is a step in the change frame");
+  assert.ok(ramps((ms) => feedAt(ms), 79_000, 80_500) >= 38, "after song 1's flip at 75 s (to 79.15 s): the ramp before 80 s has the room");
 });
 
 test("beat-like light is held at rest from 250 ms before a run until 300 ms after it: no lift in the hold, lifts outside", () => {
-  const frames = play(18_000, 22_000);
-  // The ramp is 19 300 to 19 983, held from 19 050 until 300 ms after its end. A lift that started before the hold runs out (at most 240 ms: none is cut), and none starts in it.
-  const inHold = frames.filter((f) => f.ms >= 19_300 && f.ms < 20_280);
+  const frames = play(22_000, 26_000, (ms) => movedFeed(ms));
+  // The ramp is 23 300 to 23 983, held from 23 050 until 300 ms after its end. A lift that started before the hold runs out (at most 240 ms: none is cut), and none starts in it.
+  const inHold = frames.filter((f) => f.ms >= 23_300 && f.ms < 24_280);
   assert.ok(inHold.length > 50 && inHold.every((f) => f.d.lift === 0), "no lift in the hold");
-  assert.ok(frames.some((f) => f.ms >= 19_050 && f.ms < 19_290 && f.d.lift > 0), "a lift that started before the hold is not cut");
-  assert.ok(frames.filter((f) => f.ms < 19_000 || f.ms > 20_400).some((f) => f.d.lift > 0.01), "lifts outside it");
-  const none = play(18_000, 22_000, (ms) => feedAt(ms, { link: { state: "Coasting" } }));
+  assert.ok(frames.some((f) => f.ms >= 23_050 && f.ms < 23_290 && f.d.lift > 0), "a lift that started before the hold is not cut");
+  assert.ok(frames.filter((f) => f.ms < 23_000 || f.ms > 24_400).some((f) => f.d.lift > 0.01), "lifts outside it");
+  const none = play(22_000, 26_000, (ms) => movedFeed(ms, { state: "Coasting" }));
   assert.ok(none.every((f) => f.d.lift === 0), "and none at all without the beat");
 });
 
@@ -79,7 +85,8 @@ test("the build's haze steps up 3 % on each beat at the Beat level and stays up;
   const build = play(36_000, 40_000);
   const lifts = build.map((f) => f.d.lift);
   assert.ok(Math.max(...lifts) <= 0.02 + 1e-9, "2 % lift in a build");
-  assert.ok(Math.abs(build.at(-1)!.d.hazeGain - (1 + BUILD_HAZE_STEP) ** 7.9) < 0.06);
+  // The gather's hold (its dark span and 1 s either side) holds the build's haze steps too, so the haze stands where the hold found it and resumes with the next beat after it.
+  assert.ok(build.at(-1)!.d.hazeGain >= 1 && build.at(-1)!.d.hazeGain <= (1 + BUILD_HAZE_STEP) ** 7.9 + 0.06, "the haze does not run ahead of its steps");
   const coasting = play(36_000, 40_000, (ms) => feedAt(ms, { link: { state: "Coasting" } }));
   const gains = coasting.map((f) => f.d.hazeGain);
   assert.ok(gains.every((g, i) => i === 0 || g - gains[i - 1]! <= 0.03 * FRAME + 1e-9), "coasting: the haze rises at most 3 % a second");

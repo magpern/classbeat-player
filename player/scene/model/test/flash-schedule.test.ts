@@ -122,7 +122,8 @@ test("runs: without the beat a burst still fits where the count has room, a dim 
   const burst = (from: number): RunWish => ({ id: "b", kind: "dropBurst", pieces: [{ fromMs: from + F, toMs: from + 250 }] });
   const dim: RunWish = { id: "d", kind: "dim", pieces: [{ fromMs: 10_000, toMs: 10_120 }, { fromMs: 10_500, toMs: 10_620 }] };
   assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000] }))), [["b"], [], []], "the change frame, the decay and steady light: 3");
-  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500] }))), [[], [], ["b"]], "a tick beside the change frame makes a fourth");
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500] }))), [["b"], [], []], "a tick beside the change frame: two marks and the decay inside the shared 1, 3");
+  assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000, 10_500], placed: [{ wish: ramp("r", 9_500, 300), pieces: [{ fromMs: 9_500, toMs: 9_800 }] }] }))), [["r"], [], ["b"]], "another run within 1 s of the decay: no run lies in a window that touches a burst");
   assert.deepEqual(ids(fitRuns([dim], room({ beat: [] }))), [[], [], ["d"]]);
   assert.deepEqual(ids(fitRuns([burst(10_000)], room({ beat: [], marks: [10_000], count: [{ fromMs: 9000, toMs: 11_000 }] }))), [[], [], ["b"]]);
 });
@@ -148,7 +149,7 @@ test("runs: a fourth change in a 1 s window is never made, steady light's one in
   const dim: RunWish = { id: "dim", kind: "dim", pieces: [{ fromMs: 10_100, toMs: 10_220 }, { fromMs: 10_600, toMs: 10_720 }] };
   assert.equal(STEADY_PER_WINDOW, 1);
   assert.deepEqual(ids(fitRuns([burst], room({ marks: [10_000] }))), [["burst"], [], []], "a mark, the burst's decay and steady light: 3");
-  assert.deepEqual(ids(fitRuns([burst, light, dim], room({ marks: [10_000, 10_500] }))), [[], [], ["light", "burst", "dim"]], "two marks and steady light leave no room for a run, and the order of the skipped is the scheduler's");
+  assert.deepEqual(ids(fitRuns([burst, light, dim], room({ marks: [10_000, 10_500] }))), [["light"], [], ["burst", "dim"]], "two marks and the decay inside the shared 1 are 3: the burst fits; no run overlaps it, and the order of the skipped is the scheduler's");
   assert.deepEqual(ids(fitRuns([ramp("r", 9_300, 700 - F), light], room({ marks: [10_000] }))), [["r"], [], ["light"]], "the ramp comes first (c): with its change frame it fills the window, so the burst is skipped");
   assert.deepEqual(ids(fitRuns([dim], room({ marks: [10_000] }))), [[], [], ["dim"]], "a mark and the dim's two edges would make 3, with steady light 4");
   assert.deepEqual(ids(fitRuns([dim], room({ marks: [5000] }))), [["dim"], [], []]);
@@ -159,9 +160,10 @@ test("runs: a fourth change in a 1 s window is never made, steady light's one in
 
 test("steady light is counted as one change in every window with the beat running or not, and a sweep (a phrase flip, a gather, a fan) takes the runs away", () => {
   assert.deepEqual(ids(fitRuns([ramp("a", 10_000, 700 - F)], room({ marks: [10_700] }))), [["a"], [], []], "a ramp, its change frame and steady light: 3");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000] }))), [[], ["a"], []], "inside the 2.5 s sweep of a flip");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000 - SWEEP_MS - 800] }))), [["a"], [], []], "after it");
-  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_000] }))), [["a"], [], []], "a flip after the run");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000] }))), [[], ["a"], []], "inside the span of a flip");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [9_000 - SWEEP_MS - 1_000 - 100] }))), [["a"], [], []], "after it and the 1 s beside its on-step");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_800] }))), [["a"], [], []], "a flip 1 s and more after the run's end");
+  assert.deepEqual(ids(fitRuns([ramp("a", 10_000)], room({ sweeps: [11_000] }))), [[], ["a"], []], "a flip within 1 s of the run's end: its off-step would share a second with the run");
   assert.equal(maxInASecond([{ fromMs: 999, toMs: 999 }, { fromMs: 0, toMs: 1 }]), 2);
   assert.equal(maxInASecond([{ fromMs: 0, toMs: 0 }, { fromMs: 1000, toMs: 1000 }]), 1, "a window of 1 s holds one of two marks 1 s apart");
 });

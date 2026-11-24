@@ -14,6 +14,7 @@
     "build": "node build.mjs",
     "steady": "npm run build && node --import tsx tools/steady-run.ts",
     "test:shots": "npm run build && node --import tsx tools/shots.ts",
+    "shared": "npm run build && node --import tsx tools/shared-run.ts",
     "test": "npm run lint && npm run typecheck && npm run test:unit && npm run test:shots"
   },
   "dependencies": {

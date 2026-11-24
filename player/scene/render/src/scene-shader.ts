@@ -9,7 +9,7 @@
 // strings and the numbers they are built from; nothing here reads a clock or the page.
 
 import { HAZE_DRIFT_X, HAZE_DRIFT_Y, WALL_WAVE_RATE } from "./drift-calc.ts";
-import { COMB, COMB_HALF_WIDTH } from "./light-calc.ts";
+import { CHASE_AMPLITUDE, COMB, COMB_HALF_WIDTH } from "./light-calc.ts";
 import { BURST_SHADOW, BURST_SHADOW_DEPTH, FADE, GROW, MAX_BOXES } from "./text-mask-calc.ts";
 
 export const BEAMS = 22;
@@ -83,7 +83,7 @@ float wallDot(float col, float row) {
   float head = mod(uChase, ${COMB}.0);
   float d = abs(mod(mod(col - head, ${COMB}.0) + ${COMB}.0 * 1.5, ${COMB}.0) - ${COMB}.0 / 2.0);
   if (uWallMode > 1.5) d = min(d, abs(mod(mod(55.0 - col - head, ${COMB}.0) + ${COMB}.0 * 1.5, ${COMB}.0) - ${COMB}.0 / 2.0));
-  return wave + 0.6 * max(0.0, 1.0 - d / ${COMB_HALF_WIDTH.toFixed(1)});
+  return wave + ${CHASE_AMPLITUDE.toFixed(2)} * max(0.0, 1.0 - d / ${COMB_HALF_WIDTH.toFixed(1)});
 }
 
 void main() {

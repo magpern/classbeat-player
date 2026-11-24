@@ -141,10 +141,14 @@ function oneTimeline(seed: number): void {
     assert.ok(!count.some((c) => p.fromMs < c.toMs && c.fromMs < p.toMs), `seed ${seed}: a run with a count running`);
     for (const q of pieces) if (q !== p) assert.ok(!(p.fromMs < q.toMs - TOL && q.fromMs < p.toMs - TOL), `seed ${seed}: runs overlap`);
   }
-  // 5. No 1 s window holds more than 3 counted changes: marks, runs, steady light's possible change.
+  // 5. No 1 s window holds more than 3 counted changes: marks, runs (a burst's decay is inside the shared 1), steady light's possible change.
   const counted = sorted.filter((m, i) => i === 0 || m - sorted[i - 1]! > TOL).map((m) => ({ fromMs: m, toMs: m }));
   // Steady light is one change in every window, the beat running or not (an oracle of its own: the constant, not the module's code).
-  const worst = brute([...counted, ...pieces]);
+  // A burst's decay is a ramp inside the shared 1 (scene.md "A burst's decay is light inside the shared 1"): it is not counted beside steady light, and no other run lies within 1 s of it.
+  const decays = plan.runs.filter((run) => run.wish.kind.endsWith("Burst")).flatMap((run) => run.pieces);
+  const others = plan.runs.filter((run) => !run.wish.kind.endsWith("Burst")).flatMap((run) => run.pieces);
+  for (const d of decays) for (const o of others) assert.ok(!(o.fromMs < d.toMs + 1000 - TOL && d.fromMs < o.toMs + 1000 - TOL), `seed ${seed}: a run ${o.fromMs} to ${o.toMs} within 1 s of a decay ${d.fromMs} to ${d.toMs}`);
+  const worst = brute([...counted, ...others]);
   assert.ok(worst.n + 1 <= 3 && STEADY_PER_WINDOW === 1, `seed ${seed}: a 1 s window holds ${worst.n} changes and steady light: ${JSON.stringify(worst.held)}`);
   for (const p of pieces) for (const f of sweeps) assert.ok(!(p.fromMs < f + SWEEP_MS && f < p.toMs), `seed ${seed}: a run in a sweep`);
   assert.ok(brute(counted).n <= 2, `seed ${seed}: marks alone are at most 2 in a second`);

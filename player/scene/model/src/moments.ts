@@ -2,6 +2,8 @@
 // light-only bursts of a song with none. Windows are counted in beats at the song's bpm; with no
 // bpm no window is known and none is guessed. Pure.
 
+import { fanWindowMs } from "./fan-turn.ts";
+
 export interface SongMoment {
   readonly at_ms: number;
   readonly kind: "drop" | "breakdown" | "build" | "other";
@@ -19,7 +21,6 @@ export interface Moments {
 
 export const NO_MOMENTS: Moments = { gather: false, fan: false, breakdown: false };
 const BUILD_BEATS = 8;
-const DROP_BEATS = 16;
 const BREAKDOWN_BEATS = 32;
 
 export function momentsAt(items: readonly SongMoment[] | undefined, bpm: number | undefined, posMs: number): Moments {
@@ -30,7 +31,7 @@ export function momentsAt(items: readonly SongMoment[] | undefined, bpm: number 
   for (const m of items) {
     if (m.kind === "drop") {
       gather ||= within(m.at_ms - BUILD_BEATS * beat, BUILD_BEATS);
-      fan ||= within(m.at_ms, DROP_BEATS);
+      fan ||= posMs >= m.at_ms && posMs < m.at_ms + fanWindowMs(bpm);
     } else if (m.kind === "build") gather ||= within(m.at_ms, BUILD_BEATS);
     else if (m.kind === "breakdown") breakdown ||= within(m.at_ms, BREAKDOWN_BEATS);
   }

@@ -4,8 +4,9 @@
 // does not fit is a step in the change frame, a burst or a dim that does not fit is left out, and beat-like light is
 // held at rest around every run that is placed. Pure: the class and the time come in, nothing is read.
 
-import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, phraseFlipsMs, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
-import type { PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
+import { HOLD_AFTER_MS, HOLD_BEFORE_MS, fixedFrames, fitRuns, inHold, patternCountRuns } from "../../model/src/index.ts";
+import type { CutRecord, DarkSpan, PlacedRun, RunKind, RunWish, Span } from "../../model/src/index.ts";
+import { lightB8InHold, songSpans, swayNearDecay } from "./dark-calc.ts";
 import { FRAME_MS, REACH_MS, nearby, planMarks } from "./marks-calc.ts";
 import type { Where } from "./marks-calc.ts";
 import { readPattern } from "./pattern-light-calc.ts";
@@ -13,8 +14,6 @@ import { nth } from "./lookup.ts";
 
 export type { Where } from "./marks-calc.ts";
 const FAR_MS = 1e9;
-/** The build gathers every beam over the 8 beats before a drop. */
-const GATHER_BEATS = 8;
 export const RAMP_MS = 700;
 export const BURST_MS = 250;
 export const DIM_EDGE_MS = 120;
@@ -38,7 +37,10 @@ export function dropFrame(w: Where, dropClassMs: number): number {
 export class RunBudget {
   private readonly decided = new Map<string, boolean>();
   private placed: PlacedRun[] = [];
-  private sweepsSeen: number[] = [];
+  private spansSeen: DarkSpan[] = [];
+  private readonly cutLog: CutRecord[] = [];
+  private readonly skipLog: string[] = [];
+  private readonly holdSkipLog: string[] = [];
   private readonly hold: { readonly before: number; readonly after: number };
 
   private readonly off: boolean;
@@ -65,28 +67,39 @@ export class RunBudget {
     const beat: Span[] = w.level === "None" ? [] : [{ fromMs: -FAR_MS, toMs: FAR_MS }];
     const wish: RunWish = { id, kind, pieces, waits };
     const song = nth(w.cls.songs, w.songIndex);
-    const offset = w.classMs - w.songPosMs;
-    const bpm = song?.bpm;
-    // Where the beams start a sweep: a phrase flip (Beat level), a build's gather, a drop's fan. Moments are gated off the list and while frozen.
-    const gather = GATHER_BEATS * (bpm !== undefined && bpm > 0 ? 60_000 / bpm : 0);
-    const sweeps = [
-      ...(w.level === "Beat" ? phraseFlipsMs(song?.anchors, w.songPosMs - REACH_MS, w.songPosMs + REACH_MS) : []),
-      ...(song?.moments ?? []).flatMap((m) => (m.kind === "drop" ? [m.at_ms - gather, m.at_ms] : m.kind === "build" ? [m.at_ms] : [])),
-    ].filter((t) => Math.abs(t - w.songPosMs) <= REACH_MS).map((t) => t + offset);
-    // A sweep outlives its song: one the budget saw before a song change still counts after it.
-    const allSweeps = [...new Set([...this.sweepsSeen, ...sweeps])];
-    this.sweepsSeen = allSweeps.filter((t) => t > w.classMs - REACH_MS);
-    // A drop's own gather and fan are not in the way of its burst: the fan's fixtures come on in the drop's frame, under it.
-    const own = id.startsWith("drop@") ? Number(id.slice(5)) : Number.NaN;
-    const ownAt = new Set(Number.isNaN(own) ? [] : [own - gather + offset, own + offset]);
-    const heard = allSweeps.filter((t) => !ownAt.has(t));
-    const beatMs = bpm !== undefined && bpm > 0 ? 60_000 / bpm : 500;
-    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweeps: heard });
+    // The dark spans, planned from the song alone (phrase flips, a build's gather, the fan's turn, the song change), the same at every level:
+    // the plan is a function of the song, not of the link. Seen ones are kept: a span outlives its song.
+    const [lo] = [w.classMs - REACH_MS];
+    const heard = songSpans(w);
+    const seen = new Set(heard.map((s) => Math.round(s.offMs)));
+    const allSpans = [...heard, ...this.spansSeen.filter((s) => !seen.has(Math.round(s.offMs)))];
+    this.spansSeen = allSpans.filter((s) => s.onMs > lo);
+    // At the Beat level and Tempo only the looks' sway runs wherever the look is at rest: a burst whose decay lies within 1 s of it is skipped, and recorded (steps e and f).
+    if ((kind === "lightBurst" || kind === "dropBurst") && w.level !== "None" && pieces.some((p) => swayNearDecay(w, allSpans, p))) { this.skipLog.push(id); this.decided.set(id, false); return false; }
+    // A light-only burst whose cut is a B8 gives way: its on-step lies in the hold planned without it, where steady light would add a second change (recorded).
+    if (kind === "lightBurst" && pieces.some((p) => lightB8InHold(allSpans, p, FRAME_MS))) { this.holdSkipLog.push(id); this.decided.set(id, false); return false; }
+    const beatMs = song?.bpm !== undefined && song.bpm > 0 ? 60_000 / song.bpm : 500;
+    const plan = fitRuns([wish], { marks, beat, count: countSpans(w), beatMs, endMs: w.classMs + 2 * REACH_MS, frameMs: FRAME_MS, placed: this.placed, sweepWindows: allSpans.map((x) => ({ fromMs: x.offMs, toMs: x.onMs, ...(x.swayAfter === undefined ? {} : { swayAfter: x.swayAfter }) })) });
     const run = plan.runs.find((r) => r.wish.id === id);
-    if (run) this.placed.push(run);
+    if (run) { this.placed.push(run); this.cutLog.push(...plan.cuts); }
     this.decided.set(id, run !== undefined);
     this.placed = this.placed.filter((r) => (r.pieces.at(-1)?.toMs ?? 0) > w.classMs - 4000);
     return run !== undefined;
+  }
+
+  /** The bursts left out because the sway or steady light resumes within 1 s of their decay beside a step the burst would have moved (steps e and f). */
+  nearSway(): readonly string[] {
+    return this.skipLog;
+  }
+
+  /** The light-only bursts left out because their B8 on-step lies in the hold planned without them (#618 comment 7134670843: placed, it makes the cut gate count 2). */
+  holdSkips(): readonly string[] {
+    return this.holdSkipLog;
+  }
+
+  /** The planned sweep windows the placed bursts have cut so far: only their counted length changed, never a turn. */
+  cuts(): readonly CutRecord[] {
+    return this.cutLog;
   }
 
   /** Beat-like light is held at rest: 250 ms before a placed run starts until 300 ms after it ends. */
