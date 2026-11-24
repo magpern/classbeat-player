@@ -10,6 +10,8 @@ import type { PairingView } from "../../src/core/pairing/view.ts";
 import type { ClassRow } from "../../src/core/sync/class-list.ts";
 import type { SyncView } from "../../src/core/sync/view.ts";
 import { createListController } from "../../src/main/list/list-controller.ts";
+import { MIX_DISABLED } from "../../src/core/mix/view.ts";
+import type { MixView } from "../../src/core/mix/view.ts";
 import { PAIRED, row, SYNCED } from "./list-fixtures.ts";
 
 const OPENED = { ...EMPTY_SNAPSHOT, loadId: 1, doc: { class: {} } } as unknown as Snapshot;
@@ -28,6 +30,7 @@ function rig() {
     openResult: OPENED,
     listener: (): void => undefined,
     account: "a".repeat(64) as string | null,
+    mix: MIX_DISABLED as MixView,
   };
   const controller = createListController({
     sync: {
@@ -40,6 +43,7 @@ function rig() {
     pairing: { view: () => r.pairing },
     account: () => r.account,
     open: (name, text) => (r.opened.push([name, text]), r.openResult),
+    mix: () => r.mix,
   });
   return { r, controller };
 }
@@ -216,4 +220,14 @@ test("the snapshot is tied to the account key: a new account with the same email
   assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"]);
   r.account = "a".repeat(64);
   assert.deepEqual(controller.view().rows.map((x) => x.title), ["Alpha", "Charlie"], "and it does not come back");
+});
+
+test("Start is refused while a Swedebeat sign-out is deleting the account's mixes", () => {
+  const { r, controller } = rig();
+  controller.view();
+  const first = r.rows[0]!;
+  r.mix = { ...MIX_DISABLED, state: "signed_in", signingOut: true };
+  assert.equal(controller.start(first.id, first.hash), false);
+  assert.equal(r.pins.length, 0);
+  assert.equal(controller.view().mix.signingOut, true);
 });

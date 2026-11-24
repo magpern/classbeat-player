@@ -2,6 +2,8 @@
 // as plain data, from what the shell sent and what the window holds (the filter and the
 // selection). Pure: the clock is an argument, and nothing here touches the page.
 import { clockText } from "../format.ts";
+import { footerReason, mixHeadOf, rowMixOf } from "../mix/list-model.ts";
+import type { MixForm, MixHead, MixLine, MixPlate, RowMix } from "../mix/list-model.ts";
 import { updatedText } from "../sync/updated-text.ts";
 import { filterRows, FILTER_FROM } from "./filter.ts";
 import type { ListRow } from "./rows.ts";
@@ -23,6 +25,8 @@ export interface RowModel {
   readonly selected: boolean;
   /** Greyed and not startable: another class is being played. */
   readonly dim: boolean;
+  /** A Swedebeat row's mix words, or null. */
+  readonly mix: RowMix | null;
 }
 
 export interface Footer {
@@ -42,7 +46,8 @@ export interface FilterModel {
 
 export type Body =
   | { readonly kind: "list"; readonly rows: readonly RowModel[]; readonly footer: Footer }
-  | { readonly kind: "panel"; readonly panel: Panel };
+  | { readonly kind: "panel"; readonly panel: Panel }
+  | { readonly kind: "mix-form"; readonly form: MixForm };
 
 export interface Screen {
   readonly count: string | null;
@@ -50,6 +55,9 @@ export interface Screen {
   readonly plate: Plate | null;
   /** The second plate: a class file that did not open. */
   readonly filePlate: Plate | null;
+  /** The Swedebeat line, or its plate in its place (docs/design/swedebeat.md). */
+  readonly mixLine: MixLine | null;
+  readonly mixPlate: MixPlate | null;
   /** Null: no filter (fewer than eight classes, or no list). */
   readonly filter: FilterModel | null;
   readonly body: Body;
@@ -69,34 +77,48 @@ function tagsOf(r: ListRow): string[] {
   return [...(r.playing ? ["Playing now"] : []), ...(r.removed ? ["Removed: plays to the end"] : []), ...(r.newer ? ["Newer version after this class"] : []), ...(r.notUpdated ? ["Could not be updated: older copy shown"] : [])];
 }
 
-function footerOf(r: ListRow | undefined, pinned: boolean): Footer | null {
+const START = "Starting opens the room screen and the presenter window";
+
+/** `reason`: the end of the line for a Swedebeat class that plays on the manual clock. */
+function footerOf(r: ListRow | undefined, pinned: boolean, reason: string | null): Footer | null {
   if (r === undefined) return null;
+  const detail = r.source === "swedebeat" && reason !== null ? `${START}. ${reason}` : START;
   return pinned
     ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", id: r.id }
-    : { title: r.title, detail: "Starting opens the room screen and the presenter window", button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", id: r.id };
+    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", id: r.id };
 }
+
+const NO_MIX: MixHead = { line: null, plate: null, panel: null, form: null };
 
 const countText = (n: number): string => (n === 1 ? "1 class" : `${n} classes`);
 
 export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
   const head = headOf(v);
-  // The filter is there from eight classes; while a file's error plate is up it steps aside, so that a whole screen of rows stays in view.
-  const allowed = v.rows.length >= FILTER_FROM && v.fileError === null;
+  // Swedebeat only on a paired list that is shown (a state with a panel of its own comes first).
+  const mix = head.panel === null ? mixHeadOf(v.mix, ui.mix ?? "none", v.rows.some((r) => r.source === "swedebeat")) : NO_MIX;
+  // The filter is there from eight classes; while a file's error plate or a Swedebeat plate is up it steps aside, so that a whole screen of rows stays in view.
+  const allowed = v.rows.length >= FILTER_FROM && v.fileError === null && mix.plate === null;
   const filterText = allowed ? ui.filter : "";
   const shown = filterRows(v.rows, filterText);
   const playingRow = v.rows.find((r) => r.playing);
   const pinned = playingRow !== undefined;
   const selectedId = keepSelection(shown.map((r) => r.id), ui.selectedId, playingRow?.id ?? null, ui.lastStartedId);
 
+  const rowMix = rowMixOf(v.mix);
+
   let body: Body;
   let withFilter = false;
   if (head.panel !== null) {
     body = { kind: "panel", panel: head.panel };
+  } else if (mix.form !== null) {
+    body = { kind: "mix-form", form: mix.form };
+  } else if (mix.panel !== null) {
+    body = { kind: "panel", panel: mix.panel };
   } else if (v.rows.length === 0) {
     body = { kind: "panel", panel: v.sync.status === "syncing" || v.sync.status === "unpaired" ? FIRST_SYNC : NO_CLASSES };
   } else {
     withFilter = allowed;
-    const footer = footerOf(pinned ? playingRow : shown.find((r) => r.id === selectedId), pinned);
+    const footer = footerOf(pinned ? playingRow : shown.find((r) => r.id === selectedId), pinned, footerReason(v.mix));
     if (shown.length === 0 || footer === null) {
       body = { kind: "panel", panel: NO_MATCH(filterText.trim()) };
     } else {
@@ -110,6 +132,7 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
         tags: tagsOf(r),
         selected: r.id === selectedId,
         dim: pinned && !r.playing,
+        mix: r.source === "swedebeat" ? rowMix : null,
       }));
       body = { kind: "list", rows, footer };
     }
@@ -125,9 +148,11 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
     status: head.status,
     plate: head.plate,
     filePlate,
+    mixLine: mix.line,
+    mixPlate: mix.plate,
     filter: withFilter ? { of: filterText.trim() === "" ? null : `${shown.length} of ${v.rows.length}` } : null,
     body,
     selectedId,
-    announce: head.status?.text ?? head.plate?.headline ?? "",
+    announce: mix.plate?.headline ?? head.status?.text ?? head.plate?.headline ?? "",
   };
 }

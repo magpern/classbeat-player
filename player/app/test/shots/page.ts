@@ -46,6 +46,8 @@ const STUB = `
     startPairing: () => { window.__calls.push(["pair"]); return Promise.resolve(window.__view.pairing); },
     reopenPairingPage: () => { window.__calls.push(["reopen"]); return Promise.resolve(window.__view.pairing); },
     unpair: () => { window.__calls.push(["cancel"]); return Promise.resolve(window.__view.pairing); },
+    mixSignIn: (c) => { window.__calls.push(["mix-sign-in", Object.keys(c)]); return answer(); },
+    mixSignOut: () => { window.__calls.push(["mix-sign-out"]); return answer(); },
   };
 `;
 

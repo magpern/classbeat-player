@@ -2,6 +2,7 @@
 // run uses (test/shots/states.ts). Plain data; no network, no real account.
 import type { ListRow } from "../../src/core/list/rows.ts";
 import type { ListView } from "../../src/core/list/view.ts";
+import { MIX_DISABLED } from "../../src/core/mix/view.ts";
 import type { PairingView } from "../../src/core/pairing/view.ts";
 import type { SyncView } from "../../src/core/sync/view.ts";
 
@@ -35,5 +36,5 @@ export const SYNCED: SyncView = { status: "synced", unavailable: null, wiping: f
 
 export function view(over: Omit<Partial<ListView>, "sync"> & { sync?: Partial<SyncView> } = {}): ListView {
   const { sync, ...rest } = over;
-  return { sync: { ...SYNCED, ...sync }, pairing: PAIRED, rows: [], fileError: null, ...rest };
+  return { sync: { ...SYNCED, ...sync }, pairing: PAIRED, rows: [], fileError: null, mix: MIX_DISABLED, ...rest };
 }

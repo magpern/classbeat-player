@@ -4,7 +4,7 @@
 // presenter. Each page may use only its own channels (the handlers ask `pageOf`).
 // The room screen has a window of its own and is never one of those pages: it is recognised only
 // by `isRoomSender`, and may use only ROOM_CHANNELS.
-import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "./channels.ts";
+import { CH_MIX_SIGN_IN, CH_MIX_SIGN_OUT, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "./channels.ts";
 
 export interface SenderFacts {
   /** webContents id of the sender. */
@@ -50,6 +50,10 @@ export interface RoomTrusted {
  * the phone remote's slot with its start and stop (room-2d.md). It reads no pairing and no file.
  */
 export const ROOM_CHANNELS: readonly string[] = [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP];
+
+/** The Swedebeat sign-in channels: the class list page's only, never the presenter's or the room's. */
+export const MIX_CHANNELS: readonly string[] = [CH_MIX_SIGN_IN, CH_MIX_SIGN_OUT];
+export const MIX_PAGE: Page = "list";
 
 /** The only channels the shell pushes to the room window: its frame and the phone remote's slot. */
 export const ROOM_PUSH_CHANNELS: readonly string[] = [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE];

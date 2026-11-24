@@ -1,5 +1,6 @@
 // The MixSource interface, its fake, the unavailable default and the empty setting. With no source
-// set the player behaves exactly as today: nothing the shipped app loads reaches core/mix/ yet.
+// set the player behaves exactly as today: the shipped app reaches no source but the unavailable one
+// (sign-in on the class list, #691, loads core/mix/ for its words, never a source that connects).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -39,15 +40,21 @@ describe("UnavailableMixSource, the default", () => {
       assert.deepEqual(r, { mode: "manual", reason: "disabled" });
     }
   });
-  it("is imported by nothing the shipped bundles load", () => {
+  it("is the only source the shipped bundles can reach", () => {
     const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : n.endsWith(".ts") ? [join(d, n)] : []));
     const src = join(REPO, "player", "app", "src");
     const files: Files = new Map(walk(src).map((p) => [relative(REPO, p).split("\\").join("/"), readFileSync(p, "utf8")]));
     const graph = graphOf(files);
     const entries = [...files.keys()].filter((p) => /\/src\/(main\/main|preload\/[^/]+|renderer\/[^/]+)\.ts$/.test(p));
     assert.ok(entries.length > 3);
-    const reached = [...closure(graph, entries)].filter((p) => p.includes("/core/mix/"));
-    assert.deepEqual(reached, []);
+    const reached = [...closure(graph, entries)];
+    // Every class that is a MixSource, anywhere the shipped app reaches: the unavailable one only.
+    const sources = reached.filter((p) => /\bimplements\s+MixSource\b|\bnew\s+\w*MixSource\(/.test(files.get(p) ?? ""));
+    assert.deepEqual(sources.sort(), ["player/app/src/core/mix/source-setting.ts", "player/app/src/core/mix/unavailable-source.ts"]);
+    assert.ok(!reached.some((p) => /fake/i.test(p)));
+    // Nothing the renderer or preload loads holds a source.
+    const pages = [...closure(graph, entries.filter((p) => !p.endsWith("/main/main.ts")))];
+    assert.ok(!pages.some((p) => /\/core\/mix\/(source-setting|unavailable-source)\.ts$|\/main\/mix\//.test(p)), pages.join("\n"));
   });
 });
 

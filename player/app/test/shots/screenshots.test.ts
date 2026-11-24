@@ -1,4 +1,4 @@
-// Every state of the class list at the three window sizes (20 states, 60 renderings): the real page
+// Every state of the class list at the three window sizes (20 states and 12 Swedebeat states, 96 renderings): the real page
 // in headless Chrome over the fixture views, screenshots written to screenshots/ (CI keeps them
 // for the Designer), and the spec's measurable checks on each. Needs `npm run build` first.
 //   npm run test:shots            (SHOTS_ONLY=<regex> limits it to matching "<state>-<w>x<h>")
@@ -33,6 +33,7 @@ for (const state of STATES) {
           await opened.page.focus("#filter-input");
           await opened.page.keyboard.type(state.type);
         }
+        for (const action of state.click ?? []) await opened.page.click(`[data-action="${action}"]`);
         await opened.page.waitForTimeout(100);
         await opened.page.screenshot({ path: join(SHOT_DIR, `class-list-${name}.png`), animations: "disabled" });
         const report = await check(opened.page);
