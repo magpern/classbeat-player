@@ -39,6 +39,11 @@ export function fakeVault(): FakeVault {
       v.tokens.delete(a);
     },
     hasKey: (a) => v.keys.has(a),
+    loadKey: (a) => (v.keys.has(a) ? Buffer.alloc(32, a.charCodeAt(0)) : null),
+    createKey(a) {
+      v.keys.add(a);
+      return Buffer.alloc(32, a.charCodeAt(0));
+    },
     clearKey(a) {
       v.log.push(`clearKey ${a.slice(0, 1)}`);
       if (v.failStep === "clearKey") throw new Error("x");
