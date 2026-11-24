@@ -17,6 +17,7 @@ ADR that changes a decision says which one it replaces.
 | [0009](0009-the-room-scene-is-web-3d.md) | The room's 3D scene is web 3D | Accepted |
 | [0010](0010-sign-in-with-classbeat.md) | Instructors sign in with their classbeat account | Proposed |
 | [0011](0011-the-phone-app-is-built-with-capacitor.md) | The phone and tablet app is built with Capacitor | Proposed |
+| [0012](0012-sensors.md) | Sensors: reading Bluetooth heart rate, cadence and power | Proposed |
 
 ## Template
 
