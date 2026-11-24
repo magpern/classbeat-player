@@ -1,0 +1,7 @@
+/* The mix on the room screen's link line (docs/design/swedebeat.md). Loaded after room.css.
+   The shapes are room.css's: a dot for the music, a square for the manual clock. Added: a hollow
+   dot for "working". No hue, no plate: none of these is a fault the room must act on. */
+.link.work { color: var(--light-2); }
+.link.work::before { background: transparent; border: 0.25vh solid var(--light-2); width: 1.4vh; height: 1.4vh; box-sizing: border-box; }
+.link.ready { color: var(--light-1); }
+.link.ready::before { background: var(--light-1); }
