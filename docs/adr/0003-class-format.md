@@ -1,6 +1,6 @@
 # 0003. Class format
 
-Status: Accepted when this pull request merges (2026-11-12)
+Status: Accepted (2026-11-12)
 
 ## Context
 

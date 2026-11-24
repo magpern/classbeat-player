@@ -1,7 +1,9 @@
-// The 20 states of the class list (docs/design/class-list.md, "States"), as the views the shell would
-// send, with the classes of the reference mock-ups. The screenshot run renders each at every size.
+// The 20 states of the class list (docs/design/class-list.md, "States") and the Swedebeat states of
+// docs/design/swedebeat.md, as the views the shell would send, with the classes of the reference mock-ups. The screenshot run renders each at every size.
 import type { ListRow } from "../../src/core/list/rows.ts";
 import type { ListView } from "../../src/core/list/view.ts";
+import { fieldsView, MIX_DISABLED } from "../../src/core/mix/view.ts";
+import type { MixView } from "../../src/core/mix/view.ts";
 import { NOTICE_TEXT } from "../../src/core/pairing/view.ts";
 import { PAIRED, row, SYNCED, view } from "../unit/list-fixtures.ts";
 
@@ -52,7 +54,15 @@ export interface State {
   readonly view: ListView;
   /** Typed into the filter before the screenshot. */
   readonly type?: string;
+  /** Buttons (their `data-action`) clicked, in order, before the screenshot. */
+  readonly click?: readonly string[];
 }
+
+// Swedebeat (docs/design/swedebeat.md, "Class list page"): two of the twelve are Swedebeat classes.
+const SWEDEBEAT = TWELVE.map((r) => (r.title.startsWith("Friday") || r.title.startsWith("Pyramid") ? { ...r, source: "swedebeat" as const } : r));
+const MIX_OUT: MixView = { ...MIX_DISABLED, state: "signed_out", fields: fieldsView([{ name: "username", secret: false }, { name: "password", secret: true }]) };
+const mixed = (mix: Partial<MixView>): ListView => view({ rows: SWEDEBEAT, sync: synced(SWEDEBEAT), mix: { ...MIX_OUT, ...mix } });
+const SIGNED_IN: Partial<MixView> = { state: "signed_in", fields: [] };
 
 const thursday = TWELVE.find((r) => r.title === "Thursday threshold")!;
 
@@ -76,5 +86,17 @@ export const STATES: readonly State[] = [
   { name: "file-error", view: view({ rows: TWELVE, sync: synced(TWELVE), fileError: { message: "This class file is not valid.", fileName: "thursday-threshold.json", details: ["unknown_zone at /intervals/3/zone", "missing_field at /songs/4/title"] } }) },
   { name: "unavailable", view: view({ sync: synced([], { status: "unavailable", unavailable: "passing" }) }) },
   { name: "unavailable-lasting", view: view({ sync: synced([], { status: "unavailable", unavailable: "lasting" }) }) },
+  { name: "sw-signed-out", view: mixed({}) },
+  { name: "sw-form", view: mixed({}), click: ["mix-connect"] },
+  { name: "sw-refused", view: mixed({ state: "refused", refusal: "bad_credentials" }), click: ["mix-connect"] },
+  { name: "sw-rate-limited", view: mixed({ state: "refused", refusal: "rate_limited" }), click: ["mix-connect"] },
+  { name: "sw-unreachable", view: mixed({ state: "refused", refusal: "unavailable" }) },
+  { name: "sw-reconnect", view: mixed({ needsReconnect: true }) },
+  { name: "sw-connecting", view: mixed({ state: "signing_in", fields: [] }) },
+  { name: "sw-signed-in", view: mixed(SIGNED_IN) },
+  { name: "sw-sign-out-ask", view: mixed(SIGNED_IN), click: ["mix-sign-out"] },
+  { name: "sw-signing-out", view: mixed({ ...SIGNED_IN, signingOut: true }) },
+  { name: "sw-off", view: mixed(MIX_DISABLED) },
+  { name: "sw-no-keychain", view: mixed({ keychainUsable: false, fields: [] }) },
   { name: "not-updated", view: view({ rows: TWELVE.map((r) => (r.title.startsWith("Hill") ? { ...r, notUpdated: true } : r)), sync: synced(TWELVE, { notUpdated: [TWELVE[3].id] }) }) },
 ];

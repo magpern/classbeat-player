@@ -19,6 +19,8 @@ import { joinPage, numbersSheet } from "./render/form.ts";
 import type { FormHandlers } from "./render/form.ts";
 import { endedPage, refusedPage, removedPage, waitingPage } from "./render/pages.ts";
 import { RiderRun } from "./render/run.ts";
+import { SensorPanel } from "./sensor-panel.ts";
+import type { SensorSource } from "../sensors/source.ts";
 import { RiderSocket } from "./socket.ts";
 import { forgetNumbers, forgetToken, loadNumbers, loadToken, rememberNumbers, saveToken, storageWorks } from "./store.ts";
 
@@ -55,12 +57,15 @@ export class RiderApp {
   private readonly host: HTMLElement;
   private readonly wake: ScreenWake;
   private readonly handlers: FormHandlers;
+  private readonly sensors: SensorPanel;
 
-  constructor(host: HTMLElement) {
+  /** `source`: the rider's own sensors, from the entry point (ADR 0012). */
+  constructor(host: HTMLElement, source: SensorSource) {
     // Before anything else: the address keeps the bare class code only.
     this.address = codeInAddress();
     this.host = host;
     this.wake = new ScreenWake(() => this.draw(true));
+    this.sensors = new SensorPanel(source, () => this.draw());
     const storage = storageWorks();
     const remembered = storage ? loadNumbers() : null;
     this.mine = remembered ?? NO_NUMBERS;
@@ -74,6 +79,12 @@ export class RiderApp {
     };
     setInterval(() => this.tick(), TICK_MS);
     addEventListener("hashchange", () => this.onHash());
+    // A resize or a turn of the phone changes the height the readings have: the next rows fit again.
+    const refit = (): void => {
+      if (this.shown === "run") this.run?.fit();
+    };
+    addEventListener("resize", refit);
+    matchMedia("(orientation: portrait)").addEventListener("change", refit);
     const token = loadToken();
     if (token) this.connect(token);
     this.draw();
@@ -194,6 +205,7 @@ export class RiderApp {
     forgetToken();
     this.wake.want(false);
     this.sheet = false;
+    this.sensors.stop();
     if (this.live?.gone === "lapsed") {
       this.live = null;
       this.form = awayForm(this.form);
@@ -263,14 +275,18 @@ export class RiderApp {
       case "ended":
       case "lapsed":
         return this.mount("ended", endedPage, force);
-      case "run":
+      case "run": {
+        if (v.done) this.sensors.stop();
+        const s = this.sensors.sheet();
+        if (s) return this.mount(s.key, s.build, force);
         if (this.sheet) return this.mount(this.formKey("sheet", f), () => numbersSheet(f, this.handlers), force);
         if (!this.run || this.shown !== "run") {
-          const screen = new RiderRun(() => this.openSheet());
+          const screen = new RiderRun(() => this.openSheet(), () => this.sensors.press());
           this.mount("run", () => screen.root, true);
           this.run = screen;
         }
-        this.run.update(v, this.wake.works);
+        this.run.update(v, this.wake.works, this.sensors.view(v.effort));
+      }
     }
   }
 

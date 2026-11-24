@@ -173,7 +173,7 @@ and 640 × 360 too. The state names are the `SensorSource`'s (ADR 0012 section 3
 | Worst case | The longest content | Four-digit power, three-digit plan, the 80-character zone name, 58:58, three 80-character next names; and a sheet with a 32-character device name and three devices | [html](mockups/sensors-worst.html), [portrait](mockups/sensors-worst-390x844.png), [sheet](mockups/sensors-worst-sheet-390x844.png) |
 
 A sensor state **never uses the top line** (it carries the connection plates of rider.md: "Waiting
-for the instructor", "Reconnecting"); sensor plates sit in the effort block. Sensors work in every
+for the instructor", "Reconnecting"); sensor plates sit in the effort block. One plate at a time, in this order as built (`plateOf` in `web/src/rider/core/sensor-view.ts`): choosing, then lost, then failed (lost wins over failed). Sensors work in every
 connected class state (paused, held, waiting for the instructor) because the readings are local; the
 readings need no connection to the class.
 

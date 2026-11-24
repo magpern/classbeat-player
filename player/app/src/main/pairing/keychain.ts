@@ -30,7 +30,15 @@ export const RECORD_FILE = "device-pairing.bin";
 export const MAX_FILE_BYTES = 4 * MAX_RECORD_BYTES;
 
 export function keychainStore(safe: SafeStorageLike, dir: string, platform: string): SecretStore {
-  const file = join(dir, RECORD_FILE);
+  return keychainFile(safe, join(dir, RECORD_FILE), platform, MAX_RECORD_BYTES);
+}
+
+/**
+ * One secret in one file, encrypted by safeStorage: the pairing record above, and the Swedebeat
+ * token (main/mix/vault.ts). `maxText`: the most bytes of text it keeps; the file is read only up
+ * to four times that.
+ */
+export function keychainFile(safe: SafeStorageLike, file: string, platform: string, maxText: number): SecretStore {
   const available = (): boolean => {
     try {
       const backend = platform === "linux" ? (safe.getSelectedStorageBackend?.() ?? null) : null;
@@ -44,7 +52,7 @@ export function keychainStore(safe: SafeStorageLike, dir: string, platform: stri
     load() {
       if (!available()) return null;
       try {
-        const data = readCapped(file, MAX_FILE_BYTES);
+        const data = readCapped(file, 4 * maxText);
         return data === null ? null : safe.decryptString(data);
       } catch {
         return null;
@@ -52,7 +60,7 @@ export function keychainStore(safe: SafeStorageLike, dir: string, platform: stri
     },
     save(text) {
       if (!available()) throw new Error("no keychain");
-      if (Buffer.byteLength(text) > MAX_RECORD_BYTES) throw new Error("record too large");
+      if (Buffer.byteLength(text) > maxText) throw new Error("record too large");
       const tmp = `${file}.tmp`;
       // A stale temporary file, or a link planted in its place, is removed (the link itself, never
       // its target). The new one is then created exclusively, so if anything appears there in the

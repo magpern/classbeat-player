@@ -9,7 +9,9 @@ import { SYNC_EVERY_MS } from "../sync/backoff-policy.ts";
 import type { ListView } from "./view.ts";
 
 export type Marker = "ok" | "work" | "away";
-export type ButtonId = "pair" | "pair-again" | "cancel" | "reopen" | "open-file" | "close";
+export type ButtonId = "pair" | "pair-again" | "cancel" | "reopen" | "open-file" | "close" | MixButtonId;
+/** The Swedebeat keys (core/mix/list-model.ts). */
+export type MixButtonId = "mix-connect" | "mix-submit" | "mix-cancel" | "mix-sign-out" | "mix-sign-out-yes" | "mix-keep";
 
 export interface Button {
   readonly id: ButtonId;

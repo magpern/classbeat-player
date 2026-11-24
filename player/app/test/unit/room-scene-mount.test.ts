@@ -1,27 +1,47 @@
-// The room window mounts the scene (#677, S10, S11): the page holds the canvas and the text layer's root, the script starts the
-// join with the same reduced-motion value the plain screen gets, and every frame the plain screen draws is also pushed to the join.
-// The join itself (reduced motion, kills, the 2 s deadline) is tested in player/scene/render/test/scene-join.test.ts.
+// The room window's scene is its own script (#677, S10, S11): the plain screen's script announces each frame it draws on the page's
+// document, the scene's script listens, and the phone app, which bundles the plain screen's script, carries no three.js.
+// The join's behaviour (reduced motion, kills, the 2 s deadline, the playlist plate) is tested in player/scene/render/test/.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { build, type BuildOptions } from "esbuild";
+import { BUILDS } from "../../build-config.mjs";
+import type { RoomFrame } from "../../src/core/room/frame.ts";
+import { announceFrame, onFrame } from "../../src/renderer/room-frame-event.ts";
 
-const dir = join(import.meta.dirname, "..", "..", "src", "renderer");
-const ts = readFileSync(join(dir, "room.ts"), "utf8");
-const html = readFileSync(join(dir, "room.html"), "utf8");
+const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const frame = { doc: null, view: null, link: null, band: null, pattern: null, playlistNotLoaded: true } as RoomFrame;
 
-test("room.html holds the scene's canvas and the text layer's root, and no new source for the page's policy", () => {
-  assert.match(html, /<canvas id="scene"><\/canvas>/);
-  assert.match(html, /<div id="text"><\/div>/);
-  assert.match(html, /script-src 'self'; style-src 'self'/);
-  assert.doesNotMatch(html, /unsafe-inline|unsafe-eval|blob:|data:/);
+test("a frame announced on a page reaches the scene's listener, once, until it stops", () => {
+  const page = new EventTarget();
+  const got: RoomFrame[] = [];
+  const stop = onFrame(page, (f) => got.push(f));
+  announceFrame(page, frame);
+  assert.deepEqual(got, [frame]);
+  stop();
+  announceFrame(page, frame);
+  assert.equal(got.length, 1);
 });
 
-test("room.ts starts the join with the plain screen's own reduced-motion value and feeds it every frame", () => {
-  assert.match(ts, /mountScene\(\{ reducedMotion, visible:/);
-  assert.match(ts, /screen\.update\(frame\);\s*scene\.push\(frame\);/);
+test("frames announced on another target are not heard", () => {
+  const got: RoomFrame[] = [];
+  onFrame(new EventTarget(), (f) => got.push(f));
+  announceFrame(new EventTarget(), frame);
+  assert.deepEqual(got, []);
 });
 
-test("the scene's root goes after the plain screen in the document, so the plain screen's parts are found first", () => {
-  assert.match(ts, /document\.body\.append\(sceneRoot\)/);
+async function inputsOf(entry: string): Promise<string[]> {
+  const b = BUILDS.find((o: BuildOptions) => (o.entryPoints as string[]).includes(entry))!;
+  const r = await build({ ...b, absWorkingDir: APP, write: false, metafile: true, logLevel: "silent" });
+  return Object.keys(r.metafile!.inputs);
+}
+
+test("the plain screen's script carries no three.js and none of the scene (the phone app bundles it); the scene's own script carries both", async () => {
+  const plain = await inputsOf("src/renderer/room.ts");
+  assert.ok(plain.length > 20);
+  assert.deepEqual(plain.filter((i) => /node_modules\/three\/|scene\/render/.test(i)), []);
+  const scene = await inputsOf("src/renderer/room-scene.ts");
+  assert.ok(scene.some((i) => /node_modules\/three\//.test(i)));
+  assert.ok(scene.some((i) => i.endsWith("scene/render/join/mount.ts")));
 });

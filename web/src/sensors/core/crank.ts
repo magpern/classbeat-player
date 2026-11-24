@@ -7,7 +7,7 @@ export interface Crank {
   readonly time: number;
 }
 
-const WRAP = 0x10000;
+const WRAP = 2 ** 16;
 
 /**
  * rpm between two crank events, or null when no new event happened (same time), the step is absurd,

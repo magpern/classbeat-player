@@ -15,6 +15,12 @@ export const CH_LIST_START = "list:start";
 export const CH_LIST_OPEN_FILE = "list:open-file";
 export const CH_LIST_DISMISS = "list:dismiss-error";
 export const CH_LIST_BACK = "list:back";
+// Swedebeat sign-in and sign-out on the class list page (ADR 0013 section 1, docs/design/swedebeat.md).
+// `player:mix-sign-in` takes what was typed, by the field names the source declares, each at most
+// 256 characters; `player:mix-sign-out` takes no argument. Each answers with the ListView, never a
+// token or anything typed. The class list page's only: the presenter and the room have no way to them.
+export const CH_MIX_SIGN_IN = "player:mix-sign-in";
+export const CH_MIX_SIGN_OUT = "player:mix-sign-out";
 // The room screen's window (docs/design/room-2d.md): `room:state` takes no argument and answers
 // with a RoomFrame; `room:update` is the shell's push of the same. Nothing else is the room's.
 export const CH_ROOM_STATE = "room:state";

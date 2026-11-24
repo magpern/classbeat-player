@@ -21,15 +21,15 @@ function files(dir: string): string[] {
 const code = (p: string): string => readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 
 describe("the rider page's structure", () => {
-  it("its core (the address, effort_calc, the fields, the join form, the wire, the session, the view) imports no DOM or I/O", () => {
+  it("its core (the address, effort_calc, the fields, the join form, the wire, the session, the view, the sensor view) imports no DOM or I/O", () => {
     const dir = join(RIDER, "core");
     const list = readdirSync(dir).filter((f) => f.endsWith(".ts"));
-    assert.deepEqual(list.sort(), ["address.ts", "effort-calc.ts", "fields.ts", "join.ts", "session.ts", "view.ts", "wire.ts"]);
+    assert.deepEqual(list.sort(), ["address.ts", "effort-calc.ts", "fields.ts", "join.ts", "sensor-view.ts", "session.ts", "view.ts", "wire.ts"]);
     for (const f of list) assert.deepEqual(impurities(f, readFileSync(join(dir, f), "utf8"), RIDER_ALLOWED), [], f);
   });
 
   it("the rider's allowed list still refuses I/O modules", () => {
-    for (const bad of ['import "../store.ts";', 'import "../../companion/socket.ts";', 'import "../../companion/core/wire.ts";', 'import "../net.ts";']) {
+    for (const bad of ['import "../store.ts";', 'import "../../companion/socket.ts";', 'import "../../companion/core/wire.ts";', 'import "../net.ts";', 'import "../../sensors/source.ts";', 'import "../../sensors/web-bluetooth.ts";', 'import "../../sensors/fake-replay.ts";']) {
       assert.notDeepEqual(impurities("x.ts", bad, RIDER_ALLOWED), [], bad);
     }
   });

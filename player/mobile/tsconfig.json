@@ -14,7 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     // The room screen's core (player/app) imports classformat; resolve it from this package.
-    "paths": { "classformat/*": ["./node_modules/classformat/*"], "three": ["./node_modules/@types/three/index.d.ts"] }
+    "paths": { "classformat/*": ["./node_modules/classformat/*"] }
   },
   "include": ["src", "test", "build.mjs", "build-config.mjs", "eslint.config.js"]
 }

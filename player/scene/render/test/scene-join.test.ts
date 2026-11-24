@@ -193,3 +193,61 @@ test("the feed: no class, no clock or no songs means the plain screen", () => {
   assert.equal(feedOf({ doc: null, playlistNotLoaded: false, view: null, link: null }, 0, false), null);
   assert.equal(feedOf({ ...frame(), doc: { ...doc, songs: [] } as Class }, 0, false), null);
 });
+
+test("a healthy, visible scene stays up for far longer than the stall window, drawing every frame", () => {
+  const f = fake();
+  const join = startJoin(f.ports, { reducedMotion: false });
+  join.push(frame());
+  f.advance(10 * (STALL_MS + WATCH_EVERY_MS));
+  assert.equal(join.mode, "scene");
+  assert.equal(join.why, null);
+  assert.ok(f.drawn.length > 600);
+});
+
+test("a scene given up on stays down for that class and is tried again for the next one, or a fresh run of it", () => {
+  const f = fake();
+  const join = startJoin(f.ports, { reducedMotion: false });
+  join.push(frame());
+  f.advance(100);
+  f.advance(2000, false);
+  assert.equal(join.why, "no frames");
+  const made = f.created();
+  join.push(frame({ classMs: 20_000 }));
+  f.advance(500);
+  assert.equal(join.mode, "plain", "the same class: not again");
+  assert.equal(f.created(), made);
+  join.push({ ...frame(), doc: { ...doc, class: { ...doc.class, title: "Another ride" } } as Class });
+  f.advance(100);
+  assert.equal(f.created(), made + 1);
+  assert.equal(join.mode, "scene");
+  assert.equal(join.why, null);
+  f.lost();
+  join.push(frame({ status: "ready", classMs: 0 }));
+  f.advance(100);
+  assert.equal(f.created(), made + 2, "a fresh run of the same class");
+});
+
+test("reduced motion is never tried again, whatever class comes", () => {
+  const f = fake();
+  const join = startJoin(f.ports, { reducedMotion: true });
+  join.push(frame());
+  join.push({ ...frame(), doc: { ...doc, class: { ...doc.class, title: "Another ride" } } as Class });
+  f.advance(500);
+  assert.equal(f.created(), 0);
+});
+
+test("a stopped join stays stopped", () => {
+  const f = fake();
+  const join = startJoin(f.ports, { reducedMotion: false });
+  join.push(frame());
+  join.stop();
+  join.push({ ...frame(), doc: { ...doc, class: { ...doc.class, title: "Another ride" } } as Class });
+  f.advance(500);
+  assert.equal(f.created(), 1);
+  assert.equal(join.mode, "plain");
+});
+
+test("the playlist notice goes from the frame to the feed", () => {
+  assert.equal(feedOf({ ...frame(), playlistNotLoaded: true }, 0, false)!.feed.playlistNotLoaded, true);
+  assert.equal(feedOf(frame(), 0, false)!.feed.playlistNotLoaded, false);
+});

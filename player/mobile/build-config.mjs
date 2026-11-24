@@ -15,8 +15,6 @@ export function buildOptions(outdir) {
     format: "iife",
     // Android System WebView follows Chrome; the app's minimum (Android 9) updates it from the store.
     target: "chrome130",
-    // The room window's script mounts the scene (player/scene), whose three.js resolves from this package.
-    nodePaths: ["node_modules"],
     loader: { ".woff2": "file" },
     assetNames: "fonts/[name]",
   };

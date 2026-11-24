@@ -112,7 +112,7 @@ function codeLine(code: string): HTMLElement {
   return el("p", { class: "code-line" }, [el("span", { tier: "label" }, ["Class code ", el("span", { class: "v n", text: code })])]);
 }
 
-const page = (lead: Node[], act: Node[]): HTMLElement => el("main", { class: "page form" }, [el("div", { class: "lead" }, lead), el("div", { class: "act" }, act)]);
+export const page = (lead: Node[], act: Node[]): HTMLElement => el("main", { class: "page form" }, [el("div", { class: "lead" }, lead), el("div", { class: "act" }, act)]);
 
 /** The join form: plain, remembered, with errors, with no code, with a plate, and while joining. */
 export function joinPage(f: Form, h: FormHandlers): HTMLElement {

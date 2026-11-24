@@ -1,5 +1,7 @@
 // What the shell sends the class list window: built field by field, so no token, no document and
 // no account key can ride along. Pure types.
+import type { MixUi } from "../mix/list-model.ts";
+import type { MixView } from "../mix/view.ts";
 import type { PairingView } from "../pairing/view.ts";
 import type { SyncView } from "../sync/view.ts";
 import type { ListRow } from "./rows.ts";
@@ -16,6 +18,8 @@ export interface ListView {
   readonly pairing: PairingView;
   readonly rows: readonly ListRow[];
   readonly fileError: FileErrorView | null;
+  /** Swedebeat: a state and field names only (core/mix/view.ts). */
+  readonly mix: MixView;
 }
 
 /** What the window holds itself: the filter text and the selection. */
@@ -23,4 +27,6 @@ export interface ListUi {
   readonly filter: string;
   readonly selectedId: string | null;
   readonly lastStartedId: string | null;
+  /** The Swedebeat form or question the page has open, or the call it waits for; "none" when absent. */
+  readonly mix?: MixUi;
 }

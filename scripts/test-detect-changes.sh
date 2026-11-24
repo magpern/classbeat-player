@@ -58,7 +58,7 @@ check "unknown base means everything" "backend schema player android mobile web 
 commit scripts/other.sh
 check "unrelated file sets no flag" "" "$(flags push "$main_tip" HEAD)"
 commit schema/class-format/v1/x.json
-check "schema change runs backend, schema and desktop" "backend schema desktop" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
+check "schema change runs backend, schema, player and desktop (#702)" "backend schema player desktop" "$(flags push "$(git rev-parse HEAD~1)" HEAD)"
 before_wf="$(git rev-parse HEAD)"
 commit .github/workflows/ci.yml
 check "workflow change runs backend, schema, player and desktop" "backend schema player android mobile desktop" "$(flags push "$before_wf" HEAD)"
@@ -94,7 +94,7 @@ check "an unknown base still runs everything (the code flag too)" "true" "$(code
 before_tok="$(git rev-parse HEAD)"
 before_live="$(git rev-parse HEAD)"
 commit schema/live/v1/examples/x.json
-check "live schema example change runs backend, schema, web and desktop" "backend schema web desktop" "$(flags push "$before_live" HEAD)"
+check "live schema example change runs backend, schema, player, web and desktop" "backend schema player web desktop" "$(flags push "$before_live" HEAD)"
 before_pol="$(git rev-parse HEAD)"
 commit backend/src/player_backend/request_policy.py
 check "request policy change runs backend and web" "backend web" "$(flags push "$before_pol" HEAD)"

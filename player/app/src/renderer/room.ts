@@ -5,8 +5,6 @@
 import "../../../../web/src/main.ts";
 import "./room-band.css";
 import "./room-join.css";
-import "../../../scene/render/layer/text.css";
-import "../../../scene/render/join/scene-join.css";
 import type { RoomCommand } from "../core/room/commands.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { REMOTE_ABSENT } from "../core/room/remote.ts";
@@ -15,7 +13,7 @@ import type { ClockStatus } from "../core/room/band-view.ts";
 import { mountBand } from "./room-band.ts";
 import { createMarks } from "./room-marks.ts";
 import { mountSheet } from "./room-join.ts";
-import { mountScene } from "../../../scene/render/join/mount.ts";
+import { announceFrame } from "./room-frame-event.ts";
 
 type Answer<T> = Promise<T | null>;
 
@@ -40,12 +38,7 @@ interface RoomApi {
 const api = (window as unknown as { room: RoomApi }).room;
 const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const screen = window.classbeatRoom.mount(document.body, { reducedMotion });
-// The 3D scene under the text and the band (docs/design/scene.md): none with reduced motion, no WebGL or a failure, where the plain
-// screen above, which stays mounted and keeps drawing the same frames, is what shows (S10, S11). The scene's own join is player/scene/render/join/.
-// After the plain screen in the document, so a query for its parts (`.gel`, `.intro`) finds the plain screen's first, as before the scene.
-const sceneRoot = document.getElementById("scene-join");
-if (sceneRoot) document.body.append(sceneRoot);
-const scene = mountScene({ reducedMotion, visible: () => !document.hidden });
+// The 3D scene (room-scene.ts, its own script) listens for the frames the plain screen draws; this script knows nothing of it, so the phone app that bundles it carries no three.js.
 
 // One display unless the system says the desktop spans more than one (the Window Management
 // API's `isExtended`); where it cannot tell, the band behaves as on one display, which keeps Start
@@ -62,7 +55,7 @@ const sheet = mountSheet(document.body, () => band.redraw(), marks);
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;
   screen.update(frame);
-  scene.push(frame);
+  announceFrame(document, frame);
   status = (frame.view?.status as ClockStatus | undefined) ?? null;
   sheet.facts(status, slot);
   band.frame(frame);

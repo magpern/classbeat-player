@@ -9,9 +9,11 @@ import { screenOf } from "../core/list/screen.ts";
 import type { Screen } from "../core/list/screen.ts";
 import { FILTER_FROM } from "../core/list/filter.ts";
 import type { ListUi, ListView } from "../core/list/view.ts";
+import type { MixUi } from "../core/mix/list-model.ts";
 import type { PairingView } from "../core/pairing/view.ts";
 import { colsEl, footerEl, panelEl, plateEl, rowEl, shortcut, statusEl } from "./list-paint.ts";
 import type { Act } from "./list-paint.ts";
+import { clearTyped, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
 
 interface ListApi {
   listView(): Promise<ListView | null>;
@@ -22,6 +24,8 @@ interface ListApi {
   startPairing(): Promise<PairingView | null>;
   reopenPairingPage(): Promise<PairingView | null>;
   unpair(): Promise<PairingView | null>;
+  mixSignIn(credentials: Record<string, string>): Promise<ListView | null>;
+  mixSignOut(): Promise<ListView | null>;
 }
 
 const api = (window as unknown as { player: ListApi }).player;
@@ -36,7 +40,7 @@ const input = $("filter-input") as HTMLInputElement;
 let view: ListView | null = null;
 let screen: Screen | null = null;
 let ui: ListUi = { filter: "", selectedId: null, lastStartedId: null };
-const shown = { status: "", file: "", of: "", body: "", footer: "", rows: "", panel: "" };
+const shown = { status: "", file: "", mix: "", of: "", body: "", footer: "", rows: "", panel: "" };
 let scrollToSelection = false;
 
 const listEl = (): HTMLElement | null => document.getElementById("list");
@@ -67,8 +71,43 @@ const act: Act = (id) => {
       return void api.openClassFile().then(take);
     case "close":
       return void api.dismissFileError().then(take);
+    default:
+      return mixAct(id);
   }
 };
+
+function setMix(mix: MixUi): void {
+  ui = { ...ui, mix };
+  paint();
+}
+
+/** Swedebeat: the form, the sign-out question, and the two calls (docs/design/swedebeat.md). */
+function mixAct(id: Parameters<Act>[0]): void {
+  if (id === "mix-connect") return setMix("form");
+  if (id === "mix-sign-out") return setMix("ask");
+  if (id === "mix-keep") return setMix("none");
+  if (id === "mix-cancel") {
+    clearTyped($("body"));
+    return setMix("none");
+  }
+  if (id === "mix-submit" && ui.mix === "form") {
+    const typed = takeTyped($("body"));
+    setMix("signing-in");
+    // A refusal of the details or of too many tries keeps the form, empty; anything else closes it.
+    return void api.mixSignIn(typed).then((v) => {
+      const again = v !== null && v.mix.state === "refused" && (v.mix.refusal === "bad_credentials" || v.mix.refusal === "rate_limited");
+      ui = { ...ui, mix: again ? "form" : "none" };
+      take(v);
+    });
+  }
+  if (id === "mix-sign-out-yes") {
+    setMix("signing-out");
+    return void api.mixSignOut().then((v) => {
+      ui = { ...ui, mix: "none" };
+      take(v);
+    });
+  }
+}
 
 function select(id: string, scroll: boolean): void {
   ui = { ...ui, selectedId: id };
@@ -81,6 +120,13 @@ function paintStatus(s: Screen): void {
   if (sig !== shown.status) {
     shown.status = sig;
     $("status-slot").replaceChildren(...(s.plate !== null ? [plateEl(s.plate, act, "status", false)] : s.status !== null ? [statusEl(s.status)] : []));
+  }
+  const mix = JSON.stringify([s.mixLine, s.mixPlate]);
+  if (mix !== shown.mix) {
+    shown.mix = mix;
+    $("mix-slot").replaceChildren(...(s.mixPlate !== null ? [mixPlateEl(s.mixPlate, act)] : s.mixLine !== null ? [mixLineEl(s.mixLine, act)] : []));
+    // The sign-out question: "Keep connected" has the focus, so Enter or Esc keeps.
+    if (s.mixPlate !== null) ($("mix-slot").querySelector('[data-action="mix-keep"]') as HTMLElement | null)?.focus();
   }
   const file = JSON.stringify(s.filePlate);
   if (file !== shown.file) {
@@ -149,6 +195,16 @@ function paintPanel(s: Screen & { body: { kind: "panel" } }): void {
   if (document.activeElement === document.body || document.activeElement === null) ($("body").querySelector("button.primary, button") as HTMLElement | null)?.focus();
 }
 
+function paintForm(s: Screen & { body: { kind: "mix-form" } }): void {
+  const sig = JSON.stringify(s.body.form);
+  if (shown.body === "mix-form" && sig === shown.panel) return;
+  shown.body = "mix-form";
+  shown.panel = sig;
+  $("body").replaceChildren(mixFormEl(s.body.form, act));
+  // The first field has the focus.
+  ($("body").querySelector("input") as HTMLElement | null)?.focus();
+}
+
 function paint(): void {
   if (view === null) return;
   screen = screenOf(view, ui, Date.now());
@@ -159,6 +215,7 @@ function paint(): void {
   paintStatus(screen);
   paintFilter(screen);
   if (screen.body.kind === "list") paintList(screen as Screen & { body: { kind: "list" } });
+  else if (screen.body.kind === "mix-form") paintForm(screen as Screen & { body: { kind: "mix-form" } });
   else paintPanel(screen as Screen & { body: { kind: "panel" } });
   if ($("live").textContent !== screen.announce) $("live").textContent = screen.announce;
 }
@@ -221,9 +278,9 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     input.focus();
   } else if (e.key === "Escape" && !inField) {
-    // Close the file-error plate, else cancel a pairing in progress.
+    // Close the file-error plate, else cancel a pairing in progress or the Swedebeat form, or keep Swedebeat connected.
     const close = document.querySelector<HTMLElement>('#file-slot [data-action="close"]');
-    const cancel = document.querySelector<HTMLElement>('#body [data-action="cancel"]');
+    const cancel = document.querySelector<HTMLElement>('#body [data-action="cancel"], #body [data-action="mix-cancel"], #mix-slot [data-action="mix-keep"]');
     (close ?? cancel)?.click();
   }
 });

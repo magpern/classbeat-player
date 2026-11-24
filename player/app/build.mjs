@@ -1,5 +1,6 @@
 // Builds dist/: the shell (main.cjs), the preload scripts (preload.cjs, room-preload.cjs), the
-// presenter and class list pages, and the room screen's page (the web lane's room screen, bundled in).
+// presenter page and its style sheet, the class list page, and the room screen's page (the web
+// lane's room screen, bundled in).
 // Bundled with the pinned esbuild; the class schema and its validator are bundled in, so the
 // application never reads the schema from the repository at run time.
 import { copyFileSync, mkdirSync, rmSync } from "node:fs";
