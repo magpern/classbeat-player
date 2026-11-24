@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
 import { build, type BuildOptions } from "esbuild";
 import { BUILDS } from "../../build-config.mjs";
 import type { RoomFrame } from "../../src/core/room/frame.ts";
-import { announceFrame, onFrame } from "../../src/renderer/room-frame-event.ts";
+import { announceFrame, onFrame, type FrameHost } from "../../src/renderer/room-frame-event.ts";
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const frame = { doc: null, view: null, link: null, band: null, pattern: null, playlistNotLoaded: true } as RoomFrame;
 
 test("a frame announced on a page reaches the scene's listener, once, until it stops", () => {
-  const page = new EventTarget();
+  const page: FrameHost = {};
   const got: RoomFrame[] = [];
   const stop = onFrame(page, (f) => got.push(f));
   announceFrame(page, frame);
@@ -24,11 +24,23 @@ test("a frame announced on a page reaches the scene's listener, once, until it s
   assert.equal(got.length, 1);
 });
 
-test("frames announced on another target are not heard", () => {
+test("with no listener, announcing does nothing; frames on another page are not heard", () => {
+  announceFrame({}, frame);
   const got: RoomFrame[] = [];
-  onFrame(new EventTarget(), (f) => got.push(f));
-  announceFrame(new EventTarget(), frame);
+  onFrame({}, (f) => got.push(f));
+  announceFrame({}, frame);
   assert.deepEqual(got, []);
+});
+
+test("a listener that throws does not stop the others or the caller; the error is reported", () => {
+  const page: FrameHost = {};
+  const got: RoomFrame[] = [];
+  onFrame(page, () => { throw new Error("scene bug"); });
+  onFrame(page, (f) => got.push(f));
+  const errors: unknown[] = [];
+  announceFrame(page, frame, (e) => errors.push(e));
+  assert.deepEqual(got, [frame]);
+  assert.equal((errors[0] as Error).message, "scene bug");
 });
 
 async function inputsOf(entry: string): Promise<string[]> {

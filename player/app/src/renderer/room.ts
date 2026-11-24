@@ -55,7 +55,7 @@ const sheet = mountSheet(document.body, () => band.redraw(), marks);
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;
   screen.update(frame);
-  announceFrame(document, frame);
+  announceFrame(window, frame);
   status = (frame.view?.status as ClockStatus | undefined) ?? null;
   sheet.facts(status, slot);
   band.frame(frame);

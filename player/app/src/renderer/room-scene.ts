@@ -11,4 +11,4 @@ const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-r
 const root = document.getElementById("scene-join");
 if (root) document.body.append(root);
 const scene = mountScene({ reducedMotion, visible: () => !document.hidden });
-onFrame(document, (frame) => scene.push(frame));
+onFrame(window, (frame) => scene.push(frame));
