@@ -165,8 +165,14 @@ spike 3 run (#634). Since then: the app's own screens in the spec (#628, #636, #
 #641), the locked-down Capacitor shell with its rule guards (#627, #637) and the CI debug APK with
 the mobile tests (#629, #642).
 
-Open: the mode holder (#630, in review as #643), then pairing and the Keystore token (#631), the
-music follower (#632) and rider mode (#633), in that order.
+Then: the mode holder (#630, #643), pairing with the Keystore token store and its plates (#631,
+#651; spec as built #652, #655; the status row on wide screens #657, #658) and the music follower
+behind a neutral reader (#632, #656). The app's backend calls and its Spotify reader wait for the
+owner (#649, #653, [owner.md](owner.md)): until then pairing runs on a stand-in that fails as
+offline, and the follower's stand-in reader reports "unavailable", so the phone runs on the manual
+clock.
+
+Open: rider mode (#633), on a stand-in transport for the same reason.
 
 ## Infra
 
@@ -252,6 +258,15 @@ Merged: #30 and its findings (#53).
   (#436 N1), the offline export and add-passkey buttons (#430 design), and the shared shot names
   (#439 N2), in #441 and #442. From #431: no test that a busy or rate-limited passkey sign-in
   ends nothing (N3).
+
+- PL12 notes: an instrumented test of the Keystore store and a network-security config for the
+  debug loopback (#651 N2, N4, both with #649); the cache deleted at once on a removed device,
+  against ADR 0002 section 6, to revisit when the room plays from the cache (#651 N3); tests for
+  the unpair question flow, the follow bridge's own mode check and the listener switched off at
+  start (#651 N7, #656 N3); the expired plate with three classes 25 px over at 360x640 and 18 px at
+  640x360 (#651, #658 design reviews); the follow sheet must not offer notification access while
+  the reader is the stand-in (#656 N2); the listener guard could also ban `Class.forName` and
+  `getMethod` (#656 N1, with #653); a long comment in `reader.ts` (#656 N4).
 
 - PL8 notes: from #273, HEAD on `/control` answers 405 (by design); from #340, the
   private-import guard does not follow names reached through a container or `self`.

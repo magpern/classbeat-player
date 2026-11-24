@@ -35,6 +35,14 @@ object IntentPolicy {
         "getClass" to Spec(Mode.INSTRUCTOR, mapOf("id" to Arg.STRING)),
         "unpair" to Spec(Mode.INSTRUCTOR, emptyMap()),
         "pairAgain" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        // Instructor mode (#632): following the music app. Notification access is asked for only
+        // here (openFollowSetting is the only way to the setting), so never in rider mode. None
+        // takes an argument: the page names no app, session or package.
+        "followAccess" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "openFollowSetting" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "follow" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "unfollow" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "reading" to Spec(Mode.INSTRUCTOR, emptyMap()),
     )
 
     /** The intents [mode] has, and only those. */

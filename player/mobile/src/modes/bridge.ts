@@ -35,6 +35,18 @@ export interface InstructorModePlugin {
   unpair(): Promise<unknown>;
   /** Opens the native pairing screen again once the pairing ran out. */
   pairAgain(): Promise<unknown>;
+  // Following the music app (issue #632; follow/answers.ts reads the answers). Notification access
+  // is asked for only through these, so only in instructor mode.
+  /** Whether Android has granted the notification access following needs: {granted}. */
+  followAccess(): Promise<unknown>;
+  /** Opens Android's notification-access setting for this app: {state: "opened" | "notOpened"}. */
+  openFollowSetting(): Promise<unknown>;
+  /** Turns following on: {state: "following" | "noAccess" | "unavailable"}. */
+  follow(): Promise<unknown>;
+  /** Back to the manual clock: {state: "stopped"}. */
+  unfollow(): Promise<unknown>;
+  /** The latest reading while following, or why there is none. */
+  reading(): Promise<unknown>;
 }
 
 export const riderMode = (): RiderModePlugin => registerPlugin<RiderModePlugin>("RiderMode");

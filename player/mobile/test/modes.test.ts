@@ -65,5 +65,10 @@ test("the bridge names exactly the native intents, and only join takes arguments
     ["syncNow", ""],
     ["unpair", ""],
     ["pairAgain", ""],
+    ["followAccess", ""],
+    ["openFollowSetting", ""],
+    ["follow", ""],
+    ["unfollow", ""],
+    ["reading", ""],
   ]);
 });

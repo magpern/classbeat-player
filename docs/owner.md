@@ -58,20 +58,35 @@ with other work; nothing in the development loop waits for an answer.
   Agents do not loosen a guard, so this is yours, as the desktop's live connection was (#173).
   Proposal, like option 1 there: one file (`BackendTransport.kt`) may use `HttpsURLConnection`, only
   to the backend address fixed in the build, with no redirects, a 64 KiB answer limit and a 10 s
-  timeout; every other file keeps the full check, and a test pins it. Until you decide, the app is
-  built with a stand-in that fails every backend call as offline, so pairing shows its offline
-  state; nothing else waits.
+  timeout; every other file keeps the full check, and a test pins it. Rider mode (#633) needs the
+  same for the rider's join call and, in one more file, a WebSocket to the same fixed address for
+  the rider connection. Until you decide, the app is built with stand-ins that fail every backend
+  call and the rider connection as offline, so pairing and joining show their offline states;
+  nothing else waits.
 - **The phone app's music follower and the Kotlin audio and Spotify guard (#632, #653, 2026-11-24).**
   ADR 0011 (section 6) has the app follow Spotify by reading its media session (the song and
   whether it plays, never the audio). The guard added in #637 bans every `android.media` and
   `MediaSession` name and the word "spotify" in all the app's Kotlin code, so the reader cannot be
   written without an exception. Proposal, like #173: one file (`SpotifySessionReader.kt`) may name
-  the media-session and metadata types and the package `com.spotify.music`; every other pattern
-  (audio playback and recording, players, the network) stays checked in that file, every other
+  only the media-session types it reads (the session manager, `MediaController`, `MediaMetadata`,
+  `PlaybackState` and its `TransportControls`) and the package `com.spotify.music`. Everything
+  else stays banned in that file too: audio playback and recording (`MediaPlayer`, `AudioTrack`,
+  `AudioRecord`), players and the network; every other
   file keeps the full check, and a test pins it. New guards come with it: the notification listener
   stays empty, the package filter comes before any read, and no Spotify SDK or `spotify:` link.
   Until you decide, the app is built with a stand-in reader that reports "unavailable", so the
   phone runs on the manual clock; nothing else waits.
+- **Sensors and two rule guards (PL9, ADR 0012, 2026-11-24).** The player's guard bans
+  `navigator.bluetooth` in all its code, and the live guard bans `power`, `cadence`, `rpm` and
+  `ftms` in every live message, so two parts of PL9 need you. Proposals, like #173: (1) one player
+  renderer file may use `navigator.bluetooth`, only for the heart-rate, cycling and fitness-machine
+  services, with no write to any sensor and the app's own device chooser; (2) one live message,
+  `rider_reading`, from a rider to the instructor's computer only, with heart rate, cadence and
+  power at most once a second, shown in the presenter window only, in join order and never
+  ranked, and never stored. With one display (the usual studio), riders' readings would not be
+  shown at all. The phone app's native sensors would follow (1). Until you decide, the
+  instructor's sensor panel shows "unavailable" and riders' readings stay on their own phones.
+  Built now: the rider page reads the rider's own sensor and shows it to that rider only.
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
