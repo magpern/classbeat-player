@@ -11,6 +11,7 @@ import com.getcapacitor.Bridge
 import com.getcapacitor.plugin.CapacitorCookieManager
 import java.net.CookieHandler
 import org.apache.cordova.CordovaWebView
+import org.apache.cordova.PluginManager
 import org.classbeat.player.policy.PluginPolicy
 
 /**
@@ -68,10 +69,18 @@ object BridgeLockdown {
     private fun removeCordovaPlugins(bridge: Bridge) {
         val field = Bridge::class.java.getDeclaredField(CORDOVA_VIEW).apply { isAccessible = true }
         val manager = (field.get(bridge) as CordovaWebView).pluginManager
-        PluginPolicy.checkCordova(manager.pluginEntries.map { it.service })
+        val services = manager.pluginEntries.map { it.service }
+        PluginPolicy.checkCordova(services)
         manager.setPluginEntries(emptyList())
-        check(manager.pluginEntries.isEmpty()) { "Cordova plugins left: ${manager.pluginEntries.map { it.service }}" }
+        // exec() looks in the loaded plugins (pluginMap) before the entries, so both must be empty.
+        val loaded = PluginManager::class.java.getDeclaredField(CORDOVA_LOADED).apply { isAccessible = true }
+        val left = (loaded.get(manager) as Map<*, *>).keys + manager.pluginEntries.map { it.service }
+        check(left.isEmpty()) { "Cordova plugins left: $left" }
+        check(services.none { manager.getPlugin(it) != null }) { "a Cordova plugin is still reachable" }
     }
+
+    /** The name of PluginManager's loaded-plugin map in Cordova 14.0.1; CorePluginsTest checks it. */
+    const val CORDOVA_LOADED = "pluginMap"
 
     /** The name of Bridge's Cordova web view field in Capacitor 8.6.0; CorePluginsTest checks its type. */
     const val CORDOVA_VIEW = "cordovaWebView"

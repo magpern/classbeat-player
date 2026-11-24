@@ -5,6 +5,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.apache.cordova.CordovaWebView
+import org.apache.cordova.PluginManager
 import org.classbeat.player.policy.PluginPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -71,6 +72,10 @@ class CorePluginsTest {
         assertTrue(Map::class.java.isAssignableFrom(plugins.type))
         val cordova = Bridge::class.java.getDeclaredField(BridgeLockdown.CORDOVA_VIEW)
         assertEquals(CordovaWebView::class.java, cordova.type)
+        val loaded = PluginManager::class.java.getDeclaredField(BridgeLockdown.CORDOVA_LOADED)
+        assertTrue(Map::class.java.isAssignableFrom(loaded.type))
+        val maps = PluginManager::class.java.declaredFields.filter { Map::class.java.isAssignableFrom(it.type) }.map { it.name }
+        assertEquals("every plugin map the lockdown must empty", setOf("pluginMap", "entryMap"), maps.toSet())
     }
 
     @Test
