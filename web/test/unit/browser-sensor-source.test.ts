@@ -19,6 +19,7 @@ const gate = (): { promise: Promise<void>; open: () => void } => {
 function strap(id = "strap") {
   const ch = Object.assign(new EventTarget(), { value: undefined as DataView | undefined, startNotifications: async () => ch });
   let hold: Promise<void> | null = null;
+  let lookupHold: Promise<void> | null = null;
   const log: string[] = [];
   const gatt = {
     connected: false,
@@ -33,6 +34,11 @@ function strap(id = "strap") {
       gatt.connected = false;
     },
     getPrimaryService: async (s: number) => {
+      // The last service looked up (speed and cadence) can be held; after a disconnect it fails.
+      if (s === 0x1816 && lookupHold) {
+        await lookupHold;
+        if (!gatt.connected) throw new DOMException("disconnected", "NetworkError");
+      }
       if (s !== 0x180d) throw new DOMException("no service", "NotFoundError");
       return { getCharacteristic: async () => ch };
     },
@@ -41,6 +47,7 @@ function strap(id = "strap") {
   return {
     device,
     log,
+    holdLookup: (p: Promise<void> | null) => void (lookupHold = p),
     holdConnect: (p: Promise<void> | null) => void (hold = p),
     beat: (bpm: number) => {
       ch.value = new DataView(new Uint8Array([0, bpm]).buffer);
@@ -110,6 +117,21 @@ describe("a sensor after the rider left", () => {
     assert.equal(s.device.gatt.connected, false);
     s.beat(150);
     assert.equal(p.samples(), 0);
+  });
+
+  it("removed during the last service lookup, which then fails: no connected after removed", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    g.open();
+    await flush();
+    assert.ok(!p.types().includes("connected"), p.types().join());
+    assert.equal(p.types().at(-1), "removed");
+    assert.equal(s.device.gatt.connected, false);
   });
 
   it("a new pick after leaving still connects", async () => {
