@@ -55,6 +55,10 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
   // Bumped when the rider leaves (disconnectAll): a pick or a connection that finishes after that
   // belongs to a page that let go of its sensors, so it is disconnected and nothing is emitted.
   let epoch = 0;
+  // Devices on their FIRST connection (a count: a stale attempt may still end after a new pick).
+  // Only a connected device is kept for reconnect; one that drops or is removed before that must
+  // clear the page's "choosing", which "lost" and "removed" do not.
+  const connecting = new Map<string, number>();
   const now = (): number => win.performance.now();
   /** A connection that finished after the page let go of it (left, removed or superseded). */
   class Left extends Error {}
@@ -128,6 +132,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     if (d) release(d);
     leaving.add(id);
     listeners.emit({ type: "removed", id });
+    if (connecting.has(id)) listeners.emit({ type: "closed" }); // the pick it belonged to ends here
   };
 
   const source: SensorSource = {
@@ -145,18 +150,29 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
             watched.add(d);
             d.addEventListener("gattserverdisconnected", () => {
               if (leaving.has(d.id) || !devices.has(d.id)) return;
+              if (connecting.has(d.id)) {
+                // Dropped before it ever connected: let go of it and clear "choosing" (the page
+                // ignores "lost" for a device it never showed), so the rider can pick again.
+                release(d);
+                return listeners.emit({ type: "failed" });
+              }
               subscriptions.get(d.id)?.abort(); // a lookup still running must not say "connected" after "lost"
               listeners.emit({ type: "lost", id: d.id });
             });
           }
           devices.set(d.id, d);
           leaving.delete(d.id);
+          connecting.set(d.id, (connecting.get(d.id) ?? 0) + 1);
           try {
             await subscribe(d, at);
           } catch (e) {
             if (e instanceof Left) return settle(d, at);
             release(d);
             listeners.emit({ type: "failed" });
+          } finally {
+            const n = (connecting.get(d.id) ?? 1) - 1;
+            if (n > 0) connecting.set(d.id, n);
+            else connecting.delete(d.id);
           }
         },
         (err: unknown) => {

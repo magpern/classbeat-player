@@ -3,7 +3,7 @@
 // or second pick of the same sensor ever doubles its listeners or its readings.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { SensorEvent } from "../../src/sensors/core/readings.ts";
+import { NO_SENSORS, step, type SensorEvent } from "../../src/sensors/core/readings.ts";
 import { webBluetoothSource } from "#browser-sensors";
 
 const flush = async (): Promise<void> => {
@@ -85,7 +85,8 @@ function page() {
   };
   const types = (): string[] => events.map((e) => e.type);
   const samples = (): number => events.filter((e) => e.type === "sample").length;
-  return { source, events, pick, types, samples };
+  const state = () => events.reduce(step, NO_SENSORS);
+  return { source, events, pick, types, samples, state };
 }
 
 describe("a sensor after the rider left", () => {
@@ -142,7 +143,7 @@ describe("a sensor after the rider left", () => {
     g.open();
     await flush();
     assert.ok(!p.types().includes("connected"), p.types().join());
-    assert.equal(p.types().at(-1), "removed");
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
     assert.equal(s.device.gatt.connected, false);
   });
 
@@ -156,7 +157,7 @@ describe("a sensor after the rider left", () => {
     p.source.disconnect(s.device.id);
     g.fail();
     await flush();
-    assert.deepEqual(p.types(), ["choosing", "removed"]);
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
   });
 
   it("removed while notifications start, then they fail: no failed after removed", async () => {
@@ -169,7 +170,7 @@ describe("a sensor after the rider left", () => {
     p.source.disconnect(s.device.id);
     g.fail();
     await flush();
-    assert.deepEqual(p.types(), ["choosing", "removed"]);
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
   });
 
   it("left while connecting, then the connection fails: nothing said", async () => {
@@ -182,7 +183,7 @@ describe("a sensor after the rider left", () => {
     p.source.disconnectAll();
     g.fail();
     await flush();
-    assert.deepEqual(p.types(), ["choosing", "removed"]);
+    assert.deepEqual(p.types(), ["choosing", "removed", "closed"]);
   });
 
   it("a sensor that fails while the rider is still here says failed", async () => {
@@ -197,7 +198,7 @@ describe("a sensor after the rider left", () => {
     assert.deepEqual(p.types(), ["choosing", "failed"]);
   });
 
-  it("lost during the service lookups: no connected after lost, and it can reconnect", async () => {
+  it("dropped during the first connection: failed, released, no stuck choosing, can pick again", async () => {
     const p = page();
     const s = strap();
     const g = gate();
@@ -207,11 +208,48 @@ describe("a sensor after the rider left", () => {
     s.lose();
     g.open();
     await flush();
-    assert.deepEqual(p.types(), ["choosing", "lost"]);
+    assert.deepEqual(p.types(), ["choosing", "failed"]);
+    assert.equal(p.state().choosing, false);
+    assert.equal(p.state().devices.length, 0);
+    p.source.reconnect(s.device.id); // not kept: nothing to reconnect
+    s.holdLookup(null);
+    p.source.connect();
+    await p.pick(s.device);
+    assert.equal(p.types().at(-1), "connected");
+    assert.equal(p.state().choosing, false);
+  });
+
+  it("removed during the first connection: choosing is cleared", async () => {
+    const p = page();
+    const s = strap();
+    const g = gate();
+    s.holdConnect(g.promise);
+    p.source.connect();
+    await p.pick(s.device);
+    p.source.disconnect(s.device.id);
+    g.open();
+    await flush();
+    assert.equal(p.state().choosing, false);
+  });
+
+  it("lost during a reconnect's lookups: no connected after lost, and it can reconnect again", async () => {
+    const p = page();
+    const s = strap();
+    p.source.connect();
+    await p.pick(s.device);
+    s.lose();
+    const g = gate();
+    s.holdLookup(g.promise);
+    p.source.reconnect(s.device.id);
+    await flush();
+    s.lose();
+    g.open();
+    await flush();
+    assert.deepEqual(p.types(), ["choosing", "connected", "lost", "retry", "lost"]);
     s.holdLookup(null);
     p.source.reconnect(s.device.id);
     await flush();
-    assert.deepEqual(p.types(), ["choosing", "lost", "retry", "connected"]);
+    assert.equal(p.types().at(-1), "connected");
     s.beat(120);
     assert.equal(p.samples(), 1);
   });
