@@ -48,8 +48,9 @@ with other work; nothing in the development loop waits for an answer.
   rider mode keeps rules 13 to 15 and gives riders no control.
 - **The app's screens: defaults agents picked (#636, 2026-11-24).** You may change any: the app
   does not open from the room's QR code or an App Link, so a rider types the room code; "Follow the
-  music" is not on the class list; and a shared tablet forgets a rider's remembered nickname and
-  FTP when the rider leaves the class or the app changes mode (#633).
+  music" is not on the class list; and a rider's nickname is never remembered (ADR 0007), while FTP
+  and maximum heart rate are kept only with "Remember on this phone" and are cleared when the
+  rider leaves, the app changes mode, the class ends or the rider is dropped (#633).
 - **FYI: no burst on an interval change at two energy levels (#590).** At the Beat level, and at
   Tempo only (wherever the energy ramp runs), a drop that falls on an interval change gets no
   burst, and a song with no marked moments gets no light-only burst on its interval changes: the
