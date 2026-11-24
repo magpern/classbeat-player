@@ -28,7 +28,7 @@ import org.classbeat.player.policy.PluginPolicy
 class ModeController(
     private val activity: ComponentActivity,
     private val lockPrompt: ActivityResultLauncher<Intent>,
-) : ModeEffects, PageGate, PageSteps {
+) : ModeEffects, PageGate, PageSteps, UnpairSteps {
     private lateinit var holder: ModeHolder
     private lateinit var locked: BridgeLockdown.Locked
     private lateinit var webView: WebView
@@ -51,8 +51,8 @@ class ModeController(
     /** The page's askInstructorMode or askRiderMode call, answered when the question it opened is. */
     private var waiting: PluginCall? = null
 
-    /** The "Unpair this phone?" question shows. */
-    private var unpairing = false
+    /** The "Unpair this phone?" question. */
+    private val unpairing = UnpairQuestion(this)
 
     private lateinit var intents: InstructorIntents
 
@@ -101,7 +101,7 @@ class ModeController(
     override fun closeBridge() {
         expose(null)
         pairing.drop()
-        unpairing = false
+        unpairing.close()
         // The page that asked is being replaced: its question ends here, with the one refused word.
         waiting?.reject(REFUSED)
         waiting = null
@@ -156,8 +156,7 @@ class ModeController(
     fun unpair(call: PluginCall) {
         if (waiting != null || pairing.showing || holder.pending != null || current != Mode.INSTRUCTOR) return call.reject(REFUSED)
         waiting = call
-        unpairing = true
-        showScreen { screens.unpairQuestion(stay = ::stay, unpair = ::unpairConfirmed) }
+        unpairing.ask()
     }
 
     fun askRiderMode(call: PluginCall) {
@@ -187,7 +186,7 @@ class ModeController(
 
     /** Leaving the app while the question shows means "Stay". */
     fun stopped() {
-        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing) stay()
+        if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing.showing) stay()
     }
 
     private fun openSettings() {
@@ -204,20 +203,23 @@ class ModeController(
         }
     }
 
-    /** "Unpair": the page hears first, then the token and the classes go and instructor mode closes. */
-    private fun unpairConfirmed() {
-        if (!unpairing) return
-        unpairing = false
+    // UnpairSteps: the unpair question's steps. "Unpair": the page hears first, then the token and
+    // the classes go and instructor mode closes.
+
+    override fun showQuestion(stay: () -> Unit, unpair: () -> Unit) = showScreen { screens.unpairQuestion(stay, unpair) }
+
+    override fun answer(result: String) {
         hideScreen()
-        settle("unpaired")
-        intents.unpair()
+        settle(result)
     }
 
-    private fun stay() {
+    override fun unpair() = intents.unpair()
+
+    override fun stay() {
         // Between modes (the switching screen): Back does nothing, and the screen stays.
         if (current == null) return
         if (pairing.showing) return pairing.back()
-        unpairing = false
+        unpairing.close()
         when (holder.pending) {
             ModeHolder.Pending.NO_LOCK -> holder.noLockStay()
             ModeHolder.Pending.RIDER_QUESTION -> holder.riderAnswered(false)

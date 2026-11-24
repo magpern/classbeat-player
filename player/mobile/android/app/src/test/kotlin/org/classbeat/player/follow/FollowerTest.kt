@@ -42,7 +42,22 @@ class FollowerTest {
     private var now = 50_000L
     private val reading = SourceReading("track:1", "Song A", "Band A", 180_000, true, 10_000, 49_200)
 
-    private fun follower(source: MusicSource, access: ListenerAccess) = Follower(source, access) { now }
+    /** A follower with the fakes' logs cleared after its start-up drop (tested on its own below). */
+    private fun follower(source: MusicSource, access: ListenerAccess) = Follower(source, access) { now }.also {
+        (source as? FakeSource)?.calls?.clear()
+        (access as? FakeAccess)?.switches?.clear()
+    }
+
+    @Test
+    fun `a new follower follows nothing and has the listener off, whichever mode opens`() {
+        val access = FakeAccess(grant = true)
+        val source = FakeSource(SourceStatus.READING, reading)
+        val f = Follower(source, access) { now }
+        assertFalse(f.following)
+        assertEquals(listOf("stop"), source.calls)
+        assertEquals(listOf(false), access.switches)
+        assertEquals(mapOf("state" to "stopped"), f.reading())
+    }
 
     @Test
     fun `without access following does not start, the source is never started and the listener stays off`() {

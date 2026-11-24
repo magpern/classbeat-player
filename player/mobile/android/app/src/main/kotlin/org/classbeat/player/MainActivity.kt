@@ -72,9 +72,8 @@ class MainActivity : BridgeActivity(), ModeHost {
         val pairing = PairingService(origin, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, transport, KeystoreSecretStore(this), ports)
         val intents = InstructorIntents(pairing, cache, ClassSync(transport, cache, pairing::credential, pairing::refused))
         // Following stays on the manual clock until the real reader (#653): the source is the stand-in.
+        // Built dropped (Follower's init): nothing follows at start-up and the listener stays off.
         val follower = Follower(UnavailableSource, AndroidListenerAccess(this), SystemClock::elapsedRealtime)
-        // Nothing follows at start-up, whichever mode opens: the listener stays off until asked for.
-        follower.drop()
         // Rider mode's live link waits on the same decision (#649): every join and link is "offline".
         val rider = RiderSession(OfflineRiderTransport { Handler(Looper.getMainLooper()).post(it) })
         this.rider = rider
