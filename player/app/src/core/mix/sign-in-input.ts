@@ -16,7 +16,7 @@ export function parseCredentials(raw: unknown, fields: readonly CredentialField[
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const proto: unknown = Object.getPrototypeOf(raw);
   if (proto !== Object.prototype && proto !== null) return null;
-  const keys = Reflect.ownKeys(raw);
+  const keys = [...Object.getOwnPropertyNames(raw), ...Object.getOwnPropertySymbols(raw)];
   if (keys.length !== fields.length) return null;
   const out: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const f of fields) {
