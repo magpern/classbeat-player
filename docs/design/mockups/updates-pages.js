@@ -73,6 +73,9 @@ add('checking', 'Settings: checking',
 add('could-not-check', 'Settings: could not check',
   'State: "Could not check". Hollow square (a normal state, as Offline on the class list, not a plate). The player works as before. Latest version "Not known" when no check has ever succeeded.',
   page({ status: statusRow('away', 'Could not check', 'The list of releases could not be read. Press Check now to try again.'), latest: 'Not known' }));
+add('before-any-check', 'Settings: before any check',
+  'State: before any update check has run (automatic checks off, none pressed yet). The status is still "Could not check" with the same hollow square; only the detail line differs, saying that no check has run yet. Latest version "Not known".',
+  page({ status: statusRow('away', 'Could not check', 'No check has run yet. Press Check now.'), latest: 'Not known', auto: false }));
 add('auto-off', 'Settings: automatic checks off, pre-releases on',
   'State: both switches changed from their defaults, the keyboard focus on Check automatically (its focus ring). With automatic checks off the help text says when the player looks.',
   page({ status: statusRow('ok', 'Up to date', 'You have the newest version.'), latest: '0.1.0', auto: false, pre: true, focus: 'auto' }));
