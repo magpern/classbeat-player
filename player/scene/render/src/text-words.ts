@@ -58,6 +58,8 @@ export function barsText(bars: number, last: boolean): string {
 /** The link plate, in the words of the plain screen (web/src/room/link-text.ts): quiet while following, white (alert) when the music is not followed (ADR 0001). */
 export function linkWords(link: TextLink, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
   const following = link.mode === "following";
+  // A mix class: the player's line, only its fixed words (web/src/room/link-text.ts: it comes before every other plate). White for news, as the plain screen's white square.
+  if (link.mix !== undefined) return { text: link.mix.text, alert: link.mix.shape === "news" };
   // "Playlist not loaded" (scene.md, the states table): white, in the place of the quiet states of a followed class (Locked, or "Manual" before the first lock),
   // before the start too; never in place of a link fault or the real manual clock.
   if (playlistNotLoaded && following && (link.state === "Locked" || link.state === "Manual")) return { text: "Playlist not loaded", alert: true };

@@ -69,3 +69,20 @@ test("the text steps when the notice comes and goes, and only then", () => {
   assert.ok(stepped >= 1, "the notice is shown on a frame mark");
   assert.equal(last.playlistNotLoaded, true);
 });
+
+test("a mix class's line takes the plate's place before every other plate, white for news, as on the plain screen", () => {
+  const base: TextLink = { state: "Coasting", mode: "following" };
+  assert.equal(linkWords({ ...base, mix: { text: "Playing the mix", shape: "dot" } }, DEMO_TEXT, true).text, "Playing the mix");
+  assert.equal(linkWords({ ...base, mix: { text: "Playing the mix", shape: "dot" } }, DEMO_TEXT).alert, false);
+  assert.deepEqual(linkWords({ ...base, mix: { text: "Mix not checked", shape: "news" } }, DEMO_TEXT), { text: "Mix not checked", alert: true });
+  assert.equal(linkWords({ state: "Manual", mode: "manual", started: false, mix: { text: "Manual clock", shape: "square" } }, DEMO_TEXT).text, "Manual clock");
+});
+
+test("the text steps when the mix line's words change", () => {
+  const clock = new TextClock();
+  const at = (ms: number, text: string): Feed => ({ ...feedAt(ms, { link: { state: "Locked" } }), link: { state: "Locked", mode: "following", mix: { text, shape: "circle" } } as TextLink });
+  clock.step(at(5000, "Downloading the mix 10%"));
+  let stepped = 0;
+  for (let ms = 5016; ms < 8000; ms += 16) if (clock.step(at(ms, "Downloading the mix 11%")).changed) stepped++;
+  assert.ok(stepped >= 1);
+});

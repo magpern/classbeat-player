@@ -4,6 +4,7 @@
 // frame arrived. Nothing about a rider is in the input, so nothing about one can be in the output (rule 1).
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import type { LinkInput, SceneClass } from "../../model/src/index.ts";
+import { mixWordsAllowed } from "../../../../web/src/room/mix-words.ts";
 import type { Feed } from "../src/loop.ts";
 import type { Cadence, TextClass, TextInterval, TextLink, TextZone } from "../src/text-types.ts";
 
@@ -12,6 +13,8 @@ export interface JoinFrame {
   readonly doc: Class | null;
   /** True exactly while the "Playlist not loaded" plate is due (RoomFrame.playlistNotLoaded). */
   readonly playlistNotLoaded: boolean;
+  /** The mix class's link line (RoomFrame.mix), or null. */
+  readonly mix: { readonly text: string; readonly shape: "dot" | "circle" | "square" | "news" } | null;
   readonly view: {
     readonly status: "ready" | "running" | "paused" | "ended";
     readonly classMs: number;
@@ -114,9 +117,9 @@ export function carriedMs(frame: JoinFrame, sinceMs: number): number {
 }
 
 /** The link as the plate's words read it (web/src/room/link-text.ts): the mode matters, because "Manual" in following mode is the wait for the first lock, not the manual clock. */
-function linkOf(link: JoinFrame["link"], started: boolean): TextLink {
-  if (link === null) return { state: "Manual", mode: "manual", started };
-  const base = { mode: link.mode, started } as const;
+function linkOf(link: JoinFrame["link"], started: boolean, mix: TextLink["mix"]): TextLink {
+  if (link === null) return { state: "Manual", mode: "manual", started, ...(mix ? { mix } : {}) };
+  const base = { mode: link.mode, started, ...(mix ? { mix } : {}) } as const;
   if (link.mode === "manual") return { ...base, state: "Manual", announcement: link.announcement !== null, available: link.available };
   return { ...base, state: link.state, held: link.held };
 }
@@ -131,7 +134,9 @@ export function feedOf(frame: JoinFrame, sinceMs: number, reducedMotion: boolean
   const song = frame.doc.songs.at(songIndex);
   const before = frame.view.status === "ready" && classMs <= 0;
   const finished = frame.view.status === "ended" || classMs >= frame.doc.class.length_ms;
-  const link: TextLink = linkOf(frame.link, !before);
+  // The mix line only in the words the plain screen draws, and not once the class is over (web/src/room/adapter.ts).
+  const mix = frame.mix !== null && !finished && mixWordsAllowed(frame.mix) ? { text: frame.mix.text, shape: frame.mix.shape } : undefined;
+  const link: TextLink = linkOf(frame.link, !before, mix);
   const feed: Feed = {
     cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion, playlistNotLoaded: frame.playlistNotLoaded && !finished,
     ...(before ? { stage: "before" as const } : {}),

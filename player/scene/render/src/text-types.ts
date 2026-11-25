@@ -68,6 +68,8 @@ export interface TextLink extends LinkInput {
   readonly available?: boolean;
   /** False before the clock is started. */
   readonly started?: boolean;
+  /** The link line of a mix class (docs/design/swedebeat.md, "Room screen"): the player's fixed words and a shape, checked against the fixed pairs by the join. It takes the plate's place, as on the plain screen. */
+  readonly mix?: { readonly text: string; readonly shape: "dot" | "circle" | "square" | "news" };
 }
 
 export interface TextInput {

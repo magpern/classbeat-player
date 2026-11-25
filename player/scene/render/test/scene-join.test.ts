@@ -18,7 +18,7 @@ const doc = {
   songs: [{ title: "A", artist: "B", length_ms: 120_000, start_ms: 0, end_ms: 120_000, bpm: 120, beat_anchors: { quality: "measured", anchors: [{ at_ms: 0, bpm: 120 }] } }],
 } as unknown as Class;
 const frame = (over: Partial<JoinFrame["view"] & object> = {}, link: Partial<NonNullable<JoinFrame["link"]>> = {}): JoinFrame => ({
-  doc, playlistNotLoaded: false, view: { status: "running", classMs: 10_000, songIndex: null, ...over },
+  doc, playlistNotLoaded: false, mix: null, view: { status: "running", classMs: 10_000, songIndex: null, ...over },
   link: { mode: "following", state: "Locked", held: false, songIndex: null, announcement: null, available: true, ...link },
 });
 
@@ -191,7 +191,7 @@ test("the feed: song, link and stage come from the frame; nothing else does", ()
 });
 
 test("the feed: no class, no clock or no songs means the plain screen", () => {
-  assert.equal(feedOf({ doc: null, playlistNotLoaded: false, view: null, link: null }, 0, false), null);
+  assert.equal(feedOf({ doc: null, playlistNotLoaded: false, mix: null, view: null, link: null }, 0, false), null);
   assert.equal(feedOf({ ...frame(), doc: { ...doc, songs: [] } as Class }, 0, false), null);
 });
 
@@ -271,4 +271,15 @@ test("the link as the plain screen's words need it: following-before-lock is not
 
 test("the playlist notice is not carried once the class has ended", () => {
   assert.equal(feedOf({ ...frame({ status: "ended", classMs: 120_000 }), playlistNotLoaded: true }, 0, false)!.feed.playlistNotLoaded, false);
+});
+
+test("the mix class's link line goes to the scene's text in its fixed words only, and not once the class has ended", () => {
+  const mix = (text: string, shape: "dot" | "circle" | "square" | "news") => ({ ...frame(), mix: { text, shape } });
+  const link = (f: JoinFrame) => (feedOf(f, 0, false)!.feed.link as TextLink).mix;
+  assert.deepEqual(link(mix("Playing the mix", "dot")), { text: "Playing the mix", shape: "dot" });
+  assert.deepEqual(link(mix("Downloading the mix 63%", "circle")), { text: "Downloading the mix 63%", shape: "circle" });
+  assert.equal(link(mix("Anything else a class could say", "dot")), undefined, "words that are not a fixed pair are dropped");
+  assert.equal(link(mix("Playing the mix", "square")), undefined, "a fixed word with the wrong shape is dropped");
+  assert.equal(link(frame()), undefined);
+  assert.equal(link({ ...mix("Playing the mix", "dot"), view: { status: "ended", classMs: 120_000, songIndex: null } }), undefined);
 });

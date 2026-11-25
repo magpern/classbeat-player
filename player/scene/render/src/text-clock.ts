@@ -40,7 +40,7 @@ const JUMP_MS = 1000;
 const REPLAN_MS = 2500;
 const EPS = 1e-6;
 
-const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.link.mode ?? ""}|${f.link.announcement === true}|${f.link.available === true}|${f.link.started !== false}|${f.reducedMotion}|${f.playlistNotLoaded === true}`;
+const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.link.mode ?? ""}|${f.link.announcement === true}|${f.link.available === true}|${f.link.started !== false}|${f.link.mix?.text ?? ""}|${f.link.mix?.shape ?? ""}|${f.reducedMotion}|${f.playlistNotLoaded === true}`;
 
 export class TextClock {
   private prev: { readonly cls: SceneClass; readonly classMs: number; readonly key: string } | null = null;
