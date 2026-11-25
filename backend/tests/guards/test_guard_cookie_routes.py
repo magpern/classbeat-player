@@ -124,6 +124,10 @@ PAGE_ROUTES = frozenset(
         ("GET", "/releases.json"),
         ("GET", "/site.js"),
         ("GET", "/site.css"),
+        ("GET", "/fonts/atkinson-hyperlegible-latin-400-normal.woff2"),
+        ("GET", "/fonts/atkinson-hyperlegible-latin-700-normal.woff2"),
+        ("GET", "/fonts/big-shoulders-display-latin-600-normal.woff2"),
+        ("GET", "/fonts/big-shoulders-display-latin-800-normal.woff2"),
     }
 )
 # Section 5 (#427): a sign-in ends the session the browser held. These routes read the
@@ -285,7 +289,7 @@ def test_the_page_routes_take_no_dependency_and_only_read() -> None:
     assert all(
         r.method == "GET"
         and r.path.startswith(
-            ("/control", "/j", "/download", "/releases.json", "/site.js", "/site.css")
+            ("/control", "/j", "/download", "/releases.json", "/site.js", "/site.css", "/fonts/")
         )
         for r in pages
     )

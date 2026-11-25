@@ -21,7 +21,16 @@ RELEASES = b'{\n  "release": null\n}\n'
 SCRIPT = b"void 0;"
 STYLE = b"body{}"
 SECRET = b"never served"
-ALL = ("/download", "/releases.json", "/site.js", "/site.css")
+FONTS = tuple(
+    f"/fonts/{n}.woff2"
+    for n in (
+        "atkinson-hyperlegible-latin-400-normal",
+        "atkinson-hyperlegible-latin-700-normal",
+        "big-shoulders-display-latin-600-normal",
+        "big-shoulders-display-latin-800-normal",
+    )
+)
+ALL = ("/download", "/releases.json", "/site.js", "/site.css", *FONTS)
 
 
 def _app(tmp_path: Path, built: bool = True) -> FastAPI:
@@ -32,6 +41,9 @@ def _app(tmp_path: Path, built: bool = True) -> FastAPI:
         (site / "releases.json").write_bytes(RELEASES)
         (site / "site.js").write_bytes(SCRIPT)
         (site / "site.css").write_bytes(STYLE)
+        (site / "fonts").mkdir()
+        for path in FONTS:
+            (site / path.removeprefix("/")).write_bytes(b"wOF2" + path.encode())
     (site / "secret.txt").write_bytes(SECRET)
     return create_app(
         SETTINGS, control_dir=tmp_path / "none", rider_dir=tmp_path / "none", site_dir=site
@@ -71,6 +83,39 @@ def test_site_script_and_style(tmp_path: Path) -> None:
     assert style.headers["content-type"] == "text/css; charset=utf-8"
     _page_headers_hold(dict(script.headers))
     _page_headers_hold(dict(style.headers))
+
+
+def test_fonts(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    for path in FONTS:
+        response = send(app, "GET", path)
+        assert response.status_code == 200
+        assert response.content == b"wOF2" + path.encode()
+        assert response.headers["content-type"] == "font/woff2"
+        _page_headers_hold(dict(response.headers))
+
+
+def test_a_link_is_never_served(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(SECRET)
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_bytes(PAGE)
+    (site / "releases.json").symlink_to(outside)
+    app = create_app(
+        SETTINGS, control_dir=tmp_path / "none", rider_dir=tmp_path / "none", site_dir=site
+    )
+    for path in ("/releases.json", "/download"):
+        assert SECRET not in send(app, "GET", path).content
+    assert send(app, "GET", "/releases.json").status_code == 404
+    assert send(app, "GET", "/download").status_code == 200
+    # A linked folder is not followed either.
+    linked = tmp_path / "linked"
+    linked.symlink_to(site, target_is_directory=True)
+    app = create_app(
+        SETTINGS, control_dir=tmp_path / "none", rider_dir=tmp_path / "none", site_dir=linked
+    )
+    assert send(app, "GET", "/download").status_code == 404
 
 
 def test_no_account_needed(tmp_path: Path) -> None:

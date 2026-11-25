@@ -1,8 +1,8 @@
-"""Serves the site's download page (`/download`), its release data (`/releases.json`) and the two
-files the page loads (`/site.js`, `/site.css`).
+"""Serves the site's download page (`/download`), its release data (`/releases.json`) and the
+files the page loads (`/site.js`, `/site.css`, four fonts).
 
 Both are built into `web/dist/site/` (web/build.mjs; docs/design/download.md). They are public and
-depend on no account: nothing here reads a cookie or a token. The four files are read once, when the
+depend on no account: nothing here reads a cookie or a token. The files are read once, when the
 app is made, and answered from memory, so no request path reaches the disk. Any other path is a 404
 from the app. The headers are the site's page headers, set for every answer by the app's
 middleware (app.py); both answers are revalidated, so a new release shows without a stale copy.
@@ -26,6 +26,23 @@ FILES: Final = {
     "/releases.json": ("releases.json", "application/json"),
     "/site.js": ("site.js", "text/javascript; charset=utf-8"),
     "/site.css": ("site.css", "text/css; charset=utf-8"),
+    # The four fonts site.css loads (web/build.mjs: assetNames "fonts/[name]").
+    "/fonts/atkinson-hyperlegible-latin-400-normal.woff2": (
+        "fonts/atkinson-hyperlegible-latin-400-normal.woff2",
+        "font/woff2",
+    ),
+    "/fonts/atkinson-hyperlegible-latin-700-normal.woff2": (
+        "fonts/atkinson-hyperlegible-latin-700-normal.woff2",
+        "font/woff2",
+    ),
+    "/fonts/big-shoulders-display-latin-600-normal.woff2": (
+        "fonts/big-shoulders-display-latin-600-normal.woff2",
+        "font/woff2",
+    ),
+    "/fonts/big-shoulders-display-latin-800-normal.woff2": (
+        "fonts/big-shoulders-display-latin-800-normal.woff2",
+        "font/woff2",
+    ),
 }
 
 _log = logging.getLogger("player_backend.pages")
