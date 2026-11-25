@@ -43,7 +43,7 @@
   .run.rider:has(.splate) {
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     grid-template-areas: "top top" "gel effort" "clock effort" "coming effort" "coming keys";
-    --c-read: min(10.6dvh, 6vw);
+    --c-read: min(11.2dvh, 6.6vw);
   }
   .run.rider:has(.splate) .effort.sens { row-gap: 0.4dvh; }
 }

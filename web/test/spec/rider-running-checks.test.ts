@@ -60,6 +60,20 @@ const emptySlot: Stage = async (f) => {
   const body = await f.page.locator("body").innerText();
   assert.doesNotMatch(body, /Target|Incline (raised|flat)/);
 };
+/**
+ * With a sensor plate in landscape every next row stays: the plate moves them under the countdown, and fit() must not
+ * hide them for the effort's overflow (run.ts). Removing that early return hides two of the three rows at 640 x 360.
+ */
+const allNextRows: Stage = async (f) => {
+  const r = await f.page.evaluate(() => {
+    const rows = [...document.querySelectorAll<HTMLElement>(".coming .next")];
+    return { landscape: innerWidth > innerHeight, total: rows.length, visible: rows.filter((e) => getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0).length, stepped: document.querySelector(".coming")?.className ?? "" };
+  });
+  if (!r.landscape) return;
+  assert.ok(r.total >= 3, "the class view has three next rows");
+  assert.equal(r.visible, r.total, `next rows hidden beside the plate (${r.stepped})`);
+};
+
 /** RC8 and RC9: a reading is numbers only (no gauge, no meter) and white or grey, whatever its value. */
 const plain: Stage = async (f) => {
   const r = await f.page.evaluate(() => {
@@ -105,9 +119,9 @@ const STATES: Readonly<Record<string, StateDef>> = {
   // A reading older than 3 s (FRESH_MS) is missing, never the last number.
   "running-stale": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), treadmill(), pod(), tick(), numbers(["11.0", "3.0", "170"]), tick(3500), dashes(UNITS), words([], ["11.0"])),
   // A lost sensor: the plate and its words, the rows show dashes. In landscape the next rows sit under the countdown.
-  "running-lost": state(IN, inClass(RUN_CLASS), connect(TREADMILL), treadmill(), tick(), async (f) => drop(f.page, TREADMILL.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), dashes(["km/h", "%"]), words(["Sensor lost", `${TREADMILL.name}. Wake it, then press Reconnect.`, "Reconnect"])),
+  "running-lost": state(IN, inClass(RUN_CLASS), connect(TREADMILL), treadmill(), tick(), async (f) => drop(f.page, TREADMILL.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), dashes(["km/h", "%"]), allNextRows, words(["Sensor lost", `${TREADMILL.name}. Wake it, then press Reconnect.`, "Reconnect"])),
   // The treadmill drops while the foot pod is still heard: Speed and Incline are dashes (their source is lost), Cadence keeps its number.
-  "running-lost-pod": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), treadmill(), pod(), tick(), async (f) => drop(f.page, TREADMILL.id), pod(), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), numbers(["–", "–", "170"]), words(["Sensor lost", "Reconnect"])),
+  "running-lost-pod": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), treadmill(), pod(), tick(), async (f) => drop(f.page, TREADMILL.id), pod(), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), numbers(["–", "–", "170"]), allNextRows, words(["Sensor lost", "Reconnect"])),
   // The widest numbers beside the longest names, at all four sizes.
   "running-worst": state(IN, inClass(WORST_CLASS, true, NICK24), connect(TREADMILL), another(FOOT_POD), treadmill(treadmillBytes(39.9, 14.8)), pod(rscBytes(10.8, 249)), tick(), numbers(["39.9", "14.8", "249"]), plain, words(["39.9", "14.8", "249"])),
   // The sheet: each device with its state in words.
