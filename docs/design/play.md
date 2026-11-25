@@ -417,6 +417,14 @@ gel 13 %, countdown 50 %; small landscape value 7 %, cue (plain) 2.6 %, cue (lon
 | P10. Collisions and coverage | No two texts overlap; nothing wraps beyond its slot or is cut, except a designed ellipsis; every text is inside a checked element; the tokens of tokens.css and the two fonts of system.md only |
 | Picker | site.md's S1 to S12 at 390, 768, 844 and 1024 px: controls at least 44 px high, no sideways scroll, one h1 in one main, no hue |
 
+## A running class (issue #769, ADR 0015)
+
+The room screen's running-class change ([room-2d.md](room-2d.md), "A running class"): one "Target"
+metric, "Incline raised" or "Incline flat", in place of Cadence and Position, at the metrics' own
+size. Held upright on a phone the value breaks into two lines, "Incline" over "raised" (3.7 % cap
+height); elsewhere it is one line. All of "Visible at once" holds. Spec, numbers and mock-ups:
+[running-class.md](running-class.md) (`runclass-play`, `runclass-play-flat`).
+
 ## What the page never shows or does (plan section 3)
 
 Rule-sensitive for this issue: rules 1, 4, 6 and 7.

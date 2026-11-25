@@ -74,6 +74,12 @@ play.md's.
   own names for "Notification access", "App info" and "Allow restricted settings".
 - The sheet says what is read in plain words and nothing about other apps.
 
+## A running class (issue #769, ADR 0015)
+
+The class screen is `/play`'s, so a running class shows the incline target as `/play` does
+([play.md](play.md), "A running class"): one "Target" metric in place of Cadence and Position. The
+follow sheet and the band are unchanged.
+
 ## Rules (plan section 3)
 
 | Rule | How these screens keep it |
