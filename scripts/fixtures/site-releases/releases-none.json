@@ -1,0 +1,52 @@
+[
+  {
+    "tag_name": "player-v0.3.0",
+    "draft": true,
+    "prerelease": false,
+    "published_at": "2026-12-01T09:30:00Z",
+    "html_url": "https://github.com/magpern/classbeat-player/releases/tag/player-v0.3.0",
+    "assets": [
+      {
+        "name": "classbeat-player-linux-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.3.0/classbeat-player-linux-x64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-macos-arm64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.3.0/classbeat-player-macos-arm64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-macos-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.3.0/classbeat-player-macos-x64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-windows-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.3.0/classbeat-player-windows-x64-unsigned.tar.gz"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.0.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-12-02T09:30:00Z",
+    "html_url": "https://github.com/magpern/classbeat-player/releases/tag/v1.0.0",
+    "assets": [
+      {
+        "name": "classbeat-player-linux-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/v1.0.0/classbeat-player-linux-x64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-macos-arm64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/v1.0.0/classbeat-player-macos-arm64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-macos-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/v1.0.0/classbeat-player-macos-x64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-windows-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/v1.0.0/classbeat-player-windows-x64-unsigned.tar.gz"
+      }
+    ]
+  }
+]

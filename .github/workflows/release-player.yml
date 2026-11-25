@@ -27,6 +27,9 @@ on:
       - .github/workflows/release-player.yml
       - scripts/check-release-tag.sh
       - scripts/release-player-assets.sh
+      - scripts/site-releases-json.mjs
+      - scripts/test-site-releases-json.mjs
+      - scripts/fixtures/site-releases/**
       - scripts/test-release-player.sh
       - scripts/package-desktop.sh
 
@@ -192,7 +195,11 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      pull-requests: write
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-player-assets
@@ -244,3 +251,38 @@ jobs:
           gh release create "$TAG" --verify-tag --title "classbeat player $VERSION" \
             --notes-file RELEASE_NOTES.md --generate-notes "${flags[@]}" \
             ./*.tar.gz SHA256SUMS
+      # The download page's data (issue #793): after the release is published, the site's
+      # releases.json is rebuilt from the published releases and their SHA256SUMS (the latest by
+      # docs/design/download.md, not necessarily this tag) and proposed as a pull request on a
+      # branch of its own, never pushed to main. No change, no pull request. The pull request is
+      # reviewed and merged like any other. Reads and writes go through the REST API only.
+      - name: Open a pull request with the site's releases.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          file=web/src/site/releases.json
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | jq 'add // []' >"$RUNNER_TEMP/releases.json"
+          latest="$(node scripts/site-releases-json.mjs tag "$RUNNER_TEMP/releases.json")"
+          sums="$RUNNER_TEMP/SHA256SUMS"
+          if [ -n "$latest" ]; then
+            gh release download "$latest" --pattern SHA256SUMS --output "$sums"
+          else
+            : >"$sums"
+          fi
+          node scripts/site-releases-json.mjs build "$RUNNER_TEMP/releases.json" "$sums" "$RUNNER_TEMP/site-releases.json"
+          if cmp -s "$RUNNER_TEMP/site-releases.json" "$file"; then
+            echo "the site's releases.json already matches the latest release"
+            exit 0
+          fi
+          branch="site-releases-$TAG"
+          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
+          file_sha="$(gh api "repos/$GH_REPO/contents/$file?ref=main" --jq .sha)"
+          gh api -X POST "repos/$GH_REPO/git/refs" -f ref="refs/heads/$branch" -f sha="$main_sha" >/dev/null
+          gh api -X PUT "repos/$GH_REPO/contents/$file" -f message="chore(screens): site releases.json for $latest" \
+            -f branch="$branch" -f sha="$file_sha" -f content="$(base64 -w0 "$RUNNER_TEMP/site-releases.json")" >/dev/null
+          gh api -X POST "repos/$GH_REPO/pulls" -f title="chore(screens): site releases.json for $latest" \
+            -f head="$branch" -f base=main \
+            -f body="Written by scripts/site-releases-json.mjs from the published releases and SHA256SUMS of $latest (issue #793). Only web/src/site/releases.json changes." >/dev/null

@@ -57,9 +57,16 @@ jobs:
         run: bash scripts/check-providers.sh
       # A change to documentation only (docs/ or a root *.md) runs no tests: the never-commit guard
       # and the provider guard above stay, the script tests, deploy-file tests and shellcheck do not.
+      # The site's releases.json writer (#793) is tested on recorded fixtures and loads the download
+      # page's TypeScript reader by Node's own type stripping (Node 22.18 or later). No network.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          node-version: 24
       - name: Script tests
         if: needs.changes.outputs.code == 'true'
         run: |
+          node --test scripts/test-site-releases-json.mjs
           bash scripts/test-check-repo.sh
           bash scripts/test-check-providers.sh
           bash scripts/test-check-pr-title.sh
