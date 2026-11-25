@@ -41,13 +41,14 @@ function setup(options: { adapt?: boolean; quality?: QualityLevel } = {}) {
   const h = fakeHost();
   const rows: SecondRow[] = [];
   const levels: (QualityLevel | "Plain")[] = [];
-  const r = new SceneRenderer(h.host, { tokens, onSecond: (row) => rows.push(row), onLevel: (l) => levels.push(l), ...options });
+  const framesAt: number[] = [];
+  const r = new SceneRenderer(h.host, { tokens, onSecond: (row) => rows.push(row), onLevel: (l) => { levels.push(l); framesAt.push(h.frames); }, ...options });
   r.start(() => feedAt(20_000));
-  return { h, r, rows, levels };
+  return { h, r, rows, levels, framesAt };
 }
 
 test("a low frame rate steps High to Medium to Low, each time applying the level's render scale, then hands over at Plain and stops", () => {
-  const { h, rows, levels } = setup();
+  const { h, rows, levels, framesAt } = setup();
   assert.equal(h.ratios.at(-1), QUALITY.High.renderScale);
   let t = h.run(40, 5.5, 0);
   assert.deepEqual(levels, ["Medium"]);
@@ -59,7 +60,8 @@ test("a low frame rate steps High to Medium to Low, each time applying the level
   h.run(20, 5.5, t);
   assert.deepEqual(levels, ["Medium", "Low", "Plain"]);
   assert.equal(h.scheduled, false, "no further frame is asked for at Plain");
-  assert.equal(h.requests, h.frames, "every frame asked for was run, and none was asked for after the one that reached Plain");
+  assert.equal(h.frames, framesAt.at(-1), "the run offered more frames, and none was run after the one that reached Plain");
+  assert.equal(h.requests, h.frames, "no frame was asked for after the one that reached Plain");
   assert.ok(rows.some((r) => r.level === "Low") && rows.every((r) => r.fps > 0));
 });
 
