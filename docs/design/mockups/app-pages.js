@@ -163,6 +163,9 @@ add('leave-ask', 'app-rider-join.md', 'App: leave the class?', 'State: Back pres
 add('display-idle', 'app-room-display.md', 'App: external display, no class open', 'State: a display is connected and no class is open on the phone. The stage stays dark with one line; nothing else.',
   `<main class="idle">${T('text', 'The class shows here when it opens on the phone', 2)}</main>`, { room: true, display: true });
 
+add('display-idle-rider', 'app-room-display.md', 'App: external display, rider mode', 'State: a display is connected and the phone is in rider mode, in any page or a joined class. The same dark stage as the instructor idle, with the rider line; nothing of the rider, the class or other riders.',
+  `<main class="idle">${T('text', 'Your class is on your phone', 2)}</main>`, { room: true, display: true });
+
 add('display-lost', 'app-room-display.md', 'App: the display went away', 'State: the display was unplugged or the cast ended during the class. The phone goes on as it was; for 30 s the link slot says so in white.',
   running({ text: 'Room screen disconnected', kind: 'manual handover' }), { room: true });
 
