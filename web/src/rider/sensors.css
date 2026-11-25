@@ -37,7 +37,15 @@
    by value; a reading with no value is a grey dash (.none, above). Nothing here is animated (RC8). */
 .effort.sens .rd.line { grid-column: 2 / -1; margin-bottom: 0; justify-content: flex-end; }
 @media (orientation: landscape) {
-  .effort.sens .rd.line { grid-column: 2 / -1; justify-content: flex-start; }
+  .effort.sens .rd.line { justify-content: flex-start; }
+  /* A sensor plate shows (lost, choosing, failed): the effort column needs the full height, so the next rows
+     move under the countdown in the left column, all of them kept (design review of #781). */
+  .run.rider:has(.splate) {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "top top" "gel effort" "clock effort" "coming effort" "coming keys";
+    --c-read: min(10.6dvh, 6vw);
+  }
+  .run.rider:has(.splate) .effort.sens { row-gap: 0.4dvh; }
 }
 
 /* The gauge: a line, the planned band (the zone's colour) and one white tick for the reading.

@@ -38,7 +38,7 @@ function marginTable(margins: ReadonlyMap<string, Record<string, number>>): stri
 /** One test per shot: every state of `states` at the class sizes, a form or a sheet in portrait. */
 export function checkRiderShots(title: string, states: Readonly<Record<string, StateDef>>): void {
   const shots: Shot[] = Object.entries(states)
-    .flatMap(([state, def]) => (def.sizes ?? (def.form ? FORM_SIZES : CLASS_SIZES)).map(([width, height]) => ({ state, width, height })))
+    .flatMap(([state, def]) => (def.form ? FORM_SIZES : CLASS_SIZES).map(([width, height]) => ({ state, width, height })))
     .filter((s) => !ONLY || ONLY.test(nameOf(s)));
   const margins = new Map<string, Record<string, number>>();
   const note = (s: Shot, m: Readonly<Record<string, number>>): void => {

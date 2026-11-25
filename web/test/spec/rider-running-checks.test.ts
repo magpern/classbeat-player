@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { WEB_DIR } from "../lib/browser.ts";
 import { checkRiderShots } from "../lib/rider-shots.ts";
 import { another, connect, press, rules as sharedRules, tick } from "../lib/rider-sensor-stages.ts";
-import { FORM_SIZES, IN, NICK24, RUN, WORST, at, inClass, then, variant, words } from "../lib/rider-stages.ts";
+import { IN, NICK24, RUN, WORST, at, inClass, then, variant, words } from "../lib/rider-stages.ts";
 import type { Stage, StateDef } from "../lib/rider-stages.ts";
 import { FOOT_POD, TREADMILL, drop, hexBytes, notify } from "../lib/sensor-fake.ts";
 
@@ -104,9 +104,10 @@ const STATES: Readonly<Record<string, StateDef>> = {
   "running-missing": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), tick(3500), dashes(UNITS), words(["Speed", "Incline", "Cadence"])),
   // A reading older than 3 s (FRESH_MS) is missing, never the last number.
   "running-stale": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), treadmill(), pod(), tick(), numbers(["11.0", "3.0", "170"]), tick(3500), dashes(UNITS), words([], ["11.0"])),
-  // A lost sensor: the plate and its words, the rows show dashes. Portrait only: in landscape the effort rows, the
-  // two readings and the plate need more height than the screen has (reported in the pull request).
-  "running-lost": { sizes: FORM_SIZES, ...state(IN, inClass(RUN_CLASS), connect(TREADMILL), treadmill(), tick(), async (f) => drop(f.page, TREADMILL.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), dashes(["km/h", "%"]), words(["Sensor lost", `${TREADMILL.name}. Wake it, then press Reconnect.`, "Reconnect"])) },
+  // A lost sensor: the plate and its words, the rows show dashes. In landscape the next rows sit under the countdown.
+  "running-lost": state(IN, inClass(RUN_CLASS), connect(TREADMILL), treadmill(), tick(), async (f) => drop(f.page, TREADMILL.id), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), dashes(["km/h", "%"]), words(["Sensor lost", `${TREADMILL.name}. Wake it, then press Reconnect.`, "Reconnect"])),
+  // The treadmill drops while the foot pod is still heard: Speed and Incline are dashes (their source is lost), Cadence keeps its number.
+  "running-lost-pod": state(IN, inClass(RUN_CLASS), connect(TREADMILL), another(FOOT_POD), treadmill(), pod(), tick(), async (f) => drop(f.page, TREADMILL.id), pod(), tick(), (f) => at(f, "[data-action=reconnect_sensor]"), numbers(["–", "–", "170"]), words(["Sensor lost", "Reconnect"])),
   // The widest numbers beside the longest names, at all four sizes.
   "running-worst": state(IN, inClass(WORST_CLASS, true, NICK24), connect(TREADMILL), another(FOOT_POD), treadmill(treadmillBytes(39.9, 14.8)), pod(rscBytes(10.8, 249)), tick(), numbers(["39.9", "14.8", "249"]), plain, words(["39.9", "14.8", "249"])),
   // The sheet: each device with its state in words.
