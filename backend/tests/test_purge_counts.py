@@ -150,7 +150,7 @@ def test_the_counts_are_per_kind_and_the_live_rows_stay(su: Conn) -> None:
             su,
             "audit_events",
             "account_id, event, occurred_at",
-            "%s, 'purge-test', now() - %s::interval",
+            "%s, 'purge_test', now() - %s::interval",
             n,
             account,
             age,
