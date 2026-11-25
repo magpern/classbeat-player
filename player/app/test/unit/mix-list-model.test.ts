@@ -129,3 +129,24 @@ test("a fault plate carries a one-line detail for a window too short for five ro
   assert.ok(reconnect?.detail.startsWith(reconnect.short ?? "?"));
   assert.equal(head(mv({ state: "signed_in", fields: [] }), "ask").plate?.short, "The mixes saved on this computer are removed.");
 });
+
+test("the form takes the body and the filter with it; without a form the filter shows (#724)", () => {
+  const withForm = screenOf(shotView(mv({ state: "refused", refusal: "bad_credentials" })), { ...UI, mix: "form" }, NOW);
+  assert.ok(withForm.body.kind === "mix-form" && withForm.filter === null);
+  const without = screenOf(shotView(mv({ state: "refused", refusal: "bad_credentials" })), UI, NOW);
+  assert.ok(without.body.kind === "list" && without.filter !== null);
+});
+
+test("the filter stays shown under the sign-out question (#724)", () => {
+  const s = screenOf(shotView(mv({ state: "signed_in", fields: [] })), { ...UI, mix: "ask", filter: "class 03" }, NOW);
+  assert.equal(s.mixPlate?.headline, "Sign out of Swedebeat?");
+  assert.deepEqual(s.filter, { of: "1 of 12" });
+});
+
+test("a filter typed before the form opened does not narrow the selection behind it (#724)", () => {
+  const mix = mv({ state: "refused", refusal: "bad_credentials" });
+  const plain = screenOf(shotView(mix), { ...UI, mix: "form" }, NOW);
+  const typed = screenOf(shotView(mix), { ...UI, mix: "form", filter: "zzz-no-match" }, NOW);
+  assert.ok(plain.selectedId !== null);
+  assert.equal(typed.selectedId, plain.selectedId);
+});
