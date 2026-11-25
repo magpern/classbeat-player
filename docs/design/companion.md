@@ -444,6 +444,14 @@ renamed to dodge a guard word. Until then the page shows what the "Without it" c
 None of these proposals adds rider data, a token or code, the join code, or anything that sets
 an equipment value. Whatever the instructor reads, the phone never sends.
 
+## A running class (issue #769, ADR 0015)
+
+Unchanged. The page shows no cadence, position or incline today, so a running class needs no new
+state; the cue carries what the author wrote. Showing the incline word is the open question in the
+first row of "Contract gaps" (guard words), and its mock-up would follow
+[running-class.md](running-class.md). Mock-up of the unchanged page with a running cue:
+[runclass-companion](mockups/runclass-companion.html).
+
 ## Page hardening (for the phone page issue)
 
 From ADR 0005, section 8, for the page that builds this spec:

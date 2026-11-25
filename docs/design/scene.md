@@ -1621,6 +1621,13 @@ pull request:
 Energy by zone is a table in the scene's pure model module (`scene_model`), not a token: it is
 behaviour, and a test holds it to the table above.
 
+## A running class (issue #769, ADR 0015)
+
+The scene's look and inputs are the same for a running class as for a cycling one: light only, the
+zone's colour, the clock. Nothing in it moves with speed, incline or any treadmill or foot-pod
+reading (rules 4, 5), and it shows no incline target, which the plain screen carries as text.
+See [running-class.md](running-class.md).
+
 ## The product rules (plan section 3)
 
 | Rule | How the scene keeps it |

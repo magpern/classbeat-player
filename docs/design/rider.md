@@ -326,6 +326,16 @@ holds FTP or maximum heart rate (a test over the recorded messages and the join 
 writes nothing to `localStorage` while Remember is off; `effort_calc` table tests; the nickname is
 rendered as text only; the page sends `hello` and nothing else after joining.
 
+## A running class (issue #769, ADR 0015)
+
+In a running class the page has no position and no cadence target; the incline target is text in
+the clock's right-hand slot ("Target", "Incline raised" or "Incline flat", the value tier, 3.7 % /
+6.7 %), which needs a field the live contract does not carry yet (running-class.md, G1: empty like a
+null position until then). A treadmill's speed and incline and a foot pod's cadence appear as
+numbers, one line each, under the effort rows: no gauge, no colour by value, a grey dash when older
+than 3 s. Rows, states, numbers and mock-ups: [running-class.md](running-class.md)
+(`runclass-rider*`); the sheet, plates and lost state are [sensors.md](sensors.md)'s.
+
 ## What the page never shows or does (plan section 3)
 
 | Rule | How this page keeps it |

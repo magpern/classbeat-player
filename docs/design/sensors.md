@@ -309,6 +309,16 @@ instructor's choice and it is **off by default, every class** (never remembered)
 | Strip, no reading | [html](mockups/room-sensors-strip-missing.html) |
 | Worst case (checked at all ten room sizes) | [html](mockups/room-sensors-strip-worst.html), [16:9](mockups/room-sensors-strip-worst-1920x1080.png), [4:3](mockups/room-sensors-strip-worst-1024x768.png) |
 
+## Treadmill and foot-pod readings (issue #769, ADR 0015)
+
+Three more readings, on the rider page only: **Speed** (km/h, one decimal), **Incline** (%, one
+decimal) and **Cadence** from a foot pod (steps/min, whole number). They follow "What a reading is"
+(held 3 s, a dash when missing, one source per measure, a step at most once a second) with two
+differences: **no gauge** and no plan beside them (a running class's incline is "raised" or "flat",
+and there is no speed or cadence plan), so a reading is a label, a number and a unit on one line at
+the `read` tier, never coloured. Total distance is never shown. The instructor's panel and the room
+strip show no running reading. Rows, states and mock-ups: [running-class.md](running-class.md).
+
 ## Measurable criteria (stated as numbers)
 
 Which tool checks what: **the mock-up tools** (shoot.js, measure.js) check S1, S3, S4, S5, S6, S7

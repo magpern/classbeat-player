@@ -899,6 +899,17 @@ is a placeholder of the right size, not a real code ([qr-placeholder.svg](mockup
 The state with the band hidden is the state mock-up itself (for example
 [running](mockups/room-running.html)).
 
+## A running class (issue #769, ADR 0015)
+
+For a class with `sport` `running` the screen has one change: the Cadence and Position metrics
+(item 3 of "Content") become one metric, label "Target", value **"Incline raised"** or **"Incline
+flat"** in the metrics column at `--t-value` (7.4 vh, cap height 6.0 %, at 3:2 and wider so that
+it fits the 38 vh column; the row's own size at 3:2 and narrower), and the next row ends with the
+next interval's incline in words instead of its cadence and position. No cadence gauge, no seated or
+standing cue, no position pattern. Every other item, size and state is as above; the zone stays a
+number, a name and a colour, and the scene's look and inputs do not change for a running class.
+Spec, numbers and mock-ups: [running-class.md](running-class.md) (`runclass-room*`).
+
 ## What the screen never shows (plan section 3)
 
 | Rule | How this screen keeps it |

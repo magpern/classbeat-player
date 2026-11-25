@@ -69,6 +69,13 @@ room-2d.md's on the display; app.md's on the phone.
 
 "room screen" for the display, as in room-2d.md.
 
+## A running class (issue #769, ADR 0015)
+
+The display shows [room-2d.md](room-2d.md)'s room screen, so a running class shows the incline
+target as the room screen does ("A running class"; mock-ups `runclass-room*`). The idle stage is
+unchanged. In rider mode the display stays on the idle stage, so no treadmill or foot-pod reading
+can reach it (ADR 0015 section 5).
+
 ## Rules (plan section 3)
 
 | Rule | How these screens keep it |
