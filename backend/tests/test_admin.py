@@ -7,6 +7,7 @@ purge through `auth_purge_expired()`. A database error shows its type, never its
 from __future__ import annotations
 
 import io
+import re
 import secrets
 from collections.abc import Iterator
 
@@ -15,6 +16,7 @@ import pytest
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from player_backend.admin import main
+from player_backend.db.operator import PURGE_KINDS
 from tests.dbhelp import Conn
 
 pytestmark = pytest.mark.usefixtures("owner_url")
@@ -124,7 +126,15 @@ def test_purge_removes_what_is_past_its_time(db_url: str) -> None:
                 (key, expires),
             )
     try:
-        assert _run("purge") == (0, "purged expired rows\n", "")
+        code, out, err = _run("purge")
+        assert (code, err) == (0, "")
+        # Kind names and numbers only: one `purged <kind>: <count>` line per kind, in order.
+        lines = out.splitlines()
+        assert [line.split(":")[0] for line in lines] == [f"purged {k}" for k in PURGE_KINDS]
+        assert all(re.fullmatch(r"purged [a-z_]+: [0-9]+", line) for line in lines)
+        assert out.endswith("\n") and len(out.splitlines(keepends=True)) == len(PURGE_KINDS)
+        assert int(lines[PURGE_KINDS.index("rate_limits")].split(": ")[1]) >= 1
+        assert old.hex() not in out and fresh.hex() not in out
         with psycopg.connect(db_url, autocommit=True) as conn:
             left = conn.execute(
                 "SELECT key_hash FROM player.rate_limits WHERE key_hash IN (%s, %s)", (old, fresh)

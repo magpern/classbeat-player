@@ -22,6 +22,7 @@ M0015_CLOSE_EMAIL_LINK_AND_PASSKEYS: Final[Query] = Query.from_file(
     "0015_close_email_link_and_passkeys.sql"
 )
 M0016_CLASSBEAT_EVENTS: Final[Query] = Query.from_file("0016_classbeat_events.sql")
+M0017_PURGE_COUNTS: Final[Query] = Query.from_file("0017_purge_counts.sql")
 
 # The ledger lives in its own schema, with row-level security forced like every table, and one
 # policy for player_owner alone. No other role has any right on it.

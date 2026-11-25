@@ -91,8 +91,10 @@ python -m player_backend.admin purge                     # auth_purge_expired(),
 ```
 
 The allowlist is changed through its one policy (ADR 0002, section 9) and nothing else.
-`purge` calls `auth_purge_expired()` once, in its own transaction; the function returns
-nothing, so the command prints only that it ran. A database error is printed as its type and
+`purge` calls `auth_purge_expired()` once, in its own transaction; the function returns how
+many rows it removed per kind (migration 0017), and the command prints one line per kind,
+`purged <kind>: <count>`, with the table's name as the kind: no ids, emails, tokens or other row
+data. Kinds other than the expected ones roll the purge back and fail. A database error is printed as its type and
 SQLSTATE, never its message. Exit status: 0 done, 1 refused or failed, 2 bad input or no URL.
 
 **The purge schedule.** `purge` runs every hour on the server, outside the web process. The

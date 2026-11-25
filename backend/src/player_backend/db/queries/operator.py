@@ -19,7 +19,8 @@ ALLOWLIST_LIST: Final[Query] = Query(
     "SELECT email, added_at FROM player.signup_allowlist ORDER BY email"
 )
 
-PURGE_EXPIRED: Final[Query] = Query("SELECT player.auth_purge_expired()")
+# One row per kind, in the function's order: the table's name and how many rows went (0017).
+PURGE_EXPIRED: Final[Query] = Query("SELECT kind, removed FROM player.auth_purge_expired()")
 
 # ADR 0010, section 8: `account link`. The tenant policy lets player_owner (the tables' owner,
 # under FORCE ROW LEVEL SECURITY) reach the one account set for the transaction, and no other.
