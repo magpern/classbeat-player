@@ -118,6 +118,13 @@ jobs:
           got="$(node -p process.arch)"
           [ "$got" = "$WANT" ] || { echo "runner is $got, target needs $WANT" >&2; exit 1; }
       - run: npm ci
+      # npm ci does not fetch the Electron runtime here (the electron package runs no install script
+      # under this npm; in ci.yml the e2e test fetches it on first launch). Run Electron's own
+      # install.js, the version pinned in the lockfile, as scripts/build-mac.sh does.
+      - name: Fetch the Electron runtime
+        run: |
+          if [ ! -d node_modules/electron/dist ]; then node node_modules/electron/install.js; fi
+          [ -d node_modules/electron/dist ] || { echo "no Electron runtime after install.js" >&2; exit 1; }
       - run: npm run build
       # Signing and notarisation will be added here once the owner provides the signing identities
       # (docs/owner.md). Until then the package is unsigned and the release notes say so.
