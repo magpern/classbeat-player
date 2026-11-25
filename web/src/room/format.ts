@@ -76,6 +76,13 @@ export function positionText(iv: Interval): string | null {
   return null;
 }
 
+/** A running interval's incline target, as words ("Incline raised"); null for an interval with none (a cycling one). */
+export function inclineText(iv: Interval): string | null {
+  if (iv.incline === "raised") return "Incline raised";
+  if (iv.incline === "flat") return "Incline flat";
+  return null;
+}
+
 /** The zone's own entry in the class's scale; the name and targets are the class's, not ours. */
 export function zoneDef(doc: Class, zone: number): ZoneDef | undefined {
   return doc.zone_scale.find((z) => z.zone === zone);

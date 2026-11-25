@@ -1,0 +1,15 @@
+/* A running class on the room screen (docs/design/running-class.md, "Size"): the Target metric reads
+   "Incline raised" or "Incline flat", text only and white (rule 7). "Incline raised" is 4.88 em wide in the
+   value face, wider than "On the beat" (4.24 em). In the wide layouts the metrics column is 38vh wide, so
+   its size is 7.4vh (cap height 6.0 % of the screen, over the 5.5 % floor) and it fits (36.1vh). At 3:2 and
+   narrower the row's own size, min(7.4vh, 5.55vw), already holds it. Nothing here moves or changes with a
+   reading, so reduced motion changes nothing here (RC8). */
+@media (min-aspect-ratio: 3/2) {
+  .metric .v.inc { font-size: 7.4vh; }
+}
+
+/* /play held upright: the metrics column beside the gel is about 160 px wide on a phone, so the incline
+   target breaks at its space into two lines, "Incline" over "raised", at the metrics' own size. */
+@media (max-aspect-ratio: 1/1) {
+  .play .metric .v.inc { white-space: normal; }
+}

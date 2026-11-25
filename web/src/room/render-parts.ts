@@ -46,7 +46,7 @@ export function renderMetrics(metrics: readonly MetricModel[]): HTMLElement {
     if (m.pattern) return el("div", { class: "metric" }, [label, patternValueEl(m.pattern)]);
     const value: Child[] = [m.value];
     if (m.unit) value.push(el("small", { tier: "minor", text: m.unit }));
-    return el("div", { class: "metric" }, [label, el("span", { class: "v n", tier: "value" }, value)]);
+    return el("div", { class: "metric" }, [label, el("span", { class: m.incline ? "v n inc" : "v n", tier: "value" }, value)]);
   });
   // A pattern's count closes the column's gap so the cue below keeps its place.
   return el("section", { class: `metrics${metrics.some((m) => m.pattern) ? " fold" : ""}` }, items);
@@ -81,12 +81,12 @@ export function renderNext(next: NextModel): HTMLElement {
 }
 
 /**
- * The phone layouts of the web player page (play.md, "Small landscape") let a fact label and the
+ * The phone layouts of the web player page (play.md, "Small landscape") let a fact label, the incline target and the
  * pause line take up to two lines; the room's own layout never does, so its checks keep their one
  * line. Set by the mount from the layout in use, and removed again when it is the room's.
  */
 export function allowTwoLines(root: ParentNode, allowed: boolean): void {
-  for (const e of root.querySelectorAll<HTMLElement>(".facts .lbl, .bars.text")) {
+  for (const e of root.querySelectorAll<HTMLElement>(".facts .lbl, .bars.text, .metric .v.inc")) {
     if (allowed) e.dataset.lines = "2";
     else delete e.dataset.lines;
   }
