@@ -37,8 +37,10 @@ the app's own, so Android never mirrors the phone's screen onto it:
 | Between modes (a switch, a native screen) | The idle stage |
 | The app in the background | Nothing: the app presents only while it is in front, and the display shows what the system shows |
 
-The idle stage is the same page in every mode, with the same line: a class opens on the phone only
-in instructor mode, so the line holds in rider mode too.
+The idle stage is the same page in every mode, with the same line. In rider mode, with a class
+joined, the line does not describe what the rider is doing; the display shows nothing of the
+rider's, and this is accepted so that no rider data can reach it. A rider-specific line is a
+possible later issue.
 
 If the display's page stops working (its web view's render process dies), the app presents it once
 more. If it stops a second time for the same display, page and mode, the display stays as the system
