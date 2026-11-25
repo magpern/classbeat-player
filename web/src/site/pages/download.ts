@@ -30,6 +30,8 @@ function bodyOf(reading: Reading, env: DownloadEnv): HTMLElement[] {
 }
 
 export async function downloadPage(main: HTMLElement, env: DownloadEnv): Promise<void> {
+  // Every rule of download.css is scoped to this class, so none reaches another page (the sessions page has a `.tag` too).
+  main.classList.add("download");
   const head = h1(DOWNLOAD_TITLE);
   main.replaceChildren(head, working("Looking for the latest release"), waitingRows());
   const text = await readReleasesText();
