@@ -15,6 +15,7 @@ export * from "./merge-intervals.ts";
 export * from "./moments.ts";
 export * from "./phase.ts";
 export * from "./quality.ts";
+export * from "./quality-monitor.ts";
 export * from "./step.ts";
 export * from "./dark.ts";
 export * from "./sweeps.ts";
