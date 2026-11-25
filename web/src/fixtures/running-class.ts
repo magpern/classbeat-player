@@ -5,8 +5,9 @@
 import type { Class, RoomInput } from "../room/input.ts";
 import { classOf, intervalsFrom, scaleOf, snapshot, songsFrom } from "./build.ts";
 
-const NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2 max", "Anaerobic capacity", "Neuromuscular power"];
-const HR: readonly (readonly [number, number])[] = [[50, 60], [61, 70], [71, 80], [81, 89], [90, 95], [96, 100], [100, 100]];
+// Five zones: a running class has no more (the class format, zone_out_of_range_for_sport).
+const NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2 max"];
+const HR: readonly (readonly [number, number])[] = [[50, 60], [61, 70], [71, 80], [81, 89], [90, 100]];
 
 const scale = scaleOf(NAMES, (z) => ({ hrmax_pct: [...HR[z - 1]] as [number, number], rpe: [Math.min(10, z + 1), Math.min(10, z + 2)] as [number, number] }));
 
@@ -36,7 +37,9 @@ export function runningClass(): Class {
     { name: "Cool-down", kind: "cooldown" as const, start_ms: 1_260_000, end_ms: 1_440_000 },
   ];
   const doc = classOf("Thursday tempo run", scale, intervals as unknown as Class["intervals"], songs, segments, 40);
-  return { ...doc, class: { ...doc.class, sport: "running" } };
+  // The totals name every zone of the scale, a zone not used with 0 (totals_zone_keys_mismatch).
+  const time_in_zone_ms = Object.fromEntries(scale.map((z) => [String(z.zone), doc.totals.time_in_zone_ms[String(z.zone)] ?? 0]));
+  return { ...doc, class: { ...doc.class, sport: "running" }, totals: { ...doc.totals, time_in_zone_ms } };
 }
 
 export const RUNNING_FIXTURES: Readonly<Record<string, RoomInput>> = (() => {
