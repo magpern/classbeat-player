@@ -5,12 +5,16 @@
 // class clock it shows is already the current one (continuous), and the switch is one `show("plain")`.
 import type { JoinFrame } from "./room-feed-calc.ts";
 import { feedOf } from "./room-feed-calc.ts";
+import { observe, startMonitor } from "../../model/src/index.ts";
+import type { MonitorState, QualityLevel, SecondRow } from "../../model/src/index.ts";
 import type { Feed } from "../src/loop.ts";
 import type { TextClass } from "../src/text-types.ts";
 
 /** What the host draws a scene frame with. `frame` may throw: that is a kill. */
 export interface SceneHandle {
   frame(input: { readonly feed: Feed; readonly text: TextClass }, nowMs: number): void;
+  /** Draws at this quality level from the next frame (scene.md "Quality levels"). Absent on a handle with one level. */
+  setQuality?(level: QualityLevel): void;
   dispose(): void;
 }
 
@@ -30,6 +34,8 @@ export interface JoinOptions {
   readonly reducedMotion: boolean;
   /** The presenter preview and CI's reduced screenshots: the scene is shown as the still rig instead of giving way to the plain screen. */
   readonly stillRig?: boolean;
+  /** Once a second while the scene draws: the frame rate of the last second and the level it was drawn at (the S9 log). */
+  readonly onSecond?: (row: SecondRow) => void;
 }
 
 /** The class a frame is of, and whether it is a fresh start of it: a scene given up on stays down for the rest of that class (scene.md, Plain: "does not come back in that class") and is tried again for the next. */
@@ -57,7 +63,7 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
   let cancelTick: (() => void) | null = null;
   let cancelWatch: (() => void) | null = null;
   /** The class and run state the scene was given up on in; null while it runs or was never asked for. */
-  let downIn: { readonly key: string; readonly ready: boolean } | null = null;
+  let downIn: { readonly key: string; readonly ready: boolean; readonly slow: boolean } | null = null;
   let lastFrameAt = ports.now();
   let stopped = false;
 
@@ -66,14 +72,14 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
     mode = next;
     ports.show(next);
   };
-  const kill = (reason: string): void => {
+  const kill = (reason: string, slow = false): void => {
     why = reason;
     cancelTick?.();
     cancelWatch?.();
     const gone = handle;
     handle = null;
     const f = latest?.frame ?? null;
-    downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready" };
+    downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready", slow };
     set("plain");
     try { gone?.dispose(); } catch { /* the plain screen is already showing; a failed dispose has nothing left to lose */ }
   };
@@ -81,18 +87,24 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
   const still = options.stillRig === true;
   const reducedMotion = options.reducedMotion || still;
 
+  /** A log that fails is no failure of the scene. */
+  const logSecond = (row: SecondRow): void => {
+    try { options.onSecond?.(row); } catch { /* the S9 log is the host's; the scene goes on */ }
+  };
+
   const boot = (): void => {
     try {
       handle = ports.create(() => kill("context lost"));
     } catch {
       why = "no WebGL";
       const f = latest?.frame ?? null;
-      downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready" };
+      downIn = { key: f === null ? "" : classKey(f), ready: f?.view?.status === "ready", slow: false };
       return;
     }
     why = null;
     downIn = null;
     lastFrameAt = ports.now();
+    let monitor: MonitorState = startMonitor();
     const tick = (nowMs: number): void => {
       if (handle === null) return;
       try {
@@ -103,6 +115,16 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
         } else {
           handle.frame(pack, nowMs);
           set("scene");
+          // The still rig is a fixed picture for the presenter and CI, not a class: it never gives way for a slow machine.
+          if (!still) {
+            const seen = observe(monitor, nowMs);
+            monitor = seen.state;
+            if (seen.row) logSecond(seen.row);
+            if (seen.stepped) {
+              if (seen.state.level === "Plain") { kill("too slow", true); return; }
+              handle.setQuality?.(seen.state.level);
+            }
+          }
         }
       } catch {
         kill("renderer error");
@@ -129,7 +151,7 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
     push(frame) {
       latest = { frame, at: ports.now() };
       // A new class, or a fresh run of it, is another chance for a scene that was given up on (never with reduced motion).
-      if (!stopped && downIn !== null && !(options.reducedMotion && !still) && handle === null && frame.view !== null && (classKey(frame) !== downIn.key || (frame.view.status === "ready" && !downIn.ready))) boot();
+      if (!stopped && downIn !== null && !(options.reducedMotion && !still) && handle === null && frame.view !== null && (classKey(frame) !== downIn.key || (frame.view.status === "ready" && !downIn.ready && !downIn.slow))) boot();
     },
     get mode() { return mode; },
     get why() { return why; },
