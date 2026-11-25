@@ -24,8 +24,8 @@ function baseClass(): Class {
   songs[6] = { ...songs[6], moments: { quality: "measured", items: [{ at_ms: 45_000, kind: "drop" }] } };
   const segments = [
     { name: "Warm-up", kind: "warmup" as const, start_ms: 0, end_ms: 300_000 },
-    { name: "Main set", kind: "main" as const, start_ms: 300_000, end_ms: 2_340_000 },
-    { name: "Cool-down", kind: "cooldown" as const, start_ms: 2_340_000, end_ms: 2_520_000 },
+    { name: "Main set", kind: "main" as const, start_ms: 300_000, end_ms: 2_324_000 },
+    { name: "Cool-down", kind: "cooldown" as const, start_ms: 2_324_000, end_ms: 2_520_000 },
   ];
   const doc = classOf("Thursday threshold", scale, intervals, songs, segments, 58);
   return withCue(doc, 6, "Find the beat and hold it. Breathe out on every second bar.", { cadence: { from: 90, to: 100 } });
