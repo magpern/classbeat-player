@@ -22,6 +22,8 @@ export interface RailView {
   readonly done: string | null;
   readonly segment: string | null;
   readonly link: { readonly text: string; readonly alert: boolean };
+  /** The shape of the link marker (named `kind`, a member the layer may read) (scene.md "Link markers in the text layer"). */
+  readonly kind: "round" | "square" | "ring";
 }
 
 export interface ClockView {

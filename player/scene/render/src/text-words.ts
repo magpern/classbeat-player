@@ -59,24 +59,39 @@ export function barsText(bars: number, last: boolean): string {
   return `${bars} ${bars === 1 ? "bar" : "bars"} ${last ? "to the end" : "to the change"}`;
 }
 
-/** The link plate, in the words of the plain screen (web/src/room/link-text.ts): quiet while following, white (alert) when the music is not followed (ADR 0001). */
-export function linkWords(link: TextLink, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
+export type LinkKind = "round" | "square" | "ring";
+export interface LinkPlate { text: string; alert: boolean; kind: LinkKind }
+
+/** A mix line's marker follows its shape as on the plain screen (web/src/room/mix-words.ts): dot round, circle a ring, square and news square. */
+const mixKind = (shape: "dot" | "circle" | "square" | "news"): LinkKind => (shape === "dot" ? "round" : shape === "circle" ? "ring" : "square");
+
+/**
+ * The link plate and its marker, decided from the link and mix state, never from the words (scene.md "Link markers in the text layer", room-2d.md States):
+ * round while the music is followed, square for the manual clock and its prompts and for every white plate, a ring for a mix download.
+ */
+export function linkPlate(link: TextLink, cls: Pick<TextClass, "following">, playlistNotLoaded = false): LinkPlate {
   const following = link.mode === "following";
   // A mix class: the player's line, only its fixed words (web/src/room/link-text.ts: it comes before every other plate). White for news, as the plain screen's white square.
-  if (link.mix !== undefined) return { text: link.mix.text, alert: link.mix.shape === "news" };
+  if (link.mix !== undefined) return { text: link.mix.text, alert: link.mix.shape === "news", kind: mixKind(link.mix.shape) };
   // "Playlist not loaded" (scene.md, the states table): white, in the place of the quiet states of a followed class (Locked, or "Manual" before the first lock),
   // before the start too; never in place of a link fault or the real manual clock.
-  if (playlistNotLoaded && following && (link.state === "Locked" || link.state === "Manual")) return { text: "Playlist not loaded", alert: true };
-  if (link.started === false) return following ? { text: "Waiting for the first song", alert: false } : { text: "Press Start", alert: false };
-  if (following && link.state === "Manual") return { text: "Waiting for the first song", alert: false };
+  if (playlistNotLoaded && following && (link.state === "Locked" || link.state === "Manual")) return { text: "Playlist not loaded", alert: true, kind: "square" };
+  if (link.started === false) return following ? { text: "Waiting for the first song", alert: false, kind: "round" } : { text: "Press Start", alert: false, kind: "square" };
+  if (following && link.state === "Manual") return { text: "Waiting for the first song", alert: false, kind: "round" };
   switch (link.state) {
-    case "Paused": return { text: "Music paused", alert: true };
-    case "Coasting": return { text: "Music not heard", alert: true };
-    case "Off the list": return { text: "Not a class song", alert: true };
-    case "Ambiguous": return { text: "Song is in twice", alert: true };
+    case "Paused": return { text: "Music paused", alert: true, kind: "square" };
+    case "Coasting": return { text: "Music not heard", alert: true, kind: "square" };
+    case "Off the list": return { text: "Not a class song", alert: true, kind: "square" };
+    case "Ambiguous": return { text: "Song is in twice", alert: true, kind: "square" };
     case "Manual":
-      if (link.mode === "manual" && link.announcement === true) return { text: "Following stopped", alert: true };
-      return link.mode === "manual" && link.available === true ? { text: "Manual \u00b7 F to follow", alert: false } : { text: "Manual clock", alert: false };
-    default: return { text: cls.following, alert: false };
+      if (link.mode === "manual" && link.announcement === true) return { text: "Following stopped", alert: true, kind: "square" };
+      return { text: link.mode === "manual" && link.available === true ? "Manual \u00b7 F to follow" : "Manual clock", alert: false, kind: "square" };
+    default: return { text: cls.following, alert: false, kind: "round" };
   }
+}
+
+/** The link plate, in the words of the plain screen (web/src/room/link-text.ts): quiet while following, white (alert) when the music is not followed (ADR 0001). */
+export function linkWords(link: TextLink, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
+  const { text, alert } = linkPlate(link, cls, playlistNotLoaded);
+  return { text, alert };
 }
