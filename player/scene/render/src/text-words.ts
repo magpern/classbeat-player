@@ -43,7 +43,11 @@ export function patternWords(p: TextPattern): string {
  * The next row's spec, longest form first: cadence and position (or the pattern in words), then
  * without the unit, then the position or pattern alone. The row takes the longest that fits.
  */
-export function specForms(cadence: Cadence | null, position: Side | null, pattern: TextPattern | null): string[] {
+/** A running interval's target in words (running-class.md, item 1). */
+export const inclineWords = (incline: "flat" | "raised"): string => (incline === "raised" ? "Incline raised" : "Incline flat");
+
+export function specForms(cadence: Cadence | null, position: Side | null, pattern: TextPattern | null, incline?: "flat" | "raised"): string[] {
+  if (incline !== undefined) return [inclineWords(incline)];
   const c = cadence === null ? null : cadenceWords(cadence);
   const tail = pattern ? patternWords(pattern) : position ? positionWord(position) : null;
   const join = (parts: (string | null)[]): string => parts.filter((p): p is string => p !== null).join(" ");

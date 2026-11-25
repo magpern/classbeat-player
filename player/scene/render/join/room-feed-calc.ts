@@ -84,6 +84,7 @@ function build(doc: Class): DerivedClass {
   };
   const intervals: TextInterval[] = doc.intervals.map((iv) => ({
     startMs: iv.start_ms, lengthMs: iv.length_ms, zone: iv.zone, name: nameOf(iv.zone), cue: iv.cue, cadence: cadenceOf(iv.cadence), position: iv.position ?? null,
+    ...(iv.incline !== undefined ? { incline: iv.incline } : {}),
     pattern: iv.pattern ? { positions: iv.pattern.positions, beats: iv.pattern.beats, startOn: iv.pattern.start_on ?? "interval_start" } : null,
   }));
   const text: TextClass = {

@@ -22,6 +22,8 @@ export interface TextInterval {
   readonly cadence: Cadence | null;
   readonly position: Side | null;
   readonly pattern: TextPattern | null;
+  /** A running interval's incline target (ADR 0015): text only, shown in place of cadence and position. Never a scene input. */
+  readonly incline?: "flat" | "raised";
 }
 
 export interface TextSong {

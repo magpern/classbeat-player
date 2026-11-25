@@ -25,7 +25,7 @@ export class TextLayer {
   private readonly gel: { root: HTMLElement; num: HTMLElement; name: HTMLElement; targets: Pool<{ root: HTMLElement }> };
   private readonly rail: { time: HTMLElement; done: HTMLElement; seg: HTMLElement; link: HTMLElement };
   private readonly clock: { label: HTMLElement; paused: HTMLElement; bars: HTMLElement; count: HTMLElement; pause: HTMLElement };
-  private readonly metrics: readonly { label: HTMLElement; row: HTMLElement; val: HTMLElement; unit: HTMLElement; fold: HTMLElement; side: HTMLElement; count: HTMLElement; note: HTMLElement }[];
+  private readonly metrics: readonly { root: HTMLElement; label: HTMLElement; row: HTMLElement; val: HTMLElement; unit: HTMLElement; fold: HTMLElement; side: HTMLElement; count: HTMLElement; note: HTMLElement }[];
   private readonly pattern: { root: HTMLElement; label: HTMLElement; side: HTMLElement; count: HTMLElement; squares: HTMLElement; boxes: Pool<{ root: HTMLElement }>; note: HTMLElement };
   private readonly cue: { root: HTMLElement; text: HTMLElement };
   private readonly next: { root: HTMLElement; line: HTMLElement; label: HTMLElement; chip: HTMLElement; name: HTMLElement; length: HTMLElement; spec: HTMLElement; cue: HTMLElement };
@@ -62,7 +62,7 @@ export class TextLayer {
       const row = ink(m, "div", "m-row");
       const fold = ink(m, "div", "m-fold");
       return {
-        label, row, val: make(row, "span", "m-val n"), unit: make(row, "span", "m-unit"), fold,
+        root: m, label, row, val: make(row, "span", "m-val n"), unit: make(row, "span", "m-unit"), fold,
         side: make(fold, "span", "side n"), count: make(fold, "span", "count n"), note: ink(m, "div", "m-note"),
       };
     });
@@ -148,7 +148,9 @@ export class TextLayer {
     const metrics = view.metrics;
     this.metrics.forEach((n, i) => {
       const m = metrics.at(i);
+      show(n.root, m !== undefined);
       if (m === undefined) return;
+      setClass(n.val, m.label === "Target" ? "m-val n tgt" : "m-val n");
       const state = m.folded;
       setText(n.label, m.label);
       setText(n.val, m.value);

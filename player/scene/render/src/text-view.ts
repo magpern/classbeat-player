@@ -38,7 +38,7 @@ export interface ClockView {
 }
 
 export interface MetricView {
-  readonly key: "cadence" | "position" | "song";
+  readonly key: "cadence" | "position" | "target" | "song";
   readonly label: string;
   readonly value: string;
   readonly unit: string | null;
