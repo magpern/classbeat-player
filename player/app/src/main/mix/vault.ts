@@ -3,10 +3,12 @@
 // user can read, and the account's mix folder `<app data>/mixes/<account key>/`. No plain-text
 // fallback: without a keychain no secret is written. An empty "ending" mark, written before an
 // account's deletion starts and removed once it is done, makes the account's token count as gone,
-// so a crash between the steps never leaves an account that looks connected (issue #709). Nothing here logs, and no path is ever built
-// from anything but a 64-hex account key.
+// so a crash between the steps never leaves an account that looks connected (issue #709). The mark
+// and its folder are flushed to disk before `markEnding` returns, so a power loss after the key's
+// deletion still finds the mark (#720). Nothing here logs, and no path is ever built from anything
+// but a 64-hex account key.
 import { randomBytes } from "node:crypto";
-import { closeSync, constants, lstatSync, openSync, readdirSync, rmSync } from "node:fs";
+import { closeSync, constants, fsyncSync, lstatSync, openSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { keychainFile } from "../pairing/keychain.ts";
 import type { SafeStorageLike, SecretStore } from "../pairing/keychain.ts";
@@ -67,7 +69,20 @@ const names = (dir: string): string[] => {
   }
 };
 
-export function keychainVault(safe: SafeStorageLike, dir: string, platform: string): MixVault {
+/** Flushes an open file or folder to disk (`fsyncSync`; a test stands in one that records or fails). */
+export type Flush = (fd: number) => void;
+
+/** Opens `path`, flushes it and closes it; throws when it cannot be opened or flushed. */
+const flushPath = (path: string, flags: number, flush: Flush, mode?: number): void => {
+  const fd = openSync(path, flags, mode);
+  try {
+    flush(fd);
+  } finally {
+    closeSync(fd);
+  }
+};
+
+export function keychainVault(safe: SafeStorageLike, dir: string, platform: string, flush: Flush = fsyncSync): MixVault {
   const tokenFile = (a: string): string => join(dir, `mix-token-${checked(a)}.bin`);
   const keyFile = (a: string): string => join(dir, `mix-key-${checked(a)}.bin`);
   const endFile = (a: string): string => join(dir, `mix-ending-${checked(a)}.bin`);
@@ -102,7 +117,10 @@ export function keychainVault(safe: SafeStorageLike, dir: string, platform: stri
     },
     markEnding(a) {
       // Empty, never truncating or following a link planted in its place; one already there is kept.
-      closeSync(openSync(endFile(a), constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, 0o600));
+      flushPath(endFile(a), constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, flush, 0o600);
+      // The folder's entry for the mark too. Windows cannot open a folder to flush it; there NTFS
+      // journals the new entry itself.
+      if (platform !== "win32") flushPath(dir, constants.O_RDONLY, flush);
     },
     isEnding: (a) => exists(endFile(a)),
     clearEnding: (a) => rmSync(endFile(a), { force: true }),
