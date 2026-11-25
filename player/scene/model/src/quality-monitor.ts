@@ -14,7 +14,7 @@ export const STEP_BELOW_FPS: Readonly<Record<QualityLevel, number>> = { High: 50
 export const STEP_AFTER_MS = 5000;
 /** One window of frames is read when it spans at least this long. */
 export const WINDOW_MS = 1000;
-/** A gap this long between two frames is a pause (hidden window, suspended computer), not a slow scene: it is no evidence. */
+/** One gap this long between two frames is a pause (hidden window, suspended computer), not a slow scene: it is no evidence. A second long gap right after it is a computer drawing under one frame in 2 s: that is evidence. */
 export const PAUSE_MS = 2000;
 
 /** One row of the once-a-second frame-rate log (S9): the whole window's rate and the level it was drawn at. */
@@ -32,6 +32,8 @@ export interface MonitorState {
   /** Time spent in consecutive windows under the level's threshold. */
   readonly lowMs: number;
   readonly seconds: number;
+  /** The last gap between frames was over the pause limit: a second one in a row is no longer a pause. */
+  readonly afterPause: boolean;
 }
 
 export interface Observed {
@@ -43,19 +45,20 @@ export interface Observed {
 }
 
 export function startMonitor(level: QualityLevel = "High"): MonitorState {
-  return { level, windowStartMs: null, lastMs: null, frames: 0, lowMs: 0, seconds: 0 };
+  return { level, windowStartMs: null, lastMs: null, frames: 0, lowMs: 0, seconds: 0, afterPause: false };
 }
 
 /** Take one frame, at `nowMs`. */
 export function observe(state: MonitorState, nowMs: number): Observed {
-  const restart = state.lastMs === null || nowMs - state.lastMs > PAUSE_MS || nowMs < state.lastMs;
-  if (restart) return { state: { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, lowMs: 0 }, row: null, stepped: false };
+  const long = state.lastMs !== null && nowMs - state.lastMs > PAUSE_MS;
+  const restart = state.lastMs === null || nowMs < state.lastMs || (long && !state.afterPause);
+  if (restart) return { state: { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, lowMs: 0, afterPause: long }, row: null, stepped: false };
   const frames = state.frames + 1;
   const elapsed = nowMs - (state.windowStartMs ?? nowMs);
-  if (elapsed < WINDOW_MS) return { state: { ...state, lastMs: nowMs, frames }, row: null, stepped: false };
+  if (elapsed < WINDOW_MS) return { state: { ...state, lastMs: nowMs, frames, afterPause: long }, row: null, stepped: false };
   const fps = (frames * 1000) / elapsed;
   const row: SecondRow = { second: state.seconds, fps, level: state.level };
-  const next = { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, seconds: state.seconds + 1 };
+  const next = { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, seconds: state.seconds + 1, afterPause: long };
   if (state.level === "Plain") return { state: next, row, stepped: false };
   const lowMs = fps < STEP_BELOW_FPS[state.level] ? state.lowMs + elapsed : 0;
   if (lowMs < STEP_AFTER_MS) return { state: { ...next, lowMs }, row, stepped: false };

@@ -52,6 +52,8 @@ export class SceneRenderer {
   private cancel: (() => void) | null = null;
   private running = false;
   private monitor: MonitorState;
+  /** The scene gave way to the plain 2D screen; it does not come back in this class (a new renderer starts a new class). */
+  private plain = false;
 
   constructor(host: Host, options: RendererOptions) {
     this.host = host;
@@ -90,6 +92,7 @@ export class SceneRenderer {
 
   /** A level the person or the host chose: the frame-rate count starts again at it. */
   setQuality(level: QualityLevel): void {
+    if (this.plain) return;
     this.monitor = startMonitor(level);
     this.applyLevel(level);
   }
@@ -112,7 +115,7 @@ export class SceneRenderer {
   }
 
   start(getFeed: () => Feed): void {
-    if (this.running) return;
+    if (this.running || this.plain) return;
     this.running = true;
     const tick = (now: number) => {
       if (!this.running) return;
@@ -130,6 +133,7 @@ export class SceneRenderer {
     if (seen.row) this.options.onSecond?.(seen.row);
     if (!seen.stepped) return false;
     if (seen.state.level === "Plain") {
+      this.plain = true;
       this.stop();
       this.options.onLevel?.("Plain");
       return true;

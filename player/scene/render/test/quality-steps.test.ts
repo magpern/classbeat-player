@@ -14,20 +14,24 @@ const tokens = tokensFromFile();
 /** A host whose frames the test fires by hand, at the frame time it chooses. */
 function fakeHost() {
   let pending: ((nowMs: number) => void) | null = null;
+  let requests = 0;
+  let frames = 0;
   const ratios: number[] = [];
   const host: Host = {
     painter: { setPixelRatio: (r) => ratios.push(r), setSize: () => undefined, render: () => undefined, dispose: () => undefined },
     size: () => ({ width: 1280, height: 720, pixelRatio: 1 }),
     onResize: () => () => undefined,
-    schedule: (cb) => { pending = cb; return () => { pending = null; }; },
+    schedule: (cb) => { pending = cb; requests++; return () => { pending = null; }; },
   };
   return {
     host, ratios,
+    get requests() { return requests; },
+    get frames() { return frames; },
     get scheduled() { return pending !== null; },
     /** Run frames at `fps` for `seconds`, from `fromMs`; returns the time after the last one. */
     run(fps: number, seconds: number, fromMs: number): number {
       let t = fromMs;
-      for (let i = 0; i <= Math.round(fps * seconds) && pending; i++) { const cb = pending; pending = null; t = fromMs + (i * 1000) / fps; cb(t); }
+      for (let i = 0; i <= Math.round(fps * seconds) && pending; i++) { const cb = pending; pending = null; frames++; t = fromMs + (i * 1000) / fps; cb(t); }
       return t + 1000 / fps;
     },
   };
@@ -55,6 +59,7 @@ test("a low frame rate steps High to Medium to Low, each time applying the level
   h.run(20, 5.5, t);
   assert.deepEqual(levels, ["Medium", "Low", "Plain"]);
   assert.equal(h.scheduled, false, "no further frame is asked for at Plain");
+  assert.equal(h.requests, h.frames, "every frame asked for was run, and none was asked for after the one that reached Plain");
   assert.ok(rows.some((r) => r.level === "Low") && rows.every((r) => r.fps > 0));
 });
 
@@ -88,4 +93,22 @@ test("a person's setQuality restarts the count at the chosen level", () => {
   assert.deepEqual(levels, []);
   h.run(40, 2, t);
   assert.deepEqual(levels, ["Low"]);
+});
+
+test("after Plain, start and setQuality refuse: the scene does not come back and the level does not rise", () => {
+  const { h, r, levels } = setup({ quality: "Low" });
+  h.run(10, 6, 0);
+  assert.deepEqual(levels, ["Plain"]);
+  const ratio = h.ratios.at(-1);
+  r.setQuality("High");
+  assert.equal(h.ratios.at(-1), ratio, "no new render scale");
+  r.start(() => feedAt(20_000));
+  assert.equal(h.scheduled, false, "start does not bring the loop back");
+});
+
+test("a computer drawing a frame every 2.1 s still walks to Plain through the renderer", () => {
+  const { h, levels } = setup();
+  let t = 0;
+  for (let i = 0; i < 40 && !levels.includes("Plain"); i++) { t = h.run(1 / 2.1, 0, t); }
+  assert.deepEqual(levels, ["Medium", "Low", "Plain"]);
 });

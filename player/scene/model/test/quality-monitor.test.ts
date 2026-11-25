@@ -111,3 +111,31 @@ test("at the table's own numbers: 49 fps steps High, 50 does not; 44 steps Mediu
   assert.deepEqual([steps("Medium", 44), steps("Medium", 45)], [1, 0]);
   assert.deepEqual([steps("Low", 29), steps("Low", 30)], [1, 0]);
 });
+
+/** Frames `gapMs` apart, `count` of them from 0, on a fresh monitor at `level`. */
+function gaps(level: QualityLevel, gapMs: number, count: number): Run {
+  const run = fresh(level);
+  for (let i = 0; i < count; i++) {
+    const r = observe(run.state, i * gapMs);
+    run.state = r.state;
+    if (r.row) run.rows.push(r.row);
+    if (r.stepped) { run.steps++; run.levels.push(r.state.level); }
+  }
+  return run;
+}
+
+test("a computer drawing a frame every 2.1 s (over the pause limit) walks to Plain and logs, not stuck as a pause", () => {
+  const run = gaps("High", 2100, 40);
+  assert.deepEqual(run.levels, ["Medium", "Low", "Plain"]);
+  assert.ok(run.rows.length > 0 && run.rows.every((r) => r.fps < 1));
+});
+
+test("one long gap stays a pause; a normal frame after it clears the pause, so two long gaps apart never add up", () => {
+  let s = observe(startMonitor("High"), 0).state;
+  let t = 0;
+  for (let i = 0; i < 10; i++) {
+    t += 3000; s = observe(s, t).state; // a long gap (a pause) ...
+    for (let k = 0; k < 40; k++) { t += 25; s = observe(s, t).state; } // ... then a healthy second
+  }
+  assert.equal(s.level, "High");
+});
