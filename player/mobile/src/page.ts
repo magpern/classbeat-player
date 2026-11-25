@@ -14,6 +14,8 @@ export const PAGES = {
   "rider.html": { title: "Rider mode", bundle: "rider" },
   "instructor.html": { title: "Instructor mode", bundle: "instructor" },
   "room.html": { title: "Room screen", bundle: "main" },
+  // Only the external display's presentation loads it (ExternalDisplayPolicy.kt); no mode shows it.
+  "display.html": { title: "Room screen, no class open", bundle: "display" },
 } as const;
 
 export type PageName = keyof typeof PAGES;
@@ -32,6 +34,7 @@ export function pageHtml(name: PageName): string {
     ...(bundle ? [`<link rel="stylesheet" href="${bundle}.css">`, `<script src="${bundle}.js" defer></script>`] : []),
     "</head>",
     room ? '<body data-band="hidden" data-join="closed">' : "<body>",
+    ...(name === "display.html" ? ['<main class="idle"><span data-tier="text" data-lines="2">The class shows here when it opens on the phone</span></main>'] : []),
     "</body>",
     "</html>",
     "",

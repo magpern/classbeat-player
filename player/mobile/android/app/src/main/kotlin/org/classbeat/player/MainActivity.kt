@@ -98,6 +98,7 @@ class MainActivity : BridgeActivity(), ModeHost {
 
     /** Leaving the app for good ends the rider's session: the link closes and the token goes. */
     override fun onDestroy() {
+        modes?.destroyed()
         rider?.drop()
         rider = null
         super.onDestroy()

@@ -1,0 +1,5 @@
+/* The external display with no class open: the dark stage and one line in the middle
+   (docs/design/mockups/app-room.css, ".idle"). */
+html, body { margin: 0; height: 100%; background: var(--stage); }
+.idle { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; background: var(--stage); }
+.idle [data-tier] { font-family: var(--face-text); font-size: 6vh; color: var(--light-2); text-align: center; line-height: 1.2; max-width: 70vw; }

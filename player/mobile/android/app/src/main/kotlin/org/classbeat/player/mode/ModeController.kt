@@ -36,6 +36,7 @@ class ModeController(
     private lateinit var webView: WebView
     private val screens = ModeScreens(activity)
     private val opener = PageOpener(this)
+    private val externalDisplay = ExternalDisplay(AndroidDisplays(activity), AndroidRoomSurface(activity))
     private lateinit var pairing: PairingUi
 
     /** Instructor mode's class intents. */
@@ -81,6 +82,7 @@ class ModeController(
         // Added first, so a native screen's Back (added last) runs before the rider's.
         activity.onBackPressedDispatcher.addCallback(activity, rider.back)
         activity.onBackPressedDispatcher.addCallback(activity, back)
+        externalDisplay.start()
         holder.start()
     }
 
@@ -94,6 +96,7 @@ class ModeController(
         page = path
         opener.committed(path)
         syncKeepAwake()
+        syncExternalDisplay()
     }
 
     // PageSteps: the opener's steps.
@@ -114,6 +117,7 @@ class ModeController(
         // Between modes: the screen is released at once, before the drops run.
         page = null
         setKeepOn(false)
+        syncExternalDisplay()
         pairing.drop()
         unpairing.close()
         // The page that asked is being replaced: its question ends here, with the one refused word.
@@ -185,6 +189,7 @@ class ModeController(
     fun resumed() {
         foreground = true
         syncKeepAwake()
+        syncExternalDisplay()
         pairing.resumed()
         if (holder.pending != ModeHolder.Pending.NO_LOCK) return
         holder.noLockReturned()
@@ -199,6 +204,7 @@ class ModeController(
     fun stopped() {
         foreground = false
         syncKeepAwake()
+        syncExternalDisplay()
         if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing.showing) stay()
     }
 
@@ -245,6 +251,12 @@ class ModeController(
     /** The window flag follows the pure decision; it is set only on the main thread, as everything here. */
     private fun syncKeepAwake() =
         setKeepOn(KeepAwakePolicy.keepOn(current, page, riderJoined(), foreground))
+
+    /** The room screen on an external display follows the pure decision, as the window flag does (issue #738). */
+    private fun syncExternalDisplay() = externalDisplay.update(current, page, foreground)
+
+    /** The activity is going: the room screen comes down and the displays are no longer watched. */
+    fun destroyed() = externalDisplay.stop()
 
     private fun riderJoined() = ::rider.isInitialized && rider.joined
 
