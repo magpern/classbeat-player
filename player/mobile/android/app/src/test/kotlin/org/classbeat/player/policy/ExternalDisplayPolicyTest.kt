@@ -41,7 +41,6 @@ class ExternalDisplayPolicyTest {
             val want = when {
                 !d || !f -> Shown.NONE
                 path == room -> Shown.ROOM
-                mode == Mode.RIDER -> Shown.IDLE_RIDER
                 else -> Shown.IDLE
             }
             assertEquals("$path $d $f", want, shown(Mode.INSTRUCTOR, path, d, f))
