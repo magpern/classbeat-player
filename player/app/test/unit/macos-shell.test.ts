@@ -197,7 +197,12 @@ test("the release page is opened in one place, only with the address built from 
   // The service hands openPage only what releasePageAddress builds from the shown status, never anything from the page.
   const service = src("main/update/service.ts");
   assert.deepEqual([...service.matchAll(/\bdeps\.openPage\(([^)]*)\)/g)].map((m) => m[1]), ["address"]);
-  assert.match(service, /const address = releasePageAddress\(visible\(now\(\)\)\);/);
+  // The whole openReleasePage body is pinned, so the one call cannot move to a place where another
+  // value is named `address` (the feed's, #810); and `address` is declared there and nowhere else.
+  assert.match(service, /\n {4}openReleasePage\(\) \{\n {6}const address = releasePageAddress\(visible\(now\(\)\)\);\n {6}if \(address === null\) return false;\n {6}deps\.openPage\(address\);\n {6}return true;\n {4}\},\n/);
+  assert.equal(code(service).match(/\baddress\b/g)?.length, 4, "address only in openReleasePage");
+  assert.match(service, /^import \{ couldNotCheck, releasePageAddress, statusAfter \} from "\.\.\/\.\.\/core\/update\/status\.ts";$/m);
+  assert.equal(code(service).match(/\breleasePageAddress\b/g)?.length, 2, "imported from status.ts and called once, never defined here");
   assert.match(src("core/update/status.ts"), /export const RELEASE_PAGE_PREFIX = "https:\/\/github\.com\/magpern\/classbeat-player\/releases\/tag\/player-v";/);
   assert.match(src("core/update/status.ts"), /return RELEASE_PAGE_PREFIX \+ latest\.text;/);
   // The handler passes no argument on: Open release page takes none.

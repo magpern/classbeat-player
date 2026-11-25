@@ -171,6 +171,24 @@ test("the class gate: during a class nothing is shown or done, a result that arr
   assert.deepEqual(r.opened, [`${RELEASE_PAGE_PREFIX}0.2.0`]);
 });
 
+test("Check now during a class, with no check running, makes no request and changes nothing visible", async () => {
+  // A reply is queued, so a check that got past the gate would make its request and show 0.3.0.
+  const r = rig({ answers: [ok(release("0.2.0")), ok(release("0.3.0"))] });
+  r.service.start();
+  await r.service.idle();
+  const before = r.service.view();
+  assert.equal(before?.notice, "0.2.0");
+  assert.equal(before?.kind, "newer", "no check running");
+  r.cls.open = true;
+  assert.equal(r.service.checkNow(), null);
+  await r.service.idle();
+  assert.equal(r.requests.length, 1, "no request during the class");
+  assert.equal(r.service.view(), null);
+  r.cls.open = false;
+  assert.deepEqual(r.service.view(), before, "nothing changed once the class closes");
+  assert.equal(r.requests.length, 1);
+});
+
 test("a timer that fires during a class still checks, and a failure then drops the notice once the class ends", async () => {
   const r = rig({ answers: [ok(release("0.2.0")), () => new Response("", { status: 503 })] });
   r.service.start();
