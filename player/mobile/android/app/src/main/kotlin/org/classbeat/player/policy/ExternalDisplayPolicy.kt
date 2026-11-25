@@ -10,6 +10,9 @@ object ExternalDisplayPolicy {
     /** The dark stage with its one line, for a display with no class open (display.html: no bridge, no data). */
     const val IDLE_PAGE = "/display.html"
 
+    /** The same stage with the rider's line, for rider mode (issue #759). Chosen by the mode alone. */
+    const val IDLE_RIDER_PAGE = "/display-rider.html"
+
     enum class Shown(val page: String?) {
         /** Nothing: no presentation. */
         NONE(null),
@@ -17,8 +20,11 @@ object ExternalDisplayPolicy {
         /** "Display, class open": the room screen. */
         ROOM(ROOM_PAGE),
 
-        /** "Display, no class open", rider mode and between modes: the idle stage. */
+        /** "Display, no class open" and between modes: the idle stage with the instructor's line. */
         IDLE(IDLE_PAGE),
+
+        /** Rider mode: the idle stage with "Your class is on your phone". */
+        IDLE_RIDER(IDLE_RIDER_PAGE),
     }
 
     /**
@@ -32,18 +38,19 @@ object ExternalDisplayPolicy {
     fun shown(mode: Mode?, path: String?, displayPresent: Boolean, foreground: Boolean): Shown = when {
         !displayPresent || !foreground -> Shown.NONE
         mode == Mode.INSTRUCTOR && path == ROOM_PAGE -> Shown.ROOM
+        mode == Mode.RIDER -> Shown.IDLE_RIDER
         else -> Shown.IDLE
     }
 
     /**
      * Whether the presentation's web view may load [url]: the bundle's own files only, and in the main
-     * frame the room page or the idle page only. Inner frames may load any bundle file (the page's CSP
+     * frame the room page or an idle page only. Inner frames may load any bundle file (the page's CSP
      * allows none); there is no link or other page to go to.
      */
     fun mayLoad(url: String, mainFrame: Boolean): Boolean {
         if (!NavigationPolicy.serves(url)) return false
         if (!mainFrame) return true
         val path = NavigationPolicy.decodePath(url.substringAfter("//localhost").substringBefore('?').substringBefore('#'))
-        return path == ROOM_PAGE || path == IDLE_PAGE
+        return path == ROOM_PAGE || path == IDLE_PAGE || path == IDLE_RIDER_PAGE
     }
 }
