@@ -80,3 +80,10 @@ export function linkWords(link: TextLink, cls: Pick<TextClass, "following">, pla
     default: return { text: cls.following, alert: false };
   }
 }
+
+/** The link marker's shape (scene.md "Link markers in the text layer", room-2d.md States): a round dot while the music is followed, a square for the manual clock, its prompts ("Press Start", "Manual \u00b7 F to follow", "Following stopped") and the "Playlist not loaded" plate. A fault plate keeps its own square (the .alert style). */
+export function linkMarker(plate: { text: string; alert: boolean }, link: TextLink): "round" | "square" {
+  if (plate.alert) return "square";
+  if (link.mix !== undefined) return "round";
+  return plate.text === "Press Start" || plate.text === "Manual clock" || plate.text === "Manual \u00b7 F to follow" ? "square" : "round";
+}

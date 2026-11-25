@@ -10,7 +10,7 @@ import type { PatternState } from "./text-pattern-calc.ts";
 import { scoreView } from "./text-score-calc.ts";
 import type { TextInput, TextInterval, TextZone } from "./text-types.ts";
 import type { ClockView, GelView, MetricView, NextView, PatternBlockView, RailView, TextView } from "./text-view.ts";
-import { barsText, cadenceWords, classTimeText, clockText, countdownText, linkWords, inclineWords, patternWords, positionWord, specForms } from "./text-words.ts";
+import { barsText, cadenceWords, classTimeText, clockText, countdownText, linkMarker, linkWords, inclineWords, patternWords, positionWord, specForms } from "./text-words.ts";
 
 const WIDE_COUNT_MS = 10 * 60_000;
 /** Below this the block's count steps down to 14.6 vh (it is 16 vw at the least, else it folds). */
@@ -46,7 +46,7 @@ export function textView(input: TextInput): TextView {
   const gel: GelView = { zone: iv.zone, look: paused ? "down" : "zone", numeral: String(iv.zone), name: zone.name, nameSmall: nameSmall(zone.name, layout, aspect), targets: zone.targets };
   const segment = cls.segments.filter((s) => s.startMs <= classMs).at(-1)?.name ?? null;
   const unstarted = link.started === false;
-  const rail: RailView = { left: unstarted ? null : `${clockText(cls.endMs - classMs)} left`, done: unstarted ? null : `${classTimeText(classMs)} done`, segment: layout === "wide" && !plate.alert ? segment : null, link: plate };
+  const rail: RailView = { left: unstarted ? null : `${clockText(cls.endMs - classMs)} left`, done: unstarted ? null : `${classTimeText(classMs)} done`, segment: layout === "wide" && !plate.alert ? segment : null, link: plate, kind: linkMarker(plate, link) };
 
   const bpm = song?.bpm;
   const bars = level === "Beat" && bpm !== undefined && !paused ? barsText(Math.floor((remaining * bpm) / 60_000 / 4), last) : null;

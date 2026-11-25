@@ -39,6 +39,7 @@
 #text .rail .seg { font-size: var(--t-label); font-weight: 700; margin-right: 1vw; }
 #text .link { font-size: var(--t-label); font-weight: 700; display: inline-flex; align-items: center; gap: 0.7vh; }
 #text .link::before { content: ""; width: 1.2vh; height: 1.2vh; border-radius: 50%; background: var(--light-1); flex: none; }
+#text .link.sq::before { border-radius: 0; }
 #text .link.alert { background: var(--light-1); color: var(--ink); padding: 0.5vh 1vh; }
 #text .link.alert::before { background: var(--ink); border-radius: 0; }
 
