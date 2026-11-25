@@ -28,7 +28,7 @@ const SEMVER = new RegExp(
 /** The version in `raw`, or null when it is not a string holding exactly one SemVer version. */
 export function parseVersion(raw: unknown): Version | null {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_VERSION_LENGTH) return null;
-  const m = SEMVER.exec(raw);
+  const m = raw.match(SEMVER);
   if (!m) return null;
   return { text: raw, core: [m[1]!, m[2]!, m[3]!], pre: m[4] === undefined ? [] : m[4].split(".") };
 }
