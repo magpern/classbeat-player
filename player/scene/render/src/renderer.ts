@@ -6,7 +6,8 @@
 // not here.
 
 import type { QualityLevel } from "../../model/src/index.ts";
-import { QUALITY } from "../../model/src/index.ts";
+import { QUALITY, observe, startMonitor } from "../../model/src/index.ts";
+import type { MonitorState, SecondRow } from "../../model/src/index.ts";
 import type { Host } from "./host.ts";
 import { RigLoop } from "./loop.ts";
 import type { Draw, Feed } from "./loop.ts";
@@ -26,6 +27,15 @@ export interface RendererOptions {
   readonly budgetOff?: boolean;
   /** The demo's `steady=1`: only steady light is drawn (steady-calc.ts), for the gate's per-region rate. Never the product. */
   readonly steadyOnly?: boolean;
+  /**
+   * Whether `start` steps the quality level down on a low frame rate (scene.md "Quality levels"). On by default: the product
+   * wants it. The demo turns it off unless asked, so a slow CI machine keeps the level a screenshot names.
+   */
+  readonly adapt?: boolean;
+  /** Once a second while `start` runs: the frame rate of the last second and the level it was drawn at (the S9 log). */
+  readonly onSecond?: (row: SecondRow) => void;
+  /** The level stepped (always down). Called after the new level is applied; at Plain the loop has stopped and the host shows the plain 2D screen instead. */
+  readonly onLevel?: (level: QualityLevel | "Plain") => void;
   /** Called after each frame with what was drawn and the rig's measured beam directions. */
   readonly onFrame?: (draw: Draw, measured: ReturnType<SceneRig["measuredDirections"]>, nowMs: number) => void;
 }
@@ -41,11 +51,13 @@ export class SceneRenderer {
   private last: number | null = null;
   private cancel: (() => void) | null = null;
   private running = false;
+  private monitor: MonitorState;
 
   constructor(host: Host, options: RendererOptions) {
     this.host = host;
     this.options = options;
     this.quality = options.quality ?? "High";
+    this.monitor = startMonitor(this.quality);
     this.rig = new SceneRig(options.tokens);
     this.loop = new RigLoop(options.tokens, options.budgetOff === true);
     if (options.steadyOnly === true) this.loop.holdMotionPhase();
@@ -76,7 +88,13 @@ export class SceneRenderer {
     this.rig.mask.set(this.boxes, w, h);
   }
 
+  /** A level the person or the host chose: the frame-rate count starts again at it. */
   setQuality(level: QualityLevel): void {
+    this.monitor = startMonitor(level);
+    this.applyLevel(level);
+  }
+
+  private applyLevel(level: QualityLevel): void {
     this.quality = level;
     this.resize();
   }
@@ -99,9 +117,26 @@ export class SceneRenderer {
     const tick = (now: number) => {
       if (!this.running) return;
       this.frame(getFeed(), now);
+      if (this.options.adapt !== false && this.watch(now)) return;
       this.cancel = this.host.schedule(tick);
     };
     this.cancel = this.host.schedule(tick);
+  }
+
+  /** Feed the frame to the monitor, log its second, apply a step. True when the scene is over (Plain): the loop stops and the host hands over to the 2D screen. */
+  private watch(nowMs: number): boolean {
+    const seen = observe(this.monitor, nowMs);
+    this.monitor = seen.state;
+    if (seen.row) this.options.onSecond?.(seen.row);
+    if (!seen.stepped) return false;
+    if (seen.state.level === "Plain") {
+      this.stop();
+      this.options.onLevel?.("Plain");
+      return true;
+    }
+    this.applyLevel(seen.state.level);
+    this.options.onLevel?.(seen.state.level);
+    return false;
   }
 
   stop(): void {
