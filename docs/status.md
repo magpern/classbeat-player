@@ -5,14 +5,14 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #736; `main` at e9c112f).
+Updated 2026-11-25 (after #774; `main` at fc1f5e9).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
 All issues are merged: CI (#1, #10, #17, #24, #33), ADRs 0001–0004 (#2, #3, #9, #15, #35),
 spike 1 harness (#4), and spike 2 web and Godot variants (#5, #18). What is still open is the
-owner's: running both spikes (owner.md). Open: a timeout on every CI job (#756), after
-PR #680's `node-packages` job hung for almost three hours.
+owner's: running both spikes (owner.md). Every CI job now has a timeout (#756, #757), set after
+PR #680's `node-packages` job hung for almost three hours. Open: a 90-minute limit for the scene shots (#775, PR #776).
 
 ## PL5: music link (done on fakes)
 
@@ -149,15 +149,19 @@ the control band and join sheet under the strict measure (#585, #600), the room 
 
 **Rule gap (S6), since closed:** the sweep and sway windows (#618) did not yet fit the strict whole-frame
 gate in every case. The revised sweep and sway spec is merged (#635: a turning beam moves in black,
-near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened);
+near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened).
 
 Also merged: the player's state-rate test made deterministic (#624, #626), the 4.15 s sweep
 windows with a burst's decay counted in the shared budget and gated (#618, #622; this closes the
 known S6 gap above and #592), and scene.md as built after #592 (#671).
 
-Open: mounting the scene in the room window (#677, PR #680), stepping the quality level down on a
-low frame rate (#678, PR #740), and #717 (after #677). Design follow-up: the scene folds the grey circle
-and square markers into one round dot; scene.md or `text.css` is to settle this.
+Also merged: the scene mounted in the room window, with the plain 2D fallback and reduced motion
+(#677, #680).
+
+Open: stepping the quality level down on a low frame rate (#678, PR #740), then the plain level
+after a sustained low frame rate (#717, after #740 because both change the quality monitor).
+Design follow-up: the scene folds the grey circle and square markers into one round dot;
+scene.md or `text.css` is to settle this.
 
 ## PL12: installed phone and tablet apps
 
@@ -184,9 +188,10 @@ Android app is finished (#684).
 Also merged: keeping the screen on during a class (#737) and the room screen on an external
 display as the presenter view (#738, #748).
 
-Open: a test of ModeController's keep-screen-on wiring (#749), a limit on how often a crashed
-external display is shown again (#752, PR #755), and a rider line on the external display's idle
-stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
+Also merged: a test of ModeController's keep-screen-on wiring (#749, #761) and a limit on how
+often a crashed external display is shown again (#752, #755).
+
+Open: a rider line on the external display's idle stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
 reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
 
 ## PL9: sensors (ADR 0012), done on fakes
@@ -229,8 +234,17 @@ updater's ADR (#762, security-critical), the release runbook (#763) and the down
 
 ## PL10: running classes and treadmill reading
 
-The design is being settled first in an ADR (#765, rule-sensitive: the treadmill is read, never
-controlled). Testing on a real treadmill waits for the owner.
+Merged: ADR 0015 (#765: the treadmill and foot pod are read, never controlled; the fitness
+machine's and the running service's control points stay banned) and the running decoders with the
+sensor allowlist widened to the Running Speed and Cadence service, the treadmill data
+characteristic and foot-pod step cadence (#770, #773).
+
+Also merged: the running-class design, with running states in eight screen specs (#769, #774).
+
+Open: the screens (#771) and a scene test that pins the scene's inputs for running classes
+(#772). Decided: the rider page's incline-target slot
+stays empty, like a missing position, until a contract change adds an incline field; the live
+contract has none today. Testing on a real treadmill waits for the owner.
 
 ## Infra
 

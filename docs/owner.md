@@ -107,7 +107,8 @@ with other work; nothing in the development loop waits for an answer.
   `navigator.bluetooth` in all its code, and the live guard bans `power`, `cadence`, `rpm` and
   `ftms` in every live message, so two parts of PL9 need you. Proposals, like #173: (1) one player
   renderer file may use `navigator.bluetooth`, only for the heart-rate, cycling and fitness-machine
-  services (and, from PL10, the Running Speed and Cadence service for foot pods, ADR 0015), with no write to any sensor and the app's own device chooser; (2) one live message,
+  services (and, from PL10, the Running Speed and Cadence service for foot pods, ADR 0015),
+  with no write to any sensor and the app's own device chooser; (2) one live message,
   `rider_reading`, from a rider to the instructor's computer only, with heart rate, cadence and
   power at most once a second, shown in the presenter window only, in join order and never
   ranked, and never stored. With one display (the usual studio), riders' readings would not be
