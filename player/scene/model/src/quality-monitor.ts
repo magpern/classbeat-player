@@ -29,6 +29,8 @@ export interface MonitorState {
   readonly windowStartMs: number | null;
   readonly lastMs: number | null;
   readonly frames: number;
+  /** The open window's length with every gap capped at the pause limit: what counts as slow time, so one long gap never takes a whole step. */
+  readonly cappedMs: number;
   /** Time spent in consecutive windows under the level's threshold. */
   readonly lowMs: number;
   readonly seconds: number;
@@ -45,22 +47,23 @@ export interface Observed {
 }
 
 export function startMonitor(level: QualityLevel = "High"): MonitorState {
-  return { level, windowStartMs: null, lastMs: null, frames: 0, lowMs: 0, seconds: 0, afterPause: false };
+  return { level, windowStartMs: null, lastMs: null, frames: 0, cappedMs: 0, lowMs: 0, seconds: 0, afterPause: false };
 }
 
 /** Take one frame, at `nowMs`. */
 export function observe(state: MonitorState, nowMs: number): Observed {
   const long = state.lastMs !== null && nowMs - state.lastMs > PAUSE_MS;
   const restart = state.lastMs === null || nowMs < state.lastMs || (long && !state.afterPause);
-  if (restart) return { state: { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, lowMs: 0, afterPause: long }, row: null, stepped: false };
+  if (restart) return { state: { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, cappedMs: 0, lowMs: 0, afterPause: long }, row: null, stepped: false };
   const frames = state.frames + 1;
+  const cappedMs = state.cappedMs + Math.min(nowMs - (state.lastMs ?? nowMs), PAUSE_MS);
   const elapsed = nowMs - (state.windowStartMs ?? nowMs);
-  if (elapsed < WINDOW_MS) return { state: { ...state, lastMs: nowMs, frames, afterPause: long }, row: null, stepped: false };
+  if (elapsed < WINDOW_MS) return { state: { ...state, lastMs: nowMs, frames, cappedMs, afterPause: long }, row: null, stepped: false };
   const fps = (frames * 1000) / elapsed;
   const row: SecondRow = { second: state.seconds, fps, level: state.level };
-  const next = { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, seconds: state.seconds + 1, afterPause: long };
+  const next = { ...state, windowStartMs: nowMs, lastMs: nowMs, frames: 0, cappedMs: 0, seconds: state.seconds + 1, afterPause: long };
   if (state.level === "Plain") return { state: next, row, stepped: false };
-  const lowMs = fps < STEP_BELOW_FPS[state.level] ? state.lowMs + elapsed : 0;
+  const lowMs = fps < STEP_BELOW_FPS[state.level] ? state.lowMs + Math.min(elapsed, cappedMs) : 0;
   if (lowMs < STEP_AFTER_MS) return { state: { ...next, lowMs }, row, stepped: false };
   return { state: { ...next, level: stepDown(state.level), lowMs: 0 }, row, stepped: true };
 }

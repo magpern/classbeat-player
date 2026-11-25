@@ -45,6 +45,7 @@ function createHandle(canvas: HTMLCanvasElement, onLost: () => void): SceneHandl
     return merged.made;
   };
   return {
+    setQuality: (level) => renderer.setQuality(level),
     frame({ feed, text }, nowMs) {
       // The text first: it shows the class as the last frame mark had it (text rule 2), and the mask needs its boxes before the draw.
       const s = renderer.textAt(feed);
