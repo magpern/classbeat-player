@@ -8,13 +8,13 @@
     python -m player_backend.admin account delete <account id>
 
 They connect with `PLAYER_DATABASE_OWNER_URL` (as the migration runner does) and refuse any
-other role. `purge` calls `auth_purge_expired()` once; the deploy runs it every hour (README,
-"Operator commands"). `account link` makes an existing (`unlinked`) account the instructor of a
-classbeat identity, once, and deletes its passkeys; `account delete` deletes an account fully,
-as ADR 0002, section 12 does, for an `account-deleted` event classbeat could not deliver (ADR
-0010, section 8). Output goes to the
-operator's terminal only, never to a log. A database error is shown by its type and SQLSTATE,
-never by its message.
+other role. `purge` calls `auth_purge_expired()` once and prints how many rows went per kind,
+kind names and numbers only; the deploy runs it every hour (README, "Operator commands").
+`account link` makes an existing (`unlinked`) account the instructor of a classbeat identity,
+once, and deletes its passkeys; `account delete` deletes an account fully, as ADR 0002, section
+12 does, for an `account-deleted` event classbeat could not deliver (ADR 0010, section 8).
+Output goes to the operator's terminal only, never to a log. A database error is shown by its
+type and SQLSTATE, never by its message.
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from uuid import UUID
 from player_backend.db.executor import DatabaseError
 from player_backend.db.operator import (
     NotOperatorRole,
+    UnexpectedPurgeReport,
     account_delete,
     account_link,
     allowlist_add,
@@ -124,8 +125,8 @@ def main(
     try:
         with operator_handle(url) as db:
             if args.command == "purge":
-                purge_expired(db)
-                print("purged expired rows", file=out)
+                for kind, removed in purge_expired(db):
+                    print(f"purged {kind}: {removed}", file=out)
             elif link is not None:
                 done = account_link(db, *link)
                 print(f"{'linked' if done else 'no unlinked account'}: {link[0]}", file=out)
@@ -141,7 +142,7 @@ def main(
             elif email is not None:
                 done = allowlist_remove(db, email)
                 print(f"{'removed' if done else 'not listed'}: {email}", file=out)
-    except NotOperatorRole as refused:
+    except (NotOperatorRole, UnexpectedPurgeReport) as refused:
         print(str(refused), file=err)
         return 1
     except DatabaseError as error:

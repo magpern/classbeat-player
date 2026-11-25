@@ -62,10 +62,40 @@ def allowlist_list(db: Handle) -> list[tuple[str, datetime]]:
     return listed
 
 
-def purge_expired(db: Handle) -> None:
-    """One call of `auth_purge_expired()`, in its own transaction. It returns nothing."""
+# The kinds `auth_purge_expired()` reports, in its order (migration 0017): each a table's name.
+PURGE_KINDS: Final = (
+    "login_links",
+    "login_challenges",
+    "pairings",
+    "source_link_codes",
+    "rate_limits",
+    "classbeat_sign_ins",
+    "classbeat_event_ids",
+    "sessions",
+    "devices",
+    "audit_events",
+)
+
+
+class UnexpectedPurgeReport(RuntimeError):
+    """The function reported something other than PURGE_KINDS with a count each. Carries no
+    value of what it returned."""
+
+
+def purge_expired(db: Handle) -> list[tuple[str, int]]:
+    """One call of `auth_purge_expired()`, in its own transaction: how many rows went, per
+    kind. Anything but the fixed kinds with a non-negative count each rolls the purge back, so
+    only kind names and numbers ever leave here."""
     with db.transaction():
-        db.rows(q.PURGE_EXPIRED)
+        rows = db.rows(q.PURGE_EXPIRED)
+        counts: list[tuple[str, int]] = []
+        for kind, removed in rows:
+            if not isinstance(kind, str) or type(removed) is not int or removed < 0:
+                raise UnexpectedPurgeReport("the purge reported something other than counts")
+            counts.append((kind, removed))
+        if tuple(kind for kind, _ in counts) != PURGE_KINDS:
+            raise UnexpectedPurgeReport("the purge reported other kinds than expected")
+    return counts
 
 
 def account_link(db: Handle, account_id: UUID, issuer: str, subject: str) -> bool:

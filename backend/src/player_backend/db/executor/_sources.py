@@ -47,4 +47,5 @@ SQL_FILES: Final = (
     "0014_classbeat_sign_in.sql",
     "0015_close_email_link_and_passkeys.sql",
     "0016_classbeat_events.sql",
+    "0017_purge_counts.sql",
 )

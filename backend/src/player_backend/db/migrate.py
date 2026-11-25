@@ -122,6 +122,9 @@ def apply_migrations(db: Handle) -> list[str]:
     with _step(db, done, "0016_classbeat_events.sql") as pending:
         if pending:
             db.rows(q.M0016_CLASSBEAT_EVENTS)
+    with _step(db, done, "0017_purge_counts.sql") as pending:
+        if pending:
+            db.rows(q.M0017_PURGE_COUNTS)
     return done
 
 
