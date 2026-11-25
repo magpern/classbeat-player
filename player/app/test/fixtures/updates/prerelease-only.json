@@ -1,0 +1,5 @@
+[
+  {"tag_name": "player-v1.0.0-beta.2", "name": "Player 1.0.0 beta 2", "draft": false, "prerelease": true, "published_at": "2026-11-12T10:00:00Z", "html_url": "https://github.com/magpern/classbeat-player/releases/tag/player-v1.0.0-beta.2"},
+  {"tag_name": "player-v1.0.0-beta.10", "name": "Player 1.0.0 beta 10", "draft": false, "prerelease": true, "published_at": "2026-11-14T10:00:00Z", "html_url": "https://github.com/magpern/classbeat-player/releases/tag/player-v1.0.0-beta.10"},
+  {"tag_name": "player-v1.0.0", "name": "Draft of 1.0.0", "draft": true, "prerelease": false, "published_at": null, "html_url": "https://github.com/magpern/classbeat-player/releases/tag/untagged-2"}
+]
