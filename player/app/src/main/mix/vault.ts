@@ -1,10 +1,12 @@
 // Where Swedebeat's secrets live on this computer (ADR 0013 section 1): the token and the account's
 // cache key, each encrypted by safeStorage (the operating system's keychain) in a file only this
 // user can read, and the account's mix folder `<app data>/mixes/<account key>/`. No plain-text
-// fallback: without a keychain nothing is written. Nothing here logs, and no path is ever built
+// fallback: without a keychain no secret is written. An empty "ending" mark, written before an
+// account's deletion starts and removed once it is done, makes the account's token count as gone,
+// so a crash between the steps never leaves an account that looks connected (issue #709). Nothing here logs, and no path is ever built
 // from anything but a 64-hex account key.
 import { randomBytes } from "node:crypto";
-import { lstatSync, readdirSync, rmSync } from "node:fs";
+import { closeSync, constants, lstatSync, openSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { keychainFile } from "../pairing/keychain.ts";
 import type { SafeStorageLike, SecretStore } from "../pairing/keychain.ts";
@@ -15,11 +17,13 @@ export const MAX_TOKEN_BYTES = 8192;
 const MAX_KEY_BYTES = 1024;
 const KEY_HEX = /^[0-9a-f]{64}$/;
 const ACCOUNT = /^[0-9a-f]{64}$/;
-const FILE = /^mix-(token|key)-([0-9a-f]{64})\.bin$/;
+const FILE = /^mix-(token|key|ending)-([0-9a-f]{64})\.bin$/;
+const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 export interface MixVault {
   /** True only when a real keychain protects what is saved. */
   available(): boolean;
+  /** Null when there is none, it cannot be read, or the account is ending. */
   loadToken(account: string): string | null;
   /** Throws when the token could not be kept. */
   saveToken(account: string, token: string): void;
@@ -31,7 +35,13 @@ export interface MixVault {
   createKey(account: string): Buffer;
   clearKey(account: string): void;
   removeFolder(account: string): void;
-  /** Every account with a token, a key or a mix folder on this computer. */
+  /** Marks the account as ending, before its deletion starts. Throws when the mark could not be made. */
+  markEnding(account: string): void;
+  /** Whether the account's deletion was started and has not finished. */
+  isEnding(account: string): boolean;
+  /** Removes the mark, once every step of the deletion is done. */
+  clearEnding(account: string): void;
+  /** Every account with a token, a key, an ending mark or a mix folder on this computer. */
   accounts(): string[];
 }
 
@@ -60,6 +70,7 @@ const names = (dir: string): string[] => {
 export function keychainVault(safe: SafeStorageLike, dir: string, platform: string): MixVault {
   const tokenFile = (a: string): string => join(dir, `mix-token-${checked(a)}.bin`);
   const keyFile = (a: string): string => join(dir, `mix-key-${checked(a)}.bin`);
+  const endFile = (a: string): string => join(dir, `mix-ending-${checked(a)}.bin`);
   const store = (a: string): SecretStore => keychainFile(safe, tokenFile(a), platform, MAX_TOKEN_BYTES);
   const keyStore = (a: string): SecretStore => keychainFile(safe, keyFile(a), platform, MAX_KEY_BYTES);
   const loadKey = (a: string): Buffer | null => {
@@ -69,7 +80,7 @@ export function keychainVault(safe: SafeStorageLike, dir: string, platform: stri
   const mixes = join(dir, "mixes");
   return {
     available: () => keychainFile(safe, join(dir, "mix-probe.bin"), platform, MAX_KEY_BYTES).available(),
-    loadToken: (a) => store(a).load(),
+    loadToken: (a) => (exists(endFile(a)) ? null : store(a).load()),
     saveToken: (a, token) => store(a).save(token),
     clearToken: (a) => store(a).clear(),
     hasKey: (a) => exists(keyFile(a)),
@@ -89,6 +100,12 @@ export function keychainVault(safe: SafeStorageLike, dir: string, platform: stri
       // A link planted in the folder's place is removed itself; its target is never followed.
       rmSync(join(mixes, checked(a)), { recursive: true, force: true });
     },
+    markEnding(a) {
+      // Empty, never truncating or following a link planted in its place; one already there is kept.
+      closeSync(openSync(endFile(a), constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, 0o600));
+    },
+    isEnding: (a) => exists(endFile(a)),
+    clearEnding: (a) => rmSync(endFile(a), { force: true }),
     accounts() {
       const found = new Set<string>();
       for (const n of names(dir)) {

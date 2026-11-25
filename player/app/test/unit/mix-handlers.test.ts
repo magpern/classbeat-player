@@ -70,5 +70,5 @@ test("from the list page: sign in, then sign out; no answer carries the token or
   assert.equal((signedOut as ReturnType<typeof view>).mix.state, "signed_out");
   const out = JSON.stringify([signedIn, signedOut]);
   assert.ok(!out.includes(PASSWORD) && !out.includes(FAKE_TOKEN));
-  assert.deepEqual(r.vault.log, ["saveToken a", "clearKey a", "clearToken a", "removeFolder a"]);
+  assert.deepEqual(r.vault.log, ["saveToken a", "markEnding a", "clearKey a", "clearToken a", "removeFolder a", "clearEnding a"]);
 });
