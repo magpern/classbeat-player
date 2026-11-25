@@ -1,10 +1,12 @@
 """`auth_purge_expired()` reports how many rows it removed per kind (#739, migration 0017),
-keeps the live rows, and keeps the rights 0003 gave it."""
+keeps the live rows, and keeps the rights 0003 gave it. Every kind has expired and live rows,
+in counts no two kinds share (#744)."""
 
 from __future__ import annotations
 
 import secrets
 import uuid
+from typing import Final, LiteralString
 
 from psycopg import sql
 
@@ -44,71 +46,122 @@ def _count(su: Conn, table: str) -> int:
     return row[0]
 
 
+# A fresh 32-byte hash per generated row.
+_HASH: Final = "sha256(convert_to(gen_random_uuid()::text, 'UTF8'))"
+
+
+def _rows(
+    su: Conn, table: str, columns: LiteralString, values: LiteralString, n: int, *params: object
+) -> None:
+    """`n` rows of `values` (a select list of the row's columns) into `table`."""
+    query = sql.SQL("INSERT INTO {} ({}) SELECT {} FROM generate_series(1, {})").format(
+        sql.Identifier("player", table), sql.SQL(columns), sql.SQL(values), sql.Literal(n)
+    )
+    su.execute(query, params)
+
+
+# How many rows of each kind are past their time: no two kinds alike, so a report that swapped
+# any two kinds' labels or counts would not match.
+EXPIRED: dict[str, int] = dict(zip(PURGE_KINDS, range(1, len(PURGE_KINDS) + 1), strict=True))
+
+
+# The kinds that go at `expires_at`: table, columns, values (the expiry an offset from now, the
+# last parameter) and whether the row is an account's (its id the first parameter).
+_EXPIRING: tuple[tuple[str, LiteralString, LiteralString, bool], ...] = (
+    (
+        "login_links",
+        "link_hash, email, browser_hash, usable, expires_at",
+        f"{_HASH}, 'p@example.test', {_HASH}, true, now() + %s::interval",
+        False,
+    ),
+    (
+        "login_challenges",
+        "challenge_hash, browser_hash, expires_at",
+        f"{_HASH}, {_HASH}, now() + %s::interval",
+        False,
+    ),
+    (
+        "pairings",
+        "device_code_hash, user_code_hash, platform, version, expires_at",
+        f"{_HASH}, {_HASH}, 'linux', '1', now() + %s::interval",
+        False,
+    ),
+    (
+        "source_link_codes",
+        "code_hash, account_id, source_id, redirect_uri, code_challenge, expires_at",
+        f"{_HASH}, %s, 'fake', 'https://example.test/cb', repeat('a', 43), now() + %s::interval",
+        True,
+    ),
+    (
+        "rate_limits",
+        "key_hash, window_start, hits, expires_at",
+        f"{_HASH}, now(), 1, now() + %s::interval",
+        False,
+    ),
+    (
+        "classbeat_sign_ins",
+        "binding_hash, state_hash, nonce_hash, purpose, expires_at",
+        f"{_HASH}, {_HASH}, {_HASH}, 'sign_in', now() + %s::interval",
+        False,
+    ),
+    ("classbeat_event_ids", "jti_hash, expires_at", f"{_HASH}, now() + %s::interval", False),
+)
+
+
 def test_the_counts_are_per_kind_and_the_live_rows_stay(su: Conn) -> None:
     _purge(su)  # whatever expired before this test is gone; what follows is all there is
     before = {kind: _count(su, kind) for kind in PURGE_KINDS}
     account = _account(su)
-    su.execute(
-        "INSERT INTO player.login_links (link_hash, email, browser_hash, usable, expires_at) "
-        "VALUES (%s, 'p@example.test', %s, true, now() - interval '1 second'),"
-        "(%s, 'p@example.test', %s, true, now() - interval '1 hour'),"
-        "(%s, 'p@example.test', %s, true, now() + interval '1 minute')",
-        (_h(), _h(), _h(), _h(), _h(), _h()),
+    for kind, columns, values, owned in _EXPIRING:
+        for offset, n in (("-1 second", EXPIRED[kind]), ("1 minute", 1)):
+            _rows(su, kind, columns, values, n, *((account,) if owned else ()), offset)
+    # Sessions go when unused for 14 days or older than 60 days, whichever comes first.
+    sessions = "account_id, token_hash, last_used_at, created_at"
+    unused = EXPIRED["sessions"] // 2
+    session_rows: tuple[tuple[LiteralString, int], ...] = (
+        (f"%s, {_HASH}, now() - interval '15 days', now() - interval '20 days'", unused),
+        (f"%s, {_HASH}, now(), now() - interval '61 days'", EXPIRED["sessions"] - unused),
+        (f"%s, {_HASH}, now(), now() - interval '30 days'", 1),
     )
-    su.execute(
-        "INSERT INTO player.login_challenges (challenge_hash, browser_hash, expires_at) VALUES "
-        "(%s, %s, now() - interval '1 second'), (%s, %s, now() + interval '1 minute')",
-        (_h(), _h(), _h(), _h()),
+    for values, n in session_rows:
+        _rows(su, "sessions", sessions, values, n, account)
+    # Devices go 90 days after they were revoked, or after 24 hours when never used.
+    devices = (
+        "account_id, token_hash, name, platform, version, created_at, last_used_at, revoked_at"
     )
-    su.execute(
-        "INSERT INTO player.rate_limits (key_hash, window_start, hits, expires_at) VALUES "
-        "(%s, now(), 1, now() - interval '1 minute'), (%s, now(), 1, now() - interval '2 hours'),"
-        "(%s, now(), 1, now() - interval '1 day'), (%s, now(), 1, now() + interval '1 hour')",
-        (_h(), _h(), _h(), _h()),
+    revoked = EXPIRED["devices"] // 2
+    device_rows: tuple[tuple[LiteralString, int], ...] = (
+        (
+            f"%s, {_HASH}, 'revoked long ago', 'linux', '1', now() - interval '1 year',"
+            " now() - interval '100 days', now() - interval '91 days'",
+            revoked,
+        ),
+        (
+            f"%s, {_HASH}, 'never used', 'linux', '1', now() - interval '25 hours', NULL, NULL",
+            EXPIRED["devices"] - revoked,
+        ),
+        (f"%s, {_HASH}, 'in use', 'linux', '1', now() - interval '1 year', now(), NULL", 1),
     )
-    su.execute(
-        "INSERT INTO player.classbeat_event_ids (jti_hash, expires_at) VALUES "
-        "(%s, now() - interval '1 second'), (%s, now() + interval '8 days')",
-        (_h(), _h()),
+    for values, n in device_rows:
+        _rows(su, "devices", devices, values, n, account)
+    # Audit events go after 180 days.
+    for age, n in (("181 days", EXPIRED["audit_events"]), ("179 days", 1)):
+        _rows(
+            su,
+            "audit_events",
+            "account_id, event, occurred_at",
+            "%s, 'purge_test', now() - %s::interval",
+            n,
+            account,
+            age,
+        )
+    assert _purge(su) == EXPIRED
+    # One live row of each kind stays.
+    assert {kind: _count(su, kind) - before[kind] for kind in PURGE_KINDS} == dict.fromkeys(
+        PURGE_KINDS, 1
     )
-    su.execute(
-        "INSERT INTO player.sessions (account_id, token_hash, last_used_at, created_at) VALUES "
-        "(%s, %s, now() - interval '15 days', now() - interval '20 days'),"
-        "(%s, %s, now(), now() - interval '61 days'),"
-        "(%s, %s, now(), now() - interval '30 days')",
-        (account, _h(), account, _h(), account, _h()),
-    )
-    su.execute(
-        "INSERT INTO player.devices (account_id, token_hash, name, platform, version, created_at,"
-        " last_used_at, revoked_at) VALUES "
-        "(%s, %s, 'revoked long ago', 'linux', '1', now() - interval '1 year', now() - interval"
-        " '100 days', now() - interval '91 days'),"
-        "(%s, %s, 'never used', 'linux', '1', now() - interval '25 hours', NULL, NULL),"
-        "(%s, %s, 'in use', 'linux', '1', now() - interval '1 year', now(), NULL)",
-        (account, _h(), account, _h(), account, _h()),
-    )
-    su.execute(
-        "INSERT INTO player.audit_events (account_id, event, occurred_at) VALUES "
-        "(%s, 'old', now() - interval '181 days'), (%s, 'kept', now() - interval '179 days')",
-        (account, account),
-    )
-    expected = {kind: 0 for kind in PURGE_KINDS} | {
-        "login_links": 2,
-        "login_challenges": 1,
-        "rate_limits": 3,
-        "classbeat_event_ids": 1,
-        "sessions": 2,
-        "devices": 2,
-        "audit_events": 1,
-    }
-    assert _purge(su) == expected
-    live = {"login_links": 1, "login_challenges": 1, "rate_limits": 1, "classbeat_event_ids": 1}
-    live |= {"sessions": 1, "devices": 1, "audit_events": 1}
-    assert {kind: _count(su, kind) - before[kind] for kind in PURGE_KINDS} == {
-        kind: live.get(kind, 0) for kind in PURGE_KINDS
-    }
     # Nothing is past its time any more: a second run removes nothing.
-    assert _purge(su) == {kind: 0 for kind in PURGE_KINDS}
+    assert _purge(su) == dict.fromkeys(PURGE_KINDS, 0)
 
 
 def test_the_rights_are_those_of_0003(su: Conn) -> None:
