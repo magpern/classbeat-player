@@ -18,6 +18,8 @@ with other work; nothing in the development loop waits for an answer.
   enough only if the policy allows apps from identified developers; if it allows only the App
   Store, the company's IT has to make an exception for the app in its device management. Until then the unsigned CI build
   (`classbeat-player-macos-unsigned`) runs only on a Mac that is not managed.
+  The player's updater (ADR 0014) also waits for these: until a system's build is signed, the
+  player only tells users that a new version exists and never installs one by itself.
 
 - **A treadmill to test on** (PL10, #765): one with FTMS over Bluetooth, for a live check of the
   treadmill reading. Until then PL10 is built and tested on a fake treadmill.
