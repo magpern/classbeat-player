@@ -1495,6 +1495,19 @@ straight on the scene.
   paused, coasting, off the list and before the start: every pair meets S16. The pattern's side
   and count start 1.2 vh under its label, so they stay clear of the head line too.
 
+### Link markers in the text layer (#822)
+
+The scene's text layer follows [room-2d.md](room-2d.md) for the link state's marker, and nothing is folded: the marker's
+shape follows the link state, exactly as on the plain 2D screen.
+
+| Link state | Marker |
+|---|---|
+| "Following Spotify" (a following state room-2d.md marks round) | round dot |
+| "Manual clock", "Press Start" (manual clock), "Following stopped", "Manual · F to follow", and the "Playlist not loaded" plate | square |
+
+The list is room-2d.md's (its States tables); where the two differ, room-2d.md wins. The alert square, on the plates of a
+link fault, stays as it is. A shot or a unit test asserts the shape per state against the same list.
+
 ## States
 
 | State | Rig | Text layer |
