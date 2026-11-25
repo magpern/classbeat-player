@@ -6,6 +6,7 @@ import "../../../scene/render/join/scene-join.css";
 import { mountScene } from "../../../scene/render/join/mount.ts";
 import type { RoomFrame } from "../core/room/frame.ts";
 import { onFrame } from "./room-frame-event.ts";
+import { frameRateLogger } from "./room-scene-log.ts";
 
 // The scene draws what the shell feeds the room window through its preload (`window.room`); a page without that bridge has no class to draw,
 // so it builds no WebGL context at all. Nor does a page opened with `?scene=off` (a window that only looks at the plain screen or asks for audio,
@@ -20,7 +21,7 @@ if ((window as unknown as { room?: unknown }).room !== undefined && !location.se
     // After the plain screen in the document, so a query for its parts (`.gel`, `.intro`) finds the plain screen's first.
     const root = document.getElementById("scene-join");
     if (root) document.body.append(root);
-    scene = mountScene({ reducedMotion, visible: () => !document.hidden });
+    scene = mountScene({ reducedMotion, visible: () => !document.hidden, onSecond: frameRateLogger() });
     if (latest !== null) scene.push(latest);
   };
   onFrame(window, (frame) => {
