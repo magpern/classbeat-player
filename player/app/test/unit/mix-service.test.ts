@@ -160,7 +160,7 @@ test("sign-out deletes the key, then the token, then the folder, and tells the s
   r.vault.keys.add(ACCT);
   r.vault.folders.add(ACCT);
   r.vault.log.length = 0;
-  const v = r.service.signOut();
+  const v = await r.service.signOut();
   assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a", "removeFolder a"]);
   assert.equal(v?.state, "signed_out");
   assert.equal(v?.needsReconnect, false);
@@ -169,12 +169,34 @@ test("sign-out deletes the key, then the token, then the folder, and tells the s
   assert.deepEqual(r.vault.accounts(), []);
 });
 
-test("each deletion step runs even when the one before it fails", () => {
+test("sign-out removes the folder only once the account's downloads have stopped", async () => {
+  let release: () => void = () => undefined;
+  const asked: string[] = [];
+  const r = rig({
+    cancelDownloads: (a) => {
+      asked.push(a);
+      return new Promise<void>((done) => (release = done));
+    },
+  });
+  await r.service.signIn(TYPED);
+  r.vault.log.length = 0;
+  const out = r.service.signOut();
+  await flush();
+  assert.deepEqual(asked, [ACCT]);
+  assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a"]);
+  assert.equal(r.service.view().signingOut, true);
+  assert.equal(await r.service.signOut(), null);
+  release();
+  assert.equal((await out)?.state, "signed_out");
+  assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a", "removeFolder a"]);
+});
+
+test("each deletion step runs even when the one before it fails", async () => {
   for (const step of ["clearKey", "clearToken", "removeFolder"]) {
     const r = rig();
     r.vault.tokens.set(ACCT, FAKE_TOKEN);
     r.vault.failStep = step;
-    r.service.signOut();
+    await r.service.signOut();
     assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a", "removeFolder a"], step);
   }
 });
@@ -205,8 +227,9 @@ test("unpairing or deleting the account ends every account here, key then token 
   r.vault.folders.add(OTHER);
   r.vault.log.length = 0;
   r.setAccount(null);
-  r.service.forgotten();
-  assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a", "removeFolder a", "clearKey b", "clearToken b", "removeFolder b"]);
+  await r.service.forgotten();
+  // Every key and token goes first; each folder once that account's downloads have stopped.
+  assert.deepEqual(r.vault.log, ["clearKey a", "clearToken a", "clearKey b", "clearToken b", "removeFolder a", "removeFolder b"]);
   assert.deepEqual(r.vault.accounts(), []);
 });
 

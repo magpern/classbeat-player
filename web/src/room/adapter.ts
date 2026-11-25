@@ -4,7 +4,7 @@
 import { nthOnsetAfter } from "./beat-grid.ts";
 import { cueIsLong } from "./fit.ts";
 import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
-import type { Class, LinkInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
+import type { Class, LinkInput, MixInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
 import { countLabel, linkPlate, pauseLine } from "./link-text.ts";
 import { isNoTempo, patternText, patternValue, patternWords } from "./pattern-model.ts";
@@ -42,9 +42,10 @@ export function toRoomModel(input: RoomInput, scale: ScoreScale = LANDSCAPE_SCAL
   const view = mergedView(doc, input.view);
   const finished = view.status === "ended" || view.classMs >= view.lengthMs;
   const before = !finished && view.status === "ready" && (view.classMs <= 0 || input.startingPoint === true);
+  const mix = input.mix ?? null;
   if (finished) return outside("finished", doc, view, link, notice, scale);
-  if (before) return outside("before-start", doc, view, link, notice, scale, input.playlistNotLoaded === true);
-  return running(doc, view, link, notice, scale, input.playlistNotLoaded === true, input.pattern ?? null);
+  if (before) return outside("before-start", doc, view, link, notice, scale, input.playlistNotLoaded === true, mix);
+  return running(doc, view, link, notice, scale, input.playlistNotLoaded === true, input.pattern ?? null, mix);
 }
 
 function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreScale) {
@@ -61,13 +62,13 @@ function scoreFor(doc: Class, view: View, link: LinkInput | null, scale: ScoreSc
   });
 }
 
-function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded = false): RoomModel {
+function outside(kind: "finished" | "before-start", doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded = false, mix: MixInput | null = null): RoomModel {
   const finished = kind === "finished";
   return {
     ...EMPTY,
     kind,
     gel: finished ? completeGel(doc) : firstZoneGel(doc, view.intervalIndex),
-    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished, notice, playlistNotLoaded && !finished) },
+    rail: { left: null, done: null, segment: null, link: linkPlate(doc, link, view, finished, notice, playlistNotLoaded && !finished, finished ? null : mix) },
     intro: finished ? finishedIntro(doc) : beforeStartIntro(doc),
     score: scoreFor(doc, view, link, scale),
     intervalKey: kind,
@@ -75,7 +76,7 @@ function outside(kind: "finished" | "before-start", doc: Class, view: View, link
   };
 }
 
-function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded: boolean, pattern: PatternInput | null): RoomModel {
+function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNotice | null, scale: ScoreScale, playlistNotLoaded: boolean, pattern: PatternInput | null, mix: MixInput | null): RoomModel {
   const iv = doc.intervals[Math.min(view.intervalIndex, doc.intervals.length - 1)];
   const paused = link?.state === "Paused" || view.status === "paused";
   const song = songOf(doc, view, link);
@@ -90,7 +91,7 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
   return {
     kind: "running",
     gel,
-    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded) },
+    rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded, mix) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
     metrics: metricsFor(iv, song, link, position),
     count: countFor(position, song, view.classMs),

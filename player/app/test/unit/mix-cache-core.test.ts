@@ -138,12 +138,21 @@ describe("the eviction policy, on a fake clock", () => {
     assert.equal(DEFAULT_CAP_BYTES, 4 * 1024 ** 3);
     assert.equal(EXPIRY_MS, 90 * DAY_MS);
   });
-  it("deletes the least recently used first until under the cap, never a kept one", () => {
+  it("deletes the least recently used first until under the cap, a kept one only after every other", () => {
     const mixes = [m("a", 40, 1), m("b", 40, 3), m("c", 40, 2), m("d", 40, 10)];
     assert.deepEqual(evictionPlan(mixes, { now, capBytes: 100, keep: new Set() }), ["d", "b"]);
     assert.deepEqual(evictionPlan(mixes, { now, capBytes: 100, keep: new Set(["d"]) }), ["b", "c"]);
     assert.deepEqual(evictionPlan(mixes, { now, capBytes: 160, keep: new Set() }), []);
-    assert.deepEqual(evictionPlan(mixes, { now, capBytes: 0, keep: new Set(["a", "b", "c", "d"]) }), []);
+    // Kept mixes go above the cap too, least recently used first, after the others.
+    assert.deepEqual(evictionPlan(mixes, { now, capBytes: 40, keep: new Set(["b", "d"]) }), ["c", "a", "d"]);
+    assert.deepEqual(evictionPlan(mixes, { now, capBytes: 0, keep: new Set(["a", "b", "c", "d"]) }), ["d", "b", "c", "a"]);
+  });
+  it("never deletes a pinned mix (the one playing, the open class's), however full", () => {
+    const mixes = [m("a", 40, 1), m("b", 40, 3), m("c", 40, 2), m("d", 40, 10)];
+    assert.deepEqual(evictionPlan(mixes, { now, capBytes: 0, keep: new Set(["a", "b"]), pinned: new Set(["d"]) }), ["c", "b", "a"]);
+    assert.deepEqual(evictionPlan(mixes, { now, capBytes: 0, keep: new Set(), pinned: new Set(["a", "b", "c", "d"]) }), []);
+    // Pinned beats the other rules: not named, not used for a year.
+    assert.deepEqual(evictionPlan([m("x", 1, 365)], { now, capBytes: 0, keep: new Set(), pinned: new Set(["x"]), named: new Set() }), []);
   });
   it("expires a mix not used for 90 days, unless kept", () => {
     const mixes = [m("a", 1, 89.9), m("b", 1, 90), m("c", 1, 200)];

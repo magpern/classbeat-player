@@ -4,10 +4,14 @@
 // the presenter. "Show the room screen" (menu.ts) opens it again through the same `open`.
 // It has the presenter's hardening (web-preferences.ts, hardening.ts), its own page and policy
 // (room.html, ROOM_CSP) and its own preload, which reads frames and the phone remote's slot and
-// sends only the room's fixed controls.
+// sends only the room's fixed controls. During mix playback it also sends the room's <audio> its
+// cue (core/mix/audio-cue.ts) and draws the mix's link line in the frame.
 import { BrowserWindow, screen } from "electron";
-import { CH_ROOM_REMOTE_UPDATE, CH_ROOM_UPDATE } from "../../core/channels.ts";
+import { CH_ROOM_MIX, CH_ROOM_REMOTE_UPDATE, CH_ROOM_UPDATE } from "../../core/channels.ts";
 import type { RoomTrusted } from "../../core/ipc-policy.ts";
+import { mixCueOf } from "../../core/mix/audio-cue.ts";
+import type { MixCue } from "../../core/mix/audio-cue.ts";
+import type { MixLine } from "../../core/mix/mix-line.ts";
 import { roomFrameOf } from "../../core/room/frame.ts";
 import { placeRoom } from "../../core/room/placement.ts";
 import { remoteViewOf } from "../../core/room/remote.ts";
@@ -24,6 +28,8 @@ export interface RoomWindow {
   send(s: Snapshot): void;
   /** Sends the window the phone remote's slot, as remoteViewOf leaves it; nothing when it is not open. */
   sendRemote(v: RemoteView): void;
+  /** Sends the window's <audio> a cue, as mixCueOf leaves it; nothing when it is not open. */
+  sendMix(c: MixCue): void;
   trusted(): RoomTrusted;
 }
 
@@ -33,6 +39,10 @@ export interface RoomWindowDeps {
   readonly preload: string;
   /** The presenter's window, beside which the room goes. */
   readonly presenter: () => BrowserWindow | null;
+  /** The mix's link line for the open class, drawn in every frame (main/mix/mix-player.ts). */
+  readonly mixLine?: () => MixLine | null;
+  /** The window with this webContents id closed: its play ends. */
+  readonly closed?: (webContentsId: number) => void;
 }
 
 // With one display the room window covers the presenter: it takes the keyboard only when the
@@ -48,6 +58,7 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
   let win: BrowserWindow | null = null;
   // The display the room window was last on: the next class opens there while it is connected.
   let lastDisplay: number | null = null;
+  const frame = (s: Snapshot) => roomFrameOf(s, d.mixLine?.() ?? null);
   const live = (): BrowserWindow | null => (win && !win.isDestroyed() ? win : null);
   const push = (channel: string, message: unknown): void => {
     const wc = live()?.webContents;
@@ -75,12 +86,15 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
         webPreferences: { ...secureWebPreferences(d.preload), backgroundThrottling: false },
       });
       win = w;
+      // Taken now: the webContents is gone by the time "closed" runs.
+      const wcId = w.webContents.id;
       w.removeMenu();
       w.on("close", () => {
         if (!w.isDestroyed()) lastDisplay = screen.getDisplayMatching(w.getBounds()).id;
       });
       w.on("closed", () => {
         if (win === w) win = null;
+        d.closed?.(wcId);
       });
       w.once("ready-to-show", () => {
         // With a second display the presenter keeps the keyboard and its controls (plan, section 9);
@@ -95,8 +109,9 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
       live()?.close();
     },
     isOpen: () => live() !== null,
-    send: (s) => push(CH_ROOM_UPDATE, roomFrameOf(s)),
+    send: (s) => push(CH_ROOM_UPDATE, frame(s)),
     sendRemote: (v) => push(CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)),
+    sendMix: (c) => push(CH_ROOM_MIX, mixCueOf(c)),
     trusted: () => ({ roomId: live()?.webContents.id ?? null, roomUrl: d.url }),
   };
 }

@@ -27,7 +27,7 @@ test("the list's account key is the credential's, not the pairing email", () => 
 test("the room window opens with every class that opens, and is sent every snapshot", () => {
   assert.match(main, /controller\.onOpened\(\(\)\s*=>\s*room\.open\(\)\)/);
   assert.match(main, /controller\.watch\(\(s\)\s*=>\s*room\.send\(s\)\)/);
-  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller,\s*\{ endClass, remote \}\)/);
+  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller,\s*\{ endClass, remote, mixReport: \(r\) => player\.report\(r\) \}\)/);
 });
 
 test("the room window closes with the class: on the class list unpinned, at the end on the list, with the presenter", () => {

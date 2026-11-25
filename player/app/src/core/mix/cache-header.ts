@@ -2,12 +2,15 @@
 // the file id, the mix tag (never the mix id or a title), the source file's identity as `describe`
 // gave it, the chunk count, the state and when the mix was last used, authenticated by an
 // HMAC under a key bound to the file id and mix tag. Pure: encoding, parsing and checking only.
-import { chunkCount } from "./cache-layout.ts";
+import { chunkCount, sealedEnd } from "./cache-layout.ts";
 import { headerMac, sameMac } from "./cache-crypto.ts";
 import type { MixDescription } from "./source.ts";
 
 export const HEADER_FORMAT = 1;
 export const MAX_HEADER_BYTES = 2048;
+
+/** The most a whole mix of `byteLength` bytes takes on disk: its sealed chunks and its header. */
+export const entryBytes = (byteLength: number): number => sealedEnd(byteLength, chunkCount(byteLength)) + MAX_HEADER_BYTES;
 export type CacheState = "downloading" | "complete" | "bad";
 
 export interface MixHeader {

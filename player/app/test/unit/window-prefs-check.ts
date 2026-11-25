@@ -29,9 +29,14 @@ const SECURE = "secureWebPreferences";
 const STATIC_CALLS = new Set(["getFocusedWindow", "getAllWindows", "fromWebContents", "fromId"]);
 export { EXTRA_KEYS };
 /** Built-in constructors the sources may call `new` on (by their global name only). */
-const GLOBAL_NEW = new Set(["Date", "Error", "Map", "Set", "RegExp", "TextEncoder", "TextDecoder", "URL", "Intl.Collator", "AbortController", "Promise", "WeakMap", "WeakSet", "Uint8Array", "TypeError", "RangeError", "WebSocket"]);
-/** Globals allowed after `new` in one file only (owner, 2026-11-13, #173): the live connection. */
-const ONE_FILE_NEW: ReadonlyMap<string, RegExp> = new Map([["WebSocket", /[\\/]src[\\/]main[\\/]live[\\/]live-socket\.ts$/]]);
+const GLOBAL_NEW = new Set(["Date", "Error", "Map", "Set", "RegExp", "TextEncoder", "TextDecoder", "URL", "Intl.Collator", "AbortController", "Promise", "WeakMap", "WeakSet", "Uint8Array", "TypeError", "RangeError", "WebSocket", "Response", "ReadableStream"]);
+/** Globals allowed after `new` in one file only: the live connection (owner, 2026-11-13, #173) and the mix scheme's answer (#693). */
+const MIX_RESPONSE = /[\\/]src[\\/]main[\\/]mix[\\/]mix-response\.ts$/;
+const ONE_FILE_NEW: ReadonlyMap<string, RegExp> = new Map([
+  ["WebSocket", /[\\/]src[\\/]main[\\/]live[\\/]live-socket\.ts$/],
+  ["Response", MIX_RESPONSE],
+  ["ReadableStream", MIX_RESPONSE],
+]);
 const FORBIDDEN_TEXT = /constructor/;
 
 export interface Found {

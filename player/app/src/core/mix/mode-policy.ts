@@ -28,10 +28,15 @@ export const REASON_WORDS: Readonly<Record<FallbackReason, string>> = {
   not_allowed: "This account cannot play this mix",
 };
 
-/** The shorter forms the room shows for 30 s when a class falls back; only these two can happen mid-class. */
+/**
+ * The shorter forms the room shows for 30 s when a class falls back during the class. The spec
+ * has the first two; signing out of Swedebeat mid-class is the third that can happen, and the spec
+ * has no short form for it yet: plain words, flagged for the Designer in #693's pull request.
+ */
 export const SHORT_REASON_WORDS: Readonly<Partial<Record<FallbackReason, string>>> = {
   downloading: "Mix still downloading",
   not_checked: "Mix not checked",
+  not_connected: "Signed out of Swedebeat",
 };
 
 export interface ModeInput {

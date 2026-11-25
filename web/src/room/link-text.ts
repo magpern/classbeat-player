@@ -1,13 +1,17 @@
 // The words for the music link and the clock's label (docs/design/room-2d.md, "States"). Pure.
 // Link states are white, grey and black only, never a hue (rule 7): the look says how, never a zone.
-import type { Class, LinkInput, PlayNotice, RoomInput } from "./input.ts";
+import type { Class, LinkInput, MixInput, PlayNotice, RoomInput } from "./input.ts";
+import { mixPlate } from "./mix-words.ts";
 import type { LinkPlate } from "./model.ts";
 
 type View = NonNullable<RoomInput["view"]>;
 
 /** Link plates are at most about 20 characters so they fit beside the class time at 4:3. */
-export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean, notice: PlayNotice | null = null, playlistNotLoaded = false): LinkPlate {
+export function linkPlate(doc: Class, link: LinkInput | null, view: View, started: boolean, notice: PlayNotice | null = null, playlistNotLoaded = false, mix: MixInput | null = null): LinkPlate {
   if (notice !== null) return NOTICES[notice];
+  // A mix class: the player's line (docs/design/swedebeat.md), only its fixed words.
+  const mixed = mixPlate(mix);
+  if (mixed !== null) return mixed;
   // The player's quiet states (following, Locked or before the first lock, which arrives as "Manual" in following mode): the plate replaces them.
   // A link fault above and the real manual clock (mode "manual") never show it.
   if (playlistNotLoaded && link?.mode === "following" && (link.state === "Locked" || link.state === "Manual")) return PLAYLIST_NOT_LOADED;

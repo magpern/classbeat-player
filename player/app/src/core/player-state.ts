@@ -2,7 +2,7 @@
 // shell holds the state and passes a monotonic `now`.
 import { readClassText } from "./class-file.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
-import { createClock, positionAt, tick } from "./clock/clock.ts";
+import { createClock, moveTo, positionAt, tick } from "./clock/clock.ts";
 import { applyToClock } from "./clock/apply.ts";
 import type { ClockState } from "./clock/clock.ts";
 import { planFrom } from "./clock/plan.ts";
@@ -165,6 +165,16 @@ export function withoutReader(s: PlayerState): PlayerState {
   if (l === null || !l.following) return s;
   const manual = goManual(l.link, l.clock);
   return { ...s, loaded: { ...l, following: false, unavailable: true, link: manual.link, clock: manual.clock } };
+}
+
+/**
+ * Mix playback: the running clock goes to the class time of the audio (ADR 0013 section 4, class
+ * time = audio position - offset_ms). A clock that is not running is left as it is.
+ */
+export function alignClock(s: PlayerState, classMs: number, now: number): PlayerState {
+  const l = s.loaded;
+  if (l === null || tick(l.clock, now).status !== "running") return s;
+  return { ...s, loaded: { ...l, clock: moveTo(l.clock, classMs, now) } };
 }
 
 /** True while the instructor follows the music: only then does the shell ask for readings. */

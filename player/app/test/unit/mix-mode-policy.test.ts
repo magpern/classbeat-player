@@ -48,8 +48,8 @@ describe("mode policy", () => {
     for (const w of Object.values(REASON_WORDS)) assert.ok(!/[./\\:]|token|http|error/i.test(w), w);
   });
 
-  it("has short forms only for the two reasons that can happen during a class", () => {
-    assert.deepEqual(SHORT_REASON_WORDS, { downloading: "Mix still downloading", not_checked: "Mix not checked" });
+  it("has short forms only for the three reasons that can happen during a class", () => {
+    assert.deepEqual(SHORT_REASON_WORDS, { downloading: "Mix still downloading", not_checked: "Mix not checked", not_connected: "Signed out of Swedebeat" });
   });
 
   it("words a result: the reason for a fall-back, nothing otherwise", () => {
