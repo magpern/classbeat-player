@@ -239,8 +239,10 @@ machine's and the running service's control points stay banned) and the running 
 sensor allowlist widened to the Running Speed and Cadence service, the treadmill data
 characteristic and foot-pod step cadence (#770, #773).
 
-Open: the running-class design (#769, PR #774), then the screens (#771) and a scene test that
-pins the scene's inputs for running classes (#772). Decided: the rider page's incline-target slot
+Also merged: the running-class design, with running states in eight screen specs (#769, #774).
+
+Open: the screens (#771) and a scene test that pins the scene's inputs for running classes
+(#772). Decided: the rider page's incline-target slot
 stays empty, like a missing position, until a contract change adds an incline field; the live
 contract has none today. Testing on a real treadmill waits for the owner.
 
