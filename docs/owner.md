@@ -21,6 +21,14 @@ with other work; nothing in the development loop waits for an answer.
   The player's updater (ADR 0014) also waits for these: until a system's build is signed, the
   player only tells users that a new version exists and never installs one by itself.
 
+- **Let GitHub Actions open pull requests** (PL7, #793): in the repository's Settings, Actions,
+  General, "Workflow permissions", tick "Allow GitHub Actions to create and approve pull
+  requests". The release workflow's last step uses it to open the pull request that updates the
+  download page's `releases.json`. Agents never change repository settings. Until it is ticked,
+  that step fails after the release is published (the release itself is fine), and the file is
+  updated by hand (runbook player-release.md, section 8). A pull request opened this way starts
+  no CI until someone pushes to it or reruns its checks.
+
 - **A treadmill to test on** (PL10, #765): one with FTMS over Bluetooth, for a live check of the
   treadmill reading. Until then PL10 is built and tested on a fake treadmill. Two choices are
   yours, with the defaults agents built (ADR 0015): whether the instructor's computer and the

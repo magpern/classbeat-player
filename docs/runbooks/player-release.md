@@ -163,8 +163,15 @@ data comes from"). A new release shows only after the site is rebuilt.
 
 1. Rebuild and redeploy the site (the deploy is the owner's; see
    [backend-deploy.md](backend-deploy.md)).
-2. The page's data file, `releases.json`, is to be generated from the release's published files.
-   That generator is not built yet: see issue #793. Until then the build does not produce the file.
-3. The backend's `/download` route, which serves the page, is issue #794.
+2. The page's data file, `releases.json`, is generated from the release's published files by the
+   last step of the `publish` job (`scripts/site-releases-json.mjs`, #793). The step opens a pull
+   request with the new file on a branch `site-releases-<tag>`; no change means no pull request.
+   - It needs the repository setting "Allow GitHub Actions to create and approve pull requests"
+     (owner, [owner.md](../owner.md)). Without it the step fails after the release was created:
+     the release stands, `publish` shows red, and a `site-releases-<tag>` branch may be left over.
+     Open the pull request from that branch by hand, or delete the branch and rerun the job.
+   - A pull request opened with `GITHUB_TOKEN` starts no CI by itself. Push a commit to it or rerun
+     its checks, then review and merge it like any other screens-lane pull request.
+3. The backend's `/download` route serves the page and its files from a fixed list (#794).
 4. After the rebuild, open the download page and check that the version, the pre-release mark and
    the four checksums match `SHA256SUMS` of the release.

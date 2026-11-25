@@ -146,3 +146,18 @@ injected fake feed. Nothing in CI calls GitHub or any other host.
   "could not check" and can turn checks off.
 - A change to the release tag or asset names in the workflow must keep this ADR's feed rules, or
   amend them.
+
+## Amendment, 2026-11-25: as built (#798, #808, #811, #815, #816)
+
+Records two behaviours of the built updater that sections 3 and 4 did not spell out. Nothing else
+changes.
+
+1. **Rollback skips a range, not one version.** Once a version is marked as skipped, no version
+   at or below it is offered; only a strictly higher one is (`core/update/rollback.ts`). This is
+   what section 4's "offered again only when a higher version appears" means for older versions
+   too: a rollback never leads to an offer of a version older than the one that failed.
+2. **A failed check drops the notice.** When a check ends in "could not check", the class list
+   shows no update notice, while settings keep showing the latest version the last successful
+   check found (`core/update/view.ts`; updates.md, "Latest version"). Before any check has run,
+   the status is "could not check" with the detail "No check has run yet. Press Check now." and
+   no notice (#811, #816). While a check runs, the last result and its notice stay.
