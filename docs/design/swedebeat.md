@@ -143,6 +143,11 @@ Notes:
 - The sync states of class-list.md still lead: with the cache unreadable, being wiped or pairing in
   progress the Swedebeat line is not shown.
 - "Try again" and "Connect Swedebeat again" open the form; they never send anything themselves.
+- **The class filter stays under the Swedebeat plates.** Under the two fault plates ("Swedebeat could
+  not be reached", "Swedebeat needs you to connect again") and under the sign-out question the
+  filter (from eight classes, class-list.md) and the list stay shown; only the form, a file's error
+  plate or a sync panel takes them away (`allowed` in `core/list/screen.ts`; the plate is
+  `.plate.mix` with 10 px padding in `renderer/classlist.css`, so the five rows still fit).
 - The three plates above the form (field left empty, not taken, did not finish) are the page's own
   notes. They replace a refusal the shell still holds while the form is open, and none of them shows
   a value typed in a field. The empty-field plate has no key: the form's own "Connect" and "Cancel"
@@ -211,7 +216,7 @@ three room sizes (room); the product's CI screenshots are held to the same numbe
 | W1 | Cap height, class list (window height 720) | As class-list.md L1: Swedebeat line state and plate headline (18 to 20 px type) at least 14 px (1.9 %); detail and mix words (16 px) at least 11 px (1.5 %); buttons at least 12 px (1.7 %); the form's heading at least 28 px (3.9 %); field text (18 px) at least 13 px (1.8 %); labels at least 9.5 px (1.3 %). No text under 14 px |
 | W2 | Room: the link line | Label tier of room-2d.md: cap height at least 2.0 % of screen height at every room size; the longest lines, "Press Start · Swedebeat cannot be connected here" before the start and "Mix still downloading" during the class, on one line, inside the safe area, at 1024×768 and wider |
 | W3 | Contrast | Class list as L2: 7 : 1 for the state, plate and mix words (the lowest measured on the mock-ups is 7.2 : 1), 4.5 : 1 for labels. Room: 4.5 : 1 for the link line (the lowest measured on the link lines is 7.2 : 1) |
-| W4 | What is visible at once | Class list: header, sync status, Swedebeat line, list header, at least **5 full rows** and the footer with Start at 1000×720 and every size above (4 with a plate and the long titles of class-list.md's worst case); the selected row fully visible. The form shows its heading, every field, both keys and the grey line without scrolling at 1000×720. Room: the link line and everything the room already shows |
+| W4 | What is visible at once | Class list: header, sync status, Swedebeat line, list header, at least **5 full rows** and the footer with Start at 1000×720 and every size above (**5 whole rows is the floor with a Swedebeat plate**, the filter still shown, at 1000×720); the selected row fully visible. The form shows its heading, every field, both keys and the grey line without scrolling at 1000×720. Room: the link line and everything the room already shows |
 | W5 | The state is more than a colour | There is no hue on any of these screens (the checker's hue test). Every state is a word and a shape: filled circle, hollow circle, hollow square. A percentage is always a number in words |
 | W6 | Nothing is cut | No text is ellipsised or clipped; a plate may take up to three lines |
 | W7 | Controls | Every key and field at least 44 px high |

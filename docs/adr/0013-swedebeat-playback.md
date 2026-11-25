@@ -374,8 +374,10 @@ lifetime").
 - **While the mark exists the token reads as gone:** `loadToken` returns null for an ending account
   (`main/mix/vault.ts`), so a crash or a failed deletion never leaves an account that looks
   connected.
-- **The start-up sweep or the next sign-in finishes the deletion.** `sweep` ends every account with
-  a mark, including the current account's own, and `signIn` finishes an unfinished ending first and
+- **The start-up sweep or the next sign-in finishes the deletion.** `sweep` ends every account other
+  than the current one, whether or not it has a mark, and the current one only when it is marked;
+  where the current account holds no key, its mixes folder is removed (`sweep`, `main/mix/service.ts`;
+  the accounts come from `accounts()`, `main/mix/vault.ts`). `signIn` finishes an unfinished ending first and
   sends nothing while the mark still cannot be removed (`main/mix/service.ts`).
 - The sign-in form's three notes for an empty field, details not taken and a call that did not
   finish are in `core/mix/form-note.ts`; their states are in
