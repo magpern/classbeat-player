@@ -1,5 +1,6 @@
 // What the shell sends the class list window: built field by field, so no token, no document and
 // no account key can ride along. Pure types.
+import type { FormNote } from "../mix/form-note.ts";
 import type { MixUi } from "../mix/list-model.ts";
 import type { MixView } from "../mix/view.ts";
 import type { PairingView } from "../pairing/view.ts";
@@ -29,4 +30,6 @@ export interface ListUi {
   readonly lastStartedId: string | null;
   /** The Swedebeat form or question the page has open, or the call it waits for; "none" when absent. */
   readonly mix?: MixUi;
+  /** What the open Swedebeat form says when it stayed open without a refusal; null when nothing. */
+  readonly mixNote?: FormNote | null;
 }
