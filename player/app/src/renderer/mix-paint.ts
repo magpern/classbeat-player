@@ -99,11 +99,11 @@ export function clearTyped(root: HTMLElement): void {
   for (const input of root.querySelectorAll<HTMLInputElement>("input[data-field]")) input.value = "";
 }
 
-/** Rows that must stay whole in view beside the filter and a fault plate (W4, #724). */
-export const KEEP_ROWS = 4;
+/** Whole rows kept in view beside the filter and a Swedebeat plate (swedebeat.md W4, class-list.md L3, #724). */
+export const KEEP_ROWS = 5;
 
 /**
- * The plate's detail on one line when the filter and four whole rows would not fit with the long one
+ * The plate's detail on one line when the filter and five whole rows would not fit with the long one
  * (#724): the detail gives way, never the filter. Always starts from the full detail, so a window
  * that grows gets it back.
  */

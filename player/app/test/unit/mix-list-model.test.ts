@@ -120,12 +120,12 @@ test("a fault plate has no dismiss key, and its own key is the way back to the f
   }
 });
 
-test("a fault plate carries a one-line detail for a window too short for four rows (#724)", () => {
+test("a fault plate carries a one-line detail for a window too short for five rows (#724)", () => {
   const unreachable = head(mv({ state: "refused", refusal: "unavailable" })).plate;
   assert.equal(unreachable?.short, "Check the connection, then try again.");
   assert.ok(unreachable?.detail.startsWith(unreachable.short ?? "?"));
   const reconnect = head(mv({ needsReconnect: true })).plate;
   assert.equal(reconnect?.short, "The mixes saved on this computer are kept.");
   assert.ok(reconnect?.detail.startsWith(reconnect.short ?? "?"));
-  assert.equal(head(mv({ state: "signed_in", fields: [] }), "ask").plate?.short, null);
+  assert.equal(head(mv({ state: "signed_in", fields: [] }), "ask").plate?.short, "The mixes saved on this computer are removed.");
 });

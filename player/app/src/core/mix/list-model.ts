@@ -21,7 +21,7 @@ export interface MixLine {
 export interface MixPlate {
   readonly headline: string;
   readonly detail: string;
-  /** The detail cut to one line, for when the class filter and four whole rows need the room (#724); null when the detail is short already. */
+  /** The detail cut to one line, for when the class filter and five whole rows need the room (#724); null when the detail is short already. */
   readonly short: string | null;
   readonly buttons: readonly Button[];
 }
@@ -75,7 +75,7 @@ export function mixHeadOf(v: MixView, ui: MixUi, listed: boolean, note: FormNote
     return only({ line: line("work", "Connecting to Swedebeat…", "Your details were sent and have been cleared from this page"), panel: wait("mix-connecting", "Swedebeat classes can start on the manual clock meanwhile.") });
   }
   if (v.state === "signed_in") {
-    if (ui === "ask") return only({ plate: plate("Sign out of Swedebeat?", `The mixes saved on this computer are removed. ${NOTE}`, [btn("mix-sign-out-yes", "Sign out"), btn("mix-keep", "Keep connected", "Esc")]) });
+    if (ui === "ask") return only({ plate: plate("Sign out of Swedebeat?", `The mixes saved on this computer are removed. ${NOTE}`, [btn("mix-sign-out-yes", "Sign out"), btn("mix-keep", "Keep connected", "Esc")], "The mixes saved on this computer are removed.") });
     return only({ line: line("ok", "Swedebeat is connected", "Mixes download in the background and play from this computer", btn("mix-sign-out", "Sign out of Swedebeat")) });
   }
   if (v.state === "disabled") return listed ? only({ line: line("away", "Swedebeat playback is off", NOTE) }) : NONE;
