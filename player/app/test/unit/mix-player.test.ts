@@ -17,6 +17,7 @@ import type { MixPlayerDeps } from "../../src/main/mix/mix-player.ts";
 import type { MixReader } from "../../src/main/mix/mix-reader.ts";
 import { createPlays } from "../../src/main/mix/plays.ts";
 import { RETRY_MS } from "../../src/main/mix/open-download.ts";
+import type { NamedMixes } from "../../src/main/sync/service.ts";
 
 const A = "a".repeat(64);
 const SIGNED_IN: MixView = { ...MIX_DISABLED, state: "signed_in" };
@@ -43,6 +44,7 @@ function rig(
     complete?: boolean;
     room?: number | null;
     listed?: readonly string[];
+    named?: NamedMixes | null;
   } = {},
 ) {
   let t = 0;
@@ -64,14 +66,14 @@ function rig(
   const plays = createPlays();
   let view = o.view ?? SIGNED_IN;
   const cache: MixPlayerDeps["cache"] = {
-    download: (a, m, keep) => {
-      log.push(`download ${a === A} ${m} ${JSON.stringify(keep)}`);
+    download: (a, m, opts) => {
+      log.push(`download ${a === A} ${m} ${JSON.stringify(opts)}`);
       return outcome;
     },
     open: () => reader(complete),
     played: (_a, m) => void log.push(`played ${m}`),
     evict: (_a, opts) => {
-      log.push(`evict ${JSON.stringify(opts.keep)}`);
+      log.push(`evict ${JSON.stringify(opts)}`);
       return Promise.resolve(0);
     },
   };
@@ -85,6 +87,7 @@ function rig(
     align: (ms) => void aligned.push(ms),
     now: () => t,
     listed: () => o.listed ?? [],
+    named: () => o.named ?? null,
   });
   return {
     player,
@@ -107,13 +110,13 @@ test("a class without a mix: nothing downloads, no cue, no line", () => {
   r.player.snapshot(snap(1, "running", 0, { source: "spotify" }));
   assert.equal(r.player.line(), null);
   assert.deepEqual(r.cues, []);
-  assert.deepEqual(r.log, ["evict []"]);
+  assert.deepEqual(r.log, ['evict {"keep":[],"pinned":[]}']);
 });
 
 test("opening a mix class starts its download, keeping that mix; the line shows the progress", async () => {
   const r = rig();
   r.player.snapshot(snap(1, "ready"));
-  assert.deepEqual(r.log, ['evict ["mix_1"]', 'download true mix_1 ["mix_1"]']);
+  assert.deepEqual(r.log, ['evict {"keep":[],"pinned":["mix_1"]}', 'download true mix_1 {"keep":[]}']);
   await r.flush();
   r.advance(1_000);
   r.player.snapshot(snap(1, "ready"));
@@ -372,7 +375,7 @@ test("the class ends: the audio stops, the mix is kept from eviction, the line g
   r.player.snapshot(snap(1, "ended", 60_000));
   assert.equal(r.plays.live(id), null);
   assert.equal(r.cues.at(-1)!.url, null);
-  assert.equal(r.log.at(-1), 'evict ["mix_1"]');
+  assert.equal(r.log.at(-1), 'evict {"keep":[],"pinned":["mix_1"]}');
   assert.equal(r.player.line(), null);
 });
 
@@ -384,8 +387,8 @@ test("another class opens: the play ends and the old mix may be evicted, the new
   r.player.snapshot(snap(2, "ready", 0, music("mix_2")));
   assert.equal(r.plays.live(id), null);
   assert.equal(r.cues.at(-1)!.url, null);
-  assert.ok(r.log.includes('evict ["mix_2"]'));
-  assert.ok(r.log.includes('download true mix_2 ["mix_2"]'));
+  assert.ok(r.log.includes('evict {"keep":[],"pinned":["mix_2"]}'));
+  assert.ok(r.log.includes('download true mix_2 {"keep":[]}'));
 });
 
 test("a download that did not complete is started again after RETRY_MS, while signed in", async () => {
@@ -417,6 +420,8 @@ test("a decoded length more than 1 000 ms from length_ms is not used: not checke
     r.player.snapshot(snap(1, "ready"));
     r.player.snapshot(snap(1, "running", 0));
     r.player.report({ seq: r.cues[0]!.seq, positionMs: 0, playing: true, failed: false, durationMs });
+    assert.deepEqual(r.player.line(), { text: "Playing the mix", shape: "dot" }, `${durationMs}: one report is not confirmed`);
+    r.player.report({ seq: r.cues[0]!.seq, positionMs: 0, playing: true, failed: false, durationMs });
     assert.deepEqual(
       r.player.line(),
       kept ? { text: "Playing the mix", shape: "dot" } : { text: "Mix not checked", shape: "news" },
@@ -424,6 +429,18 @@ test("a decoded length more than 1 000 ms from length_ms is not used: not checke
     );
     if (!kept) assert.equal(r.cues.at(-1)!.url, null, "the audio is emptied");
   }
+});
+
+test("an early wrong length the next report revises is not acted on", () => {
+  const r = rig();
+  r.player.snapshot(snap(1, "ready"));
+  r.player.snapshot(snap(1, "running", 0));
+  const seq = r.cues[0]!.seq;
+  for (const durationMs of [30_000, 60_000, 60_000, 90_000, 60_000]) r.player.report({ seq, positionMs: 0, playing: true, failed: false, durationMs });
+  assert.deepEqual(r.player.line(), { text: "Playing the mix", shape: "dot" });
+  r.player.report({ seq, positionMs: 0, playing: true, failed: false, durationMs: 90_000 });
+  r.player.report({ seq, positionMs: 0, playing: true, failed: false, durationMs: 90_000 });
+  assert.deepEqual(r.player.line(), { text: "Mix not checked", shape: "news" }, "a wrong length that holds falls back");
 });
 
 test("the clock is never steered past the class's end, nor below 0", () => {
@@ -441,10 +458,28 @@ test("the clock is never steered past the class's end, nor below 0", () => {
   assert.deepEqual(late.aligned, [0]);
 });
 
-test("eviction and the download keep the playing mix and every mix the synced classes name", () => {
-  const r = rig({ listed: ["mix_9", "mix_0"] });
+test("eviction pins the open class's mix and keeps every mix the synced classes name", () => {
+  const r = rig({ listed: ["mix_0", "mix_9"] });
+  assert.equal(r.player.openMix(), null);
   r.player.snapshot(snap(1, "ready"));
-  assert.deepEqual(r.log, ['evict ["mix_0","mix_1","mix_9"]', 'download true mix_1 ["mix_0","mix_1","mix_9"]']);
+  assert.deepEqual(r.log, ['evict {"keep":["mix_0","mix_9"],"pinned":["mix_1"]}', 'download true mix_1 {"keep":["mix_0","mix_9"]}']);
+  assert.equal(r.player.openMix(), "mix_1");
+  r.player.snapshot(snap(2, "ready", 0, { source: "spotify" }));
+  assert.equal(r.player.openMix(), null);
+});
+
+test("a mix no class names is deleted only with a complete synced list of the same account", () => {
+  const full = rig({ listed: ["mix_0"], named: { account: A, mixes: ["mix_0"] } });
+  full.player.snapshot(snap(1, "ready"));
+  assert.equal(full.log[0], 'evict {"keep":["mix_0"],"pinned":["mix_1"],"named":["mix_0"]}');
+  // Not complete (a sync running, a wipe waiting, nothing named): nothing goes for not being named.
+  const partial = rig({ listed: ["mix_0"], named: null });
+  partial.player.snapshot(snap(1, "ready"));
+  assert.equal(partial.log[0], 'evict {"keep":["mix_0"],"pinned":["mix_1"]}');
+  // Another account's list never sweeps this account's cache.
+  const other = rig({ listed: ["mix_0"], named: { account: "b".repeat(64), mixes: ["mix_0"] } });
+  other.player.snapshot(snap(1, "ready"));
+  assert.equal(other.log[0], 'evict {"keep":["mix_0"],"pinned":["mix_1"]}');
 });
 
 // ADR 0013 section 4: interval timing within about 1 s and beat effects within 50 ms (ADR 0001),

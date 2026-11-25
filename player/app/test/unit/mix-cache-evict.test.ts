@@ -1,5 +1,6 @@
 // Eviction in the encrypted mix cache (ADR 0013 section 3), on a fake clock: above the cap the least
-// recently played mix goes first, never one kept for the class playing or starting soon; a mix not
+// recently played mix goes first, a kept one (a class starting soon) only after every other, the
+// open class's never; a mix not
 // played for 90 days and one no class names go; leftovers and unreadable entries go; other accounts
 // are never touched.
 import assert from "node:assert/strict";
@@ -40,19 +41,28 @@ describe("eviction above the cap", () => {
     assert.deepEqual(present("m1", "m3", "m4", "m5"), ["m1", "m4", "m5"]);
   });
 
-  it("never deletes a mix kept for the class playing or starting soon", async () => {
+  it("never deletes the open class's mix; kept mixes go above the cap only after every other", async () => {
     rig = makeRig(randomBytes(SIZE), { capBytes: 250_000 });
     await cached("m1", "m2");
     rig.clock.now += DAY_MS;
     rig.source.bytes = randomBytes(SIZE);
-    assert.equal(await rig.cache.download(ACCT, "m3", ["m1"]), "complete");
+    assert.equal(await rig.cache.download(ACCT, "m3", { keep: ["m1"] }), "complete");
     assert.deepEqual(present("m1", "m2", "m3"), ["m1", "m3"]);
-    // Kept above the cap: nothing kept is deleted, however full.
-    assert.equal(await rig.cache.evict(ACCT, { keep: ["m1", "m3"] }), 0);
     rig.rebuild({ capBytes: 1 });
-    assert.equal(await rig.cache.evict(ACCT, { keep: ["m1", "m3"] }), 0);
-    assert.equal(await rig.cache.evict(ACCT, { keep: ["m3"] }), 1);
+    // Far above the cap: the kept mix goes, the pinned one never does.
+    assert.equal(await rig.cache.evict(ACCT, { keep: ["m1"], pinned: ["m3"] }), 1);
     assert.deepEqual(present("m1", "m3"), ["m3"]);
+    assert.equal(await rig.cache.evict(ACCT, { keep: ["m3"], pinned: ["m3"] }), 0);
+    assert.equal(await rig.cache.evict(ACCT, { keep: ["m3"] }), 1);
+  });
+
+  it("the open class's download goes past the cap and pins its mix: the oldest kept one goes", async () => {
+    rig = makeRig(randomBytes(SIZE), { capBytes: 250_000 });
+    await cached("m1", "m2");
+    rig.clock.now += DAY_MS;
+    rig.source.bytes = randomBytes(SIZE);
+    assert.equal(await rig.cache.download(ACCT, "m3", { keep: ["m1", "m2", "m3"] }), "complete");
+    assert.deepEqual(present("m1", "m2", "m3"), ["m2", "m3"]);
   });
 });
 

@@ -35,6 +35,12 @@ export interface SyncDeps {
   readonly clearTimer: (handle: unknown) => void;
 }
 
+/** The mix ids every class of the account names (ADR 0013 section 3: a mix no class names goes). */
+export interface NamedMixes {
+  readonly account: string;
+  readonly mixes: readonly string[];
+}
+
 export interface SyncService {
   /** Reads the cache at startup (again later, after a fault reading it), and syncs. */
   start(): void;
@@ -47,6 +53,12 @@ export interface SyncService {
   list(): readonly ClassRow[];
   /** The Swedebeat mix ids the class list's classes name (core/mix/keep-policy.ts); nothing else of a document leaves. */
   mixes(): readonly string[];
+  /**
+   * The same with their account, only when the list is complete: the last sync finished, no sync
+   * runs, no wipe waits, the pairing is the cached account's and every held class reads back. Else
+   * null, and also when no class names a mix: the cache then deletes nothing for not being named.
+   */
+  named(): NamedMixes | null;
   /**
    * Takes the snapshot of a cached class for play, or null when it is not held or does not read
    * back with its hash. Sync never changes it; a newer version applies after `unpin`.
@@ -212,6 +224,16 @@ export function createSyncService(d: SyncDeps): SyncService {
     view: () => syncView(state),
     list: () => classListView(state, listed()),
     mixes: () => mixesNamed(listed().values()),
+    named() {
+      const account = state.account;
+      const c = d.credential();
+      if (account === null || c === null || c.account !== account || state.status !== "synced" || state.run !== null || state.unread || state.lasting || state.wipePending || state.wipeAfterPin) return null;
+      const docs = listed();
+      // A held class that does not read back may still name a mix: the list is not complete.
+      if (docs.size !== state.held.size) return null;
+      const mixes = mixesNamed(docs.values());
+      return mixes.length === 0 ? null : { account, mixes };
+    },
     pin(id, seen) {
       const hash = state.held.get(id);
       // The version the instructor saw: a class that changed since is refused.

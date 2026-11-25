@@ -15,7 +15,7 @@ import { createPrefetch } from "./prefetch.ts";
 import type { Prefetch } from "./prefetch.ts";
 import type { SyncService } from "../sync/service.ts";
 
-export function setupPlayback(mix: MixSetup, plays: Plays, controller: Pick<Controller, "watch" | "align">, room: Pick<RoomWindow, "trusted" | "sendMix">, sync: Pick<SyncService, "mixes" | "watch">): { player: MixPlayer; prefetch: Prefetch } {
+export function setupPlayback(mix: MixSetup, plays: Plays, controller: Pick<Controller, "watch" | "align">, room: Pick<RoomWindow, "trusted" | "sendMix">, sync: Pick<SyncService, "mixes" | "named" | "watch">): { player: MixPlayer; prefetch: Prefetch } {
   const listed = (): readonly string[] => sync.mixes();
   const player = createMixPlayer({
     cache: mix.cache,
@@ -27,8 +27,9 @@ export function setupPlayback(mix: MixSetup, plays: Plays, controller: Pick<Cont
     align: (classMs) => controller.align(classMs),
     now: () => performance.now(),
     listed,
+    named: () => sync.named(),
   });
-  const prefetch = createPrefetch({ cache: mix.cache, view: () => mix.service.view(), account: mix.account, listed });
+  const prefetch = createPrefetch({ cache: mix.cache, view: () => mix.service.view(), account: mix.account, listed, named: () => sync.named(), open: () => player.openMix() });
   handleMixScheme({ live: (id) => plays.live(id), open: (a, m) => mix.cache.open(a, m), onFault: (id, f) => player.fault(id, f) });
   controller.watch((s) => player.snapshot(s));
   // Sign-in has no event of its own: the sign-in handler and each snapshot check it; it acts only when it changed.

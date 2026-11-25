@@ -30,7 +30,7 @@ function rig(outcome: CacheOutcome | null = null) {
       },
       view: () => view,
       account: () => A,
-      keep: (m) => [m],
+      keep: () => [MIX.id],
       now: () => t,
     },
     MIX,

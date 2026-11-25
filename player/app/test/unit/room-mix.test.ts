@@ -151,6 +151,9 @@ test("the decoded length is reported in ms once known, at once on loadedmetadata
   r.audio.duration = 2_700.0004;
   r.fire("loadedmetadata");
   assert.deepEqual(r.reports, [[1, 0, true, false, 2_700_000]]);
+  r.audio.duration = 2_701;
+  r.fire("durationchange");
+  assert.deepEqual(r.reports.at(-1), [1, 0, true, false, 2_701_000], "a revised length is reported at once");
   for (const bad of [Number.POSITIVE_INFINITY, Number.NaN, -1]) {
     r.audio.duration = bad;
     r.tick();

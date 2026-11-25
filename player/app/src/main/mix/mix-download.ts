@@ -10,14 +10,14 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Hash } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
 import { FILE_ID_BYTES, mixTag, openChunk, sealChunk } from "../../core/mix/cache-crypto.ts";
-import { identityOf, sameSource } from "../../core/mix/cache-header.ts";
+import { entryBytes, identityOf, sameSource } from "../../core/mix/cache-header.ts";
 import type { MixHeader, SourceIdentity } from "../../core/mix/cache-header.ts";
 import { chunkCount, plainEnd, plainLength, sealedEnd, sealedStart, wholeChunks } from "../../core/mix/cache-layout.ts";
 import type { MixSource } from "../../core/mix/source.ts";
 import { dropBad, keysOf, loadHeader, saveHeader } from "./cache-entry.ts";
 import type { AccountCache, EntryKeys } from "./cache-entry.ts";
 
-export type DownloadOutcome = "complete" | "interrupted" | "token_invalid" | "unavailable" | "not_found" | "not_allowed" | "too_large" | "bad";
+export type DownloadOutcome = "complete" | "interrupted" | "token_invalid" | "unavailable" | "not_found" | "not_allowed" | "too_large" | "no_room" | "bad";
 
 export interface DownloadInput {
   readonly source: MixSource;
@@ -25,6 +25,8 @@ export interface DownloadInput {
   readonly mixId: string;
   readonly now: number;
   readonly capBytes: number;
+  /** When given, a mix whose whole entry would take more than this many bytes is not downloaded ("no_room"). */
+  readonly roomBytes?: number;
   /** A stream that sends nothing for this long is dropped; the download resumes later. */
   readonly idleMs?: number;
   /** Aborted at sign-out: the download stops at once, as if the stream had ended early. */
@@ -195,6 +197,8 @@ export async function downloadMix(c: AccountCache, d: DownloadInput): Promise<Do
   if (id === null) return "unavailable";
   const kept = loadHeader(c, tag);
   if (kept?.state === "complete" && sameSource(kept, id)) return "complete";
+  // A mix already cached is complete whatever the room; one still to download must fit whole.
+  if (d.roomBytes !== undefined && entryBytes(id.byteLength) > d.roomBytes) return "no_room";
   // Two tries at most: a resume that meets a torn record with other bytes starts over once, under a new key.
   for (let attempt = 0; attempt < 2; attempt++) {
     const old = loadHeader(c, tag);

@@ -13,8 +13,8 @@ export interface OpenDownloadDeps {
   readonly view: () => MixView;
   /** The paired account's key, or null. */
   readonly account: () => string | null;
-  /** What eviction keeps while this mix downloads (core/mix/keep-policy.ts). */
-  readonly keep: (mixId: string) => readonly string[];
+  /** The mixes the synced classes name: the eviction after the download keeps them; this one it never deletes. */
+  readonly keep: () => readonly string[];
   /** Monotonic ms. */
   readonly now: () => number;
 }
@@ -59,7 +59,7 @@ export function openDownload(d: OpenDownloadDeps, mix: ClassMix): OpenDownload {
       settledAt = d.now();
       polledAt = -Infinity;
     };
-    void d.cache.download(a, mix.id, d.keep(mix.id)).then(settle, () => settle("unavailable"));
+    void d.cache.download(a, mix.id, { keep: d.keep() }).then(settle, () => settle("unavailable"));
   };
   const poll = (t: number): void => {
     if (account === null || t - polledAt < POLL_MS) return;

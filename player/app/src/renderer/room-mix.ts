@@ -26,8 +26,10 @@ export function mountMix(audio: HTMLAudioElement, report: MixReport, every: (fn:
     const d = audio.duration;
     report(seq, Math.max(0, Math.round(audio.currentTime * 1000)), !audio.paused, failed, Number.isFinite(d) && d >= 0 ? Math.round(d * 1000) : null);
   };
-  // The decoded length is known: the shell checks it against the class's at once, not a second later.
+  // The decoded length is known or changed: the shell checks it against the class's at once, not a
+  // second later. It acts on a length only once two reports agree, so a revised estimate counts.
   audio.addEventListener("loadedmetadata", () => say(false));
+  audio.addEventListener("durationchange", () => say(false));
   audio.addEventListener("error", () => {
     // Once per cue: the shell falls back to the manual clock and sends an empty cue.
     if (!hasSource || failedFor === seq) return;

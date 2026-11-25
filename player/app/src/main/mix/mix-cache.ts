@@ -4,6 +4,7 @@
 // and eviction by the pure policy (core/mix/eviction-policy.ts). The Swedebeat token is read from
 // the vault here and passed only to the source; neither it nor a key is logged or returned.
 import { mixTag } from "../../core/mix/cache-crypto.ts";
+import { entryBytes } from "../../core/mix/cache-header.ts";
 import { DEFAULT_CAP_BYTES, evictionPlan } from "../../core/mix/eviction-policy.ts";
 import type { CachedMix } from "../../core/mix/eviction-policy.ts";
 import { MIX_ID } from "../../core/mix/class-mix.ts";
@@ -31,17 +32,31 @@ export interface MixCacheDeps {
 }
 
 export interface EvictOptions {
-  /** Mix ids never deleted now: the one playing, those of classes starting within 24 hours. */
+  /** Mix ids of classes that may start within 24 hours: deleted only above the cap, after every other. */
   readonly keep: readonly string[];
+  /** Mix ids never deleted now: the one playing, the open class's. */
+  readonly pinned?: readonly string[];
   /** Every mix id some class of the account names; when given, any other cached mix is deleted. */
   readonly named?: readonly string[];
+}
+
+export interface DownloadOptions {
+  /** As in `EvictOptions`, for the eviction after the download. */
+  readonly keep?: readonly string[];
+  readonly pinned?: readonly string[];
+  /**
+   * A download ahead: refused ("no_room") when the whole mix would take the account's cache past
+   * the cap, so it never pushes out another; the mix it gets is kept, not pinned. Without it (the
+   * open class's own mix) the download goes ahead and the mix is pinned in the eviction after it.
+   */
+  readonly fit?: boolean;
 }
 
 export type CacheOutcome = DownloadOutcome | "signed_out" | "no_key";
 
 export interface MixCache {
-  /** Downloads the mix for the account, or resumes it; then evicts above the cap, keeping this mix and `keep`. */
-  download(account: string, mixId: string, keep?: readonly string[]): Promise<CacheOutcome>;
+  /** Downloads the mix for the account, or resumes it; then evicts above the cap (`DownloadOptions`). */
+  download(account: string, mixId: string, opts?: DownloadOptions): Promise<CacheOutcome>;
   /** A reader for the account's cached mix, or null. Never while the account holds no token. */
   open(account: string, mixId: string): MixReader | null;
   /** The mix was played now: it moves to the back of the eviction order. */
@@ -88,6 +103,17 @@ export function createMixCache(d: MixCacheDeps): MixCache {
   };
   const tokenOf = (account: string): string | null => (d.vault.available() ? d.vault.loadToken(account) : null);
 
+  // What the account's other entries take on disk; one still downloading counts as whole.
+  function usedBy(c: AccountCache, except: string): number {
+    let used = 0;
+    for (const [tag, bytes] of c.folder.scan().tags) {
+      if (tag === except) continue;
+      const h = loadHeader(c, tag);
+      used += h?.state === "downloading" ? Math.max(bytes, entryBytes(h.byteLength)) : bytes;
+    }
+    return used;
+  }
+
   async function evictNow(account: string, opts: EvictOptions): Promise<number> {
     const c = cacheOf(account, false);
     if (c === null) return 0;
@@ -103,13 +129,14 @@ export function createMixCache(d: MixCacheDeps): MixCache {
       } else mixes.push({ tag, bytes, usedAt: h.usedAt });
     }
     const tagsOf = (ids: readonly string[]): Set<string> => new Set(ids.filter(validId).map((id) => mixTag(c.cacheKey, id).toString("hex")));
-    const plan = evictionPlan(mixes, { now: d.now(), capBytes: cap, keep: tagsOf(opts.keep), ...(opts.named === undefined ? {} : { named: tagsOf(opts.named) }) });
+    const named = opts.named === undefined ? {} : { named: tagsOf(opts.named) };
+    const plan = evictionPlan(mixes, { now: d.now(), capBytes: cap, keep: tagsOf(opts.keep), pinned: tagsOf(opts.pinned ?? []), ...named });
     for (const tag of plan) c.folder.remove(tag);
     return gone + plan.length;
   }
 
   return {
-    download(account, mixId, keep = []) {
+    download(account, mixId, opts = {}) {
       const signal = abortOf(account);
       return queued(account, async (): Promise<CacheOutcome> => {
         if (signal.aborted) return "signed_out";
@@ -118,9 +145,13 @@ export function createMixCache(d: MixCacheDeps): MixCache {
         if (token === null) return "signed_out";
         const c = cacheOf(account, true);
         if (c === null) return "no_key";
-        const out = await downloadMix(c, { source: d.source, token, mixId, now: d.now(), capBytes: cap, signal, ...(d.idleMs === undefined ? {} : { idleMs: d.idleMs }) });
+        const fit = opts.fit === true;
+        const room = fit ? { roomBytes: cap - usedBy(c, mixTag(c.cacheKey, mixId).toString("hex")) } : {};
+        const out = await downloadMix(c, { source: d.source, token, mixId, now: d.now(), capBytes: cap, signal, ...room, ...(d.idleMs === undefined ? {} : { idleMs: d.idleMs }) });
         if (out === "token_invalid") d.onTokenInvalid?.(account);
-        if (out === "complete" && !signal.aborted) await evictNow(account, { keep: [...keep, mixId] });
+        const keep = opts.keep ?? [];
+        const pinned = opts.pinned ?? [];
+        if (out === "complete" && !signal.aborted) await evictNow(account, fit ? { keep: [...keep, mixId], pinned } : { keep, pinned: [...pinned, mixId] });
         return out;
       });
     },

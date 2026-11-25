@@ -9,7 +9,6 @@
 import { mixCueOf, mixPositionOf, steer, wrongLength } from "../../core/mix/audio-cue.ts";
 import type { AudioReport, MixCue } from "../../core/mix/audio-cue.ts";
 import { classMixOf } from "../../core/mix/class-mix.ts";
-import { keepOf } from "../../core/mix/keep-policy.ts";
 import { mixLineOf } from "../../core/mix/mix-line.ts";
 import type { MixLine, MixPlayState } from "../../core/mix/mix-line.ts";
 import { modePolicy } from "../../core/mix/mode-policy.ts";
@@ -18,6 +17,7 @@ import { playUrl } from "../../core/mix/scheme-policy.ts";
 import type { MixView } from "../../core/mix/view.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import type { MixCache } from "./mix-cache.ts";
+import type { NamedMixes } from "../sync/service.ts";
 import type { PlayFault } from "./mix-response.ts";
 import { openDownload } from "./open-download.ts";
 import type { OpenDownload } from "./open-download.ts";
@@ -39,6 +39,8 @@ export interface MixPlayerDeps {
   readonly now: () => number;
   /** The mix ids the account's synced classes name (SyncService `mixes`). */
   readonly listed: () => readonly string[];
+  /** The same with their account, only while that list is complete (SyncService `named`); else null. */
+  readonly named: () => NamedMixes | null;
 }
 
 export interface MixPlayer {
@@ -50,6 +52,8 @@ export interface MixPlayer {
   roomClosed(webContentsId: number): void;
   /** The room's link line for the open class, or null when it plays no mix. */
   line(): MixLine | null;
+  /** The open class's mix id (the one that plays), or null: the cache never deletes it. */
+  openMix(): string | null;
 }
 
 /** A clock further than this from where it should be was moved by a command: the audio seeks. */
@@ -70,16 +74,17 @@ interface Run {
   cue: MixCue | null;
   cuedAt: number;
   answered: boolean;
+  /** The decoded length the room last reported for this play: a wrong one counts only when it repeats. */
+  duration: number | null;
   /** Where the clock was at the last snapshot, to tell a command's jump from time passing. */
   base: { classMs: number; at: number; running: boolean } | null;
 }
 
-const blank = (loadId: number, fetch: OpenDownload | null, classLengthMs: number): Run => ({ loadId, fetch, classLengthMs, started: false, status: null, state: null, play: null, cue: null, cuedAt: 0, answered: false, base: null });
+const blank = (loadId: number, fetch: OpenDownload | null, classLengthMs: number): Run => ({ loadId, fetch, classLengthMs, started: false, status: null, state: null, play: null, cue: null, cuedAt: 0, answered: false, duration: null, base: null });
 
 export function createMixPlayer(d: MixPlayerDeps): MixPlayer {
   let run = blank(0, null, 0);
-  const keep = (playing: string | null): readonly string[] => keepOf(playing, d.listed());
-  const fetchDeps = { cache: d.cache, view: d.view, account: d.account, keep, now: d.now };
+  const fetchDeps = { cache: d.cache, view: d.view, account: d.account, keep: d.listed, now: d.now };
   let seq = 0;
 
   const send = (url: string | null, playing: boolean, classMs: number): void => {
@@ -94,10 +99,14 @@ export function createMixPlayer(d: MixPlayerDeps): MixPlayer {
     run.play = null;
     if (run.cue?.url != null) send(null, false, 0);
   };
-  const evict = (playing: string | null): void => {
+  const evict = (open: string | null): void => {
     // The first class opened has no download's account yet: the paired account's cache is swept.
     const a = run.fetch?.account() ?? d.account();
-    if (a !== null) void d.cache.evict(a, { keep: keep(playing) }).catch(() => undefined);
+    if (a === null) return;
+    // The synced list sweeps only its own account's cache.
+    const n = d.named();
+    const named = n !== null && n.account === a ? n.mixes : null;
+    void d.cache.evict(a, { keep: d.listed(), pinned: open === null ? [] : [open], ...(named === null ? {} : { named }) }).catch(() => undefined);
   };
   const fallBack = (reason: FallbackReason): void => {
     stop();
@@ -113,6 +122,7 @@ export function createMixPlayer(d: MixPlayerDeps): MixPlayer {
     const a = run.fetch?.account() ?? null;
     if (room === null || a === null || run.fetch === null) return;
     run.play = d.plays.begin(room, a, run.fetch.mix.id);
+    run.duration = null;
     d.cache.played(a, run.fetch.mix.id);
     send(playUrl(run.play.id), running, classMs);
   };
@@ -171,7 +181,11 @@ export function createMixPlayer(d: MixPlayerDeps): MixPlayer {
       if (run.cue === null || run.cue.url === null || r.seq !== run.cue.seq || run.fetch === null || run.state?.kind !== "playing") return;
       run.answered = true;
       // The audio failed, or decoded to a length more than 1 000 ms from the class's `length_ms`.
-      if (r.failed || wrongLength(r.durationMs, run.fetch.mix.lengthMs)) return fallBack("not_checked");
+      // A length is confirmed by two reports in a row: an early, estimated one (a browser may still
+      // be reading the file) does not drop the mix; the room reports again on `durationchange`.
+      const confirmed = r.durationMs !== null && r.durationMs === run.duration;
+      run.duration = r.durationMs;
+      if (r.failed || (confirmed && wrongLength(r.durationMs, run.fetch.mix.lengthMs))) return fallBack("not_checked");
       const b = run.base;
       if (b === null || !b.running) return;
       const t = d.now();
@@ -194,5 +208,6 @@ export function createMixPlayer(d: MixPlayerDeps): MixPlayer {
       if (run.status === "ended") return null;
       return mixLineOf(run.state, run.started, d.now());
     },
+    openMix: () => run.fetch?.mix.id ?? null,
   };
 }

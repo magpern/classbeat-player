@@ -300,3 +300,51 @@ test("mixes: the Swedebeat mixes the listed classes name, once each, and none un
   assert.deepEqual(s.mixes(), []);
   assert.deepEqual(logged, []);
 });
+
+test("named: the mixes with their account only while the synced list is complete; never an empty list", async () => {
+  const cache = classCache(dir);
+  const withMix = (title: string, id: string): Record<string, unknown> => ({ ...document(title), music: { source: "swedebeat", swedebeat_mix: { id, length_ms: 60_000, offset_ms: 0 } } });
+  const a = withMix("Alpha", "mix_b");
+  const b = withMix("beta", "mix_a");
+  cache.keep(ANN, ID_A, contentHash(a), a, STAMP);
+  cache.keep(ANN, ID_B, contentHash(b), b, STAMP);
+  cache.commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  assert.equal(s.named(), null, "the cache is not read yet");
+  s.start();
+  assert.equal(s.named(), null, "the first sync is running");
+  await settle();
+  assert.deepEqual(s.named(), { account: ANN, mixes: ["mix_a", "mix_b"] });
+  s.syncNow();
+  assert.equal(s.named(), null, "a sync is running");
+  await settle();
+  assert.notEqual(s.named(), null);
+  // A held class that does not read back with its hash may name a mix: not complete.
+  const other = withMix("Another version", "mix_c");
+  classCache(dir).keep(ANN, ID_B, contentHash(other), other, STAMP);
+  assert.equal(s.named(), null);
+  classCache(dir).keep(ANN, ID_B, contentHash(b), b, STAMP);
+  assert.notEqual(s.named(), null);
+  credential = credentialOf(BOB);
+  assert.equal(s.named(), null, "another account's pairing");
+  credential = credentialOf(ANN);
+  // The pairing ends: the cache is wiped, nothing is named, and nothing is complete.
+  credential = null;
+  s.forgotten();
+  assert.equal(s.named(), null);
+  assert.deepEqual(logged, []);
+});
+
+test("named: a complete list that names no mix is not a reason to delete every mix", async () => {
+  const cache = classCache(dir);
+  const c = document("Gamma");
+  cache.keep(ANN, ID_C, contentHash(c), c, STAMP);
+  cache.commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.view().classes, 1);
+  assert.equal(s.named(), null);
+});
