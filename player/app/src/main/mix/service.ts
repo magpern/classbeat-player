@@ -4,8 +4,9 @@
 // the keychain (main/mix/vault.ts) and never leaves the main process. Ending an account marks it as
 // ending, then deletes, in this order, the cache key, the token and the mix folder, and removes the
 // mark only once all three are gone: a token of a marked account counts as gone, so a crash between
-// the steps never shows "connected" at the next start, whose sweep finishes the deletion (#709). An
-// invalid token deletes the token only.
+// the steps never shows "connected" at the next start, whose sweep finishes the deletion (#709). When
+// the mark cannot be made, nothing is deleted: the sign-out did not finish, and the view still shows
+// the account connected, to be tried again (#720). An invalid token deletes the token only.
 import { parseCredentials } from "../../core/mix/sign-in-input.ts";
 import type { MixSource, SignInRefusal, SignInResult } from "../../core/mix/source.ts";
 import { fieldsView, MIX_DISABLED } from "../../core/mix/view.ts";
@@ -30,7 +31,7 @@ export interface MixService {
   view(): MixView;
   /** Null when the input or the moment is refused (nothing was sent anywhere). */
   signIn(raw: unknown): Promise<MixView | null>;
-  /** Null while a sign-in or sign-out is out. */
+  /** Null while a sign-in or sign-out is out. When the account cannot be marked as ending, nothing is deleted and the view still shows it connected. */
   signOut(): Promise<MixView | null>;
   /** The source said the account's token is no longer valid: the token only is deleted. */
   tokenInvalid(account: string): void;
@@ -69,10 +70,12 @@ export function createMixService(d: MixDeps): MixService {
     }
   };
 
-  // Each step runs even if one before it failed; the next start's sweep retries what is left. True
-  // when the key and the token are both gone.
-  function forget(a: string): boolean {
-    attempt(() => d.vault.markEnding(a));
+  // Null when the account could not be marked as ending: then nothing is deleted, since a crash
+  // between the steps could leave a token that looks connected. Once marked, each step runs even if
+  // one before it failed; the next start's sweep retries what is left. True when the key and the
+  // token are both gone.
+  function forget(a: string): boolean | null {
+    if (!attempt(() => d.vault.markEnding(a))) return null;
     const key = attempt(() => d.vault.clearKey(a));
     const token = attempt(() => d.vault.clearToken(a));
     held.delete(a);
@@ -82,15 +85,19 @@ export function createMixService(d: MixDeps): MixService {
   }
 
   // The mark goes last, and only when every step before it was done.
-  function finish(a: string, forgotten: boolean): void {
+  function finish(a: string, forgotten: boolean | null): void {
+    if (forgotten === null) return;
     if (attempt(() => d.vault.removeFolder(a)) && forgotten) attempt(() => d.vault.clearEnding(a));
   }
 
-  async function endAccount(a: string): Promise<void> {
+  /** False when the account could not be marked as ending, and nothing was deleted. */
+  async function endAccount(a: string): Promise<boolean> {
     const forgotten = forget(a);
+    if (forgotten === null) return false;
     // The folder goes only once no download of the account writes to it any more.
     await (d.cancelDownloads?.(a) ?? Promise.resolve()).catch(() => undefined);
     finish(a, forgotten);
+    return true;
   }
 
   function call(credentials: Parameters<MixSource["signIn"]>[0]): Promise<Outcome> {
@@ -173,8 +180,8 @@ export function createMixService(d: MixDeps): MixService {
       busy = "out";
       try {
         const token = hasToken(a) ? d.vault.loadToken(a) : null;
-        await endAccount(a);
-        if (token !== null) dropRemote(token);
+        // Not ended: the token is still kept here, so it is not dropped at the source either.
+        if ((await endAccount(a)) && token !== null) dropRemote(token);
       } finally {
         busy = null;
       }

@@ -192,14 +192,14 @@ test("sign-out removes the folder only once the account's downloads have stopped
 });
 
 test("each deletion step runs even when the one before it fails; the mark stays unless every step was done", async () => {
-  for (const step of ["markEnding", "clearKey", "clearToken", "removeFolder"]) {
+  // A mark that cannot be made deletes nothing at all (mix-sign-out-crash.test.ts, #720).
+  for (const step of ["clearKey", "clearToken", "removeFolder"]) {
     const r = rig();
     r.vault.tokens.set(ACCT, FAKE_TOKEN);
     r.vault.failStep = step;
     await r.service.signOut();
-    const unmark = step === "markEnding" ? ["clearEnding a"] : [];
-    assert.deepEqual(r.vault.log, ["markEnding a", "clearKey a", "clearToken a", "removeFolder a", ...unmark], step);
-    assert.equal(r.vault.ending.has(ACCT), step !== "markEnding", step);
+    assert.deepEqual(r.vault.log, ["markEnding a", "clearKey a", "clearToken a", "removeFolder a"], step);
+    assert.equal(r.vault.ending.has(ACCT), true, step);
     assert.equal(r.service.view().state, "signed_out", step);
   }
 });
