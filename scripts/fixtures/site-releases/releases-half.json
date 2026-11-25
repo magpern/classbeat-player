@@ -1,0 +1,19 @@
+[
+  {
+    "tag_name": "player-v0.1.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-11-25T09:30:00Z",
+    "html_url": "https://github.com/magpern/classbeat-player/releases/tag/player-v0.1.0",
+    "assets": [
+      {
+        "name": "classbeat-player-linux-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.1.0/classbeat-player-linux-x64-unsigned.tar.gz"
+      },
+      {
+        "name": "classbeat-player-windows-x64-unsigned.tar.gz",
+        "browser_download_url": "https://github.com/magpern/classbeat-player/releases/download/player-v0.1.0/classbeat-player-windows-x64-unsigned.tar.gz"
+      }
+    ]
+  }
+]
