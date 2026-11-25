@@ -151,8 +151,8 @@ test("the real vault: the mark and then its folder are flushed to disk before ma
   assert.deepEqual(flushed, ["file"]);
 });
 
-// The folder case only where a folder can be opened to flush it: on Windows opening one fails before
-// the injected flush is reached, so that case would pass without testing the flush (#729).
+// The folder case only where a folder can be flushed: on Windows the real open or flush of a folder
+// fails before the injected flush is reached, so that case would pass without testing it (#729).
 const FLUSHED = process.platform === "win32" ? ["file"] : ["file", "dir"];
 
 test("the real vault: a mark that cannot be flushed fails the sign-out, nothing is deleted, and the mark goes again", async () => {
@@ -190,7 +190,8 @@ test("the real vault: a mark that cannot be flushed fails the sign-out, nothing 
 test("the real vault: a mark from an unfinished deletion stays when it cannot be flushed again", () => {
   for (const failing of FLUSHED) {
     const d = mkdtempSync(join(tmpdir(), "mix-crash-"));
-    keychainVault(fakeSafe(), d, "linux").markEnding(ACCT);
+    // The earlier mark, made without a real flush: Windows cannot flush a folder.
+    keychainVault(fakeSafe(), d, "linux", () => undefined).markEnding(ACCT);
     const v = keychainVault(fakeSafe(), d, "linux", (fd) => {
       if ((fstatSync(fd).isDirectory() ? "dir" : "file") === failing) throw new Error("EIO");
     });
