@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
 import { WEB_DIR } from "../lib/browser.ts";
-import { BLUETOOTH_ALLOWED, violations } from "../lib/sensor-guard.ts";
+import { ALLOWED_LIST, BLUETOOTH_ALLOWED, violations } from "../lib/sensor-guard.ts";
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -59,7 +59,7 @@ describe("the guard catches each", () => {
     ["name, SC", '"sc_control_point"', "control-point UUID"],
     ["name, power", '"cycling_power_control_point"', "control-point UUID"],
     ["unlisted characteristic, hex", "0x2A19", "control-point UUID"],
-    ["unlisted service, string", '"1814"', "control-point UUID"],
+    ["unlisted service, string", '"1815"', "control-point UUID"],
     ["navigator.bluetooth", "navigator.bluetooth.requestDevice({})", "bluetooth"],
     ["optional chain", "navigator?.bluetooth", "bluetooth"],
     ["bracket spelling", 'navigator["bluetooth"]', "bluetooth"],
@@ -76,11 +76,28 @@ describe("the guard catches each", () => {
     ["member 16-bit UUID", "const U = 0xFEC3;", "control-point UUID"],
     ["eight-digit string", '"00002ad9"', "control-point UUID"],
     ["decimal GATT number in a sensor file", "getCharacteristic(10840)", "control-point UUID"],
-    ["decimal GATT service in a file that names no sensor", "export const RSC = 6164;", "control-point UUID"],
+    ["decimal GATT service in a file that names no sensor", "export const SVC = 6165;", "control-point UUID"],
     ["decimal GATT number with separators, anywhere", "const LENGTH_S = 11_093;", "control-point UUID"],
     ["decimal GATT number that looks like watts", "const watts = 6200;", "control-point UUID"],
   ];
   for (const [label, src, name] of cases) it(label, () => assert.ok(violations(src).includes(name)));
+
+  it("pins the allowlist: the eight of ADR 0012 and exactly 0x1814, 0x2A53 and 0x2ACD (ADR 0015)", () => {
+    assert.deepEqual(
+      [...ALLOWED_LIST].sort((a, b) => a - b),
+      [0x180d, 0x1814, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a53, 0x2a5b, 0x2a63, 0x2acd, 0x2ad2],
+    );
+  });
+
+  it("still fails the control points beside the new numbers, and any write", () => {
+    const ok = "const a = 0x1814, b = 0x2A53, c = 0x2ACD, d = 6164, e = 10835, f = 10957;";
+    assert.deepEqual(violations(ok), []);
+    for (const bad of ["0x2AD9", "0x2A55", "10969", "10837", '"2ad9"', '"2a55"', '"00002a55-0000-1000-8000-00805f9b34fb"', '"RSC Control Point"']) {
+      assert.deepEqual(violations(`${ok} ${bad}`), ["control-point UUID"], bad);
+    }
+    assert.deepEqual(violations(`${ok} c.writeValueWithResponse(x)`), ["write call"]);
+    assert.deepEqual(violations(`${ok} c.writeValue(x)`), ["write call"]);
+  });
 
   it("lets the allowed characteristics through", () => {
     assert.deepEqual(violations("const a = 0x2A37, b = 0x2A5B, c = 0x2A63, d = 0x2AD2, e = 0x180d, f = 0x00002a37;"), []);

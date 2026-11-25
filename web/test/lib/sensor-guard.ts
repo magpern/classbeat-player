@@ -2,7 +2,9 @@
 // the four allowed services and characteristics may be named, in any spelling, there is no write
 // call and no control point by name, and the word "bluetooth" appears in one file only
 // (BLUETOOTH_ALLOWED, pinned by its test).
-const ALLOWED = new Set([0x180d, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a5b, 0x2a63, 0x2ad2]);
+// ADR 0015 section 3 added exactly 0x1814, 0x2A53 and 0x2ACD; the guard's test pins this list.
+export const ALLOWED_LIST: readonly number[] = [0x180d, 0x1814, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a53, 0x2a5b, 0x2a63, 0x2acd, 0x2ad2];
+const ALLOWED = new Set(ALLOWED_LIST);
 /** The one file that may name the browser's sensor API, relative to web/. */
 export const BLUETOOTH_ALLOWED: readonly string[] = ["src/sensors/web-bluetooth.ts"];
 

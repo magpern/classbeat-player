@@ -1,0 +1,13 @@
+{
+  "note": "Hand-built notification bytes, in the layout of a real treadmill's and foot pod's (hex, little endian): Treadmill Data and Running Speed and Cadence measurement. t is ms since the start of the replay. Distance bytes are present in some entries on purpose: they must be skipped, never read.",
+  "treadmill": [
+    { "t": 0, "hex": "0800e80314000000", "kmh": 10, "inclinePct": 2 },
+    { "t": 1000, "hex": "0c001a041027001e000000", "kmh": 10.5, "inclinePct": 3 },
+    { "t": 2000, "hex": "08044c041e0000003c00", "kmh": 11, "inclinePct": 3 }
+  ],
+  "rsc": [
+    { "t": 0, "hex": "008002a0", "kmh": 9, "stepsPerMin": 160 },
+    { "t": 1000, "hex": "050003aa6400", "kmh": 10.8, "stepsPerMin": 170 },
+    { "t": 2000, "hex": "070003aa6400e8030000", "kmh": 10.8, "stepsPerMin": 170 }
+  ]
+}

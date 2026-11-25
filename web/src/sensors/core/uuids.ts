@@ -5,6 +5,7 @@ export const SERVICES = {
   cyclingSpeedCadence: 0x1816,
   cyclingPower: 0x1818,
   fitnessMachine: 0x1826,
+  runningSpeedCadence: 0x1814,
 } as const;
 
 export const CHARACTERISTICS = {
@@ -12,6 +13,8 @@ export const CHARACTERISTICS = {
   cscMeasurement: 0x2a5b,
   cyclingPowerMeasurement: 0x2a63,
   indoorBikeData: 0x2ad2,
+  treadmillData: 0x2acd,
+  rscMeasurement: 0x2a53,
 } as const;
 
 /** The 128-bit form of a 16-bit assigned number. */
