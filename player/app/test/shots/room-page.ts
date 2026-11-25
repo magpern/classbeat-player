@@ -75,6 +75,12 @@ export interface RoomOpenOptions {
   readonly touch?: boolean;
   /** A script that runs in the page before its own (a test's probe). */
   readonly init?: string;
+  /**
+   * Opens the page with the 3D scene mounted (it needs WebGL, which headless Chrome draws in software: a few seconds of page time cost minutes).
+   * Off by default (`?scene=off`): every room page test is about the plain screen and the controls, and the scene is tested by the scene package and
+   * room-mix-scene.test.ts.
+   */
+  readonly scene?: boolean;
 }
 
 export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<RoomOpen> {
@@ -99,7 +105,7 @@ export async function openRoom(browser: Browser, o: RoomOpenOptions): Promise<Ro
   page.on("request", (r) => {
     if (!r.url().startsWith("file:")) external.push(r.url());
   });
-  await page.goto(`file://${join(APP_DIR, "dist", "room.html")}`);
+  await page.goto(`file://${join(APP_DIR, "dist", "room.html")}${o.scene === true ? "" : "?scene=off"}`);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForSelector(".room");
   // The screen's own first draw and the band's or the sheet's first change are marks of one ledger, 500 ms apart: the page is let to settle.

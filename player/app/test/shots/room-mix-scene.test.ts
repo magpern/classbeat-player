@@ -28,7 +28,7 @@ after(async () => {
 for (const [w, h] of SIZES) {
   test(`the longest mix line in the scene's text, before the start, at ${w}x${h}`, async () => {
     if (only && !only.test(`${w}x${h}`)) return;
-    const o = await openRoom(browser, { size: [w, h], frame, remote: { slot: "absent" } });
+    const o = await openRoom(browser, { size: [w, h], frame, remote: { slot: "absent" }, scene: true });
     try {
       // The page runs on a fake clock: let it run until the first scene frame has been drawn.
       for (let i = 0; i < 40 && (await o.page.evaluate(() => document.documentElement.dataset.scene)) !== "on"; i++) await o.page.clock.runFor(100);

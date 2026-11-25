@@ -58,7 +58,7 @@ const SHOTS: readonly MixShot[] = [
 
 const frame = (s: MixShot): RoomFrame => ({ ...frameOf(s.fixture), link: null, mix: s.mix });
 
-/** The line's words, colour and marker as drawn by the plain screen (the room is opened with reduced motion, so the scene, whose text has its own `.rail .link`, is not mounted; its words are tested in player/scene/render/test/scene-join.test.ts); one line per difference from the spec. */
+/** The line's words, colour and marker as drawn; one line per difference from the spec. */
 function lookOf(page: Page, mix: MixLine): Promise<string[]> {
   return page.evaluate(
     ({ text, look }) => {
@@ -103,7 +103,7 @@ for (const shot of SHOTS) {
     for (const size of shot.sizes) {
       const name = `${shot.name}-${size[0]}x${size[1]}`;
       if (only && !only.test(name)) continue;
-      const o = await openRoom(browser, { size, frame: frame(shot), remote: { slot: "absent" }, reducedMotion: true });
+      const o = await openRoom(browser, { size, frame: frame(shot), remote: { slot: "absent" } });
       try {
         await o.page.screenshot({ path: join(SHOT_DIR, `room-mix-${name}.png`) });
         const measured: TextMeasure[] = [];
