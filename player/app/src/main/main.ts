@@ -5,12 +5,15 @@ import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { Trusted } from "../core/ipc-policy.ts";
 import { createController } from "./controller.ts";
-import { enableSandboxUnlessTest, hardenSession } from "./hardening.ts";
+import { enableSandboxUnlessTest, hardenSession, registerMixScheme } from "./hardening.ts";
 import { registerIpc } from "./ipc.ts";
 import { createListController } from "./list/list-controller.ts";
 import type { ListController } from "./list/list-controller.ts";
 import { registerListHandlers } from "./list/list-handlers.ts";
 import { registerMixHandlers } from "./mix/mix-handlers.ts";
+import type { MixPlayer } from "./mix/mix-player.ts";
+import { setupPlayback } from "./mix/playback-setup.ts";
+import { createPlays } from "./mix/plays.ts";
 import { setupMix } from "./mix/setup.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
@@ -60,7 +63,17 @@ const controller = createController(undefined, music.reader, music.transport);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 // The room screen's own window: it opens with every class that opens, and closes with the class.
-const room = createRoomWindow({ file: ROOM_FILE, url: pathToFileURL(ROOM_FILE).href, preload: ROOM_PRELOAD, presenter: live });
+// Its <audio> plays a cached mix through `cbp-mix:` with a play id bound to it (ADR 0013 section 5).
+const plays = createPlays();
+let mixPlayer: MixPlayer | null = null;
+const room = createRoomWindow({
+  file: ROOM_FILE,
+  url: pathToFileURL(ROOM_FILE).href,
+  preload: ROOM_PRELOAD,
+  presenter: live,
+  mixLine: () => mixPlayer?.line() ?? null,
+  closed: (id) => (mixPlayer === null ? plays.endFor(id) : mixPlayer.roomClosed(id)),
+});
 // The room window's phone-remote slot: absent until the live client is set up, then joined to it
 // (#202). Its Phone remote button is the instructor's request; nothing starts it by itself.
 let remote: RoomRemote = NO_REMOTE;
@@ -153,6 +166,8 @@ function createPresenter(): void {
 // Chromium's sandbox for every renderer, unless the test-only --no-sandbox switch is present
 // (CI runs without the sandbox helper). Must run before the app is ready.
 enableSandboxUnlessTest();
+// The mix scheme's privileges are fixed before the app is ready (core/mix/scheme-policy.ts).
+registerMixScheme();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -173,13 +188,14 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
   void app.whenReady().then(() => {
-    hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD]);
+    hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD], (id, wc) => plays.liveFrom(id, wc) !== null);
     const paired = setupPairing();
     pairing = paired;
     // Keeps the account's classes offline, and the class list shows them.
     sync = setupSync(paired);
     // Swedebeat sign-in on the class list page; the token stays in the keychain and this process.
-    const mix = setupMix(paired);
+    const mixSetup = setupMix(paired, plays);
+    const mix = mixSetup.service;
     list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text), mix: () => mix.view() });
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
     // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
@@ -193,6 +209,9 @@ if (!app.requestSingleInstanceLock()) {
     controller.onOpened(() => room.open());
     // A new class is a new run: the session of the class before ends (ADR 0005 section 2).
     controller.onOpened(() => phoneRemote?.classChanged());
+    // Before the room is sent the snapshot, so its link line is current.
+    const { player, prefetch } = setupPlayback(mixSetup, plays, controller, room, sync);
+    mixPlayer = player;
     controller.watch((s) => room.send(s));
     controller.watch(() => refreshRoomItem());
     controller.watch((s) => keepAwake.update(s.view));
@@ -204,10 +223,10 @@ if (!app.requestSingleInstanceLock()) {
     controller.watch(() => roomRemote.refresh());
     paired.watch(() => roomRemote.refresh());
     remote.watch((v) => room.sendRemote(v));
-    registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote });
+    registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote, mixReport: (r) => player.report(r) });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
-    registerMixHandlers(ipcMain, trusted, mix, list);
+    registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();

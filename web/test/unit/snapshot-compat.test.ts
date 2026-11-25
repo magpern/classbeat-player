@@ -62,6 +62,18 @@ describe("the room input follows the player's snapshot", () => {
     for (const k of WEB_ONLY) assert.ok(!frame.has(k), `${k} is in RoomFrame now: drop it from the page-only list`);
   });
 
+  it("MixInput is read from the player's MixLine, with the same shapes", () => {
+    const line = readFileSync(join(WEB, "..", "player", "app", "src", "core", "mix", "mix-line.ts"), "utf8");
+    const ours = own("MixInput");
+    assert.deepEqual([...ours.keys()].sort(), [...player(join("mix", "mix-line.ts"), "MixLine").keys()].sort());
+    const theirs = line.match(/export type MixShape =([^;]+);/)?.[1] ?? "";
+    const shapes = (src: string) => [...src.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    assert.deepEqual(shapes(ours.get("shape") ?? ""), shapes(theirs));
+    assert.ok(shapes(theirs).length === 4);
+    const frame = readFileSync(join(WEB, "..", "player", "app", "src", "core", "room", "frame.ts"), "utf8");
+    assert.match(frame, /readonly mix: MixLine \| null;/);
+  });
+
   it("the link states are the player's", () => {
     const states = readFileSync(join(WEB, "..", "player", "app", "src", "core", "link", "types.ts"), "utf8").match(/export type LinkStateName =([^;]+);/)?.[1] ?? "";
     const theirs = [...states.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();

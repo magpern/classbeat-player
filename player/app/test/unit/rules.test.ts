@@ -34,8 +34,19 @@ const LIVE_SOCKET = join("main", "live", "live-socket.ts");
 const LIVE_SETUP = join("main", "live", "setup.ts");
 const NETWORK = "a network request";
 const NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[LIVE_SOCKET, /\bWebSocket\b/g]]);
+// The second exception (ADR 0013 section 5, #693): the room window plays a Swedebeat mix, which
+// plan rule 3 allows, through one `<audio>` element. Exactly that element in renderer/room.html and
+// exactly its `audio.play()` in renderer/room-mix.ts are taken out of the audio check alone. Every
+// other way to make sound stays a hit in those two files, and both words stay hits everywhere else.
+const AUDIO = "audio playback (rule 3)";
+const ROOM_HTML = join("renderer", "room.html");
+const ROOM_MIX = join("renderer", "room-mix.ts");
+const AUDIO_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([
+  [ROOM_HTML, /<audio id="mix" preload="auto"><\/audio>/g],
+  [ROOM_MIX, /\baudio\.play\(\)/g],
+]);
 const checked = (path: string, text: string, what: string): string => {
-  const strip = what === NETWORK ? NETWORK_EXCEPTIONS.get(path) : undefined;
+  const strip = what === NETWORK ? NETWORK_EXCEPTIONS.get(path) : what === AUDIO ? AUDIO_EXCEPTIONS.get(path) : undefined;
   return strip ? text.replace(strip, "") : text;
 };
 
@@ -62,6 +73,32 @@ test("the live connection's exception is one file and one word, for the network 
   // Any other file: the word is a network request.
   for (const path of [join("main", "main.ts"), LIVE_SETUP, join("main", "live", "live-service.ts"), join("renderer", "live-panel.ts")]) {
     assert.match(checked(path, "new WebSocket(u)", NETWORK), FORBIDDEN[3][1], path);
+  }
+});
+
+test("the mix's exception is one element and one call, in two files, for the audio check only", () => {
+  assert.deepEqual([...AUDIO_EXCEPTIONS.keys()], [ROOM_HTML, ROOM_MIX]);
+  assert.deepEqual([...AUDIO_EXCEPTIONS.values()].map((r) => r.source), ['<audio id="mix" preload="auto"><\\/audio>', "\\baudio\\.play\\(\\)"]);
+  for (const [path, re] of AUDIO_EXCEPTIONS) {
+    const s = sources.find((x) => x.path === path);
+    assert.ok(s, `${path} exists`);
+    // Exactly one element and one call: the exception covers no second one.
+    assert.equal(code(s.text).match(re)?.length, 1, path);
+  }
+  // In those files every other way to make sound is still a hit.
+  for (const path of [ROOM_HTML, ROOM_MIX]) {
+    for (const bad of ["new Audio(x)", "<audio src=x>", "<video>", "new AudioContext()", "webkitAudioContext", "new MediaSource()", "el.play()"]) {
+      assert.match(checked(path, bad, AUDIO), FORBIDDEN[0][1], `${path}: ${bad}`);
+    }
+  }
+  // The other rules take no exception there.
+  for (const [what, bad] of [["a Spotify interface (rule 3)", "api.spotify"], ["equipment control (rule 2)", "c.writeValue(b)"], [NETWORK, "fetch(u)"]] as const) {
+    assert.match(checked(ROOM_MIX, `audio.play() ${bad}`, what), FORBIDDEN.find(([w]) => w === what)![1], what);
+  }
+  // Any other file: both are audio playback.
+  for (const path of [join("renderer", "room.ts"), join("renderer", "presenter.html"), join("main", "mix", "mix-player.ts"), join("scene", "x.ts")]) {
+    assert.match(checked(path, '<audio id="mix" preload="auto"></audio>', AUDIO), FORBIDDEN[0][1], path);
+    assert.match(checked(path, "audio.play()", AUDIO), FORBIDDEN[0][1], path);
   }
 });
 

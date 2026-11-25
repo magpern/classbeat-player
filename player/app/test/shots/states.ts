@@ -88,6 +88,7 @@ export const STATES: readonly State[] = [
   { name: "unavailable-lasting", view: view({ sync: synced([], { status: "unavailable", unavailable: "lasting" }) }) },
   { name: "sw-signed-out", view: mixed({}) },
   { name: "sw-form", view: mixed({}), click: ["mix-connect"] },
+  { name: "sw-form-missing", view: mixed({}), click: ["mix-connect", "mix-submit"] },
   { name: "sw-refused", view: mixed({ state: "refused", refusal: "bad_credentials" }), click: ["mix-connect"] },
   { name: "sw-rate-limited", view: mixed({ state: "refused", refusal: "rate_limited" }), click: ["mix-connect"] },
   { name: "sw-unreachable", view: mixed({ state: "refused", refusal: "unavailable" }) },

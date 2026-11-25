@@ -12,7 +12,10 @@ import type { SyncView } from "../../src/core/sync/view.ts";
 import { createListController } from "../../src/main/list/list-controller.ts";
 import { MIX_DISABLED } from "../../src/core/mix/view.ts";
 import type { MixView } from "../../src/core/mix/view.ts";
+import { createMixService } from "../../src/main/mix/service.ts";
+import { FakeMixSource } from "./fake-mix-source.ts";
 import { PAIRED, row, SYNCED } from "./list-fixtures.ts";
+import { ACCT, fakeVault } from "./mix-fakes.ts";
 
 const OPENED = { ...EMPTY_SNAPSHOT, loadId: 1, doc: { class: {} } } as unknown as Snapshot;
 const BAD = { ...EMPTY_SNAPSHOT, error: { message: "This class file is not valid.", details: [] } } as Snapshot;
@@ -230,4 +233,26 @@ test("Start is refused while a Swedebeat sign-out is deleting the account's mixe
   assert.equal(controller.start(first.id, first.hash), false);
   assert.equal(r.pins.length, 0);
   assert.equal(controller.view().mix.signingOut, true);
+});
+
+test("with the real sign-in service, Start is refused while its sign-out waits for the downloads to stop, and allowed after (#709)", async () => {
+  const { r, controller } = rig();
+  let release: () => void = () => undefined;
+  const service = createMixService({
+    source: new FakeMixSource(new Uint8Array(8)),
+    vault: fakeVault(),
+    account: () => ACCT,
+    cancelDownloads: () => new Promise<void>((done) => (release = done)),
+  });
+  Object.defineProperty(r, "mix", { get: () => service.view() });
+  await service.signIn({ username: "ana.k", password: "pw" });
+  controller.view();
+  const first = r.rows[0]!;
+  const out = service.signOut();
+  await new Promise((done) => setImmediate(done));
+  assert.equal(controller.start(first.id, first.hash), false, "refused while the sign-out is running");
+  assert.equal(r.pins.length, 0);
+  release();
+  assert.equal((await out)?.state, "signed_out");
+  assert.equal(controller.start(first.id, first.hash), true, "allowed once it has finished");
 });

@@ -84,6 +84,15 @@ export function takeTyped(root: HTMLElement): Record<string, string> {
   return typed;
 }
 
+/** The ids of the fields left empty; reads only whether each is empty, never a value. */
+export function emptyFields(root: HTMLElement): Set<string> {
+  const empty = new Set<string>();
+  for (const input of root.querySelectorAll<HTMLInputElement>("input[data-field]")) {
+    if (input.dataset.field !== undefined && input.value.length === 0) empty.add(input.dataset.field);
+  }
+  return empty;
+}
+
 /** Empties every field without reading it (Cancel, Esc). */
 export function clearTyped(root: HTMLElement): void {
   for (const input of root.querySelectorAll<HTMLInputElement>("input[data-field]")) input.value = "";

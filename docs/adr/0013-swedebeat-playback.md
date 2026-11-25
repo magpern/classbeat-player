@@ -182,7 +182,7 @@ A contract pull request adds, as format minor `"1.3"` under ADR 0003 section 7:
 
 | Field | Meaning |
 |---|---|
-| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_.-]`, never a token or a link. (As built: the class schema's `swedebeatMix.id` is `^[A-Za-z0-9_-]+$`, 1 to 64, with no newline; the player's own reader, `MIX_ID` in `core/mix/class-mix.ts`, also accepts a dot. A class the schema allows is always read; a dotted id never passes the schema.) `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
+| `music.swedebeat_mix` | Optional. `{ "id": string, "length_ms": int, "offset_ms": int }`: the one mix the class was designed against. `id` is the provider's id, opaque, 1 to 64 characters of `[A-Za-z0-9_-]`, never a token or a link. (As built: the class schema's `swedebeatMix.id` is `^[A-Za-z0-9_-]+$`, 1 to 64, with no newline; the player's own reader, `MIX_ID` in `core/mix/class-mix.ts`, accepts exactly that alphabet and length, so a dotted, empty or 65-character id is refused.) `length_ms` (1 or more) is the mix's length as the source measured it. `offset_ms` (0 or more, default 0) is the mix position at class time 0 |
 
 The validator adds:
 
@@ -333,3 +333,50 @@ is truncated first".
 - **Plaintext scan.** The test looks for the mix's aligned 32-byte blocks in every file under the
   cache folder; any run of 64 or more plaintext bytes contains at least one whole aligned block, so
   it is found.
+
+## Amendment: mix playback as built (PL11, #693)
+
+Records code already reviewed, as built (owner decision by the Orchestrator, 2026-11-25). It
+amends section 3 where it says which mixes are kept and how the cap works.
+
+- **Keep covers every mix a synced class names.** The class format has no start time, so "a class
+  starting within the next 24 hours" cannot be told; keep is a superset of that rule
+  (`SyncService.mixes()`, passed as `keep` in `main/mix/playback-setup.ts`).
+- **Keep is soft above the cap.** A download ahead never takes the cache past 4 GiB: a mix that
+  would not fit whole is skipped until the next sync (`fit: true`, `main/mix/prefetch.ts`,
+  `main/mix/mix-cache.ts`). Over the cap, eviction deletes the unlisted mixes first, then the
+  listed ones, each group least recently used first, and never the playing mix or the open
+  class's mix (`core/mix/eviction-policy.ts`).
+- **A removed class's mix is deleted only when the synced list is complete and authoritative:**
+  the last sync finished, no sync runs, no wipe waits, the pairing is the cached account's and
+  every held class reads back (`SyncService.named()`, else null and nothing is deleted for not
+  being named).
+- **`DRIFT_MS` is 30:** the audio position is steered to the class clock only when they differ by
+  more than 30 ms (`core/mix/audio-cue.ts`).
+- **"Mix not checked" needs two agreeing length reports.** The room reports the decoded length
+  again on `durationchange`; the mix is dropped for a wrong length (more than 1 000 ms from
+  `length_ms`) only when two reports in a row give the same length, so an early estimate does not
+  drop it (`main/mix/mix-player.ts`, `report`).
+
+## Amendment: sign-out ending mark as built (PL11, #709, #723)
+
+Records code already reviewed, as built. It amends the deletion order in section 1 ("One key
+lifetime").
+
+- **An "ending" mark goes first.** Sign-out, unpairing and the account's deletion each write an empty
+  mark file for the account (`mix-ending-<account key>.bin`, mode 0600, never following a link
+  planted in its place) before anything is deleted (`markEnding` in `main/mix/vault.ts`; `forget`
+  in `main/mix/service.ts`). If the mark cannot be written the steps still run.
+- **The order is then:** the mark, the cache key, the token, the account's mix folder, and the mark
+  last (`forget`, `finish` in `main/mix/service.ts`). Each step runs even when one before it failed.
+- **The mark is removed only when all three deletions succeeded** (key, token and folder; `finish`).
+  Otherwise it stays.
+- **While the mark exists the token reads as gone:** `loadToken` returns null for an ending account
+  (`main/mix/vault.ts`), so a crash or a failed deletion never leaves an account that looks
+  connected.
+- **The start-up sweep or the next sign-in finishes the deletion.** `sweep` ends every account with
+  a mark, including the current account's own, and `signIn` finishes an unfinished ending first and
+  sends nothing while the mark still cannot be removed (`main/mix/service.ts`).
+- The sign-in form's three notes for an empty field, details not taken and a call that did not
+  finish are in `core/mix/form-note.ts`; their states are in
+  [the Swedebeat spec](../design/swedebeat.md).

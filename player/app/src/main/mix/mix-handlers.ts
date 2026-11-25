@@ -10,16 +10,19 @@ import { pageEvent } from "../ipc-handlers.ts";
 import type { ListController } from "../list/list-controller.ts";
 import type { MixService } from "./service.ts";
 
-export function registerMixHandlers(bus: IpcBus, trusted: () => Trusted, mix: MixService, list: Pick<ListController, "view">): void {
+export function registerMixHandlers(bus: IpcBus, trusted: () => Trusted, mix: MixService, list: Pick<ListController, "view">, signedIn: () => void = () => undefined): void {
   const onList = (e: Parameters<typeof pageEvent>[0]): boolean => pageEvent(e, trusted) === MIX_PAGE;
   bus.handle(CH_MIX_SIGN_IN, async (e, raw) => {
     if (!onList(e)) return null;
     // The service parses and refuses; `raw` is not kept, logged or answered back.
     const done = await mix.signIn(raw);
-    return done === null ? null : list.view();
+    if (done === null) return null;
+    // The synced classes' mixes start downloading (ADR 0013 section 3).
+    signedIn();
+    return list.view();
   });
-  bus.handle(CH_MIX_SIGN_OUT, (e, raw) => {
+  bus.handle(CH_MIX_SIGN_OUT, async (e, raw) => {
     if (!onList(e) || raw !== undefined) return null;
-    return mix.signOut() === null ? null : list.view();
+    return (await mix.signOut()) === null ? null : list.view();
   });
 }

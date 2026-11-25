@@ -5,7 +5,7 @@ import type { WebContents } from "electron";
 import classSchema from "../../../../schema/class-format/v1/class.schema.json" with { type: "json" };
 import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
-import { advance, answerLoad, command, INITIAL, isFollowing, openText, playlistAtStart, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
+import { advance, alignClock, answerLoad, command, INITIAL, isFollowing, openText, playlistAtStart, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
 import { createLoadGate } from "../core/link/load-gate.ts";
 import { fallsBack, PLAYLIST_CONFIRM_MS } from "../core/link/playlist-load.ts";
 import { canLoadPlaylist } from "../core/link/playlist.ts";
@@ -27,6 +27,8 @@ export interface Controller {
   command(cmd: ClockCommand): Snapshot;
   /** A named command for the music app; ignored unless the instructor follows the music. */
   music(action: TransportAction): Snapshot;
+  /** Mix playback: moves a running clock to this class time (the audio's position minus offset_ms). */
+  align(classMs: number): void;
   /** Calls the listener once when the open class's clock reaches its end. */
   onEnded(listener: () => void): void;
   /** Calls the listener each time a class opens for play (a file or a list's class that read). */
@@ -148,6 +150,10 @@ export function createController(now: () => number = () => performance.now(), re
       gate.expire(now());
       if (transport !== null && isFollowing(state)) gate.send(action);
       return snapshot();
+    },
+    align(classMs) {
+      state = alignClock(state, classMs, now());
+      push();
     },
     onEnded(listener) {
       enders.push(listener);

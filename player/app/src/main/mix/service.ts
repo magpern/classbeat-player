@@ -1,8 +1,11 @@
 // Swedebeat sign-in and sign-out in the main process (ADR 0013 section 1). The credentials arrive
 // in one call, are checked against the fields the source declares, handed to its `signIn` once and
 // dropped: they are never written, logged, put in a URL or answered back. The token goes only to
-// the keychain (main/mix/vault.ts) and never leaves the main process. Ending an account deletes, in
-// this order, the cache key, the token and the mix folder; an invalid token deletes the token only.
+// the keychain (main/mix/vault.ts) and never leaves the main process. Ending an account marks it as
+// ending, then deletes, in this order, the cache key, the token and the mix folder, and removes the
+// mark only once all three are gone: a token of a marked account counts as gone, so a crash between
+// the steps never shows "connected" at the next start, whose sweep finishes the deletion (#709). An
+// invalid token deletes the token only.
 import { parseCredentials } from "../../core/mix/sign-in-input.ts";
 import type { MixSource, SignInRefusal, SignInResult } from "../../core/mix/source.ts";
 import { fieldsView, MIX_DISABLED } from "../../core/mix/view.ts";
@@ -19,18 +22,20 @@ export interface MixDeps {
   /** The key of the paired account (sync/link.ts), or null when not paired. */
   readonly account: () => string | null;
   readonly waitMs?: number;
+  /** Stops the account's downloads and resolves once none writes any more (main/mix/mix-cache.ts `cancel`). */
+  readonly cancelDownloads?: (account: string) => Promise<void>;
 }
 
 export interface MixService {
   view(): MixView;
   /** Null when the input or the moment is refused (nothing was sent anywhere). */
   signIn(raw: unknown): Promise<MixView | null>;
-  /** Null while a sign-in is out. */
-  signOut(): MixView | null;
+  /** Null while a sign-in or sign-out is out. */
+  signOut(): Promise<MixView | null>;
   /** The source said the account's token is no longer valid: the token only is deleted. */
   tokenInvalid(account: string): void;
   /** The pairing was deleted (unpaired, or the account deleted): every account here is ended. */
-  forgotten(): void;
+  forgotten(): Promise<void>;
   /** At start: what an ended account left behind (a crash between the steps) is deleted. */
   sweep(): void;
 }
@@ -54,18 +59,38 @@ export function createMixService(d: MixDeps): MixService {
   // Best effort, after the local deletion or for a token that is not kept: never awaited, never reported.
   const dropRemote = (token: string): void => void Promise.resolve().then(() => d.source.signOut(token)).catch(() => undefined);
 
-  function endAccount(a: string): void {
-    // Each step runs even if one before it failed; the next start's sweep retries what is left.
-    for (const step of [() => d.vault.clearKey(a), () => d.vault.clearToken(a), () => d.vault.removeFolder(a)]) {
-      try {
-        step();
-      } catch {
-        // nothing is logged: the account key is not for a log either
-      }
+  const attempt = (step: () => void): boolean => {
+    try {
+      step();
+      return true;
+    } catch {
+      // nothing is logged: the account key is not for a log either
+      return false;
     }
+  };
+
+  // Each step runs even if one before it failed; the next start's sweep retries what is left. True
+  // when the key and the token are both gone.
+  function forget(a: string): boolean {
+    attempt(() => d.vault.markEnding(a));
+    const key = attempt(() => d.vault.clearKey(a));
+    const token = attempt(() => d.vault.clearToken(a));
     held.delete(a);
     reconnect.delete(a);
     if (refused?.account === a) refused = null;
+    return key && token;
+  }
+
+  // The mark goes last, and only when every step before it was done.
+  function finish(a: string, forgotten: boolean): void {
+    if (attempt(() => d.vault.removeFolder(a)) && forgotten) attempt(() => d.vault.clearEnding(a));
+  }
+
+  async function endAccount(a: string): Promise<void> {
+    const forgotten = forget(a);
+    // The folder goes only once no download of the account writes to it any more.
+    await (d.cancelDownloads?.(a) ?? Promise.resolve()).catch(() => undefined);
+    finish(a, forgotten);
   }
 
   function call(credentials: Parameters<MixSource["signIn"]>[0]): Promise<Outcome> {
@@ -102,6 +127,11 @@ export function createMixService(d: MixDeps): MixService {
       if (d.source.kind === "unavailable" || busy !== null) return null;
       const a = d.account();
       if (a === null || !d.vault.available() || hasToken(a)) return null;
+      // An ending that did not finish is finished first; while it cannot be, nothing is sent.
+      if (d.vault.isEnding(a)) {
+        finish(a, forget(a));
+        if (d.vault.isEnding(a)) return null;
+      }
       // The one local variable that holds what was typed, for the length of this call.
       let credentials = parseCredentials(raw, d.source.credentialFields());
       if (credentials === null) return null;
@@ -136,14 +166,14 @@ export function createMixService(d: MixDeps): MixService {
       }
       return service.view();
     },
-    signOut() {
+    async signOut() {
       if (busy !== null) return null;
       const a = d.account();
       if (a === null) return service.view();
       busy = "out";
       try {
         const token = hasToken(a) ? d.vault.loadToken(a) : null;
-        endAccount(a);
+        await endAccount(a);
         if (token !== null) dropRemote(token);
       } finally {
         busy = null;
@@ -159,18 +189,26 @@ export function createMixService(d: MixDeps): MixService {
       held.delete(a);
       reconnect.add(a);
     },
-    forgotten() {
-      for (const a of new Set([...d.vault.accounts(), ...held.keys()])) endAccount(a);
+    async forgotten() {
+      const ending = [...new Set([...d.vault.accounts(), ...held.keys()])].map(endAccount);
       refused = null;
       reconnect.clear();
+      await Promise.all(ending);
     },
     sweep() {
       // Not when the keychain cannot be read at all: the pairing may still be there.
       if (!d.vault.available()) return;
       const current = d.account();
-      for (const a of d.vault.accounts()) if (a !== current) endAccount(a);
+      // At start no download runs yet, so each account ends at once.
+      // So does the current account's own, when a sign-out of it did not finish.
+      let ended = false;
+      for (const a of d.vault.accounts()) {
+        if (a === current && !d.vault.isEnding(a)) continue;
+        if (a === current) ended = true;
+        finish(a, forget(a));
+      }
       // Mixes with no key left are files nothing can decrypt.
-      if (current !== null && !d.vault.hasKey(current)) {
+      if (current !== null && !ended && !d.vault.hasKey(current)) {
         try {
           d.vault.removeFolder(current);
         } catch {

@@ -95,7 +95,7 @@ const countText = (n: number): string => (n === 1 ? "1 class" : `${n} classes`);
 export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
   const head = headOf(v);
   // Swedebeat only on a paired list that is shown (a state with a panel of its own comes first).
-  const mix = head.panel === null ? mixHeadOf(v.mix, ui.mix ?? "none", v.rows.some((r) => r.source === "swedebeat")) : NO_MIX;
+  const mix = head.panel === null ? mixHeadOf(v.mix, ui.mix ?? "none", v.rows.some((r) => r.source === "swedebeat"), ui.mixNote ?? null) : NO_MIX;
   // The filter is there from eight classes; while a file's error plate or a Swedebeat plate is up it steps aside, so that a whole screen of rows stays in view.
   const allowed = v.rows.length >= FILTER_FROM && v.fileError === null && mix.plate === null;
   const filterText = allowed ? ui.filter : "";

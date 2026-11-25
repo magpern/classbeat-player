@@ -4,6 +4,8 @@
 import type { Button, Marker, Panel } from "../list/states.ts";
 import { REASON_WORDS } from "./mode-policy.ts";
 import type { FallbackReason } from "./mode-policy.ts";
+import { noteWords } from "./form-note.ts";
+import type { FormNote } from "./form-note.ts";
 import { mayOfferSignIn } from "./view.ts";
 import type { MixFieldView, MixView } from "./view.ts";
 
@@ -60,9 +62,10 @@ function formOf(v: MixView, again: boolean): MixForm {
 
 /**
  * The Swedebeat part of the page. `listed`: the list holds a Swedebeat class. The line is shown
- * only then, or while a token is held, or while the instructor is acting on it.
+ * only then, or while a token is held, or while the instructor is acting on it. `note`: what the
+ * open form says when it stayed open without a refusal (core/mix/form-note.ts).
  */
-export function mixHeadOf(v: MixView, ui: MixUi, listed: boolean): MixHead {
+export function mixHeadOf(v: MixView, ui: MixUi, listed: boolean, note: FormNote | null = null): MixHead {
   if (ui === "signing-out" || v.signingOut) {
     return only({ line: line("work", "Signing out of Swedebeat", "The mixes saved on this computer are being removed"), panel: wait("mix-signing-out", "Nothing can start until this is done. You can still open a class file.") });
   }
@@ -77,6 +80,12 @@ export function mixHeadOf(v: MixView, ui: MixUi, listed: boolean): MixHead {
   if (!v.keychainUsable) return listed ? only({ line: line("away", "Swedebeat cannot be connected here", `This computer has no safe place to keep the sign-in. ${NOTE}`) }) : NONE;
   const refusal = v.state === "refused" ? v.refusal : null;
   if (ui === "form" && mayOfferSignIn(v)) {
+    // The page's own note is newer than a refusal the shell still holds. The form stays the one
+    // already shown, so the fields filled in are not emptied by a repaint.
+    if (note !== null) {
+      const w = noteWords(note);
+      return only({ plate: plate(w.headline, w.detail), form: formOf(v, refusal === "bad_credentials" || refusal === "rate_limited") });
+    }
     if (refusal === "bad_credentials") return only({ plate: plate("Swedebeat did not accept those details", "Check them and type them again. Nothing was kept."), form: formOf(v, true) });
     if (refusal === "rate_limited") return only({ plate: plate("Too many tries", "Wait a few minutes, then type your details again. Nothing was kept."), form: formOf(v, true) });
     return only({ form: formOf(v, false) });

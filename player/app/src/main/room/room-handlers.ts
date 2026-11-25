@@ -3,12 +3,15 @@
 // gets a RoomFrame (core/room/frame.ts), never the presenter's snapshot, and the phone remote's
 // slot as remoteViewOf leaves it (core/room/remote.ts). The sender check comes first, before
 // anything is parsed. `room:state` reads nothing sent with it; `room:command` takes one of the
-// room's clock commands (core/room/commands.ts) and the other channels no argument at all. A
+// room's clock commands (core/room/commands.ts), `room:mix-report` one AudioReport
+// (core/mix/audio-cue.ts, four fields, parsed strictly) and the other channels no argument at all. A
 // refused message gets null, changes nothing and is logged by its channel and reason, never with
 // what was sent.
 import type { IpcMainInvokeEvent } from "electron";
-import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_STATE } from "../../core/channels.ts";
+import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_MIX_REPORT, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_STATE } from "../../core/channels.ts";
 import { isRoomSender } from "../../core/ipc-policy.ts";
+import { parseAudioReport } from "../../core/mix/audio-cue.ts";
+import type { AudioReport } from "../../core/mix/audio-cue.ts";
 import type { RoomTrusted } from "../../core/ipc-policy.ts";
 import { parseRoomCommand } from "../../core/room/commands.ts";
 import { roomFrameOf } from "../../core/room/frame.ts";
@@ -18,13 +21,15 @@ import type { RemoteView, RoomRemote } from "../../core/room/remote.ts";
 import type { Controller } from "../controller.ts";
 import type { IpcBus } from "../ipc-handlers.ts";
 
-export type RefusalReason = "sender" | "command" | "argument";
+export type RefusalReason = "sender" | "command" | "argument" | "report";
 
 /** What the room's controls reach in the shell (main.ts). */
 export interface RoomHost {
   /** End class: the class is no longer pinned, the class list comes back and the room window closes. */
   readonly endClass: () => void;
   readonly remote: RoomRemote;
+  /** Where the mix audio's reports go (main/mix/mix-player.ts); none: reports are read and dropped. */
+  readonly mixReport?: (r: AudioReport) => void;
   /** Where a refusal is written: one line with the channel and the reason, nothing sent with it. */
   readonly log?: (line: string) => void;
 }
@@ -66,5 +71,12 @@ export function registerRoomHandlers(bus: IpcBus, trusted: () => RoomTrusted, co
   bare(CH_ROOM_REMOTE_STOP, () => {
     host.remote.stop();
     return remote();
+  });
+  bus.handle(CH_ROOM_MIX_REPORT, (e, raw): true | null => {
+    if (!roomEvent(e, trusted)) return refuse(CH_ROOM_MIX_REPORT, "sender");
+    const r = parseAudioReport(raw);
+    if (r === null) return refuse(CH_ROOM_MIX_REPORT, "report");
+    host.mixReport?.(r);
+    return true;
   });
 }

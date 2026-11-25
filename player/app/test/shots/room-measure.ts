@@ -65,9 +65,20 @@ async function inkOf(page: Page, probe: Page, size: readonly [number, number], i
 }
 
 /** C1 to C4 for the band's text. One line per problem; empty is a pass. */
-export async function bandText(page: Page, probe: Page, size: readonly [number, number]): Promise<string[]> {
+export const bandText = (page: Page, probe: Page, size: readonly [number, number]): Promise<string[]> => tierText(page, probe, size, ".band [data-tier]");
+
+/** The measured cap height (share of the screen height) and worst contrast of each text `selector` matches. */
+export interface TextMeasure {
+  readonly text: string;
+  readonly tier: string;
+  readonly cap: number;
+  readonly contrast: number | null;
+}
+
+/** C1 to C4 for the text `selector` matches. One line per problem; empty is a pass. `measured` gets the numbers. */
+export async function tierText(page: Page, probe: Page, size: readonly [number, number], selector: string, measured: TextMeasure[] = []): Promise<string[]> {
   const { items } = await page.evaluate(collect);
-  const inBand = new Set(await page.evaluate(() => [...document.querySelectorAll(".band [data-tier]")].map((e) => Number((e as HTMLElement).dataset.mi))));
+  const inBand = new Set(await page.evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => Number((e as HTMLElement).dataset.mi)), selector));
   const band = items.filter((it) => inBand.has(it.i));
   const unhide = await addSheet(page, HIDE);
   const inked: (Item & { k: Box })[] = [];
@@ -75,6 +86,7 @@ export async function bandText(page: Page, probe: Page, size: readonly [number, 
   for (const it of band) {
     const t = TIERS[it.tier];
     const r = await inkOf(page, probe, size, it);
+    measured.push({ text: it.text, tier: it.tier, cap: it.cap, contrast: r ? r.worst : null });
     const problems = [...it.problems];
     if (!t) problems.push(`unknown tier ${it.tier}`);
     if (!r) problems.push("no visible ink");

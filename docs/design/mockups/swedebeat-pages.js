@@ -86,6 +86,18 @@ refused('refused', 'Class list: Swedebeat did not accept the details', 'State: `
   'Swedebeat did not accept those details', 'Check them and type them again. Nothing was kept.');
 refused('rate-limited', 'Class list: too many tries', 'State: `rate_limited`. The form is back, empty.',
   'Too many tries', 'Wait a few minutes, then type your details again. Nothing was kept.');
+// The page's own notes (core/mix/form-note.ts): the form stays open, fields as typed are not emptied.
+const noted = (name, title, comment, st, dt, u, p) => add(name, title, comment,
+  `${HEAD}${SYNC}${plate(st, dt, '', true)}${panel('Connect Swedebeat', `${form(u, p)}<div class="row-btns">${BTN('Connect', 'Enter', 'primary')}${BTN('Cancel', 'Esc')}</div>`)}`);
+noted('form-missing', 'Class list: a field was left empty',
+  'State: sw-form-missing. Connect was pressed with a field empty. The plate names the empty fields, lowercased, in the form\'s order ("a", "a and b", "a, b and c"); nothing was read or sent. Fields already filled stay as typed. With many fields the plate stays within three lines (W6).',
+  'Type your password', 'Every field is needed to connect. Nothing was sent.', 'ana.k', '');
+noted('form-not-sent', 'Class list: those details were not sent',
+  'State: the shell answered that it did not take the details (no answer). The form is open and empty.',
+  'Those details were not sent', 'Type them again. Nothing was kept.', '', '');
+noted('form-unfinished', 'Class list: connecting did not finish',
+  'State: the call to the shell failed. The page reads the shell again; the form is open and empty.',
+  'Connecting did not finish', 'Type your details again to try once more.', '', '');
 add('unreachable', 'Class list: Swedebeat could not be reached',
   'State: `unavailable`. Back on the list with the plate; the manual clock stays.',
   `${HEAD}${SYNC}${plate('Swedebeat could not be reached', `Check the connection, then try again. ${NOTE}`, BTN('Try again'), true)}${COLS}${list(MANUAL, true)}${foot(SEL, `${START}. Manual clock: Swedebeat is not connected`)}`);

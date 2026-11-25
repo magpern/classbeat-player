@@ -62,6 +62,15 @@ export interface PatternInput {
  */
 export type PlayNotice = "screen-may-turn-off" | "reloaded";
 
+/**
+ * The link line of a mix class as the player decides it (`MixLine` in player/app/src/core/mix/mix-line.ts):
+ * fixed words and a shape. The screen draws only the fixed pairs of mix-words.ts.
+ */
+export interface MixInput {
+  readonly text: string;
+  readonly shape: "dot" | "circle" | "square" | "news";
+}
+
 /** What the room screen is given: a recorded or live snapshot. */
 export interface RoomInput {
   readonly doc: Class | null;
@@ -79,4 +88,6 @@ export interface RoomInput {
    * field is the one source; the screen keeps no clock of its own. Absent counts as false.
    */
   readonly playlistNotLoaded?: boolean;
+  /** The player's frame field (`RoomFrame.mix`): the link line of a mix class, or null (absent) for any other class. */
+  readonly mix?: MixInput | null;
 }

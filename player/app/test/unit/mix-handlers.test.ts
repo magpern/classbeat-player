@@ -24,8 +24,9 @@ function rig() {
   const mix = createMixService({ source, vault, account: () => ACCT });
   const handlers = new Map<string, (e: IpcMainInvokeEvent, raw: unknown) => unknown>();
   const bus: IpcBus = { handle: (ch, fn) => void handlers.set(ch, fn) };
-  registerMixHandlers(bus, () => TRUSTED, mix, { view: () => ({ ...view(), mix: mix.view() }) });
-  return { source, vault, mix, handlers, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw) };
+  const signedIn = { n: 0 };
+  registerMixHandlers(bus, () => TRUSTED, mix, { view: () => ({ ...view(), mix: mix.view() }) }, () => void signedIn.n++);
+  return { signedIn, source, vault, mix, handlers, call: (ch: string, e: IpcMainInvokeEvent, raw?: unknown) => handlers.get(ch)!(e, raw) };
 }
 
 test("the sign-in channels are the list page's only: never the room's, and named as the issue says", () => {
@@ -44,6 +45,7 @@ test("every sender but the list page's top frame is refused before anything is r
     assert.equal(await r.call(CH_MIX_SIGN_OUT, e), null);
   }
   assert.equal(read, 0);
+  assert.equal(r.signedIn.n, 0, "no download check for a refused sender");
   assert.deepEqual(r.source.calls, []);
   assert.deepEqual(r.vault.log, []);
 });
@@ -52,6 +54,7 @@ test("oversize and unexpected input is refused and reaches no source", async () 
   const r = rig();
   const bad: unknown[] = [undefined, null, "u:p", [], {}, { username: "u" }, { username: "u", password: "p", origin: "http://127.0.0.1" }, { username: "u".repeat(257), password: "p" }, { username: "u", password: "p".repeat(1_000_000) }];
   for (const b of bad) assert.equal(await r.call(CH_MIX_SIGN_IN, fromList, b), null);
+  assert.equal(r.signedIn.n, 0);
   assert.deepEqual(r.source.calls, []);
   // Sign-out takes nothing.
   assert.equal(await r.call(CH_MIX_SIGN_OUT, fromList, { all: true }), null);
@@ -62,9 +65,10 @@ test("from the list page: sign in, then sign out; no answer carries the token or
   const r = rig();
   const signedIn = await r.call(CH_MIX_SIGN_IN, fromList, { username: "ana.k", password: PASSWORD });
   assert.equal((signedIn as ReturnType<typeof view>).mix.state, "signed_in");
+  assert.equal(r.signedIn.n, 1, "the synced classes' mixes are checked for download after the sign-in");
   const signedOut = await r.call(CH_MIX_SIGN_OUT, fromList);
   assert.equal((signedOut as ReturnType<typeof view>).mix.state, "signed_out");
   const out = JSON.stringify([signedIn, signedOut]);
   assert.ok(!out.includes(PASSWORD) && !out.includes(FAKE_TOKEN));
-  assert.deepEqual(r.vault.log, ["saveToken a", "clearKey a", "clearToken a", "removeFolder a"]);
+  assert.deepEqual(r.vault.log, ["saveToken a", "markEnding a", "clearKey a", "clearToken a", "removeFolder a", "clearEnding a"]);
 });

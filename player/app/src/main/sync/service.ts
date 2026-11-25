@@ -6,6 +6,7 @@ import classSchema from "../../../../../schema/class-format/v1/class.schema.json
 import { isClassId, parseChanges, parseClass } from "../../core/sync/answers.ts";
 import { INITIAL, step } from "../../core/sync/sync-model.ts";
 import type { Effect, SyncEvent, SyncState } from "../../core/sync/sync-model.ts";
+import { mixesNamed } from "../../core/mix/keep-policy.ts";
 import { classListView } from "../../core/sync/class-list.ts";
 import type { ClassRow } from "../../core/sync/class-list.ts";
 import { lastingFault } from "../../core/sync/fault-policy.ts";
@@ -34,6 +35,12 @@ export interface SyncDeps {
   readonly clearTimer: (handle: unknown) => void;
 }
 
+/** The mix ids every class of the account names (ADR 0013 section 3: a mix no class names goes). */
+export interface NamedMixes {
+  readonly account: string;
+  readonly mixes: readonly string[];
+}
+
 export interface SyncService {
   /** Reads the cache at startup (again later, after a fault reading it), and syncs. */
   start(): void;
@@ -44,6 +51,14 @@ export interface SyncService {
   view(): SyncView;
   /** The class list's rows: one per cached class that reads back with its hash, in title order. */
   list(): readonly ClassRow[];
+  /** The Swedebeat mix ids the class list's classes name (core/mix/keep-policy.ts); nothing else of a document leaves. */
+  mixes(): readonly string[];
+  /**
+   * The same with their account, only when the list is complete: the last sync finished, no sync
+   * runs, no wipe waits, the pairing is the cached account's and every held class reads back. Else
+   * null, and also when no class names a mix: the cache then deletes nothing for not being named.
+   */
+  named(): NamedMixes | null;
   /**
    * Takes the snapshot of a cached class for play, or null when it is not held or does not read
    * back with its hash. Sync never changes it; a newer version applies after `unpin`.
@@ -183,6 +198,20 @@ export function createSyncService(d: SyncDeps): SyncService {
     dispatch({ type: "due", credential: c === null ? null : { account: c.account, expired: c.expired } });
   };
 
+  /** The documents the class list shows, by class id. */
+  const listed = (): Map<string, Readonly<Record<string, unknown>>> => {
+    const documents = new Map<string, Readonly<Record<string, unknown>>>();
+    // The same guards as pin(): nothing while a wipe waits, or under another account's pairing.
+    const c = d.credential();
+    if (state.account === null || state.wipeAfterPin || state.wipePending || (c !== null && c.account !== state.account)) return documents;
+    for (const [id, hash] of state.held) {
+      // Only the paired account's document that still has the hash it was kept with is listed.
+      const found = d.cache.read(id);
+      if (found !== null && found.hash === hash && found.account === state.account) documents.set(id, found.document);
+    }
+    return documents;
+  };
+
   return {
     start() {
       // A cache that cannot be read is neither used nor wiped: the model asks to read it again later.
@@ -193,17 +222,17 @@ export function createSyncService(d: SyncDeps): SyncService {
       dispatch({ type: "forgotten" });
     },
     view: () => syncView(state),
-    list() {
-      const documents = new Map<string, Readonly<Record<string, unknown>>>();
-      // The same guards as pin(): nothing while a wipe waits, or under another account's pairing.
+    list: () => classListView(state, listed()),
+    mixes: () => mixesNamed(listed().values()),
+    named() {
+      const account = state.account;
       const c = d.credential();
-      if (state.account === null || state.wipeAfterPin || state.wipePending || (c !== null && c.account !== state.account)) return [];
-      for (const [id, hash] of state.held) {
-        // Only the paired account's document that still has the hash it was kept with is listed.
-        const found = d.cache.read(id);
-        if (found !== null && found.hash === hash && found.account === state.account) documents.set(id, found.document);
-      }
-      return classListView(state, documents);
+      if (account === null || c === null || c.account !== account || state.status !== "synced" || state.run !== null || state.unread || state.lasting || state.wipePending || state.wipeAfterPin) return null;
+      const docs = listed();
+      // A held class that does not read back may still name a mix: the list is not complete.
+      if (docs.size !== state.held.size) return null;
+      const mixes = mixesNamed(docs.values());
+      return mixes.length === 0 ? null : { account, mixes };
     },
     pin(id, seen) {
       const hash = state.held.get(id);

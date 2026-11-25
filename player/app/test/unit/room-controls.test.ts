@@ -199,7 +199,7 @@ test("no control code, token or controller detail reaches the room window on any
   for (const s of SECRETS) assert.ok(!sent.includes(s), s);
   assert.deepEqual(remoteViewOf(HOSTILE), { slot: "on", joinCode: "BCDF-GHJK", phones: 1, reconnecting: false });
   const clock = { start: "clock", pause: "clock", resume: "clock", next: "clock", previous: "clock" };
-  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock, pattern: null, playlistNotLoaded: false });
+  assert.deepEqual(r.call(CH_ROOM_STATE), { doc: SNAP.doc, view: SNAP.view, link: SNAP.link, band: clock, pattern: null, playlistNotLoaded: false, mix: null });
 });
 
 const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts", "core/live/room-slot.ts", "main/live/room-remote.ts"];
@@ -207,7 +207,7 @@ const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "
 test("the room's sources name no control code, token or controller, and each push goes through its filter", () => {
   for (const p of ROOM_SOURCES) assert.doesNotMatch(code(read("src", ...p.split("/"))), /control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, p);
   const win = code(read("src", "main", "room", "room-window.ts"));
-  assert.deepEqual([...win.matchAll(/\bpush\(([^)]*\))\)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE, roomFrameOf(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)"]);
+  assert.deepEqual([...win.matchAll(/\bpush\(([^)]*\))\)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE, frame(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)", "CH_ROOM_MIX, mixCueOf(c)"]);
   assert.deepEqual([...win.matchAll(/\.send\((\w+)/g)].map((m) => m[1]), ["channel"]);
 });
 

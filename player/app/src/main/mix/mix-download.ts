@@ -10,14 +10,14 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Hash } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
 import { FILE_ID_BYTES, mixTag, openChunk, sealChunk } from "../../core/mix/cache-crypto.ts";
-import { identityOf, sameSource } from "../../core/mix/cache-header.ts";
+import { entryBytes, identityOf, sameSource } from "../../core/mix/cache-header.ts";
 import type { MixHeader, SourceIdentity } from "../../core/mix/cache-header.ts";
 import { chunkCount, plainEnd, plainLength, sealedEnd, sealedStart, wholeChunks } from "../../core/mix/cache-layout.ts";
 import type { MixSource } from "../../core/mix/source.ts";
 import { dropBad, keysOf, loadHeader, saveHeader } from "./cache-entry.ts";
 import type { AccountCache, EntryKeys } from "./cache-entry.ts";
 
-export type DownloadOutcome = "complete" | "interrupted" | "token_invalid" | "unavailable" | "not_found" | "not_allowed" | "too_large" | "bad";
+export type DownloadOutcome = "complete" | "interrupted" | "token_invalid" | "unavailable" | "not_found" | "not_allowed" | "too_large" | "no_room" | "bad";
 
 export interface DownloadInput {
   readonly source: MixSource;
@@ -25,8 +25,12 @@ export interface DownloadInput {
   readonly mixId: string;
   readonly now: number;
   readonly capBytes: number;
+  /** When given, a mix whose whole entry would take more than this many bytes is not downloaded ("no_room"). */
+  readonly roomBytes?: number;
   /** A stream that sends nothing for this long is dropped; the download resumes later. */
   readonly idleMs?: number;
+  /** Aborted at sign-out: the download stops at once, as if the stream had ended early. */
+  readonly signal?: AbortSignal;
 }
 
 export const DOWNLOAD_IDLE_MS = 60_000;
@@ -99,7 +103,13 @@ async function writeChunk(p: Progress, plain: Buffer): Promise<boolean> {
     if (p.torn.length > sealed.length || !sealed.subarray(0, p.torn.length).equals(p.torn)) return false;
     p.torn = Buffer.alloc(0);
   }
-  await p.file.write(sealed, 0, sealed.length, sealedStart(p.next));
+  // A write may take fewer bytes than asked; the rest is written until the chunk is whole.
+  let done = 0;
+  while (done < sealed.length) {
+    const { bytesWritten } = await p.file.write(sealed, done, sealed.length - done, sealedStart(p.next) + done);
+    if (bytesWritten <= 0) throw new Error("write made no progress");
+    done += bytesWritten;
+  }
   p.hash.update(plain);
   p.next++;
   return true;
@@ -108,13 +118,20 @@ async function writeChunk(p: Progress, plain: Buffer): Promise<boolean> {
 type Fill = "done" | "short" | "restart" | "bad" | "token_invalid" | "unavailable" | "not_found";
 
 /** The next piece of the stream, or "idle" when none came for `idleMs`. */
-async function nextPiece(it: AsyncIterator<Uint8Array>, idleMs: number): Promise<IteratorResult<Uint8Array> | "idle"> {
+async function nextPiece(it: AsyncIterator<Uint8Array>, idleMs: number, signal?: AbortSignal): Promise<IteratorResult<Uint8Array> | "idle"> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const idle = new Promise<"idle">((resolve) => (timer = setTimeout(() => resolve("idle"), idleMs)));
+  let onAbort: (() => void) | undefined;
+  const idle = new Promise<"idle">((resolve) => {
+    timer = setTimeout(() => resolve("idle"), idleMs);
+    onAbort = () => resolve("idle");
+    if (signal?.aborted === true) resolve("idle");
+    else signal?.addEventListener("abort", onAbort, { once: true });
+  });
   try {
     return await Promise.race([it.next(), idle]);
   } finally {
     clearTimeout(timer);
+    if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -133,8 +150,8 @@ async function fill(p: Progress, d: DownloadInput): Promise<Fill> {
   try {
     it = r.bytes[Symbol.asyncIterator]();
     for (;;) {
-      const step = await nextPiece(it, d.idleMs ?? DOWNLOAD_IDLE_MS);
-      if (step === "idle") return "short";
+      const step = await nextPiece(it, d.idleMs ?? DOWNLOAD_IDLE_MS, d.signal);
+      if (step === "idle" || d.signal?.aborted === true) return "short";
       if (step.done === true) {
         ended = true;
         break;
@@ -180,6 +197,8 @@ export async function downloadMix(c: AccountCache, d: DownloadInput): Promise<Do
   if (id === null) return "unavailable";
   const kept = loadHeader(c, tag);
   if (kept?.state === "complete" && sameSource(kept, id)) return "complete";
+  // A mix already cached is complete whatever the room; one still to download must fit whole.
+  if (d.roomBytes !== undefined && entryBytes(id.byteLength) > d.roomBytes) return "no_room";
   // Two tries at most: a resume that meets a torn record with other bytes starts over once, under a new key.
   for (let attempt = 0; attempt < 2; attempt++) {
     const old = loadHeader(c, tag);
@@ -202,9 +221,11 @@ export async function downloadMix(c: AccountCache, d: DownloadInput): Promise<Do
       dropBad(c, p.header);
       return "bad";
     }
-    // A play while downloading may have moved its last use on; that is kept.
+    // The entry may have been evicted or replaced while the last chunk was written: then it is not
+    // brought back. A play while downloading may have moved its last use on; that is kept.
     const now = loadHeader(c, tag);
-    saveHeader(c, { ...p.header, state: "complete", usedAt: now?.fileId === p.header.fileId ? now.usedAt : p.header.usedAt });
+    if (now === null || now.fileId !== p.header.fileId) return "interrupted";
+    saveHeader(c, { ...p.header, state: "complete", usedAt: now.usedAt });
     return "complete";
   }
   return "bad";

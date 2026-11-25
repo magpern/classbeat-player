@@ -1,10 +1,11 @@
 // The room screen's only door to the shell, apart from the presenter's (preload.ts): it reads what
 // to draw and the phone remote's slot, and sends the one-screen controls (room-2d.md, "What the
-// room window needs from the desktop shell"). No function takes an argument from the page: each
-// sends one fixed message, and the shell checks it again (main/room/room-handlers.ts). No pairing,
-// no file, no free text. Runs sandboxed; no Node, no ipcRenderer and no event objects reach the page.
+// room window needs from the desktop shell"). No function takes an argument from the page but the
+// mix audio's report, which is rebuilt here from four values (a number, a number, two flags); every
+// other one sends one fixed message, and the shell checks each again (main/room/room-handlers.ts).
+// It also hands the page the shell's mix cue for its one <audio>. No pairing, no file, no free text. Runs sandboxed; no Node, no ipcRenderer and no event objects reach the page.
 import { contextBridge, ipcRenderer } from "electron";
-import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "../core/channels.ts";
+import { CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_MIX, CH_ROOM_MIX_REPORT, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_STOP, CH_ROOM_REMOTE_UPDATE, CH_ROOM_STATE, CH_ROOM_UPDATE } from "../core/channels.ts";
 
 contextBridge.exposeInMainWorld("room", {
   state: (): Promise<unknown> => ipcRenderer.invoke(CH_ROOM_STATE),
@@ -32,4 +33,11 @@ contextBridge.exposeInMainWorld("room", {
     if (typeof cb !== "function") return;
     ipcRenderer.on(CH_ROOM_REMOTE_UPDATE, (_e, slot: unknown) => cb(slot));
   },
+  // Mix playback: the shell's cue for the <audio>, and where the audio is (core/mix/audio-cue.ts).
+  onMix: (cb: (cue: unknown) => void): void => {
+    if (typeof cb !== "function") return;
+    ipcRenderer.on(CH_ROOM_MIX, (_e, cue: unknown) => cb(cue));
+  },
+  mixReport: (seq: unknown, positionMs: unknown, playing: unknown, failed: unknown, durationMs: unknown): Promise<unknown> =>
+    ipcRenderer.invoke(CH_ROOM_MIX_REPORT, { seq: Number(seq), positionMs: Number(positionMs), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs : null }),
 });

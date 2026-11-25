@@ -82,7 +82,7 @@ test("the room's door has no live channel: its preload, its channel list and its
   }
   // The room preload's own channels are the room's (#199), none of them a live channel.
   const used = [...roomPreload.matchAll(/\bCH_[A-Z_]+\b/g)].map((m) => m[0]);
-  assert.deepEqual([...new Set(used)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_STATE", "CH_ROOM_UPDATE"]);
+  assert.deepEqual([...new Set(used)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_MIX", "CH_ROOM_MIX_REPORT", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_STATE", "CH_ROOM_UPDATE"]);
 });
 
 test("Drop takes exactly 1 or 2 from the presenter; anything else is not read", async () => {

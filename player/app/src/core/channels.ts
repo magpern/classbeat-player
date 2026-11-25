@@ -35,6 +35,11 @@ export const CH_ROOM_REMOTE_STATE = "room:remote-state";
 export const CH_ROOM_REMOTE_START = "room:remote-start";
 export const CH_ROOM_REMOTE_STOP = "room:remote-stop";
 export const CH_ROOM_REMOTE_UPDATE = "room:remote-update";
+// Mix playback in the room window (ADR 0013 section 5): `room:mix` is the shell's push of a MixCue
+// (core/mix/audio-cue.ts) for the window's one <audio>; `room:mix-report` takes the window's
+// AudioReport (four fields, parsed strictly) and answers true, or null when refused.
+export const CH_ROOM_MIX = "room:mix";
+export const CH_ROOM_MIX_REPORT = "room:mix-report";
 // The presenter's phone-remote panel (ADR 0005): `live:view`, `live:start`, `live:end` and
 // `live:code` take no argument; `live:drop` takes a phone's place, 1 or 2. Each answers with a
 // LivePanelView. They are the presenter page's only: the room window has no way to them.
