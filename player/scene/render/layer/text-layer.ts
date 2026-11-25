@@ -127,7 +127,7 @@ export class TextLayer {
     setText(this.rail.seg, rail.segment ?? "");
     show(this.rail.seg, rail.segment !== null);
     setText(this.rail.link, rail.link.text);
-    setClass(this.rail.link, `link ink${rail.link.alert ? " alert" : ""}${rail.kind === "square" ? " sq" : ""}`);
+    setClass(this.rail.link, `link ink${rail.link.alert ? " alert" : ""}${rail.kind === "square" ? " sq" : rail.kind === "ring" ? " rg" : ""}`);
   }
 
   private updateClock(view: TextView): void {
