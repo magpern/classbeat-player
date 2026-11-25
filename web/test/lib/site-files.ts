@@ -7,7 +7,7 @@ import type { Route } from "playwright-core";
 import { DIST } from "./browser.ts";
 
 const SITE_DIR = join(DIST, "site");
-const TYPES: Readonly<Record<string, string>> = { ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".html": "text/html; charset=utf-8" };
+const TYPES: Readonly<Record<string, string>> = { ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".json": "application/json", ".html": "text/html; charset=utf-8" };
 const CSP_HEADER = "Content-Security-Policy";
 
 /**
@@ -28,7 +28,7 @@ export function serveFile(route: Route, pathname: string, csp: string): Promise<
   // The web player page (ADR 0008) is built beside the site and served at /play: its page, and its own files.
   if (rel === "play" || rel.startsWith("play/")) return servePlay(route, rel, csp);
   // Every address of the site is the one page; its scripts, styles and fonts are files.
-  const file = /^(site\.(js|css)|fonts\/[\w.-]+\.woff2)$/.test(rel) ? rel : "index.html";
+  const file = /^(site\.(js|css)|releases\.json|fonts\/[\w.-]+\.woff2)$/.test(rel) ? rel : "index.html";
   return route.fulfill({
     status: 200,
     headers: withCsp(csp, { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream", "Referrer-Policy": "no-referrer" }),

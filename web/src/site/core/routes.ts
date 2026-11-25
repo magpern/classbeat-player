@@ -14,6 +14,7 @@ export interface SignedInPage {
 
 export type Page =
   | { readonly kind: "sign-in" }
+  | { readonly kind: "download" }
   | { readonly kind: "redirect"; readonly to: string }
   | SignedInPage
   | { readonly kind: "not-found" };
@@ -31,6 +32,8 @@ const signedIn = (title: string, nav: Nav, load: string): SignedInPage => ({ kin
 /** The page for a path. Only the exact addresses of the table are pages; anything else is "not found". */
 export function pageOf(path: string): Page {
   if (path === "/sign-in") return { kind: "sign-in" };
+  // The one public page besides sign-in: the player's download page, for anyone (docs/design/download.md).
+  if (path === "/download") return { kind: "download" };
   if (path === "/") return { kind: "redirect", to: "/classes" };
   if (path === "/account") return { kind: "redirect", to: "/account/sessions" };
   if (path === "/classes") return signedIn("Classes", "classes", "classes");

@@ -1,0 +1,43 @@
+/* The download page (docs/design/download.md). The values of docs/design/mockups/download.css, in
+   rem so the browser's own text size works; tokens only, no hue, nothing animates. Phone under 600
+   px, tablet 600 to 999, desktop 1000 and up (as site.css, in em). */
+.ver { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.875rem; margin: 0.75rem 0 0.25rem; }
+.ver .num { font-family: var(--face-number); font-weight: 600; font-size: 1.625rem; line-height: 1.1; }
+.ver .when { font-size: 1.125rem; color: var(--light-2); }
+.notes { display: inline-flex; align-items: center; min-height: 2.75rem; margin: 0 0 1rem; }
+.plate.unsigned { max-width: 44em; margin: 0.5rem 0 1.5rem; }
+.plate.unsigned .dt + .dt { margin-top: 0.5rem; }
+
+/* The signing label and "Pre-release": a bordered word, with its mark when it has one. */
+.tag { display: inline-flex; gap: 0.5rem; align-items: baseline; font-size: 1rem; font-weight: 700; border: 2px solid var(--light-1); border-radius: 4px; padding: 1px 0.5rem; line-height: 1.3; }
+.tag .mark { width: 0.75rem; height: 0.75rem; transform: translateY(1px); }
+
+.dl { border-top: 1px solid var(--stage-line); }
+.dl-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem 1.5rem; padding: 1.25rem 0; border-bottom: 1px solid var(--stage-line); }
+.dl-row .sys { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
+.dl-row .sys .n { margin: 0; font-size: 1.625rem; line-height: 1.1; }
+.dl-row .file { font-size: 1rem; color: var(--light-2); }
+.dl-row .sumlab { font-size: 0.875rem; color: var(--light-3); margin-top: 0.25rem; }
+/* The groups sit in a row with no whitespace between them, so a copied checksum has no spaces. */
+.sum { font-size: 1.125rem; line-height: 1.5; color: var(--light-1); overflow-wrap: anywhere; }
+.sum .g { display: inline-block; margin-right: 0.75rem; }
+.sum .h { margin-right: 0.75rem; }
+.sum .g:last-child { margin-right: 0; }
+.dl-row .go { align-self: start; }
+.dl-row.wait .w { font-size: 1.125rem; color: var(--light-2); }
+
+.check { margin-top: 2rem; }
+.check h2 { margin-top: 0; }
+.check dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 1.25rem; max-width: 44em; }
+.check dt { font-weight: 700; margin-top: 0.625rem; }
+.check dd { font-size: 1.125rem; color: var(--light-2); overflow-wrap: anywhere; }
+
+@media (max-width: 37.4375em) { .dl-row .go .btn { width: 100%; } }
+@media (min-width: 37.5em) {
+  .ver .num { font-size: 1.875rem; }
+  .sum .h { display: block; }
+  .dl-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .dl-row .go { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  .check dl { grid-template-columns: 10rem minmax(0, 1fr); }
+  .check dt { margin-top: 0; }
+}
