@@ -77,7 +77,8 @@
 #text .p-note { font-size: var(--t-label); font-weight: 700; margin-top: 1vh; }
 
 /* ---------- Cue and next row ---------- */
-#text .cue { position: absolute; left: 27vw; right: 5vw; bottom: 31.6vh; font-size: var(--t-text); line-height: 1.04; font-weight: 700; display: flex; justify-content: flex-start; }
+#text .cue { position: absolute; left: 27vw; right: 5vw; bottom: 31.6vh; font-size: var(--t-text); line-height: 1.04; font-weight: 700; display: flex; justify-content: flex-start; /* The plain screen's page-level `.cue` rules (web/src/room/room.css) match this box too on the room page: top, max-height, overflow and text-wrap are reset so the box is placed by `bottom` alone (#823). */
+  top: auto; max-height: none; overflow: visible; text-wrap: wrap; }
 #text .cue .ink { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 #text .cue.small { font-size: var(--t-text-min); }
 #text .cue.small .ink { -webkit-line-clamp: 3; }

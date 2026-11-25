@@ -1,6 +1,6 @@
 // CI's scene run, in headless Chrome on the built demo page (dist/), no network and no real account:
 //  1. Screenshots of the scene in each state at two room sizes, for the Designer (screenshots/), and
-//     of the text layer in each zone at 16:9, 16:10 and 4:3 with its measured checks (text-shots.ts).
+//     of the text layer in each zone at 16:9, 16:10, 4:3 and 5:4 with its measured checks (text-shots.ts).
 //  2. The browser frame log: a real-time run through a phrase flip, a song change from a mirrored
 //     phrase and a build with its drop, at the page's own frame times, recording the highest beam
 //     speed of each second (artifacts/frame-log-browser.csv). The run fails above 30 degrees a second
@@ -19,6 +19,7 @@ import { beamFloor } from "./beam-floor-shots.ts";
 import { reportS6 } from "./flash-shots.ts";
 import { reportSteady } from "./steady-shots.ts";
 import { settleTransitions } from "./settle.ts";
+import { pageStylesheetDoesNotReachTheCue } from "./room-css-shots.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { reportShared } from "./shared-shots.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
@@ -171,6 +172,7 @@ try {
   const opener = (w: number, h: number, query: string) => open(browser, w, h, query);
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
+  await pageStylesheetDoesNotReachTheCue(opener); // #823: the plain screen's stylesheet on the same page
   await lightMeasurement(opener);
   await beamFloor(opener); // S5b: the house look's beams keep their floor, and the check fails the look without it
   await reportS6(opener, ARTIFACTS);
@@ -180,7 +182,7 @@ try {
   await browserFrameLog(browser, "&budget=off", "frame-log-browser"); // every run fits: the beams' speed through every burst the scheduler might skip
   await browserFrameLog(browser, "", "frame-log-browser-budget-on"); // the product's own: the ramps and bursts the scheduler places
   await reportShared(opener, ARTIFACTS); // the shared 1, last so that every other gate has run: the sway, the sweeps and a burst's decay count at most 1 in any second
-  console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 34 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
+  console.log(`scene shots: ${SHOTS_LIST.length * SIZES.length} scene and 45 text screenshots in ${SHOTS}; frame log in ${ARTIFACTS}`);
 } finally {
   await browser.close();
 }
