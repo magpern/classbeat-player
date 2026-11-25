@@ -26,6 +26,14 @@ with other work; nothing in the development loop waits for an answer.
   Losing it means users must uninstall to update. iOS after the Android app (owner, 2026-11-24): the owner's Apple silicon Mac to run
   it; later an iPhone or iPad and the Apple Developer membership above.
 
+- **Let design reviews see the CI screenshots** (2026-11-25). The agents' cloud environment
+  cannot download GitHub Actions artifacts: they are served from a storage host
+  (`*.blob.core.windows.net`) whose name changes from run to run, and an environment's allowed
+  hosts take exact names only. Until then the Designer gives its verdict from the source, the
+  spec and green CI, and its comment says so. To change it, either allow that host in the
+  environment's network settings (claude.ai, the environment's Settings), or say if you want CI
+  to publish the screenshots somewhere the agents can reach.
+
 ## Decisions waiting
 
 - **Swedebeat playback (PL11, ADR 0013, 2026-11-24).** Built and tested on a fake source; the
