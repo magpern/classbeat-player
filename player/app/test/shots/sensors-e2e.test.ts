@@ -38,6 +38,8 @@ type Fake = { calls: string[]; add(id: string, name: string, m: string[]): void;
 test("connect, a reading shown, disconnect: only taps reach the source, nothing leaves the file system", { timeout: 60_000 }, async () => {
   const context = await browser.newContext({ viewport: { width: 1000, height: 720 }, reducedMotion: "reduce" });
   await context.addInitScript("globalThis.__name = (f) => f;");
+  // Every Content-Security-Policy violation the page reports (a blocked script, style, image or connection).
+  await context.addInitScript("globalThis.__csp = []; document.addEventListener('securitypolicyviolation', (e) => globalThis.__csp.push(e.violatedDirective + ' ' + e.blockedURI));");
   const page = await context.newPage();
   const external: string[] = [];
   const errors: string[] = [];
@@ -91,6 +93,8 @@ test("connect, a reading shown, disconnect: only taps reach the source, nothing 
     // No network: every request was for the file system, and the page raised nothing.
     assert.deepEqual(external, [], "no request left the file system");
     assert.deepEqual(errors, [], "no page errors");
+    assert.deepEqual(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp), [], "no CSP violation");
+    assert.deepEqual(await page.evaluate(() => (window as unknown as { __unexpected: string[] }).__unexpected), [], "the panel used only the SensorSource methods");
   } finally {
     await context.close();
   }
