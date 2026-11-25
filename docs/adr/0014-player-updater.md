@@ -1,6 +1,6 @@
 # 0014. The desktop player's updater
 
-Status: Proposed. Becomes Accepted when a Reviewer passes its pull request. Installing updates by
+Status: Accepted (#792; built in PL7, amended as built 2026-11-25). Installing updates by
 itself waits for the owner's signing identities (docs/owner.md); until then the player only says
 that a new version exists.
 

@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #816; `main` at 56b03e1).
+Updated 2026-11-25 (after #818; `main` at 99a4d16).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -227,7 +227,7 @@ mid-class fall-back, cached play offline and the paired class list's mix states 
 unit tests only. Waiting for the owner: Swedebeat's agreement and the real source client (plan
 decision 11, ADR 0013 section 7).
 
-## PL7: release (done on fakes, pending the Verifier)
+## PL7: release (done on fakes)
 
 Merged: the desktop release workflow with unsigned builds (#760, #779; hardened with its test in
 CI, #784), the release runbook (#763, #795), ADR 0014 on the player's updater (#762, #792: tell
@@ -238,7 +238,9 @@ and notice (#798, #808; spec as built #812), the site's `releases.json` from the
 (#793, #814), the backend's `/download` with the page's files and fonts from a fixed list (#794,
 #813), the updater's guard gaps (#810, #815) and the "No check has run yet" wording (#811, #816).
 
-The Verifier runs PL7's "done when" on `main` next. Signing, notarisation, the first deploy and
+The Verifier ran PL7's "done when" on `main` at c3e698c and found one gap, ADR 0014 still
+marked Proposed (#819, fixed here). Not run on fakes: packaging with `scripts/package-desktop.sh`,
+which needs the Electron runtime download; the release workflow's test covers it. Signing, notarisation, the first deploy and
 the repository setting that lets the release workflow open its pull request wait for the owner
 ([owner.md](owner.md)).
 
