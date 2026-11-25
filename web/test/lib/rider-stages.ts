@@ -78,5 +78,7 @@ export interface StateDef {
   readonly stage: Stage;
   /** A form: checked in portrait, and it may scroll down. */
   readonly form?: boolean;
+  /** The sizes it is shot at, where not the class sizes (or the form's, for a form). */
+  readonly sizes?: readonly (readonly [number, number])[];
 }
 export const IN = { answers: [JOINED] };

@@ -32,6 +32,14 @@
   .effort.sens .rd.solo { grid-column: 3 / -1; }
 }
 
+/* A treadmill or foot-pod reading (docs/design/running-class.md, "The readings"): one line, the label at the
+   left and the number with its unit at the right (landscape: beside the label). No gauge, no tick, no colour
+   by value; a reading with no value is a grey dash (.none, above). Nothing here is animated (RC8). */
+.effort.sens .rd.line { grid-column: 2 / -1; margin-bottom: 0; justify-content: flex-end; }
+@media (orientation: landscape) {
+  .effort.sens .rd.line { grid-column: 2 / -1; justify-content: flex-start; }
+}
+
 /* The gauge: a line, the planned band (the zone's colour) and one white tick for the reading.
    The tick is white wherever it stands: no colour change inside or outside the band (rules 7, 8, 11). */
 .gauge { position: relative; height: max(10px, 1.5dvh); background: var(--stage-raised); border: 1px solid var(--stage-line); border-radius: 2px; min-width: 0; }

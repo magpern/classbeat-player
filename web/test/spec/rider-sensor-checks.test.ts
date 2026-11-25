@@ -7,14 +7,12 @@
 // Shots: screenshots/rider/sensors-<state>-<size>.png (SPEC_ONLY, SPEC_JOBS as in rider-shots.ts).
 import assert from "node:assert/strict";
 import { checkRiderShots } from "../lib/rider-shots.ts";
+import { another, connect, press, rules as sharedRules, tick } from "../lib/rider-sensor-stages.ts";
 import { IN, NICK24, RUN, WORST, at, inClass, then, words } from "../lib/rider-stages.ts";
 import type { Stage, StateDef } from "../lib/rider-stages.ts";
-import { BIKE, IPHONE_UA, STRAP, bikeBytes, cancel, drop, hrBytes, notify, pick, refuse } from "../lib/sensor-fake.ts";
+import { BIKE, IPHONE_UA, STRAP, bikeBytes, cancel, drop, hrBytes, notify, refuse } from "../lib/sensor-fake.ts";
 import type { FakeDevice } from "../lib/sensor-fake.ts";
 
-/** ADR 0012: the services and measurement characteristics the page may ask for. */
-const SERVICES = [0x180d, 0x1816, 0x1818, 0x1826];
-const CHARACTERISTICS = [0x2a37, 0x2a5b, 0x2a63, 0x2ad2];
 const HR = 0x2a37;
 const BIKE_DATA = 0x2ad2;
 // Readings no other part of the page shows, so a stored copy would be seen.
@@ -25,36 +23,11 @@ const RPM = 91;
 const WIDE: FakeDevice = { id: "wide", name: "W".repeat(32), services: [0x1826] };
 const GARMIN: FakeDevice = { id: "garmin", name: "Garmin HRM-Pro 0042", services: [0x180d] };
 
-const tick = (ms = 300): Stage => async (f) => void (await f.page.clock.runFor(ms));
-const press = (action: string): Stage => async (f) => {
-  await f.page.click(`[data-action=${action}]`);
-  await f.page.clock.runFor(300);
-};
-/** Presses the second key of the foot row and picks `d` in the browser's list. */
-const connect = (d: FakeDevice, action = "sensors"): Stage => then(press(action), async (f) => pick(f.page, d), tick(), (f) => at(f, `[data-action=sensors]:not([disabled])`));
-/** A second sensor: through the sheet's Connect another sensor. */
-const another = (d: FakeDevice): Stage => then(press("sensors"), connect(d, "sensors_add"));
 const heart = (d: FakeDevice, bpm = BPM): Stage => async (f) => notify(f.page, d.id, HR, hrBytes(bpm));
 const ride = (d: FakeDevice, watts = WATTS, rpm = RPM): Stage => async (f) => notify(f.page, d.id, BIKE_DATA, bikeBytes(watts, rpm));
 
 /** The rules every shot keeps (sensors.md, "Never"; ADR 0012; rules 4 and 6). */
-const rules: Stage = async (f) => {
-  const types = f.live.sent.map((m) => (JSON.parse(m) as { type?: string }).type);
-  assert.ok(types.every((t) => t === "hello"), `the page sent ${types.join(", ")}`);
-  const traps = await f.traps();
-  for (const { detail } of traps.filter((t) => t.kind === "sensor")) {
-    assert.doesNotMatch(detail, /^write/, "a write to a sensor");
-    const [what, rest] = [detail.split(" ")[0], detail.slice(detail.indexOf(" ") + 1)];
-    if (what === "request") {
-      const o = JSON.parse(rest) as { filters: { services: number[] }[]; optionalServices: number[] };
-      for (const s of [...o.filters.flatMap((x) => x.services), ...o.optionalServices]) assert.ok(SERVICES.includes(s), `asked for service ${s.toString(16)}`);
-    }
-    if (what === "service") assert.ok(SERVICES.includes(Number.parseInt(rest, 16)), detail);
-    if (what === "characteristic" || what === "notify") assert.ok(CHARACTERISTICS.includes(Number.parseInt(rest, 16)), detail);
-  }
-  const kept = traps.filter((t) => t.kind === "storage" && [BPM, WATTS, RPM].some((n) => t.detail.includes(String(n))));
-  assert.deepEqual(kept, [], "a reading was stored");
-};
+const rules: Stage = sharedRules([BPM, WATTS, RPM]);
 const state = (open: StateDef["open"], ...stages: Stage[]): StateDef => ({ open, stage: then(...stages, rules) });
 const sheet = (open: StateDef["open"], ...stages: Stage[]): StateDef => ({ ...state(open, ...stages), form: true });
 /**

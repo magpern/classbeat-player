@@ -13,15 +13,23 @@ export interface FakeDevice {
   readonly name: string;
   /** The 16-bit services it has. */
   readonly services: readonly number[];
+  /** The measurement characteristics it has; the one of each service's own kind when not given (a treadmill and a bike share a service). */
+  readonly characteristics?: readonly number[];
 }
 
 export const STRAP: FakeDevice = { id: "strap", name: "Polar H10 A1B2C3", services: [0x180d] };
 export const BIKE: FakeDevice = { id: "bike", name: "Wahoo KICKR 4F2E", services: [0x1826] };
+/** A treadmill (Treadmill Data 0x2ACD in the Fitness Machine service) and a foot pod (Running Speed and Cadence 0x2A53). */
+export const TREADMILL: FakeDevice = { id: "treadmill", name: "Life Fitness T5 8C21", services: [0x1826], characteristics: [0x2acd] };
+export const FOOT_POD: FakeDevice = { id: "foot-pod", name: "Stryd 5521", services: [0x1814] };
 
 export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1";
 
 /** A heart rate measurement (0x2A37): 8-bit value. */
 export const hrBytes = (bpm: number): number[] => [0x00, bpm];
+/** The recorded notifications of a treadmill and a foot pod (web/fixtures/sensors/running.json), as bytes. */
+export const hexBytes = (hex: string): number[] => (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+
 /** Indoor bike data (0x2AD2): speed, cadence (0.5 rpm) and power present. */
 export const bikeBytes = (watts: number, rpm: number): number[] => {
   const c = rpm * 2;
@@ -36,11 +44,11 @@ export function installSensorApi(o: { api: SensorApi }): void {
     delete (Navigator.prototype as unknown as { bluetooth?: unknown }).bluetooth;
     return;
   }
-  type Dev = { id: string; name: string; services: number[] };
+  type Dev = { id: string; name: string; services: number[]; characteristics?: number[] };
   const chars = new Map<string, EventTarget & { value?: DataView }>();
   const devices = new Map<string, EventTarget & { gatt: { connected: boolean } }>();
   let pending: { resolve: (d: unknown) => void; reject: (e: unknown) => void } | null = null;
-  const MEASURE: Record<number, number> = { 0x180d: 0x2a37, 0x1818: 0x2a63, 0x1826: 0x2ad2, 0x1816: 0x2a5b };
+  const MEASURE: Record<number, number[]> = { 0x180d: [0x2a37], 0x1818: [0x2a63], 0x1826: [0x2ad2], 0x1816: [0x2a5b], 0x1814: [0x2a53] };
   const write = (what: string) => () => {
     note(`write ${what}`);
     return Promise.reject(new DOMException("not allowed", "NotSupportedError"));
@@ -64,7 +72,7 @@ export function installSensorApi(o: { api: SensorApi }): void {
         return {
           getCharacteristic: async (c: number) => {
             note(`characteristic ${c.toString(16)}`);
-            if (MEASURE[s] !== c) throw new DOMException("no characteristic", "NotFoundError");
+            if (!(spec.characteristics ?? MEASURE[s]).includes(c)) throw new DOMException("no characteristic", "NotFoundError");
             const ch = new EventTarget() as EventTarget & Record<string, unknown>;
             ch.startNotifications = async () => (note(`notify ${c.toString(16)}`), ch);
             ch.stopNotifications = async () => (note(`stop ${c.toString(16)}`), ch);
