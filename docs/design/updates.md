@@ -139,6 +139,7 @@ candidate" or "channel". The version itself shows as the tag has it.
 | **Newer version available** | "newer": a strictly higher version | The strip, shown | Filled square, "Newer version available", "Version *x* is on its release page. Nothing is downloaded or installed." | Shown |
 | **Checking…** | "checking": at start, every 6 hours, or "Check now" | None. A notice already shown stays until the result replaces it (no flicker to nothing) | Hollow circle, still, "Checking…", "Looking for a newer version." | Absent |
 | **Could not check** | "could not check": any failure of the fetch (ADR 0014 section 1) | None. A notice from an earlier check is dropped: the player no longer knows | Hollow square, "Could not check", "The list of releases could not be read. Press Check now to try again." Not a plate: it is a normal state, as Offline on the class list | Absent |
+| **Before any check** | No check has run since the player started (for example "Check automatically" is off). The bridge status is still "could not check"; the view says no check has happened | None | Hollow square, "Could not check", "No check has run yet. Press Check now." Same marker and words as "Could not check"; only the detail line differs. Latest version "Not known" | Absent |
 | **Newer pre-release** | "newer" with "Pre-releases" on and the latest a pre-release | As "Newer version available", with the "Pre-release" tag | As "Newer version available", with the tag beside "Latest version" | Shown |
 | **Class open** | Any status while a class is open | None; no Settings key | Not reachable | Not reachable |
 
@@ -260,7 +261,7 @@ The renderer holds no address, path, feed setting or install control, and shows 
 - **No feedback when the browser fails to open.** The button simply does nothing; the bridge returns
   no result (ADR 0014 section 5). If it later does, a `role="status"` line "The page could not be
   opened. Try again." goes under the button.
-- **Before any check** the status reads "Could not check", as the four states are fixed and no fifth state is added. Its detail line says that no check has run yet (for example "No check has run yet. Press Check now."), not that the list of releases could not be read. The words in `player/app/src/core/update/words.ts` (line 252) and `view.ts` (line 176) still give the failure wording; a screens-lane issue tracks the fix.
+- **Before any check** the status reads "Could not check", as the four states are fixed and no fifth state is added. Its detail line says "No check has run yet. Press Check now." (as built, #816); after a failed check the detail line is unchanged. CI screenshot state: `before-any-check`.
 - **No dismiss on the notice.** The strip is one line and goes when the player is updated.
 
 ## What the screen never shows (plan section 3)
