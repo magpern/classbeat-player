@@ -8,7 +8,7 @@ class ExternalDisplayPolicyTest {
     private val room = "/room.html"
     private val idle = "/display.html"
     private val idleRider = "/display-rider.html"
-    private val paths = listOf(null, "/index.html", "/instructor.html", room, "/rider.html", idle)
+    private val paths = listOf(null, "/index.html", "/instructor.html", room, "/rider.html", idle, idleRider)
 
     private fun shown(mode: Mode?, path: String? = room, display: Boolean = true, fg: Boolean = true) =
         ExternalDisplayPolicy.shown(mode, path, display, fg)
@@ -79,7 +79,7 @@ class ExternalDisplayPolicyTest {
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/room.html?x=1#y", mainFrame = true))
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/display.html", mainFrame = true))
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/display-rider.html", mainFrame = true))
-        for (other in listOf("/instructor.html", "/rider.html", "/index.html", "/", "/display.html/x", "/room.htm")) {
+        for (other in listOf("/instructor.html", "/rider.html", "/index.html", "/", "/display.html/x", "/room.htm", "/display-rider.html/x", "/display-rider.htm")) {
             assertEquals(other, false, ExternalDisplayPolicy.mayLoad("$base$other", mainFrame = true))
         }
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/main.js", mainFrame = false))
