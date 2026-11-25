@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #774; `main` at fc1f5e9).
+Updated 2026-11-25 (after #807; `main` at 6b268e6).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -191,7 +191,8 @@ display as the presenter view (#738, #748).
 Also merged: a test of ModeController's keep-screen-on wiring (#749, #761) and a limit on how
 often a crashed external display is shown again (#752, #755).
 
-Open: a rider line on the external display's idle stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
+Also merged: the rider line on the external display's idle stage (#787 spec, #790; its policy test
+hardened in #807). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
 reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
 
 ## PL9: sensors (ADR 0012), done on fakes
@@ -228,51 +229,32 @@ decision 11, ADR 0013 section 7).
 
 ## PL7: release
 
-Issues written 2026-11-25: the desktop release workflow with unsigned builds (#760), the
-updater's ADR (#762, security-critical), the release runbook (#763) and the download page spec
-(#764). Signing and notarisation wait for the owner's signing identities (owner.md).
+Merged: the desktop release workflow with unsigned builds (#760, #785; hardened with its test in
+CI, #784), the release runbook (#763, #795), ADR 0014 on the player's updater (#762, #792: tell
+only while builds are unsigned, nothing during a class, a start marker for rollback), the download
+page spec (#789) and the update notice spec (#796, #801), and the pure update module (#797, #799).
 
-## PL10: running classes and treadmill reading
+Open: the download page (#764, #791), then the site's `releases.json` (#793) and the backend's
+`/download` (#794); the update checker, its settings and notice (#798). Signing and notarisation
+wait for the owner's signing identities (owner.md).
+
+## PL10: running classes and treadmill reading, done on fakes
 
 Merged: ADR 0015 (#765: the treadmill and foot pod are read, never controlled; the fitness
-machine's and the running service's control points stay banned) and the running decoders with the
+machine's and the running service's control points stay banned), the running decoders with the
 sensor allowlist widened to the Running Speed and Cadence service, the treadmill data
-characteristic and foot-pod step cadence (#770, #773).
+characteristic and foot-pod step cadence (#770, #773), the running-class design in eight screen
+specs (#769, #774), the screens (#771, #781; plate numbers as built #800) and the scene's inputs
+pinned for running classes (#772, #778).
 
-Also merged: the running-class design, with running states in eight screen specs (#769, #774).
-
-Open: the screens (#771) and a scene test that pins the scene's inputs for running classes
-(#772). Decided: the rider page's incline-target slot
-stays empty, like a missing position, until a contract change adds an incline field; the live
-contract has none today. Testing on a real treadmill waits for the owner.
-
-## Infra
-
-Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
-(#75, #76); the backend job also runs for changes under `schema/` (#88, #93); the class list
-screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` job also runs for
-the shared design tokens and the request policy (#268, #271); the backend image ships
-`web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
-check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326); the
-backend image ships `web/dist/j` too, with its contents checked (#387, #388); the web spec
-checks run in five parallel shards (about 8 minutes instead of 27) and a change to documentation
-only runs no tests (#435, #437; follow-ups #438, #439); the scene's screenshot tests run in their own job, only when
-the scene can change, so the other Node package tests take about 8 minutes instead of 46 (#644,
-#645).
-
-## Scene spike
-
-Merged: #30 and its findings (#53).
-
-## Decisions recorded
-
-- ADR 0002 section 9 item 1 (amended in #40): string-built SQL is held by an executor that alone
-  owns the driver and runs only registered `Query` objects, with a source guard aimed at
-  mistakes. After four `FAIL`s on a source-only guard, the Orchestrator reassessed the design.
-- ADR 0002 principle 7 (#57): limits that bound the app's database role are constants in the
-  database functions and change by migration in a security-critical pull request.
-- Another app playing while following shows "Off the list" (ADR 0001).
-- A reader that cannot start six times reports following as unavailable on that computer (#59).
+**Done on fakes:** the Verifier ran PL10 on `main` at `2e5f58d` (2026-11-25) against ADR 0015 and
+running-class.md (the plan has no written "done when" for PL10). Its two gaps are closed: the
+screens' running fixture was not a valid class (#802, #804; every fixture is now checked against
+the schema, #805, #806) and no player test opened a running class (#803, #807). Decided: the rider
+page's incline-target slot stays empty, like a missing position, until a contract change adds an
+incline field; the live contract has none today. Waiting for the owner: a real treadmill, reading
+a treadmill on the instructor's computer and in the app's rider mode, and sending riders' running
+readings to the instructor ([owner.md](owner.md)).
 
 ## Later hardening (non-blocking findings)
 

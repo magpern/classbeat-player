@@ -22,7 +22,11 @@ with other work; nothing in the development loop waits for an answer.
   player only tells users that a new version exists and never installs one by itself.
 
 - **A treadmill to test on** (PL10, #765): one with FTMS over Bluetooth, for a live check of the
-  treadmill reading. Until then PL10 is built and tested on a fake treadmill.
+  treadmill reading. Until then PL10 is built and tested on a fake treadmill. Two choices are
+  yours, with the defaults agents built (ADR 0015): whether the instructor's computer and the
+  app's rider mode may read a treadmill (default: only the rider's own web page reads one), and
+  whether riders' running readings may be sent to the instructor (default: no; the live contract
+  carries none).
 
 - **Phone and tablet apps** (PL12, owner, 2026-11-15): Android first, as a self-signed APK
   installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
