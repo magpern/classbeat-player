@@ -139,9 +139,11 @@ Portrait (390 x 844)                         Landscape (844 x 390), right column
 - **Landscape with a plate** (a running class's lost treadmill with a foot pod's cadence is the
   tightest case; issue #771): the next rows **move to the left column, under the countdown**, and
   every next row still shows; the effort rows, the readings and the plate take the whole right
-  column above the keys. In that state a reading is set at `min(10.6dvh, 6vw)` (cap height 30.7 px
-  at 640 × 360, over its 29 px floor with 5 % headroom; 8.7 % at 844 × 390) and the effort block's
-  row gap is 0.4dvh. Built as one rule on `.run.rider:has(.splate)` in landscape: grid areas
+  column above the keys. In that state a reading is set at `min(11.2dvh, 6.6vw)` with line height
+  0.76 (cap height 32.8 px at 640 × 360, over its 29 px floor; 9.1 % at 844 × 390), the effort
+  block's row gap is 0.2dvh, and the plate gives up height before the readings do: block padding
+  0.6dvh, gap 0.2dvh, detail line height 1.05, so it ends at least 4 px above the keys (checked).
+  Built as one rule on `.run.rider:has(.splate)` in landscape: grid areas
   `"top top" "gel effort" "clock effort" "coming effort" "coming keys"`. It holds at 844 × 390 and
   640 × 360 for a lost sensor with three readings, and applies to every class with a plate. Portrait
   is unchanged.
