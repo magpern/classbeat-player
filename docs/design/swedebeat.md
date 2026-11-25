@@ -182,7 +182,7 @@ the ADR leaves unworded.
 | `not_allowed` | This account cannot play this mix | `describe` says the account may not play it | Footer, room link |
 
 The words are the same on the class list and in the room, so what the instructor read before the
-class is what the room says. The room adds "Press Start · " before the start; during the class it shows a short form of the reason alone for 30 s (the square says manual): "Mix still downloading" and "Mix not checked", and only `downloading` and `not_checked` can happen during a class (the rest are decided at the start). A reason never names an error code, a host, a path, the token or the source's
+class is what the room says. The room adds "Press Start · " before the start; during the class it shows a short form of the reason alone for 30 s (the square says manual): "Mix still downloading", "Mix not checked" and "Signed out of Swedebeat" (`not_connected`, when the account signs out of Swedebeat mid-class). Only these three can happen during a class (`disabled`, `no_keychain` and `not_allowed` are decided at the start). A reason never names an error code, a host, a path, the token or the source's
 origin (ADR 0013 section 1).
 
 ## Keyboard

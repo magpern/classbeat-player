@@ -333,3 +333,27 @@ is truncated first".
 - **Plaintext scan.** The test looks for the mix's aligned 32-byte blocks in every file under the
   cache folder; any run of 64 or more plaintext bytes contains at least one whole aligned block, so
   it is found.
+
+## Amendment: mix playback as built (PL11, #693)
+
+Records code already reviewed, as built (owner decision by the Orchestrator, 2026-11-25). It
+amends section 3 where it says which mixes are kept and how the cap works.
+
+- **Keep covers every mix a synced class names.** The class format has no start time, so "a class
+  starting within the next 24 hours" cannot be told; keep is a superset of that rule
+  (`SyncService.mixes()`, passed as `keep` in `main/mix/playback-setup.ts`).
+- **Keep is soft above the cap.** A download ahead never takes the cache past 4 GiB: a mix that
+  would not fit whole is skipped until the next sync (`fit: true`, `main/mix/prefetch.ts`,
+  `main/mix/mix-cache.ts`). Over the cap, eviction deletes the unlisted mixes first, then the
+  listed ones, each group least recently used first, and never the playing mix or the open
+  class's mix (`core/mix/eviction-policy.ts`).
+- **A removed class's mix is deleted only when the synced list is complete and authoritative:**
+  the last sync finished, no sync runs, no wipe waits, the pairing is the cached account's and
+  every held class reads back (`SyncService.named()`, else null and nothing is deleted for not
+  being named).
+- **`DRIFT_MS` is 30:** the audio position is steered to the class clock only when they differ by
+  more than 30 ms (`core/mix/audio-cue.ts`).
+- **"Mix not checked" needs two agreeing length reports.** The room reports the decoded length
+  again on `durationchange`; the mix is dropped for a wrong length (more than 1 000 ms from
+  `length_ms`) only when two reports in a row give the same length, so an early estimate does not
+  drop it (`main/mix/mix-player.ts`, `report`).
