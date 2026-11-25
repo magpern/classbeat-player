@@ -19,8 +19,17 @@ class RiderBridge(private val session: RiderSession, private val current: () -> 
         override fun handleOnBackPressed() = session.backPressed()
     }
 
+    /** Told after [back] follows the session: the edge's keep-awake follows it too (#737). */
+    var joinedChanged: () -> Unit = {}
+
+    /** Whether a rider is joined. */
+    val joined: Boolean get() = session.joined
+
     init {
-        session.changed = { back.isEnabled = session.joined }
+        session.changed = {
+            back.isEnabled = session.joined
+            joinedChanged()
+        }
     }
 
     /** Both were checked as strings by IntentPolicy; RiderSession checks their form. */

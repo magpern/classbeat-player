@@ -3,6 +3,7 @@ package org.classbeat.player.mode
 import android.app.KeyguardManager
 import android.content.Intent
 import android.provider.Settings
+import android.view.WindowManager
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -15,6 +16,7 @@ import org.classbeat.player.classes.InstructorIntents
 import org.classbeat.player.follow.Follower
 import org.classbeat.player.pairing.PairingPorts
 import org.classbeat.player.pairing.PairingService
+import org.classbeat.player.policy.KeepAwakePolicy
 import org.classbeat.player.policy.Mode
 import org.classbeat.player.policy.ModePolicy
 import org.classbeat.player.policy.NavigationPolicy
@@ -56,6 +58,10 @@ class ModeController(
 
     private lateinit var intents: InstructorIntents
 
+    /** The main-frame page last committed, and whether the app is in the foreground: inputs of [KeepAwakePolicy]. */
+    private var page: String? = null
+    private var foreground = false
+
     /** Back while a native screen shows answers it as "Stay", never as the page's Back. */
     private val back = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = stay()
@@ -71,6 +77,7 @@ class ModeController(
         follow = FollowBridge(parts.follower, parts.pairing::secrets) { current }
         intents = parts.intents
         this.rider = rider
+        rider.joinedChanged = ::syncKeepAwake
         // Added first, so a native screen's Back (added last) runs before the rider's.
         activity.onBackPressedDispatcher.addCallback(activity, rider.back)
         activity.onBackPressedDispatcher.addCallback(activity, back)
@@ -83,7 +90,11 @@ class ModeController(
 
     override fun mayShow(path: String): Boolean = opener.mayShow(path) ?: ModePolicy.mayShow(current, path)
 
-    override fun shown(path: String) = opener.committed(path)
+    override fun shown(path: String) {
+        page = path
+        opener.committed(path)
+        syncKeepAwake()
+    }
 
     // PageSteps: the opener's steps.
 
@@ -100,6 +111,9 @@ class ModeController(
 
     override fun closeBridge() {
         expose(null)
+        // Between modes: the screen is released at once, before the drops run.
+        page = null
+        setKeepOn(false)
         pairing.drop()
         unpairing.close()
         // The page that asked is being replaced: its question ends here, with the one refused word.
@@ -169,6 +183,8 @@ class ModeController(
 
     /** Back in the app, from the security settings or anywhere else: the lock may have been set meanwhile. */
     fun resumed() {
+        foreground = true
+        syncKeepAwake()
         pairing.resumed()
         if (holder.pending != ModeHolder.Pending.NO_LOCK) return
         holder.noLockReturned()
@@ -181,6 +197,8 @@ class ModeController(
 
     /** Leaving the app while the question shows means "Stay". */
     fun stopped() {
+        foreground = false
+        syncKeepAwake()
         if (holder.pending == ModeHolder.Pending.RIDER_QUESTION || unpairing.showing) stay()
     }
 
@@ -222,6 +240,17 @@ class ModeController(
         }
         hideScreen()
         settle("stayed")
+    }
+
+    /** The window flag follows the pure decision; it is set only on the main thread, as everything here. */
+    private fun syncKeepAwake() =
+        setKeepOn(KeepAwakePolicy.keepOn(current, page, riderJoined(), foreground))
+
+    private fun riderJoined() = ::rider.isInitialized && rider.joined
+
+    private fun setKeepOn(on: Boolean) {
+        val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        if (on) activity.window.addFlags(flag) else activity.window.clearFlags(flag)
     }
 
     private fun settle(answer: String) = question.settle(answer)
