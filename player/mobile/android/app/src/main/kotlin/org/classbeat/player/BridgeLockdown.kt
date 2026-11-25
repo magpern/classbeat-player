@@ -1,6 +1,5 @@
 package org.classbeat.player
 
-import android.annotation.SuppressLint
 import android.webkit.ServiceWorkerClient
 import android.webkit.ServiceWorkerController
 import android.webkit.WebResourceRequest
@@ -93,8 +92,8 @@ object BridgeLockdown {
     /** The name of Bridge's plugin table in Capacitor 8.6.0; CorePluginsTest checks it is a Map. */
     const val PLUGIN_TABLE = "plugins"
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun harden(s: WebSettings) {
+    /** The settings of every web view the app builds: also the external display's (RoomPresentation). */
+    fun harden(s: WebSettings) {
         s.allowFileAccess = false
         s.allowContentAccess = false
         s.setGeolocationEnabled(false)
