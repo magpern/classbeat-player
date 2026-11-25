@@ -47,6 +47,7 @@
 #text .metric { display: flex; flex-direction: column; align-items: flex-start; }
 #text .m-row { display: flex; align-items: baseline; gap: 0.5vw; white-space: nowrap; }
 #text .m-val { font-size: 7.6vh; line-height: 0.9; margin-top: 0.3vh; }
+#text .m-val.tgt { font-size: 7.4vh; }
 #text .m-unit { font-size: var(--t-minor); font-weight: 700; }
 #text .m-fold { display: flex; align-items: baseline; gap: 0.8vw; }
 #text .m-fold .side { font-size: 7.6vh; }

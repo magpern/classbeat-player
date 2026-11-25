@@ -10,7 +10,7 @@ import type { PatternState } from "./text-pattern-calc.ts";
 import { scoreView } from "./text-score-calc.ts";
 import type { TextInput, TextInterval, TextZone } from "./text-types.ts";
 import type { ClockView, GelView, MetricView, NextView, PatternBlockView, RailView, TextView } from "./text-view.ts";
-import { barsText, cadenceWords, classTimeText, clockText, countdownText, linkWords, patternWords, positionWord, specForms } from "./text-words.ts";
+import { barsText, cadenceWords, classTimeText, clockText, countdownText, linkWords, inclineWords, patternWords, positionWord, specForms } from "./text-words.ts";
 
 const WIDE_COUNT_MS = 10 * 60_000;
 /** Below this the block's count steps down to 14.6 vh (it is 16 vw at the least, else it folds). */
@@ -59,10 +59,17 @@ export function textView(input: TextInput): TextView {
   const cadence = cadenceWords(iv.cadence);
   const noTempo = state?.kind === "note" && bpm === undefined;
   const fold = iv.pattern !== null && (layout === "narrow" || foldsPattern({ aspect, countGlyphs: clock.wide ? 5 : 4, valueGlyphs: cadence.value.length, unitGlyphs: cadence.unit?.length ?? 0 }));
+  const songLabel = link.state === "Off the list" ? "Song, planned" : noTempo ? "Song, no tempo" : "Song";
+  // A running interval has an incline and no cadence or position: one "Target" metric takes both places (running-class.md, item 1).
+  const own: readonly MetricView[] = iv.incline !== undefined
+    ? [{ key: "target", label: "Target", value: inclineWords(iv.incline), unit: null, folded: null }]
+    : [
+      { key: "cadence", label: "Cadence", value: cadence.value, unit: cadence.unit, folded: null },
+      { key: "position", label: "Position", value: iv.pattern === null ? positionWord(iv.position) : "Up / down", unit: null, folded: fold ? state : null },
+    ];
   const metrics: readonly MetricView[] = [
-    { key: "cadence", label: "Cadence", value: cadence.value, unit: cadence.unit, folded: null },
-    { key: "position", label: "Position", value: iv.pattern === null ? positionWord(iv.position) : "Up / down", unit: null, folded: fold ? state : null },
-    { key: "song", label: link.state === "Off the list" ? "Song, planned" : noTempo ? "Song, no tempo" : "Song", value: bpm === undefined ? "–" : String(Math.round(bpm)), unit: bpm === undefined ? null : "bpm", folded: null },
+    ...own,
+    { key: "song", label: songLabel, value: bpm === undefined ? "–" : String(Math.round(bpm)), unit: bpm === undefined ? null : "bpm", folded: null },
   ];
   const room = patternRoom({ aspect, countGlyphs: clock.wide ? 5 : 4, valueGlyphs: cadence.value.length, unitGlyphs: cadence.unit?.length ?? 0 });
   const pattern: PatternBlockView | null = iv.pattern === null || state === null || fold ? null : {
@@ -70,10 +77,10 @@ export function textView(input: TextInput): TextView {
     squares: state.kind === "count" && state.total <= MAX_SQUARES ? { total: state.total, left: state.left } : null,
   };
 
-  const songMetric = metrics.at(2);
+  const songMetric = metrics.at(-1);
   const fit = nextIv === null ? null : fitNextRow({
     layout, aspect, zoneName: zoneInfo(cls.zones, nextIv.zone).name, length: clockText(nextIv.lengthMs),
-    specs: specForms(nextIv.cadence, nextIv.position, nextIv.pattern), song: { label: songMetric?.label ?? "Song", value: songMetric?.value ?? "", unit: songMetric?.unit ?? null },
+    specs: specForms(nextIv.cadence, nextIv.position, nextIv.pattern, nextIv.incline), song: { label: songMetric?.label ?? "Song", value: songMetric?.value ?? "", unit: songMetric?.unit ?? null },
   });
   const next: NextView = nextIv === null || fit === null
     ? { end: true, zone: iv.zone, zoneName: "End of class", length: "", spec: null, cue: null, leftVw: layout === "wide" ? 42 : 5, sizeVh: 4.6, cueLines: 0 }

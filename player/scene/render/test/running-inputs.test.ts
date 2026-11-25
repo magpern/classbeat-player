@@ -66,7 +66,7 @@ function readsOf(frame: JoinFrame): Set<string> {
 
 test("feedOf reads only these paths of the frame and the class file: no incline, no reading", () => {
   const ALLOWED = [
-    "doc", "doc.class", "doc.class.length_ms", "doc.class.title", "doc.intervals", "doc.intervals[]", "doc.intervals[].cadence", "doc.intervals[].cadence.from", "doc.intervals[].cadence.to", "doc.intervals[].cue", "doc.intervals[].length_ms",
+    "doc", "doc.class", "doc.class.length_ms", "doc.class.title", "doc.intervals", "doc.intervals[]", "doc.intervals[].cadence", "doc.intervals[].cadence.from", "doc.intervals[].cadence.to", "doc.intervals[].cue", "doc.intervals[].incline","doc.intervals[].length_ms",
     "doc.intervals[].pattern", "doc.intervals[].start_ms", "doc.intervals[].zone", "doc.intervals[].position", "doc.music", "doc.music.source", "doc.segments",
     "doc.songs", "doc.songs[]", "doc.songs[].artist", "doc.songs[].beat_anchors", "doc.songs[].beat_anchors.anchors", "doc.songs[].beat_anchors.quality", "doc.songs[].bpm",
     "doc.songs[].length_ms", "doc.songs[].moments", "doc.songs[].moments.items", "doc.songs[].moments.quality", "doc.songs[].start_ms", "doc.songs[].title",
@@ -140,8 +140,13 @@ test("the scene's own code names no reading: no incline, treadmill, foot pod, sp
     const found = [...code(f).matchAll(new RegExp(NAMES, "gi"))].map((m) => m[0]);
     // Allowed by word: "speed" in loop.ts and frame.ts is the beams' angular speed (scene.md "How a beam turns"); "bpm" in room-feed-calc.ts, frame.ts and loop.ts is the song's tempo from the class file. Never a rider's.
     const allowed = found.filter((w) => !((f.endsWith("loop.ts") || f.endsWith("frame.ts")) && /^speed\w*$/i.test(w)) && !((f.endsWith("room-feed-calc.ts") || f.endsWith("frame.ts") || f.endsWith("loop.ts")) && /^bpm$/i.test(w)));
-    assert.deepEqual(allowed, [], `${f} names a reading`);
+    // The one exception: the join hands the TEXT layer the class's incline target (running-class.md); the scene's interval is built from the start and the zone alone.
+    const rest = f.endsWith("room-feed-calc.ts") ? allowed.filter((w) => !/^incline$/i.test(w)) : allowed;
+    assert.deepEqual(rest, [], `${f} names a reading`);
   }
+  const feedCode = code("../join/room-feed-calc.ts");
+  assert.ok(feedCode.includes("intervals: doc.intervals.map((iv) => ({ startMs: iv.start_ms, zone: iv.zone })),"), "the scene's interval is its start and zone alone");
+  assert.deepEqual(feedCode.split("\n").filter((l) => /incline/i.test(l)).map((l) => l.trim()), ["...(iv.incline !== undefined ? { incline: iv.incline } : {}),"], "the incline goes to the text interval only");
   for (const f of ["../join/room-feed-calc.ts", "../join/scene-join.ts", "../join/mount.ts"]) {
     const specs = [...code(f).matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((m) => m[1]!);
     assert.deepEqual(specs.filter((s) => /sensor|treadmill|bluetooth/i.test(s)), [], `${f} imports a sensor module`);
