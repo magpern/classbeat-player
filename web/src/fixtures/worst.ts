@@ -87,7 +87,7 @@ function worstClass(o: Worst): Class {
     moments: { quality: "measured", items: [{ at_ms: 375_000, kind: "breakdown" }] },
   });
   Object.assign(songs[11], { title: "Another Remarkably Long Title, Part Two: the Return of the Long Title Again", artist: "The Very Long Artist Name Collective", bpm: 174 });
-  const segments = [{ name: o.wide ? WIDE_WORD : SEGMENT, kind: "main" as const, start_ms: 3_000_000, end_ms: 9_000_000 }];
+  const segments = [{ name: o.wide ? WIDE_WORD : SEGMENT, kind: "main" as const, start_ms: 3_008_000, end_ms: 8_991_000 }];
   const doc = classOf(o.wide ? WIDE_WORD : TITLE, scale, intervals, songs as Class["songs"], segments, 388);
   return { ...doc, class: { ...doc.class, length_ms: LENGTH_S * 1000 } };
 }

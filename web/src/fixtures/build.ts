@@ -44,7 +44,8 @@ export function scaleOf(names: readonly string[], targets: (zone: number) => Omi
 /** Assembles a class; the totals are worked out from the intervals, as a producer would. */
 export function classOf(title: string, scale: Class["zone_scale"], intervals: Interval[], songs: Song[], segments: NonNullable<Class["segments"]>, load: number): Class {
   const length = intervals[intervals.length - 1].start_ms + intervals[intervals.length - 1].length_ms;
-  const time: Record<string, number> = {};
+  // Every zone of the scale has a key, 0 when no interval uses it (the format's totals rule).
+  const time: Record<string, number> = Object.fromEntries(scale.map((z) => [String(z.zone), 0]));
   for (const iv of intervals) time[String(iv.zone)] = (time[String(iv.zone)] ?? 0) + iv.length_ms;
   return {
     format_version: "1.0",

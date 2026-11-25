@@ -14,7 +14,7 @@ type Pattern = NonNullable<Interval["pattern"]>;
 const NEXT_CUE = "Settle in and spin it out. Eyes up, shoulders loose.";
 /** 120 characters: the longest cue the format allows. */
 const NEXT_CUE_120 = "Drop into the saddle and settle your breathing; count the bars out loud, keep the wheel turning and wait for the call!";
-const CUE_120 = "Stay tall through the shoulders and let the legs spin freely, then find the beat and lean into it for the full eight bars!";
+const CUE_120 = "Stay tall through the shoulders and let the legs spin free, then find the beat and lean into it for the full eight bars!";
 const CUE_WIDE = "WHOA: MOVE WITH THE MUSIC. WOW, MOMENTUM NOW. MAXIMUM WORK, WIDE KNEES, MOW THE HILL. WE WIN WHEN WE MOVE AS ONE. WOW!";
 
 const alt = (positions: Pattern["positions"], beats: Pattern["beats"], start_on?: Pattern["start_on"]): Pattern => ({ kind: "alternate", positions, beats, ...(start_on ? { start_on } : {}) });
