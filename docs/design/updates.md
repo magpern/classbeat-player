@@ -161,7 +161,7 @@ Notes:
 - **No URL.** No address, link text or hint of one is shown or typed anywhere. "Open release page"
   is a button, not a link, so the page has no `href`; the shell opens the page itself
   (ADR 0014 section 2). If the browser cannot be opened, the player says nothing extra in this
-  version (open item 2).
+  version (see Decisions).
 
 ## Keyboard and focus
 
@@ -249,20 +249,17 @@ The renderer holds no address, path, feed setting or install control, and shows 
 
 ## Open items
 
-1. **The Settings page is new.** class-list.md has no Settings key, and no spec defines a Settings
-   page. This spec adds the key to the class list's header and a page with one section.
-   class-list.md's header, tab order and L3 numbers need a line for the key when the Orchestrator
-   folds this spec in; no other class-list state changes. Default if declined: the "Updates" part
-   becomes a body panel opened from the notice and from a "Check for updates" key, with the same
-   content.
-2. **Opening can fail.** ADR 0014's "open release page" returns nothing to the page, so a browser
-   that cannot be opened shows nothing (the button simply does nothing). Default: leave it; if the
-   bridge later returns a result, the line "The page could not be opened. Try again." goes under the
-   button as a `role="status"` line.
-3. **A dismissed notice.** Not offered: the strip is one line and goes when the player is updated.
-   Default: none; revisit if the owner finds it tiresome.
-4. **When installing is switched on** (ADR 0014 section 2, after signing) this spec is replaced by
+1. **When installing is switched on** (ADR 0014 section 2, after signing) this spec is replaced by
    one for "Restart to update" and the install states; none of those is drawn here.
+
+## Decisions (Orchestrator, on this pull request)
+
+- **Settings key.** Accepted: "Settings" (Ctrl+,) in the class list header. class-list.md carries
+  its header, tab order and L3 line; the filled-square marker is in system.md, "Status markers".
+- **No feedback when the browser fails to open.** The button simply does nothing; the bridge returns
+  no result (ADR 0014 section 5). If it later does, a `role="status"` line "The page could not be
+  opened. Try again." goes under the button.
+- **No dismiss on the notice.** The strip is one line and goes when the player is updated.
 
 ## What the screen never shows (plan section 3)
 

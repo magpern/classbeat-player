@@ -147,6 +147,14 @@ the 2 % tier is kept for labels, link states and the score's song titles.
   and the cue and the next interval use the full width under the gel.
 - Spacing steps are multiples of 0.6 vh; the base gap is 2 vh.
 
+## Status markers
+
+On the player's own windows (class list, settings) a status is a marker and its words, in white, never a hue
+(rule 7). The shapes: a **filled circle** for fine, a **hollow circle** for working (it stays still), a
+**hollow square** for away (a normal state with no action), and a **filled square** for news: something
+for the instructor to read that is not a fault ("Newer version available", updates.md). A marker never
+stands without its words.
+
 ## Motion
 
 **The strict S6 measure holds for every screen that shows a room** (decided in #582 for the plain
