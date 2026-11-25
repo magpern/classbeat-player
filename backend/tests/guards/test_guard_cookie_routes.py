@@ -122,6 +122,8 @@ PAGE_ROUTES = frozenset(
         # The site's download page and its release data (#794): fixed files, public.
         ("GET", "/download"),
         ("GET", "/releases.json"),
+        ("GET", "/site.js"),
+        ("GET", "/site.css"),
     }
 )
 # Section 5 (#427): a sign-in ends the session the browser held. These routes read the
@@ -281,7 +283,10 @@ def test_the_page_routes_take_no_dependency_and_only_read() -> None:
     assert {(r.method, r.path) for r in pages} == PAGE_ROUTES
     assert all(not r.dependencies for r in pages)
     assert all(
-        r.method == "GET" and r.path.startswith(("/control", "/j", "/download", "/releases.json"))
+        r.method == "GET"
+        and r.path.startswith(
+            ("/control", "/j", "/download", "/releases.json", "/site.js", "/site.css")
+        )
         for r in pages
     )
 

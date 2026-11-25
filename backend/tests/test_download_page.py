@@ -18,7 +18,10 @@ SETTINGS = Settings(
 )
 PAGE = b"<!doctype html><title>Class player</title>"
 RELEASES = b'{\n  "release": null\n}\n'
+SCRIPT = b"void 0;"
+STYLE = b"body{}"
 SECRET = b"never served"
+ALL = ("/download", "/releases.json", "/site.js", "/site.css")
 
 
 def _app(tmp_path: Path, built: bool = True) -> FastAPI:
@@ -27,6 +30,8 @@ def _app(tmp_path: Path, built: bool = True) -> FastAPI:
     if built:
         (site / "index.html").write_bytes(PAGE)
         (site / "releases.json").write_bytes(RELEASES)
+        (site / "site.js").write_bytes(SCRIPT)
+        (site / "site.css").write_bytes(STYLE)
     (site / "secret.txt").write_bytes(SECRET)
     return create_app(
         SETTINGS, control_dir=tmp_path / "none", rider_dir=tmp_path / "none", site_dir=site
@@ -56,9 +61,21 @@ def test_releases_json(tmp_path: Path) -> None:
     _page_headers_hold(dict(response.headers))
 
 
+def test_site_script_and_style(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    script = send(app, "GET", "/site.js")
+    assert (script.status_code, script.content) == (200, SCRIPT)
+    assert script.headers["content-type"] == "text/javascript; charset=utf-8"
+    style = send(app, "GET", "/site.css")
+    assert (style.status_code, style.content) == (200, STYLE)
+    assert style.headers["content-type"] == "text/css; charset=utf-8"
+    _page_headers_hold(dict(script.headers))
+    _page_headers_hold(dict(style.headers))
+
+
 def test_no_account_needed(tmp_path: Path) -> None:
     app = _app(tmp_path)
-    for path in ("/download", "/releases.json"):
+    for path in ALL:
         response = send(app, "GET", path)
         assert response.status_code == 200
         assert "set-cookie" not in response.headers
@@ -66,7 +83,16 @@ def test_no_account_needed(tmp_path: Path) -> None:
 
 def test_unknown_paths_are_404(tmp_path: Path) -> None:
     app = _app(tmp_path)
-    for path in ("/download/x", "/downloads", "/secret.txt", "/releases.json/x"):
+    for path in (
+        "/download/x",
+        "/downloads",
+        "/secret.txt",
+        "/releases.json/x",
+        "/site.js/x",
+        "/index.html",
+        "/site.js.map",
+        "/play",
+    ):
         response = send(app, "GET", path)
         assert response.status_code == 404, path
         assert SECRET not in response.content
@@ -75,11 +101,11 @@ def test_unknown_paths_are_404(tmp_path: Path) -> None:
 
 def test_only_get(tmp_path: Path) -> None:
     app = _app(tmp_path)
-    for path in ("/download", "/releases.json"):
+    for path in ALL:
         assert send(app, "POST", path).status_code == 405
 
 
 def test_not_built_is_404(tmp_path: Path) -> None:
     app = _app(tmp_path, built=False)
-    for path in ("/download", "/releases.json"):
+    for path in ALL:
         assert send(app, "GET", path).status_code == 404

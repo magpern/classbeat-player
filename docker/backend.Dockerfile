@@ -12,7 +12,7 @@
 #
 # The handlebar companion page (`/control`, issue #277) and the rider page (`/j`, issue #387) are
 # built in a first stage, with the same Node major as CI, and only `web/dist/control` and
-# `web/dist/j`, plus the site's `index.html` and `releases.json` (download_page.py), are copied into the final image, where the backend reads them (control_page.py:
+# `web/dist/j`, plus the site's `index.html`, `releases.json`, `site.js` and `site.css` (download_page.py), are copied into the final image, where the backend reads them (control_page.py:
 # CONTROL_DIR, RIDER_DIR). Nothing else from `web/dist` is copied. Node and npm stay out of the
 # final image.
 #
@@ -51,7 +51,7 @@ COPY backend/src backend/src
 COPY backend/db backend/db
 COPY --from=web /web/dist/control web/dist/control
 COPY --from=web /web/dist/j web/dist/j
-COPY --from=web /web/dist/site/index.html /web/dist/site/releases.json web/dist/site/
+COPY --from=web /web/dist/site/index.html /web/dist/site/releases.json /web/dist/site/site.js /web/dist/site/site.css web/dist/site/
 RUN cd backend && uv sync --locked --no-dev
 
 COPY docker/backend-entrypoint.sh docker/purge-loop.sh /usr/local/bin/
