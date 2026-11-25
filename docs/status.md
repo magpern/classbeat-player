@@ -5,14 +5,14 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #736; `main` at e9c112f).
+Updated 2026-11-25 (after #774; `main` at fc1f5e9).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
 All issues are merged: CI (#1, #10, #17, #24, #33), ADRs 0001–0004 (#2, #3, #9, #15, #35),
 spike 1 harness (#4), and spike 2 web and Godot variants (#5, #18). What is still open is the
 owner's: running both spikes (owner.md). Every CI job now has a timeout (#756, #757), set after
-PR #680's `node-packages` job hung for almost three hours; the scene shots get 90 minutes (#775).
+PR #680's `node-packages` job hung for almost three hours. Open: a 90-minute limit for the scene shots (#775, PR #776).
 
 ## PL5: music link (done on fakes)
 
@@ -188,10 +188,10 @@ Android app is finished (#684).
 Also merged: keeping the screen on during a class (#737) and the room screen on an external
 display as the presenter view (#738, #748).
 
-Also merged: a test of ModeController's keep-screen-on wiring (#749, #761).
+Also merged: a test of ModeController's keep-screen-on wiring (#749, #761) and a limit on how
+often a crashed external display is shown again (#752, #755).
 
-Open: a limit on how often a crashed external display is shown again (#752, PR #755), and a rider line on the external display's idle
-stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
+Open: a rider line on the external display's idle stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
 reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
 
 ## PL9: sensors (ADR 0012), done on fakes
