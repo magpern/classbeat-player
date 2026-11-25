@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-24 (after #645; `main` at c180037).
+Updated 2026-11-25 (after #736; `main` at e9c112f).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -110,8 +110,8 @@ spec and mock-ups as built (#428, #434); the follow-ups for export, devices, del
 refused first request (#426, #430), the tighter site guards with a backslash refused in the
 connect return address (#425, #436), and on the backend a sign-in ending the session the
 browser held, a backslash refused in redirect addresses (#427, #431) and ADR 0002 as built
-(#432, #433). Next: the offline and guard follow-ups (#441) and the spec touch-ups (#442),
-purge counts (needs a migration).
+(#432, #433), the offline and guard follow-ups (#441) and the spec touch-ups (#442). Open:
+purge counts with a new migration (#739, security-critical).
 
 ## PL4: screens
 
@@ -146,14 +146,18 @@ the control band and join sheet under the strict measure (#585, #600), the room 
 2 s after an unforeseen cause (#617, #619), the haze and wall slowed to the steady-light cap (#616,
 #620) and the 1 s cap on how far ahead an action joins a fixed frame (#608, #623).
 
-**Known rule gap (S6):** the sweep and sway windows (#618) do not yet fit the strict whole-frame
+**Rule gap (S6), since closed:** the sweep and sway windows (#618) did not yet fit the strict whole-frame
 gate in every case. The revised sweep and sway spec is merged (#635: a turning beam moves in black,
 near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened);
 #622 is being rebuilt on it. #592 (steady light at its cap) closes when #618 merges.
 
-Also merged: the player's state-rate test made deterministic (#624, #626).
+Also merged: the player's state-rate test made deterministic (#624, #626), the 4.15 s sweep
+windows with a burst's decay counted in the shared budget and gated (#618, #622; this closes the
+known S6 gap above and #592), and scene.md as built after #592 (#671).
 
-Open: #618 (#622).
+Open: mounting the scene in the room window (#677, PR #680), stepping the quality level down on a
+low frame rate (#678), and #717 (after #677). Design follow-up: the scene folds the grey circle
+and square markers into one round dot; scene.md or `text.css` is to settle this.
 
 ## PL12: installed phone and tablet apps
 
@@ -172,7 +176,45 @@ owner (#649, #653, [owner.md](owner.md)): until then pairing runs on a stand-in 
 offline, and the follower's stand-in reader reports "unavailable", so the phone runs on the manual
 clock.
 
-Open: rider mode (#633), on a stand-in transport for the same reason.
+Since then: rider mode on a stand-in transport (#633, #666), hardening batch 1 (#670) and a
+second mode question refused so the unpair call is always answered (#675). The owner decided on
+2026-11-24 that iPhone riders use the installed app and that the iOS build starts once the
+Android app is finished (#684).
+
+Open: keeping the screen on during a class (#737), then the room screen on an external display
+as the presenter view (#738).
+
+## PL9: sensors (ADR 0012), done on fakes
+
+Merged: ADR 0012 (#660), the sensor core with parsers for heart rate, cycling and fitness-machine
+data (#665), the sensor spec (#667) and its as-built batch (#679), the rider page reading the
+rider's own sensor (#681) and its hardening (#704, #706, #712), the instructor's sensor panel on a
+stand-in source (#674), a scan of every built player bundle for Bluetooth code (#696), and Bluefy
+dropped (#684, #687).
+
+**Done on fakes:** the Verifier ran PL9 on `main` at `e9c112f` (2026-11-25) and filed no gap
+issues. The plan has no written "done when" for PL9, so the PL9 row and ADR 0012 section 6 served.
+Every rule guard (no equipment control in the player or web, no Bluetooth in the player bundle,
+no equipment word or rider-bound data in live messages) failed under one mutation each. Waiting
+for the owner: reading sensors on the computer, riders' readings sent to the instructor, and real
+bikes and phones ([owner.md](owner.md)). Not filed: no Electron e2e test drives the instructor's
+sensor panel; the shots harness covers it.
+
+## PL11: Swedebeat playback (ADR 0013), done on fakes
+
+Merged: ADR 0013 (#683) with the owner's questions (#694), `music.swedebeat_mix` in class format
+1.3 (#695, #701), the Connect Swedebeat and mix-state spec (#699), the mix source interface, guards
+and mode policy (#700), sign-in and sign-out on the class list (#708) and its hardening (#723,
+#728, #727), the encrypted mix cache (#710, #716), mix playback in the room window (#718), the
+ending mark and its flushes (#731, #734), and the as-built records (#714, #721, #726, #732, #736).
+
+**Done on fakes:** the Verifier ran PL11 on `main` at `e9c112f` (2026-11-25) and filed no gap
+issues, against ADR 0013 and swedebeat.md (the plan has no written "done when" for PL11). It
+covered play while downloading, no plaintext in the cache, the class clock matching the audio,
+the fall-back to the manual clock with a reason, and the `cbp-mix:` hardening. Revoked tokens,
+mid-class fall-back, cached play offline and the paired class list's mix states are covered by
+unit tests only. Waiting for the owner: Swedebeat's agreement and the real source client (plan
+decision 11, ADR 0013 section 7).
 
 ## Infra
 
