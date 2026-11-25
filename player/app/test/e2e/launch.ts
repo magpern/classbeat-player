@@ -1,6 +1,6 @@
 // Starts the built application under Playwright's Electron support. Needs a display (xvfb-run on
 // headless Linux). The headless-only Chromium flags are passed HERE, never set by the app itself.
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,8 +51,22 @@ export async function closeApp(app: ElectronApplication | undefined): Promise<vo
   }
 }
 
+/**
+ * The update checker never reaches the network in a test (ADR 0014 section 6): automatic checks off,
+ * and a feed override that no fetch accepts, so even Check now ends in "could not check" with no
+ * request. A test that wrote its own settings file keeps it.
+ */
+function noUpdateChecks(userData: string): void {
+  try {
+    writeFileSync(join(userData, "update-settings.json"), `${JSON.stringify({ automaticChecks: false, prereleases: false, feed: "" })}\n`, { flag: "wx" });
+  } catch {
+    // Already there.
+  }
+}
+
 export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = opts.userData ?? mkdtempSync(join(tmpdir(), "player-e2e-"));
+  noUpdateChecks(userData);
   let app: ElectronApplication | undefined;
   try {
     app = await within(

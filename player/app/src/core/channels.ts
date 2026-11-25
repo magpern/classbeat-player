@@ -55,3 +55,11 @@ export const CH_LIVE_RIDERS = "live:riders";
 export const CH_LIVE_DROP_RIDER = "live:drop-rider";
 export const CH_LIVE_LOCK = "live:lock";
 export const CH_LIVE_NEW_CODE = "live:new-code";
+// Updates (ADR 0014 section 5; docs/design/updates.md), the class list page's only. `update:status`,
+// `update:check` and `update:open-release` take no argument; the two setters take true or false. The
+// answers are an UpdateView (core/update/view.ts): versions and words, never an address or a path.
+export const CH_UPDATE_STATUS = "update:status";
+export const CH_UPDATE_CHECK = "update:check";
+export const CH_UPDATE_OPEN_RELEASE = "update:open-release";
+export const CH_UPDATE_SET_AUTO = "update:set-auto";
+export const CH_UPDATE_SET_PRERELEASES = "update:set-prereleases";

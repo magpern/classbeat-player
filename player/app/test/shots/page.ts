@@ -48,16 +48,23 @@ const STUB = `
     unpair: () => { window.__calls.push(["cancel"]); return Promise.resolve(window.__view.pairing); },
     mixSignIn: (c) => { window.__calls.push(["mix-sign-in", Object.keys(c)]); return answer(); },
     mixSignOut: () => { window.__calls.push(["mix-sign-out"]); return answer(); },
+    // Updates (ADR 0014 section 5): null, as with a class open, unless a test sets window.__update.
+    updateStatus: () => Promise.resolve(window.__update ?? null),
+    checkForUpdate: (...a) => { window.__calls.push(["update-check", ...a]); return Promise.resolve(window.__update ?? null); },
+    openReleasePage: (...a) => { window.__calls.push(["update-open", ...a]); return Promise.resolve(null); },
+    setAutomaticChecks: (...a) => { window.__calls.push(["update-auto", ...a]); return Promise.resolve(window.__update ?? null); },
+    setPrereleases: (...a) => { window.__calls.push(["update-pre", ...a]); return Promise.resolve(window.__update ?? null); },
   };
 `;
 
-export async function openList(browser: Browser, size: readonly [number, number], view: ListView, motion: "no-preference" | "reduce" = "no-preference"): Promise<Opened> {
+export async function openList(browser: Browser, size: readonly [number, number], view: ListView, motion: "no-preference" | "reduce" = "no-preference", update: unknown = null): Promise<Opened> {
   const context = await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: 1, reducedMotion: motion });
   await context.clock.setFixedTime(FIXED_NOW);
   // Code serialised into the page by `evaluate` may be wrapped by the transpiler's `__name` helper.
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(STUB);
   await context.addInitScript(`window.__view = ${JSON.stringify(view)};`);
+  await context.addInitScript(`window.__update = ${JSON.stringify(update)};`);
   const page = await context.newPage();
   const external: string[] = [];
   const errors: string[] = [];

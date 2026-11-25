@@ -11,11 +11,13 @@
 <div class="app" id="app">
   <header class="head">
     <div class="title"><h1>Classes</h1><span class="count" id="count" hidden></span></div>
-    <button type="button" id="open-file"><span>Open a class file…</span> <span class="kbd" id="open-key">Ctrl+O</span></button>
+    <span class="keys" id="head-keys"><button type="button" id="settings-key"><span>Settings</span> <span class="kbd" id="settings-kbd">Ctrl+,</span></button><button type="button" id="open-file"><span>Open a class file…</span> <span class="kbd" id="open-key">Ctrl+O</span></button></span>
   </header>
   <div id="status-slot" class="slot"></div>
   <div id="mix-slot" class="slot"></div>
   <div id="file-slot" class="slot"></div>
+  <!-- The update notice (docs/design/updates.md): only for a newer version, only with no plate or panel. -->
+  <div class="notice" id="update-notice" role="status" hidden></div>
   <div class="filter" id="filter" hidden>
     <label for="filter-input" class="lbl">Find a class</label>
     <div class="box"><input id="filter-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type to filter"><span class="kbd slash" id="filter-key" aria-hidden="true">/</span></div>
@@ -23,6 +25,23 @@
   </div>
   <div id="body" class="slot"></div>
   <p id="live" role="status" class="visually-hidden"></p>
+</div>
+<!-- Settings (docs/design/updates.md): replaces the class list; Esc goes back. No link and no address. -->
+<div class="app" id="settings-app" hidden>
+  <header class="head">
+    <div class="title"><h1>Settings</h1></div>
+    <button type="button" id="settings-back"><span>Back to the classes</span> <span class="kbd">Esc</span></button>
+  </header>
+  <main class="settings">
+    <h2>Updates</h2>
+    <div class="s-status" id="u-status" role="status"><div class="what"><span class="mark" id="u-mark" aria-hidden="true"></span><div><span class="st" id="u-st"></span><span class="dt" id="u-dt"></span></div></div></div>
+    <div class="facts"><span class="lbl">Current version</span><span class="v n" id="u-current"></span><span class="lbl">Latest version</span><span class="v n" id="u-latest"></span></div>
+    <div class="actions"><button type="button" id="u-check"><span>Check now</span></button></div>
+    <div class="switches">
+      <div class="sw" id="u-auto" role="switch" aria-checked="false" tabindex="0" aria-labelledby="u-auto-nm" aria-describedby="u-auto-hp"><div><div class="nm" id="u-auto-nm">Check automatically</div><div class="hp" id="u-auto-hp"></div></div><div class="ctl"><span class="state"></span><span class="track" aria-hidden="true"><i></i></span></div></div>
+      <div class="sw" id="u-pre" role="switch" aria-checked="false" tabindex="0" aria-labelledby="u-pre-nm" aria-describedby="u-pre-hp"><div><div class="nm" id="u-pre-nm">Pre-releases</div><div class="hp" id="u-pre-hp"></div></div><div class="ctl"><span class="state"></span><span class="track" aria-hidden="true"><i></i></span></div></div>
+    </div>
+  </main>
 </div>
 <!-- A Swedebeat sign-in field (docs/design/swedebeat.md, "The form"): nothing the browser keeps, suggests or checks. -->
 <template id="mix-field"><input class="in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="256"></template>

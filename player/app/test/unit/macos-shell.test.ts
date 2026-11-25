@@ -152,8 +152,10 @@ const src = (path: string): string => code(sources.find((s) => s.path === path)?
 // main/readers/windows-spawn.ts; test/unit/windows-script.test.ts pins how.
 const WINDOWS_SPAWN = "main/readers/windows-spawn.ts";
 const EXEC_READERS = ["main/linux-reader.ts", "main/macos-reader.ts"];
-// The one place that opens anything in the system: the pairing page in the browser (#74).
+// The places that open anything in the system: the pairing page in the browser (#74), and the newer
+// version's release page (#798, ADR 0014 section 2), each checked by its own test below.
 const OPENS_PAGE = "main/pairing/setup.ts";
+const OPENS_RELEASE = "main/update/setup.ts";
 
 test("only the macOS and Linux readers and the Windows helper start a process, the readers with execFile, and never a shell", () => {
   const users = sources.filter((s) => /child_process/.test(code(s.text))).map((s) => s.path);
@@ -167,7 +169,7 @@ test("only the macOS and Linux readers and the Windows helper start a process, t
   }
   for (const s of sources) {
     assert.doesNotMatch(code(s.text), /\b(exec|execSync|execFileSync|spawnSync|fork)\(|shell:\s*true|\bopenPath\b/, s.path);
-    if (s.path !== OPENS_PAGE) assert.doesNotMatch(code(s.text), /\bopenExternal\b/, s.path);
+    if (s.path !== OPENS_PAGE && s.path !== OPENS_RELEASE) assert.doesNotMatch(code(s.text), /\bopenExternal\b/, s.path);
     if (s.path !== WINDOWS_SPAWN) assert.doesNotMatch(code(s.text), /\bspawn\(/, s.path);
   }
   assert.equal(src(WINDOWS_SPAWN).match(/\bspawn\(/g)?.length, 1, "one call site");
@@ -188,6 +190,20 @@ test("the browser is opened in one place, only with the pairing page, which the 
   assert.match(src("core/pairing/protocol.ts"), /const page = pairingPageOn\(origin, field\(a\.body, "verification_uri"\)\);/);
 });
 
+test("the release page is opened in one place, only with the address built from the fixed prefix and a checked newer version", () => {
+  const setup = src(OPENS_RELEASE);
+  assert.equal(setup.match(/\bopenExternal\b/g)?.length, 1, "one call site");
+  assert.match(setup, /openPage: \(address\) => void shell\.openExternal\(address\)\.catch\(\(\) => undefined\)/);
+  // The service hands openPage only what releasePageAddress builds from the shown status, never anything from the page.
+  const service = src("main/update/service.ts");
+  assert.deepEqual([...service.matchAll(/\bdeps\.openPage\(([^)]*)\)/g)].map((m) => m[1]), ["address"]);
+  assert.match(service, /const address = releasePageAddress\(visible\(now\(\)\)\);/);
+  assert.match(src("core/update/status.ts"), /export const RELEASE_PAGE_PREFIX = "https:\/\/github\.com\/magpern\/classbeat-player\/releases\/tag\/player-v";/);
+  assert.match(src("core/update/status.ts"), /return RELEASE_PAGE_PREFIX \+ latest\.text;/);
+  // The handler passes no argument on: Open release page takes none.
+  assert.match(src("main/update/update-handlers.ts"), /if \(onList\(e\) && raw === undefined\) updates\.openReleasePage\(\);/);
+});
+
 test("the scripts are constants: no template text, no joining with data, and one place names osascript", () => {
   const scripts = src("core/link/macos-scripts.ts");
   assert.doesNotMatch(scripts, /`|\$\{|\+|\.concat\(|\.replace\(|\.join\(/);
@@ -205,10 +221,10 @@ test("the reader is built in the main process only, by platform", () => {
   assert.match(src("main/main.ts"), /selectMusic\(process\.platform\)/);
 });
 
-test("the preload bridge: the same four functions, those of pairing (#74), of the class list, of Swedebeat sign-in (#691), of the phone remote (#173) and of the riders panel (#366); only startClass, mixSignIn, dropPhone, dropRider and lockJoining take arguments", () => {
+test("the preload bridge: the same four functions, those of pairing (#74), of the class list, of Swedebeat sign-in (#691), of the phone remote (#173), of the riders panel (#366) and of updates (#798); only startClass, mixSignIn, dropPhone, dropRider, lockJoining, setAutomaticChecks and setPrereleases take arguments", () => {
   const preload = src("preload/preload.ts");
   const exposed = [...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
-  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass", "mixSignIn", "mixSignOut", "liveView", "startLive", "endLive", "makeControlCode", "dropPhone", "riders", "dropRider", "lockJoining", "newJoinCode"]);
+  assert.deepEqual(exposed, ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass", "mixSignIn", "mixSignOut", "liveView", "startLive", "endLive", "makeControlCode", "dropPhone", "riders", "dropRider", "lockJoining", "newJoinCode", "updateStatus", "checkForUpdate", "openReleasePage", "setAutomaticChecks", "setPrereleases"]);
   // The class list's only argument is a class's id and hash (startClass); the shell parses it (core/list/commands.ts).
   assert.match(preload, /^ {2}startClass: \(id: unknown, hash: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIST_START, \{ id, hash \}\),$/m);
   // Swedebeat's sign-in takes what was typed, passed on as it is; the shell checks it against the source's fields (core/mix/sign-in-input.ts).
@@ -218,12 +234,15 @@ test("the preload bridge: the same four functions, those of pairing (#74), of th
   // The riders panel's: the rider's id and the lock's value, passed on as they are; the shell takes only a rider id and a boolean.
   assert.match(preload, /^ {2}dropRider: \(rider: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIVE_DROP_RIDER, rider\),$/m);
   assert.match(preload, /^ {2}lockJoining: \(locked: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_LIVE_LOCK, locked\),$/m);
-  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"], ["mixSignOut", "CH_MIX_SIGN_OUT"], ["liveView", "CH_LIVE_VIEW"], ["startLive", "CH_LIVE_START"], ["endLive", "CH_LIVE_END"], ["makeControlCode", "CH_LIVE_CODE"], ["riders", "CH_LIVE_RIDERS"], ["newJoinCode", "CH_LIVE_NEW_CODE"]]) {
+  // The update switches' one boolean each, passed on as it is; the shell takes only true or false (main/update/update-handlers.ts).
+  assert.match(preload, /^ {2}setAutomaticChecks: \(on: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_UPDATE_SET_AUTO, on\),$/m);
+  assert.match(preload, /^ {2}setPrereleases: \(on: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_UPDATE_SET_PRERELEASES, on\),$/m);
+  for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"], ["mixSignOut", "CH_MIX_SIGN_OUT"], ["liveView", "CH_LIVE_VIEW"], ["startLive", "CH_LIVE_START"], ["endLive", "CH_LIVE_END"], ["makeControlCode", "CH_LIVE_CODE"], ["riders", "CH_LIVE_RIDERS"], ["newJoinCode", "CH_LIVE_NEW_CODE"], ["updateStatus", "CH_UPDATE_STATUS"], ["checkForUpdate", "CH_UPDATE_CHECK"], ["openReleasePage", "CH_UPDATE_OPEN_RELEASE"]]) {
     assert.match(preload, new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${channel}\\),$`, "m"), name);
   }
   assert.deepEqual(
     [...src("core/channels.ts").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "room:mix", "room:mix-report", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code"],
+    ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "room:mix", "room:mix-report", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code", "update:status", "update:check", "update:open-release", "update:set-auto", "update:set-prereleases"],
   );
   // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
 });

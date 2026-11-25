@@ -37,7 +37,8 @@ function problems(text: string): string[] {
 
 test("the update module has its files", () => {
   assert.deepEqual(sources.map((s) => s.path).sort(), [
-    "core/update/class-gate.ts", "core/update/feed.ts", "core/update/rollback.ts", "core/update/semver.ts", "core/update/status.ts",
+    "core/update/class-gate.ts", "core/update/feed-address.ts", "core/update/feed.ts", "core/update/rollback.ts", "core/update/semver.ts",
+    "core/update/settings.ts", "core/update/status.ts", "core/update/view.ts", "core/update/words.ts",
   ]);
 });
 
