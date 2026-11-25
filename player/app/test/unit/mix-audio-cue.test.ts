@@ -1,14 +1,15 @@
 // What passes between the shell and the room's <audio> (core/mix/audio-cue.ts): strict parsing both ways, and the steering.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DRIFT_MS, mixCueOf, mixPositionOf, parseAudioReport, parseMixCue, steer } from "../../src/core/mix/audio-cue.ts";
+import { DRIFT_MS, LENGTH_TOLERANCE_MS, mixCueOf, mixPositionOf, parseAudioReport, parseMixCue, steer, wrongLength } from "../../src/core/mix/audio-cue.ts";
 
 const URL = `cbp-mix://play/${"0".repeat(32)}`;
-const report = { seq: 3, positionMs: 1500.4, playing: true, failed: false };
+const report = { seq: 3, positionMs: 1500.4, playing: true, failed: false, durationMs: 60_000.6 };
 const cue = { seq: 2, url: URL, playing: true, positionMs: 1000 };
 
-test("a report is four fields of their types and ranges, and nothing else", () => {
-  assert.deepEqual(parseAudioReport(report), { seq: 3, positionMs: 1500, playing: true, failed: false });
+test("a report is five fields of their types and ranges, and nothing else", () => {
+  assert.deepEqual(parseAudioReport(report), { seq: 3, positionMs: 1500, playing: true, failed: false, durationMs: 60_001 });
+  assert.deepEqual(parseAudioReport({ ...report, durationMs: null }), { seq: 3, positionMs: 1500, playing: true, failed: false, durationMs: null });
   for (const bad of [
     null,
     "x",
@@ -25,6 +26,12 @@ test("a report is four fields of their types and ranges, and nothing else", () =
     { ...report, positionMs: 100_000_001 },
     { ...report, playing: 1 },
     { ...report, failed: "no" },
+    { seq: 3, positionMs: 1, playing: true, failed: false },
+    { ...report, durationMs: Number.NaN },
+    { ...report, durationMs: Infinity },
+    { ...report, durationMs: -1 },
+    { ...report, durationMs: "60000" },
+    { ...report, durationMs: 100_000_001 },
   ]) {
     assert.equal(parseAudioReport(bad), null, JSON.stringify(bad));
   }
@@ -57,12 +64,25 @@ test("mixCueOf copies the four fields and nothing more", () => {
 });
 
 test("steer: the clock follows the audio past the drift, within the class", () => {
-  assert.equal(DRIFT_MS, 250);
-  assert.equal(steer(10_000, 10_250, 0, 60_000), null);
-  assert.equal(steer(10_000, 10_251, 0, 60_000), 10_251);
+  assert.ok(DRIFT_MS < 50, "inside ADR 0001's 50 ms beat target");
+  assert.equal(DRIFT_MS, 30);
+  assert.equal(steer(10_000, 10_030, 0, 60_000), null);
+  assert.equal(steer(10_000, 10_031, 0, 60_000), 10_031);
+  assert.equal(steer(10_000, 9_970, 0, 60_000), null);
+  assert.equal(steer(10_000, 9_969, 0, 60_000), 9_969);
   assert.equal(steer(10_000, 9_000, 0, 60_000), 9_000);
   assert.equal(steer(10_000, 15_000, 5_000, 60_000), null, "offset");
   assert.equal(steer(1_000, 500, 5_000, 60_000), 0, "never below 0");
   assert.equal(steer(1_000, 90_000, 0, 60_000), 60_000, "never past the class");
   assert.equal(mixPositionOf(1_000, 5_000), 6_000);
+});
+
+test("wrongLength: a decoded length more than 1 000 ms from length_ms, and only a known one", () => {
+  assert.equal(LENGTH_TOLERANCE_MS, 1000);
+  assert.equal(wrongLength(null, 60_000), false, "not decoded yet");
+  assert.equal(wrongLength(61_000, 60_000), false);
+  assert.equal(wrongLength(59_000, 60_000), false);
+  assert.equal(wrongLength(61_001, 60_000), true);
+  assert.equal(wrongLength(58_999, 60_000), true);
+  assert.equal(wrongLength(0, 60_000), true);
 });

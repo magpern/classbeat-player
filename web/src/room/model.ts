@@ -17,7 +17,8 @@ export interface GelModel {
 /** `quiet`: grey with a round dot; `alert`: a white plate; `manual`: grey with a square. */
 export interface LinkPlate {
   readonly text: string;
-  readonly look: "quiet" | "alert" | "manual";
+  /** `ready` (white dot) and `work` (hollow grey circle) are the mix's (mix-words.ts). */
+  readonly look: "quiet" | "alert" | "manual" | "ready" | "work";
   /** White instead of grey: the clock was just handed over to the instructor (news, not a fault). */
   readonly news?: true;
 }

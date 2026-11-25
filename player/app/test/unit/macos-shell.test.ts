@@ -257,11 +257,12 @@ test("the room preload bridge: exactly its functions; none takes an argument fro
   assert.match(preload, /^ {2}onUpdate: \(cb: \(frame: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_UPDATE, \(_e, frame: unknown\) => cb\(frame\)\);\n {2}\},$/m);
   assert.match(preload, /^ {2}onRemote: \(cb: \(slot: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_REMOTE_UPDATE, \(_e, slot: unknown\) => cb\(slot\)\);\n {2}\},$/m);
   // The mix cue's push takes only a callback; the report is the one function with arguments, and
-  // it sends a new object of a number, a number and two flags (#693), never what the page passed.
+  // it sends a new object of a number, a number, two flags and a finite number or null (#693),
+  // never what the page passed.
   assert.match(preload, /^ {2}onMix: \(cb: \(cue: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_MIX, \(_e, cue: unknown\) => cb\(cue\)\);\n {2}\},$/m);
   assert.match(
     preload,
-    /^ {2}mixReport: \(seq: unknown, positionMs: unknown, playing: unknown, failed: unknown\): Promise<unknown> =>\n {4}ipcRenderer\.invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true \}\),$/m,
+    /^ {2}mixReport: \(seq: unknown, positionMs: unknown, playing: unknown, failed: unknown, durationMs: unknown\): Promise<unknown> =>\n {4}ipcRenderer\.invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number\.isFinite\(durationMs\) \? durationMs : null \}\),$/m,
   );
   assert.deepEqual(
     exposed.filter((name) => new RegExp(`^ {2}${name}: \\((?!\\)|cb: )`, "m").test(preload)),

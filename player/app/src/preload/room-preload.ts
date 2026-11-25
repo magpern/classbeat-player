@@ -38,6 +38,6 @@ contextBridge.exposeInMainWorld("room", {
     if (typeof cb !== "function") return;
     ipcRenderer.on(CH_ROOM_MIX, (_e, cue: unknown) => cb(cue));
   },
-  mixReport: (seq: unknown, positionMs: unknown, playing: unknown, failed: unknown): Promise<unknown> =>
-    ipcRenderer.invoke(CH_ROOM_MIX_REPORT, { seq: Number(seq), positionMs: Number(positionMs), playing: playing === true, failed: failed === true }),
+  mixReport: (seq: unknown, positionMs: unknown, playing: unknown, failed: unknown, durationMs: unknown): Promise<unknown> =>
+    ipcRenderer.invoke(CH_ROOM_MIX_REPORT, { seq: Number(seq), positionMs: Number(positionMs), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs : null }),
 });

@@ -210,7 +210,7 @@ if (!app.requestSingleInstanceLock()) {
     // A new class is a new run: the session of the class before ends (ADR 0005 section 2).
     controller.onOpened(() => phoneRemote?.classChanged());
     // Before the room is sent the snapshot, so its link line is current.
-    const player = setupPlayback(mixSetup, plays, controller, room);
+    const { player, prefetch } = setupPlayback(mixSetup, plays, controller, room, sync);
     mixPlayer = player;
     controller.watch((s) => room.send(s));
     controller.watch(() => refreshRoomItem());
@@ -226,7 +226,7 @@ if (!app.requestSingleInstanceLock()) {
     registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote, mixReport: (r) => player.report(r) });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
-    registerMixHandlers(ipcMain, trusted, mix, list);
+    registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();

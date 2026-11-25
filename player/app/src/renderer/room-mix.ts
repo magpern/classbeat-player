@@ -4,8 +4,8 @@
 // and no file. The shell steers the class clock from the reports, never the other way round here.
 import { parseMixCue } from "../core/mix/audio-cue.ts";
 
-/** What the room says back: the cue answered, the position in ms, playing, and whether it failed. */
-export type MixReport = (seq: number, positionMs: number, playing: boolean, failed: boolean) => void;
+/** What the room says back: the cue answered, the position in ms, playing, whether it failed, and the decoded length in ms (null: not known yet). */
+export type MixReport = (seq: number, positionMs: number, playing: boolean, failed: boolean, durationMs: number | null) => void;
 
 export interface MixDriver {
   /** A cue from the shell; one that is malformed or older than the last is ignored. */
@@ -23,8 +23,11 @@ export function mountMix(audio: HTMLAudioElement, report: MixReport, every: (fn:
   let failedFor = -1;
   const say = (failed: boolean): void => {
     if (seq < 1 || !hasSource) return;
-    report(seq, Math.max(0, Math.round(audio.currentTime * 1000)), !audio.paused, failed);
+    const d = audio.duration;
+    report(seq, Math.max(0, Math.round(audio.currentTime * 1000)), !audio.paused, failed, Number.isFinite(d) && d >= 0 ? Math.round(d * 1000) : null);
   };
+  // The decoded length is known: the shell checks it against the class's at once, not a second later.
+  audio.addEventListener("loadedmetadata", () => say(false));
   audio.addEventListener("error", () => {
     // Once per cue: the shell falls back to the manual clock and sends an empty cue.
     if (!hasSource || failedFor === seq) return;

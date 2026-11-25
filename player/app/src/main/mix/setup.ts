@@ -12,7 +12,7 @@ import type { MixCache } from "./mix-cache.ts";
 import type { Plays } from "./plays.ts";
 import { createMixService } from "./service.ts";
 import type { MixService } from "./service.ts";
-import { TEST_ACCOUNT, TEST_MIX_SWITCH, testMixSource, testMixVault } from "./test-mix.ts";
+import { TEST_ACCOUNT, testMixOn, testMixSource, testMixVault } from "./test-mix.ts";
 import { keychainVault } from "./vault.ts";
 
 export interface MixSetup {
@@ -24,7 +24,7 @@ export interface MixSetup {
 
 export function setupMix(paired: PairingService, plays: Plays): MixSetup {
   const root = app.getPath("userData");
-  const test = !app.isPackaged && app.commandLine.hasSwitch(TEST_MIX_SWITCH);
+  const test = testMixOn(app);
   const source = test ? testMixSource() : chooseMixSource();
   const vault = test ? testMixVault(root) : keychainVault(safeStorage, root, process.platform);
   const account = test ? () => TEST_ACCOUNT : () => credentialOf(paired)?.account ?? null;

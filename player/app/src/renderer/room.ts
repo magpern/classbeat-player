@@ -35,7 +35,7 @@ interface RoomApi {
   startRemote(): Answer<RemoteView>;
   onRemote(cb: (slot: RemoteView) => void): void;
   onMix(cb: (cue: unknown) => void): void;
-  mixReport(seq: number, positionMs: number, playing: boolean, failed: boolean): Answer<true>;
+  mixReport(seq: number, positionMs: number, playing: boolean, failed: boolean, durationMs: number | null): Answer<true>;
 }
 
 const api = (window as unknown as { room: RoomApi }).room;
@@ -101,5 +101,5 @@ void api.state().then((frame) => {
 api.onRemote(remote);
 void api.remoteState().then(remote);
 // The mix's <audio>: cued by the shell only, and its reports go back through the one fixed call.
-const mix = mountMix(document.getElementById("mix") as HTMLAudioElement, (seq, positionMs, playing, failed) => void api.mixReport(seq, positionMs, playing, failed));
+const mix = mountMix(document.getElementById("mix") as HTMLAudioElement, (seq, positionMs, playing, failed, durationMs) => void api.mixReport(seq, positionMs, playing, failed, durationMs));
 api.onMix((cue) => mix.cue(cue));

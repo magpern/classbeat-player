@@ -112,7 +112,7 @@ test("the room preload exposes exactly the room's functions, and uses only the r
   assert.deepEqual([...new Set(invoked)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_MIX_REPORT", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"]);
   assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_MIX"]);
   // The one function that takes values from the page sends exactly the report's four fields, rebuilt.
-  assert.match(src, /invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true \}\)/);
+  assert.match(src, /invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number\.isFinite\(durationMs\) \? durationMs : null \}\)/);
   assert.doesNotMatch(src, /ipcRenderer\.(send|sendSync|postMessage|addListener|once)\b/);
   assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP, CH_ROOM_MIX_REPORT]);
   assert.deepEqual(ROOM_PUSH_CHANNELS, [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE, CH_ROOM_MIX]);

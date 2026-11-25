@@ -23,33 +23,50 @@ export interface AudioReport {
   readonly playing: boolean;
   /** The element gave up (a load or decode error, or a stall the shell's reader ended). */
   readonly failed: boolean;
+  /** The length the element decoded, in ms, or null while it does not know it yet. */
+  readonly durationMs: number | null;
 }
 
-const KEYS = ["failed", "playing", "positionMs", "seq"];
+const KEYS = ["durationMs", "failed", "playing", "positionMs", "seq"];
 /** About 27 hours: no mix is longer, and the number stays an exact integer. */
 const MAX_MS = 100_000_000;
 
-/** A report exactly as the room sends it, or null: four fields, nothing else, each of its type and range. */
+/** A report exactly as the room sends it, or null: five fields, nothing else, each of its type and range. */
 export function parseAudioReport(raw: unknown): AudioReport | null {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype) return null;
   const r = raw as Record<string, unknown>;
   if (Object.keys(r).sort().join() !== KEYS.join()) return null;
-  const { seq, positionMs, playing, failed } = r;
+  const { seq, positionMs, playing, failed, durationMs } = r;
   if (!Number.isSafeInteger(seq) || (seq as number) < 1) return null;
-  if (typeof positionMs !== "number" || !Number.isFinite(positionMs) || positionMs < 0 || positionMs > MAX_MS) return null;
+  if (!isMs(positionMs)) return null;
   if (typeof playing !== "boolean" || typeof failed !== "boolean") return null;
-  return { seq: seq as number, positionMs: Math.round(positionMs), playing, failed };
+  if (durationMs !== null && !isMs(durationMs)) return null;
+  return { seq: seq as number, positionMs: Math.round(positionMs), playing, failed, durationMs: durationMs === null ? null : Math.round(durationMs) };
 }
 
-/** The clock follows the audio when they are further apart than this (ADR 0001's accuracy target). */
-export const DRIFT_MS = 250;
+const isMs = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_MS;
+
+/**
+ * The clock follows the audio when they are further apart than this. ADR 0001's tighter target is
+ * the one that binds: beat effects within 50 ms of the music (interval timing, about 1 s, follows
+ * from it). 30 ms leaves 10 ms for the report's trip from the room to the shell and 10 ms for the
+ * two clocks to drift apart in the second between reports (checked on the fake in mix-player.test.ts).
+ */
+export const DRIFT_MS = 30;
+
+/** A decoded length further than this from the class's `length_ms` means the mix is not used (ADR 0013 section 3). */
+export const LENGTH_TOLERANCE_MS = 1000;
+
+/** The decoded length is known and too far from the length the class was designed against. */
+export const wrongLength = (durationMs: number | null, lengthMs: number): boolean => durationMs !== null && Math.abs(durationMs - lengthMs) > LENGTH_TOLERANCE_MS;
 
 /**
  * The class time the clock should be at, or null when it is close enough. `classMs`: the clock now;
- * `audioMs`: the audio position reported; never below 0 nor past the class's length.
+ * `audioMs`: the audio position reported; `classLengthMs`: the class's length. The result is never
+ * below 0 nor past the class's end (the mix can run on after it).
  */
-export function steer(classMs: number, audioMs: number, offsetMs: number, lengthMs: number): number | null {
-  const want = Math.min(Math.max(audioMs - offsetMs, 0), lengthMs);
+export function steer(classMs: number, audioMs: number, offsetMs: number, classLengthMs: number): number | null {
+  const want = Math.min(Math.max(audioMs - offsetMs, 0), classLengthMs);
   return Math.abs(want - classMs) > DRIFT_MS ? want : null;
 }
 

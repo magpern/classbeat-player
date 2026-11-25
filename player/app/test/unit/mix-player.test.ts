@@ -16,6 +16,7 @@ import {
 import type { MixPlayerDeps } from "../../src/main/mix/mix-player.ts";
 import type { MixReader } from "../../src/main/mix/mix-reader.ts";
 import { createPlays } from "../../src/main/mix/plays.ts";
+import { RETRY_MS } from "../../src/main/mix/open-download.ts";
 
 const A = "a".repeat(64);
 const SIGNED_IN: MixView = { ...MIX_DISABLED, state: "signed_in" };
@@ -31,7 +32,7 @@ const snap = (
 ): Snapshot =>
   ({
     loadId,
-    doc: { music: m },
+    doc: { music: m, class: { length_ms: 60_000 } },
     view: status === null ? null : { status, classMs },
   }) as unknown as Snapshot;
 
@@ -41,6 +42,7 @@ function rig(
     outcome?: Promise<CacheOutcome>;
     complete?: boolean;
     room?: number | null;
+    listed?: readonly string[];
   } = {},
 ) {
   let t = 0;
@@ -82,6 +84,7 @@ function rig(
     cue: (c) => void cues.push(c),
     align: (ms) => void aligned.push(ms),
     now: () => t,
+    listed: () => o.listed ?? [],
   });
   return {
     player,
@@ -148,6 +151,7 @@ test("the offset: the audio is cued at class time + offset_ms, and steered back 
     positionMs: 7_000,
     playing: true,
     failed: false,
+    durationMs: null,
   });
   assert.deepEqual(r.aligned, [2_000]);
 });
@@ -158,21 +162,23 @@ test("the reports steer the running clock past the drift only, and a late report
   r.player.snapshot(snap(1, "running", 0));
   const seq = r.cues[0]!.seq;
   r.advance(1_000);
-  r.player.report({ seq, positionMs: 1_100, playing: true, failed: false });
+  r.player.report({ seq, positionMs: 1_030, playing: true, failed: false, durationMs: null });
   assert.deepEqual(r.aligned, [], "within the drift");
-  r.player.report({ seq, positionMs: 1_600, playing: true, failed: false });
+  r.player.report({ seq, positionMs: 1_600, playing: true, failed: false, durationMs: null });
   assert.deepEqual(r.aligned, [1_600]);
   r.player.report({
     seq: seq - 1,
     positionMs: 9_000,
     playing: true,
     failed: false,
+    durationMs: null,
   });
   r.player.report({
     seq: seq + 1,
     positionMs: 9_000,
     playing: true,
     failed: false,
+    durationMs: null,
   });
   assert.deepEqual(r.aligned, [1_600], "only the current cue's reports");
 });
@@ -186,6 +192,7 @@ test("pause, resume and a jump cue the audio; time passing does not", () => {
     positionMs: 0,
     playing: true,
     failed: false,
+    durationMs: null,
   });
   r.advance(500);
   r.player.snapshot(snap(1, "running", 500));
@@ -200,6 +207,7 @@ test("pause, resume and a jump cue the audio; time passing does not", () => {
     positionMs: 500,
     playing: false,
     failed: false,
+    durationMs: null,
   });
   r.player.snapshot(snap(1, "running", 500));
   assert.deepEqual(
@@ -211,6 +219,7 @@ test("pause, resume and a jump cue the audio; time passing does not", () => {
     positionMs: 500,
     playing: true,
     failed: false,
+    durationMs: null,
   });
   const n = r.cues.length;
   r.advance(100);
@@ -268,20 +277,31 @@ test("the audio failing in the room falls back: not checked", () => {
     positionMs: 0,
     playing: false,
     failed: true,
+    durationMs: null,
   });
   assert.deepEqual(r.player.line(), { text: "Mix not checked", shape: "news" });
 });
 
-test("sign-out mid-class ends the play: the next snapshot falls back", () => {
+test("sign-out mid-class ends the play: the next snapshot falls back, saying signed out", () => {
+  const r = rig();
+  r.player.snapshot(snap(1, "ready"));
+  r.player.snapshot(snap(1, "running", 0));
+  r.setView({ ...SIGNED_IN, state: "signed_out" });
+  r.plays.endAccount(A);
+  r.player.snapshot(snap(1, "running", 100));
+  assert.deepEqual(r.player.line(), {
+    text: "Signed out of Swedebeat",
+    shape: "news",
+  });
+});
+
+test("a play ended elsewhere while still signed in falls back: not checked", () => {
   const r = rig();
   r.player.snapshot(snap(1, "ready"));
   r.player.snapshot(snap(1, "running", 0));
   r.plays.endAccount(A);
   r.player.snapshot(snap(1, "running", 100));
-  assert.deepEqual(r.player.line(), {
-    text: "Mix still downloading",
-    shape: "news",
-  });
+  assert.deepEqual(r.player.line(), { text: "Mix not checked", shape: "news" });
 });
 
 test("not signed in, or the source refused the mix: the manual clock with the full reason before the start", async () => {
@@ -366,4 +386,97 @@ test("another class opens: the play ends and the old mix may be evicted, the new
   assert.equal(r.cues.at(-1)!.url, null);
   assert.ok(r.log.includes('evict ["mix_2"]'));
   assert.ok(r.log.includes('download true mix_2 ["mix_2"]'));
+});
+
+test("a download that did not complete is started again after RETRY_MS, while signed in", async () => {
+  const r = rig({ outcome: Promise.resolve("interrupted") });
+  const downloads = () => r.log.filter((l) => l.startsWith("download")).length;
+  r.player.snapshot(snap(1, "ready"));
+  await r.flush();
+  r.advance(RETRY_MS - 1);
+  r.player.snapshot(snap(1, "ready"));
+  assert.equal(downloads(), 1, "not yet");
+  r.advance(1);
+  r.setView({ ...SIGNED_IN, state: "signed_out" });
+  r.player.snapshot(snap(1, "ready"));
+  assert.equal(downloads(), 1, "not while signed out");
+  r.setView(SIGNED_IN);
+  r.player.snapshot(snap(1, "ready"));
+  assert.equal(downloads(), 2, "again");
+  const refused = rig({ outcome: Promise.resolve("not_found") });
+  refused.player.snapshot(snap(1, "ready"));
+  await refused.flush();
+  refused.advance(RETRY_MS * 3);
+  refused.player.snapshot(snap(1, "ready"));
+  assert.equal(refused.log.filter((l) => l.startsWith("download")).length, 1, "a final refusal is not retried");
+});
+
+test("a decoded length more than 1 000 ms from length_ms is not used: not checked", () => {
+  for (const [durationMs, kept] of [[61_000, true], [59_000, true], [61_001, false], [58_999, false], [null, true]] as const) {
+    const r = rig();
+    r.player.snapshot(snap(1, "ready"));
+    r.player.snapshot(snap(1, "running", 0));
+    r.player.report({ seq: r.cues[0]!.seq, positionMs: 0, playing: true, failed: false, durationMs });
+    assert.deepEqual(
+      r.player.line(),
+      kept ? { text: "Playing the mix", shape: "dot" } : { text: "Mix not checked", shape: "news" },
+      String(durationMs),
+    );
+    if (!kept) assert.equal(r.cues.at(-1)!.url, null, "the audio is emptied");
+  }
+});
+
+test("the clock is never steered past the class's end, nor below 0", () => {
+  const r = rig();
+  r.player.snapshot(snap(1, "ready"));
+  r.player.snapshot(snap(1, "running", 0));
+  r.advance(1_000);
+  r.player.report({ seq: r.cues[0]!.seq, positionMs: 90_000, playing: true, failed: false, durationMs: null });
+  assert.deepEqual(r.aligned, [60_000], "the class is 60 000 ms long");
+  const late = rig({ complete: true });
+  late.player.snapshot(snap(1, "ready", 0, music("mix_1", 5_000)));
+  late.player.snapshot(snap(1, "running", 0, music("mix_1", 5_000)));
+  late.advance(1_000);
+  late.player.report({ seq: late.cues[0]!.seq, positionMs: 1_000, playing: true, failed: false, durationMs: null });
+  assert.deepEqual(late.aligned, [0]);
+});
+
+test("eviction and the download keep the playing mix and every mix the synced classes name", () => {
+  const r = rig({ listed: ["mix_9", "mix_0"] });
+  r.player.snapshot(snap(1, "ready"));
+  assert.deepEqual(r.log, ['evict ["mix_0","mix_1","mix_9"]', 'download true mix_1 ["mix_0","mix_1","mix_9"]']);
+});
+
+// ADR 0013 section 4: interval timing within about 1 s and beat effects within 50 ms (ADR 0001),
+// met by construction and checked on the fake. The audio here runs 0.2 % fast and starts 300 ms
+// late, the controller's snapshots come every 250 ms, and each report is 10 ms old when it arrives.
+test("accuracy on the fake: the class clock stays within 50 ms of the audio after the first report", () => {
+  const r = rig({ complete: true });
+  r.player.snapshot(snap(1, "ready"));
+  r.player.snapshot(snap(1, "running", 0));
+  const RATE = 1.002;
+  const LATE = 300;
+  const AGE = 10;
+  const audioAt = (t: number) => Math.max(0, (t - LATE) * RATE);
+  let base = 0;
+  let at = 0;
+  let worst = 0;
+  let worstAfter = 0;
+  for (let t = 1; t <= 55_000; t += 1) {
+    r.advance(1);
+    const n = r.aligned.length;
+    if (t % 1_000 === 0) r.player.report({ seq: r.cues.at(-1)!.seq, positionMs: Math.round(audioAt(t - AGE)), playing: true, failed: false, durationMs: 60_000 });
+    if (r.aligned.length > n) {
+      base = r.aligned.at(-1)!;
+      at = t;
+    }
+    const classMs = base + (t - at);
+    if (t % 250 === 0) r.player.snapshot(snap(1, "running", classMs));
+    const err = Math.abs(classMs - audioAt(t));
+    if (t > LATE) worst = Math.max(worst, err);
+    if (t > 1_000) worstAfter = Math.max(worstAfter, err);
+  }
+  assert.ok(worst <= 1_000, `interval timing: ${worst}`);
+  assert.ok(worstAfter <= 50, `beat effects: ${worstAfter}`);
+  assert.equal(r.player.line()?.text, "Playing the mix");
 });

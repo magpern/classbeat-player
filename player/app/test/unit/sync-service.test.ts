@@ -17,7 +17,7 @@ import type { BackendRequest } from "../../src/main/pairing/http.ts";
 import { classCache, CLASSES_DIR, SYNC_FILE, WIPE_FILE } from "../../src/main/sync/cache.ts";
 import { createSyncService } from "../../src/main/sync/service.ts";
 import type { SyncCredential, SyncService } from "../../src/main/sync/service.ts";
-import { document, ID_A, ID_B, ok, page, STAMP } from "./sync-fixtures.ts";
+import { document, ID_A, ID_B, ID_C, ok, page, STAMP } from "./sync-fixtures.ts";
 
 const ANN = "a".repeat(64);
 const BOB = "b".repeat(64);
@@ -279,4 +279,24 @@ test("the class list gives a class only as the version held, and only from a fil
   const same = document("Ann's class");
   classCache(dir).keep(BOB, ID_A, contentHash(same), same, STAMP);
   assert.deepEqual(s.list(), []);
+});
+
+test("mixes: the Swedebeat mixes the listed classes name, once each, and none under another account's pairing", async () => {
+  const cache = classCache(dir);
+  const withMix = (title: string, id: string): Record<string, unknown> => ({ ...document(title), music: { source: "swedebeat", swedebeat_mix: { id, length_ms: 60_000, offset_ms: 0 } } });
+  const a = withMix("Alpha", "mix_b");
+  const b = withMix("beta", "mix_a");
+  const c = document("Gamma");
+  cache.keep(ANN, ID_A, contentHash(a), a, STAMP);
+  cache.keep(ANN, ID_B, contentHash(b), b, STAMP);
+  cache.keep(ANN, ID_C, contentHash(c), c, STAMP);
+  cache.commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.deepEqual(s.mixes(), ["mix_a", "mix_b"]);
+  credential = credentialOf(BOB);
+  assert.deepEqual(s.mixes(), []);
+  assert.deepEqual(logged, []);
 });

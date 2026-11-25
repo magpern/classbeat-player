@@ -23,5 +23,6 @@ test("during the class: playing, or the short reason for 30 s after a fall back,
   assert.deepEqual(mixLineOf(fell, true, 1_000 + FELL_BACK_SHOW_MS), { text: "Manual clock", shape: "square" });
   assert.deepEqual(mixLineOf({ kind: "manual", reason: "not_checked", since: 0 }, true, 0), { text: "Mix not checked", shape: "news" });
   assert.deepEqual(mixLineOf({ kind: "manual", reason: "not_connected", since: null }, true, 0), { text: "Manual clock", shape: "square" });
+  assert.deepEqual(mixLineOf({ kind: "manual", reason: "not_connected", since: 0 }, true, 0), { text: "Signed out of Swedebeat", shape: "news" }, "signed out mid-class");
   assert.deepEqual(mixLineOf({ kind: "manual", reason: "not_allowed", since: 0 }, true, 0), { text: "Manual clock", shape: "square" }, "no short form");
 });
