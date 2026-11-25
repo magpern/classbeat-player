@@ -47,33 +47,45 @@ a cycling one. The screens are built against that spec with screenshots of each 
 ### 3. Treadmill reading: notifications only
 
 The sensor core (`web/src/sensors/core/`, shared with the player as in ADR 0012 section 2) gains
-a pure decoder for two sources:
-- FTMS **Treadmill Data** (0x2ACD): instantaneous speed, inclination and total distance, honouring
-  the flags field;
-- the **Running Speed and Cadence** measurement (0x2A53), for foot pods.
+pure decoders for two sources:
+- FTMS **Treadmill Data** (characteristic 0x2ACD, in the Fitness Machine service 0x1826 already
+  allowed): instantaneous speed and inclination, honouring the flags field. Other fields are
+  skipped by their flag and never decoded into a value; total distance in particular is never
+  shown (rule 4).
+- **Running Speed and Cadence** (service 0x1814, measurement characteristic 0x2A53), for foot
+  pods: instantaneous speed and cadence.
 
-As for a bike, the code only connects, subscribes to notifications and decodes. It never writes
-a characteristic and never names the Fitness Machine Control Point (0x2AD9) or any other control
-point. The existing rule guard (ADR 0012 section 1) is extended so that it also covers the
-treadmill code paths, and it must fail if a control-point UUID or a characteristic write appears.
-The guard is never weakened.
+The fail-closed allowlist of ADR 0012 section 1 grows by exactly these three numbers and no
+other: 0x1814, 0x2A53 and 0x2ACD, added to `ALLOWED` in `web/test/lib/sensor-guard.ts` and to
+`SERVICES` and `CHARACTERISTICS` in `web/src/sensors/core/uuids.ts`, with the guard's own test
+updated to pin the new list. The Fitness Machine Control Point (0x2AD9), the RSC Control Point
+(0x2A55) and every other control point stay off the list, so naming one still fails the guard,
+as does any characteristic write. As for a bike, the code only connects, subscribes to
+notifications and decodes. No rule is removed from the guard and no existing check is loosened.
 
 ### 4. Readings are shown, never acted on
 
-Speed (km/h, or the pace derived from it) and incline (%) are shown as numbers only. The class's
-incline is `flat` or `raised`, not a number, so there is no gauge against it. A reading never
-changes the class, its timing, the scene or the music (rules 1, 3, 5), and it lives in memory
-only, as in ADR 0012 section 4.
+Speed (km/h, or the pace derived from it), incline (%) and a foot pod's cadence (steps a minute)
+are shown as numbers only. The class's incline is `flat` or `raised`, not a number, so there is
+no gauge against it. Colour stays the planned zone; a reading never colours anything (rule 7).
+A reading older than 3 s is shown as missing, never as the last number (`freshness.ts`, as for a
+bike). A reading never changes the class, its timing, the scene or the music (rules 1, 3, 5), and
+it lives in memory only, as in ADR 0012 section 4.
 
 ### 5. Where it runs
 
-The reading runs where ADR 0012 already allows a sensor:
-- on the instructor's computer, through the same `SensorSource`;
-- on the rider's page and in the app's rider mode, once ADR 0012 sections 5 and 6 are unblocked
-  by the owner.
-
-A rider's treadmill reading goes to the instructor only, as any other rider reading (rule 13),
-and only once the owner's `rider_reading` decision is made.
+The treadmill reading follows ADR 0012's gating exactly; this ADR opens nothing new.
+- **Built now: the rider page.** As in ADR 0012 section 5, the web rider page reads the rider's
+  own treadmill or foot pod through `web-bluetooth.ts` and shows it to that rider only. Nothing
+  is sent to the session.
+- **Waiting for the owner: the instructor's computer and the app's rider mode.** These are ADR
+  0012 section 6 cases. Until the owner decides, both keep their "unavailable" source. The
+  owner's proposal (1) names the heart-rate, cycling and fitness-machine services; it is amended
+  in `docs/owner.md` to add the RSC service (0x1814) for foot pods, the only addition.
+- **Waiting for the owner: riders' readings to the instructor.** The proposed `rider_reading`
+  carries heart rate, cadence and power only. Sending treadmill speed or incline would need a
+  contract change and an amended owner proposal (rule 13); neither is made here, so no running
+  reading leaves the rider's phone.
 
 ### 6. Fakes
 
@@ -82,12 +94,14 @@ treadmill source replays them. Nothing in CI touches Bluetooth.
 
 ## How the work splits
 
-1. design: running-class states for every screen (Designer, spec and mock-ups).
-2. sensors core: the Treadmill Data and RSC decoders, fixtures, and the extended rule guard.
-   Rule-sensitive.
-3. screens: the room screen, plain screen and phone page show a running class (after 1).
-4. player: the sensor panel shows treadmill readings (after 2), plus the scene-input test for
-   running (after 1).
+1. design: running-class states for every screen, and the treadmill and foot-pod readings on the
+   rider page (Designer, spec and mock-ups).
+2. sensors core: the Treadmill Data and RSC decoders, fixtures, and the three allowlist
+   additions with the guard test. Rule-sensitive.
+3. screens: the room screen, plain screen and phone page show a running class, and the rider
+   page shows treadmill and foot-pod readings (after 1 and 2).
+4. player: the scene-input test for running (after 1). The instructor's sensor panel and the
+   app's rider mode stay on "unavailable" until the owner's decision (ADR 0012 section 6).
 5. Verifier: PL10 on fakes.
 
 ## Alternatives
