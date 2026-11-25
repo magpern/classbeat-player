@@ -328,10 +328,9 @@ rendered as text only; the page sends `hello` and nothing else after joining.
 
 ## A running class (issue #769, ADR 0015)
 
-In a running class the page has no position and no cadence target; the incline target is text in
-the clock's right-hand slot ("Target", "Incline raised" or "Incline flat", the value tier, 3.7 % /
-6.7 %), which needs a field the live contract does not carry yet (running-class.md, G1: empty like a
-null position until then). A treadmill's speed and incline and a foot pod's cadence appear as
+In a running class the page has no position and no cadence target; the clock's right-hand slot is empty,
+as for a null position, because the live contract carries no incline (decided, running-class.md, G1:
+it stays empty until a future contract change adds a field). A treadmill's speed and incline and a foot pod's cadence appear as
 numbers, one line each, under the effort rows: no gauge, no colour by value, a grey dash when older
 than 3 s. Rows, states, numbers and mock-ups: [running-class.md](running-class.md)
 (`runclass-rider*`); the sheet, plates and lost state are [sensors.md](sensors.md)'s.

@@ -903,8 +903,8 @@ The state with the band hidden is the state mock-up itself (for example
 
 For a class with `sport` `running` the screen has one change: the Cadence and Position metrics
 (item 3 of "Content") become one metric, label "Target", value **"Incline raised"** or **"Incline
-flat"** in the metrics column at `--t-value` (7.4 vh, cap height 6.0 %, at 3:2 and wider so that
-it fits the 38 vh column; the row's own size at 3:2 and narrower), and the next row ends with the
+flat"** in the metrics column at `--t-value` (8.4 vh), reduced to 7.4 vh (cap height 6.0 %) at 3:2 and
+wider so that it fits the 38 vh column (the row's own size at 3:2 and narrower), and the next row ends with the
 next interval's incline in words instead of its cadence and position. No cadence gauge, no seated or
 standing cue, no position pattern. Every other item, size and state is as above; the zone stays a
 number, a name and a colour, and the scene's look and inputs do not change for a running class.

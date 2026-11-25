@@ -20,10 +20,11 @@ A class with `sport` `running` (ADR 0015 section 1) has per interval the zone, i
 and `incline` (`flat` or `raised`). It has no cadence, position, pattern or test. Against a cycling
 class, every screen changes in the same three ways and in no other:
 
-1. **The incline target replaces cadence and position.** Where the cycling screen has the Cadence
+1. **The incline target replaces cadence and position** (on the room screen, `/play` and the app; not on the rider page, see G1). Where the cycling screen has the Cadence
    and Position metrics, the running screen has one metric: label "Target", value
-   **"Incline raised"** or **"Incline flat"**, in the same value tier (`--t-value` on the room
-   screen, the metrics' own size on `/play`). Items 3 of room-2d.md's "Content" (cadence and
+   **"Incline raised"** or **"Incline flat"**, in the value tier (`--t-value`, 8.4 vh on the room
+   screen at 3:2 and wider, reduced to 7.4 vh there so the text fits: see "Size"; the metrics' own
+   size on `/play`). Items 3 of room-2d.md's "Content" (cadence and
    position) and the cadence and position of the next row become the incline target. A running
    interval has no position pattern, so the pattern forms never occur.
 2. **Nothing else is added or moved.** The countdown, the zone, the song's BPM, the cue, the next
@@ -62,15 +63,15 @@ column has (the cycling column holds three metrics; this one holds two).
 
 The page of [rider.md](rider.md) in a running class: the gel, the countdown, the effort rows the
 zone has (heart rate and RPE in the mock-ups), the next rows and the keys. **No position** and **no
-cadence target**. The incline target is text in the clock's right-hand slot where the cycling page
-has Position: label "Target", value "Incline raised" at the value tier (3.7 % / 6.7 % of the
-viewport height, portrait / landscape).
+cadence target**. The clock's right-hand slot, where the cycling page has Position, is **empty**, as
+for a null position: no "Target", no incline text.
 
-**Contract gap G1 (not decided here).** `rider_state` and `companion_state` carry no incline today,
-and the plain word "incline" is on the rule guards' word list (companion.md, "Contract gaps"). The
-mock-up shows the slot filled, as it would be with a field. Until the contract lane adds one,
-through the route companion.md describes and with every guard list unchanged, the slot is empty
-exactly as it is for a null position, and the rest of the page is as mocked. The handlebar
+**Decided (G1, Architect).** `rider_state` and `companion_state` carry no incline, and the plain
+word "incline" is on the rule guards' word list (companion.md, "Contract gaps"). The slot therefore
+stays empty until a future contract change adds a field, through the route companion.md describes
+and with every guard list unchanged. The mock-ups show the slot empty and are what is built. *After
+a future contract change only (not a state to build):* the slot would read label "Target", value
+"Incline raised" or "Incline flat" at the rider.md value tier. The handlebar
 companion ([companion.md](companion.md)) shows nothing of cadence, position or incline today and
 is unchanged for a running class ([mock-up](mockups/runclass-companion.html)): the cue carries what
 the author wrote.
@@ -98,14 +99,14 @@ page's existing keys: **Connect a sensor** when none is connected, **Sensors** w
   The class's incline is "raised" or "flat", not a number, so a reading is not set against it.
 - **Missing.** A reading with no value for more than 3 s shows a grey dash "–" (`--light-2`) with
   its unit kept, never the last number. A shown reading changes at most once a second, as a step.
-- Units are words the rider knows: "km/h", "%", "steps/min". No pace, no advice (rule 8).
+- Units are words the rider knows: "km/h", "%", "steps/min". No pace: the unit is km/h only, as settled in issue #769. No advice.
 
 | State | What shows | Mock-up |
 |---|---|---|
 | No sensor | The class view; the key says "Connect a sensor"; no reading rows | [html](mockups/runclass-rider.html), [390 x 844](mockups/runclass-rider-390x844.png), [844 x 390](mockups/runclass-rider-844x390.png) |
 | Treadmill and foot pod, live | Speed, Incline, Cadence as numbers | [html](mockups/runclass-rider-readings.html), [390 x 844](mockups/runclass-rider-readings-390x844.png), [844 x 390](mockups/runclass-rider-readings-844x390.png), [360 x 640](mockups/runclass-rider-readings-360x640.png), [640 x 360](mockups/runclass-rider-readings-640x360.png) |
 | Readings missing | Each of the three: a grey dash and its unit | [html](mockups/runclass-rider-missing.html), [390 x 844](mockups/runclass-rider-missing-390x844.png), [844 x 390](mockups/runclass-rider-missing-844x390.png) |
-| Treadmill only | Speed and Incline; no Cadence row; target "Incline flat" | [html](mockups/runclass-rider-treadmill-only.html), [390 x 844](mockups/runclass-rider-treadmill-only-390x844.png), [844 x 390](mockups/runclass-rider-treadmill-only-844x390.png) |
+| Treadmill only | Speed and Incline; no Cadence row | [html](mockups/runclass-rider-treadmill-only.html), [390 x 844](mockups/runclass-rider-treadmill-only-390x844.png), [844 x 390](mockups/runclass-rider-treadmill-only-844x390.png) |
 
 A sensor that is lost, refused or unsupported uses sensors.md's plates and words; the reading rows
 show dashes. **Fitting:** as sensors.md ("Fitting"), the next rows give way (three, two, one) before
@@ -120,8 +121,8 @@ CI screenshots are held to the same numbers, every floored text at least 5 % ove
 | Check | Requirement | Mock-up result |
 |---|---|---|
 | RC1. Incline target, room | Cap height at least **5.5 %** of the screen height at every size, and one line | 6.0 % at 1920 x 1080, 1280 x 720, 1280 x 800, 1440 x 1080 and 1024 x 768 |
-| RC2. Incline target, `/play` | At least the metrics' own tier: **3.7 %** portrait, **6.0 %** landscape; never under 21 px portrait, 22 px landscape | 3.7 % (32 px) at 390 x 844, 3.7 % (24 px) at 360 x 640, 6.0 % (23 px) at 844 x 390, 6.0 % (22 px) at 640 x 360 |
-| RC3. Incline target, rider page | The value tier of rider.md R1: **3.4 % / 6 %**, 21 px | 3.7 % / 6.7 % |
+| RC2. Incline target, `/play` | play.md's P1 values floor: **3.4 % / 6 %** of the viewport height, portrait / landscape, 21 px | 3.7 % (32 px) at 390 x 844, 3.7 % (24 px) at 360 x 640, 3.7 % (38 px) at 768 x 1024; 6.0 % (23 px) at 844 x 390, 6.0 % (22 px) at 640 x 360, 6.0 % (46 px) at 1024 x 768 |
+| RC3. Target slot, rider page | Empty: no text, no element, no gap filled by another text; the countdown and Position-less clock read as for a null position | empty in every `runclass-rider*` shot |
 | RC4. Readings | The sensors.md `read` tier: **4.6 % / 7.4 %**, 29 px; units at the next-row tier (1.9 % / 3.4 %) | 5.6 % (48 px) / 8.9 % (35 px); at 360 x 640 5.9 % (37 px); at 640 x 360 8.9 % (32 px); units 2.0 % / 3.7 % |
 | RC5. Contrast | At least **7 : 1** for every text: white 19.1 : 1, units 10.8 : 1, labels 7.2 : 1 on black; the gel's ink on its zone 16.6 : 1 for zone 4, and at least 7 : 1 on every zone gel (system.md) | all met; a missing reading's dash is `--light-2`, 10.8 : 1 |
 | RC6. The zone | Number, name and colour together: the gel and every next chip carry the number; the gel and next row carry the name; the zone's colour is on the zone only | present in every mock-up |
