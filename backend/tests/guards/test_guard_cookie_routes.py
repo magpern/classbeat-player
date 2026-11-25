@@ -119,6 +119,9 @@ PAGE_ROUTES = frozenset(
         ("GET", "/control/{name:path}"),
         ("GET", "/j"),
         ("GET", "/j/{name:path}"),
+        # The site's download page and its release data (#794): fixed files, public.
+        ("GET", "/download"),
+        ("GET", "/releases.json"),
     }
 )
 # Section 5 (#427): a sign-in ends the session the browser held. These routes read the
@@ -277,7 +280,10 @@ def test_the_page_routes_take_no_dependency_and_only_read() -> None:
     pages = [r for r in _routes() if (r.method, r.path) in PAGE_ROUTES]
     assert {(r.method, r.path) for r in pages} == PAGE_ROUTES
     assert all(not r.dependencies for r in pages)
-    assert all(r.method == "GET" and r.path.startswith(("/control", "/j")) for r in pages)
+    assert all(
+        r.method == "GET" and r.path.startswith(("/control", "/j", "/download", "/releases.json"))
+        for r in pages
+    )
 
 
 def test_every_route_without_a_credential_but_the_health_check_is_for_the_app_alone() -> None:
