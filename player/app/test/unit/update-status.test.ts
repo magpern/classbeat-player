@@ -79,6 +79,22 @@ test("the class gate: playing or paused mid-class holds the result until the cla
   assert.equal(releasePageAddress(visible(classChanged(statusArrived(NO_CLASS, next), true))), null); // no address during a class
 });
 
+test("'could not check' replaces an earlier 'newer': no stale latest version or address is kept", () => {
+  const newer = statusAfter("1.2.0", feed("releases.json"), false);
+  assert.equal(releasePageAddress(newer), `${PAGE}1.2.1`);
+  const failed: [string, (g: ReturnType<typeof statusArrived>) => ReturnType<typeof statusArrived>][] = [
+    ["a failed fetch, outside a class", (g) => statusArrived(g, couldNotCheck("1.2.0"))],
+    ["a wrong-shape reply, outside a class", (g) => statusArrived(g, statusAfter("1.2.0", feed("wrong-shape.json"), false))],
+    ["a reply that is not JSON, outside a class", (g) => statusArrived(g, statusAfter("1.2.0", feed("not-json.html"), false))],
+    ["a failed check held during a class", (g) => classChanged(statusArrived(classChanged(g, true), couldNotCheck("1.2.0")), false)],
+  ];
+  for (const [name, after] of failed) {
+    const shown = visible(after(statusArrived(NO_CLASS, newer)));
+    assert.deepEqual(shown, { kind: "could not check", current: "1.2.0", latest: null }, name);
+    assert.equal(releasePageAddress(shown), null, name);
+  }
+});
+
 test("mid-class means playing or paused; ready, ended and no class are not", () => {
   const cases: [Parameters<typeof midClass>[0], boolean][] = [["running", true], ["paused", true], ["ready", false], ["ended", false], [null, false]];
   for (const [clock, want] of cases) assert.equal(midClass(clock), want, String(clock));

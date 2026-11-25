@@ -22,6 +22,10 @@ export function checking(current: string): UpdateStatus {
   return { kind: "checking", current, latest: null };
 }
 
+/**
+ * A failed check. Each status is built from its own check alone, so this replaces an earlier
+ * "newer" whole: no stale latest version and no release page address survive it (updates.md).
+ */
 export function couldNotCheck(current: string): UpdateStatus {
   return { kind: "could not check", current, latest: null };
 }
