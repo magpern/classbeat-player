@@ -45,7 +45,12 @@
     grid-template-areas: "top top" "gel effort" "clock effort" "coming effort" "coming keys";
     --c-read: min(11.2dvh, 6.6vw);
   }
-  .run.rider:has(.splate) .effort.sens { row-gap: 0.4dvh; }
+  .run.rider:has(.splate) .effort.sens { row-gap: 0.2dvh; }
+  /* The plate gives up height before the readings do: it must end above the keys (a 4 px gap is checked). */
+  .run.rider:has(.splate) .splate { padding-block: 0.6dvh; gap: 0.2dvh; }
+  .run.rider:has(.splate) .splate .dt { line-height: 1.05; }
+  /* A tighter line for the numbers, not a smaller number: the readability floor is on their size. */
+  .run.rider:has(.splate) .effort.sens .rd .n { line-height: 0.76; }
 }
 
 /* The gauge: a line, the planned band (the zone's colour) and one white tick for the reading.

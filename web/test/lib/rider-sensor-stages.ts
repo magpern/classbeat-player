@@ -22,12 +22,30 @@ export const connect = (d: FakeDevice, action = "sensors"): Stage => then(press(
 /** A second sensor: through the sheet's Connect another sensor. */
 export const another = (d: FakeDevice): Stage => then(press("sensors"), connect(d, "sensors_add"));
 
+/** The least space between a sensor plate's bottom and the keys' top, in CSS pixels, where both show side by side (landscape). */
+export const PLATE_KEY_GAP = 4;
+
 /**
- * The rules every shot keeps: the page says nothing but `hello` to the live process, makes no request
+ * In landscape the plate sits above the keys with at least PLATE_KEY_GAP px between them: a plate running under the
+ * keys clips its last line, and no other check compares the two (design review of #781). No plate: nothing to check.
+ */
+export const plateAboveKeys: Stage = async (f) => {
+  const r = await f.page.evaluate(() => {
+    const plate = document.querySelector(".splate")?.getBoundingClientRect();
+    const keys = document.querySelector(".keys")?.getBoundingClientRect();
+    return { landscape: innerWidth > innerHeight, plate: plate ? plate.bottom : null, keys: keys ? keys.top : null };
+  });
+  if (!r.landscape || r.plate === null || r.keys === null) return;
+  assert.ok(r.keys - r.plate >= PLATE_KEY_GAP, `the plate's bottom (${r.plate.toFixed(1)}) is ${(r.keys - r.plate).toFixed(1)} px above the keys' top (${r.keys.toFixed(1)}), under ${PLATE_KEY_GAP} px`);
+};
+
+/**
+ * The rules every shot keeps:the page says nothing but `hello` to the live process, makes no request
  * but its one join, asks the browser only for the allowlisted services and characteristics, writes
  * nothing to a sensor, and stores none of `readings` (numbers no other part of the page shows).
  */
 export const rules = (readings: readonly (number | string)[]): Stage => async (f) => {
+  await plateAboveKeys(f);
   const types = f.live.sent.map((m) => (JSON.parse(m) as { type?: string }).type);
   assert.ok(types.every((t) => t === "hello"), `the page sent ${types.join(", ")}`);
   const traps = await f.traps();
