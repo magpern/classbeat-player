@@ -5,8 +5,9 @@
 // account's deletion starts and removed once it is done, makes the account's token count as gone,
 // so a crash between the steps never leaves an account that looks connected (issue #709). The mark
 // and its folder are flushed to disk before `markEnding` returns, so a power loss after the key's
-// deletion still finds the mark (#720); a mark made but not flushed is removed again (#729). Nothing
-// here logs, and no path is ever built from anything but a 64-hex account key.
+// deletion still finds the mark (#720); a mark made but not flushed is removed again, and that
+// removal flushed (#729, #733). Nothing here logs, and no path is ever built from anything but a
+// 64-hex account key.
 import { randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, lstatSync, openSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -128,8 +129,19 @@ export function keychainVault(safe: SafeStorageLike, dir: string, platform: stri
         // Nothing is deleted after a failed mark, so a mark made here goes again: otherwise the
         // account would still be signed in while its token reads as gone, and a restart's sweep
         // would finish the deletion without dropping the token at Swedebeat (#729). A mark from an
-        // earlier, unfinished deletion stays.
-        if (!had) rmSync(file, { force: true });
+        // earlier, unfinished deletion stays. The removal is flushed too, so a power loss right after
+        // cannot bring the mark back (#733); when that flush fails as well, the first error is the
+        // one reported.
+        if (!had) {
+          rmSync(file, { force: true });
+          if (platform !== "win32") {
+            try {
+              flushPath(dir, constants.O_RDONLY, flush);
+            } catch {
+              // The original error below says why the sign-out failed.
+            }
+          }
+        }
         throw e;
       }
     },

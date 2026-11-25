@@ -151,8 +151,9 @@ test("the real vault: the mark and then its folder are flushed to disk before ma
   assert.deepEqual(flushed, ["file"]);
 });
 
-// The folder case only where a folder can be flushed: on Windows the real open or flush of a folder
-// fails before the injected flush is reached, so that case would pass without testing it (#729).
+// The folder case is skipped on Windows: there a folder opens, but flushing it for real fails with
+// EPERM, so the vault never flushes a folder on win32 and the case would test a path Windows never
+// takes (#729, #733).
 const FLUSHED = process.platform === "win32" ? ["file"] : ["file", "dir"];
 
 test("the real vault: a mark that cannot be flushed fails the sign-out, nothing is deleted, and the mark goes again", async () => {
@@ -170,7 +171,8 @@ test("the real vault: a mark that cannot be flushed fails the sign-out, nothing 
     v.createKey(ACCT);
     mkdirSync(join(d, "mixes", ACCT), { recursive: true });
     assert.equal((await service.signOut())?.state, "signed_in", failing);
-    assert.equal(failed, 1, `${failing}: the injected flush was reached`);
+    // A failed folder flush fails again when the removal of the mark is flushed (#733).
+    assert.equal(failed, failing === "dir" ? 2 : 1, `${failing}: the injected flush was reached`);
     assert.equal(v.loadKey(ACCT) !== null, true, failing);
     assert.equal(existsSync(join(d, `mix-token-${ACCT}.bin`)), true, failing);
     assert.equal(existsSync(join(d, "mixes", ACCT)), true, failing);
@@ -198,4 +200,45 @@ test("the real vault: a mark from an unfinished deletion stays when it cannot be
     assert.throws(() => v.markEnding(ACCT), /EIO/, failing);
     assert.equal(v.isEnding(ACCT), true, failing);
   }
+});
+
+test("the real vault: the removal of a mark that could not be flushed is flushed, and the first error is the one thrown", () => {
+  const d = mkdtempSync(join(tmpdir(), "mix-crash-"));
+  const mark = join(d, `mix-ending-${ACCT}.bin`);
+  const flushed: string[] = [];
+  const v = keychainVault(fakeSafe(), d, "linux", (fd) => {
+    const st = fstatSync(fd);
+    flushed.push(st.isDirectory() ? `dir ${st.ino === statSync(d).ino} mark ${existsSync(mark)}` : "file");
+    if (!st.isDirectory()) throw new Error("EIO first");
+  });
+  assert.throws(() => v.markEnding(ACCT), /EIO first/);
+  // The folder is flushed once the mark is gone, so a power loss cannot bring it back.
+  assert.deepEqual(flushed, ["file", "dir true mark false"]);
+  assert.equal(existsSync(mark), false);
+  // The flush after the removal fails too: the first error is still the one thrown.
+  const e = mkdtempSync(join(tmpdir(), "mix-crash-"));
+  let calls = 0;
+  const w = keychainVault(fakeSafe(), e, "linux", () => {
+    calls += 1;
+    throw new Error(calls === 1 ? "EIO first" : "EIO second");
+  });
+  assert.throws(() => w.markEnding(ACCT), (err: Error) => err.message === "EIO first");
+  assert.equal(calls, 2);
+  assert.equal(w.isEnding(ACCT), false);
+  // A mark from an earlier deletion stays, so nothing is removed and nothing more is flushed.
+  calls = 0;
+  keychainVault(fakeSafe(), e, "linux", () => undefined).markEnding(ACCT);
+  assert.throws(() => w.markEnding(ACCT), /EIO first/);
+  assert.equal(calls, 1);
+  assert.equal(w.isEnding(ACCT), true);
+  // On Windows no folder is flushed, before or after the removal.
+  const x = mkdtempSync(join(tmpdir(), "mix-crash-"));
+  const kinds: string[] = [];
+  const y = keychainVault(fakeSafe(), x, "win32", (fd) => {
+    kinds.push(fstatSync(fd).isDirectory() ? "dir" : "file");
+    throw new Error("EIO first");
+  });
+  assert.throws(() => y.markEnding(ACCT), /EIO first/);
+  assert.deepEqual(kinds, ["file"]);
+  assert.equal(y.isEnding(ACCT), false);
 });
