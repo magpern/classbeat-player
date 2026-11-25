@@ -301,7 +301,7 @@ test("mixes: the Swedebeat mixes the listed classes name, once each, and none un
   assert.deepEqual(logged, []);
 });
 
-test("named: the mixes with their account only while the synced list is complete; never an empty list", async () => {
+test("named: the mixes with their account only while the synced list is complete", async () => {
   const cache = classCache(dir);
   const withMix = (title: string, id: string): Record<string, unknown> => ({ ...document(title), music: { source: "swedebeat", swedebeat_mix: { id, length_ms: 60_000, offset_ms: 0 } } });
   const a = withMix("Alpha", "mix_b");
@@ -347,4 +347,38 @@ test("named: a complete list that names no mix is not a reason to delete every m
   await settle();
   assert.equal(s.view().classes, 1);
   assert.equal(s.named(), null);
+});
+
+test("named: a complete sync with no class names no mix, so every unnamed mix may go (#720, N15)", async () => {
+  classCache(dir).commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.equal(s.view().classes, 0);
+  assert.deepEqual(s.named(), { account: ANN, mixes: [] });
+  assert.deepEqual(logged, []);
+});
+
+test("named: with no class, each guard stands alone (#720, N16)", async () => {
+  classCache(dir).commit(ANN, 3);
+  credential = credentialOf(ANN);
+  const s = service();
+  s.start();
+  await settle();
+  assert.notEqual(s.named(), null);
+  // No held class means no read-back check behind these: the guard itself must answer null.
+  credential = credentialOf(BOB);
+  assert.equal(s.named(), null, "another account's pairing");
+  credential = null;
+  assert.equal(s.named(), null, "not paired");
+  credential = credentialOf(ANN);
+  s.syncNow();
+  assert.equal(s.named(), null, "a sync is running");
+  await settle();
+  assert.notEqual(s.named(), null);
+  credential = null;
+  s.forgotten();
+  assert.equal(s.named(), null, "the pairing ended: the cache is wiped");
+  assert.deepEqual(logged, []);
 });

@@ -7,6 +7,8 @@ import { isClassId, parseChanges, parseClass } from "../../core/sync/answers.ts"
 import { INITIAL, step } from "../../core/sync/sync-model.ts";
 import type { Effect, SyncEvent, SyncState } from "../../core/sync/sync-model.ts";
 import { mixesNamed } from "../../core/mix/keep-policy.ts";
+import { namedMixes } from "../../core/sync/named-policy.ts";
+import type { NamedMixes } from "../../core/sync/named-policy.ts";
 import { classListView } from "../../core/sync/class-list.ts";
 import type { ClassRow } from "../../core/sync/class-list.ts";
 import { lastingFault } from "../../core/sync/fault-policy.ts";
@@ -35,11 +37,7 @@ export interface SyncDeps {
   readonly clearTimer: (handle: unknown) => void;
 }
 
-/** The mix ids every class of the account names (ADR 0013 section 3: a mix no class names goes). */
-export interface NamedMixes {
-  readonly account: string;
-  readonly mixes: readonly string[];
-}
+export type { NamedMixes } from "../../core/sync/named-policy.ts";
 
 export interface SyncService {
   /** Reads the cache at startup (again later, after a fault reading it), and syncs. */
@@ -56,7 +54,8 @@ export interface SyncService {
   /**
    * The same with their account, only when the list is complete: the last sync finished, no sync
    * runs, no wipe waits, the pairing is the cached account's and every held class reads back. Else
-   * null, and also when no class names a mix: the cache then deletes nothing for not being named.
+   * null (core/sync/named-policy.ts). No class at all names no mix (an empty list); classes that
+   * name no mix give null: the cache then deletes nothing for not being named.
    */
   named(): NamedMixes | null;
   /**
@@ -224,16 +223,7 @@ export function createSyncService(d: SyncDeps): SyncService {
     view: () => syncView(state),
     list: () => classListView(state, listed()),
     mixes: () => mixesNamed(listed().values()),
-    named() {
-      const account = state.account;
-      const c = d.credential();
-      if (account === null || c === null || c.account !== account || state.status !== "synced" || state.run !== null || state.unread || state.lasting || state.wipePending || state.wipeAfterPin) return null;
-      const docs = listed();
-      // A held class that does not read back may still name a mix: the list is not complete.
-      if (docs.size !== state.held.size) return null;
-      const mixes = mixesNamed(docs.values());
-      return mixes.length === 0 ? null : { account, mixes };
-    },
+    named: () => namedMixes(state, d.credential()?.account ?? null, listed),
     pin(id, seen) {
       const hash = state.held.get(id);
       // The version the instructor saw: a class that changed since is refused.
