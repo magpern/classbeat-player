@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #807; `main` at 6b268e6).
+Updated 2026-11-25 (after #816; `main` at 56b03e1).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -227,16 +227,27 @@ mid-class fall-back, cached play offline and the paired class list's mix states 
 unit tests only. Waiting for the owner: Swedebeat's agreement and the real source client (plan
 decision 11, ADR 0013 section 7).
 
-## PL7: release
+## PL7: release (done on fakes, pending the Verifier)
 
 Merged: the desktop release workflow with unsigned builds (#760, #779; hardened with its test in
 CI, #784), the release runbook (#763, #795), ADR 0014 on the player's updater (#762, #792: tell
-only while builds are unsigned, nothing during a class, a start marker for rollback), the download
-page spec (#789) and the update notice spec (#796, #801), and the pure update module (#797, #799).
+only while builds are unsigned, nothing during a class, a start marker for rollback; amended as
+built in this batch), the download page spec (#789) and the update notice spec (#796, #801), the
+pure update module (#797, #799), the download page (#764, #791), the update checker, its settings
+and notice (#798, #808; spec as built #812), the site's `releases.json` from the release workflow
+(#793, #814), the backend's `/download` with the page's files and fonts from a fixed list (#794,
+#813), the updater's guard gaps (#810, #815) and the "No check has run yet" wording (#811, #816).
 
-Open: the download page (#764, #791), then the site's `releases.json` (#793) and the backend's
-`/download` (#794); the update checker, its settings and notice (#798). Signing and notarisation
-wait for the owner's signing identities (owner.md).
+The Verifier runs PL7's "done when" on `main` next. Signing, notarisation, the first deploy and
+the repository setting that lets the release workflow open its pull request wait for the owner
+([owner.md](owner.md)).
+
+## PL3: the classbeat side
+
+Built in the classbeat repository as its milestone "PC — Player connection" (roadmap Amendment
+22, ADR 0034 there): sign-in through classbeat, the `player` connection, the converter, the send
+and removal jobs and the UI. All seven issues are closed. Registering the real client and
+connecting a real player are the owner's.
 
 ## PL10: running classes and treadmill reading, done on fakes
 
@@ -286,6 +297,15 @@ Merged: #30 and its findings (#53).
 
 ## Later hardening (non-blocking findings)
 
+- PL7, from the #808, #813 and #814 reviews: the site's routes answer HEAD with 405; nothing
+  pins `pull-requests: write` to the `publish` job alone (test-release-player.sh); the "not among
+  the release's files" check in test-site-releases-json.mjs is not shown to fail; the no-change
+  check compares the tagged commit's `releases.json` while the branch is cut from `main`
+  (release-player.yml); the `deps.openPage` pin in macos-shell.test.ts misses an alias; the
+  release bot's pull request carries no issue link or footer and still needs a review.
+- PL7, older: the #791 fixture names; `readingOf` tolerates extra keys; spec and code shot names
+  differ; feed.ts drops tags over 64 characters; the room-worst-pattern mock-ups say "freely";
+  a typo in rider-sensor-stages.ts; the #784 guard note; the #795 runbook nits.
 - Player: reader findings N3, N4, N6, N7 from #59; presenter layout notes from #38; a test that
   stopping the native scene clears its state (#53); one capitalisation convention for status
   texts (#65 design review).
