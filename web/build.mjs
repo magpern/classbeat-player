@@ -27,6 +27,9 @@ copyFileSync("src/harness.html", "dist/harness.html");
 // The website: one script and one stylesheet from its own origin, served at the site's root.
 await build({ ...common, entryPoints: { site: "src/site/main.ts" }, outdir: "dist/site", publicPath: "/" });
 copyFileSync("src/site/index.html", "dist/site/index.html");
+// The download page's release data (docs/design/download.md): one JSON file, fixed when the site is
+// built and read by the page from its own origin. A release replaces this file before the build.
+copyFileSync("src/site/releases.json", "dist/site/releases.json");
 
 // The web player page (ADR 0008): its own script, three stylesheets (the always-on tokens, the picker's
 // and the room screen's, which index.html switches between) and the fonts under /play/ in the site's

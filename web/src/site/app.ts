@@ -14,6 +14,7 @@ import { viewOf } from "./pages/class-views.ts";
 import { classbeatErrorPage } from "./pages/classbeat-error.ts";
 import { signedInPage } from "./pages/signed-in.ts";
 import type { SignedInEnv } from "./pages/signed-in.ts";
+import { DOWNLOAD_TITLE, downloadPage } from "./pages/download.ts";
 import { signInPage } from "./pages/sign-in.ts";
 import type { SignInEnv } from "./pages/sign-in.ts";
 import { frame, PRODUCT } from "./ui/shell.ts";
@@ -60,6 +61,13 @@ function render(focus: "heading" | "none"): void {
     return render(focus);
   }
   if (page.kind === "sign-in") return signIn(ticket, focus);
+  if (page.kind === "download") {
+    // Public: the header of a signed-out page, whoever is looking.
+    document.title = `${DOWNLOAD_TITLE} · ${PRODUCT}`;
+    void downloadPage(frame({}), { current: () => ticket === shown, reload: () => location.reload() });
+    if (focus === "heading") document.querySelector<HTMLElement>("main h1")?.focus();
+    return;
+  }
   if (page.kind === "not-found") {
     document.title = `Page not found · ${PRODUCT}`;
     const main = frame({ nav: null, onSignOut: () => void signOut(main) });

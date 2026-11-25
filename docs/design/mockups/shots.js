@@ -76,6 +76,11 @@ const site = (name, w) => ({
   save: w === 390 || w === 1280 || (w === 820 && SITE_MAIN.includes(name)),
 });
 
+// The download page (download.md): website checks at the phone and desktop widths (kept) and at 320
+// (checked, not kept); download-pages.js writes the files, one per state.
+const { NAMES: DL_NAMES } = require('./download-pages');
+const dl = (name, w) => ({ file: `download-${name}.html`, png: `download-${name}-${w}.png`, w, h: 0, auto: true, room: false, presenter: true, site: true, save: w !== 320 });
+
 // The handlebar companion (companion.md): every state in portrait and landscape at the reference
 // phone (kept) and at the smallest supported size of each orientation (checked; one kept).
 const { NAMES: COMPANION_NAMES } = require('./companion-pages');
@@ -198,6 +203,7 @@ const SHOTS = [
   ...[...UPD_NAMES, ...UPD_LISTS].flatMap((n) => LIST_SIZES.map(([w, h]) => upd(n, w, h))),
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
+  ...DL_NAMES.flatMap((n) => [320, 390, 1280].map((w) => dl(n, w))),
   ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),
   ...JOIN.map((s) => room(s, 1920, 1080)),
   ...SIZES.filter(([w, h]) => !(w === 1920 && h === 1080)).map(([w, h]) => room('join-before-start', w, h, KEEP_JOIN.has(`join-before-start-${w}x${h}`))),

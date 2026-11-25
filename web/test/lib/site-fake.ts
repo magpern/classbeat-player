@@ -10,6 +10,7 @@ import { instrument } from "./site-instrument.ts";
 import { linkRequest } from "./site-mail.ts";
 import type { Passkey } from "./site-instrument.ts";
 import { passkeyStandIn } from "./site-passkey.ts";
+import { answerReleases, scriptedReleases } from "./site-releases.ts";
 import { CLASSBEAT_ORIGIN, SOURCE_ORIGIN } from "./site-source-origin.ts";
 import { trapKit } from "./site-trap-kit.ts";
 
@@ -159,6 +160,9 @@ export async function openSite(browser: Browser, path: string, o: OpenOptions): 
       return route.abort();
     }
     if (url.pathname.startsWith("/api/site/")) return answer(site, o.script ?? {}, turns, held, route, request, url, o.mailbox);
+    // The download page's one file (site-releases.ts): scripted, or the built file.
+    const releases = url.pathname === "/releases.json" ? scriptedReleases(o.script) : null;
+    if (releases) return answerReleases(route, releases, CSP, held);
     return serveFile(route, url.pathname, CSP);
   });
   if (o.clock) {
