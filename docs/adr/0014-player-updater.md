@@ -22,17 +22,25 @@ not become an installed player, and an update must never interrupt a class.
 ### 1. The feed
 
 - The player reads the repository's releases from GitHub's REST API over `https:` only, from a
-  fixed address built into the app (`https://api.github.com/repos/magpern/classbeat-player/releases`).
-  A setting may point it at another `https:` address that serves the same shape; nothing else is
-  accepted.
+  fixed address built into the app
+  (`https://api.github.com/repos/magpern/classbeat-player/releases?per_page=100`). Only that first
+  page is read; a player release older than the newest 100 releases is never offered.
+- A setting in the main process's settings file may point it at another `https:` address that
+  serves the same shape. The renderer can never read or set that address. While the player only
+  tells (section 2), the address changes what is displayed and nothing else; when installing is
+  switched on, the signer check of section 2 holds whatever the address.
 - It considers only published, non-draft releases whose tag is `player-v` followed by a SemVer
-  version, the same rule as the download page (docs/design/download.md): the highest stable
-  version wins; pre-releases are considered only when the user has turned on "Pre-releases" in
-  the player's settings (off by default).
+  version. A release is a pre-release when its tag has a hyphen part, the rule of the download
+  page (docs/design/download.md); the API's `prerelease` flag is ignored. Unlike the page, which
+  shows the highest pre-release when no stable release exists, the player considers pre-releases
+  only when the user has turned on "Pre-releases" in its settings (off by default); with that off
+  and no stable release, it reports "up to date".
 - The request carries no cookie, account token, device identifier or class data, only a
-  `User-Agent` naming the player and its version. It is made from the main process with a timeout
-  and a capped read (`capped-read.ts`); a reply that is too large, not JSON or the wrong shape is
-  "could not check", never a partial result.
+  `User-Agent` naming the player and its version. It is made from the main process with Node's
+  `fetch` (not `net.fetch` on the app's session, whose request filter would refuse it), following
+  the pattern of `pairing/http.ts`: `redirect: "manual"` (a redirect is "could not check"), a
+  10-second `AbortSignal.timeout`, and a read capped at 1 MiB. A reply that is not 200, too large,
+  not JSON or the wrong shape is "could not check", never a partial result.
 - The player checks at start and then every 6 hours while it runs, and when the user presses
   "Check now". A setting turns the automatic checks off; "Check now" still works.
 
@@ -40,9 +48,12 @@ not become an installed player, and an update must never interrupt a class.
 
 **Now: tell only.** When the feed has a newer version, the player shows a notice outside the
 class (in the class list and in settings) with the version and a button that opens the release's
-page in the system browser. The address opened must be an `https://github.com/magpern/classbeat-player/releases/tag/player-v…`
-address taken from the feed and re-checked against that pattern; any other is dropped. The player
-downloads nothing and installs nothing.
+page in the system browser. The renderer cannot navigate or open windows (`hardening.ts`), so the
+button calls the bridge's "open release page", which takes no argument. The main process builds
+the address itself from the validated version it holds,
+`https://github.com/magpern/classbeat-player/releases/tag/player-v<version>` where `<version>` has
+passed the SemVer check, and opens it with `shell.openExternal`. No address from the feed or the
+renderer is ever opened. The player downloads nothing and installs nothing.
 
 **After signing: install.** Installing by itself is switched on only for a system whose build is
 code-signed, and only with all of these:
@@ -52,11 +63,13 @@ code-signed, and only with all of these:
   running app (the Apple Team ID on macOS, the publisher on Windows), so a release built by anyone
   else is refused even if it is on the repository's releases;
 - the new version is strictly higher than the running one (no downgrade, and no "same version
-  again").
+  again"), compared using the version recorded inside the signed package, not the feed's tag.
 
 The Linux build has no operating-system signature and stays on "tell only" until an amendment to
 this ADR pins a signing key for it. The install mechanism (Electron's own updater or another) is
-chosen in that amendment, behind an interface, and reviewed at top tier.
+chosen in that amendment, behind an interface, and reviewed at top tier. That amendment pins, on
+macOS, the full designated requirement (Team ID and bundle identifier) and requires notarisation,
+and on Windows, the certificate's subject and issuer or its thumbprint, not a publisher name alone.
 
 ### 3. Never during a class
 
@@ -67,21 +80,32 @@ chosen in that amendment, behind an interface, and reviewed at top tier.
 
 ### 4. Rollback
 
-When installing is switched on, the previous version is kept. The new version writes a start
-marker before it opens its window and clears it once the class list has rendered. If a start finds
-the marker of the same new version twice in a row, the player goes back to the kept version and
-marks the new one as skipped; it is offered again only when a higher version appears.
+When installing is switched on, the previous version is kept. A start marker naming the new
+version is written before the new version is launched, and the new version clears it once the
+class list has rendered. The marker is checked by something that runs before the new version's own
+code, so a build that fails before its code runs is still caught: a small launcher kept from the
+previous version, or the install mechanism's own first-run check. The amendment of section 2
+names which. If a start finds the marker of the same new version twice in a row, it goes back to
+the kept version and marks the new one as skipped; it is offered again only when a higher version
+appears.
 
 ### 5. Where it lives
 
 - A pure module (`player/app/src/core/update/`) holds the rules: reading a feed reply into release
   records, picking the latest per channel, comparing versions, the class gate and the rollback
   state. It imports no I/O.
-- The main process holds the fetch, the timer and the settings, and gives the renderer two
-  bridge calls only: the current update status (current version, latest version, release page
-  address, "could not check") and "check now". The renderer never gets a URL to fetch, a file path
-  or a way to start an install. The shell hardening (sandbox, context isolation, the
-  `electron-blocker`) is unchanged.
+- The main process holds the fetch, the timer and the settings. It gives the renderer these
+  bridge calls only:
+  - the update status: the current version, the latest version, and "up to date", "newer",
+    "checking" or "could not check";
+  - "check now";
+  - "open release page", which takes no argument;
+  - two setters that each take one boolean: automatic checks on or off, and pre-releases on or
+    off. A value that is not a boolean is refused.
+
+  The renderer never gets or sets a URL, a file path, the feed address, or a way to start an
+  install. The shell hardening (`hardening.ts` and `web-preferences.ts`: sandbox, context
+  isolation, refused navigation and windows) is unchanged.
 
 ### 6. Tests
 
