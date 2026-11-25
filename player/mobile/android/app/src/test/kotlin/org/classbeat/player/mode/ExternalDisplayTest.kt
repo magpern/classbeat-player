@@ -90,12 +90,13 @@ class ExternalDisplayTest {
         displays.connect(2)
         ext.update(Mode.RIDER, "/rider.html", foreground = true)
         ext.update(Mode.RIDER, "/room.html", foreground = true)
-        assertEquals(listOf("show 2 /display.html"), surface.log)
+        // Rider mode shows the rider's line (issue #759); between modes the instructor's.
+        assertEquals(listOf("show 2 /display-rider.html"), surface.log)
         classOpen()
         ext.update(null, null, foreground = true)
-        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html"), surface.log)
+        assertEquals(listOf("show 2 /display-rider.html", "load /room.html", "load /display.html"), surface.log)
         ext.update(Mode.RIDER, null, foreground = false)
-        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display-rider.html", "load /room.html", "load /display.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -170,7 +171,7 @@ class ExternalDisplayTest {
         surface.crashed!!.invoke()
         val down = surface.log.toList()
         ext.update(Mode.RIDER, "/rider.html", foreground = true)
-        assertEquals(down + "show 3 /display.html", surface.log)
+        assertEquals(down + "show 3 /display-rider.html", surface.log)
     }
 
     @Test

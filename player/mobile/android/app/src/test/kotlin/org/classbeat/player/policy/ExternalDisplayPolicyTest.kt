@@ -7,6 +7,7 @@ import org.junit.Test
 class ExternalDisplayPolicyTest {
     private val room = "/room.html"
     private val idle = "/display.html"
+    private val idleRider = "/display-rider.html"
     private val paths = listOf(null, "/index.html", "/instructor.html", room, "/rider.html", idle)
 
     private fun shown(mode: Mode?, path: String? = room, display: Boolean = true, fg: Boolean = true) =
@@ -27,9 +28,10 @@ class ExternalDisplayPolicyTest {
     }
 
     @Test
-    fun `rider mode and between modes show the idle stage with a display in the foreground, and never the room screen`() {
+    fun `rider mode shows the rider's idle stage and between modes the instructor's, and never the room screen`() {
         for (mode in listOf(Mode.RIDER, null)) for (path in paths) for (d in listOf(false, true)) for (f in listOf(false, true)) {
-            assertEquals("$mode $path $d $f", if (d && f) Shown.IDLE else Shown.NONE, shown(mode, path, d, f))
+            val idleStage = if (mode == Mode.RIDER) Shown.IDLE_RIDER else Shown.IDLE
+            assertEquals("$mode $path $d $f", if (d && f) idleStage else Shown.NONE, shown(mode, path, d, f))
         }
     }
 
@@ -58,6 +60,7 @@ class ExternalDisplayPolicyTest {
         assertEquals(null, Shown.NONE.page)
         assertEquals(room, Shown.ROOM.page)
         assertEquals(idle, Shown.IDLE.page)
+        assertEquals(idleRider, Shown.IDLE_RIDER.page)
         assertEquals(Shown.entries.size, Shown.entries.map { it.page }.toSet().size)
     }
 
@@ -66,6 +69,7 @@ class ExternalDisplayPolicyTest {
         assertEquals(true, ExternalDisplayPolicy.ROOM_PAGE in ModePolicy.pages(Mode.INSTRUCTOR))
         assertEquals(false, ExternalDisplayPolicy.ROOM_PAGE in ModePolicy.pages(Mode.RIDER))
         for (mode in Mode.entries) assertEquals(false, ExternalDisplayPolicy.IDLE_PAGE in ModePolicy.pages(mode))
+        for (mode in Mode.entries) assertEquals(false, ExternalDisplayPolicy.IDLE_RIDER_PAGE in ModePolicy.pages(mode))
     }
 
     @Test
@@ -74,6 +78,7 @@ class ExternalDisplayPolicyTest {
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/room.html", mainFrame = true))
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/room.html?x=1#y", mainFrame = true))
         assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/display.html", mainFrame = true))
+        assertEquals(true, ExternalDisplayPolicy.mayLoad("$base/display-rider.html", mainFrame = true))
         for (other in listOf("/instructor.html", "/rider.html", "/index.html", "/", "/display.html/x", "/room.htm")) {
             assertEquals(other, false, ExternalDisplayPolicy.mayLoad("$base$other", mainFrame = true))
         }

@@ -14,8 +14,16 @@ export const PAGES = {
   "rider.html": { title: "Rider mode", bundle: "rider" },
   "instructor.html": { title: "Instructor mode", bundle: "instructor" },
   "room.html": { title: "Room screen", bundle: "main" },
-  // Only the external display's presentation loads it (ExternalDisplayPolicy.kt); no mode shows it.
+  // Only the external display's presentation loads the display pages (ExternalDisplayPolicy.kt); no mode shows it.
   "display.html": { title: "Room screen, no class open", bundle: "display" },
+  // The same stage with the rider's line, for rider mode (issue #759); chosen by the mode alone.
+  "display-rider.html": { title: "Room screen, rider mode", bundle: "display" },
+} as const;
+
+/** The one line of each idle stage: a fixed string, never data (plan rule 13). */
+export const IDLE_LINES = {
+  "display.html": "The class shows here when it opens on the phone",
+  "display-rider.html": "Your class is on your phone",
 } as const;
 
 export type PageName = keyof typeof PAGES;
@@ -34,7 +42,7 @@ export function pageHtml(name: PageName): string {
     ...(bundle ? [`<link rel="stylesheet" href="${bundle}.css">`, `<script src="${bundle}.js" defer></script>`] : []),
     "</head>",
     room ? '<body data-band="hidden" data-join="closed">' : "<body>",
-    ...(name === "display.html" ? ['<main class="idle"><span data-tier="text" data-lines="2">The class shows here when it opens on the phone</span></main>'] : []),
+    ...(name in IDLE_LINES ? [`<main class="idle"><span data-tier="text" data-lines="2">${IDLE_LINES[name as keyof typeof IDLE_LINES]}</span></main>`] : []),
     "</body>",
     "</html>",
     "",

@@ -31,6 +31,7 @@ test("each page loads only its own mode's bundle, and index.html loads nothing",
     "instructor.html": ["instructor.css", "instructor.js"],
     "room.html": ["main.css", "main.js"],
     "display.html": ["display.css", "display.js"],
+    "display-rider.html": ["display.css", "display.js"],
   };
   assert.deepEqual(NAMES.sort(), Object.keys(expected).sort());
   for (const name of NAMES) {
