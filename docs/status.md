@@ -229,7 +229,7 @@ decision 11, ADR 0013 section 7).
 
 ## PL7: release
 
-Merged: the desktop release workflow with unsigned builds (#760, #785; hardened with its test in
+Merged: the desktop release workflow with unsigned builds (#760, #779; hardened with its test in
 CI, #784), the release runbook (#763, #795), ADR 0014 on the player's updater (#762, #792: tell
 only while builds are unsigned, nothing during a class, a start marker for rollback), the download
 page spec (#789) and the update notice spec (#796, #801), and the pure update module (#797, #799).
@@ -255,6 +255,34 @@ page's incline-target slot stays empty, like a missing position, until a contrac
 incline field; the live contract has none today. Waiting for the owner: a real treadmill, reading
 a treadmill on the instructor's computer and in the app's rider mode, and sending riders' running
 readings to the instructor ([owner.md](owner.md)).
+
+## Infra
+
+Merged: the desktop app built and tested on Linux, macOS and Windows, with unsigned packages
+(#75, #76); the backend job also runs for changes under `schema/` (#88, #93); the class list
+screenshots are uploaded whenever the shot tests exist (#139, #140); the `web` job also runs for
+the shared design tokens and the request policy (#268, #271); the backend image ships
+`web/dist/control` (#277, #280) and the generated schema models (#287, #288); the dockerignore
+check compares the whole file in order (#289, #291; #294, #296; #298, #300; #325, #326); the
+backend image ships `web/dist/j` too, with its contents checked (#387, #388); the web spec
+checks run in five parallel shards (about 8 minutes instead of 27) and a change to documentation
+only runs no tests (#435, #437; follow-ups #438, #439); the scene's screenshot tests run in their own job, only when
+the scene can change, so the other Node package tests take about 8 minutes instead of 46 (#644,
+#645).
+
+## Scene spike
+
+Merged: #30 and its findings (#53).
+
+## Decisions recorded
+
+- ADR 0002 section 9 item 1 (amended in #40): string-built SQL is held by an executor that alone
+  owns the driver and runs only registered `Query` objects, with a source guard aimed at
+  mistakes. After four `FAIL`s on a source-only guard, the Orchestrator reassessed the design.
+- ADR 0002 principle 7 (#57): limits that bound the app's database role are constants in the
+  database functions and change by migration in a security-critical pull request.
+- Another app playing while following shows "Off the list" (ADR 0001).
+- A reader that cannot start six times reports following as unavailable on that computer (#59).
 
 ## Later hardening (non-blocking findings)
 
