@@ -369,11 +369,11 @@ lifetime").
   in `main/mix/service.ts`). The mark is written and flushed, and then its folder is flushed; the
   folder flush is skipped on win32, which cannot open a folder to flush it (#728, #731, #734).
 - **If the mark cannot be written or flushed, nothing is deleted.** The sign-out does not finish, the
-  view still shows the account connected, and the error is the one `markEnding` threw (`forget`,
-  `endAccount` in `main/mix/service.ts`).
+  view still shows the account connected, and nothing is reported: `forget` runs `markEnding` inside
+  `attempt`, which swallows the error, and `endAccount` returns false (`main/mix/service.ts`).
 - **A mark this attempt created but could not flush is removed again, and the removal is flushed**
   (the folder flush is skipped on win32), so a power loss right after cannot bring it back (#728,
-  #731, #734). The original error is the one reported, also when the flush of the removal fails. A mark
+  #731, #734). The error `markEnding` throws is the original one, also when the flush of the removal fails. A mark
   left by an earlier, unfinished deletion stays (`markEnding` in `main/mix/vault.ts`).
 - **The order is then:** the mark, the cache key, the token, the account's mix folder, and the mark
   last (`forget`, `finish` in `main/mix/service.ts`). Each step runs even when one before it failed.
