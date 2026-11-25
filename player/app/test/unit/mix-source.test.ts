@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
+import ts from "typescript";
 import { modePolicy } from "../../src/core/mix/mode-policy.ts";
 import { chooseMixSource, DEFAULT_MIX_SOURCE_SETTING, isAllowedOrigin } from "../../src/core/mix/source-setting.ts";
 import { UnavailableMixSource } from "../../src/core/mix/unavailable-source.ts";
@@ -55,6 +56,51 @@ describe("UnavailableMixSource, the default", () => {
     // Nothing the renderer or preload loads holds a source.
     const pages = [...closure(graph, entries.filter((p) => !p.endsWith("/main/main.ts")))];
     assert.ok(!pages.some((p) => /\/core\/mix\/(source-setting|unavailable-source)\.ts$|\/main\/mix\//.test(p)), pages.join("\n"));
+  });
+});
+
+// The text of a node, without its comments and with single spaces.
+const flat = (n: ts.Node, sf: ts.SourceFile): string => n.getText(sf).replace(/\s+/g, " ");
+
+function walkNodes(n: ts.Node, visit: (n: ts.Node) => void): void {
+  visit(n);
+  n.forEachChild((c) => walkNodes(c, visit));
+}
+
+describe("the source the shell builds (#709)", () => {
+  const read = (p: string): ts.SourceFile => ts.createSourceFile(p, readFileSync(join(REPO, p), "utf8"), ts.ScriptTarget.Latest, true);
+  it("is chooseMixSource() in setupMix, unless the test switch is on, and that one source goes to the cache and the service", () => {
+    const sf = read("player/app/src/main/mix/setup.ts");
+    const decls = new Map<string, string[]>();
+    const passed: string[] = [];
+    walkNodes(sf, (n) => {
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) decls.set(n.name.text, [...(decls.get(n.name.text) ?? []), n.initializer === undefined ? "" : flat(n.initializer, sf)]);
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && /^create(MixCache|MixService)$/.test(n.expression.text)) {
+        const deps = n.arguments[0];
+        assert.ok(deps !== undefined && ts.isObjectLiteralExpression(deps), n.expression.text);
+        for (const p of deps.properties) if (p.name !== undefined && ts.isIdentifier(p.name) && p.name.text === "source") passed.push(`${n.expression.text} ${flat(p, sf)}`);
+      }
+    });
+    assert.deepEqual(decls.get("source"), ["test ? testMixSource() : chooseMixSource()"]);
+    assert.deepEqual(decls.get("test"), ["testMixOn(app)"]);
+    assert.deepEqual(passed.sort(), ["createMixCache source", "createMixService source"]);
+  });
+  it("holds no source written as an object literal anywhere the shipped app reaches, but the switched-off test one", () => {
+    const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : n.endsWith(".ts") ? [join(d, n)] : []));
+    const files: Files = new Map(walk(join(REPO, "player", "app", "src")).map((p) => [relative(REPO, p).split("\\").join("/"), readFileSync(p, "utf8")]));
+    const entries = [...files.keys()].filter((p) => /\/src\/(main\/main|preload\/[^/]+|renderer\/[^/]+)\.ts$/.test(p));
+    const literals: string[] = [];
+    for (const p of closure(graphOf(files), entries)) {
+      const sf = ts.createSourceFile(p, files.get(p) ?? "", ts.ScriptTarget.Latest, true);
+      walkNodes(sf, (n) => {
+        if (!ts.isObjectLiteralExpression(n)) return;
+        const names = n.properties.map((x) => (x.name !== undefined && (ts.isIdentifier(x.name) || ts.isStringLiteral(x.name)) ? x.name.text : ""));
+        // Every MixSource has `credentialFields`; one that connects is `kind: "available"`.
+        const available = n.properties.some((x) => ts.isPropertyAssignment(x) && flat(x, sf) === 'kind: "available"');
+        if (names.includes("credentialFields") || available) literals.push(p);
+      });
+    }
+    assert.deepEqual(literals, ["player/app/src/main/mix/test-mix.ts"]);
   });
 });
 
