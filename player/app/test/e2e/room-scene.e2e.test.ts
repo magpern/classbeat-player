@@ -18,6 +18,9 @@ let server: Server;
 let app: ElectronApplication;
 let page: Page;
 let room: Page;
+/** The scene's own frame-rate log lines (room-scene-log.ts), as the room page wrote them to its console. */
+const rows: { fps: number; level: string }[] = [];
+const SLOW_MS = 400;
 
 before(async () => {
   let origin: string;
@@ -45,6 +48,11 @@ test("a class with songs: the scene mounts in the room window and draws its canv
   await page.locator('footer [data-action="start"]').click();
   await onPage(page, "presenter.html");
   room = await theRoom(app);
+  room.on("console", (m) => {
+    const r = /^scene frame rate: second=\d+ fps=(\d+(?:\.\d+)?) level=(\w+)$/.exec(m.text());
+    if (r) rows.push({ fps: Number(r[1]), level: r[2]! });
+  });
+  // Nothing is forced here: the scene must be on before any step-down (which software GL may begin by itself some seconds later).
   await waitFor(async () => (await scene()) === "on", 60_000, "data-scene=on");
   // A canvas that was drawn on: the WebGL context exists and has a size, and it is the one the page shows.
   const canvas = await room.evaluate(() => {
@@ -59,12 +67,22 @@ test("a forced slow frame rate ends on the plain screen, and the class clock goe
   await command({ type: "start" });
   await waitFor(async () => (await remaining()) !== undefined, 10_000, "the running class");
   const before = (await within(10_000, "read the clock", remaining()))!;
-  // About 4 frames a second, from the next frame on.
-  await room.evaluate(() => {
+  // About 2.5 frames a second, from the next frame on.
+  const mark = rows.length;
+  await room.evaluate((ms) => {
     const w = window as unknown as { requestAnimationFrame(cb: FrameRequestCallback): number };
-    w.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 250);
-  });
+    const g = window as unknown as { slowFrames: number };
+    g.slowFrames = 0;
+    w.requestAnimationFrame = (cb) => window.setTimeout(() => { g.slowFrames++; cb(performance.now()); }, ms);
+  }, SLOW_MS);
   await waitFor(async () => (await scene()) === "off", 90_000, "the plain screen after the step-downs");
+  // What the scene itself measured after the wrap (the first sample may straddle it): never faster than the forced rate allows.
+  const seen = rows.slice(mark + 1);
+  assert.ok(seen.length >= 1, "the scene logged samples while it was slowed");
+  assert.ok(seen.every((r) => r.fps <= 3), `the forced rate decided the frame rate: ${JSON.stringify(seen)}`);
+  // The scene took its frames through the wrap (not through the real frame clock), at the forced pace: at most one per SLOW_MS.
+  const wrapped = await room.evaluate(() => (window as unknown as { slowFrames: number }).slowFrames);
+  assert.ok(wrapped >= 3, `the scene's frames came through the wrapped requestAnimationFrame (${wrapped})`);
   const after = (await within(10_000, "read the clock", remaining()))!;
   assert.ok(after < before, `the class clock continued (${before} to ${after})`);
   await new Promise((r) => setTimeout(r, 1500));
