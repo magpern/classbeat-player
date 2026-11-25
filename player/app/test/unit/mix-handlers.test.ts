@@ -68,6 +68,7 @@ test("from the list page: sign in, then sign out; no answer carries the token or
   assert.equal(r.signedIn.n, 1, "the synced classes' mixes are checked for download after the sign-in");
   const signedOut = await r.call(CH_MIX_SIGN_OUT, fromList);
   assert.equal((signedOut as ReturnType<typeof view>).mix.state, "signed_out");
+  assert.equal(r.signedIn.n, 2, "the sign-out is checked too, so the next sign-in asks every mix again (#720)");
   const out = JSON.stringify([signedIn, signedOut]);
   assert.ok(!out.includes(PASSWORD) && !out.includes(FAKE_TOKEN));
   assert.deepEqual(r.vault.log, ["saveToken a", "markEnding a", "clearKey a", "clearToken a", "removeFolder a", "clearEnding a"]);
