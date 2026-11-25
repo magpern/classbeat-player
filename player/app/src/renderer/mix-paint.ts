@@ -26,6 +26,7 @@ export function mixPlateEl(p: MixPlate, act: Act): HTMLElement {
   const words = h("div", null);
   words.append(h("span", "st", p.headline), h("span", "dt", p.detail));
   box.append(words);
+  if (p.short !== null) box.dataset.short = p.short;
   if (p.buttons.length > 0) {
     const row = h("div", "row-btns");
     for (const b of p.buttons) row.append(buttonEl(b, act));
@@ -96,4 +97,25 @@ export function emptyFields(root: HTMLElement): Set<string> {
 /** Empties every field without reading it (Cancel, Esc). */
 export function clearTyped(root: HTMLElement): void {
   for (const input of root.querySelectorAll<HTMLInputElement>("input[data-field]")) input.value = "";
+}
+
+/** Rows that must stay whole in view beside the filter and a fault plate (W4, #724). */
+export const KEEP_ROWS = 4;
+
+/**
+ * The plate's detail on one line when the filter and four whole rows would not fit with the long one
+ * (#724): the detail gives way, never the filter. Always starts from the full detail, so a window
+ * that grows gets it back.
+ */
+export function fitPlate(slot: HTMLElement, list: HTMLElement | null): void {
+  const plate = slot.querySelector<HTMLElement>(".plate[data-short]");
+  const dt = plate?.querySelector(".dt");
+  if (!plate || !dt || plate.dataset.short === undefined) return;
+  const full = (plate.dataset.full ??= dt.textContent ?? "");
+  dt.textContent = full;
+  if (list === null) return;
+  const rows = [...list.querySelectorAll<HTMLElement>(".row")];
+  const box = list.getBoundingClientRect();
+  const whole = rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= box.top - 1 && b.bottom <= box.bottom + 1; }).length;
+  if (whole < Math.min(KEEP_ROWS, rows.length)) dt.textContent = plate.dataset.short;
 }

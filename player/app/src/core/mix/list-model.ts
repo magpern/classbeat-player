@@ -21,6 +21,8 @@ export interface MixLine {
 export interface MixPlate {
   readonly headline: string;
   readonly detail: string;
+  /** The detail cut to one line, for when the class filter and four whole rows need the room (#724); null when the detail is short already. */
+  readonly short: string | null;
   readonly buttons: readonly Button[];
 }
 export interface MixForm {
@@ -52,7 +54,7 @@ const CANCEL = btn("mix-cancel", "Cancel", "Esc");
 const wait = (kind: string, text: string): Panel => ({ kind, heading: "One moment", text, label: null, code: null, steps: [], note: null, buttons: [] });
 const only = (h: Partial<MixHead>): MixHead => ({ ...NONE, ...h });
 const line = (marker: Marker, text: string, detail: string, button: Button | null = null): MixLine => ({ marker, text, detail, button });
-const plate = (headline: string, detail: string, buttons: Button[] = []): MixPlate => ({ headline, detail, buttons });
+const plate = (headline: string, detail: string, buttons: Button[] = [], short: string | null = null): MixPlate => ({ headline, detail, short, buttons });
 
 function formOf(v: MixView, again: boolean): MixForm {
   return again
@@ -90,8 +92,8 @@ export function mixHeadOf(v: MixView, ui: MixUi, listed: boolean, note: FormNote
     if (refusal === "rate_limited") return only({ plate: plate("Too many tries", "Wait a few minutes, then type your details again. Nothing was kept."), form: formOf(v, true) });
     return only({ form: formOf(v, false) });
   }
-  if (refusal === "unavailable") return only({ plate: plate("Swedebeat could not be reached", `Check the connection, then try again. ${NOTE}`, [btn("mix-connect", "Try again")]) });
-  if (v.needsReconnect) return only({ plate: plate("Swedebeat needs you to connect again", `The mixes saved on this computer are kept. ${NOTE}`, [btn("mix-connect", "Connect Swedebeat again")]) });
+  if (refusal === "unavailable") return only({ plate: plate("Swedebeat could not be reached", `Check the connection, then try again. ${NOTE}`, [btn("mix-connect", "Try again")], "Check the connection, then try again.") });
+  if (v.needsReconnect) return only({ plate: plate("Swedebeat needs you to connect again", `The mixes saved on this computer are kept. ${NOTE}`, [btn("mix-connect", "Connect Swedebeat again")], "The mixes saved on this computer are kept.") });
   return listed ? only({ line: line("away", "Swedebeat is not connected", `${NOTE} Connect to play the mixes.`, mayOfferSignIn(v) ? CONNECT : null) }) : NONE;
 }
 

@@ -13,7 +13,7 @@ import type { PairingView } from "../core/pairing/view.ts";
 import { colsEl, footerEl, panelEl, plateEl, rowEl, shortcut, statusEl } from "./list-paint.ts";
 import type { Act } from "./list-paint.ts";
 import { mixFlow } from "./mix-flow.ts";
-import { clearTyped, emptyFields, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
+import { clearTyped, emptyFields, fitPlate, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
 
 interface ListApi {
   listView(): Promise<ListView | null>;
@@ -202,6 +202,7 @@ function paint(): void {
   else if (screen.body.kind === "mix-form") paintForm(screen as Screen & { body: { kind: "mix-form" } });
   else paintPanel(screen as Screen & { body: { kind: "panel" } });
   if ($("live").textContent !== screen.announce) $("live").textContent = screen.announce;
+  fitPlate($("mix-slot"), listEl());
 }
 
 function take(v: ListView | null): void {
@@ -277,3 +278,6 @@ window.addEventListener("drop", (e) => e.preventDefault());
 
 setInterval(refresh, REFRESH_MS);
 refresh();
+
+// A window that changes size changes how many rows show beside a plate.
+window.addEventListener("resize", () => fitPlate($("mix-slot"), listEl()));
