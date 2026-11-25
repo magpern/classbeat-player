@@ -37,7 +37,7 @@
 #text .rail .t { font-size: var(--t-minor); font-family: var(--face-number); font-weight: 600; line-height: 1; }
 #text .rail .grow { flex: 1; }
 #text .rail .seg { font-size: var(--t-label); font-weight: 700; margin-right: 1vw; }
-#text .link { font-size: var(--t-label); font-weight: 700; display: inline-flex; align-items: center; gap: 0.7vh; }
+#text .link { font-size: var(--t-label); font-weight: 700; display: inline-flex; align-items: center; gap: 0.5vh; }
 #text .link::before { content: ""; width: 1.4vh; height: 1.4vh; border-radius: 50%; background: var(--light-1); flex: none; }
 #text .link.sq::before { border-radius: 0; }
 #text .link.rg::before { background: radial-gradient(circle, var(--stage) 52%, var(--light-1) 56%); } /* a hollow ring in the dot's own size, as on the plain screen (the mix download); colour is #829's */
