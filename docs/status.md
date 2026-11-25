@@ -11,7 +11,8 @@ Updated 2026-11-25 (after #736; `main` at e9c112f).
 
 All issues are merged: CI (#1, #10, #17, #24, #33), ADRs 0001–0004 (#2, #3, #9, #15, #35),
 spike 1 harness (#4), and spike 2 web and Godot variants (#5, #18). What is still open is the
-owner's: running both spikes (owner.md).
+owner's: running both spikes (owner.md). Open: a timeout on every CI job (#756), after
+PR #680's `node-packages` job hung for almost three hours.
 
 ## PL5: music link (done on fakes)
 
@@ -87,7 +88,7 @@ layouts, and rules 1 to 4, 6 and 7, with no gaps. Not served yet: nothing in the
 `dist/site/`, which ADR 0008 leaves to the deploy work; whoever serves it sends the site's page
 headers and its path fallback (`/play` to `play/index.html`).
 
-## PL2: backend and sign-in
+## PL2: backend and sign-in (done on fakes)
 
 Merged: service skeleton, roles and migrations (#32), email link sign-in and site sessions (#54),
 sign-in hardening (#60), ADR 0002 as built (#57, #68 and this update), device pairing (#58, #61),
@@ -110,8 +111,8 @@ spec and mock-ups as built (#428, #434); the follow-ups for export, devices, del
 refused first request (#426, #430), the tighter site guards with a backslash refused in the
 connect return address (#425, #436), and on the backend a sign-in ending the session the
 browser held, a backslash refused in redirect addresses (#427, #431) and ADR 0002 as built
-(#432, #433), the offline and guard follow-ups (#441) and the spec touch-ups (#442). Open:
-purge counts with a new migration (#739, security-critical).
+(#432, #433), the offline and guard follow-ups (#441), the spec touch-ups (#442), and the purge
+counts with a new migration (#739, #747; the guard and docstring follow-up #751, #753).
 
 ## PL4: screens
 
@@ -149,14 +150,13 @@ the control band and join sheet under the strict measure (#585, #600), the room 
 **Rule gap (S6), since closed:** the sweep and sway windows (#618) did not yet fit the strict whole-frame
 gate in every case. The revised sweep and sway spec is merged (#635: a turning beam moves in black,
 near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened);
-#622 is being rebuilt on it. #592 (steady light at its cap) closes when #618 merges.
 
 Also merged: the player's state-rate test made deterministic (#624, #626), the 4.15 s sweep
 windows with a burst's decay counted in the shared budget and gated (#618, #622; this closes the
 known S6 gap above and #592), and scene.md as built after #592 (#671).
 
 Open: mounting the scene in the room window (#677, PR #680), stepping the quality level down on a
-low frame rate (#678), and #717 (after #677). Design follow-up: the scene folds the grey circle
+low frame rate (#678, PR #740), and #717 (after #677). Design follow-up: the scene folds the grey circle
 and square markers into one round dot; scene.md or `text.css` is to settle this.
 
 ## PL12: installed phone and tablet apps
@@ -181,8 +181,13 @@ second mode question refused so the unpair call is always answered (#675). The o
 2026-11-24 that iPhone riders use the installed app and that the iOS build starts once the
 Android app is finished (#684).
 
-Open: keeping the screen on during a class (#737), then the room screen on an external display
-as the presenter view (#738).
+Also merged: keeping the screen on during a class (#737) and the room screen on an external
+display as the presenter view (#738, #748).
+
+Open: a test of ModeController's keep-screen-on wiring (#749), a limit on how often a crashed
+external display is shown again (#752, PR #755), and a rider line on the external display's idle
+stage (#759). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
+reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
 
 ## PL9: sensors (ADR 0012), done on fakes
 
@@ -215,6 +220,17 @@ the fall-back to the manual clock with a reason, and the `cbp-mix:` hardening. R
 mid-class fall-back, cached play offline and the paired class list's mix states are covered by
 unit tests only. Waiting for the owner: Swedebeat's agreement and the real source client (plan
 decision 11, ADR 0013 section 7).
+
+## PL7: release
+
+Issues written 2026-11-25: the desktop release workflow with unsigned builds (#760), the
+updater's ADR (#762, security-critical), the release runbook (#763) and the download page spec
+(#764). Signing and notarisation wait for the owner's signing identities (owner.md).
+
+## PL10: running classes and treadmill reading
+
+The design is being settled first in an ADR (#765, rule-sensitive: the treadmill is read, never
+controlled). Testing on a real treadmill waits for the owner.
 
 ## Infra
 
