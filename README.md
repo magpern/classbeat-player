@@ -9,7 +9,8 @@ product has its own backend, accounts and releases and shares no code with class
 the backend with sign-in, the website and the phone companion are built and tested on fakes; the 3D
 scene waits for spike 2. Where things stand: [docs/status.md](docs/status.md). The plan:
 [docs/plan.md](docs/plan.md). Running things on your own Mac:
-[docs/runbooks/owner-mac.md](docs/runbooks/owner-mac.md).
+[docs/runbooks/owner-mac.md](docs/runbooks/owner-mac.md). Releasing the desktop player:
+[docs/runbooks/player-release.md](docs/runbooks/player-release.md).
 
 Layout:
 
