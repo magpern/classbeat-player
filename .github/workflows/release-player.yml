@@ -1,0 +1,213 @@
+name: release-player
+
+# The desktop player release (issue #760, plan PL7): UNSIGNED builds for macOS (arm64 and x64),
+# Windows x64 and Linux x64, uploaded with SHA256SUMS to a GitHub Release with generated notes.
+#  - A tag `player-vX.Y.Z` (SemVer; a pre-release has a hyphen part) pushed on a commit of main
+#    publishes. The tag is checked (SemVer, on main) before anything is built.
+#  - workflow_dispatch with dry_run (the default) builds every target and writes SHA256SUMS but
+#    publishes nothing; dry_run false publishes only when it is run on a player-v tag.
+#  - A pull request that changes this workflow or its scripts runs the same dry run.
+# Signing and notarisation wait for the owner (docs/owner.md: Apple Developer membership and a
+# Windows signing identity, plan decision 9). There are no signing steps and no secrets here, and
+# the release notes say the builds are unsigned. This workflow never creates, moves or deletes a
+# tag: `gh release create --verify-tag` refuses to run unless the pushed tag already exists.
+# Checks of this file: scripts/test-release-player.sh (run by the verify job below).
+
+on:
+  push:
+    tags: ["player-v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build every target and write SHA256SUMS without publishing
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - .github/workflows/release-player.yml
+      - scripts/check-release-tag.sh
+      - scripts/release-player-assets.sh
+      - scripts/test-release-player.sh
+      - scripts/package-desktop.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-player-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Decides whether this run publishes and checks the tag. A tag that is not SemVer or not on main
+  # fails here, so no build starts.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      publish: ${{ steps.mode.outputs.publish }}
+      version: ${{ steps.mode.outputs.version }}
+      prerelease: ${{ steps.mode.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release script tests
+        run: bash scripts/test-release-player.sh
+      - id: mode
+        name: Check the tag and decide whether to publish
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          publish=false
+          if [ "$EVENT" = push ] || { [ "$EVENT" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; }; then
+            publish=true
+          fi
+          if [ "$publish" = true ] && [ "$REF_TYPE" != tag ]; then
+            echo "publishing needs a player-v tag; this run is on a $REF_TYPE" >&2
+            exit 1
+          fi
+          if [ "$REF_TYPE" = tag ]; then
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+            bash scripts/check-release-tag.sh "$TAG" "$COMMIT" refs/remotes/origin/main
+          else
+            echo "version=dry-run-${COMMIT:0:12}" >>"$GITHUB_OUTPUT"
+            echo "prerelease=true" >>"$GITHUB_OUTPUT"
+          fi
+          echo "publish=$publish" >>"$GITHUB_OUTPUT"
+          echo "publish: $publish"
+
+  # The same build steps as the desktop-app job in ci.yml (npm ci, build, scripts/package-desktop.sh),
+  # on one runner per target. No npm cache, so a release is built only from the lockfile's packages.
+  build:
+    needs: verify
+    name: build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: linux-x64, arch: x64 }
+          - { os: macos-latest, label: macos-arm64, arch: arm64 }
+          - { os: macos-15-intel, label: macos-x64, arch: x64 }
+          - { os: windows-latest, label: windows-x64, arch: x64 }
+    defaults:
+      run:
+        shell: bash
+        working-directory: player/app
+    steps:
+      - name: Keep LF line endings
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Check the runner's CPU matches the target
+        env:
+          WANT: ${{ matrix.arch }}
+        run: |
+          got="$(node -p process.arch)"
+          [ "$got" = "$WANT" ] || { echo "runner is $got, target needs $WANT" >&2; exit 1; }
+      - run: npm ci
+      # npm ci does not fetch the Electron runtime here (the electron package runs no install script
+      # under this npm; in ci.yml the e2e test fetches it on first launch). Run Electron's own
+      # install.js, the version pinned in the lockfile, as scripts/build-mac.sh does.
+      - name: Fetch the Electron runtime
+        run: |
+          if [ ! -d node_modules/electron/dist ]; then node node_modules/electron/install.js; fi
+          [ -d node_modules/electron/dist ] || { echo "no Electron runtime after install.js" >&2; exit 1; }
+      - run: npm run build
+      # Signing and notarisation will be added here once the owner provides the signing identities
+      # (docs/owner.md). Until then the package is unsigned and the release notes say so.
+      - name: Package (unsigned)
+        env:
+          LABEL: ${{ matrix.label }}
+        run: bash ../../scripts/package-desktop.sh . "$RUNNER_TEMP/package" "$LABEL"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-player-${{ matrix.label }}
+          path: ${{ runner.temp }}/package/*.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
+  # Collects every archive, writes SHA256SUMS and the release notes, and keeps them as one artifact.
+  # Runs on a dry run too, so the dry run proves the whole set is built.
+  checksums:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      # The four build artifacts (release-player-<system>-<cpu>), not release-player-assets. The
+      # assets script below fails on a missing archive or any other file.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-player-*-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - name: SHA256SUMS and release notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          PUBLISH: ${{ needs.verify.outputs.publish }}
+        run: |
+          set -euo pipefail
+          bash scripts/release-player-assets.sh "$RUNNER_TEMP/assets" "$VERSION"
+          cat "$RUNNER_TEMP/assets/SHA256SUMS"
+          {
+            echo "## Desktop player $VERSION (publish: $PUBLISH)"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/assets/SHA256SUMS"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-player-assets
+          path: |
+            ${{ runner.temp }}/assets/*.tar.gz
+            ${{ runner.temp }}/assets/SHA256SUMS
+            ${{ runner.temp }}/assets/RELEASE_NOTES.md
+          retention-days: 7
+          if-no-files-found: error
+
+  # The only job that can write, and only for a player-v tag that verify accepted. Never on a pull
+  # request. `--verify-tag` makes gh refuse rather than create a tag; an existing release is never
+  # replaced (gh fails instead).
+  publish:
+    needs: [verify, checksums]
+    if: needs.verify.outputs.publish == 'true' && github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/player-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-player-assets
+          path: assets
+      - name: Create the GitHub Release
+        working-directory: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --verify-tag --title "classbeat player $VERSION" \
+            --notes-file RELEASE_NOTES.md --generate-notes "${flags[@]}" \
+            ./*.tar.gz SHA256SUMS
