@@ -95,17 +95,18 @@ export function startJoin(ports: JoinPorts, options: JoinOptions): Join {
     lastFrameAt = ports.now();
     const tick = (nowMs: number): void => {
       if (handle === null) return;
-      const pack = latest === null ? null : feedOf(latest.frame, nowMs - latest.at, reducedMotion);
-      if (pack === null) {
-        set("plain");
-      } else {
-        try {
+      try {
+        // The feed too: a frame the join cannot read is a failure of the scene, not a stalled loop.
+        const pack = latest === null ? null : feedOf(latest.frame, nowMs - latest.at, reducedMotion);
+        if (pack === null) {
+          set("plain");
+        } else {
           handle.frame(pack, nowMs);
-        } catch {
-          kill("renderer error");
-          return;
+          set("scene");
         }
-        set("scene");
+      } catch {
+        kill("renderer error");
+        return;
       }
       lastFrameAt = ports.now();
       cancelTick = ports.schedule(tick);

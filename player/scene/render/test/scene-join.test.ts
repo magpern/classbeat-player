@@ -283,3 +283,18 @@ test("the mix class's link line goes to the scene's text in its fixed words only
   assert.equal(link(frame()), undefined);
   assert.equal(link({ ...mix("Playing the mix", "dot"), view: { status: "ended", classMs: 120_000, songIndex: null } }), undefined);
 });
+
+test("a frame with no mix field (an older shell, a recorded frame) is read as no mix line", () => {
+  const bare: Partial<JoinFrame> = { ...frame() };
+  delete bare.mix;
+  assert.equal((feedOf(bare as JoinFrame, 0, false)!.feed.link as TextLink).mix, undefined);
+});
+
+test("a frame the join cannot read shows the plain screen at once instead of freezing the loop", () => {
+  const f = fake();
+  const join = startJoin(f.ports, { reducedMotion: false });
+  join.push({ ...frame(), doc: { ...doc, zone_scale: undefined } as unknown as Class });
+  f.advance(100);
+  assert.equal(join.mode, "plain");
+  assert.equal(join.why, "renderer error");
+});

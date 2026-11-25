@@ -14,7 +14,7 @@ export interface JoinFrame {
   /** True exactly while the "Playlist not loaded" plate is due (RoomFrame.playlistNotLoaded). */
   readonly playlistNotLoaded: boolean;
   /** The mix class's link line (RoomFrame.mix), or null. */
-  readonly mix: { readonly text: string; readonly shape: "dot" | "circle" | "square" | "news" } | null;
+  readonly mix?: { readonly text: string; readonly shape: "dot" | "circle" | "square" | "news" } | null;
   readonly view: {
     readonly status: "ready" | "running" | "paused" | "ended";
     readonly classMs: number;
@@ -135,7 +135,8 @@ export function feedOf(frame: JoinFrame, sinceMs: number, reducedMotion: boolean
   const before = frame.view.status === "ready" && classMs <= 0;
   const finished = frame.view.status === "ended" || classMs >= frame.doc.class.length_ms;
   // The mix line only in the words the plain screen draws, and not once the class is over (web/src/room/adapter.ts).
-  const mix = frame.mix !== null && !finished && mixWordsAllowed(frame.mix) ? { text: frame.mix.text, shape: frame.mix.shape } : undefined;
+  const given = frame.mix ?? null;
+  const mix = given !== null && !finished && mixWordsAllowed(given) ? { text: given.text, shape: given.shape } : undefined;
   const link: TextLink = linkOf(frame.link, !before, mix);
   const feed: Feed = {
     cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion, playlistNotLoaded: frame.playlistNotLoaded && !finished,
