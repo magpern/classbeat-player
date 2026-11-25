@@ -8,8 +8,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** ADR 0012, section 1: the services and characteristics read by notification, and nothing else. */
-export const ALLOWED_GATT: ReadonlySet<number> = new Set([0x180d, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a5b, 0x2a63, 0x2ad2]);
+/** ADR 0012, section 1 and ADR 0015, section 3: the services and characteristics read by notification, and nothing else. */
+export const ALLOWED_GATT: ReadonlySet<number> = new Set([0x180d, 0x1814, 0x1816, 0x1818, 0x1826, 0x2a37, 0x2a53, 0x2a5b, 0x2a63, 0x2acd, 0x2ad2]);
 
 const BANNED: readonly [string, RegExp][] = [
   ["Bluetooth (the word, in any case, inside any name)", /bluetooth/i],

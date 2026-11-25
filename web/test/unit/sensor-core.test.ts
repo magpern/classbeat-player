@@ -145,8 +145,8 @@ describe("freshness (3 s)", () => {
 
 describe("constants", () => {
   it("allowlist numbers and the 128-bit form", () => {
-    assert.deepEqual(Object.values(SERVICES), [0x180d, 0x1816, 0x1818, 0x1826]);
-    assert.deepEqual(Object.values(CHARACTERISTICS), [0x2a37, 0x2a5b, 0x2a63, 0x2ad2]);
+    assert.deepEqual(Object.values(SERVICES), [0x180d, 0x1816, 0x1818, 0x1826, 0x1814]);
+    assert.deepEqual(Object.values(CHARACTERISTICS), [0x2a37, 0x2a5b, 0x2a63, 0x2ad2, 0x2acd, 0x2a53]);
     assert.equal(uuid128(0x2a37), "00002a37-0000-1000-8000-00805f9b34fb");
   });
 });
