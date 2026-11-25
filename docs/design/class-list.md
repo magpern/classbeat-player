@@ -107,7 +107,7 @@ window; nothing smaller is a design size. The shell sets that minimum (#123, mer
 
 | Region | Content | Behaviour |
 |---|---|---|
-| Header | "Classes" (Big Shoulders 800, 40 px), the count in grey, "Open a class file…" with its shortcut | Always there; the count is the number of cached classes, or "1 class" |
+| Header | "Classes" (Big Shoulders 800, 40 px), the count in grey, "Settings" (Ctrl+, or Cmd+,) and "Open a class file…", each with its shortcut | "Settings" is absent, not disabled, while a class is open ([updates.md](updates.md), "The class gate"); the rest always there; the count is the number of cached classes, or "1 class" |
 | Status | A marker and one line of words, a grey detail line; or a white plate with a button | See "States" |
 | Filter | A text field and, once typed in, "n of N" | Only from 8 classes; absent otherwise; hidden while the file-error plate is shown at 1000×720, so five rows stay whole |
 | List header | "Class", "Length", "Updated" in grey 14 px | Fixed, outside the scrolling region |
@@ -198,8 +198,8 @@ Notes on the states:
 ## Keyboard
 
 Everything is reachable and usable with the keyboard alone, in this order of Tab:
-Open a class file, the status button (Pair this computer, Pair again, Cancel, Close) where there
-is one, the filter, the list, Start. The list is one Tab stop.
+Settings, Open a class file, the status button (Pair this computer, Pair again, Cancel, Close) where there
+is one, the update notice's "Open release page" when shown ([updates.md](updates.md)), the filter, the list, Start. The list is one Tab stop.
 
 | Key | Where | Does |
 |---|---|---|
@@ -210,6 +210,7 @@ is one, the filter, the list, Start. The list is one Tab stop.
 | `/`, or Ctrl+F (Cmd+F) | anywhere but the filter | Focuses the filter (from eight classes) |
 | Esc | filter | Clears the text; with the filter already empty, returns to the list |
 | Esc | pairing, file-error plate | Cancel, Close |
+| Ctrl+, (Cmd+,) | class list, with no class open | Opens Settings (also in the application menu) |
 | Ctrl+O (Cmd+O) | anywhere | Open a class file… (also in the application menu) |
 | Typing a letter | list | Moves the focus to the filter with that letter typed (from eight classes); with fewer classes, jumps to the next title starting with it |
 
@@ -230,7 +231,7 @@ numbers.
 |---|---|---|
 | L1 | Cap height of text (a capital H in its face), as pixels and as a share of the window height at 1000×720 | Row title and the selected class's title in the footer (22 px type): at least 15 px (2.1 %). Status line and plate headline (20 px): at least 14 px (1.9 %). Buttons (17 px; Start 22 px): at least 12 px (1.7 %); Start at least 15 px. The code in the pairing state: at least 40 px (5.6 %). Length (Big Shoulders 26 px): at least 18 px (2.5 %). Second lines, details, dates (16 px): at least 11 px (1.5 %). Labels, column heads, shortcuts, tags (14 px): at least 9.5 px (1.3 %). **No text is set below 14 px** |
 | L2 | Contrast of text against the pixels behind it, worst pixel | Titles, lengths, status line, buttons, details, dates: at least 7 : 1. Labels (14 px grey, `--light-3`): at least 4.5 : 1. The measured worst pixel on the mock-ups is 19.1 : 1 for primary text |
-| L3 | What is visible at once | Header with count and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 5 to 11 rows; 5 rows is the minimum when a plate is shown (expired, file error) at 1000×720; the worst case of wide capitals at 1000×720 shows 4); the selected row always fully visible |
+| L3 | What is visible at once | Header with count, Settings and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 5 to 11 rows; 5 rows is the minimum when a plate is shown (expired, file error) at 1000×720; the worst case of wide capitals at 1000×720 shows 4; with the update notice shown, [updates.md](updates.md) U4 holds: at least 5 with the filter, 6 without); the selected row always fully visible |
 | L4 | Colour | **No hue anywhere** on this screen (the checker's "hue outside a zone" test, which every element must pass): it shows no zone, so it uses no zone colour (rule 7). States are carried by words and by the marker shapes |
 | L5 | Words with every marker | Every marker, plate and tag has its words beside it; the selected row also carries the bar and the outline |
 | L6 | Nothing is cut | No title, status, detail or button text is cut or ellipsised, except the footer's title (two lines, then an ellipsis, with the full title in the selected row) |

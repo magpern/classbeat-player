@@ -155,6 +155,11 @@ const { NAMES: SW_NAMES, ROOM_NAMES: SW_ROOMS } = require('./swedebeat-pages');
 const swList = (name, w, h) => ({ file: `class-list-swedebeat-${name}.html`, png: `class-list-swedebeat-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || w === 1280 || (name === 'signed-in' && w === 1920) });
 const SW_ROOM_SIZES = [[1920, 1080], [1280, 1024], [1024, 768]];
 
+// The update notice and the "Updates" settings (updates.md): the settings page and the class list
+// with the notice, at the class list's three window sizes (1000x720 kept, the main states also at 1920x1080).
+const { NAMES: UPD_NAMES, LIST_NAMES: UPD_LISTS } = require('./updates-pages');
+const upd = (name, w, h) => ({ file: `updates-${name}.html`, png: `updates-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || (w === 1920 && (name === 'newer' || name === 'list-newer')) });
+
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 
 const SHOTS = [
@@ -190,6 +195,7 @@ const SHOTS = [
   ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
   ...SW_NAMES.flatMap((n) => LIST_SIZES.map(([w, h]) => swList(n, w, h))),
   ...SW_ROOMS.flatMap((n) => SW_ROOM_SIZES.map(([w, h]) => room(`mix-${n}`, w, h, true))),
+  ...[...UPD_NAMES, ...UPD_LISTS].flatMap((n) => LIST_SIZES.map(([w, h]) => upd(n, w, h))),
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),
   ...COMPANION_NAMES.flatMap((n) => COMPANION_SIZES.map(([w, h]) => companion(n, w, h))),
