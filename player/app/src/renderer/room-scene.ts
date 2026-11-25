@@ -8,8 +8,10 @@ import type { RoomFrame } from "../core/room/frame.ts";
 import { onFrame } from "./room-frame-event.ts";
 
 // The scene draws what the shell feeds the room window through its preload (`window.room`); a page without that bridge has no class to draw,
-// so it builds no WebGL context at all. Nor does a window nobody can see (hidden, minimised): it is built when the window first shows.
-if ((window as unknown as { room?: unknown }).room !== undefined) {
+// so it builds no WebGL context at all. Nor does a page opened with `?scene=off` (a window that only looks at the plain screen or asks for audio,
+// as the mix e2e test's stray window does: a WebGL context costs seconds there), nor a window nobody can see (hidden, minimised): it is built
+// when the window first shows.
+if ((window as unknown as { room?: unknown }).room !== undefined && !location.search.slice(1).split("&").includes("scene=off")) {
   const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let scene: ReturnType<typeof mountScene> | null = null;
   let latest: RoomFrame | null = null;

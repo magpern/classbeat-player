@@ -101,7 +101,8 @@ const fromOtherWindow = (url: string): Promise<number> =>
     app.evaluate(
       async ({ app: electron, BrowserWindow }, { url, webPreferences }) => {
         const w = new BrowserWindow({ show: false, webPreferences });
-        await w.loadFile(`${electron.getAppPath()}/dist/room.html`);
+        // `?scene=off`: this window only asks for audio, so the room page builds no 3D scene (and no WebGL context) in it.
+        await w.loadFile(`${electron.getAppPath()}/dist/room.html`, { query: { scene: "off" } });
         await w.webContents.executeJavaScript(
           `new Promise((r) => { const x = new Audio(${JSON.stringify(url)}); x.onerror = () => r(0); x.oncanplay = () => r(1); setTimeout(() => r(2), 5000); })`,
         );
