@@ -24,6 +24,28 @@ On the display:
 
 On the phone, while a display is connected: the class screen as in app-follow.md, unchanged.
 
+## When the display shows what (issue #752)
+
+While a display is connected and the app is in the foreground, the display always shows a page of
+the app's own, so Android never mirrors the phone's screen onto it:
+
+| Phone | Display |
+|---|---|
+| Instructor mode, a class open | The room screen |
+| Instructor mode, any other page | The idle stage |
+| Rider mode, any page, a joined class included | The idle stage: never the room screen, nothing of the rider's |
+| Between modes (a switch, a native screen) | The idle stage |
+| The app in the background | Nothing: the app presents only while it is in front, and the display shows what the system shows |
+
+The idle stage is the same page in every mode, with the same line. In rider mode, with a class
+joined, the line does not describe what the rider is doing; the display shows nothing of the
+rider's, and this is accepted so that no rider data can reach it. A rider-specific line is a
+possible later issue.
+
+If the display's page stops working (its web view's render process dies), the app presents it once
+more. If it stops a second time for the same display, page and mode, the display stays as the system
+leaves it until one of the three changes. The phone is not affected either way.
+
 ## Layout
 
 The display uses room-2d.md's layouts at its own size: 1920 × 1080 the reference, 1280 × 720 the
@@ -36,6 +58,7 @@ layout does not change.
 |---|---|---|
 | Display, no class open | `app-display-idle` | The idle line |
 | Display, class open | room-2d.md's room mock-ups | The room screen, every state of room-2d.md |
+| Display, rider mode or between modes | `app-display-idle` | The idle line, as with no class open |
 | Display gone during a class | `app-display-lost` | The phone goes on as it was; for 30 s its link slot says "Room screen disconnected" in white, then the clock's usual words. Reconnecting shows the room view again with no question |
 
 ## Motion and reduced motion
@@ -52,7 +75,7 @@ room-2d.md's on the display; app.md's on the phone.
 |---|---|
 | 7. Colour means the planned zone | room-2d.md's; the idle line is grey on the stage |
 | 12. No camera | None |
-| 13. Rider data one way | The display never shows the riders' list, a count of riders or a nickname |
+| 13. Rider data one way | The display never shows the riders' list, a count of riders or a nickname; in rider mode it shows only the idle stage, never the rider's own screen |
 | 15. No team games | None |
 
 ## Open questions

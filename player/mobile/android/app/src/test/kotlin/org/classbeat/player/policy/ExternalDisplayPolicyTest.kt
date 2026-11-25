@@ -27,9 +27,9 @@ class ExternalDisplayPolicyTest {
     }
 
     @Test
-    fun `rider mode and between modes never present, whatever else holds`() {
+    fun `rider mode and between modes show the idle stage with a display in the foreground, and never the room screen`() {
         for (mode in listOf(Mode.RIDER, null)) for (path in paths) for (d in listOf(false, true)) for (f in listOf(false, true)) {
-            assertEquals(Shown.NONE, shown(mode, path, d, f))
+            assertEquals("$mode $path $d $f", if (d && f) Shown.IDLE else Shown.NONE, shown(mode, path, d, f))
         }
     }
 
@@ -37,11 +37,19 @@ class ExternalDisplayPolicyTest {
     fun `instructor mode, every input, against a written table`() {
         for (path in paths) for (d in listOf(false, true)) for (f in listOf(false, true)) {
             val want = when {
-                !d || !f || path == null -> Shown.NONE
+                !d || !f -> Shown.NONE
                 path == room -> Shown.ROOM
                 else -> Shown.IDLE
             }
             assertEquals("$path $d $f", want, shown(Mode.INSTRUCTOR, path, d, f))
+        }
+    }
+
+    @Test
+    fun `the background and no display never present, in any mode`() {
+        for (mode in listOf(Mode.RIDER, Mode.INSTRUCTOR, null)) for (path in paths) {
+            assertEquals(Shown.NONE, shown(mode, path, display = true, fg = false))
+            assertEquals(Shown.NONE, shown(mode, path, display = false, fg = true))
         }
     }
 
