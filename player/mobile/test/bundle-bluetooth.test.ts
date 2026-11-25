@@ -15,14 +15,14 @@ const MOBILE = join(dirname(fileURLToPath(import.meta.url)), "..");
 const make = (extra: Record<string, unknown> = {}): Promise<BuildResult> =>
   build({ ...buildOptions("unused"), ...extra, absWorkingDir: MOBILE, write: false, metafile: true, logLevel: "silent" }) as Promise<BuildResult>;
 
-test("the phone app builds exactly its three entries", () => {
-  assert.deepEqual([...ENTRY_POINTS].sort(), ["src/instructor.ts", "src/main.ts", "src/rider.ts"]);
+test("the phone app builds exactly its four entries", () => {
+  assert.deepEqual([...ENTRY_POINTS].sort(), ["src/display.ts", "src/instructor.ts", "src/main.ts", "src/rider.ts"]);
 });
 
 test("every bundle of the phone app is free of Bluetooth code, also minified", async () => {
   for (const extra of [{}, { minify: true }]) {
     const r = await make(extra);
-    for (const e of ["instructor.js", "main.js", "rider.js"]) assert.ok(r.outputFiles!.some((f) => f.path.endsWith(e)), `${e} was not built`);
+    for (const e of ["display.js", "instructor.js", "main.js", "rider.js"]) assert.ok(r.outputFiles!.some((f) => f.path.endsWith(e)), `${e} was not built`);
     assert.deepEqual(buildFindings(r, MOBILE), []);
   }
 });

@@ -1,6 +1,6 @@
 // The phone app's esbuild options, shared by build.mjs and the Bluetooth guard test (issue #686), so the
 // test scans the build exactly as it is shipped.
-export const ENTRY_POINTS = ["src/main.ts", "src/rider.ts", "src/instructor.ts"];
+export const ENTRY_POINTS = ["src/main.ts", "src/rider.ts", "src/instructor.ts", "src/display.ts"];
 
 export function buildOptions(outdir) {
   return {

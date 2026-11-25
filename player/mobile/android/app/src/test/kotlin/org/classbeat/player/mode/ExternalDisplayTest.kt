@@ -32,10 +32,16 @@ private class FakeDisplays : DisplaySource {
 private class FakeSurface : RoomSurface {
     val log = mutableListOf<String>()
     var gone: (() -> Unit)? = null
+    var crashed: (() -> Unit)? = null
 
-    override fun show(id: Int, gone: () -> Unit) {
-        log.add("show $id")
+    override fun show(id: Int, page: String, gone: () -> Unit, crashed: () -> Unit) {
+        log.add("show $id $page")
         this.gone = gone
+        this.crashed = crashed
+    }
+
+    override fun load(page: String) {
+        log.add("load $page")
     }
 
     override fun dismiss() {
@@ -55,16 +61,18 @@ class ExternalDisplayTest {
         classOpen()
         assertEquals(emptyList<String>(), surface.log)
         displays.connect(2)
-        assertEquals(listOf("show 2"), surface.log)
+        assertEquals(listOf("show 2 /room.html"), surface.log)
     }
 
     @Test
-    fun `a display already there when the class opens shows it, and the class list does not`() {
+    fun `a display already there shows the idle stage on the class list, then the room screen when the class opens`() {
         displays.connect(2)
         ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
-        assertEquals(emptyList<String>(), surface.log)
+        assertEquals(listOf("show 2 /display.html"), surface.log)
         classOpen()
-        assertEquals(listOf("show 2"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "load /room.html"), surface.log)
+        ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
+        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html"), surface.log)
     }
 
     @Test
@@ -72,9 +80,9 @@ class ExternalDisplayTest {
         classOpen()
         displays.connect(2)
         displays.disconnect(2)
-        assertEquals(listOf("show 2", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
         displays.connect(3)
-        assertEquals(listOf("show 2", "dismiss", "show 3"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss", "show 3 /room.html"), surface.log)
     }
 
     @Test
@@ -85,7 +93,7 @@ class ExternalDisplayTest {
         assertEquals(emptyList<String>(), surface.log)
         classOpen()
         ext.update(null, null, foreground = true)
-        assertEquals(listOf("show 2", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -94,7 +102,7 @@ class ExternalDisplayTest {
         classOpen()
         ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
         classOpen()
-        assertEquals(listOf("show 2", "dismiss", "show 2"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html"), surface.log)
     }
 
     @Test
@@ -103,7 +111,7 @@ class ExternalDisplayTest {
         classOpen()
         classOpen()
         displays.connect(5)
-        assertEquals(listOf("show 2"), surface.log)
+        assertEquals(listOf("show 2 /room.html"), surface.log)
     }
 
     @Test
@@ -112,7 +120,18 @@ class ExternalDisplayTest {
         classOpen()
         surface.gone!!.invoke()
         classOpen()
-        assertEquals(listOf("show 2", "show 2"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "show 2 /room.html"), surface.log)
+    }
+
+    @Test
+    fun `a dead render process takes the presentation down and shows it again while the policy says so`() {
+        displays.connect(2)
+        classOpen()
+        surface.crashed!!.invoke()
+        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html"), surface.log)
+        ext.update(Mode.RIDER, "/rider.html", foreground = true)
+        surface.crashed!!.invoke()
+        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -122,8 +141,8 @@ class ExternalDisplayTest {
         assertEquals(emptyList<String>(), surface.log)
         displays.connect(2)
         ext.stop()
-        assertEquals(listOf("show 2", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
         displays.connect(3)
-        assertEquals(listOf("show 2", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
     }
 }

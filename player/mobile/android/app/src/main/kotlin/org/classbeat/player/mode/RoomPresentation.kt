@@ -26,14 +26,19 @@ import org.classbeat.player.policy.ExternalDisplayPolicy
 import org.classbeat.player.policy.NavigationPolicy
 
 /**
- * The room screen on an external display (issue #738): the bundled room page, full screen, in a web
+ * The room screen, or the idle stage, on an external display (issue #738): a bundled page, full screen, in a web
  * view locked down like the main one. It is a plain web view, not Capacitor's: no bridge is built
  * for it and no script interface is added, so the page has no native method to call. It has the
  * same settings (BridgeLockdown.harden: no network, no file or content access) and the same chrome
  * client (no permission), and the bundle is served by an asset loader that answers only what
  * [ExternalDisplayPolicy.mayLoad] allows. The page runs on the fake room (fake-room.ts) as on the phone.
  */
-class RoomPresentation(private val activity: Activity, display: Display) : Presentation(activity, display) {
+class RoomPresentation(
+    private val activity: Activity,
+    display: Display,
+    private var page: String,
+    private val crashed: () -> Unit,
+) : Presentation(activity, display) {
     var web: WebView? = null
         private set
 
@@ -46,11 +51,17 @@ class RoomPresentation(private val activity: Activity, display: Display) : Prese
         BridgeLockdown.harden(view.settings)
         view.settings.javaScriptEnabled = true
         view.settings.domStorageEnabled = true
-        view.webViewClient = PresentationClient(activity)
+        view.webViewClient = PresentationClient(activity) { view.post(crashed) }
         view.webChromeClient = LockedChromeClient()
         setContentView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         web = view
-        view.loadUrl(NavigationPolicy.APP_ORIGIN + ExternalDisplayPolicy.ROOM_PAGE)
+        view.loadUrl(NavigationPolicy.APP_ORIGIN + page)
+    }
+
+    /** Shows another bundled page (the policy's choice; the client refuses any other). */
+    fun load(page: String) {
+        this.page = page
+        web?.loadUrl(NavigationPolicy.APP_ORIGIN + page)
     }
 
     /** Takes the web view off its window and frees it. */
@@ -64,7 +75,7 @@ class RoomPresentation(private val activity: Activity, display: Display) : Prese
 }
 
 /** The bundle's files from the app's assets, and nothing else: no navigation, no link out, no TLS error accepted. */
-private class PresentationClient(context: Context) : WebViewClient() {
+private class PresentationClient(context: Context, private val renderGone: () -> Unit) : WebViewClient() {
     private val assets = WebViewAssetLoader.AssetsPathHandler(context)
     private val loader = WebViewAssetLoader.Builder()
         .setDomain("localhost")
@@ -83,18 +94,22 @@ private class PresentationClient(context: Context) : WebViewClient() {
         handler.cancel()
     }
 
-    // A dead renderer must not take the app down; the next presentation builds a new web view.
-    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean = true
+    // A dead renderer must not take the app down: the presenter takes this presentation down and, if the
+    // policy still says so, builds a new one (posted, so the web view is not freed inside its own callback).
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        renderGone()
+        return true
+    }
 }
 
 /** Shows [RoomPresentation] on a display by id. [ExternalDisplay] decides when. */
 class AndroidRoomSurface(private val activity: Activity) : RoomSurface {
     private var current: RoomPresentation? = null
 
-    override fun show(id: Int, gone: () -> Unit) {
+    override fun show(id: Int, page: String, gone: () -> Unit, crashed: () -> Unit) {
         val display = activity.getSystemService(DisplayManager::class.java).getDisplay(id)
         if (display == null) return gone()
-        val presentation = RoomPresentation(activity, display)
+        val presentation = RoomPresentation(activity, display, page, crashed)
         presentation.setOnDismissListener {
             // The system took it down (the display went away): free it and tell the presenter.
             presentation.release()
@@ -111,6 +126,10 @@ class AndroidRoomSurface(private val activity: Activity) : RoomSurface {
             current = null
             gone()
         }
+    }
+
+    override fun load(page: String) {
+        current?.load(page)
     }
 
     override fun dismiss() {
