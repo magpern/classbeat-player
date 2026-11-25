@@ -13,6 +13,9 @@ import { closeApp, launch } from "./launch.ts";
 import { startBackend } from "./room-backend.ts";
 import { onPage, theRoom, waitFor, within } from "./room-helpers.ts";
 
+// launch.ts gives Chromium software GL (SwiftShader), which the Linux and Windows runners render with. A macOS runner's Chromium has no
+// software WebGL at all (probed on the runner: every SwiftShader and GL switch left webgl disabled), but its virtual Metal device renders it.
+const GL = process.platform === "darwin" ? ["--use-angle=metal"] : [];
 const T = { timeout: 120_000 };
 let server: Server;
 let app: ElectronApplication;
@@ -26,7 +29,7 @@ const SLOW_MS = 400;
 before(async () => {
   let origin: string;
   ({ server, origin } = await startBackend(classWithSongs()));
-  ({ app, page } = await launch({ page: "list", args: ["--test-memory-keychain", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"], env: { PLAYER_BACKEND_ORIGIN: origin } }));
+  ({ app, page } = await launch({ page: "list", args: ["--test-memory-keychain", ...GL], env: { PLAYER_BACKEND_ORIGIN: origin } }));
   await app.evaluate(({ shell }) => {
     shell.openExternal = async () => undefined;
   });
@@ -63,7 +66,7 @@ test("a class with songs: the scene mounts in the room window and draws its canv
   // Nothing is forced here: the scene must be on before any step-down (which software GL may begin by itself some seconds later).
   await waitFor(async () => (await scene()) === "on", 60_000, "data-scene=on").catch(async (e: unknown) => {
     const gpu = await app.evaluate(({ app: a }) => JSON.stringify(a.getGPUFeatureStatus()));
-    throw new Error(`${String(e)}; ${await diagnosis()}; gpu=${gpu}`);
+    throw new Error(`${String(e)}; ${await diagnosis()}; gpu=${gpu}`, { cause: e });
   });
   // A canvas that was drawn on: the WebGL context exists and has a size, and it is the one the page shows.
   const canvas = await room.evaluate(() => {
