@@ -21,6 +21,7 @@ jobs:
   # filter counts as fine there; a failed or cancelled one fails `ci`.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       backend: ${{ steps.detect.outputs.backend }}
       schema: ${{ steps.detect.outputs.schema }}
@@ -47,6 +48,7 @@ jobs:
   repo-checks:
     needs: changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Repository checks
@@ -84,6 +86,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.player == 'true' || needs.changes.outputs.scene_spec == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - id: found
@@ -225,6 +228,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true' || needs.changes.outputs.player == 'true' || needs.changes.outputs.schema == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -249,6 +253,7 @@ jobs:
     if: needs.changes.outputs.web == 'true'
     name: web-specs (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -281,6 +286,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.schema == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
@@ -305,6 +311,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
@@ -458,6 +465,7 @@ jobs:
     needs: [changes, repo-checks, node-packages, scene-shots, desktop-app, web, web-specs, schema, backend, android, mobile]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Fail if any needed job failed or was cancelled
         env:
@@ -493,6 +501,7 @@ jobs:
   pr-title:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Check Conventional Commits title
