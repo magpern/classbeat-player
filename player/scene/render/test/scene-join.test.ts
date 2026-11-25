@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import { CARRY_MAX_MS, carriedMs, feedOf } from "../join/room-feed-calc.ts";
+import type { TextLink } from "../src/text-types.ts";
 import type { JoinFrame } from "../join/room-feed-calc.ts";
 import { STALL_MS, WATCH_EVERY_MS, startJoin } from "../join/scene-join.ts";
 import type { JoinPorts, SceneHandle } from "../join/scene-join.ts";
@@ -18,7 +19,7 @@ const doc = {
 } as unknown as Class;
 const frame = (over: Partial<JoinFrame["view"] & object> = {}, link: Partial<NonNullable<JoinFrame["link"]>> = {}): JoinFrame => ({
   doc, playlistNotLoaded: false, view: { status: "running", classMs: 10_000, songIndex: null, ...over },
-  link: { mode: "following", state: "Locked", held: false, songIndex: null, ...link },
+  link: { mode: "following", state: "Locked", held: false, songIndex: null, announcement: null, available: true, ...link },
 });
 
 /** Ports driven by hand: a clock, the animation frames and the timers. */
@@ -179,10 +180,10 @@ test("the feed: the clock is carried only while it runs, is capped, and holds a 
 test("the feed: song, link and stage come from the frame; nothing else does", () => {
   const out = feedOf(frame({ classMs: 0, status: "ready" }, { held: true }), 0, false)!;
   assert.equal(out.feed.stage, "before");
-  assert.deepEqual(out.feed.link, { state: "Locked", held: true });
+  assert.deepEqual(out.feed.link, { mode: "following", started: false, state: "Locked", held: true });
   assert.equal(out.feed.songPosMs, 0);
   assert.deepEqual(Object.keys(out.feed).sort(), ["classMs", "cls", "link", "playlistNotLoaded", "reducedMotion", "songIndex", "songPosMs", "stage"]);
-  assert.deepEqual(feedOf(frame({}, { mode: "manual", state: "Locked" }), 0, false)!.feed.link, { state: "Manual" });
+  assert.deepEqual(feedOf(frame({}, { mode: "manual", state: "Locked" }), 0, false)!.feed.link, { mode: "manual", started: true, state: "Manual", announcement: false, available: true });
   assert.equal(out.text.intervals[1]!.pattern?.startOn, "interval_start");
   assert.deepEqual(out.text.intervals[0]!.cadence, "beat");
   assert.equal(out.text.following, "Following Spotify");
@@ -216,15 +217,22 @@ test("a scene given up on stays down for that class and is tried again for the n
   f.advance(500);
   assert.equal(join.mode, "plain", "the same class: not again");
   assert.equal(f.created(), made);
-  join.push({ ...frame(), doc: { ...doc, class: { ...doc.class, title: "Another ride" } } as Class });
+  const another = { ...doc, class: { ...doc.class, title: "Another ride" } } as Class;
+  join.push({ ...frame(), doc: another, view: { status: "running", classMs: 30_000, songIndex: null } });
   f.advance(100);
   assert.equal(f.created(), made + 1);
   assert.equal(join.mode, "scene");
   assert.equal(join.why, null);
   f.lost();
-  join.push(frame({ status: "ready", classMs: 0 }));
+  // The scene was given up on in "Another ride" while it ran. The same class, still running, is not a new chance ...
+  join.push({ ...frame(), doc: another, view: { status: "running", classMs: 31_000, songIndex: null } });
+  f.advance(100);
+  assert.equal(f.created(), made + 1, "the same class, still running");
+  // ... but the same class started again (the clock ready at 0) is.
+  join.push({ ...frame(), doc: another, view: { status: "ready", classMs: 0, songIndex: null } });
   f.advance(100);
   assert.equal(f.created(), made + 2, "a fresh run of the same class");
+  assert.equal(join.mode, "scene");
 });
 
 test("reduced motion is never tried again, whatever class comes", () => {
@@ -250,4 +258,17 @@ test("a stopped join stays stopped", () => {
 test("the playlist notice goes from the frame to the feed", () => {
   assert.equal(feedOf({ ...frame(), playlistNotLoaded: true }, 0, false)!.feed.playlistNotLoaded, true);
   assert.equal(feedOf(frame(), 0, false)!.feed.playlistNotLoaded, false);
+});
+
+test("the link as the plain screen's words need it: following-before-lock is not the manual clock", () => {
+  const link = (over: Partial<NonNullable<JoinFrame["link"]>>) => feedOf(frame({}, over), 0, false)!.feed.link;
+  assert.deepEqual(link({ state: "Manual" }), { mode: "following", started: true, state: "Manual", held: false });
+  assert.deepEqual(link({ mode: "manual", state: "Locked", announcement: "x", available: true }), { mode: "manual", started: true, state: "Manual", announcement: true, available: true });
+  assert.equal(JSON.stringify(link({ mode: "manual", announcement: "private words" })).includes("private"), false, "only whether there is an announcement is read");
+  assert.equal((feedOf(frame({ classMs: 0, status: "ready" }), 0, false)!.feed.link as TextLink).started, false);
+  assert.deepEqual(feedOf({ ...frame(), link: null }, 0, false)!.feed.link, { mode: "manual", started: true, state: "Manual" });
+});
+
+test("the playlist notice is not carried once the class has ended", () => {
+  assert.equal(feedOf({ ...frame({ status: "ended", classMs: 120_000 }), playlistNotLoaded: true }, 0, false)!.feed.playlistNotLoaded, false);
 });

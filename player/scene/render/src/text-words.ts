@@ -1,8 +1,7 @@
 // The words and numbers the room screen shows (room-2d.md "Fitting text", scene.md "Intervals
 // first"): clocks, ranges, sides, the pattern in words and the music link's plate. Pure.
 
-import type { LinkInput } from "../../model/src/index.ts";
-import type { Cadence, Side, TextClass, TextPattern } from "./text-types.ts";
+import type { Cadence, Side, TextClass, TextLink, TextPattern } from "./text-types.ts";
 
 const pad2 = (n: number): string => String(n).padStart(2, "0");
 
@@ -56,16 +55,22 @@ export function barsText(bars: number, last: boolean): string {
   return `${bars} ${bars === 1 ? "bar" : "bars"} ${last ? "to the end" : "to the change"}`;
 }
 
-/** The link plate: quiet while following, white (alert) when the music is not followed (ADR 0001). */
-export function linkWords(link: LinkInput, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
-  if (link.held === true) return { text: "Until the next song", alert: false };
+/** The link plate, in the words of the plain screen (web/src/room/link-text.ts): quiet while following, white (alert) when the music is not followed (ADR 0001). */
+export function linkWords(link: TextLink, cls: Pick<TextClass, "following">, playlistNotLoaded = false): { text: string; alert: boolean } {
+  const following = link.mode === "following";
+  // "Playlist not loaded" (scene.md, the states table): white, in the place of the quiet states of a followed class (Locked, or "Manual" before the first lock),
+  // before the start too; never in place of a link fault or the real manual clock.
+  if (playlistNotLoaded && following && (link.state === "Locked" || link.state === "Manual")) return { text: "Playlist not loaded", alert: true };
+  if (link.started === false) return following ? { text: "Waiting for the first song", alert: false } : { text: "Press Start", alert: false };
+  if (following && link.state === "Manual") return { text: "Waiting for the first song", alert: false };
   switch (link.state) {
     case "Paused": return { text: "Music paused", alert: true };
     case "Coasting": return { text: "Music not heard", alert: true };
     case "Off the list": return { text: "Not a class song", alert: true };
     case "Ambiguous": return { text: "Song is in twice", alert: true };
-    case "Manual": return { text: "Manual clock", alert: false };
-    // "Playlist not loaded" (scene.md, the states table; room-2d.md): white, in the place of "Following ...", and never in place of a link fault above.
-    default: return playlistNotLoaded ? { text: "Playlist not loaded", alert: true } : { text: cls.following, alert: false };
+    case "Manual":
+      if (link.mode === "manual" && link.announcement === true) return { text: "Following stopped", alert: true };
+      return link.mode === "manual" && link.available === true ? { text: "Manual \u00b7 F to follow", alert: false } : { text: "Manual clock", alert: false };
+    default: return { text: cls.following, alert: false };
   }
 }

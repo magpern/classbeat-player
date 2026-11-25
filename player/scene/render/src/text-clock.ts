@@ -5,18 +5,19 @@
 // other text (the rail's clocks, the bars line, the labels, the score's travel) shows on the first mark at or after its
 // time and never before it. Pure: the frame's own state comes in, nothing is read.
 
-import type { LinkInput, SceneClass } from "../../model/src/index.ts";
+import type { SceneClass } from "../../model/src/index.ts";
 import { beatLevel } from "../../model/src/index.ts";
 import type { Want } from "../../model/src/index.ts";
 import { REACH_MS, planMarks } from "./marks-calc.ts";
 import { nth } from "./lookup.ts";
+import type { TextLink } from "./text-types.ts";
 
 /** What the text layer is told to show: the state of the class on the last mark's frame. */
 export interface Shown {
   readonly classMs: number;
   readonly songIndex: number;
   readonly songPosMs: number;
-  readonly link: LinkInput;
+  readonly link: TextLink;
   readonly reducedMotion: boolean;
   readonly playlistNotLoaded?: boolean;
   /** True on the frame the text steps. */
@@ -28,7 +29,7 @@ export interface ClockFeed {
   readonly classMs: number;
   readonly songIndex: number;
   readonly songPosMs: number;
-  readonly link: LinkInput;
+  readonly link: TextLink;
   readonly reducedMotion: boolean;
   readonly playlistNotLoaded?: boolean;
 }
@@ -39,7 +40,7 @@ const JUMP_MS = 1000;
 const REPLAN_MS = 2500;
 const EPS = 1e-6;
 
-const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.reducedMotion}|${f.playlistNotLoaded === true}`;
+const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.link.mode ?? ""}|${f.link.announcement === true}|${f.link.available === true}|${f.link.started !== false}|${f.reducedMotion}|${f.playlistNotLoaded === true}`;
 
 export class TextClock {
   private prev: { readonly cls: SceneClass; readonly classMs: number; readonly key: string } | null = null;

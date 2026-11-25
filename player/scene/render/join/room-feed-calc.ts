@@ -5,7 +5,7 @@
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import type { LinkInput, SceneClass } from "../../model/src/index.ts";
 import type { Feed } from "../src/loop.ts";
-import type { Cadence, TextClass, TextInterval, TextZone } from "../src/text-types.ts";
+import type { Cadence, TextClass, TextInterval, TextLink, TextZone } from "../src/text-types.ts";
 
 /** The fields of the shell's room frame the join reads (player/app/src/core/room/frame.ts); nothing else reaches it. */
 export interface JoinFrame {
@@ -22,6 +22,10 @@ export interface JoinFrame {
     readonly state: LinkInput["state"];
     readonly held: boolean;
     readonly songIndex: number | null;
+    /** The hand-over announcement's text while it lasts; only whether there is one is read, never the text. */
+    readonly announcement: string | null;
+    /** The music could be followed. */
+    readonly available: boolean;
   } | null;
 }
 
@@ -109,6 +113,14 @@ export function carriedMs(frame: JoinFrame, sinceMs: number): number {
   return running ? base + Math.max(0, Math.min(sinceMs, CARRY_MAX_MS)) : base;
 }
 
+/** The link as the plate's words read it (web/src/room/link-text.ts): the mode matters, because "Manual" in following mode is the wait for the first lock, not the manual clock. */
+function linkOf(link: JoinFrame["link"], started: boolean): TextLink {
+  if (link === null) return { state: "Manual", mode: "manual", started };
+  const base = { mode: link.mode, started } as const;
+  if (link.mode === "manual") return { ...base, state: "Manual", announcement: link.announcement !== null, available: link.available };
+  return { ...base, state: link.state, held: link.held };
+}
+
 /** The feed for one scene frame, or null where the plain screen is the right one (no class, no songs). */
 export function feedOf(frame: JoinFrame, sinceMs: number, reducedMotion: boolean): { feed: Feed; text: TextClass } | null {
   if (frame.doc === null || frame.view === null) return null;
@@ -117,10 +129,11 @@ export function feedOf(frame: JoinFrame, sinceMs: number, reducedMotion: boolean
   const classMs = Math.min(carriedMs(frame, sinceMs), frame.doc.class.length_ms);
   const songIndex = songIndexAt(frame.doc, frame, classMs);
   const song = frame.doc.songs.at(songIndex);
-  const link: LinkInput = frame.link === null || frame.link.mode === "manual" ? { state: "Manual" } : { state: frame.link.state, held: frame.link.held };
   const before = frame.view.status === "ready" && classMs <= 0;
+  const finished = frame.view.status === "ended" || classMs >= frame.doc.class.length_ms;
+  const link: TextLink = linkOf(frame.link, !before);
   const feed: Feed = {
-    cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion, playlistNotLoaded: frame.playlistNotLoaded,
+    cls: made.scene, classMs, songIndex, songPosMs: Math.max(0, classMs - (song?.start_ms ?? 0)), link, reducedMotion, playlistNotLoaded: frame.playlistNotLoaded && !finished,
     ...(before ? { stage: "before" as const } : {}),
   };
   return { feed, text: made.text };
