@@ -688,7 +688,15 @@ Adding one is a security-critical change.
 | `auth_new_link_code(code_hash, source, redirect, challenge)` | For the account already set only: stores a source link code. It writes no event (it takes no client); the exchange writes `source.linked` or `source.link_refused`. (Amended by ADR 0010, section 10: it takes `client`, `login_hint` and `issuer`; for a `classbeat` link to any account but the one named it writes `source.link_refused` (`wrong_account`) and returns `wrong_account`, storing no code; it stores the set account's `(issuer, subject)`.) | Nothing (amended by ADR 0010: null, or `wrong_account`) |
 | `auth_exchange_link_code(code_hash, source, redirect, verifier, token_hash)` | Checks the bindings and the PKCE verifier, uses up the code, creates the source link. Refuses above 5 links per account | True or false. (Amended by ADR 0010, section 10: `NULL` on a refusal, else the link's `(issuer, subject)`.) |
 | `rate_limit_hit(key_hash, window, limit)` | Counts one event in a fixed window | True when over the limit |
-| `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | Nothing |
+| `auth_purge_expired()` | Deletes expired links, challenges, pairings, codes, counters, sessions, old revoked devices, never-used devices and audit events past retention | A count per kind (amended 2026-11-25, as built in migration 0017 and #742: see the note below the table) |
+
+*As built, 2026-11-25 (migration 0017, #742).* `auth_purge_expired()` returns a table `(kind text,
+removed bigint)`: one row per kind, always all ten, in this order: `login_links`,
+`login_challenges`, `pairings`, `source_link_codes`, `rate_limits`, `classbeat_sign_ins`,
+`classbeat_event_ids`, `sessions`, `devices`, `audit_events`. A kind is the table's name and
+`removed` is 0 when nothing went. The deletes, retention periods and rights are those of before:
+`SECURITY DEFINER`, owned by `player_auth`, not executable by `PUBLIC`, executable by `player_app`.
+The operator command checks the kinds and counts and rolls the purge back on anything else.
 
 "For the account already set" means the function reads `app.account_id` and does nothing when
 it is empty. Every function that writes an audit event, a session or a device takes one more
