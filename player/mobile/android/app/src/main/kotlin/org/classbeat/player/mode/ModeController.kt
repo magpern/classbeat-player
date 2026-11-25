@@ -3,7 +3,6 @@ package org.classbeat.player.mode
 import android.app.KeyguardManager
 import android.content.Intent
 import android.provider.Settings
-import android.view.WindowManager
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -16,7 +15,6 @@ import org.classbeat.player.classes.InstructorIntents
 import org.classbeat.player.follow.Follower
 import org.classbeat.player.pairing.PairingPorts
 import org.classbeat.player.pairing.PairingService
-import org.classbeat.player.policy.KeepAwakePolicy
 import org.classbeat.player.policy.Mode
 import org.classbeat.player.policy.ModePolicy
 import org.classbeat.player.policy.NavigationPolicy
@@ -35,6 +33,7 @@ class ModeController(
     private lateinit var locked: BridgeLockdown.Locked
     private lateinit var webView: WebView
     private val screens = ModeScreens(activity)
+    private val keepAwake = KeepAwake(WindowScreenFlag(activity.window))
     private val opener = PageOpener(this)
     private val externalDisplay = ExternalDisplay(AndroidDisplays(activity), AndroidRoomSurface(activity))
     private lateinit var pairing: PairingUi
@@ -59,7 +58,7 @@ class ModeController(
 
     private lateinit var intents: InstructorIntents
 
-    /** The main-frame page last committed, and whether the app is in the foreground: inputs of [KeepAwakePolicy]. */
+    /** The main-frame page last committed, and whether the app is in the foreground: inputs of [KeepAwake]. */
     private var page: String? = null
     private var foreground = false
 
@@ -116,7 +115,7 @@ class ModeController(
         expose(null)
         // Between modes: the screen is released at once, before the drops run.
         page = null
-        setKeepOn(false)
+        keepAwake.release()
         syncExternalDisplay()
         pairing.drop()
         unpairing.close()
@@ -250,7 +249,7 @@ class ModeController(
 
     /** The window flag follows the pure decision; it is set only on the main thread, as everything here. */
     private fun syncKeepAwake() =
-        setKeepOn(KeepAwakePolicy.keepOn(current, page, riderJoined(), foreground))
+        keepAwake.sync(current, page, riderJoined(), foreground)
 
     /** The room screen on an external display follows the pure decision, as the window flag does (issue #738). */
     private fun syncExternalDisplay() = externalDisplay.update(current, page, foreground)
@@ -259,11 +258,6 @@ class ModeController(
     fun destroyed() = externalDisplay.stop()
 
     private fun riderJoined() = ::rider.isInitialized && rider.joined
-
-    private fun setKeepOn(on: Boolean) {
-        val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        if (on) activity.window.addFlags(flag) else activity.window.clearFlags(flag)
-    }
 
     private fun settle(answer: String) = question.settle(answer)
 
