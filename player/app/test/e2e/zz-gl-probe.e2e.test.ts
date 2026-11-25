@@ -19,7 +19,7 @@ for (const set of SETS) {
         const c = document.createElement("canvas");
         return { webgl2: c.getContext("webgl2") !== null, webgl1: document.createElement("canvas").getContext("webgl") !== null };
       });
-      const gpu = await app.evaluate(({ app: a }) => (a.getGPUFeatureStatus() as Record<string, string>).webgl);
+      const gpu = await app.evaluate(({ app: a }) => a.getGPUFeatureStatus().webgl);
       console.log(`PROBE ${JSON.stringify(set)} -> ${JSON.stringify(r)} webgl=${gpu}`);
     } finally {
       await closeApp(app);
