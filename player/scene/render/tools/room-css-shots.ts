@@ -1,0 +1,38 @@
+// The scene's text layer on a page that also carries the plain screen's stylesheet (the real room page does: dist/room.html
+// loads web/src/room/room.css beside the scene). That sheet's global `.cue`, `.next` ... rules must not reach `#text`: at 5:4
+// its `.cue { top: 60.2vh }` pulled the current cue up over the next row's cue (#823). The demo page loads no such sheet, so this
+// check injects the real one (read-only) and asserts the cue still ends at its spec line and that nothing overlaps.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Page } from "playwright-core";
+import { overlapScript } from "./page-checks.ts";
+import { RENDER_DIR } from "./tokens-file.ts";
+
+type Open = (w: number, h: number, query: string) => Promise<{ page: Page; problems: string[] }>;
+
+const ROOM_CSS = join(RENDER_DIR, "..", "..", "..", "web", "src", "room", "room.css");
+/** Size, and where the current cue's box ends (scene.md "Layout": 68.4 vh wide, 80.3 vh at 3:2 and narrower). */
+const CASES = [["16x9", 1920, 1080, 68.4], ["4x3", 1440, 1080, 80.3], ["5x4", 1279, 1023, 80.3]] as const;
+
+export async function pageStylesheetDoesNotReachTheCue(open: Open): Promise<void> {
+  const css = readFileSync(ROOM_CSS, "utf8");
+  const failures: string[] = [];
+  for (const [name, w, h, endVh] of CASES) {
+    const { page } = await open(w, h, "&class=long");
+    // A constructed sheet: the page's CSP allows no inline <style>.
+    await page.evaluate(async (text) => { const sheet = new CSSStyleSheet(); await sheet.replace(text); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; }, css);
+    await page.evaluate(() => (window as unknown as { __scene: { advance(a: number, b: number, fps: number): void; settle(): void } }).__scene.advance(279_000, 285_000, 60));
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => (window as unknown as { __scene: { settle(): void } }).__scene.settle());
+    const m = await page.evaluate(() => {
+      const r = document.querySelector("#text .cue")!.getBoundingClientRect();
+      return { bottom: r.bottom, height: r.height, vh: window.innerHeight };
+    });
+    const where = `room.css loaded, ${name}`;
+    if (Math.abs(m.bottom / m.vh * 100 - endVh) >= 0.3) failures.push(`${where}: the cue ends at ${(m.bottom / m.vh * 100).toFixed(1)} vh, not ${endVh}`);
+    for (const o of await page.evaluate(overlapScript) as string[]) failures.push(`${where}: S16 ${o}`);
+    await page.close();
+  }
+  assert.deepEqual(failures, [], "the page stylesheet reaches the text layer");
+}

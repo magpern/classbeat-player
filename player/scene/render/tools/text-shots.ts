@@ -1,4 +1,4 @@
-// CI's text-layer run (tools/shots.ts calls it): for each zone at 16:9, 16:10 and 4:3, a screenshot
+// CI's text-layer run (tools/shots.ts calls it): for each zone at 16:9, 16:10, 4:3 and 5:4, a screenshot
 // of the running room and the measured checks of scene.md on the real page: S1 cap heights, S2 the
 // colour of every line over the scene, S15 the safe area and S16 overlaps; then S2's light
 // measurement (the scene's relative luminance under every text box grown by 1.2 vh, over 120 frames
@@ -13,7 +13,7 @@ import { capsScript, coloursScript, lumSetup, maskCoverScript, overlapScript, sa
 
 export type Open = (w: number, h: number, query: string) => Promise<{ page: Page; problems: string[] }>;
 
-const SIZES = [["16x9", 1920, 1080], ["16x10", 1280, 800], ["4x3", 1440, 1080]] as const;
+const SIZES = [["16x9", 1920, 1080], ["16x10", 1280, 800], ["4x3", 1440, 1080], ["5x4", 1279, 1023]] as const;
 /** A moment inside each zone's interval of the long demo class (demo/long-class.ts), mid-interval and on the beat grid. */
 const ZONE_AT_S = [60, 180, 285, 355, 495, 575, 640] as const;
 export const CAP = 0.08;
@@ -37,7 +37,7 @@ export async function zoneShots(open: Open, dir: string): Promise<void> {
     await settle(page);
     const where = `zone ${zone} at ${name}`;
     await page.screenshot({ path: join(dir, `text-zone-${zone}-${name}-${w}x${h}.png`) });
-    assert.deepEqual(await page.evaluate(capsScript(name === "4x3")) as string[], [], `${where}: S1 text height`);
+    assert.deepEqual(await page.evaluate(capsScript(w / h <= 1.5)) as string[], [], `${where}: S1 text height`);
     assert.deepEqual(await page.evaluate(coloursScript) as string[], [], `${where}: S2 colour`);
     assert.deepEqual(await page.evaluate(safeAreaScript) as string[], [], `${where}: S15 safe area`);
     assert.deepEqual(await page.evaluate(overlapScript) as string[], [], `${where}: S16 overlap`);
@@ -54,7 +54,7 @@ export async function worstCase(open: Open, dir: string): Promise<void> {
     await page.evaluate(() => (window as unknown as Api).__scene.advance(349_000, 355_000, 60));
     await settle(page);
     const where = `worst case, ${link}, at ${name}`;
-    assert.deepEqual(await page.evaluate(capsScript(name === "4x3")) as string[], [], `${where}: S1 text height`);
+    assert.deepEqual(await page.evaluate(capsScript(w / h <= 1.5)) as string[], [], `${where}: S1 text height`);
     assert.deepEqual(await page.evaluate(coloursScript) as string[], [], `${where}: S2 colour`);
     assert.deepEqual(await page.evaluate(safeAreaScript) as string[], [], `${where}: S15 safe area`);
     assert.deepEqual(await page.evaluate(overlapScript) as string[], [], `${where}: S16 overlap`);
