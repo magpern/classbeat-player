@@ -24,6 +24,7 @@ import type { TextView } from "../src/text-view.ts";
 import { TextLayer } from "../layer/text-layer.ts";
 import { FrameLog } from "../tools/frame-log.ts";
 import { DEMO_TEXT } from "./demo-text.ts";
+import { RUNNING_TEXT } from "./running-class.ts";
 import { LONG_END_MS, LONG_TEXT, WORST_TEXT, longFeedAt } from "./long-class.ts";
 import { DEMO_CLASS, VARIANTS, feedAt } from "./scenario.ts";
 
@@ -65,7 +66,7 @@ const host: Host = {
 };
 const long = params.get("class") === "long" || params.get("class") === "worst";
 // Interval changes under 1 s apart are one change frame in the text too (P1): the merged-away interval is absent from it.
-const textClass = mergeTextClass(params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : DEMO_TEXT);
+const textClass = mergeTextClass(params.get("class") === "worst" ? WORST_TEXT : long ? LONG_TEXT : params.get("class") === "running" ? RUNNING_TEXT : DEMO_TEXT);
 const layer = new TextLayer();
 const renderer = new SceneRenderer(host, {
   tokens, quality: state.quality, textMask: params.get("mask") !== "0", budgetOff: params.get("budget") === "off", steadyOnly: params.get("steady") === "1",

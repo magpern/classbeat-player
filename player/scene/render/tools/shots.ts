@@ -53,6 +53,8 @@ const SHOTS_LIST: readonly Shot[] = [
   { name: "coasting-none-level", query: "&state=coasting", fromS: 30, toS: 38 },
   { name: "off-the-list-holding", query: "&state=off", fromS: 36, toS: 44 },
   { name: "reduced-motion-still-rig", query: "&rm=1", fromS: 30, toS: 38 },
+  // A running class (ADR 0015): the same light-only scene as the cycling class at the same moment; the assertions below hold the canvas's light to zone-2-beat's.
+  { name: "running-class", query: "&class=running", fromS: 23, toS: 29.5 },
   { name: "quality-medium", query: "&q=Medium", fromS: 23, toS: 29.5 },
   { name: "quality-low", query: "&q=Low", fromS: 23, toS: 29.5 },
 ];
@@ -123,6 +125,8 @@ async function screenshots(browser: Browser): Promise<void> {
   assert.ok(m("paused") < m("zone-2-beat") * 0.2, "paused: lights down");
   assert.ok(m("off-the-list-holding") < m("drop-fan"), "off the list has no fan and no burst");
   assert.ok(m("drop-burst") > m("zone-2-beat") * 1.5, "the drop's white burst is the brightest moment");
+  // Not equal to the digit: the running class's own words sit under the text mask. Anything a speed or an incline did to the light would be far more than 5 %.
+  assert.ok(Math.abs(m("running-class") - m("zone-2-beat")) < m("zone-2-beat") * 0.05, `a running class draws the scene as a cycling class does (${m("running-class")} against ${m("zone-2-beat")})`);
   assert.ok(m("quality-low") > 0, "low quality still draws");
 }
 

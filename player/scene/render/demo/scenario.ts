@@ -8,6 +8,7 @@
 import type { SceneClass, SceneInterval, SceneSong } from "../../model/src/index.ts";
 import type { Feed } from "../src/loop.ts";
 import { withGenerated } from "./generated.ts";
+import { RUNNING_VARIANT } from "./running-class.ts";
 
 const SONGS: readonly SceneSong[] = [
   { bpm: 120, anchors: [{ at_ms: 0, bpm: 120 }], moments: [{ at_ms: 40_000, kind: "drop" }, { at_ms: 58_000, kind: "drop" }], lengthMs: 60_000 },
@@ -43,6 +44,8 @@ const FIXED: Readonly<Record<string, Variant>> = {
   demo: DEMO_VARIANT,
   collide: { cls: COLLIDE_CLASS, starts: SONG_STARTS_MS },
   dim: { cls: DIM_CLASS, starts: [0, 60_000, 70_000, 100_000] },
+  /** A running class (ADR 0015) derived by the join from a class file: the scene must draw it as it draws the demo. */
+  running: RUNNING_VARIANT,
 };
 /** The fixed variants, and the names the CI matrices generate (demo/generated.ts: `tempo~<variant>`, `gen~<json>`). */
 export const VARIANTS: Readonly<Record<string, Variant>> = withGenerated(FIXED);
