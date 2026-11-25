@@ -126,6 +126,9 @@ own panels.
 | Playback is off | `off` (code: `disabled`) | Hollow square, "Swedebeat playback is off", detail "Swedebeat classes play on the manual clock." **No button, no field** | List as before. Footer detail for a Swedebeat class ends "Manual clock: Swedebeat playback is off" | [off](mockups/class-list-swedebeat-off.html) |
 | Not connected | `signed_out` | Hollow square, "Swedebeat is not connected", detail "Swedebeat classes play on the manual clock. Connect to play the mixes.", key "Connect Swedebeat" | Each Swedebeat row: hollow square "Manual clock". Footer detail ends "Manual clock: Swedebeat is not connected" | [not connected](mockups/class-list-swedebeat-signed-out.html) |
 | The form | `signed_out`, form open | Not shown | Panel "Connect Swedebeat": the sentence "Type the details you use for Swedebeat. They are used once to connect and are not kept.", the fields, "Connect", "Cancel", and "Your password is not kept." | [form](mockups/class-list-swedebeat-form.html) |
+| Field left empty (`sw-form-missing`) | `signed_out`, form open, Connect pressed with a field empty | **Plate** "Type your <empty fields>", detail "Every field is needed to connect. Nothing was sent." The fields are named in lowercase, in the form's order: "a", "a and b", "a, b and c" (fake source: "Type your password", "Type your username", "Type your username and password") | The form, fields already filled kept as typed; nothing was read or sent | [missing](mockups/class-list-swedebeat-form-missing.html) |
+| Not taken | the shell gave no answer to the details | **Plate** "Those details were not sent", detail "Type them again. Nothing was kept." | The form, empty | [not sent](mockups/class-list-swedebeat-form-not-sent.html) |
+| Did not finish | the call to the shell failed | **Plate** "Connecting did not finish", detail "Type your details again to try once more." The page reads the shell's state again | The form, empty | [did not finish](mockups/class-list-swedebeat-form-unfinished.html) |
 | Connecting | `signing_in` | Hollow circle, "Connecting to Swedebeat…", detail "Your details were sent and have been cleared from this page" | Panel "One moment": "Swedebeat classes can start on the manual clock meanwhile." No fields, no key | [connecting](mockups/class-list-swedebeat-connecting.html) |
 | Details refused | `refused` (`bad_credentials`) | **Plate** "Swedebeat did not accept those details", detail "Check them and type them again. Nothing was kept." | The form again, fields empty | [refused](mockups/class-list-swedebeat-refused.html) |
 | Too many tries | `refused` (`rate_limited`) | **Plate** "Too many tries", detail "Wait a few minutes, then type your details again. Nothing was kept." No number of minutes | The form again, empty | [too many](mockups/class-list-swedebeat-rate-limited.html) |
@@ -140,6 +143,12 @@ Notes:
 - The sync states of class-list.md still lead: with the cache unreadable, being wiped or pairing in
   progress the Swedebeat line is not shown.
 - "Try again" and "Connect Swedebeat again" open the form; they never send anything themselves.
+- The three plates above the form (field left empty, not taken, did not finish) are the page's own
+  notes. They replace a refusal the shell still holds while the form is open, and none of them shows
+  a value typed in a field. The empty-field plate has no key: the form's own "Connect" and "Cancel"
+  stay. **Long field lists (W6):** the plate takes at most three lines in all. The headline is one
+  line or two and the detail one line; a source whose empty fields do not fit in two headline lines
+  must have its labels shortened in `credentialFields()`, the plate is never ellipsised or cut.
 - Sign-out never asks for the password and works with no network (the deletion is local).
 
 ### A row's mix (while a source is on)
