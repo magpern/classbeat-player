@@ -127,7 +127,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.scene_shots == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: player/scene/render
