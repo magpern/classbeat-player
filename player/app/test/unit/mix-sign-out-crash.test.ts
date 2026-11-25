@@ -66,7 +66,8 @@ test("a sign-in for an account whose ending did not finish finishes it first, an
 
 test("the real vault: a marked account's token reads as none, the mark is found as an account, and the sweep clears both", () => {
   const d = mkdtempSync(join(tmpdir(), "mix-crash-"));
-  const v = keychainVault(fakeSafe(), d, "linux");
+  // The real flush runs here, so the vault is told the real system: Windows cannot flush a folder.
+  const v = keychainVault(fakeSafe(), d, process.platform === "win32" ? "win32" : "linux");
   v.saveToken(ACCT, FAKE_TOKEN);
   v.markEnding(ACCT);
   v.markEnding(ACCT);
