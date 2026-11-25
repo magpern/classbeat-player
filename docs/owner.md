@@ -19,6 +19,9 @@ with other work; nothing in the development loop waits for an answer.
   Store, the company's IT has to make an exception for the app in its device management. Until then the unsigned CI build
   (`classbeat-player-macos-unsigned`) runs only on a Mac that is not managed.
 
+- **A treadmill to test on** (PL10, #765): one with FTMS over Bluetooth, for a live check of the
+  treadmill reading. Until then PL10 is built and tested on a fake treadmill.
+
 - **Phone and tablet apps** (PL12, owner, 2026-11-15): Android first, as a self-signed APK
   installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
   with Spotify on it. Before the first APK that studios keep: an Android signing key, made once
