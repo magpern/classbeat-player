@@ -4,7 +4,7 @@
 // check injects the real one (read-only) and asserts the cue still ends at its spec line and that nothing overlaps.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Page } from "playwright-core";
 import { overlapScript } from "./page-checks.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
@@ -12,14 +12,57 @@ import { RENDER_DIR } from "./tokens-file.ts";
 type Open = (w: number, h: number, query: string) => Promise<{ page: Page; problems: string[] }>;
 
 const ROOM_CSS = join(RENDER_DIR, "..", "..", "..", "web", "src", "room", "room.css");
+
+/** The sheet with its `@import "./x.css";` lines replaced by the imported sheets' text, depth first. A constructed sheet drops
+ *  `@import` silently, so each one is inlined here; one that is not a relative file inside the room folder, or is missing, throws. */
+export function withImports(file: string, root = dirname(file), seen: string[] = []): string {
+  if (seen.includes(file)) throw new Error(`room.css: @import cycle at ${file}`);
+  return readFileSync(file, "utf8").replace(/@import\s+(?:url\()?["']([^"']+)["']\)?[^;]*;/g, (_m, ref: string) => {
+    const target = resolve(dirname(file), ref);
+    if (!/^\.\.?\//.test(ref) || !target.startsWith(root)) throw new Error(`room.css: @import "${ref}" is not a relative sheet inside ${root}`);
+    return withImports(target, root, [...seen, file]);
+  });
+}
+
+/** The scene spec's colours (scene.md S2: all text over the scene is --light-1; the gel's labels are ink), read from the page as
+ *  computed values, so page CSS that beats the text layer shows up here (#829). */
+const colourScript = `(() => {
+  const rgb = (token) => { const p = document.createElement("i"); p.style.color = "var(" + token + ")"; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
+  const light1 = rgb("--light-1");
+  const ink = rgb("--ink");
+  const out = [];
+  const text = document.querySelector("#text");
+  const check = (what, got, want) => { if (got !== want) out.push(what + " is " + got + ", not " + want); };
+  const all = (sel) => [...text.querySelectorAll(sel)];
+  const seen = { link: 0, lbl: 0, seg: 0, gelLbl: 0 };
+  for (const el of all(".link:not(.alert)")) { seen.link++; check(".link text", getComputedStyle(el).color, light1); check(".link marker", getComputedStyle(el, "::before").backgroundColor, light1); }
+  for (const el of all(".lbl")) {
+    if (el.closest(".gel")) { if (!el.closest(".gel.down")) { seen.gelLbl++; check(".gel .lbl", getComputedStyle(el).color, ink); } continue; }
+    seen.lbl++; check(".lbl outside the gel", getComputedStyle(el).color, light1);
+  }
+  for (const el of all(".rail .seg")) { seen.seg++; check(".rail .seg", getComputedStyle(el).color, light1); }
+  // The marker shapes (#822), in the colour of the text beside them: the dot, the square and the hollow ring.
+  const link = all(".link:not(.alert)")[0];
+  if (link) {
+    const keep = link.className;
+    for (const shape of ["sq", "rg"]) {
+      link.className = "link " + shape;
+      const b = getComputedStyle(link, "::before");
+      check(".link." + shape + " marker", shape === "rg" ? (b.backgroundImage.match(/rgb\\([^)]*\\)/g) || []).slice(-1)[0] || b.backgroundImage : b.backgroundColor, light1);
+    }
+    link.className = keep;
+  }
+  for (const [k, n] of Object.entries(seen)) if (n === 0) out.push("no " + k + " element on the page to check");
+  return out;
+})()`;
 /** Size, and where the current cue's box ends (scene.md "Layout": 68.4 vh wide, 80.3 vh at 3:2 and narrower). */
 const CASES = [["16x9", 1920, 1080, 68.4], ["4x3", 1440, 1080, 80.3], ["5x4", 1279, 1023, 80.3]] as const;
 
 export async function pageStylesheetDoesNotReachTheCue(open: Open): Promise<void> {
-  const css = readFileSync(ROOM_CSS, "utf8");
+  const css = withImports(ROOM_CSS);
   const failures: string[] = [];
   for (const [name, w, h, endVh] of CASES) {
-    const { page } = await open(w, h, "&class=long");
+    const { page, problems } = await open(w, h, "&class=long");
     // A constructed sheet: the page's CSP allows no inline <style>.
     await page.evaluate(async (text) => { const sheet = new CSSStyleSheet(); await sheet.replace(text); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; }, css);
     await page.evaluate(() => (window as unknown as { __scene: { advance(a: number, b: number, fps: number): void; settle(): void } }).__scene.advance(279_000, 285_000, 60));
@@ -30,8 +73,10 @@ export async function pageStylesheetDoesNotReachTheCue(open: Open): Promise<void
       return { bottom: r.bottom, height: r.height, vh: window.innerHeight };
     });
     const where = `room.css loaded, ${name}`;
+    for (const c of await page.evaluate(colourScript) as string[]) failures.push(`${where}: ${c}`);
     if (Math.abs(m.bottom / m.vh * 100 - endVh) >= 0.3) failures.push(`${where}: the cue ends at ${(m.bottom / m.vh * 100).toFixed(1)} vh, not ${endVh}`);
     for (const o of await page.evaluate(overlapScript) as string[]) failures.push(`${where}: S16 ${o}`);
+    for (const p of problems) failures.push(`${where}: ${p}`);
     await page.close();
   }
   assert.deepEqual(failures, [], "the page stylesheet reaches the text layer");
