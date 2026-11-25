@@ -6,9 +6,13 @@ import "../../../scene/render/join/scene-join.css";
 import { mountScene } from "../../../scene/render/join/mount.ts";
 import { onFrame } from "./room-frame-event.ts";
 
-const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-// After the plain screen in the document, so a query for its parts (`.gel`, `.intro`) finds the plain screen's first.
-const root = document.getElementById("scene-join");
-if (root) document.body.append(root);
-const scene = mountScene({ reducedMotion, visible: () => !document.hidden });
-onFrame(window, (frame) => scene.push(frame));
+// The scene draws what the shell feeds the room window through its preload (`window.room`); a page without that bridge has no class to draw,
+// so it builds no WebGL context at all.
+if ((window as unknown as { room?: unknown }).room !== undefined) {
+  const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // After the plain screen in the document, so a query for its parts (`.gel`, `.intro`) finds the plain screen's first.
+  const root = document.getElementById("scene-join");
+  if (root) document.body.append(root);
+  const scene = mountScene({ reducedMotion, visible: () => !document.hidden });
+  onFrame(window, (frame) => scene.push(frame));
+}
