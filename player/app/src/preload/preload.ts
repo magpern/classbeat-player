@@ -27,6 +27,11 @@ import {
   CH_STATE,
   CH_UNPAIR,
   CH_UPDATE,
+  CH_UPDATE_CHECK,
+  CH_UPDATE_OPEN_RELEASE,
+  CH_UPDATE_SET_AUTO,
+  CH_UPDATE_SET_PRERELEASES,
+  CH_UPDATE_STATUS,
 } from "../core/channels.ts";
 
 contextBridge.exposeInMainWorld("player", {
@@ -65,4 +70,12 @@ contextBridge.exposeInMainWorld("player", {
   dropRider: (rider: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_DROP_RIDER, rider),
   lockJoining: (locked: unknown): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_LOCK, locked),
   newJoinCode: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_NEW_CODE),
+  // Updates (class list only, ADR 0014 section 5): the status, Check now, Open release page (no
+  // argument: the shell builds the address) and the two switches, one boolean each. No address,
+  // path or feed setting crosses, and there is no way to start an install.
+  updateStatus: (): Promise<unknown> => ipcRenderer.invoke(CH_UPDATE_STATUS),
+  checkForUpdate: (): Promise<unknown> => ipcRenderer.invoke(CH_UPDATE_CHECK),
+  openReleasePage: (): Promise<unknown> => ipcRenderer.invoke(CH_UPDATE_OPEN_RELEASE),
+  setAutomaticChecks: (on: unknown): Promise<unknown> => ipcRenderer.invoke(CH_UPDATE_SET_AUTO, on),
+  setPrereleases: (on: unknown): Promise<unknown> => ipcRenderer.invoke(CH_UPDATE_SET_PRERELEASES, on),
 });

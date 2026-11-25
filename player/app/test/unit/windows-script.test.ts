@@ -223,8 +223,9 @@ test("the Windows helper is started only in windows-spawn.ts, and nothing starts
   assert.doesNotMatch(spawn, /shell: true|\bexec\w*\(|\bfork\(/);
   assert.equal(spawn.match(/\bspawn\(/g)?.length, 1);
   for (const f of files) assert.doesNotMatch(f.text, /shell: true|\bexecSync\b|\bopenPath\b/, f.path);
-  // The pairing page (#74) is the one thing opened in the system, from one file; macos-shell.test.ts pins how.
-  assert.deepEqual(files.filter((f) => /\bopenExternal\b/.test(f.text)).map((f) => f.path), ["main/pairing/setup.ts"]);
+  // The pairing page (#74) and the newer version's release page (#798) are the only things opened in
+  // the system, each from one file; macos-shell.test.ts pins how.
+  assert.deepEqual(files.filter((f) => /\bopenExternal\b/.test(f.text)).map((f) => f.path).sort(), ["main/pairing/setup.ts", "main/update/setup.ts"]);
 });
 
 test("the parser, the supervisor and the reader do no I/O of their own", () => {

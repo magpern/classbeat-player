@@ -67,3 +67,14 @@ test("a newer marker replaces a pending one and starts its count again", () => {
   assert.deepEqual(replaced.marker, { version: "1.2.0", found: 0 });
   assert.deepEqual(started(replaced).action, { action: "try new", version: "1.2.0" });
 });
+
+test("rewriting the pending marker for the same version keeps its count, so a build that fails on every start is reverted", () => {
+  const pending = started(markerWritten(NO_ROLLBACK, "1.1.0")).state;
+  assert.equal(pending.marker?.found, 1);
+  // The launcher writes the marker again before the second launch: the count is not reset.
+  const rewritten = markerWritten(pending, "1.1.0");
+  assert.equal(rewritten, pending);
+  const second = started(rewritten);
+  assert.deepEqual(second.action, { action: "revert", version: "1.1.0" });
+  assert.deepEqual(second.state, { marker: null, skipped: "1.1.0" });
+});

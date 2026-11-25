@@ -125,3 +125,35 @@ button { min-height: 44px; }
 .field-box input.in { font: inherit; font-size: 18px; width: 100%; min-height: 44px; background: var(--stage-raised); color: var(--light-1); border: 1px solid var(--stage-line); border-radius: 6px; padding: 9px 12px; letter-spacing: 0.02em; }
 .field-box input.in:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }
 .panel p.fine { font-size: 16px; color: var(--light-2); max-width: 34em; }
+
+/* The update notice and Settings (docs/design/updates.md, docs/design/mockups/updates.css). No hue, no motion. */
+.head .keys { display: flex; gap: 12px; }
+.mark.news { border-radius: 0; background: var(--light-1); }
+.notice { flex: none; margin-top: 10px; border: 2px solid var(--light-1); border-radius: 6px; padding: 6px 14px 6px 16px; display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 60px; }
+.notice .what, .s-status .what { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.notice .st, .s-status .st { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.notice .dt { display: block; font-size: 16px; color: var(--light-2); margin-top: 1px; line-height: 1.3; }
+.notice .l1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.notice .ver { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1; }
+.settings { flex: 1 1 0; min-height: 0; padding: 18px 0 20px; max-width: 760px; display: flex; flex-direction: column; gap: 22px; }
+.settings h2 { font-family: var(--face-number); font-weight: 800; font-size: 32px; line-height: 1.05; border-bottom: 1px solid var(--stage-line); padding-bottom: 8px; }
+.s-status { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 56px; }
+.s-status .st { display: block; }
+.s-status .dt { display: block; font-size: 16px; color: var(--light-2); margin-top: 2px; line-height: 1.3; }
+.facts { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 20px; align-items: baseline; }
+.facts .v { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1.1; display: flex; align-items: baseline; gap: 12px; }
+.facts .v.none { font-family: var(--face-text); font-weight: 400; font-size: 20px; color: var(--light-2); }
+.actions { display: flex; gap: 12px; align-items: center; }
+button[aria-disabled="true"] { color: var(--light-2); cursor: default; }
+.switches { display: grid; border-top: 1px solid var(--stage-line); }
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 72px; padding: 10px 0; border-bottom: 1px solid var(--stage-line); cursor: default; }
+.sw .nm { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.sw .hp { font-size: 16px; color: var(--light-2); margin-top: 2px; line-height: 1.3; max-width: 30em; }
+.sw .ctl { display: flex; align-items: center; gap: 12px; flex: none; }
+.sw .state { font-size: 17px; font-weight: 700; min-width: 2.2em; text-align: right; }
+.track { width: 60px; height: 34px; border: 2px solid var(--light-1); border-radius: 17px; position: relative; flex: none; }
+.track i { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--light-1); }
+.sw.on .track { background: var(--light-1); }
+.sw.on .track i { left: 30px; background: var(--ink); }
+.sw:focus { outline: none; }
+.sw:focus-visible { outline: 3px solid var(--light-1); outline-offset: 2px; }

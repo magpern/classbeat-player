@@ -35,9 +35,12 @@ export function mayOffer(s: RollbackState, version: string): boolean {
   return skipped === null || compareVersions(v, skipped) > 0;
 }
 
-/** The marker is written before the new version is launched. A version that may not be offered is refused (unchanged). */
+/** The marker is written before the new version is launched. A version that may not be offered is refused (unchanged).
+ *  A marker already pending for the same version is kept as it is: rewriting it must never reset its count, or a build
+ *  that fails on every start, with a marker written before each launch, would never be reverted. */
 export function markerWritten(s: RollbackState, version: string): RollbackState {
   if (!mayOffer(s, version)) return s;
+  if (s.marker !== null && s.marker.version === version) return s;
   return { ...s, marker: { version, found: 0 } };
 }
 

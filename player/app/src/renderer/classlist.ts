@@ -14,6 +14,7 @@ import { colsEl, footerEl, panelEl, plateEl, rowEl, shortcut, statusEl } from ".
 import type { Act } from "./list-paint.ts";
 import { mixFlow } from "./mix-flow.ts";
 import { clearTyped, emptyFields, fitPlate, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
+import { updatesUi } from "./update-ui.ts";
 
 interface ListApi {
   listView(): Promise<ListView | null>;
@@ -36,6 +37,7 @@ const $ = (id: string): HTMLElement => {
   return el;
 };
 const input = $("filter-input") as HTMLInputElement;
+const updates = updatesUi();
 
 let view: ListView | null = null;
 let screen: Screen | null = null;
@@ -201,6 +203,8 @@ function paint(): void {
   if (screen.body.kind === "list") paintList(screen as Screen & { body: { kind: "list" } });
   else if (screen.body.kind === "mix-form") paintForm(screen as Screen & { body: { kind: "mix-form" } });
   else paintPanel(screen as Screen & { body: { kind: "panel" } });
+  // The update notice only on a clear list: a plate or a panel comes first (updates.md, "Priority").
+  updates.listPainted(screen.plate === null && screen.filePlate === null && screen.mixPlate === null && screen.body.kind === "list");
   if ($("live").textContent !== screen.announce) $("live").textContent = screen.announce;
   fitPlate($("mix-slot"), listEl());
 }

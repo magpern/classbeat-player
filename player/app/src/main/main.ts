@@ -36,6 +36,9 @@ import { selectMusic } from "./select-music.ts";
 import { credentialOf } from "./sync/link.ts";
 import { setupSync } from "./sync/setup.ts";
 import type { SyncService } from "./sync/service.ts";
+import { registerUpdateHandlers } from "./update/update-handlers.ts";
+import { setupUpdates } from "./update/setup.ts";
+import type { UpdateService } from "./update/service.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 import { PRESENTER_SIZE } from "./window-size.ts";
 
@@ -56,6 +59,8 @@ let pairing: PairingService | null = null;
 let sync: SyncService | null = null;
 // The phone remote: off until the instructor starts it, in the presenter or on the room screen, and only for the open class run.
 let phoneRemote: LiveService | null = null;
+// Tells of a newer version outside a class only (ADR 0014); it downloads and installs nothing.
+let updates: UpdateService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
 const keepAwake = createKeepAwake(electronBlocker);
@@ -228,6 +233,9 @@ if (!app.requestSingleInstanceLock()) {
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
+    // The class gate: a class open in the room and presenter windows, or pinned (updates.md).
+    updates = setupUpdates(() => roomMayOpen(controller.snapshot().doc !== null, onListPage(), pinned()));
+    registerUpdateHandlers(ipcMain, trusted, updates);
     installMenu({ openClass: () => void openClass(), showList, showRoom });
     createPresenter();
     controller.attach(() => live()?.webContents ?? null);
@@ -237,6 +245,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("will-quit", () => keepAwake.release());
   app.on("will-quit", () => pairing?.stop());
   app.on("will-quit", () => sync?.stop());
+  app.on("will-quit", () => updates?.stop());
   // Last, so the rest has stopped: ends the phone remote's session, waiting a little for it (#205).
   app.on("will-quit", quit.willQuit);
   app.on("window-all-closed", () => {
