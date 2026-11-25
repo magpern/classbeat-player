@@ -182,8 +182,9 @@ jobs:
           if-no-files-found: error
 
   # The only job that can write, and only for a player-v tag that verify accepted. Never on a pull
-  # request. `--verify-tag` makes gh refuse rather than create a tag; an existing release is never
-  # replaced (gh fails instead).
+  # request. It checks the archives against SHA256SUMS and that the tag has not moved since the
+  # build (issue #783). `--verify-tag` makes gh refuse rather than create a tag; an existing
+  # release is never replaced (gh fails instead).
   publish:
     needs: [verify, checksums]
     if: needs.verify.outputs.publish == 'true' && github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/player-v')
@@ -196,6 +197,38 @@ jobs:
         with:
           name: release-player-assets
           path: assets
+      # The archives uploaded below are exactly the ones checksums listed, unchanged since then: every
+      # line of SHA256SUMS matches its file, and every archive here has a line.
+      - name: Check the archives against SHA256SUMS
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          sha256sum -c --strict SHA256SUMS
+          for f in ./*.tar.gz; do
+            awk -v f="${f#./}" '$2 == f || $2 == "*" f { found = 1 } END { exit !found }' SHA256SUMS ||
+              { echo "archive not in SHA256SUMS: $f" >&2; exit 1; }
+          done
+      # The tag must still point at the commit that was verified and built. A tag moved (or deleted)
+      # since the push fails the job here, before anything is published. Read-only and anonymous:
+      # the repository is public, and if it ever is not, ls-remote fails and so does the job.
+      - name: Check the remote tag still points at the built commit
+        env:
+          TAG: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          set -euo pipefail
+          refs="$(git ls-remote "$REPO_URL" "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+          # An annotated tag lists the tag object and its commit (^{}); a lightweight tag only the commit.
+          remote="$(awk -v r="refs/tags/$TAG^{}" '$2 == r { print $1 }' <<<"$refs")"
+          if [ -z "$remote" ]; then
+            remote="$(awk -v r="refs/tags/$TAG" '$2 == r { print $1 }' <<<"$refs")"
+          fi
+          if [ "$remote" != "$COMMIT" ]; then
+            echo "tag $TAG points at '${remote:-nothing}', not the built commit $COMMIT" >&2
+            exit 1
+          fi
+          echo "tag $TAG still points at $COMMIT"
       - name: Create the GitHub Release
         working-directory: assets
         env:
