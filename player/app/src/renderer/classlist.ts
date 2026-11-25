@@ -9,11 +9,11 @@ import { screenOf } from "../core/list/screen.ts";
 import type { Screen } from "../core/list/screen.ts";
 import { FILTER_FROM } from "../core/list/filter.ts";
 import type { ListUi, ListView } from "../core/list/view.ts";
-import type { MixUi } from "../core/mix/list-model.ts";
 import type { PairingView } from "../core/pairing/view.ts";
 import { colsEl, footerEl, panelEl, plateEl, rowEl, shortcut, statusEl } from "./list-paint.ts";
 import type { Act } from "./list-paint.ts";
-import { clearTyped, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
+import { mixFlow } from "./mix-flow.ts";
+import { clearTyped, emptyFields, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
 
 interface ListApi {
   listView(): Promise<ListView | null>;
@@ -76,38 +76,22 @@ const act: Act = (id) => {
   }
 };
 
-function setMix(mix: MixUi): void {
-  ui = { ...ui, mix };
-  paint();
-}
-
-/** Swedebeat: the form, the sign-out question, and the two calls (docs/design/swedebeat.md). */
-function mixAct(id: Parameters<Act>[0]): void {
-  if (id === "mix-connect") return setMix("form");
-  if (id === "mix-sign-out") return setMix("ask");
-  if (id === "mix-keep") return setMix("none");
-  if (id === "mix-cancel") {
-    clearTyped($("body"));
-    return setMix("none");
-  }
-  if (id === "mix-submit" && ui.mix === "form") {
-    const typed = takeTyped($("body"));
-    setMix("signing-in");
-    // A refusal of the details or of too many tries keeps the form, empty; anything else closes it.
-    return void api.mixSignIn(typed).then((v) => {
-      const again = v !== null && v.mix.state === "refused" && (v.mix.refusal === "bad_credentials" || v.mix.refusal === "rate_limited");
-      ui = { ...ui, mix: again ? "form" : "none" };
-      take(v);
-    });
-  }
-  if (id === "mix-sign-out-yes") {
-    setMix("signing-out");
-    return void api.mixSignOut().then((v) => {
-      ui = { ...ui, mix: "none" };
-      take(v);
-    });
-  }
-}
+/** Swedebeat: the form, the sign-out question, and the two calls (renderer/mix-flow.ts). */
+const mixAct = mixFlow({
+  mix: () => ui.mix ?? "none",
+  fields: () => view?.mix.fields ?? [],
+  emptyFields: () => emptyFields($("body")),
+  takeTyped: () => takeTyped($("body")),
+  clearTyped: () => clearTyped($("body")),
+  set: (mix, mixNote) => {
+    ui = { ...ui, mix, mixNote };
+    paint();
+  },
+  signIn: (typed) => api.mixSignIn(typed),
+  signOut: () => api.mixSignOut(),
+  take,
+  refresh,
+});
 
 function select(id: string, scroll: boolean): void {
   ui = { ...ui, selectedId: id };

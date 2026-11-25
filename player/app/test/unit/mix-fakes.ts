@@ -11,6 +11,8 @@ export interface FakeVault extends MixVault {
   readonly tokens: Map<string, string>;
   readonly keys: Set<string>;
   readonly folders: Set<string>;
+  /** Accounts marked as ending: their token counts as gone, as in the real vault. */
+  readonly ending: Set<string>;
   usable: boolean;
   failSave: boolean;
   /** A step that throws, to show the next one still runs. */
@@ -23,11 +25,12 @@ export function fakeVault(): FakeVault {
     tokens: new Map(),
     keys: new Set(),
     folders: new Set(),
+    ending: new Set(),
     usable: true,
     failSave: false,
     failStep: null,
     available: () => v.usable,
-    loadToken: (a) => v.tokens.get(a) ?? null,
+    loadToken: (a) => (v.ending.has(a) ? null : (v.tokens.get(a) ?? null)),
     saveToken(a, t) {
       if (v.failSave) throw new Error("record not saved");
       v.log.push(`saveToken ${a.slice(0, 1)}`);
@@ -54,7 +57,18 @@ export function fakeVault(): FakeVault {
       if (v.failStep === "removeFolder") throw new Error("x");
       v.folders.delete(a);
     },
-    accounts: () => [...new Set([...v.tokens.keys(), ...v.keys, ...v.folders])].sort(),
+    markEnding(a) {
+      v.log.push(`markEnding ${a.slice(0, 1)}`);
+      if (v.failStep === "markEnding") throw new Error("x");
+      v.ending.add(a);
+    },
+    isEnding: (a) => v.ending.has(a),
+    clearEnding(a) {
+      v.log.push(`clearEnding ${a.slice(0, 1)}`);
+      if (v.failStep === "clearEnding") throw new Error("x");
+      v.ending.delete(a);
+    },
+    accounts: () => [...new Set([...v.tokens.keys(), ...v.keys, ...v.folders, ...v.ending])].sort(),
   };
   return v;
 }

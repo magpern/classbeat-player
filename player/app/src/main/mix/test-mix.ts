@@ -79,9 +79,10 @@ export function testMixSource(wav: Uint8Array = toneWav(), pauseMs = PAUSE_MS): 
 export function testMixVault(dir: string): MixVault {
   const tokens = new Map<string, string>([[TEST_ACCOUNT, TOKEN]]);
   const keys = new Map<string, Buffer>();
+  const ending = new Set<string>();
   return {
     available: () => true,
-    loadToken: (a) => tokens.get(a) ?? null,
+    loadToken: (a) => (ending.has(a) ? null : (tokens.get(a) ?? null)),
     saveToken: (a, t) => void tokens.set(a, t),
     clearToken: (a) => void tokens.delete(a),
     hasKey: (a) => keys.has(a),
@@ -93,6 +94,9 @@ export function testMixVault(dir: string): MixVault {
     },
     clearKey: (a) => void keys.delete(a),
     removeFolder: (a) => rmSync(join(dir, "mixes", a), { recursive: true, force: true }),
-    accounts: () => [...new Set([...tokens.keys(), ...keys.keys()])],
+    markEnding: (a) => void ending.add(a),
+    isEnding: (a) => ending.has(a),
+    clearEnding: (a) => void ending.delete(a),
+    accounts: () => [...new Set([...tokens.keys(), ...keys.keys(), ...ending])],
   };
 }
