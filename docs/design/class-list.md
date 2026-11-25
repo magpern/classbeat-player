@@ -162,7 +162,7 @@ states that need the instructor (the system's only alert form, as on the room sc
 
 | State | Data | Status line (sentence case, no full stop, presenter.md) | Body | Mock-up |
 |---|---|---|---|---|
-| Up to date | `status: synced` | Filled circle, "Up to date", detail "Paired as *email*, “*device*”" (the device name only when there is one) | List, footer | [synced](mockups/class-list-synced.html) |
+| Up to date | `status: synced` | Filled circle, "Up to date" (the class list is in sync; it says nothing about the player's own version, which the update notice reports separately, [updates.md](updates.md)), detail "Paired as *email*, “*device*”" (the device name only when there is one) | List, footer | [synced](mockups/class-list-synced.html) |
 | Syncing, with classes | `status: syncing`, `classes > 0` | Hollow circle, "Syncing", detail "Checking for new and changed classes" | List, footer: classes start while syncing | [syncing](mockups/class-list-syncing.html) |
 | First sync | `status: syncing`, `classes: 0` | Hollow circle, "Syncing", detail "Paired as *email*, “*device*”" | Panel "Getting your classes" | [first sync](mockups/class-list-first-sync.html) |
 | Offline | `status: offline` | Hollow square, "Offline", detail "Showing the classes saved on this computer. Trying again later." Not a plate: offline is a normal state (plan, "Offline") | List, footer | [offline](mockups/class-list-offline.html) |
