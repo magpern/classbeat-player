@@ -2,9 +2,12 @@
 # Tests the desktop player release (issue #760): scripts/check-release-tag.sh against a throwaway
 # git repository, scripts/release-player-assets.sh on fake archives, and static checks of
 # .github/workflows/release-player.yml (pinned actions, no secrets, least privilege, timeouts,
-# nothing published from a pull request, no tag moved or deleted). Touches no network.
+# nothing published from a pull request, no tag moved or deleted; #783: build needs verify,
+# publish's guard is all &&, no pull_request_target, SHA256SUMS and the remote tag checked before
+# publishing). Touches no network.
 # The workflow checks are functions that wf_check calls by name, which shellcheck cannot see.
-# shellcheck disable=SC2329
+# The patterns quote workflow text such as ${{ github.sha }} and $COMMIT literally.
+# shellcheck disable=SC2329,SC2016
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -136,6 +139,51 @@ publish_guarded() {
     grep -q 'contents: write' "$tmp/publish" &&
     grep -q -- '--verify-tag' "$tmp/publish"
 }
+# The block of one job (two-space key under jobs:) into $tmp/job-<name>.
+job_block() {
+  awk -v j="  $1:" '$0 == j {p=1; next} p && /^  [A-Za-z0-9_-]+:$/{exit} p' "$wf" >"$tmp/job-$1"
+  [ -s "$tmp/job-$1" ]
+}
+# No build starts before verify has checked the tag (#783).
+build_needs_verify() {
+  job_block build && grep -Eq '^    needs: (verify|\[([a-z_-]+, )*verify(, [a-z_-]+)*\])$' "$tmp/job-build"
+}
+# publish's if: is one line of conditions all joined with &&: no ||, no negated group, and each
+# required condition is one of its terms (#783).
+publish_if_and_only() {
+  local cond term need found
+  job_block publish || return 1
+  [ "$(grep -c '^    if: ' "$tmp/job-publish")" -eq 1 ] || return 1
+  cond="$(sed -n 's/^    if: //p' "$tmp/job-publish")"
+  case "$cond" in *'||'* | *'!('*) return 1 ;; esac
+  for need in "needs.verify.outputs.publish == 'true'" "github.event_name != 'pull_request'" \
+    "startsWith(github.ref, 'refs/tags/player-v')"; do
+    found=0
+    while IFS= read -r term; do
+      term="$(sed -E 's/^ +| +$//g' <<<"$term")"
+      if [ "$term" = "$need" ]; then found=1; fi
+    done <<<"${cond//&&/$'\n'}"
+    [ "$found" -eq 1 ] || return 1
+  done
+}
+# No trigger that runs with write access on a pull request's code (#783).
+no_pr_target() { ! grep -q 'pull_request_target' "$wf"; }
+# publish runs <pattern> in a step before gh release create.
+before_release() {
+  local at rel
+  job_block publish || return 1
+  at="$(grep -nE -- "$1" "$tmp/job-publish" | head -n1 | cut -d: -f1)"
+  rel="$(grep -n 'gh release create' "$tmp/job-publish" | head -n1 | cut -d: -f1)"
+  [ -n "$at" ] && [ -n "$rel" ] && [ "$at" -lt "$rel" ]
+}
+# publish checks the downloaded archives against SHA256SUMS before uploading them (#783).
+publish_checks_sums() { before_release '^ +sha256sum -c --strict SHA256SUMS$'; }
+# publish checks that the remote tag still points at the built commit, and fails if not (#783).
+publish_checks_tag() {
+  before_release 'git ls-remote "\$REPO_URL" "refs/tags/\$TAG"' &&
+    grep -q '^          COMMIT: \${{ github.sha }}$' "$tmp/job-publish" &&
+    grep -A3 'if \[ "\$remote" != "\$COMMIT" \]; then' "$tmp/job-publish" | grep -q '^ *exit 1$'
+}
 # Nothing creates, moves or deletes a tag or a release, or pushes; no shell tracing that could echo values.
 no_tag_changes() { ! grep -Eq 'git (push|tag)|--delete|release (delete|edit)|--clobber|set -x|--force' "$wf"; }
 # Values a pusher controls reach scripts only through env:, never pasted into a run: script.
@@ -152,6 +200,11 @@ wf_check "contents: write appears once" one_write
 wf_check "every job has a timeout" all_timeouts
 wf_check "publish is guarded and uses --verify-tag" publish_guarded
 wf_check "never moves or deletes a tag, never traces" no_tag_changes
+wf_check "build needs verify" build_needs_verify
+wf_check "publish's if: joins its conditions with &&" publish_if_and_only
+wf_check "no pull_request_target trigger" no_pr_target
+wf_check "publish checks SHA256SUMS before uploading" publish_checks_sums
+wf_check "publish checks the remote tag still points at github.sha" publish_checks_tag
 wf_check "untrusted values pass through env only" no_injection
 
 exit "$fail"
