@@ -86,14 +86,16 @@ class ExternalDisplayTest {
     }
 
     @Test
-    fun `rider mode never shows it, and leaving the class takes it down`() {
+    fun `rider mode and the app between modes show the idle stage, never the room screen`() {
         displays.connect(2)
         ext.update(Mode.RIDER, "/rider.html", foreground = true)
         ext.update(Mode.RIDER, "/room.html", foreground = true)
-        assertEquals(emptyList<String>(), surface.log)
+        assertEquals(listOf("show 2 /display.html"), surface.log)
         classOpen()
         ext.update(null, null, foreground = true)
-        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html"), surface.log)
+        ext.update(Mode.RIDER, null, foreground = false)
+        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -129,9 +131,68 @@ class ExternalDisplayTest {
         classOpen()
         surface.crashed!!.invoke()
         assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html"), surface.log)
-        ext.update(Mode.RIDER, "/rider.html", foreground = true)
+        ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
         surface.crashed!!.invoke()
         assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html", "dismiss"), surface.log)
+    }
+
+    @Test
+    fun `a second crash on the same display, page and mode stays down until one of them changes`() {
+        displays.connect(2)
+        classOpen()
+        surface.crashed!!.invoke()
+        surface.crashed!!.invoke()
+        val down = listOf("show 2 /room.html", "dismiss", "show 2 /room.html", "dismiss")
+        assertEquals(down, surface.log)
+        // The same inputs again, a display event, and a trip to the background and back: still down.
+        classOpen()
+        displays.connect(5)
+        ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
+        classOpen()
+        assertEquals(down, surface.log)
+        // A change of page shows again, with its own re-present.
+        ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
+        assertEquals(down + "show 2 /display.html", surface.log)
+        surface.crashed!!.invoke()
+        assertEquals(down + listOf("show 2 /display.html", "dismiss", "show 2 /display.html"), surface.log)
+    }
+
+    @Test
+    fun `after a second crash, a change of display or of mode shows again`() {
+        displays.connect(2)
+        ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
+        surface.crashed!!.invoke()
+        surface.crashed!!.invoke()
+        displays.disconnect(2)
+        displays.connect(3)
+        assertEquals("show 3 /display.html", surface.log.last())
+        surface.crashed!!.invoke()
+        surface.crashed!!.invoke()
+        val down = surface.log.toList()
+        ext.update(Mode.RIDER, "/rider.html", foreground = true)
+        assertEquals(down + "show 3 /display.html", surface.log)
+    }
+
+    @Test
+    fun `a crash or a dismissal reported late, by a show that is no longer current, is ignored`() {
+        displays.connect(2)
+        classOpen()
+        val firstCrashed = surface.crashed!!
+        val firstGone = surface.gone!!
+        firstCrashed()
+        val reshown = listOf("show 2 /room.html", "dismiss", "show 2 /room.html")
+        assertEquals(reshown, surface.log)
+        // The first show's callbacks again, after the re-show: nothing comes down, and the budget is not spent.
+        firstCrashed()
+        firstGone()
+        classOpen()
+        assertEquals(reshown, surface.log)
+        surface.crashed!!.invoke()
+        assertEquals(reshown + "dismiss", surface.log)
+        // A callback of a presentation already dismissed changes nothing either.
+        surface.crashed!!.invoke()
+        surface.gone!!.invoke()
+        assertEquals(reshown + "dismiss", surface.log)
     }
 
     @Test

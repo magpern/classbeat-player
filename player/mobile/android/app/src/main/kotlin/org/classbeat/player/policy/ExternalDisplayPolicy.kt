@@ -17,21 +17,21 @@ object ExternalDisplayPolicy {
         /** "Display, class open": the room screen. */
         ROOM(ROOM_PAGE),
 
-        /** "Display, no class open": the idle stage. */
+        /** "Display, no class open", rider mode and between modes: the idle stage. */
         IDLE(IDLE_PAGE),
     }
 
     /**
-     * What the external display shows. Only in instructor mode, with a presentation display connected
-     * and the app in the foreground: the room screen while the phone is on the class page, the idle
-     * stage on every other page. Rider mode never presents, nor does the background, nor the app
-     * between modes ([mode] null) or before any page committed ([path] null). The phone's own screen
-     * does not depend on it: a display that goes away leaves the class running on the phone, and one
-     * that comes back presents again.
+     * What the external display shows (issue #752). With a presentation display connected and the app in
+     * the foreground, always a page of our own, so Android never mirrors the phone there: the room screen
+     * while instructor mode is on the class page, and the idle stage in every other case, rider mode and
+     * the app between modes ([mode] null) or before any page committed ([path] null) included. The
+     * background presents nothing. The phone's own screen does not depend on it: a display that goes away
+     * leaves the class running on the phone, and one that comes back presents again.
      */
     fun shown(mode: Mode?, path: String?, displayPresent: Boolean, foreground: Boolean): Shown = when {
-        mode != Mode.INSTRUCTOR || !displayPresent || !foreground || path == null -> Shown.NONE
-        path == ROOM_PAGE -> Shown.ROOM
+        !displayPresent || !foreground -> Shown.NONE
+        mode == Mode.INSTRUCTOR && path == ROOM_PAGE -> Shown.ROOM
         else -> Shown.IDLE
     }
 

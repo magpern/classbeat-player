@@ -109,7 +109,9 @@ class AndroidRoomSurface(private val activity: Activity) : RoomSurface {
     override fun show(id: Int, page: String, gone: () -> Unit, crashed: () -> Unit) {
         val display = activity.getSystemService(DisplayManager::class.java).getDisplay(id)
         if (display == null) return gone()
-        val presentation = RoomPresentation(activity, display, page, crashed)
+        lateinit var presentation: RoomPresentation
+        // The crash is posted: by the time it runs this presentation may be gone and another one shown.
+        presentation = RoomPresentation(activity, display, page) { if (current === presentation) crashed() }
         presentation.setOnDismissListener {
             // The system took it down (the display went away): free it and tell the presenter.
             presentation.release()
