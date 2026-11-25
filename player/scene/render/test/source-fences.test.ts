@@ -18,7 +18,7 @@ const ALLOWED = ["AdditiveBlending", "CircleGeometry", "Color", "ConeGeometry", 
 // The host (demo/ now, the shell later) alone builds the renderer; src/ is handed it (src/host.ts).
 const DEMO_ALLOWED = [...ALLOWED, "WebGLRenderer"];
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const sources = ["src", "demo"].flatMap((d) => readdirSync(join(RENDER_DIR, d)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${d}/${f}`, text: code(readFileSync(join(RENDER_DIR, d, f), "utf8")) })));
+const sources = ["src", "demo", "join"].flatMap((d) => readdirSync(join(RENDER_DIR, d)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${d}/${f}`, text: code(readFileSync(join(RENDER_DIR, d, f), "utf8")) })));
 
 test("three.js is imported by allowlisted names only, no subpath, no namespace or default import", () => {
   const names = (list: typeof sources) => list.flatMap((s) => [...s.text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"three"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()).filter(Boolean)));

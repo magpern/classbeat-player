@@ -5,19 +5,21 @@
 // other text (the rail's clocks, the bars line, the labels, the score's travel) shows on the first mark at or after its
 // time and never before it. Pure: the frame's own state comes in, nothing is read.
 
-import type { LinkInput, SceneClass } from "../../model/src/index.ts";
+import type { SceneClass } from "../../model/src/index.ts";
 import { beatLevel } from "../../model/src/index.ts";
 import type { Want } from "../../model/src/index.ts";
 import { REACH_MS, planMarks } from "./marks-calc.ts";
 import { nth } from "./lookup.ts";
+import type { TextLink } from "./text-types.ts";
 
 /** What the text layer is told to show: the state of the class on the last mark's frame. */
 export interface Shown {
   readonly classMs: number;
   readonly songIndex: number;
   readonly songPosMs: number;
-  readonly link: LinkInput;
+  readonly link: TextLink;
   readonly reducedMotion: boolean;
+  readonly playlistNotLoaded?: boolean;
   /** True on the frame the text steps. */
   readonly changed: boolean;
 }
@@ -27,8 +29,9 @@ export interface ClockFeed {
   readonly classMs: number;
   readonly songIndex: number;
   readonly songPosMs: number;
-  readonly link: LinkInput;
+  readonly link: TextLink;
   readonly reducedMotion: boolean;
+  readonly playlistNotLoaded?: boolean;
 }
 
 /** The class clock moves by more than this between two frames: a seek or a jump, a person's action. */
@@ -37,7 +40,7 @@ const JUMP_MS = 1000;
 const REPLAN_MS = 2500;
 const EPS = 1e-6;
 
-const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.reducedMotion}`;
+const stateKey = (f: ClockFeed): string => `${f.link.state}|${f.link.held === true}|${f.link.mode ?? ""}|${f.link.announcement === true}|${f.link.available === true}|${f.link.started !== false}|${f.link.mix?.text ?? ""}|${f.link.mix?.shape ?? ""}|${f.reducedMotion}|${f.playlistNotLoaded === true}`;
 
 export class TextClock {
   private prev: { readonly cls: SceneClass; readonly classMs: number; readonly key: string } | null = null;
@@ -58,7 +61,7 @@ export class TextClock {
   /** The text for this frame. The same feed again (the host asks first, the rig's loop after) gives the same answer. */
   step(feed: ClockFeed): Shown {
     const s = this.seen;
-    if (this.out !== null && s !== null && s.cls === feed.cls && s.classMs === feed.classMs && s.songIndex === feed.songIndex && s.songPosMs === feed.songPosMs && s.link === feed.link && s.reducedMotion === feed.reducedMotion) return this.out;
+    if (this.out !== null && s !== null && s.cls === feed.cls && s.classMs === feed.classMs && s.songIndex === feed.songIndex && s.songPosMs === feed.songPosMs && s.link === feed.link && s.reducedMotion === feed.reducedMotion && s.playlistNotLoaded === feed.playlistNotLoaded) return this.out;
     this.seen = feed;
     const c = feed.classMs;
     const prev = this.prev;
@@ -92,7 +95,7 @@ export class TextClock {
       this.fired = [...this.fired.filter((m) => m > due - 2 * REACH_MS), due];
       // What is shown is this frame's state, so every action up to now is shown; the marks planned for them are void.
       if (this.actions.length > 0) { this.actions = []; this.plan = null; }
-      this.out = { classMs: c, songIndex: feed.songIndex, songPosMs: feed.songPosMs, link: feed.link, reducedMotion: feed.reducedMotion, changed: true };
+      this.out = { classMs: c, songIndex: feed.songIndex, songPosMs: feed.songPosMs, link: feed.link, reducedMotion: feed.reducedMotion, playlistNotLoaded: feed.playlistNotLoaded === true, changed: true };
     } else if (this.out !== null) {
       this.out = { ...this.out, changed: false };
     }

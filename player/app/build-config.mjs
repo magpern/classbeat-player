@@ -31,4 +31,7 @@ export const BUILDS = [
   { ...common, ...page, entryPoints: ["src/renderer/room.ts"], outdir: "dist", loader: { ".woff2": "file" }, assetNames: "room-fonts/[name]" },
   // The presenter's style sheet, with the design tokens' properties and none of their faces.
   { ...common, entryPoints: ["src/renderer/presenter.css"], outfile: "dist/presenter.css", target: "chrome130", plugins: [noFontFaces] },
+  // The 3D scene under the room screen (player/scene/render/join): its own script and style, so the phone app, which bundles room.ts, carries no three.js.
+  // three.js resolves from this package: the scene package's own node_modules need not be installed.
+  { ...common, ...page, entryPoints: ["src/renderer/room-scene.ts"], outdir: "dist", nodePaths: ["node_modules"] },
 ];

@@ -1,0 +1,5 @@
+/* The scene under the room window's text and controls: the canvas and the text layer fill the window below the control band (z-index 10) and the join sheet (9); the plain screen stays mounted and is only hidden while the scene shows. */
+#scene-join { display: none; position: fixed; inset: 0; z-index: 1; background: var(--stage, #000); }
+:root[data-scene="on"] #scene-join { display: block; }
+:root[data-scene="on"] .room { visibility: hidden; }
+#scene-join canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }

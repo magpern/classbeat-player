@@ -55,13 +55,32 @@ export interface TextClass {
   readonly score?: { readonly intervals: readonly TextInterval[]; readonly away: readonly number[] };
 }
 
+/**
+ * The link as the plate's words need it: the model's link, with what the plain screen's words add (web/src/room/link-text.ts). All optional,
+ * so a plain `LinkInput` is a link with no more to say. The text clock's frame marks watch every field, so a change of any is a step.
+ */
+export interface TextLink extends LinkInput {
+  /** "following": the instructor chose the music, so "Manual" is the wait for the first lock; "manual": the clock is the instructor's own. */
+  readonly mode?: "following" | "manual";
+  /** The hand-over announcement is on ("Following stopped"). */
+  readonly announcement?: boolean;
+  /** The music could be followed ("Manual · F to follow"). */
+  readonly available?: boolean;
+  /** False before the clock is started. */
+  readonly started?: boolean;
+  /** The link line of a mix class (docs/design/swedebeat.md, "Room screen"): the player's fixed words and a shape, checked against the fixed pairs by the join. It takes the plate's place, as on the plain screen. */
+  readonly mix?: { readonly text: string; readonly shape: "dot" | "circle" | "square" | "news" };
+}
+
 export interface TextInput {
   readonly cls: TextClass;
   readonly classMs: number;
   readonly songIndex: number;
   readonly songPosMs: number;
-  readonly link: LinkInput;
+  readonly link: TextLink;
   readonly reducedMotion: boolean;
+  /** The shell's notice that the class playlist did not load (30 s after Start): the link plate says so while the music is followed. Absent counts as false. */
+  readonly playlistNotLoaded?: boolean;
   /** Window width over height. */
   readonly aspect: number;
 }

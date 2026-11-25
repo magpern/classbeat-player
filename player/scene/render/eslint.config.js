@@ -233,7 +233,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["demo/**/*.ts"],
+    files: ["demo/**/*.ts", "join/**/*.ts"],
     rules: {
       ...base,
       "no-restricted-imports": threeImports(THREE_DEMO_ALLOWED),

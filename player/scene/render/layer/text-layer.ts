@@ -120,8 +120,10 @@ export class TextLayer {
 
   private updateRail(view: TextView): void {
     const rail = view.rail;
-    setText(this.rail.time, rail.left);
-    setText(this.rail.done, rail.done);
+    setText(this.rail.time, rail.left ?? "");
+    show(this.rail.time, rail.left !== null);
+    setText(this.rail.done, rail.done ?? "");
+    show(this.rail.done, rail.done !== null);
     setText(this.rail.seg, rail.segment ?? "");
     show(this.rail.seg, rail.segment !== null);
     setText(this.rail.link, rail.link.text);

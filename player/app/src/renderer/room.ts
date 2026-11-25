@@ -15,6 +15,7 @@ import { mountBand } from "./room-band.ts";
 import { mountMix } from "./room-mix.ts";
 import { createMarks } from "./room-marks.ts";
 import { mountSheet } from "./room-join.ts";
+import { announceFrame } from "./room-frame-event.ts";
 
 type Answer<T> = Promise<T | null>;
 
@@ -41,6 +42,7 @@ interface RoomApi {
 const api = (window as unknown as { room: RoomApi }).room;
 const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const screen = window.classbeatRoom.mount(document.body, { reducedMotion });
+// The 3D scene (room-scene.ts, its own script) listens for the frames the plain screen draws; this script knows nothing of it, so the phone app that bundles it carries no three.js.
 
 // One display unless the system says the desktop spans more than one (the Window Management
 // API's `isExtended`); where it cannot tell, the band behaves as on one display, which keeps Start
@@ -57,6 +59,7 @@ const sheet = mountSheet(document.body, () => band.redraw(), marks);
 const draw = (frame: RoomFrame | null): void => {
   if (!frame) return;
   screen.update(frame);
+  announceFrame(window, frame);
   status = (frame.view?.status as ClockStatus | undefined) ?? null;
   sheet.facts(status, slot);
   band.frame(frame);

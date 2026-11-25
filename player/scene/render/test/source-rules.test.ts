@@ -9,7 +9,7 @@ import { RENDER_DIR } from "../tools/tokens-file.ts";
 
 const read = (dir: string) => readdirSync(join(RENDER_DIR, dir)).filter((f) => f.endsWith(".ts")).map((f) => ({ name: `${dir}/${f}`, text: readFileSync(join(RENDER_DIR, dir, f), "utf8") }));
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const sources = [...read("src"), ...read("demo"), ...read("layer")].map((s) => ({ ...s, text: code(s.text) }));
+const sources = [...read("src"), ...read("demo"), ...read("join"), ...read("layer")].map((s) => ({ ...s, text: code(s.text) }));
 
 const FORBIDDEN: readonly [string, RegExp][] = [
   ["audio (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bMediaSource\b|\.play\s*\(|\bgetUserMedia\b|\b\w*(Audio|Loader)\w*\b/],
@@ -51,7 +51,7 @@ test("the renderer passes on the model's moments and never makes its own", () =>
 test("no rider data and no hue of its own: the feed is the class clock's state and nothing else", () => {
   const loop = sources.find((s) => s.name === "src/loop.ts")!.text;
   const feed = /export interface Feed \{([\s\S]*?)\n\}/.exec(loop)![1]!;
-  assert.deepEqual([...feed.matchAll(/readonly (\w+)\??:/g)].map((m) => m[1]), ["cls", "classMs", "songIndex", "songPosMs", "link", "reducedMotion", "stage"]);
+  assert.deepEqual([...feed.matchAll(/readonly (\w+)\??:/g)].map((m) => m[1]), ["cls", "classMs", "songIndex", "songPosMs", "link", "reducedMotion", "playlistNotLoaded", "stage"]);
   assert.doesNotMatch(sources.map((s) => s.text).join("\n"), /\b(heartRate|heart_rate|watts?|riders?)\b/i);
 });
 
