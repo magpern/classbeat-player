@@ -15,7 +15,7 @@ import { registerUpdateHandlers } from "../../src/main/update/update-handlers.ts
 const TRUSTED = { presenterId: 7, presenterUrl: "file:///app/dist/presenter.html", listUrl: "file:///app/dist/classlist.html" };
 const event = (url: string, over: { id?: number; parent?: unknown } = {}): IpcMainInvokeEvent => ({ sender: { id: over.id ?? 7 }, senderFrame: { parent: over.parent ?? null, url } }) as unknown as IpcMainInvokeEvent;
 const fromList = event(TRUSTED.listUrl);
-const VIEW: UpdateView = { kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, auto: true, prereleases: false };
+const VIEW: UpdateView = { kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, checked: true, auto: true, prereleases: false };
 
 function rig() {
   const asked: unknown[][] = [];

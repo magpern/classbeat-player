@@ -77,6 +77,7 @@ for (const state of UPDATE_STATES) {
         await page.screenshot({ path: join(SHOT_DIR, `updates-${name}.png`), animations: "disabled" });
         const report = await check(page);
         assert.deepEqual(report.problems, [], name);
+        if (state.says !== undefined) assert.ok(((await page.textContent("#settings-app")) ?? "").includes(state.says), `${name}: says ${state.says}`);
         const f = await facts(page);
         const newer = state.update?.kind === "newer";
         // The notice: on the list, for a newer version, kept (with its button) while a new check runs.

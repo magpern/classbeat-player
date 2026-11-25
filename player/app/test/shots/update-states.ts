@@ -13,10 +13,12 @@ export interface UpdateState {
   readonly settings: boolean;
   /** Keys pressed after the page is shown (the focus ring on a switch). */
   readonly keys?: readonly string[];
+  /** Words the Settings page must show (the status detail line). */
+  readonly says?: string;
 }
 
 const list = (name: string): ListView => STATES.find((s) => s.name === name)!.view;
-export const U = (over: Partial<UpdateView>): UpdateView => ({ kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, auto: true, prereleases: false, ...over });
+export const U = (over: Partial<UpdateView>): UpdateView => ({ kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, checked: true, auto: true, prereleases: false, ...over });
 
 export const NEWER = U({ kind: "newer", latest: "0.2.0", notice: "0.2.0" });
 const NEWER_PRE = U({ kind: "newer", latest: "0.3.0-rc.1", notice: "0.3.0-rc.1", prereleases: true });
@@ -32,6 +34,7 @@ export const UPDATE_STATES: readonly UpdateState[] = [
   { name: "newer", list: list("synced"), update: NEWER, settings: true },
   { name: "newer-prerelease", list: list("synced"), update: NEWER_PRE, settings: true },
   { name: "checking", list: list("synced"), update: U({ kind: "checking" }), settings: true },
-  { name: "could-not-check", list: list("synced"), update: U({ kind: "could not check", latest: null }), settings: true },
+  { name: "could-not-check", list: list("synced"), update: U({ kind: "could not check", latest: null }), settings: true, says: "The list of releases could not be read. Press Check now to try again." },
+  { name: "before-any-check", list: list("synced"), update: U({ kind: "could not check", latest: null, checked: false, auto: false }), settings: true, says: "No check has run yet. Press Check now." },
   { name: "auto-off", list: list("synced"), update: U({ auto: false, prereleases: true }), settings: true, keys: ["Tab"] },
 ];
