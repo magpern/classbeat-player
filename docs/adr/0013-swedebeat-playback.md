@@ -357,3 +357,26 @@ amends section 3 where it says which mixes are kept and how the cap works.
   again on `durationchange`; the mix is dropped for a wrong length (more than 1 000 ms from
   `length_ms`) only when two reports in a row give the same length, so an early estimate does not
   drop it (`main/mix/mix-player.ts`, `report`).
+
+## Amendment: sign-out ending mark as built (PL11, #709, #723)
+
+Records code already reviewed, as built. It amends the deletion order in section 1 ("One key
+lifetime").
+
+- **An "ending" mark goes first.** Sign-out, unpairing and the account's deletion each write an empty
+  mark file for the account (`mix-ending-<account key>.bin`, mode 0600, never following a link
+  planted in its place) before anything is deleted (`markEnding` in `main/mix/vault.ts`; `forget`
+  in `main/mix/service.ts`). If the mark cannot be written the steps still run.
+- **The order is then:** the mark, the cache key, the token, the account's mix folder, and the mark
+  last (`forget`, `finish` in `main/mix/service.ts`). Each step runs even when one before it failed.
+- **The mark is removed only when all three deletions succeeded** (key, token and folder; `finish`).
+  Otherwise it stays.
+- **While the mark exists the token reads as gone:** `loadToken` returns null for an ending account
+  (`main/mix/vault.ts`), so a crash or a failed deletion never leaves an account that looks
+  connected.
+- **The start-up sweep or the next sign-in finishes the deletion.** `sweep` ends every account with
+  a mark, including the current account's own, and `signIn` finishes an unfinished ending first and
+  sends nothing while the mark still cannot be removed (`main/mix/service.ts`).
+- The sign-in form's three notes for an empty field, details not taken and a call that did not
+  finish are in `core/mix/form-note.ts`; their states are in
+  [the Swedebeat spec](../design/swedebeat.md).
