@@ -24,6 +24,17 @@ test("a frame announced on a page reaches the scene's listener, once, until it s
   assert.equal(got.length, 1);
 });
 
+test("a listener that joins after a frame was announced is given that frame at once, then the new ones", () => {
+  const page: FrameHost = {};
+  announceFrame(page, frame);
+  const got: RoomFrame[] = [];
+  onFrame(page, (f) => got.push(f));
+  assert.deepEqual(got, [frame]);
+  const next = { ...frame, playlistNotLoaded: false } as RoomFrame;
+  announceFrame(page, next);
+  assert.deepEqual(got, [frame, next]);
+});
+
 test("with no listener, announcing does nothing; frames on another page are not heard", () => {
   announceFrame({}, frame);
   const got: RoomFrame[] = [];

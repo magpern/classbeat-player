@@ -45,7 +45,8 @@ export function textView(input: TextInput): TextView {
 
   const gel: GelView = { zone: iv.zone, look: paused ? "down" : "zone", numeral: String(iv.zone), name: zone.name, nameSmall: nameSmall(zone.name, layout, aspect), targets: zone.targets };
   const segment = cls.segments.filter((s) => s.startMs <= classMs).at(-1)?.name ?? null;
-  const rail: RailView = { left: `${clockText(cls.endMs - classMs)} left`, done: `${classTimeText(classMs)} done`, segment: layout === "wide" && !plate.alert ? segment : null, link: plate };
+  const unstarted = link.started === false;
+  const rail: RailView = { left: unstarted ? null : `${clockText(cls.endMs - classMs)} left`, done: unstarted ? null : `${classTimeText(classMs)} done`, segment: layout === "wide" && !plate.alert ? segment : null, link: plate };
 
   const bpm = song?.bpm;
   const bars = level === "Beat" && bpm !== undefined && !paused ? barsText(Math.floor((remaining * bpm) / 60_000 / 4), last) : null;

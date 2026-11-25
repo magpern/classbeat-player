@@ -28,7 +28,7 @@ test("S4: all nine content items are in the view in every running state, at ever
     assert.ok(v.cue.text.length > 0, `${where}: 5 the cue`);
     assert.ok(v.next.zoneName.length > 0 && (v.next.end || v.next.length.length > 0), `${where}: 6 what comes next`);
     assert.ok(v.score.intervals.length > 0 && v.score.songs.length > 0, `${where}: 7 the score`);
-    assert.ok(v.rail.left.endsWith("left") && v.rail.done.endsWith("done"), `${where}: 8 the time in the class`);
+    assert.ok(v.rail.left?.endsWith("left") && v.rail.done?.endsWith("done"), `${where}: 8 the time in the class`);
     assert.ok(v.rail.link.text.length > 0, `${where}: 9 the music-link state`);
   }
 });

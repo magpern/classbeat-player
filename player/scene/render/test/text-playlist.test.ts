@@ -86,3 +86,34 @@ test("the text steps when the mix line's words change", () => {
   for (let ms = 5016; ms < 8000; ms += 16) if (clock.step(at(ms, "Downloading the mix 11%")).changed) stepped++;
   assert.ok(stepped >= 1);
 });
+
+/** The text clock shows a new link on a frame mark of its own, so every field the plate's words read must be in its state key: drop one and the old plate stays up. */
+test("the text clock steps within a second on a change of each field the plate's words read", () => {
+  const base: TextLink = { state: "Manual", mode: "following", started: true, announcement: false, available: false };
+  const changes: [string, TextLink][] = [
+    ["the mix line's words", { ...base, mix: { text: "Playing the mix", shape: "dot" } }],
+    ["the mix line's shape", { ...base, mix: { text: "Mix ready", shape: "dot" } }],
+    ["the link mode", { ...base, mode: "manual" }],
+    ["the announcement", { ...base, mode: "manual", announcement: true }],
+    ["the music being followable", { ...base, mode: "manual", available: true }],
+    ["the start", { ...base, started: false }],
+  ];
+  for (const [what, to] of changes) {
+    const from: TextLink = what === "the mix line's shape" ? { ...base, mix: { text: "Mix ready", shape: "circle" } } : what === "the announcement" || what === "the music being followable" ? { ...base, mode: "manual" } : base;
+    const clock = new TextClock();
+    const at = (ms: number, link: TextLink): Feed => ({ ...feedAt(ms, { link: { state: "Locked" } }), link });
+    clock.step(at(5000, from));
+    let shown = clock.step(at(5016, from));
+    for (let ms = 5032; ms <= 6000; ms += 16) shown = clock.step(at(ms, to));
+    assert.deepEqual(shown.link, to, `${what}: the text shows the new link a second later`);
+  }
+});
+
+test("before the start the rail holds the link line alone, as on the plain screen; once started the times are back", () => {
+  const before = textView({ ...input({ state: "Manual", mode: "manual", started: false, mix: { text: "Press Start · Swedebeat cannot be connected here", shape: "square" } }, false) });
+  assert.equal(before.rail.left, null);
+  assert.equal(before.rail.done, null);
+  assert.equal(before.rail.link.text, "Press Start · Swedebeat cannot be connected here");
+  const running = textView(input({ state: "Locked", mode: "following", started: true }, false));
+  assert.ok(running.rail.left?.endsWith("left") && running.rail.done?.endsWith("done"));
+});

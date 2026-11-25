@@ -17,8 +17,9 @@ export interface GelView {
 }
 
 export interface RailView {
-  readonly left: string;
-  readonly done: string;
+  /** Null before the start: as on the plain screen, the rail then holds the link line alone, so its longest words (swedebeat.md W2) have the whole rail. */
+  readonly left: string | null;
+  readonly done: string | null;
   readonly segment: string | null;
   readonly link: { readonly text: string; readonly alert: boolean };
 }
