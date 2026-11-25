@@ -285,7 +285,7 @@ test("the mix class's link line goes to the scene's text in its fixed words only
 });
 
 test("a frame with no mix field (an older shell, a recorded frame) is read as no mix line", () => {
-  const bare: Partial<JoinFrame> = { ...frame() };
+  const bare: { -readonly [K in keyof JoinFrame]?: JoinFrame[K] } = { ...frame() };
   delete bare.mix;
   assert.equal((feedOf(bare as JoinFrame, 0, false)!.feed.link as TextLink).mix, undefined);
 });
