@@ -69,9 +69,10 @@ export function createUpdateService(deps: UpdateDeps): UpdateService {
   };
 
   async function fetchStatus(): Promise<UpdateStatus> {
-    const address = feedOf(settings);
+    // Named apart from the release page's `address`, which the shell test pins (#810).
+    const feed = feedOf(settings);
     // An override that is not an https: address: no request at all.
-    const text = address === null ? null : await deps.fetchFeed(address);
+    const text = feed === null ? null : await deps.fetchFeed(feed);
     // The channel is read when the reply is in, so a Pre-releases change meanwhile counts.
     return text === null ? couldNotCheck(deps.current) : statusAfter(deps.current, readFeed(text), settings.prereleases);
   }
