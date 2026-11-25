@@ -14,9 +14,16 @@ kind names and numbers only; the deploy runs it every hour (README, "Operator co
 once, and deletes its passkeys; `account delete` deletes an account fully, as ADR 0002, section
 12 does, for an `account-deleted` event classbeat could not deliver (ADR 0010, section 8).
 Output goes to the operator's terminal, except for the deploy's hourly `purge`
-(`docker/purge-loop.sh`): its output goes to the purge container's log, and is kind names and
-numbers only (or the fixed refusal, or an error's type and SQLSTATE). A database error is shown
-by its type and SQLSTATE, never by its message.
+(`docker/purge-loop.sh`): its output goes to the purge container's log, and is one of these
+lines only, with kind names, numbers, a role's name and an error's type and SQLSTATE in them:
+
+    purged <kind>: <count>                                (one line per kind)
+    the purge reported something other than counts        (UnexpectedPurgeReport)
+    the commands run as player_owner, not as <role>       (NotOperatorRole)
+    PLAYER_DATABASE_OWNER_URL is required                 (the variable is missing or empty)
+    database error: <type> <SQLSTATE>
+
+A database error is shown by its type and SQLSTATE, never by its message.
 """
 
 from __future__ import annotations

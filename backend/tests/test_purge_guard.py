@@ -39,15 +39,20 @@ def _negative(rows: list[Row]) -> list[Row]:
     return [(rows[0][0], -1), *rows[1:]]
 
 
-def _not_an_int(rows: list[Row]) -> list[Row]:
-    return [(rows[0][0], 1.0), (rows[1][0], True), *rows[2:]]
+def _float_count(rows: list[Row]) -> list[Row]:
+    return [(rows[0][0], 1.0), *rows[1:]]
+
+
+def _bool_count(rows: list[Row]) -> list[Row]:
+    # On its own (#751): a bool is an int to `isinstance`, so only `type(...) is int` refuses it.
+    return [(rows[0][0], True), *rows[1:]]
 
 
 def _no_kind(rows: list[Row]) -> list[Row]:
     return [(None, rows[0][1]), *rows[1:]]
 
 
-# The kind check refuses the first three, the count check the next three (with the kind check
+# The kind check refuses the first three, the count check the next four (with the kind check
 # gone, each still fails); the last is refused by either.
 TAMPERS: dict[str, Tamper] = {
     "unexpected kind": _renamed,
@@ -55,7 +60,8 @@ TAMPERS: dict[str, Tamper] = {
     "kinds out of order": _swapped,
     "missing count": _no_count,
     "negative count": _negative,
-    "count not an int": _not_an_int,
+    "count a float": _float_count,
+    "count a bool": _bool_count,
     "kind not a string": _no_kind,
 }
 
