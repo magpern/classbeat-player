@@ -12,6 +12,8 @@ export interface UpdateView {
   readonly latest: string | null;
   /** The version for the class list's notice, or null for no notice. */
   readonly notice: string | null;
+  /** False until a check has given a result (or failed): the words then say none has run yet. */
+  readonly checked: boolean;
   readonly auto: boolean;
   readonly prereleases: boolean;
 }
@@ -31,6 +33,7 @@ export function viewOf(current: string, last: UpdateStatus | null, found: string
     current,
     latest: shown.kind === "could not check" ? found : shown.latest,
     notice: shown.kind === "newer" ? shown.latest : null,
+    checked: last !== null,
     auto: settings.auto,
     prereleases: settings.prereleases,
   };

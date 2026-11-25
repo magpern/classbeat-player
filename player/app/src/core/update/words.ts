@@ -58,7 +58,7 @@ export function statusWords(v: UpdateView): StatusWords {
     case "checking":
       return { marker: "work", words: "Checking…", detail: "Looking for a newer version." };
     case "could not check":
-      return { marker: "away", words: "Could not check", detail: "The list of releases could not be read. Press Check now to try again." };
+      return { marker: "away", words: "Could not check", detail: v.checked ? "The list of releases could not be read. Press Check now to try again." : "No check has run yet. Press Check now." };
   }
 }
 

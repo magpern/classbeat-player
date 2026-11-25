@@ -45,14 +45,14 @@ const NEWER: UpdateStatus = { kind: "newer", current: "0.1.0", latest: "0.2.0" }
 
 test("the view: the last result while a check runs, a failure drops the notice but keeps the last latest, and before any result it cannot check", () => {
   const s = DEFAULT_SETTINGS;
-  assert.deepEqual(viewOf("0.1.0", NEWER, "0.2.0", false, s), { kind: "newer", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", auto: true, prereleases: false });
-  assert.deepEqual(viewOf("0.1.0", NEWER, "0.2.0", true, s), { kind: "checking", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", auto: true, prereleases: false });
-  assert.deepEqual(viewOf("0.1.0", couldNotCheck("0.1.0"), "0.2.0", false, s), { kind: "could not check", current: "0.1.0", latest: "0.2.0", notice: null, auto: true, prereleases: false });
-  assert.deepEqual(viewOf("0.1.0", null, null, false, { ...s, auto: false }), { kind: "could not check", current: "0.1.0", latest: null, notice: null, auto: false, prereleases: false });
+  assert.deepEqual(viewOf("0.1.0", NEWER, "0.2.0", false, s), { kind: "newer", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", checked: true, auto: true, prereleases: false });
+  assert.deepEqual(viewOf("0.1.0", NEWER, "0.2.0", true, s), { kind: "checking", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", checked: true, auto: true, prereleases: false });
+  assert.deepEqual(viewOf("0.1.0", couldNotCheck("0.1.0"), "0.2.0", false, s), { kind: "could not check", current: "0.1.0", latest: "0.2.0", notice: null, checked: true, auto: true, prereleases: false });
+  assert.deepEqual(viewOf("0.1.0", null, null, false, { ...s, auto: false }), { kind: "could not check", current: "0.1.0", latest: null, notice: null, checked: false, auto: false, prereleases: false });
   assert.equal(viewOf("0.1.0", { kind: "up to date", current: "0.1.0", latest: "0.1.0" }, "0.1.0", false, s).notice, null);
 });
 
-const V = (over: Partial<UpdateView>): UpdateView => ({ kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, auto: true, prereleases: false, ...over });
+const V = (over: Partial<UpdateView>): UpdateView => ({ kind: "up to date", current: "0.1.0", latest: "0.1.0", notice: null, checked: true, auto: true, prereleases: false, ...over });
 
 test("the words: a marker and words per state, Open release page only for a newer version, Check now busy only while checking", () => {
   const cases: [UpdateView, string, string, boolean, boolean][] = [
@@ -68,6 +68,8 @@ test("the words: a marker and words per state, Open release page only for a newe
     assert.equal(w.open, open, words);
     assert.equal(w.busy, busy, words);
   }
+  assert.equal(settingsWords(V({ kind: "could not check", latest: null })).status.detail, "The list of releases could not be read. Press Check now to try again.", "after a failed check");
+  assert.equal(settingsWords(V({ kind: "could not check", latest: null, checked: false })).status.detail, "No check has run yet. Press Check now.", "before any check");
   assert.deepEqual(settingsWords(V({ latest: null })).latest, { version: null, pre: false });
   assert.deepEqual(settingsWords(V({ latest: "0.3.0-rc.1" })).latest, { version: "0.3.0-rc.1", pre: true });
   assert.equal(settingsWords(V({ latest: "0.3.0+build-1" })).latest.pre, false, "a hyphen in build data is not a pre-release");

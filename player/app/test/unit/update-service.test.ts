@@ -78,7 +78,7 @@ test("with automatic checks on, start checks once and then every 6 hours on the 
   const r = rig({ answers: [ok(release("0.2.0")), ok(release("0.3.0"))] });
   r.service.start();
   await r.service.idle();
-  assert.deepEqual(r.service.view(), { kind: "newer", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", auto: true, prereleases: false });
+  assert.deepEqual(r.service.view(), { kind: "newer", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", checked: true, auto: true, prereleases: false });
   assert.equal(r.armed().length, 1);
   assert.equal(r.armed()[0]!.ms, CHECK_EVERY_MS);
   assert.equal(CHECK_EVERY_MS, 6 * 60 * 60 * 1000);
@@ -94,7 +94,7 @@ test("with automatic checks off, nothing is asked and no timer runs until Check 
   r.service.start();
   assert.equal(r.requests.length, 0);
   assert.equal(r.armed().length, 0);
-  assert.deepEqual(r.service.view(), { kind: "could not check", current: "0.1.0", latest: null, notice: null, auto: false, prereleases: false });
+  assert.deepEqual(r.service.view(), { kind: "could not check", current: "0.1.0", latest: null, notice: null, checked: false, auto: false, prereleases: false });
   r.service.checkNow();
   await r.service.idle();
   assert.equal(r.service.view()?.kind, "up to date");
@@ -109,7 +109,7 @@ test("a check already running is not started again, and while it runs the last r
   r.service.checkNow();
   r.tick();
   assert.equal(r.requests.length, 2, "one request while one runs");
-  assert.deepEqual(r.service.view(), { kind: "checking", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", auto: true, prereleases: false });
+  assert.deepEqual(r.service.view(), { kind: "checking", current: "0.1.0", latest: "0.2.0", notice: "0.2.0", checked: true, auto: true, prereleases: false });
   second.release();
   await r.service.idle();
   assert.equal(r.service.view()?.kind, "newer");
@@ -133,7 +133,7 @@ for (const [name, answer] of FAILURES) {
     assert.equal(r.service.view()?.notice, "0.2.0");
     r.service.checkNow();
     await r.service.idle();
-    assert.deepEqual(r.service.view(), { kind: "could not check", current: "0.1.0", latest: "0.2.0", notice: null, auto: true, prereleases: false });
+    assert.deepEqual(r.service.view(), { kind: "could not check", current: "0.1.0", latest: "0.2.0", notice: null, checked: true, auto: true, prereleases: false });
     assert.equal(r.service.openReleasePage(), false, "no release page after a failed check");
     assert.deepEqual(r.opened, []);
     assert.equal(r.requests.length, 2);
