@@ -228,13 +228,15 @@ fi
 # (or the whole of it) fails, and an image without web/dist/j fails here before it is built.
 got_web_copies="$(grep -E '^COPY --from=' "$root/docker/backend.Dockerfile" || true)"
 want_web_copies='COPY --from=web /web/dist/control web/dist/control
-COPY --from=web /web/dist/j web/dist/j'
+COPY --from=web /web/dist/j web/dist/j
+COPY --from=web /web/dist/site/index.html /web/dist/site/releases.json /web/dist/site/site.js /web/dist/site/site.css web/dist/site/
+COPY --from=web /web/dist/site/fonts/atkinson-hyperlegible-latin-400-normal.woff2 /web/dist/site/fonts/atkinson-hyperlegible-latin-700-normal.woff2 /web/dist/site/fonts/big-shoulders-display-latin-600-normal.woff2 /web/dist/site/fonts/big-shoulders-display-latin-800-normal.woff2 web/dist/site/fonts/'
 if [ "$got_web_copies" != "$want_web_copies" ]; then
-  bad "the Dockerfile's COPY --from lines are not exactly web/dist/control and web/dist/j: $(printf '%s' "$got_web_copies" | tr '\n' ' ')"
+  bad "the Dockerfile's COPY --from lines are not exactly web/dist/control, web/dist/j and the site's eight files: $(printf '%s' "$got_web_copies" | tr '\n' ' ')"
 elif ! grep -Eq '^FROM node:[0-9]+[^ ]*@sha256:[0-9a-f]{64} AS web$' "$root/docker/backend.Dockerfile"; then
   bad "the Dockerfile's web stage is not a pinned Node image"
 else
-  ok "the Dockerfile builds the pages in a pinned Node stage and copies only web/dist/control and web/dist/j"
+  ok "the Dockerfile builds the pages in a pinned Node stage and copies only web/dist/control, web/dist/j and the site's eight files"
 fi
 # The whole dockerignore is compared, in order, with one exact list (issues #289, #294, #298). In a
 # dockerignore the later rule wins, so order matters: the catch-all `*` must come first (without it
@@ -413,7 +415,7 @@ assert headers["cache-control"] == "no-store"
       bad "the image does not serve /control as expected: $(tail -c 400 "$tmp/control.log")"
     fi
     # The rider page (issue #387): the image holds web/dist/j with its index.html and assets, and
-    # web/dist holds exactly control and j, nothing else.
+    # web/dist holds exactly control, j and site (index.html, releases.json, site.js, site.css), nothing else.
     if docker run --rm --entrypoint python "$image" -I -c '
 from pathlib import Path
 
@@ -424,9 +426,11 @@ assert str(RIDER_DIR) == str(dist / "j"), RIDER_DIR
 assert (RIDER_DIR / "index.html").is_file(), "no rider page"
 assert any(p.suffix == ".js" for p in RIDER_DIR.iterdir()), "no rider script"
 names = sorted(p.name for p in dist.iterdir())
-assert names == ["control", "j"], names
+assert names == ["control", "j", "site"], names
+assert sorted(p.name for p in (dist / "site").iterdir()) == ["fonts", "index.html", "releases.json", "site.css", "site.js"]
+assert len(list((dist / "site" / "fonts").glob("*.woff2"))) == 4
 ' >"$tmp/rider.log" 2>&1; then
-      ok "the image holds web/dist/j (index.html and assets) and web/dist holds only control and j"
+      ok "the image holds web/dist/j (index.html and assets) and web/dist holds only control, j and the site's eight files"
     else
       bad "the image lacks the rider page or holds more of web/dist: $(tail -c 400 "$tmp/rider.log")"
     fi
