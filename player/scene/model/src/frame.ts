@@ -29,7 +29,8 @@ export interface SceneSong {
 export interface SceneInterval {
   readonly startMs: number;
   readonly zone: number;
-  readonly [other: string]: unknown;
+  /** The class's position pattern, read by `readPattern` (marks, pattern light): the one field besides the start and zone, and the type is closed so no reading can ride along. */
+  readonly pattern?: unknown;
 }
 export interface SceneClass {
   readonly songs: readonly SceneSong[];

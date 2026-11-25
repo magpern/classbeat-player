@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import { UNAVAILABLE_SOURCE } from "../../../app/src/core/sensors/unavailable-source.ts";
+import { shapePaths } from "./shape-paths.ts";
 import { feedOf } from "../join/room-feed-calc.ts";
 import type { JoinFrame } from "../join/room-feed-calc.ts";
 import { RUNNING_DOC } from "../demo/running-class.ts";
@@ -19,31 +20,66 @@ import { RUNNING_DOC } from "../demo/running-class.ts";
 const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), "utf8");
 const code = (rel: string): string => read(rel).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
-/** The property names an interface declares, nested object types included, and whether it has an index signature. */
-function declared(rel: string, name: string): { keys: string[]; open: boolean } {
-  const body = code(rel).match(new RegExp(`export interface ${name}(?:\\s+extends\\s+[^{]+)?\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1];
-  assert.ok(body !== undefined, `${name} is declared in ${rel}`);
-  const keys = [...body.matchAll(/(?:^|[\s{;,])(?:readonly\s+)?([A-Za-z_]\w*)\??\s*:/gm)].map((m) => m[1]!);
-  return { keys: [...new Set(keys)].sort(), open: /\[\s*\w+\s*:\s*string\s*\]/.test(body) };
+// The shapes are read with the compiler, so `extends`, quoted keys, intersections, methods and named nested types
+// (BeatAnchor, SongMoment) all count, and an index signature fails by existing. Each list is the whole path set.
+test("the join's frame has exactly these fields (the class file itself is pinned by its schema type)", () => {
+  assert.deepEqual(shapePaths("../join/room-feed-calc.ts", "JoinFrame", ["doc"]), [
+    "doc", "link", "link.announcement", "link.available", "link.held", "link.mode", "link.songIndex", "link.state",
+    "mix", "mix.shape", "mix.text", "playlistNotLoaded", "view", "view.classMs", "view.songIndex", "view.status",
+  ]);
+});
+
+test("the scene's feed has exactly these fields, nested records included, and the link the join hands it too", () => {
+  assert.deepEqual(shapePaths("../src/loop.ts", "Feed"), [
+    "classMs", "cls", "cls.endMs", "cls.intervals", "cls.intervals[].pattern", "cls.intervals[].startMs", "cls.intervals[].zone",
+    "cls.songs", "cls.songs[].anchors", "cls.songs[].anchors[].at_ms", "cls.songs[].anchors[].bpm", "cls.songs[].bpm", "cls.songs[].lengthMs",
+    "cls.songs[].moments", "cls.songs[].moments[].at_ms", "cls.songs[].moments[].kind",
+    "link", "link.held", "link.state", "playlistNotLoaded", "reducedMotion", "songIndex", "songPosMs", "stage",
+  ]);
+  assert.deepEqual(shapePaths("../src/text-types.ts", "TextLink"), ["announcement", "available", "held", "mix", "mix.shape", "mix.text", "mode", "started", "state"]);
+});
+
+test("the scene's class is closed: an interval is a start, a zone and its pattern, a song its timing", () => {
+  assert.deepEqual(shapePaths("../../model/src/frame.ts", "SceneClass"), [
+    "endMs", "intervals", "intervals[].pattern", "intervals[].startMs", "intervals[].zone",
+    "songs", "songs[].anchors", "songs[].anchors[].at_ms", "songs[].anchors[].bpm", "songs[].bpm", "songs[].lengthMs", "songs[].moments", "songs[].moments[].at_ms", "songs[].moments[].kind",
+  ]);
+});
+
+/** What `feedOf` reads of a frame, by path (array indexes as `[]`, built-in members left out): everything under a Proxy, the class file included. */
+function readsOf(frame: JoinFrame): Set<string> {
+  const reads = new Set<string>();
+  const builtin = new Set([...Object.getOwnPropertyNames(Array.prototype), ...Object.getOwnPropertyNames(Object.prototype)]);
+  const wrap = <T extends object>(value: T, path: string): T => new Proxy(value, {
+    get(target, key, receiver) {
+      const got: unknown = Reflect.get(target, key, receiver);
+      if (typeof key === "symbol" || (Array.isArray(target) && key === "length") || (builtin.has(key) && !(key in (target as object) && Object.hasOwn(target, key)))) return got;
+      const at = /^\d+$/.test(key) ? `${path}[]` : path === "" ? key : `${path}.${key}`;
+      if (!/^\d+$/.test(key)) reads.add(at);
+      return typeof got === "object" && got !== null ? wrap(got, at) : got;
+    },
+    ownKeys(target) { reads.add(`${path}{enumerated}`); return Reflect.ownKeys(target); },
+  });
+  feedOf(wrap(frame, ""), 100, false);
+  return reads;
 }
 
-test("the join's frame has exactly these fields, and so has the scene's feed", () => {
-  assert.deepEqual(declared("../join/room-feed-calc.ts", "JoinFrame").keys, ["announcement", "available", "classMs", "doc", "held", "link", "mix", "mode", "playlistNotLoaded", "shape", "songIndex", "state", "status", "text", "view"]);
-  assert.deepEqual(declared("../src/loop.ts", "Feed").keys, ["classMs", "cls", "link", "playlistNotLoaded", "reducedMotion", "songIndex", "songPosMs", "stage"]);
-});
-
-test("the music link the feed carries has exactly these fields", () => {
-  assert.deepEqual(declared("../../model/src/beat-level.ts", "LinkInput").keys, ["held", "state"]);
-  assert.deepEqual(declared("../src/text-types.ts", "TextLink").keys, ["announcement", "available", "mix", "mode", "shape", "started", "text"]);
-});
-
-test("the scene's class has exactly these fields: an interval is a start and a zone, a song its timing", () => {
-  assert.deepEqual(declared("../../model/src/frame.ts", "SceneClass").keys, ["endMs", "intervals", "songs"]);
-  assert.deepEqual(declared("../../model/src/frame.ts", "SceneSong").keys, ["anchors", "bpm", "lengthMs", "moments"]);
-  const iv = declared("../../model/src/frame.ts", "SceneInterval");
-  assert.deepEqual(iv.keys, ["startMs", "zone"]);
-  // The index signature is the demo's old way of carrying a pattern; it is open on purpose today, so the run-time check below, on what the join builds, is what holds.
-  assert.equal(iv.open, true, "SceneInterval's index signature is still the one this test knows");
+test("feedOf reads only these paths of the frame and the class file: no incline, no reading", () => {
+  const ALLOWED = [
+    "doc", "doc.class", "doc.class.length_ms", "doc.class.title", "doc.intervals", "doc.intervals[]", "doc.intervals[].cadence", "doc.intervals[].cadence.from", "doc.intervals[].cadence.to", "doc.intervals[].cue", "doc.intervals[].length_ms",
+    "doc.intervals[].pattern", "doc.intervals[].start_ms", "doc.intervals[].zone", "doc.intervals[].position", "doc.music", "doc.music.source", "doc.segments",
+    "doc.songs", "doc.songs[]", "doc.songs[].artist", "doc.songs[].beat_anchors", "doc.songs[].beat_anchors.anchors", "doc.songs[].beat_anchors.quality", "doc.songs[].bpm",
+    "doc.songs[].length_ms", "doc.songs[].moments", "doc.songs[].moments.items", "doc.songs[].moments.quality", "doc.songs[].start_ms", "doc.songs[].title",
+    "doc.zone_scale", "doc.zone_scale[]", "doc.zone_scale[].hrmax_pct", "doc.zone_scale[].ftp_pct", "doc.zone_scale[].name", "doc.zone_scale[].rpe", "doc.zone_scale[].zone",
+    "link", "link.announcement", "link.available", "link.held", "link.mode", "link.songIndex", "link.state", "mix", "mix.shape", "mix.text",
+    "playlistNotLoaded", "view", "view.classMs", "view.songIndex", "view.status",
+  ];
+  const loose = (path: string): boolean => /\{enumerated\}$/.test(path);
+  const seen = new Set<string>();
+  for (const [view, , state] of MOMENTS) for (const doc of [RUNNING_DOC, cycling]) readsOf(frame(doc, view, state)).forEach((r) => seen.add(r));
+  assert.deepEqual([...seen].filter((r) => !ALLOWED.includes(r) && !loose(r)), [], "feedOf reads something outside the allowlist");
+  assert.deepEqual([...seen].filter(loose), [], "feedOf enumerates an object, so it could forward what it holds");
+  assert.ok(seen.has("doc.intervals[].zone") && seen.has("view.classMs"), "the probe sees the reads");
 });
 
 /** The same class as a cycling class: same zones, songs and times; each interval has a cadence and a position where the running one has an incline. */
@@ -99,11 +135,11 @@ test("readings put on the class, the interval or the frame change nothing and re
 });
 
 test("the scene's own code names no reading: no incline, treadmill, foot pod, speed, pace, distance or sensor along the join and the feed", () => {
-  const NAMES = /\b(incline|treadmill|foot[ _-]?pod|speed\w*|pace|distance|sensors?|readings?|rsc|ftms|bluetooth|rpm|steps?_?per)\b/i;
+  const NAMES = /\b(incline|treadmill|foot[ _-]?pod|speed\w*|\w*velocity\w*|\w*kmh\w*|grade|pace|distance|sensors?|readings?|rsc|ftms|bluetooth|rpm|steps?_?per|heart[ _-]?rate|heartRate|hr|bpm|power|watts?)\b/i;
   for (const f of ["../join/room-feed-calc.ts", "../join/scene-join.ts", "../join/mount.ts", "../../model/src/frame.ts", "../src/loop.ts"]) {
     const found = [...code(f).matchAll(new RegExp(NAMES, "gi"))].map((m) => m[0]);
-    // The turn limiter's and the loop's "speed" is the beams' angular speed (scene.md "How a beam turns"), never a rider's: allowed in loop.ts and frame.ts only by that word.
-    const allowed = f.endsWith("loop.ts") || f.endsWith("frame.ts") ? found.filter((w) => !/^speed\w*$/i.test(w)) : found;
+    // Allowed by word: "speed" in loop.ts and frame.ts is the beams' angular speed (scene.md "How a beam turns"); "bpm" in room-feed-calc.ts, frame.ts and loop.ts is the song's tempo from the class file. Never a rider's.
+    const allowed = found.filter((w) => !((f.endsWith("loop.ts") || f.endsWith("frame.ts")) && /^speed\w*$/i.test(w)) && !((f.endsWith("room-feed-calc.ts") || f.endsWith("frame.ts") || f.endsWith("loop.ts")) && /^bpm$/i.test(w)));
     assert.deepEqual(allowed, [], `${f} names a reading`);
   }
   for (const f of ["../join/room-feed-calc.ts", "../join/scene-join.ts", "../join/mount.ts"]) {
