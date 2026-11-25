@@ -32,7 +32,7 @@ async function openFromMenu(path: string): Promise<void> {
 
 test("the app starts on the class list, hardened: its own policy, its fonts, no Node", async () => {
   assert.match(page.url(), /\/dist\/classlist\.html$/);
-  assert.equal(await page.locator("h1").innerText(), "Classes");
+  assert.equal(await page.locator("#app h1").innerText(), "Classes");
   const meta = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"));
   assert.equal(meta, LIST_CSP);
   const fonts = await page.evaluate(async () => {
@@ -81,5 +81,5 @@ test("a class file that reads goes to the presenter, and the Class list menu ite
   await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("class-list")?.click());
   await page.waitForFunction(() => location.pathname.endsWith("/classlist.html"));
   await page.waitForSelector("#app[data-body]");
-  assert.equal(await page.locator("h1").innerText(), "Classes");
+  assert.equal(await page.locator("#app h1").innerText(), "Classes");
 });
