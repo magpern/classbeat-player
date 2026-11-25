@@ -8,3 +8,4 @@ export { parseIndoorBike, type BikeData } from "./indoor-bike.ts";
 export { parseTreadmill, type TreadmillData } from "./treadmill.ts";
 export { parseRsc, type RscData } from "./rsc.ts";
 export { decodeRunning, runReading, type RunKind, type RunMeasure } from "./running.ts";
+export { RUN_MEASURES, runNow, runText, usedForRun, withRunSample } from "./run-readings.ts";

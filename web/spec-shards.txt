@@ -28,6 +28,7 @@
 4 site-data-secrecy.test.ts
 4 site-data-no-email.test.ts
 5 rider-checks.test.ts
+5 rider-running-checks.test.ts
 5 room-s6.test.ts -1280x720$
 4 room-s6.test.ts *
 4 room-window-s6.test.ts

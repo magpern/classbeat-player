@@ -123,6 +123,8 @@ export class RiderRun {
     coming.classList.remove(...FITS.flat());
     const effort = this.shown.get("effort")?.node;
     if (!effort?.classList.contains("sens")) return;
+    // A plate in landscape moves the next rows under the countdown (sensors.css): hiding them frees nothing for the effort.
+    if (effort.querySelector(".splate") && matchMedia("(orientation: landscape)").matches) return;
     // The effort sits in a track that may shrink to nothing, so its readings can spill over the next
     // rows without the page growing: either overflow makes the next rows give way.
     const over = (): boolean => this.root.scrollHeight > this.root.clientHeight || effort.scrollHeight > effort.clientHeight;

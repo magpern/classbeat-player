@@ -4,7 +4,7 @@
 // reading is white or grey, never a colour; only the planned band takes the zone's hue (rule 7).
 import { zoneClass } from "../../design/zones.ts";
 import { el } from "../../room/dom.ts";
-import type { MeasureRow, Reading, SensorBlock } from "../core/sensor-view.ts";
+import type { MeasureRow, Reading, RunRow, SensorBlock } from "../core/sensor-view.ts";
 import { h1, pageKey, para } from "./parts.ts";
 import { page } from "./form.ts";
 
@@ -47,9 +47,17 @@ function measure(m: MeasureRow, zone: number | null): HTMLElement {
   return el("div", { class: "m" }, parts);
 }
 
+/** A treadmill or foot-pod reading: the label, then the number and its unit on one line; white or grey, no gauge, never a colour. */
+function runRow(r: RunRow): HTMLElement {
+  const none = r.text === "–";
+  const rd = el("div", { class: `rd line${none ? " none" : ""}` }, [el("span", { class: "n", tier: "read", text: r.text }), el("span", { class: "u", tier: "minor", text: r.unit })]);
+  rd.setAttribute("aria-label", r.aria);
+  return el("div", { class: "m" }, [label(r.label, "lbl"), rd]);
+}
+
 /** The effort block with the readings, in the effort's place. */
 export function renderSensorBlock(b: SensorBlock, zone: number | null): HTMLElement {
-  const parts: Node[] = b.rows.map((m) => measure(m, zone));
+  const parts: Node[] = [...b.rows.map((m) => measure(m, zone)), ...b.runs.map(runRow)];
   if (b.plate) {
     const p = el("div", { class: "splate" }, [el("span", { class: "h", tier: "minor", lines: 1, text: b.plate.head }), ...(b.plate.detail ? [label(b.plate.detail, "dt", 3)] : [])]);
     p.setAttribute("role", "alert");

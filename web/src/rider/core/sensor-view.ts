@@ -7,6 +7,8 @@ import { gauge } from "../../sensors/core/gauge-calc.ts";
 import type { Gauge } from "../../sensors/core/gauge-calc.ts";
 import { measureNow, sourceState, usedFor } from "../../sensors/core/readings.ts";
 import type { Measure, Sensors } from "../../sensors/core/readings.ts";
+import { RUN_LABELS, RUN_MEASURES, RUN_UNITS, runText, usedForRun } from "../../sensors/core/run-readings.ts";
+import type { RunMeasure } from "../../sensors/core/running.ts";
 import { HINT } from "./effort-calc.ts";
 import type { Effort, EffortRow } from "./effort-calc.ts";
 
@@ -36,8 +38,23 @@ export interface MeasureRow {
   readonly read: Reading | null;
 }
 
+/**
+ * A treadmill or foot-pod reading (ADR 0015 section 4): a label, a number and its unit, nothing more.
+ * No gauge and no plan beside it, and no colour by value (rules 7 and 8).
+ */
+export interface RunRow {
+  readonly label: string;
+  /** The number as shown ("9.5", "164"), or "–" when it has no value. */
+  readonly text: string;
+  readonly unit: string;
+  /** The row as read aloud. */
+  readonly aria: string;
+}
+
 export interface SensorBlock {
   readonly rows: readonly MeasureRow[];
+  /** After the effort rows: only the measures a connected sensor gives. */
+  readonly runs: readonly RunRow[];
   readonly plate: { readonly head: string; readonly detail: string } | null;
   readonly hint: string | null;
 }
@@ -50,6 +67,7 @@ export interface SensorView {
 
 /** The readings as shown: each measure's value after the once-a-second step. */
 export type Shown = Readonly<Partial<Record<Measure, number | null>>>;
+export type RunShown = Readonly<Partial<Record<RunMeasure, number | null>>>;
 
 export const PLATES = {
   choosing: ["Choose your sensor", "Pick it in your browser’s list."],
@@ -95,8 +113,15 @@ function plateOf(s: Sensors, failDetail: string): SensorBlock["plate"] {
   return null;
 }
 
-/** The effort with the rider's readings: power, heart rate and cadence as they come, then RPE. */
-export function sensorView(effort: Effort | null, s: Sensors, shown: Shown, now: number, supported: boolean, failDetail: string): SensorView {
+function runRows(s: Sensors, shown: RunShown): RunRow[] {
+  return RUN_MEASURES.filter((m) => usedForRun(s, m) !== null).map((m) => {
+    const text = runText(m, shown[m] ?? null);
+    return { label: RUN_LABELS[m], text, unit: RUN_UNITS[m], aria: `${RUN_LABELS[m]} ${text === "–" ? "no reading" : `${text} ${RUN_UNITS[m]}`}` };
+  });
+}
+
+/** The effort with the rider's readings: power, heart rate and cadence as they come, then RPE, then a treadmill's or foot pod's. */
+export function sensorView(effort: Effort | null, s: Sensors, shown: Shown, now: number, supported: boolean, failDetail: string, runShown: RunShown = {}): SensorView {
   const key = sensorKey(s, supported);
   if (!effort || !supported || (!s.devices.length && !s.choosing && !s.failed)) return { block: null, key };
   const rows: MeasureRow[] = [];
@@ -113,7 +138,7 @@ export function sensorView(effort: Effort | null, s: Sensors, shown: Shown, now:
   }
   for (const r of effort.rows.filter((r) => r.label === "RPE")) rows.push({ label: r.label, plan: { value: r.value, unit: r.unit }, read: null });
   const hint = missing[0] ?? (need.length ? numbersHint(need) : effort.hint ? HINT : null);
-  return { block: { rows, plate: plateOf(s, failDetail), hint }, key };
+  return { block: { rows, runs: runRows(s, runShown), plate: plateOf(s, failDetail), hint }, key };
 }
 
 /** The once-a-second step: a number replaces another only a second after the last change; a dash at once. */

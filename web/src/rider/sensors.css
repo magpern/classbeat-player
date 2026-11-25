@@ -32,6 +32,27 @@
   .effort.sens .rd.solo { grid-column: 3 / -1; }
 }
 
+/* A treadmill or foot-pod reading (docs/design/running-class.md, "The readings"): one line, the label at the
+   left and the number with its unit at the right (landscape: beside the label). No gauge, no tick, no colour
+   by value; a reading with no value is a grey dash (.none, above). Nothing here is animated (RC8). */
+.effort.sens .rd.line { grid-column: 2 / -1; margin-bottom: 0; justify-content: flex-end; }
+@media (orientation: landscape) {
+  .effort.sens .rd.line { justify-content: flex-start; }
+  /* A sensor plate shows (lost, choosing, failed): the effort column needs the full height, so the next rows
+     move under the countdown in the left column, all of them kept (design review of #781). */
+  .run.rider:has(.splate) {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "top top" "gel effort" "clock effort" "coming effort" "coming keys";
+    --c-read: min(11.2dvh, 6.6vw);
+  }
+  .run.rider:has(.splate) .effort.sens { row-gap: 0.2dvh; }
+  /* The plate gives up height before the readings do: it must end above the keys (a 4 px gap is checked). */
+  .run.rider:has(.splate) .splate { padding-block: 0.6dvh; gap: 0.2dvh; }
+  .run.rider:has(.splate) .splate .dt { line-height: 1.05; }
+  /* A tighter line for the numbers, not a smaller number: the readability floor is on their size. */
+  .run.rider:has(.splate) .effort.sens .rd .n { line-height: 0.76; }
+}
+
 /* The gauge: a line, the planned band (the zone's colour) and one white tick for the reading.
    The tick is white wherever it stands: no colour change inside or outside the band (rules 7, 8, 11). */
 .gauge { position: relative; height: max(10px, 1.5dvh); background: var(--stage-raised); border: 1px solid var(--stage-line); border-radius: 2px; min-width: 0; }

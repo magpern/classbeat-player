@@ -4,12 +4,14 @@
 // is only ever connected on a press, never again by itself.
 import { deviceWords, MEASURES, measureNow, NO_SENSORS, step } from "../sensors/core/readings.ts";
 import type { Measure, Sensors } from "../sensors/core/readings.ts";
+import { RUN_MEASURES, runNow } from "../sensors/core/run-readings.ts";
+import type { RunMeasure } from "../sensors/core/running.ts";
 import { isIphone } from "../sensors/core/platform.ts";
 import type { Agent } from "../sensors/core/platform.ts";
 import type { SensorSource } from "../sensors/source.ts";
 import type { Effort } from "./core/effort-calc.ts";
 import { sensorView, stepShown } from "./core/sensor-view.ts";
-import type { SensorView, Shown } from "./core/sensor-view.ts";
+import type { RunShown, SensorView, Shown } from "./core/sensor-view.ts";
 import { sensorsSheet, unsupportedSheet } from "./render/sensors.ts";
 
 type SensorSheet = "none" | "sensors" | "unsupported";
@@ -17,6 +19,7 @@ type SensorSheet = "none" | "sensors" | "unsupported";
 export class SensorPanel {
   private s: Sensors = NO_SENSORS;
   private shown = new Map<Measure, { readonly value: number | null; readonly at: number }>();
+  private runShown = new Map<RunMeasure, { readonly value: number | null; readonly at: number }>();
   private open: SensorSheet = "none";
   private readonly unlisten: () => void;
   private readonly source: SensorSource;
@@ -55,7 +58,13 @@ export class SensorPanel {
       this.shown.set(m, next);
       shown[m] = next.value;
     }
-    return sensorView(effort, this.s, shown as Shown, now, this.source.supported, this.source.failDetail);
+    const runs: Partial<Record<RunMeasure, number | null>> = {};
+    for (const m of RUN_MEASURES) {
+      const next = stepShown(this.runShown.get(m), runNow(this.s, m, now).value, now);
+      this.runShown.set(m, next);
+      runs[m] = next.value;
+    }
+    return sensorView(effort, this.s, shown as Shown, now, this.source.supported, this.source.failDetail, runs as RunShown);
   }
 
   /** The open sheet: a key that changes when what it shows changes, and its page. Null: none open. */

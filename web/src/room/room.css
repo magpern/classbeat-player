@@ -6,6 +6,7 @@
 @import "./room-intro.css";
 @import "./room-score.css";
 @import "./room-pattern.css";
+@import "./room-running.css";
 
 *,
 *::before,

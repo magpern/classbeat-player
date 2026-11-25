@@ -64,6 +64,8 @@ export interface MetricModel {
   readonly unit: string | null;
   /** Set on the Position metric of a pattern interval; `value` is then its plain text. */
   readonly pattern?: PatternValue;
+  /** Set on a running class's Target metric: text only, in its own size (running-class.md, "Size"). */
+  readonly incline?: true;
 }
 
 export interface NextModel {

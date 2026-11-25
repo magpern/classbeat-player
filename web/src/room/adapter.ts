@@ -3,7 +3,7 @@
 // is a function of its input and is tested as one.
 import { nthOnsetAfter } from "./beat-grid.ts";
 import { cueIsLong } from "./fit.ts";
-import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, positionText, targetTexts, zoneDef } from "./format.ts";
+import { cadenceText, clockText, classTimeText, countdownIsWide, countdownText, inclineText, positionText, targetTexts, zoneDef } from "./format.ts";
 import type { Class, LinkInput, MixInput, PatternInput, PlayNotice, RoomInput } from "./input.ts";
 import { beforeStartIntro, completeGel, finishedIntro, firstZoneGel } from "./intro-model.ts";
 import { countLabel, linkPlate, pauseLine } from "./link-text.ts";
@@ -93,10 +93,10 @@ function running(doc: Class, view: View, link: LinkInput | null, notice: PlayNot
     gel,
     rail: { left: classTimeText(left), done: classTimeText(view.classMs), segment, link: linkPlate(doc, link, view, true, notice, playlistNotLoaded, mix) },
     clock: clockFor(doc, view, link, paused, song, isNoTempo(position)),
-    metrics: metricsFor(iv, song, link, position),
+    metrics: metricsFor(iv, song, link, position, doc.class.sport === "running"),
     count: countFor(position, song, view.classMs),
     cue: iv.cue.trim() ? { text: iv.cue, long: cueIsLong(iv.cue) } : null,
-    next: nextFor(doc, view),
+    next: nextFor(doc, view, doc.class.sport === "running"),
     intro: null,
     score: scoreFor(doc, view, link, scale),
     intervalKey: `running:${view.intervalIndex}`,
@@ -143,15 +143,18 @@ function lineFor(view: View, link: LinkInput | null, song: Song | null, last: bo
   return { kind: "song", time: clockText(song.end_ms - view.classMs) };
 }
 
-function metricsFor(iv: Class["intervals"][number], song: Song | null, link: LinkInput | null, position: PatternValue | null): MetricModel[] {
+function metricsFor(iv: Class["intervals"][number], song: Song | null, link: LinkInput | null, position: PatternValue | null, running: boolean): MetricModel[] {
   const cadence = cadenceText(iv);
   // A song with no `bpm` in a pattern interval reads "–", whatever its anchors say.
   const bpm = song && !isNoTempo(position) ? songBpm(song) : null;
   const songLabel = isNoTempo(position) ? "Song, no tempo" : link?.state === "Off the list" ? "Song, planned" : "Song";
+  const songMetric: MetricModel = { label: songLabel, value: bpm ? String(Math.round(bpm)) : "–", unit: bpm ? "bpm" : null };
+  // A running class has one target in place of cadence and position: the incline, as text (running-class.md).
+  if (running) return [{ label: "Target", value: inclineText(iv) ?? "–", unit: null, incline: true }, songMetric];
   return [
     { label: "Cadence", value: cadence?.value ?? "–", unit: cadence?.unit ?? null },
     position ? { label: "Position", value: patternText(position), unit: null, pattern: position } : { label: "Position", value: positionText(iv) ?? "–", unit: null },
-    { label: songLabel, value: bpm ? String(Math.round(bpm)) : "–", unit: bpm ? "bpm" : null },
+    songMetric,
   ];
 }
 
@@ -169,17 +172,17 @@ function countFor(position: PatternValue | null, song: Song | null, classMs: num
   return { beatMs: 60_000 / bpm, beatsLeft, switchInMs: nthOnsetAfter(grid, u, beatsLeft) - u };
 }
 
-function nextFor(doc: Class, view: View): NextModel {
+function nextFor(doc: Class, view: View, running: boolean): NextModel {
   if (view.nextIntervalIndex === null) return { end: true, zone: 0, name: "", length: "", cadence: null, position: null, cue: null };
   const nx = doc.intervals[view.nextIntervalIndex];
-  const cadence = cadenceText(nx);
+  const cadence = running ? null : cadenceText(nx);
   return {
     end: false,
     zone: nx.zone,
     name: zoneDef(doc, nx.zone)?.name ?? "",
     length: clockText(nx.length_ms),
     cadence: cadence ? [cadence.value, cadence.unit].filter(Boolean).join(" ") : null,
-    position: nx.pattern ? patternWords(nx.pattern) : positionText(nx),
+    position: running ? inclineText(nx) : nx.pattern ? patternWords(nx.pattern) : positionText(nx),
     cue: nx.cue.trim() ? nx.cue : null,
   };
 }

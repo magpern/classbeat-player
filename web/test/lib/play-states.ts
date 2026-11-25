@@ -3,6 +3,7 @@
 // checked at. The checks and the flows both use this table.
 import type { Page } from "playwright-core";
 import { STATE_FIXTURES } from "../../src/fixtures/states.ts";
+import { runningClass } from "../../src/fixtures/running-class.ts";
 import { WORST_FIXTURES } from "../../src/fixtures/worst.ts";
 import type { Class } from "../../src/room/input.ts";
 
@@ -11,6 +12,9 @@ export const BASE_DOC = STATE_FIXTURES.running.doc as Class;
 export const WORST_DOC = WORST_FIXTURES["worst-off-list"].doc as Class;
 /** The worst class's long test interval, with the 80-character names around it, is its 61st. */
 const WORST_INTERVAL = 60;
+
+/** The running class: its raised and flat intervals are the third and the fourth. */
+const RUN_DOC = runningClass();
 
 /** The four reference sizes of every state, and the smallest phone each way up (the states in `small`). */
 export const SIZES = [[390, 844], [844, 390], [768, 1024], [1024, 768]] as const;
@@ -89,6 +93,8 @@ export const STATES: readonly PlayState[] = [
   { name: "finished", doc: BASE_DOC, stage: (p) => ended(p, BASE_DOC), small: false },
   { name: "wake-refused", doc: BASE_DOC, before: WAKE_REFUSED, stage: running(), small: false },
   { name: "reloaded", doc: BASE_DOC, stage: reloaded, small: false, clock: false },
+  { name: "running-class", doc: RUN_DOC, stage: running(2), small: true },
+  { name: "running-class-flat", doc: RUN_DOC, stage: running(3), small: true },
   { name: "worst", doc: WORST_DOC, stage: running(WORST_INTERVAL), small: true },
   { name: "worst-band", doc: WORST_DOC, stage: async (p) => { await started(p, WORST_INTERVAL); await p.keyboard.press("End"); await tickBy(p, 50); await rest(p); }, small: true },
   { name: "worst-before-start", doc: WORST_DOC, stage: async (p) => { await opened(p); await rest(p); }, small: true },

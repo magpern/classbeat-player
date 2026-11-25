@@ -6,6 +6,7 @@ import { decode, type Kind } from "./core/decode.ts";
 import type { Crank } from "./core/crank.ts";
 import type { Stamped } from "./core/freshness.ts";
 import type { Measure } from "./core/readings.ts";
+import { decodeRunning, type RunKind, type RunMeasure } from "./core/running.ts";
 import { CHARACTERISTICS, SERVICES } from "./core/uuids.ts";
 import { Listeners, unavailableSource, type SensorSource } from "./source.ts";
 
@@ -33,11 +34,27 @@ interface Api {
 }
 
 /** Each allowlisted service, its one measurement characteristic, and what it gives at first. */
-const READS: readonly { service: number; characteristic: number; kind: Kind; gives: readonly Measure[] }[] = [
+interface Read {
+  readonly service: number;
+  readonly characteristic: number;
+  readonly kind: Kind;
+  readonly gives: readonly Measure[];
+}
+/** A treadmill's or foot pod's measurement characteristic (ADR 0015 section 3): notifications only. */
+interface RunRead {
+  readonly service: number;
+  readonly characteristic: number;
+  readonly run: RunKind;
+  readonly runs: readonly RunMeasure[];
+}
+const READS: readonly (Read | RunRead)[] = [
   { service: SERVICES.heartRate, characteristic: CHARACTERISTICS.heartRateMeasurement, kind: "hr", gives: ["hr"] },
   { service: SERVICES.cyclingPower, characteristic: CHARACTERISTICS.cyclingPowerMeasurement, kind: "power", gives: ["power"] },
   { service: SERVICES.fitnessMachine, characteristic: CHARACTERISTICS.indoorBikeData, kind: "bike", gives: ["power", "cadence"] },
   { service: SERVICES.cyclingSpeedCadence, characteristic: CHARACTERISTICS.cscMeasurement, kind: "csc", gives: ["cadence"] },
+  // The Fitness Machine service is the bike's and the treadmill's: a device has the characteristic of its own kind.
+  { service: SERVICES.fitnessMachine, characteristic: CHARACTERISTICS.treadmillData, run: "treadmill", runs: ["speed", "incline"] },
+  { service: SERVICES.runningSpeedCadence, characteristic: CHARACTERISTICS.rscMeasurement, run: "rsc", runs: ["speed", "stepCadence"] },
 ];
 const ALL_SERVICES = READS.map((r) => r.service);
 
@@ -91,6 +108,7 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
     await server.connect();
     still();
     const gives = new Set<Measure>();
+    const runs = new Set<RunMeasure>();
     const cranks = new Map<Kind, Stamped<Crank>>();
     for (const r of READS) {
       let ch: Characteristic;
@@ -103,6 +121,10 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
       const read = (): void => {
         if (!ch.value) return;
         const t = now();
+        if ("run" in r) {
+          for (const x of decodeRunning(r.run, ch.value)) listeners.emit({ type: "run_sample", id: d.id, measure: x.measure, value: x.value, at: t });
+          return;
+        }
         const out = decode(r.kind, ch.value, cranks.get(r.kind) ?? null, t);
         if (out.crank) cranks.set(r.kind, out.crank);
         for (const x of out.readings) listeners.emit({ type: "sample", id: d.id, measure: x.measure, value: x.value, at: t });
@@ -110,12 +132,13 @@ export function webBluetoothSource(nav: Navigator = navigator, win: Window = win
       ch.addEventListener("characteristicvaluechanged", read, { signal: sub.signal });
       await ch.startNotifications();
       still();
-      r.gives.forEach((m) => gives.add(m));
+      if ("run" in r) r.runs.forEach((m) => runs.add(m));
+      else r.gives.forEach((m) => gives.add(m));
     }
     still(); // the last lookup may have failed after a removal: no "connected" after "removed"
-    if (!gives.size) throw new Error("nothing to read");
+    if (!gives.size && !runs.size) throw new Error("nothing to read");
     shown.add(d.id);
-    listeners.emit({ type: "connected", id: d.id, name: d.name?.trim() || "Sensor", gives: [...gives], at: now() });
+    listeners.emit({ type: "connected", id: d.id, name: d.name?.trim() || "Sensor", gives: [...gives], runs: [...runs], at: now() });
   };
 
   /** Lets go of a device the page does not keep: its listeners end and it is disconnected. */
