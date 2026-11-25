@@ -119,8 +119,24 @@ compose logs --since 3h purge                 # "purge-loop: purge done" once an
 compose run --rm migrate purge                # run it once by hand
 ```
 
+Each run logs one line per kind, always the same ten in the same order, between
+"purge-loop: purge starting" and "purge-loop: purge done":
+
+```
+purged login_links: 0
+purged login_challenges: 3
+...
+purged audit_events: 0
+```
+
+The kinds are `login_links`, `login_challenges`, `pairings`, `source_link_codes`, `rate_limits`,
+`classbeat_sign_ins`, `classbeat_event_ids`, `sessions`, `devices` and `audit_events`; the number
+is how many rows that run removed (0 when none). Only kind names and numbers are printed.
+
 A missing "done" line for more than two hours, or any "FAILED", is a fault: read the `purge` logs.
-The command prints only that it ran, and a database error as its type and SQLSTATE.
+If the function reports other kinds than these ten, or a count that is not a non-negative number,
+the command rolls the purge back, prints a one-line message to its error output and exits 1, so
+the run is logged as "FAILED". A database error is shown as its type and SQLSTATE.
 
 ## Upgrades
 
