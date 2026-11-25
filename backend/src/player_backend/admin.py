@@ -19,9 +19,11 @@ lines only, with kind names, numbers, a role's name and an error's type and SQLS
 
     purged <kind>: <count>                                (one line per kind)
     the purge reported something other than counts        (UnexpectedPurgeReport)
+    the purge reported other kinds than expected          (UnexpectedPurgeReport)
     the commands run as player_owner, not as <role>       (NotOperatorRole)
     PLAYER_DATABASE_OWNER_URL is required                 (the variable is missing or empty)
     database error: <type> <SQLSTATE>
+    database error: <type>                                (an error with no SQLSTATE)
 
 A database error is shown by its type and SQLSTATE, never by its message.
 """
