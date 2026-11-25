@@ -74,13 +74,6 @@ test("rows and footer: Manual clock while not connected; nothing on the row whil
   assert.equal(form.body.kind, "mix-form");
 });
 
-test("the filter steps aside while a Swedebeat plate is up, as for the file-error plate (five whole rows at 1000x720)", () => {
-  const twelve = Array.from({ length: 12 }, (_, i) => row(`Class ${i + 1}`, i + 1, { source: i === 1 ? "swedebeat" : "spotify" }));
-  assert.notEqual(screenOf(view({ rows: twelve, mix: OUT }), UI, NOW).filter, null);
-  assert.equal(screenOf(view({ rows: twelve, mix: mv({ needsReconnect: true }) }), UI, NOW).filter, null);
-  assert.equal(screenOf(view({ rows: twelve, mix: mv({ state: "signed_in", fields: [] }) }), { ...UI, mix: "ask" }, NOW).filter, null);
-});
-
 test("each sign-in field comes from a template that the browser neither keeps nor suggests, capped at 256", async () => {
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
@@ -88,4 +81,72 @@ test("each sign-in field comes from a template that the browser neither keeps no
   const html = readFileSync(join(REPO, "player", "app", "src", "renderer", "classlist.html"), "utf8");
   const tpl = html.match(/<template id="mix-field">(<input [^>]*>)<\/template>/)?.[1] ?? "";
   for (const attr of ['autocomplete="off"', 'autocapitalize="off"', 'spellcheck="false"', 'maxlength="256"']) assert.ok(tpl.includes(attr), attr);
+});
+
+// #724: with 8 or more classes the filter stays under the two Swedebeat fault plates and steps
+// aside only for a file's error plate or a form's note. The plate's one-line detail is the
+// fallback the window uses when four whole rows would not fit.
+const TWELVE = Array.from({ length: 12 }, (_, i) => row(`Class ${String(i).padStart(2, "0")}`, i + 1, { source: i < 2 ? "swedebeat" : "spotify" }));
+const shotView = (mix: MixView, rows = TWELVE) => view({ rows, mix });
+
+test("the class filter stays under the could-not-be-reached and connect-again plates (#724)", () => {
+  for (const mix of [mv({ state: "refused", refusal: "unavailable" }), mv({ needsReconnect: true })]) {
+    const s = screenOf(shotView(mix), { ...UI, filter: "class 03" }, NOW);
+    assert.ok(s.mixPlate !== null);
+    assert.deepEqual(s.filter, { of: "1 of 12" });
+    assert.equal(s.body.kind, "list");
+  }
+});
+
+test("the filter needs eight classes under a fault plate too (#724)", () => {
+  const s = screenOf(shotView(mv({ needsReconnect: true }), TWELVE.slice(0, 7)), UI, NOW);
+  assert.ok(s.mixPlate !== null);
+  assert.equal(s.filter, null);
+});
+
+test("the filter still steps aside for a form and its note, and for a file's error plate (#724)", () => {
+  const form = screenOf(shotView(mv({ state: "refused", refusal: "bad_credentials" })), { ...UI, mix: "form", filter: "class" }, NOW);
+  assert.equal(form.body.kind, "mix-form");
+  assert.equal(form.filter, null);
+  const error = { message: "m", fileName: "x.json", details: [] };
+  const file = screenOf(view({ rows: TWELVE, mix: mv({ needsReconnect: true }), fileError: error }), UI, NOW);
+  assert.equal(file.filter, null);
+});
+
+test("a fault plate has no dismiss key, and its own key is the way back to the form (#724)", () => {
+  for (const [mix, label] of [[mv({ state: "refused", refusal: "unavailable" }), "Try again"], [mv({ needsReconnect: true }), "Connect Swedebeat again"]] as const) {
+    const p = head(mix).plate;
+    assert.deepEqual(p?.buttons.map((b) => b.label), [label]);
+  }
+});
+
+test("a fault plate carries a one-line detail for a window too short for five rows (#724)", () => {
+  const unreachable = head(mv({ state: "refused", refusal: "unavailable" })).plate;
+  assert.equal(unreachable?.short, "Check the connection, then try again.");
+  assert.ok(unreachable?.detail.startsWith(unreachable.short ?? "?"));
+  const reconnect = head(mv({ needsReconnect: true })).plate;
+  assert.equal(reconnect?.short, "The mixes saved on this computer are kept.");
+  assert.ok(reconnect?.detail.startsWith(reconnect.short ?? "?"));
+  assert.equal(head(mv({ state: "signed_in", fields: [] }), "ask").plate?.short, "The mixes saved on this computer are removed.");
+});
+
+test("the form takes the body and the filter with it; without a form the filter shows (#724)", () => {
+  const withForm = screenOf(shotView(mv({ state: "refused", refusal: "bad_credentials" })), { ...UI, mix: "form" }, NOW);
+  assert.ok(withForm.body.kind === "mix-form" && withForm.filter === null);
+  const without = screenOf(shotView(mv({ state: "refused", refusal: "bad_credentials" })), UI, NOW);
+  assert.ok(without.body.kind === "list" && without.filter !== null);
+});
+
+test("the filter stays shown under the sign-out question (#724)", () => {
+  const s = screenOf(shotView(mv({ state: "signed_in", fields: [] })), { ...UI, mix: "ask", filter: "class 03" }, NOW);
+  assert.equal(s.mixPlate?.headline, "Sign out of Swedebeat?");
+  assert.deepEqual(s.filter, { of: "1 of 12" });
+});
+
+test("a filter typed before the form opened does not narrow the selection behind it (#724)", () => {
+  const mix = mv({ state: "refused", refusal: "bad_credentials" });
+  const plain = screenOf(shotView(mix), { ...UI, mix: "form" }, NOW);
+  const typed = screenOf(shotView(mix), { ...UI, mix: "form", filter: "zzz-no-match" }, NOW);
+  assert.ok(plain.selectedId !== null);
+  assert.equal(typed.selectedId, plain.selectedId);
 });

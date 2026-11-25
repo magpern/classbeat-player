@@ -21,11 +21,12 @@ export function mixLineEl(l: MixLine, act: Act): HTMLElement {
 }
 
 export function mixPlateEl(p: MixPlate, act: Act): HTMLElement {
-  const box = h("div", "plate second");
+  const box = h("div", "plate second mix");
   box.setAttribute("role", "alert");
   const words = h("div", null);
   words.append(h("span", "st", p.headline), h("span", "dt", p.detail));
   box.append(words);
+  if (p.short !== null) box.dataset.short = p.short;
   if (p.buttons.length > 0) {
     const row = h("div", "row-btns");
     for (const b of p.buttons) row.append(buttonEl(b, act));
@@ -96,4 +97,35 @@ export function emptyFields(root: HTMLElement): Set<string> {
 /** Empties every field without reading it (Cancel, Esc). */
 export function clearTyped(root: HTMLElement): void {
   for (const input of root.querySelectorAll<HTMLInputElement>("input[data-field]")) input.value = "";
+}
+
+/** Whole rows kept in view beside the filter and a Swedebeat plate (swedebeat.md W4, class-list.md L3, #724). */
+export const KEEP_ROWS = 5;
+
+/** What fitPlate reads of the page: the plate in the slot, and the list's height and one row's. */
+export interface FitSlot {
+  querySelector(sel: string): { dataset: Record<string, string | undefined>; querySelector(sel: string): { textContent: string | null } | null } | null;
+}
+export interface FitList {
+  readonly clientHeight: number;
+  querySelectorAll(sel: string): ArrayLike<{ offsetHeight: number }>;
+}
+
+/**
+ * The plate's detail on one line when the filter and five whole rows would not fit with the long one
+ * (#724): the detail gives way, never the filter. How many rows fit comes from the list's height and
+ * a row's, never from what is scrolled into view. Always starts from the full detail, so a window
+ * that grows gets it back.
+ */
+export function fitPlate(slot: FitSlot, list: FitList | null): void {
+  const plate = slot.querySelector(".plate[data-short]");
+  const dt = plate?.querySelector(".dt");
+  if (!plate || !dt || plate.dataset.short === undefined) return;
+  const full = (plate.dataset.full ??= dt.textContent ?? "");
+  dt.textContent = full;
+  if (list === null) return;
+  const rows = list.querySelectorAll(".row");
+  const rowHeight = rows.length > 0 ? rows[0].offsetHeight : 0;
+  if (rowHeight <= 0) return;
+  if (Math.floor(list.clientHeight / rowHeight) < Math.min(KEEP_ROWS, rows.length)) dt.textContent = plate.dataset.short;
 }
