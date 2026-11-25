@@ -5,8 +5,8 @@
 // account's deletion starts and removed once it is done, makes the account's token count as gone,
 // so a crash between the steps never leaves an account that looks connected (issue #709). The mark
 // and its folder are flushed to disk before `markEnding` returns, so a power loss after the key's
-// deletion still finds the mark (#720). Nothing here logs, and no path is ever built from anything
-// but a 64-hex account key.
+// deletion still finds the mark (#720); a mark made but not flushed is removed again (#729). Nothing
+// here logs, and no path is ever built from anything but a 64-hex account key.
 import { randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, lstatSync, openSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -116,11 +116,22 @@ export function keychainVault(safe: SafeStorageLike, dir: string, platform: stri
       rmSync(join(mixes, checked(a)), { recursive: true, force: true });
     },
     markEnding(a) {
-      // Empty, never truncating or following a link planted in its place; one already there is kept.
-      flushPath(endFile(a), constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, flush, 0o600);
-      // The folder's entry for the mark too. Windows cannot open a folder to flush it; there NTFS
-      // journals the new entry itself.
-      if (platform !== "win32") flushPath(dir, constants.O_RDONLY, flush);
+      const file = endFile(a);
+      const had = exists(file);
+      try {
+        // Empty, never truncating or following a link planted in its place; one already there is kept.
+        flushPath(file, constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, flush, 0o600);
+        // The folder's entry for the mark too. Windows cannot open a folder to flush it; there NTFS
+        // journals the new entry itself.
+        if (platform !== "win32") flushPath(dir, constants.O_RDONLY, flush);
+      } catch (e) {
+        // Nothing is deleted after a failed mark, so a mark made here goes again: otherwise the
+        // account would still be signed in while its token reads as gone, and a restart's sweep
+        // would finish the deletion without dropping the token at Swedebeat (#729). A mark from an
+        // earlier, unfinished deletion stays.
+        if (!had) rmSync(file, { force: true });
+        throw e;
+      }
     },
     isEnding: (a) => exists(endFile(a)),
     clearEnding: (a) => rmSync(endFile(a), { force: true }),

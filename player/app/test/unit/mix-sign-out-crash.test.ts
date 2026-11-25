@@ -151,11 +151,18 @@ test("the real vault: the mark and then its folder are flushed to disk before ma
   assert.deepEqual(flushed, ["file"]);
 });
 
-test("the real vault: a mark that cannot be flushed fails the sign-out, and nothing is deleted", async () => {
-  for (const failing of ["file", "dir"]) {
+// The folder case only where a folder can be opened to flush it: on Windows opening one fails before
+// the injected flush is reached, so that case would pass without testing the flush (#729).
+const FLUSHED = process.platform === "win32" ? ["file"] : ["file", "dir"];
+
+test("the real vault: a mark that cannot be flushed fails the sign-out, nothing is deleted, and the mark goes again", async () => {
+  for (const failing of FLUSHED) {
     const d = mkdtempSync(join(tmpdir(), "mix-crash-"));
+    let failed = 0;
     const flush: Flush = (fd) => {
-      if ((fstatSync(fd).isDirectory() ? "dir" : "file") === failing) throw new Error("EIO");
+      if ((fstatSync(fd).isDirectory() ? "dir" : "file") !== failing) return;
+      failed += 1;
+      throw new Error("EIO");
     };
     const v = keychainVault(fakeSafe(), d, "linux", flush);
     const service = start(v);
@@ -163,8 +170,31 @@ test("the real vault: a mark that cannot be flushed fails the sign-out, and noth
     v.createKey(ACCT);
     mkdirSync(join(d, "mixes", ACCT), { recursive: true });
     assert.equal((await service.signOut())?.state, "signed_in", failing);
+    assert.equal(failed, 1, `${failing}: the injected flush was reached`);
     assert.equal(v.loadKey(ACCT) !== null, true, failing);
     assert.equal(existsSync(join(d, `mix-token-${ACCT}.bin`)), true, failing);
     assert.equal(existsSync(join(d, "mixes", ACCT)), true, failing);
+    // The mark made for this sign-out is gone: the token still reads as kept, and a restart's sweep
+    // deletes nothing, so the token is never dropped locally without being dropped at Swedebeat.
+    assert.equal(existsSync(join(d, `mix-ending-${ACCT}.bin`)), false, failing);
+    assert.equal(v.isEnding(ACCT), false, failing);
+    assert.equal(v.loadToken(ACCT), FAKE_TOKEN, failing);
+    const next = start(v);
+    next.sweep();
+    assert.equal(next.view().state, "signed_in", failing);
+    assert.equal(v.loadKey(ACCT) !== null, true, failing);
+    assert.equal(existsSync(join(d, "mixes", ACCT)), true, failing);
+  }
+});
+
+test("the real vault: a mark from an unfinished deletion stays when it cannot be flushed again", () => {
+  for (const failing of FLUSHED) {
+    const d = mkdtempSync(join(tmpdir(), "mix-crash-"));
+    keychainVault(fakeSafe(), d, "linux").markEnding(ACCT);
+    const v = keychainVault(fakeSafe(), d, "linux", (fd) => {
+      if ((fstatSync(fd).isDirectory() ? "dir" : "file") === failing) throw new Error("EIO");
+    });
+    assert.throws(() => v.markEnding(ACCT), /EIO/, failing);
+    assert.equal(v.isEnding(ACCT), true, failing);
   }
 });
