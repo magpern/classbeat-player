@@ -1,0 +1,41 @@
+/* The download page (docs/design/download.md). Reference mock-up only; it adds to site.css and
+   uses only tokens (no hue). Phone under 600 px, tablet 600 to 999, desktop 1000 and up. */
+.ver { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 12px 0 4px; }
+.ver .num { font-family: var(--face-number); font-weight: 600; font-size: 26px; line-height: 1.1; }
+.ver .when { font-size: 18px; color: var(--light-2); }
+.ver .tag { margin-left: 0; }
+.notes { display: inline-flex; align-items: center; min-height: 44px; margin: 0 0 16px; }
+.plate.unsigned { max-width: 44em; margin: 8px 0 24px; }
+.plate.unsigned .dt + .dt { margin-top: 8px; }
+
+.dl { border-top: 1px solid var(--stage-line); }
+.dl-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 24px; padding: 20px 0; border-bottom: 1px solid var(--stage-line); }
+.dl-row .sys { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.dl-row .sys .n { font-family: var(--face-number); font-weight: 800; font-size: 26px; line-height: 1.1; }
+.dl-row .sys .tag { margin-left: 0; display: inline-flex; gap: 8px; align-items: baseline; }
+.dl-row .sys .tag .mark { width: 12px; height: 12px; transform: translateY(1px); }
+.dl-row .file { font-size: 16px; color: var(--light-2); }
+.dl-row .sumlab { font-size: 14px; color: var(--light-3); margin-top: 4px; }
+/* The groups sit in a row with no whitespace between them, so a copied checksum has no spaces. */
+.sum { font-size: 18px; line-height: 1.5; color: var(--light-1); overflow-wrap: anywhere; }
+.sum .g { display: inline-block; margin-right: 12px; }
+.sum .h { margin-right: 12px; }
+.sum .g:last-child { margin-right: 0; }
+.dl-row .go { align-self: start; }
+.dl-row.wait .w { font-size: 18px; color: var(--light-2); }
+
+.check { margin-top: 32px; }
+.check h2 { margin-top: 0; }
+.check dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 20px; max-width: 44em; }
+.check dt { font-weight: 700; margin-top: 10px; }
+.check dd { font-size: 18px; color: var(--light-2); overflow-wrap: anywhere; }
+
+@media (max-width: 599px) { .dl-row .go .btn { width: 100%; } }
+@media (min-width: 600px) {
+  .ver .num { font-size: 30px; }
+  .sum .h { display: block; }
+  .dl-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .dl-row .go { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  .check dl { grid-template-columns: 160px minmax(0, 1fr); }
+  .check dt { margin-top: 0; }
+}
