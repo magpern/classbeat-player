@@ -26,7 +26,7 @@ const SLOW_MS = 400;
 before(async () => {
   let origin: string;
   ({ server, origin } = await startBackend(classWithSongs()));
-  ({ app, page } = await launch({ page: "list", args: ["--test-memory-keychain"], env: { PLAYER_BACKEND_ORIGIN: origin } }));
+  ({ app, page } = await launch({ page: "list", args: ["--test-memory-keychain", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"], env: { PLAYER_BACKEND_ORIGIN: origin } }));
   await app.evaluate(({ shell }) => {
     shell.openExternal = async () => undefined;
   });
@@ -62,7 +62,8 @@ test("a class with songs: the scene mounts in the room window and draws its canv
   });
   // Nothing is forced here: the scene must be on before any step-down (which software GL may begin by itself some seconds later).
   await waitFor(async () => (await scene()) === "on", 60_000, "data-scene=on").catch(async (e: unknown) => {
-    throw new Error(`${String(e)}; ${await diagnosis()}`);
+    const gpu = await app.evaluate(({ app: a }) => JSON.stringify(a.getGPUFeatureStatus()));
+    throw new Error(`${String(e)}; ${await diagnosis()}; gpu=${gpu}`);
   });
   // A canvas that was drawn on: the WebGL context exists and has a size, and it is the one the page shows.
   const canvas = await room.evaluate(() => {
