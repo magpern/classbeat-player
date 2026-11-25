@@ -20,6 +20,7 @@ let page: Page;
 let room: Page;
 /** The scene's own frame-rate log lines (room-scene-log.ts), as the room page wrote them to its console. */
 const rows: { fps: number; level: string }[] = [];
+const logs: string[] = [];
 const SLOW_MS = 400;
 
 before(async () => {
@@ -37,6 +38,12 @@ after(async () => {
 }, T);
 
 const command = (cmd: object): Promise<unknown> => page.evaluate((c) => (window as unknown as { player: { command(c: unknown): Promise<unknown> } }).player.command(c), cmd);
+/** What the room page can say about why the scene is not on (a failure message only). */
+const diagnosis = (): Promise<string> =>
+  room.evaluate(() => {
+    const gl = document.createElement("canvas").getContext("webgl2") !== null;
+    return `scene=${document.documentElement.dataset.scene} hidden=${document.hidden} webgl2=${gl} canvas=${document.getElementById("scene") !== null}`;
+  }).then((d) => `${d}; log=${JSON.stringify(logs)}`);
 const scene = (): Promise<string | undefined> => room.evaluate(() => document.documentElement.dataset.scene);
 const remaining = (): Promise<number | undefined> =>
   room.evaluate(async () => ((await (window as unknown as { room: { state(): Promise<{ view: { classRemainingMs: number } | null } | null> } }).room.state())?.view?.classRemainingMs));
@@ -50,10 +57,13 @@ test("a class with songs: the scene mounts in the room window and draws its canv
   room = await theRoom(app);
   room.on("console", (m) => {
     const r = /^scene frame rate: second=\d+ fps=(\d+(?:\.\d+)?) level=(\w+)$/.exec(m.text());
+    logs.push(m.text().slice(0, 160));
     if (r) rows.push({ fps: Number(r[1]), level: r[2]! });
   });
   // Nothing is forced here: the scene must be on before any step-down (which software GL may begin by itself some seconds later).
-  await waitFor(async () => (await scene()) === "on", 60_000, "data-scene=on");
+  await waitFor(async () => (await scene()) === "on", 60_000, "data-scene=on").catch(async (e: unknown) => {
+    throw new Error(`${String(e)}; ${await diagnosis()}`);
+  });
   // A canvas that was drawn on: the WebGL context exists and has a size, and it is the one the page shows.
   const canvas = await room.evaluate(() => {
     const c = document.getElementById("scene") as HTMLCanvasElement | null;
