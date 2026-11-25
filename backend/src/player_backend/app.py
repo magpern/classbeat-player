@@ -25,6 +25,7 @@ from player_backend.control_page import (
     rider_router,
 )
 from player_backend.db.executor import open_pool
+from player_backend.download_page import SITE_DIR, download_router
 from player_backend.health import router as health_router
 from player_backend.http_errors import error_response, install_error_handlers
 from player_backend.live import router as live_router
@@ -56,12 +57,14 @@ def create_app(
     live_recheck: RecheckTiming | None = RecheckTiming(),  # noqa: B008 (frozen)
     control_dir: Path = CONTROL_DIR,
     rider_dir: Path = RIDER_DIR,
+    site_dir: Path = SITE_DIR,
     classbeat: ClassbeatClient | None = None,
 ) -> FastAPI:
     """`live_recheck` None runs no re-check loop: for tests that drive the re-check by hand.
 
     `control_dir` is the built companion page and `rider_dir` the built rider page
-    (control_page.py), each read once, here. `classbeat` None: no sign-in with classbeat.
+    (control_page.py), and `site_dir` the built site (download_page.py), each read once, here.
+    `classbeat` None: no sign-in with classbeat.
     """
     configure_logging(settings.log_level)
 
@@ -107,6 +110,7 @@ def create_app(
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(site_router)
+    app.include_router(download_router(site_dir))
     app.include_router(player_router)
     app.include_router(source_router)
     app.include_router(live_router)
