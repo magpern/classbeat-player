@@ -52,6 +52,8 @@
 .status .key.quiet .kl { font-size: var(--c-minor); font-weight: 700; color: var(--light-2); }
 /* A status line in the minor tier (pair-done). */
 .status.m { font-size: var(--c-minor); }
+/* The e-mail may be long: in the minor tier the line wraps inside the window (A5, A8). */
+.status.m .ok { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 
 /* A tablet held sideways (4:3, 16:10): the companion's landscape sizes are capped by the width for
    a 2:1 phone, which leaves them under the landscape floors here. The heights alone set them. */
