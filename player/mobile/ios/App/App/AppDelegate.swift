@@ -1,7 +1,8 @@
 import UIKit
 
-// The app's entry point (issue #894). It hands each window scene to SceneDelegate and nothing
-// else: no push notifications, no URL schemes, no background work (ADR 0016).
+// The app's entry point (issue #894). It hands the app's window scene to SceneDelegate and an
+// external display's scene to DisplaySceneDelegate (issue #897), and nothing else: no push
+// notifications, no URL schemes, no background work (ADR 0016).
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(
@@ -16,6 +17,14 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        let role = connectingSceneSession.role
+        // An external display (issue #897) gets its delegate here, in code, so Info.plist keeps the
+        // one application scene.
+        if role == .windowExternalDisplayNonInteractive {
+            let config = UISceneConfiguration(name: "External Display", sessionRole: role)
+            config.delegateClass = DisplaySceneDelegate.self
+            return config
+        }
+        return UISceneConfiguration(name: "Default Configuration", sessionRole: role)
     }
 }
