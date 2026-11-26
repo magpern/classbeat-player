@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-26 (after #832; `main` at 28e592f).
+Updated 2026-11-26 (after #838; `main` at 471a3d0).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -173,7 +173,7 @@ measurable on fakes: S9's frame rate on a studio-class computer (software GL giv
 that is the owner's spike 2 run ([owner.md](owner.md)). No real GPU, display removal or music
 link was used.
 
-## PL12: installed phone and tablet apps
+## PL12: installed phone and tablet apps (Android done on fakes)
 
 Merged: the plan (#551), ADR 0011 (Capacitor, #553), spike 3 (an Android media-session follower
 and frame-rate logger, #555) with its CI build (#560) and guard hardening (#561, #566, #568,
@@ -204,6 +204,11 @@ often a crashed external display is shown again (#752, #755).
 Also merged: the rider line on the external display's idle stage (#787 spec, #790; its policy test
 hardened in #807). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
 reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
+
+Verifier at 28e592f: the debug and release APKs build, the manifest check passes, and the 57 web
+and 238 JVM tests per variant pass. Every built item is met on fakes. One gap: the follower asked
+for notification access before checking the reader (#836, fixed in #837). Not checked on a device
+or emulator: that waits for the owner's hardware.
 
 ## PL9: sensors (ADR 0012), done on fakes
 
