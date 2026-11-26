@@ -102,19 +102,34 @@ else
   bad "assets: complete set"
 fi
 
-# The notes promise no APK (#853): android-sign may still fail after they are written, so every line
-# that mentions Android or an APK is exactly the conditional paragraph below, and nothing else.
-android_notes_want="$(cat <<'WANT'
+# The notes promise no APK (#853): android-sign may still fail after they are written, so the app is
+# mentioned only in the conditional last paragraph. A keyword filter misses a promise worded another
+# way ("phone app", "mobile build"), so the whole file is the allowlist: every line is exactly this
+# text, and any change to the notes is a change to this test (#862).
+notes_want="$(cat <<'WANT'
+## classbeat player 1.2.3
+
+**These builds are unsigned and unnotarized.** Code signing and macOS notarisation are not set up
+yet, so macOS Gatekeeper and Windows SmartScreen warn when the app is opened.
+
+| System | File |
+|---|---|
+| Linux x64 | `classbeat-player-linux-x64-unsigned.tar.gz` |
+| macOS, Apple silicon | `classbeat-player-macos-arm64-unsigned.tar.gz` |
+| macOS, Intel | `classbeat-player-macos-x64-unsigned.tar.gz` |
+| Windows x64 | `classbeat-player-windows-x64-unsigned.tar.gz` |
+
+Check a download against `SHA256SUMS`: `sha256sum -c SHA256SUMS --ignore-missing`.
+
 The signed Android app is attached separately, only after it has been signed and verified. If this
 release lists `classbeat-player-android.apk`, check it against `SHA256SUMS-android`; if it does
 not, this release has no Android app.
 WANT
 )"
-android_notes="$(grep -Ei 'android|apk' "$tmp/a1/RELEASE_NOTES.md" || true)"
-if [ "$android_notes" = "$android_notes_want" ]; then
-  ok "assets: the release notes mention the APK only conditionally"
+if printf '%s\n' "$notes_want" | cmp -s - "$tmp/a1/RELEASE_NOTES.md"; then
+  ok "assets: the release notes are exactly the allowed text, the app mentioned only conditionally"
 else
-  bad "assets: the release notes' Android lines are not the conditional paragraph: $android_notes"
+  bad "assets: the release notes differ from the allowed text: $(printf '%s\n' "$notes_want" | diff - "$tmp/a1/RELEASE_NOTES.md" | head -5)"
 fi
 
 make_set "$tmp/a2" linux-x64 macos-arm64 windows-x64

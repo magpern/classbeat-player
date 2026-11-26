@@ -163,26 +163,49 @@ refused "a second, different certificate digest refused"
 # The pin is compared after normalising: the report's digest in upper case is accepted.
 run_sign FAKE_DIGEST="$(printf '%s' "$cert_hex" | tr 'a-f' 'A-F')"
 if [ "$rc" -eq 0 ] && [ -s "$out" ]; then ok "the pinned certificate in upper case is accepted"; else bad "upper-case digest (rc=$rc)"; fi
+# An existing SIGN_DIR: its output goes to run-$n/output like every other run, so the leak scan
+# below reads it too (#862).
 n=$((n + 1))
 mkdir -p "$tmp/run-$n/signing"
 dir_before="$tmp/run-$n/signing"
 rc=0
-env -i PATH="$bin:/usr/bin:/bin" SIGN_DIR="$dir_before" FAKE_LOG=/dev/null FAKE_DIGEST="$cert_hex" \
+env -i PATH="$bin:/usr/bin:/bin" SIGN_DIR="$dir_before" FAKE_LOG="$tmp/run-$n/log" FAKE_DIGEST="$cert_hex" \
   ANDROID_CERT_SHA256="$cert" ANDROID_KEYSTORE_BASE64="$keystore_b64" ANDROID_KEYSTORE_PASSWORD="$password" \
-  ANDROID_KEY_ALIAS="$alias" bash "$here/sign-android-apk.sh" "$tmp/in.apk" "$tmp/run-$n/out.apk" >/dev/null 2>&1 || rc=$?
-if [ "$rc" -ne 0 ] && [ -d "$dir_before" ]; then ok "an existing SIGN_DIR refused and left alone"; else bad "existing SIGN_DIR (rc=$rc)"; fi
+  ANDROID_KEY_ALIAS="$alias" bash "$here/sign-android-apk.sh" "$tmp/in.apk" "$tmp/run-$n/out.apk" \
+  >"$tmp/run-$n/output" 2>&1 || rc=$?
+if [ "$rc" -ne 0 ] && [ -d "$dir_before" ] && [ ! -e "$tmp/run-$n/out.apk" ]; then
+  ok "an existing SIGN_DIR refused and left alone"
+else
+  bad "existing SIGN_DIR (rc=$rc)"
+fi
 
 # No run, passing or failing, printed a secret (#853): the alias is on apksigner's command line
 # (sign-android-apk.sh says why) but never in the script's output, so xtrace or an echo fails here.
+# Every run's output is scanned: a run that sent its output elsewhere would leave a gap (#862).
 leaked=0
+scanned=0
 for o in "$tmp"/run-*/output; do
+  scanned=$((scanned + 1))
   if grep -qF -e "$alias" -e "$password" -e "$keystore_b64" -e "$keystore_text" -- "$o"; then
     leaked=1
     bad "a secret in $o"
   fi
 done
-[ "$leaked" -eq 1 ] || ok "no run printed the alias, the password or the keystore"
-if [ "$(grep -o -- '--ks-key-alias' "$tmp/run-1/log" | wc -l)" -eq 1 ]; then ok "the alias is passed once"; else bad "the alias is not passed exactly once"; fi
+if [ "$scanned" -ne "$n" ]; then
+  bad "the leak scan read $scanned outputs of $n runs"
+elif [ "$leaked" -eq 0 ]; then
+  ok "none of the $n runs printed the alias, the password or the keystore"
+fi
+# The alias value, not the flag, appears exactly once in everything the fake tools were given (#862).
+if [ "$(grep -oF -- "$alias" "$tmp/run-1/log" | wc -l)" -eq 1 ]; then ok "the alias is passed once"; else bad "the alias is not passed exactly once"; fi
+
+# The header says apksigner itself may print the alias and that Actions masks secrets (#862).
+header="$(sed -n '1,/^set -euo pipefail$/p' "$here/sign-android-apk.sh")"
+if grep -q 'alias in its error on stderr' <<<"$header" && grep -q 'GitHub Actions masks the value' <<<"$header"; then
+  ok "the header warns that apksigner may print the alias and that Actions masks it"
+else
+  bad "the header does not warn about apksigner's stderr and Actions' masking"
+fi
 
 # --- the workflow --------------------------------------------------------------------------------
 wf_check() { # wf_check <description> <command...>: the command must succeed
