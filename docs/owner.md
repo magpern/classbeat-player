@@ -229,6 +229,8 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
 - **iOS external display (#913).** On an iPhone or iPad with the app, connect an AirPlay
   receiver or a cable display, start a class in instructor mode, and check that the room screen
   appears on the external display and the screen stays awake for the whole class.
+  Then disconnect the display during the class: the phone shows the "display lost" state and the
+  class keeps running on the phone.
 - **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
   mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
   mode first (#447).

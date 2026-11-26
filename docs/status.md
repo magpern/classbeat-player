@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-26 (after #838; `main` at 471a3d0).
+Updated 2026-11-26 (after #939; `main` at 50e4e96).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -223,6 +223,25 @@ Verifier at 28e592f: the debug and release APKs build, the manifest check passes
 and 238 JVM tests per variant pass. Every built item is met on fakes. One gap: the follower asked
 for notification access before checking the reader (#836, fixed in #837). Not checked on a device
 or emulator: that waits for the owner's hardware.
+
+iOS (ADR 0016, on the manual clock; owner, 2026-11-26: it reads no music app): the CI simulator
+job (#902), no Follow key where a platform has no music reader (#903, #904, #906), the locked iOS
+shell with its guards (#905), the runbook for running it from Xcode (#907), the mode holder with
+intents split by mode and the screen-lock check (#908), pairing with a Keychain-held device token
+(#914) and keeping the screen on with the room screen on an external display (#897, #913). Spec:
+the iOS pairing screen (#924, #930). In progress: the pairing screen (#925), then its hardening
+(#926) and rider mode (#898, which adds the Bluetooth permission text and read-only sensors under
+the same guards as Android). The Swedebeat option is dimmed in the iOS build (#932, after #898).
+
+## ADR 0017: the instructor's own local music files
+
+The owner decided on 2026-11-26 that the player is not associated with any other cycling product
+(#909, #910, #912, #916, #923, #928) and that a class's music may also be the instructor's own
+local files (ADR 0017, #915). Merged: a class whose music source this player does not know is
+listed as needing a newer player (#917, #927), with its spec (#933, #939), and the spec for the
+music files state (#919, #929). In progress: class format 1.4 with source `local` (#918, PR #934;
+it waits for the player tests of #935). Next: the file index (#920), local playback (#921), the
+music files state (#922) and an unknown major version (#931).
 
 ## PL9: sensors (ADR 0012), done on fakes
 
