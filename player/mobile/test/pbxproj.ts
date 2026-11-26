@@ -1,122 +1,121 @@
-// A reader for the iOS Xcode project the guards pin (issue #894): it parses the whole project as
-// the old-style property list Xcode writes, whatever its whitespace, line breaks, comments or
-// quoting, and gives the build configurations, file references, groups, object kinds and script
-// phases from the parsed objects. Anything it cannot parse throws, and the guards report that.
+// A reader for the iOS Xcode project the guards pin (issue #894). It accepts only the canonical
+// form Xcode writes: every line must match one of a fixed set of line shapes, keys are made of
+// [A-Za-z0-9_.], a value is a bare word or path or a quoted string with no backslash, a /* */
+// comment follows only an object id, and there is no // anywhere but the first line. The script
+// phases are the one place with backslashes, so a script line must be one of CocoaPods' own,
+// byte for byte. Any other line throws, and the guards report that the project is not canonical.
+// What Apple's own reader makes of the project is checked on macOS by ios-verify (criterion 5).
 
 export type Value = string | Value[] | Dict;
 export type Dict = { [key: string]: Value };
 
 const isDict = (v: Value | undefined): v is Dict => typeof v === "object" && !Array.isArray(v);
-const ESCAPES: Record<string, string> = { "\\": "\\", '"': '"', "'": "'", n: "\n", t: "\t", r: "\r", a: "\x07", b: "\b", f: "\f", v: "\v" };
-/** Characters of an unquoted string; anything else must be quoted. */
-const BARE = /[A-Za-z0-9_$+/:.-]/;
 
-/** Parses a project file. Throws on anything it does not read in full, a repeated key included. */
-export function parsePbxproj(text: string): Dict {
-  let i = 0;
-  const fail = (what: string): never => {
-    throw new Error(`${what} at offset ${i}`);
+/** CocoaPods' own script phases, as pod install writes them between the quotes: the lock check
+ * (twice) and the framework embed. */
+const CHECK_LOCK =
+  'diff \\"${PODS_PODFILE_DIR_PATH}/Podfile.lock\\" \\"${PODS_ROOT}/Manifest.lock\\" > /dev/null\\nif [ $? != 0 ] ; then\\n    # print error to STDERR\\n    echo \\"error: The sandbox is not in sync with the Podfile.lock. Run \'pod install\' or update your CocoaPods installation.\\" >&2\\n    exit 1\\nfi\\n# This output is used by Xcode \'outputs\' to avoid re-running this script phase.\\necho \\"SUCCESS\\" > \\"${SCRIPT_OUTPUT_FILE_0}\\"\\n';
+export const SHELL_SCRIPTS = [CHECK_LOCK, CHECK_LOCK, '\\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\\"\\n'];
+
+const KEY = String.raw`[A-Za-z0-9_.]+`;
+const ID = /^[0-9A-F]{24}$/;
+/** A comment: printable ASCII without *, / or a backslash. */
+const C = String.raw` /\* [ -)+-.0-\[\]-~]+ \*/`;
+const BARE = String.raw`/?[A-Za-z0-9_.]+(?:/[A-Za-z0-9_.]+)*`;
+/** A quoted string: printable ASCII without a quote or a backslash. */
+const QUOTED = String.raw`"[ !#-\[\]-~]*"`;
+const V = `${BARE}|${QUOTED}`;
+
+const ASSIGN = new RegExp(`^(\\t*)(${KEY})(${C})? = (${V})(${C})?;$`);
+const OPEN = new RegExp(`^(\\t*)(${KEY})(${C})? = ([{(])$`);
+const INLINE = new RegExp(`^(\\t*)(${KEY})(${C})? = \\{((?:${KEY} = (?:${V})(?:${C})?; )+)\\};$`);
+const PAIR = new RegExp(`(${KEY}) = (${V})(${C})?; `, "gy");
+const ITEM = new RegExp(`^(\\t*)(${V})(${C})?,$`);
+const CLOSE = /^(\t*)([})]);$/;
+const SCRIPT = /^(\t*)shellScript = "(.*)";$/;
+const SECTION = /^\/\* (Begin|End) ([A-Za-z]+) section \*\/$/;
+
+const unquote = (v: string): string => (v.startsWith('"') ? v.slice(1, -1) : v);
+
+/** Reads a project in Xcode's canonical form. Throws on the first line that is not. */
+export function readPbxproj(text: string): Dict {
+  const lines = text.split("\n");
+  const root: Dict = Object.create(null) as Dict;
+  const stack: (Dict | Value[])[] = [root];
+  let section: string | undefined;
+  const sectionOf = new Map<string, string>();
+  const fail = (n: number, why = "is not in Xcode's canonical form"): never => {
+    throw new Error(`line ${n + 1} ${why}`);
   };
-  const skip = (): void => {
-    for (;;) {
-      while (i < text.length && /\s/.test(text[i]!)) i++;
-      if (text.startsWith("//", i)) {
-        const end = text.indexOf("\n", i);
-        i = end < 0 ? text.length : end + 1;
-      } else if (text.startsWith("/*", i)) {
-        const end = text.indexOf("*/", i + 2);
-        if (end < 0) fail("an unclosed comment");
-        i = end + 2;
-      } else return;
+  if (lines[0] !== "// !$*UTF8*$!" || lines[1] !== "{" || lines.at(-2) !== "}" || lines.at(-1) !== "") {
+    throw new Error("the project does not start and end as Xcode writes it");
+  }
+  const commented = (n: number, word: string, comment: string | undefined): void => {
+    if (comment !== undefined && !ID.test(word)) fail(n, "has a comment after something that is not an object id");
+  };
+  const put = (n: number, depth: number, key: string, value: Value): void => {
+    const top = stack.at(-1)!;
+    if (depth !== stack.length || Array.isArray(top)) fail(n);
+    const dict = top as Dict;
+    if (Object.hasOwn(dict, key)) fail(n, `repeats the key ${key}`);
+    dict[key] = value;
+    if (stack.length === 2 && stack[1] === root["objects"]) {
+      if (section === undefined) fail(n, "is an object outside a section");
+      sectionOf.set(key, section!);
     }
   };
-  const quoted = (): string => {
-    let out = "";
-    i++;
-    for (;;) {
-      if (i >= text.length) fail("an unclosed string");
-      const c = text[i++]!;
-      if (c === '"') return out;
-      if (c !== "\\") {
-        out += c;
-        continue;
-      }
-      const e = text[i++] ?? fail("an escape at the end");
-      const hex = /^[0-9A-Fa-f]{4}/.exec(text.slice(i));
-      const oct = /^[0-7]{1,3}/.exec(text.slice(i - 1));
-      if (e === "U" && hex) {
-        out += String.fromCharCode(parseInt(hex[0], 16));
-        i += 4;
-      } else if (oct) {
-        out += String.fromCharCode(parseInt(oct[0], 8));
-        i += oct[0].length - 1;
-      } else if (Object.hasOwn(ESCAPES, e)) out += ESCAPES[e];
-      else fail(`an unknown escape \\${e}`);
-    }
-  };
-  const string = (): string => {
-    if (text[i] === '"') return quoted();
-    const start = i;
-    while (i < text.length && BARE.test(text[i]!) && !text.startsWith("//", i) && !text.startsWith("/*", i)) i++;
-    if (i === start) fail(`an unexpected ${JSON.stringify(text[i] ?? "end")}`);
-    return text.slice(start, i);
-  };
-  const expect = (c: string): void => {
-    skip();
-    if (text[i] !== c) fail(`no ${c}`);
-    i++;
-  };
-  const value = (): Value => {
-    skip();
-    if (text[i] === "{") {
-      i++;
+  for (let n = 2; n < lines.length - 2; n++) {
+    const line = lines[n]!;
+    let m: RegExpExecArray | null;
+    if (line === "") continue;
+    if ((m = SECTION.exec(line))) {
+      if (stack.length !== 2 || stack[1] !== root["objects"]) fail(n);
+      if (m[1] === "Begin" ? section !== undefined : section !== m[2]) fail(n);
+      section = m[1] === "Begin" ? m[2] : undefined;
+    } else if ((m = SCRIPT.exec(line))) {
+      if (!SHELL_SCRIPTS.includes(m[2]!)) fail(n, "is a script phase that is not one of CocoaPods' own");
+      put(n, m[1]!.length, "shellScript", m[2]!);
+    } else if ((m = ASSIGN.exec(line))) {
+      commented(n, m[2]!, m[3]);
+      commented(n, m[4]!, m[5]);
+      put(n, m[1]!.length, m[2]!, unquote(m[4]!));
+    } else if ((m = OPEN.exec(line))) {
+      commented(n, m[2]!, m[3]);
+      const value: Dict | Value[] = m[4] === "{" ? (Object.create(null) as Dict) : [];
+      put(n, m[1]!.length, m[2]!, value);
+      stack.push(value);
+    } else if ((m = INLINE.exec(line))) {
+      commented(n, m[2]!, m[3]);
       const dict: Dict = Object.create(null) as Dict;
-      for (;;) {
-        skip();
-        if (text[i] === "}") break;
-        const key = string();
-        if (Object.hasOwn(dict, key)) fail(`the key ${key} is repeated`);
-        expect("=");
-        dict[key] = value();
-        expect(";");
+      PAIR.lastIndex = 0;
+      for (let p = PAIR.exec(m[4]!); p; p = PAIR.exec(m[4]!)) {
+        commented(n, p[2]!, p[3]);
+        if (Object.hasOwn(dict, p[1]!)) fail(n, `repeats the key ${p[1]}`);
+        dict[p[1]!] = unquote(p[2]!);
       }
-      i++;
-      return dict;
-    }
-    if (text[i] === "(") {
-      i++;
-      const items: Value[] = [];
-      for (;;) {
-        skip();
-        if (text[i] === ")") break;
-        items.push(value());
-        skip();
-        if (text[i] === ",") i++;
-        else if (text[i] !== ")") fail("no , or )");
-      }
-      i++;
-      return items;
-    }
-    return string();
-  };
-  const root = value();
-  skip();
-  if (i !== text.length) fail("text after the project");
-  if (!isDict(root)) throw new Error("the project is not a dictionary");
+      put(n, m[1]!.length, m[2]!, dict);
+    } else if ((m = ITEM.exec(line))) {
+      const top = stack.at(-1)!;
+      if (m[1]!.length !== stack.length || !Array.isArray(top)) fail(n);
+      commented(n, m[2]!, m[3]);
+      (top as Value[]).push(unquote(m[2]!));
+    } else if ((m = CLOSE.exec(line))) {
+      const top = stack.pop();
+      if (m[1]!.length !== stack.length || stack.length === 0 || Array.isArray(top) !== (m[2] === ")")) fail(n);
+    } else fail(n);
+  }
+  if (stack.length !== 1 || section !== undefined) throw new Error("the project ends inside a dictionary, list or section");
+  const objects = root["objects"];
+  if (!isDict(objects)) throw new Error("the project has no objects");
+  for (const [id, o] of Object.entries(objects)) {
+    if (!ID.test(id) || !isDict(o) || o["isa"] !== sectionOf.get(id)) throw new Error(`the object ${id} is not in its own section`);
+  }
   return root;
 }
 
-/** Decodes the body of a quoted project string, as written between its quotes. */
-export const decodeString = (body: string): string => parsePbxproj(`{a = "${body}";}`)["a"] as string;
-
 /** Every object of the project by id, each a dictionary with a string isa. */
 export function projectObjects(pbxproj: string): [string, Dict][] {
-  const objects = parsePbxproj(pbxproj)["objects"];
-  if (!isDict(objects)) throw new Error("the project has no objects");
-  return Object.entries(objects).map(([id, o]) => {
-    if (!isDict(o) || typeof o["isa"] !== "string") throw new Error(`the object ${id} has no kind`);
-    return [id, o];
-  });
+  return Object.entries(readPbxproj(pbxproj)["objects"] as Dict) as [string, Dict][];
 }
 
 const str = (o: Dict, key: string): string => {
@@ -150,7 +149,7 @@ export const setting = (c: BuildConfig, key: string): string | undefined => {
   return typeof v === "string" ? v : undefined;
 };
 
-/** The names of every setting a configuration sets, conditional ones ("KEY[sdk=…]") as written. */
+/** The names of every setting a configuration sets. */
 export const settingKeys = (c: BuildConfig): string[] => Object.keys(c.settings);
 
 export type FileRef = { id: string; type: string; sourceTree: string; path: string };
@@ -170,7 +169,7 @@ export const groups = (pbxproj: string): string[] =>
 /** The kind of every object in the project. */
 export const objectKinds = (pbxproj: string): string[] => projectObjects(pbxproj).map(([, o]) => o["isa"] as string);
 
-/** Every script phase as "shellPath|script", the script decoded. */
+/** Every script phase as "shellPath|script", the script as written between its quotes. */
 export const shellScripts = (pbxproj: string): string[] =>
   projectObjects(pbxproj)
     .filter(([, o]) => o["isa"] === "PBXShellScriptBuildPhase")

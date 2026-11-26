@@ -9,7 +9,9 @@ import { test } from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { MOBILE, mobileFiles } from "../../app/test/unit/rule-sources.ts";
 import { IOS, swiftFiles } from "./ios-sources.ts";
-import { buildConfigs, decodeString, fileRefs, groups, objectKinds, parsePbxproj, setting, settingKeys, shellScripts } from "./pbxproj.ts";
+import { BANNED_PROJECT_WORDS } from "../ios-verify/allowlists.ts";
+import { plistFindings, projectJsonFindings } from "../ios-verify/checks.ts";
+import { buildConfigs, fileRefs, groups, readPbxproj, setting, SHELL_SCRIPTS, shellScripts } from "./pbxproj.ts";
 import { readPlist, type PlistValue } from "./plist.ts";
 
 const APP = join(IOS, "App");
@@ -17,95 +19,20 @@ const text = (...p: string[]): string => readFileSync(join(APP, ...p), "utf8");
 type Dict = { [key: string]: PlistValue };
 const isDict = (v: PlistValue | undefined): v is Dict => typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** The Info.plist keys the app may have. NSFaceIDUsageDescription is for the sign-in to come (ADR 0016). */
-const INFO_KEYS = new Set([
-  "CFBundleDevelopmentRegion",
-  "CFBundleDisplayName",
-  "CFBundleExecutable",
-  "CFBundleIdentifier",
-  "CFBundleInfoDictionaryVersion",
-  "CFBundleName",
-  "CFBundlePackageType",
-  "CFBundleShortVersionString",
-  "CFBundleVersion",
-  "LSRequiresIPhoneOS",
-  "NSFaceIDUsageDescription",
-  "UIApplicationSceneManifest",
-  "UILaunchScreen",
-  "UIRequiredDeviceCapabilities",
-  "UISupportedInterfaceOrientations",
-  "UISupportedInterfaceOrientations~ipad",
-  "UIViewControllerBasedStatusBarAppearance",
-]);
-/** Keys that are never in the app, at any depth: camera, microphone, photos, location, background
- * modes, Bluetooth, arbitrary loads, other apps' links and the rest of what it does not do. */
-const BANNED_KEY =
-  /^(NSCamera|NSMicrophone|NSPhotoLibrary|NSLocation|UIBackgroundModes|NSBluetooth|NSAllowsArbitraryLoads|NSAllowsLocalNetworking|NSSpeechRecognition|NSAppleMusic|NSLocalNetwork|NSBonjourServices|NSMotion|NSContacts|NSCalendars|NSReminders|NSHealth|NSUserTracking|NSNearbyInteraction|CFBundleURLTypes|LSApplicationQueriesSchemes|UIFileSharingEnabled|LSSupportsOpeningDocumentsInPlace|CFBundleDocumentTypes|NSUserActivityTypes|BGTaskSchedulerPermittedIdentifiers|com\.apple\.)/;
-const SCENES: PlistValue = {
-  UIApplicationSupportsMultipleScenes: false,
-  UISceneConfigurations: {
-    UIWindowSceneSessionRoleApplication: [
-      { UISceneConfigurationName: "Default Configuration", UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).SceneDelegate" },
-    ],
-  },
-};
-/** The one difference of the debug plist: plain http to localhost, for a loopback test server. */
-const DEBUG_ATS: PlistValue = { NSExceptionDomains: { localhost: { NSExceptionAllowsInsecureHTTPLoads: true } } };
-
-/** Every key in a property list, at any depth, as a path ("a.b[0].c"). */
-function keysAt(v: PlistValue, at = ""): string[] {
-  if (Array.isArray(v)) return v.flatMap((x, i) => keysAt(x, `${at}[${i}].`));
-  if (!isDict(v)) return [];
-  return Object.entries(v).flatMap(([k, x]) => [`${at}${k}`, ...keysAt(x, `${at}${k}.`)]);
-}
-const lastKey = (path: string): string => path.replace(/^.*\]?\./, "");
-
 /** What is wrong with the release and debug Info.plist, one line each. */
 export function infoFindings(releaseXml: string, debugXml: string): string[] {
   const found: string[] = [];
   const release = readPlist(releaseXml);
   const debug = readPlist(debugXml);
   if (!isDict(release) || !isDict(debug)) return ["an Info.plist is not a dictionary"];
-  for (const k of Object.keys(release)) if (!INFO_KEYS.has(k)) found.push(`release: ${k} is not on the allowlist`);
-  for (const [name, plist] of [["release", release], ["debug", debug]] as const) {
-    for (const path of keysAt(plist)) if (BANNED_KEY.test(lastKey(path))) found.push(`${name}: ${path} is banned`);
-  }
-  if (!isDeepStrictEqual(release["UIApplicationSceneManifest"], SCENES)) found.push("release: the scene manifest is not the one window scene");
-  if ("NSAppTransportSecurity" in release) found.push("release: NSAppTransportSecurity is set (HTTPS only means no exception)");
-  const { NSAppTransportSecurity: ats, ...rest } = debug;
-  if (!isDeepStrictEqual(ats, DEBUG_ATS)) found.push("debug: the transport security is not the localhost exception alone");
+  found.push(...plistFindings("release", release, { debug: false, built: false }));
+  found.push(...plistFindings("debug", debug, { debug: true, built: false }));
+  const rest = { ...debug };
+  delete rest["NSAppTransportSecurity"];
   if (!isDeepStrictEqual(rest, release)) found.push("debug: differs from release by more than the localhost exception");
   return found;
 }
 
-/** The build settings the project may set. Nothing that adds Info.plist keys (INFOPLIST_KEY_*,
- * INFOPLIST_PREPROCESS), entitlements, linker or compiler flags, or another plist. */
-const SETTING_KEYS = new Set(
-  (
-    "ALWAYS_SEARCH_USER_PATHS ASSETCATALOG_COMPILER_APPICON_NAME ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME BUNDLE_LOADER " +
-    "CLANG_ANALYZER_NONNULL CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION CLANG_CXX_LANGUAGE_STANDARD CLANG_CXX_LIBRARY CLANG_ENABLE_MODULES " +
-    "CLANG_ENABLE_OBJC_ARC CLANG_ENABLE_OBJC_WEAK CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING CLANG_WARN_BOOL_CONVERSION CLANG_WARN_COMMA " +
-    "CLANG_WARN_CONSTANT_CONVERSION CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS CLANG_WARN_DIRECT_OBJC_ISA_USAGE " +
-    "CLANG_WARN_DOCUMENTATION_COMMENTS CLANG_WARN_EMPTY_BODY CLANG_WARN_ENUM_CONVERSION CLANG_WARN_INFINITE_RECURSION " +
-    "CLANG_WARN_INT_CONVERSION CLANG_WARN_NON_LITERAL_NULL_CONVERSION CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF " +
-    "CLANG_WARN_OBJC_LITERAL_CONVERSION CLANG_WARN_OBJC_ROOT_CLASS CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER " +
-    "CLANG_WARN_RANGE_LOOP_ANALYSIS CLANG_WARN_STRICT_PROTOTYPES CLANG_WARN_SUSPICIOUS_MOVE CLANG_WARN_UNGUARDED_AVAILABILITY " +
-    "CLANG_WARN_UNREACHABLE_CODE CLANG_WARN__DUPLICATE_METHOD_MATCH CODE_SIGN_STYLE COPY_PHASE_STRIP CURRENT_PROJECT_VERSION " +
-    "DEBUG_INFORMATION_FORMAT ENABLE_NS_ASSERTIONS ENABLE_STRICT_OBJC_MSGSEND ENABLE_TESTABILITY GCC_C_LANGUAGE_STANDARD " +
-    "GCC_DYNAMIC_NO_PIC GCC_NO_COMMON_BLOCKS GCC_OPTIMIZATION_LEVEL GCC_PREPROCESSOR_DEFINITIONS GCC_WARN_64_TO_32_BIT_CONVERSION " +
-    "GCC_WARN_ABOUT_RETURN_TYPE GCC_WARN_UNDECLARED_SELECTOR GCC_WARN_UNINITIALIZED_AUTOS GCC_WARN_UNUSED_FUNCTION " +
-    "GCC_WARN_UNUSED_VARIABLE GENERATE_INFOPLIST_FILE INFOPLIST_FILE IPHONEOS_DEPLOYMENT_TARGET LD_RUNPATH_SEARCH_PATHS " +
-    "MARKETING_VERSION MTL_ENABLE_DEBUG_INFO MTL_FAST_MATH ONLY_ACTIVE_ARCH PRODUCT_BUNDLE_IDENTIFIER PRODUCT_NAME SDKROOT " +
-    "SWIFT_ACTIVE_COMPILATION_CONDITIONS SWIFT_COMPILATION_MODE SWIFT_OPTIMIZATION_LEVEL SWIFT_VERSION TARGETED_DEVICE_FAMILY " +
-    "TEST_HOST VALIDATE_PRODUCT"
-  ).split(" "),
-);
-/** The object kinds the project may hold: no copy-files phase, build rule, package or reference proxy. */
-const OBJECT_KINDS = new Set([
-  "PBXBuildFile", "PBXContainerItemProxy", "PBXFileReference", "PBXFrameworksBuildPhase", "PBXGroup", "PBXNativeTarget",
-  "PBXProject", "PBXResourcesBuildPhase", "PBXShellScriptBuildPhase", "PBXSourcesBuildPhase", "PBXTargetDependency",
-  "XCBuildConfiguration", "XCConfigurationList",
-]);
 /** The files the project names, other than its Swift sources: CocoaPods' generated configuration
  * files (in the git-ignored Pods), the plists, the config, the pages, the products, Foundation and
  * the pods' framework. No other framework, library, xcconfig or source. */
@@ -125,74 +52,47 @@ const FILE_REFS = new Set([
   "wrapper.framework|BUILT_PRODUCTS_DIR|Pods_AppTests.framework",
 ]);
 const GROUPS = ["||<group>", "Pods|Pods|<group>", "App|App|<group>", "AppTests|AppTests|<group>", "Frameworks||<group>", "Policy|Policy|<group>", "Products||<group>", "iOS||<group>"];
-/** CocoaPods' own script phases, as pod install writes them: the lock check (twice) and the framework embed. */
-const CHECK_LOCK =
-  'diff \\"${PODS_PODFILE_DIR_PATH}/Podfile.lock\\" \\"${PODS_ROOT}/Manifest.lock\\" > /dev/null\\nif [ $? != 0 ] ; then\\n    # print error to STDERR\\n    echo \\"error: The sandbox is not in sync with the Podfile.lock. Run \'pod install\' or update your CocoaPods installation.\\" >&2\\n    exit 1\\nfi\\n# This output is used by Xcode \'outputs\' to avoid re-running this script phase.\\necho \\"SUCCESS\\" > \\"${SCRIPT_OUTPUT_FILE_0}\\"\\n';
-const SCRIPTS = [CHECK_LOCK, CHECK_LOCK, '\\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\\"\\n'].map(
-  (s) => `/bin/sh|${decodeString(s)}`,
-);
+const SCRIPTS = SHELL_SCRIPTS.map((s) => `/bin/sh|${s}`);
 
-/** What is wrong with the Xcode project, one line each. */
+/** What is wrong with the Xcode project, one line each: what its text names, then what the
+ * canonical reader gives (or that the project is not in Xcode's canonical form). */
 export function projectFindings(pbxproj: string): string[] {
+  const found: string[] = [];
+  // A second line of defence on the text as written: no INFOPLIST_ name but the file, no banned word.
+  for (const m of pbxproj.matchAll(/INFOPLIST_(?!FILE\b)\w*/g)) found.push(`the project names ${m[0]}`);
+  for (const banned of BANNED_PROJECT_WORDS) if (pbxproj.includes(banned)) found.push(`the project has ${banned}`);
   try {
-    return readProjectFindings(pbxproj);
+    return [...found, ...readProjectFindings(pbxproj)];
   } catch (e) {
-    return [`the project could not be read: ${(e as Error).message}`];
+    return [...found, `the project could not be read: ${(e as Error).message}`];
   }
 }
 
 function readProjectFindings(pbxproj: string): string[] {
-  const found: string[] = [];
+  // The shared checks, the same ones ios:verify runs on what Apple's reader makes of the project.
+  const found = projectJsonFindings(readPbxproj(pbxproj));
   const configs = buildConfigs(pbxproj);
   for (const c of configs) {
-    const flags = Object.entries(c.settings).filter(([k]) => !/^(DEBUG_INFORMATION_FORMAT|MTL_ENABLE_DEBUG_INFO)$/.test(k));
-    if (c.name !== "Debug" && /DEBUG/.test(JSON.stringify(flags))) found.push(`${c.name}: compiles with DEBUG`);
     const target = setting(c, "IPHONEOS_DEPLOYMENT_TARGET");
     if (target !== undefined && target !== "16.0") found.push(`${c.name}: deployment target ${target}`);
     const info = setting(c, "INFOPLIST_FILE");
     const expected = c.name === "Debug" ? "App/Info-Debug.plist" : "App/Info.plist";
     if (info !== undefined && info !== expected) found.push(`${c.name}: Info.plist is ${info}`);
+    // The app's Info.plist comes from its file alone: GENERATE_INFOPLIST_FILE is NO wherever the
+    // app's plist is named, and only a test bundle (TEST_HOST) may generate its own.
+    const generate = setting(c, "GENERATE_INFOPLIST_FILE");
+    if (info !== undefined && generate !== "NO") found.push(`${c.name}: the app's Info.plist is generated`);
+    if (generate !== undefined && generate !== "NO" && setting(c, "TEST_HOST") === undefined) found.push(`${c.name}: generates an Info.plist`);
   }
   if (!configs.some((c) => setting(c, "IPHONEOS_DEPLOYMENT_TARGET") === "16.0")) found.push("no deployment target");
   const infos = configs.filter((c) => setting(c, "INFOPLIST_FILE") !== undefined).map((c) => c.name).sort();
   if (!isDeepStrictEqual(infos, ["Debug", "Release"])) found.push(`the app's Info.plist is set for ${infos.join(", ") || "nothing"}`);
-  for (const banned of ["CODE_SIGN_ENTITLEMENTS", "SystemCapabilities", "XCRemoteSwiftPackageReference", "XCLocalSwiftPackageReference", "XCSwiftPackageProductDependency"]) {
-    if (pbxproj.includes(banned) || decoded(pbxproj).includes(banned)) found.push(`the project has ${banned}`);
-  }
-  return [...found, ...infoSourceFindings(pbxproj), ...shapeFindings(pbxproj)];
+  return [...found, ...shapeFindings(pbxproj)];
 }
-
-/**
- * The app's Info.plist comes from its file alone: GENERATE_INFOPLIST_FILE is NO wherever the
- * app's plist is named, only a test bundle (TEST_HOST) may generate its own, no INFOPLIST_ setting
- * but the file, and no setting outside the allowlist (Xcode would merge INFOPLIST_KEY_* into the
- * shipped plist, around the plist checks).
- */
-function infoSourceFindings(pbxproj: string): string[] {
-  const found: string[] = [];
-  // A second line of defence: no INFOPLIST_ name but the file anywhere, as written or decoded.
-  for (const text of [pbxproj, decoded(pbxproj)]) {
-    for (const m of text.matchAll(/INFOPLIST_(?!FILE\b)\w*/g)) found.push(`the project names ${m[0]}`);
-  }
-  for (const c of buildConfigs(pbxproj)) {
-    const generate = setting(c, "GENERATE_INFOPLIST_FILE");
-    if (setting(c, "INFOPLIST_FILE") !== undefined && generate !== "NO") found.push(`${c.name}: the app's Info.plist is generated`);
-    if (generate !== undefined && generate !== "NO" && setting(c, "TEST_HOST") === undefined) found.push(`${c.name}: generates an Info.plist`);
-    for (const key of settingKeys(c)) {
-      if (/^INFOPLIST_/.test(key) && key !== "INFOPLIST_FILE") found.push(`${c.name}: sets ${key}`);
-      else if (!SETTING_KEYS.has(key)) found.push(`${c.name}: ${key} is not an allowed setting`);
-    }
-  }
-  return found;
-}
-
-/** Every key and string of the parsed project, decoded, as one text. */
-const decoded = (pbxproj: string): string => JSON.stringify(parsePbxproj(pbxproj));
 
 /** The project holds only the objects, files, groups, base configurations and scripts above. */
 function shapeFindings(pbxproj: string): string[] {
   const found: string[] = [];
-  for (const kind of new Set(objectKinds(pbxproj))) if (!OBJECT_KINDS.has(kind)) found.push(`the project has a ${kind}`);
   const swift = new Set(swiftFiles.map((f) => f.path.split(/[\\/]/).pop()));
   const refs = fileRefs(pbxproj);
   if (refs.length !== [...pbxproj.matchAll(/isa = PBXFileReference;/g)].length) found.push("a file reference could not be read");
@@ -388,20 +288,28 @@ test("each project check fails on a planted example", () => {
     ["a conditional key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", 'INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t"INFOPLIST_KEY_NSMicrophoneUsageDescription[sdk=iphoneos*]" = x;'))],
     ["a preprocessed plist", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_PREPROCESS = YES;"))],
     ["a generated plist elsewhere", () => projectFindings(swap(PBXPROJ, "ENABLE_NS_ASSERTIONS = NO;", "ENABLE_NS_ASSERTIONS = NO;\n\t\t\t\tGENERATE_INFOPLIST_FILE = YES;"))],
-    ["a camera key on a deeper line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\tINFOPLIST_KEY_NSCameraUsageDescription = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
-    ["a camera key on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; INFOPLIST_KEY_NSCameraUsageDescription = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
-    ["a camera key over several lines", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\nINFOPLIST_KEY_NSCameraUsageDescription\n=\n\"x\"\n;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
-    ["a quoted camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_KEY_NSCameraUsageDescription\" = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
-    ["an escaped camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_\\U004BEY_NSCameraUsageDescription\" = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["a camera key on a deeper line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\tINFOPLIST_KEY_NSCameraUsageDescription = x;")), "is not in Xcode's canonical form"],
+    ["a camera key on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; INFOPLIST_KEY_NSCameraUsageDescription = x;")), "is not in Xcode's canonical form"],
+    ["a camera key over several lines", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\nINFOPLIST_KEY_NSCameraUsageDescription\n=\n\"x\"\n;")), "is not in Xcode's canonical form"],
+    ["a quoted camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_KEY_NSCameraUsageDescription\" = x;")), "is not in Xcode's canonical form"],
+    ["an escaped camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_\\U004BEY_NSCameraUsageDescription\" = x;")), "is not in Xcode's canonical form"],
     ["a camera key in a comment", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; /* INFOPLIST_KEY_NSCameraUsageDescription */")), "the project names INFOPLIST_KEY_NSCameraUsageDescription"],
-    ["linker flags on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; OTHER_LDFLAGS = \"-ObjC\";")), "Release: OTHER_LDFLAGS is not an allowed setting"],
-    ["linker flags behind a comment", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_LDFLAGS /* = */ = (\n\"-ObjC\",\n);")), "Release: OTHER_LDFLAGS is not an allowed setting"],
-    ["a conditional setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"OTHER_LDFLAGS[sdk=iphoneos*]\" = x;")), "is not an allowed setting"],
-    ["a repeated setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_FILE = App/Other.plist;")), "is repeated"],
-    ["an escaped configuration kind", () => projectFindings(swap(PBXPROJ, "isa = XCBuildConfiguration;", "isa = \"XCBuild\\U0043onfiguration\";")), "build configurations read"],
+    ["linker flags on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; OTHER_LDFLAGS = \"-ObjC\";")), "is not in Xcode's canonical form"],
+    ["linker flags behind a comment", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_LDFLAGS /* = */ = (\n\"-ObjC\",\n);")), "has a comment after something that is not an object id"],
+    ["a conditional setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"OTHER_LDFLAGS[sdk=iphoneos*]\" = x;")), "is not in Xcode's canonical form"],
+    ["a repeated setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_FILE = App/Other.plist;")), "repeats the key INFOPLIST_FILE"],
+    ["an escaped configuration kind", () => projectFindings(swap(PBXPROJ, "isa = XCBuildConfiguration;", "isa = \"XCBuild\\U0043onfiguration\";")), "is not in Xcode's canonical form"],
     ["settings on another object", () => projectFindings(swap(PBXPROJ, "isa = PBXProject;", "isa = PBXProject;\n\t\t\tbuildSettings = {\n\t\t\t\tOTHER_LDFLAGS = x;\n\t\t\t};")), "has build settings"],
     ["a script run by another shell", () => projectFindings(swap(PBXPROJ, "shellPath = /bin/sh;", "shellPath = /usr/bin/python3;")), "a script phase is not one of CocoaPods' own"],
-    ["a framework written over several lines", () => projectFindings(swap(PBXPROJ, "/* Begin PBXFileReference section */", "/* Begin PBXFileReference section */\n\t\tAA0000000000000000000001 = {\nisa = PBXFileReference;\n\"lastKnownFileType\" = wrapper.framework;\npath = Vendor.framework;\nsourceTree = \"<group>\";\n};")), "the project names wrapper.framework|<group>|Vendor.framework"],
+    ["a framework written over several lines", () => projectFindings(swap(PBXPROJ, "/* Begin PBXFileReference section */", "/* Begin PBXFileReference section */\n\t\tAA0000000000000000000001 = {\nisa = PBXFileReference;\n\"lastKnownFileType\" = wrapper.framework;\npath = Vendor.framework;\nsourceTree = \"<group>\";\n};")), "is not in Xcode's canonical form"],
+    ["the reviewer's comment and escapes", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", 'VALIDATE_PRODUCT = YES//x; "GENERATE_INFO\\U0050LIST_FILE" = YES; "INFO\\U0050LIST_KEY_NSCameraUsageDescription" = x; Z = "\\n; //";')), "is not in Xcode's canonical form"],
+    ["a backslash in a quoted value", () => projectFindings(swap(PBXPROJ, 'PRODUCT_NAME = "$(TARGET_NAME)";', 'PRODUCT_NAME = "$(TARGET_\\NAME)";')), "is not in Xcode's canonical form"],
+    ["a non-ASCII key", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", "VALIDATE_PRODUCT = YES;\n\t\t\t\tINFOPLIST_KEY_NSCameraUsageаDescription = x;")), "is not in Xcode's canonical form"],
+    ["a bare slash", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", "VALIDATE_PRODUCT = YES/;")), "is not in Xcode's canonical form"],
+    ["a // line", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", "VALIDATE_PRODUCT = YES;\n\t\t\t\t// x")), "is not in Xcode's canonical form"],
+    ["a comment after a key", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", "VALIDATE_PRODUCT /* x */ = YES;")), "not an object id"],
+    ["a carriage return", () => projectFindings(swap(PBXPROJ, "VALIDATE_PRODUCT = YES;", "VALIDATE_PRODUCT = YES;\r")), "is not in Xcode's canonical form"],
+    ["an object outside its section", () => projectFindings(swap(PBXPROJ, "isa = PBXBuildFile;", "isa = PBXFileReference;")), "is not in its own section"],
     ["linker flags", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", 'INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_LDFLAGS = "-framework AVFoundation";'))],
     ["an unreadable setting line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_KEY_X=1;"))],
     ["a base xcconfig of our own", () => projectFindings(swap(PBXPROJ, "path = \"Target Support Files/Pods-App/Pods-App.release.xcconfig\"", "path = ../Camera.xcconfig"))],
@@ -412,6 +320,7 @@ test("each project check fails on a planted example", () => {
     ["an Objective-C source", () => projectFindings(swap(PBXPROJ, "lastKnownFileType = sourcecode.swift; path = BridgeFilter.swift;", "lastKnownFileType = sourcecode.c.objc; path = Bridge.m;"))],
     ["an unknown Swift file", () => projectFindings(swap(PBXPROJ, "path = BridgeFilter.swift;", "path = Other.swift;"))],
     ["a copy-files phase", () => projectFindings(`${PBXPROJ}\n\t\tAAAA = {isa = PBXCopyFilesBuildPhase; };`)],
+    ["a key hidden in a script line", () => projectFindings(swap(PBXPROJ, 'Pods-App-frameworks.sh\\"\\n";', 'Pods-App-frameworks.sh\\"\\n"; VALIDATE_PRODUCT = "x";')), "is a script phase that is not one of CocoaPods' own"],
     ["a script of our own", () => projectFindings(swap(PBXPROJ, "Pods-App-frameworks.sh", "Pods-App-frameworks.sh; /usr/libexec/PlistBuddy -c x"))],
     ["DEBUG in release", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tSWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;"))],
     ["-DDEBUG in release", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", 'INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_SWIFT_FLAGS = "-DDEBUG";'))],
