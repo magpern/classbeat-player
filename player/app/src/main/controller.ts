@@ -68,6 +68,7 @@ export function createController(now: () => number = () => performance.now(), re
     else if (obs !== null) heard = true;
     if (heard && reader.reason?.() === "not-permitted") {
       state = readerStopped(state, t);
+      // Not left to the next catchUp: a follow command in this same call re-follows before one runs.
       heard = false;
       sync();
     }
