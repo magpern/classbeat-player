@@ -119,11 +119,14 @@ export function footerEl(f: Footer, act: () => void): HTMLElement {
   const sel = h("div", "sel");
   const t = h("div", "t");
   t.append(h("span", null, f.title));
-  sel.append(t, h("div", "dt", f.detail));
+  const detail = h("div", "dt", f.detail);
+  if (f.describedBy !== null) detail.id = f.describedBy;
+  sel.append(t, detail);
   const b = h("button", "primary") as HTMLButtonElement;
   b.type = "button";
   b.dataset.action = f.action;
   b.disabled = f.disabled;
+  if (f.describedBy !== null) b.setAttribute("aria-describedby", f.describedBy);
   b.append(h("span", null, f.button.label), " ", h("span", "kbd", shortcut(f.button.key ?? "Enter")));
   b.addEventListener("click", act);
   foot.append(sel, b);

@@ -230,8 +230,12 @@ test("the footer of an unknown row shows a disabled Start with the newer-version
   assert.equal(s.body.kind, "list");
   if (s.body.kind !== "list") return;
   assert.equal(s.body.footer.disabled, true);
+  assert.equal(s.body.footer.describedBy, "foot-detail");
+  // The unstartable row stays selectable.
+  assert.equal(s.selectedId, row("Alpha", 1).id);
+  assert.equal(s.body.rows[0].selected, true);
   assert.equal(s.body.footer.button.label, "Start class");
   assert.equal(s.body.footer.detail, "This class needs a newer version of the player");
   const other = screen(view({ rows: [row("Alpha", 1, { source: "unknown" }), row("Bravo", 2)] }), { selectedId: row("Bravo", 2).id });
-  if (other.body.kind === "list") assert.equal(other.body.footer.disabled, false);
+  if (other.body.kind === "list") { assert.equal(other.body.footer.disabled, false); assert.equal(other.body.footer.describedBy, null); }
 });
