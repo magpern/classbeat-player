@@ -7,9 +7,10 @@ name: release-player
 #  - workflow_dispatch with dry_run (the default) builds every target and writes SHA256SUMS but
 #    publishes nothing; dry_run false publishes only when it is run on a player-v tag.
 #  - A pull request that changes this workflow or its scripts runs the same dry run.
-# Signing and notarisation wait for the owner (docs/owner.md: Apple Developer membership and a
-# Windows signing identity, plan decision 9). There are no signing steps and no secrets here, and
-# the release notes say the builds are unsigned. This workflow never creates, moves or deletes a
+# Desktop signing and notarisation wait for the owner (docs/owner.md: Apple Developer membership and
+# a Windows signing identity, plan decision 9): the desktop builds are unsigned and the notes say so.
+# The Android APK (#849) is built by android-build and signed by android-sign, the only job that
+# sees a secret, and only on a publishing tag; publish-android attaches it with SHA256SUMS-android. This workflow never creates, moves or deletes a
 # tag: `gh release create --verify-tag` refuses to run unless the pushed tag already exists.
 # Checks of this file: scripts/test-release-player.sh (run by the verify job below).
 
@@ -32,6 +33,9 @@ on:
       - scripts/fixtures/site-releases/**
       - scripts/test-release-player.sh
       - scripts/package-desktop.sh
+      - scripts/sign-android-apk.sh
+      - scripts/test-sign-android-apk.sh
+      - scripts/check-apk-manifest.sh
 
 permissions:
   contents: read
@@ -56,7 +60,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Release script tests
-        run: bash scripts/test-release-player.sh
+        run: |
+          bash scripts/test-release-player.sh
+          bash scripts/test-sign-android-apk.sh
       - id: mode
         name: Check the tag and decide whether to publish
         env:
@@ -184,6 +190,106 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # The Android phone and tablet app (#849, ADR 0011 section 9): the same build as the mobile job in
+  # ci.yml (npm ci, the bundled page, Gradle assembleRelease), then the release manifest check on the
+  # built APK. No secret here: the APK is unsigned and is handed to android-sign as an artifact. Runs on
+  # a dry run and a pull request too, so they prove the APK builds.
+  android-build:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: JDK 21 and Android SDK from the runner image
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >>"$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >>"$GITHUB_PATH"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Build the bundled page
+        working-directory: player/mobile
+        run: |
+          npm ci
+          npm run build
+      - name: Release APK (unsigned)
+        working-directory: player/mobile/android
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Check the built APK
+        run: |
+          set -euo pipefail
+          apk=player/mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2" bash scripts/check-apk-manifest.sh release "$apk"
+          mkdir -p "$RUNNER_TEMP/android"
+          cp "$apk" "$RUNNER_TEMP/android/classbeat-player-android-unsigned.apk"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-release-unsigned
+          path: ${{ runner.temp }}/android/classbeat-player-android-unsigned.apk
+          retention-days: 3
+          if-no-files-found: error
+
+  # Signs the APK with the project key (scripts/sign-android-apk.sh: apksigner, v2 and v3, verified
+  # with --print-certs against the pinned certificate). The only job that sees the signing secrets, and
+  # only when this run publishes from a player-v tag: never a pull request, never a dry run. A fresh
+  # runner that runs no npm or Gradle, so no dependency's install script runs beside the key. The
+  # secrets reach the one signing step through env: only. A missing secret fails this job by name, and
+  # the Android jobs only: the desktop release does not wait for them, so nothing unsigned is uploaded.
+  android-sign:
+    needs: [verify, android-build]
+    if: needs.verify.outputs.publish == 'true' && github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/player-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Android build tools from the runner image
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: android-release-unsigned
+          path: ${{ runner.temp }}/unsigned
+      # The certificate of ADR 0011 section 9's temporary key (owner, 2026-11-26); a new key changes it here.
+      - name: Sign and verify
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_CERT_SHA256: "10:3E:E1:B1:0D:73:44:25:AB:C6:7A:74:14:B3:06:F2:D2:EE:DD:EA:7E:A6:A6:6C:0D:A6:DF:35:D0:9B:DC:CA"
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          mkdir -p "$RUNNER_TEMP/android"
+          APKSIGNER="$tools/apksigner" ZIPALIGN="$tools/zipalign" SIGN_DIR="$RUNNER_TEMP/android-signing" \
+            bash scripts/sign-android-apk.sh "$RUNNER_TEMP/unsigned/classbeat-player-android-unsigned.apk" \
+            "$RUNNER_TEMP/android/classbeat-player-android.apk"
+      - name: Remove the keystore
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/android-signing"
+      - name: Check the signed APK and write SHA256SUMS-android
+        run: |
+          set -euo pipefail
+          AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+            bash scripts/check-apk-manifest.sh release "$RUNNER_TEMP/android/classbeat-player-android.apk"
+          cd "$RUNNER_TEMP/android"
+          sha256sum classbeat-player-android.apk >SHA256SUMS-android
+          cat SHA256SUMS-android
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-release-signed
+          path: |
+            ${{ runner.temp }}/android/classbeat-player-android.apk
+            ${{ runner.temp }}/android/SHA256SUMS-android
+          retention-days: 7
+          if-no-files-found: error
+
   # The only job that can write, and only for a player-v tag that verify accepted. Never on a pull
   # request. It checks the archives against SHA256SUMS and that the tag has not moved since the
   # build (issue #783). `--verify-tag` makes gh refuse rather than create a tag; an existing
@@ -286,3 +392,30 @@ jobs:
           gh api -X POST "repos/$GH_REPO/pulls" -f title="chore(screens): site releases.json for $latest" \
             -f head="$branch" -f base=main \
             -f body="Written by scripts/site-releases-json.mjs from the published releases and SHA256SUMS of $latest (issue #793). Only web/src/site/releases.json changes." >/dev/null
+
+  # Attaches the signed APK and SHA256SUMS-android to the release publish created, after checking the
+  # APK against them. Same guard as publish; never replaces an asset (gh fails instead).
+  publish-android:
+    needs: [verify, publish, android-sign]
+    if: needs.verify.outputs.publish == 'true' && github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/player-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: android-release-signed
+          path: android
+      - name: Attach the signed APK
+        working-directory: android
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          sha256sum -c --strict SHA256SUMS-android
+          [ "$(awk '{ print $2 }' SHA256SUMS-android)" = classbeat-player-android.apk ] ||
+            { echo "SHA256SUMS-android must list exactly classbeat-player-android.apk" >&2; exit 1; }
+          gh release upload "$TAG" classbeat-player-android.apk SHA256SUMS-android

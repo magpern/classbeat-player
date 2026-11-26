@@ -51,6 +51,9 @@ yet, so macOS Gatekeeper and Windows SmartScreen warn when the app is opened.
 | Windows x64 | \`classbeat-player-windows-x64-unsigned.tar.gz\` |
 
 Check a download against \`SHA256SUMS\`: \`sha256sum -c SHA256SUMS --ignore-missing\`.
+
+The Android app, \`classbeat-player-android.apk\`, is signed and is attached with its own
+\`SHA256SUMS-android\` once it has been signed and verified.
 NOTES
 
 echo "release-player-assets: wrote SHA256SUMS and RELEASE_NOTES.md for ${#want[@]} archives" >&2

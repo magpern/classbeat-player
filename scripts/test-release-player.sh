@@ -120,9 +120,21 @@ wf_check() { # wf_check <description> <command...>: the command must succeed
   if "$@"; then ok "workflow: $what"; else bad "workflow: $what"; fi
 }
 uses_pinned() { ! grep -E '^\s*-?\s*uses:' "$wf" | grep -Evq 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]'; }
-no_secrets() { ! grep -q 'secrets\.' "$wf"; }
+# The Android signing secrets (#849) are the only secrets, and only in android-sign
+# (scripts/test-sign-android-apk.sh checks that job); no other job references one.
+no_secrets() {
+  awk '/^  android-sign:$/{s=1; next} /^  [A-Za-z0-9_-]+:$/{s=0} !s' "$wf" >"$tmp/not-sign"
+  ! grep -q 'secrets\.' "$tmp/not-sign"
+}
 top_read_only() { awk '/^permissions:/{getline; print; exit}' "$wf" | grep -qx '  contents: read'; }
-one_write() { [ "$(grep -c 'contents: write' "$wf")" -eq 1 ]; }
+# contents: write is in publish and publish-android only (#849), once each.
+one_write() {
+  local j
+  [ "$(grep -c 'contents: write' "$wf")" -eq 2 ] || return 1
+  for j in publish publish-android; do
+    job_block "$j" && grep -q 'contents: write' "$tmp/job-$j" || return 1
+  done
+}
 # Each job (two-space key under jobs:) has its own timeout-minutes (#756).
 all_timeouts() {
   local jobs timeouts
@@ -194,9 +206,9 @@ no_injection() {
 
 wf_check "exists" test -f "$wf"
 wf_check "every action is pinned to a full commit SHA" uses_pinned
-wf_check "references no secret" no_secrets
+wf_check "references no secret outside android-sign" no_secrets
 wf_check "top-level permissions are contents: read" top_read_only
-wf_check "contents: write appears once" one_write
+wf_check "contents: write only in publish and publish-android" one_write
 wf_check "every job has a timeout" all_timeouts
 wf_check "publish is guarded and uses --verify-tag" publish_guarded
 wf_check "never moves or deletes a tag, never traces" no_tag_changes
