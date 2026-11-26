@@ -7,11 +7,15 @@ import Capacitor
 // the rest is cancelled. The page gets no new windows, no camera or microphone, no device
 // orientation, and no JavaScript panels (Capacitor answers its cookie and HTTP plugins through
 // the prompt panel). The page-load events still reach Capacitor, which resets its bridge on them.
+// A main-frame page loads only if the mode gate lets it (issue #895): only the current mode's
+// pages, none between modes, so neither a link nor history can bring up the other mode's page.
 final class LockedNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
     private let inner: WebViewDelegationHandler
+    private weak var gate: PageGate?
 
-    init(wrapping inner: WebViewDelegationHandler) {
+    init(wrapping inner: WebViewDelegationHandler, gate: PageGate) {
         self.inner = inner
+        self.gate = gate
         super.init()
     }
 
@@ -28,8 +32,11 @@ final class LockedNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
             userGesture: navigationAction.navigationType == .linkActivated
         )
         switch decision {
-        case .load where target != nil:
+        case .load where target?.isMainFrame == false:
             decisionHandler(.allow)
+        case .load where target != nil:
+            let path = navigationAction.request.url?.path ?? ""
+            decisionHandler(gate?.mayShow(path) == true ? .allow : .cancel)
         case .browser:
             if let link = navigationAction.request.url {
                 UIApplication.shared.open(link, options: [:], completionHandler: nil)
@@ -42,6 +49,10 @@ final class LockedNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         inner.webView(webView, didStartProvisionalNavigation: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        gate?.shown(webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -116,3 +127,11 @@ final class LockedNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
         completionHandler(nil)
     }
 }
+
+/// Which main-frame pages may load, and which one is up (ModeController).
+protocol PageGate: AnyObject {
+    func mayShow(_ path: String) -> Bool
+    func shown(_ path: String)
+}
+
+extension ModeController: PageGate {}

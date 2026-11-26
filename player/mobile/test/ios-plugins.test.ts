@@ -1,4 +1,4 @@
-// The iOS plugin allowlist against the pinned Capacitor (issue #894, ADR 0016 section 2): the
+// The iOS plugin allowlist against the pinned Capacitor (issues #894 and #895, ADR 0016 section 2): the
 // names in PluginPolicy.core are exactly the plugins @capacitor/ios 8.6.0 registers in every
 // bridge, so a Capacitor update that adds one fails here before the app stops on it.
 import assert from "node:assert/strict";
@@ -48,11 +48,13 @@ test("the pinned Capacitor is 8.6.0", () => {
   assert.equal(pkg.version, "8.6.0");
 });
 
-test("PluginPolicy.core is what @capacitor/ios 8.6.0 registers, and nothing is callable", () => {
+test("PluginPolicy.core is what @capacitor/ios 8.6.0 registers, and only the two mode plugins are callable", () => {
   const policy = iosText(POLICY);
   assert.deepEqual(registered(BRIDGE, PLUGIN_FILES), ["CapacitorCookies", "CapacitorHttp", "Console", "SystemBars", "WebView"]);
   assert.deepEqual(policySet(policy, "core"), registered(BRIDGE, PLUGIN_FILES));
-  assert.deepEqual(policySet(policy, "callable"), []);
+  // Issue #895: the mode plugins, with Android's names; none of Capacitor's own is ever callable.
+  assert.deepEqual(policySet(policy, "callable"), ["InstructorMode", "RiderMode"]);
+  assert.deepEqual(policySet(policy, "callable").filter((n) => policySet(policy, "core").includes(n)), []);
 });
 
 test("the check fails on a planted plugin, on either side", () => {
@@ -65,7 +67,8 @@ test("the check fails on a planted plugin, on either side", () => {
   const widened = policy.replace('"SystemBars"]', '"SystemBars", "Speech"]');
   assert.notEqual(widened, policy);
   assert.notDeepEqual(policySet(widened, "core"), registered(BRIDGE, PLUGIN_FILES));
-  const callable = policy.replace("static let callable: Set<String> = []", 'static let callable: Set<String> = ["Console"]');
+  const callable = policy.replace('static let callable: Set<String> = ["RiderMode", "InstructorMode"]', 'static let callable: Set<String> = ["RiderMode", "InstructorMode", "Console"]');
   assert.notEqual(callable, policy);
-  assert.deepEqual(policySet(callable, "callable"), ["Console"]);
+  assert.notDeepEqual(policySet(callable, "callable"), ["InstructorMode", "RiderMode"]);
+  assert.deepEqual(policySet(callable, "callable").filter((n) => policySet(callable, "core").includes(n)), ["Console"]);
 });

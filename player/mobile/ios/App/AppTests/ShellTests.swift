@@ -35,7 +35,7 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(HTTPCookieStorage.shared.cookieAcceptPolicy, .never)
     }
 
-    func testTheBridgeServesTheBundleOnlyWithItsCorePluginsOff() throws {
+    func testTheBridgeServesTheBundleOnlyWithItsCorePluginsOffAndTheModePluginsOn() throws {
         let bridge = try XCTUnwrap(try shell().bridge as? CapacitorBridge)
         XCTAssertEqual(bridge.config.serverURL.absoluteString, NavigationPolicy.appOrigin)
         XCTAssertEqual(bridge.config.allowedNavigationHostnames, [])
@@ -43,7 +43,7 @@ final class ShellTests: XCTestCase {
         XCTAssertFalse(bridge.config.getPluginConfig("CapacitorHttp").getBoolean("enabled", true))
         XCTAssertFalse(bridge.config.getPluginConfig("CapacitorCookies").getBoolean("enabled", true))
         let names = try XCTUnwrap(WebViewFactory.registeredPlugins(bridge))
-        XCTAssertEqual(Set(names), PluginPolicy.core)
+        XCTAssertEqual(Set(names), PluginPolicy.known)
     }
 
     func testTheSchemeHandlerServesTheBundleOnly() throws {
@@ -62,11 +62,32 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(inner.started, 1)
     }
 
+    func testTheAppOpensInRiderModeOnItsStartPage() throws {
+        let shell = try riderShell()
+        XCTAssertEqual(shell.mode, .rider)
+        XCTAssertEqual(shell.webView?.url?.path, "/rider.html")
+    }
+
+    /// The shell once rider mode's start page is up (the app opens through the blank page).
+    private func riderShell() throws -> ShellViewController {
+        let shell = try shell()
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, !(shell.mode == .rider && shell.webView?.url?.path == "/rider.html") {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
+        return shell
+    }
+
     func testANavigationAwayFromTheBundleIsCancelled() throws {
-        let webView = try XCTUnwrap(try shell().webView)
+        let webView = try XCTUnwrap(try riderShell().webView)
         let navigation = try XCTUnwrap(webView.navigationDelegate as? LockedNavigation)
         let cases: [(String, Bool?, WKNavigationType, WKNavigationActionPolicy)] = [
-            ("capacitor://localhost/index.html", true, .other, .allow),
+            // In rider mode only rider mode's page may show; neither the blank page nor instructor mode's.
+            ("capacitor://localhost/rider.html", true, .other, .allow),
+            ("capacitor://localhost/index.html", true, .other, .cancel),
+            ("capacitor://localhost/instructor.html", true, .other, .cancel),
+            ("capacitor://localhost/room.html", true, .linkActivated, .cancel),
+            ("capacitor://localhost/rider.html", false, .other, .cancel),
             ("capacitor://localhost/index.html", false, .other, .cancel),
             ("capacitor://localhost/index.html", nil, .linkActivated, .cancel),
             ("capacitor://localhost/_capacitor_file_/x", true, .other, .cancel),

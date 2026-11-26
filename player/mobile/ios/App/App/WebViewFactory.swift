@@ -8,7 +8,8 @@ import Capacitor
 // - the bundle only: no server URL, no allowed navigation hosts, no error or start path,
 //   Capacitor's scheme narrowed to the bundle (LockedSchemeHandler), navigation through
 //   NavigationPolicy (LockedNavigation), browser links opened in Safari;
-// - no plugin the shell does not know, and none the page may call (PluginPolicy, BridgeFilter);
+// - no plugin the shell does not know, and of those only the current mode's intents callable
+//   (PluginPolicy, BridgeFilter), and only the current mode's pages shown (LockedNavigation);
 // - web view inspection in a debug build only (BuildFlavor);
 // - no media playback, AirPlay or picture in picture, no windows opened by script, no link
 //   previews, no data detectors, no cookies.
@@ -70,7 +71,7 @@ enum WebViewFactory {
     private static var navigation: LockedNavigation?
 
     /// Locks the bridge once Capacitor has made it, and stops the app if it is not as expected.
-    static func lock(_ webView: WKWebView, bridge: CapacitorBridge) {
+    static func lock(_ webView: WKWebView, bridge: CapacitorBridge, gate: PageGate, exposed: @escaping () -> String?) {
         let config = bridge.config
         precondition(config.serverURL.absoluteString == NavigationPolicy.appOrigin, "classbeat: server URL")
         precondition(config.allowedNavigationHostnames.isEmpty, "classbeat: allowed navigation")
@@ -83,13 +84,14 @@ enum WebViewFactory {
         }
         precondition(PluginPolicy.unknown(names).isEmpty, "classbeat: an unknown plugin is registered")
         precondition(PluginPolicy.core.isSubset(of: Set(names)), "classbeat: a core plugin is missing")
+        precondition(PluginPolicy.callable.isSubset(of: Set(names)), "classbeat: a mode plugin is missing")
 
         let handler = bridge.webViewDelegationHandler
         let scripts = webView.configuration.userContentController
         scripts.removeScriptMessageHandler(forName: BridgeFilter.name)
-        scripts.add(BridgeFilter(wrapping: handler), name: BridgeFilter.name)
+        scripts.add(BridgeFilter(wrapping: handler, exposed: exposed), name: BridgeFilter.name)
 
-        let locked = LockedNavigation(wrapping: handler)
+        let locked = LockedNavigation(wrapping: handler, gate: gate)
         navigation = locked
         webView.navigationDelegate = locked
         webView.uiDelegate = locked
