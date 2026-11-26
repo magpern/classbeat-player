@@ -6,9 +6,9 @@ import type { Browser } from "playwright-core";
 import { QUALITY } from "../../model/src/index.ts";
 import { joinStepsTheQuality } from "../tools/join-quality-shots.ts";
 
-/** A browser whose page plays every check right (the canvas at High, Medium, Low, then the plain screen, and no violation) and
+/** A browser whose page plays every check right (the canvas at High, Medium, Low, then the plain screen, and no violation unless `trap` lists some) and
  *  whose close raises `late` through the page's own `pageerror` listener, as a late frame would. */
-function browserWith(late: string | null): Browser {
+function browserWith(late: string | null, trap: string[] = []): Browser {
   const listeners = new Map<string, (e: unknown) => void>();
   const states = (["High", "Medium", "Low"] as const).flatMap((l) => Array.from({ length: 5 }, () => ({ width: Math.floor(960 * QUALITY[l].renderScale), height: 540, mode: "scene", why: null as string | null, level: l })));
   states.push({ ...states.at(-1)!, mode: "off", why: "too slow" });
@@ -17,7 +17,7 @@ function browserWith(late: string | null): Browser {
     addInitScript: async () => undefined,
     goto: async () => null,
     waitForFunction: async () => undefined,
-    evaluate: async (_fn: unknown, arg?: unknown) => (typeof arg === "number" ? states : []),
+    evaluate: async (_fn: unknown, arg?: unknown) => (typeof arg === "number" ? states : trap),
     close: async () => { if (late !== null) listeners.get("pageerror")?.(new Error(late)); },
   };
   return { newPage: async () => page } as unknown as Browser;
@@ -31,6 +31,15 @@ test("a page error raised by the close fails the run", async () => {
   await assert.rejects(joinStepsTheQuality(browserWith("late")), (e: Error) => {
     assert.ok(e.message.includes("the join page raised errors"));
     assert.deepEqual((e as { actual?: unknown }).actual, ["page error: late"]);
+    return true;
+  });
+});
+
+test("a violation the guard trap reports fails the run and is named in the message", async () => {
+  await assert.rejects(joinStepsTheQuality(browserWith(null, ["trap: setResistance"])), (e: Error) => {
+    assert.ok(e.message.includes("the join page raised errors"));
+    assert.ok(e.message.includes("trap: setResistance"));
+    assert.deepEqual((e as { actual?: unknown }).actual, ["trap: setResistance"]);
     return true;
   });
 });

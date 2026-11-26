@@ -35,5 +35,6 @@ export async function joinStepsTheQuality(browser: Browser): Promise<void> {
   const trapped = await violations(page);
   await page.close();
   // After the close, so an error raised after the last check (a late frame, a rejected promise) is still collected.
-  assert.deepEqual([...problems, ...trapped], [], "the join page raised errors or tripped the guard");
+  const collected = [...problems, ...trapped];
+  assert.deepEqual(collected, [], `the join page raised errors or tripped the guard: ${collected.join("; ")}`);
 }
