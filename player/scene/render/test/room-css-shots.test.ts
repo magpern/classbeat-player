@@ -60,5 +60,9 @@ test("a page error raised after the last check fails the run", async () => {
     } as unknown as Page;
     return { page, problems };
   };
-  await assert.rejects(pageStylesheetDoesNotReachTheCue(open), (e: Error) => e.message.includes("the page stylesheet reaches the text layer") && JSON.stringify((e as { actual?: unknown }).actual).includes("page error: late"));
+  await assert.rejects(pageStylesheetDoesNotReachTheCue(open), (e: Error) => {
+    assert.ok(e.message.includes("the page stylesheet reaches the text layer"));
+    assert.deepEqual((e as { actual?: unknown }).actual, ["room.css loaded, 16x9: page error: late", "room.css loaded, 4x3: page error: late", "room.css loaded, 5x4: page error: late"]);
+    return true;
+  });
 });
