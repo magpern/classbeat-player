@@ -77,6 +77,8 @@ jobs:
           bash scripts/test-check-apk-manifest.sh
           bash scripts/test-release-player.sh
           bash scripts/test-sign-android-apk.sh
+          bash scripts/test-check-screenshot-uploads.sh
+          bash scripts/check-screenshot-uploads.sh
       # Backend deploy files (issue #95): `docker compose config` with placeholder secret files,
       # the roles, the secrets and the purge scheduler. Reads files only; starts nothing.
       - name: Backend deploy files
@@ -468,6 +470,17 @@ jobs:
           path: player/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 3
+      # The phone app's screenshots (#875), so the Designer can review the room screen (#871, #872). Only when
+      # the shot tests exist; only PNG files are named, so no env file or token can be swept in
+      # (scripts/check-screenshot-uploads.sh pins the path). always() keeps the failing shots on red runs.
+      - name: Keep the phone app screenshots
+        if: always() && hashFiles('player/mobile/test/shots/**') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-screenshots
+          path: player/mobile/screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
 
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
