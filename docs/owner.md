@@ -227,4 +227,6 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
 - **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
   mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
   mode first (#447).
+  The scene's S9 check needs this run too: a median of at least 58 fps and no second under 30 fps
+  at 1920x1080. The room window writes the frame-rate log; CI's software GL cannot measure it.
 - **Swedebeat:** whether to ask for an agreement and a source of the audio.
