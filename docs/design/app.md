@@ -104,6 +104,21 @@ its floor there.
   in the web view: no transition at all; pages swap at once.
 - The class screen's own motion is `/play`'s (play.md, "Motion and reduced motion").
 
+## The room screen on the phone (issue #871, as built in #880)
+
+In instructor mode, opening a class from the list runs it on the phone as the room screen
+(`/room.html`'s page, bundled); the external display stays on its idle stage
+([app-room-display.md](app-room-display.md)).
+
+- **Portrait, 390 × 844:** the room screen follows [play.md](play.md)'s "Portrait": play's portrait
+  grid (the gel and the metrics side by side, then the countdown, the cue and the next row), play's
+  tokens, and the score scaled to three minutes. The band sits over the score's box, with keys
+  64 px high. The End question is on its own line above its two keys: **End class** at the left,
+  **Keep going** at the right, as play.md's "End and its guard".
+- **Landscape, 844 × 390:** the desktop room layout, unchanged (room-2d.md).
+- Text tiers, contrast and the zone as a number and a name are play.md's and the room's; nothing
+  here relaxes them.
+
 ## Mock-ups
 
 `node docs/design/mockups/app-pages.js` writes the 35 `app-*.html` files; `ONLY='^app-' node
