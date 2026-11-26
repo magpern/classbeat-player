@@ -52,7 +52,14 @@ final class PairingAnswersTests: XCTestCase {
         screens = Screens()
         answered = [:]
         let service = rig.service
-        controller = ModeController(lock: lock, screens: screens, loader: Loader(), secrets: { service.secrets() }) { _ in
+        controller = ModeController(
+            lock: lock,
+            screens: screens,
+            loader: Loader(),
+            awake: KeepAwake(FakeFlag()),
+            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface()),
+            secrets: { service.secrets() }
+        ) { _ in
             XCTFail("a switch could not drop everything")
         }
     }
