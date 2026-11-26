@@ -412,6 +412,29 @@ const SESSION_OTHER_WAYS =
 const SESSION_READ =
   /\.(?:metadata|playbackState|transportControls|playbackInfo|queue|queueTitle|extras|sessionActivity|ratingType|flags|sessionInfo|tag)\b|\bget(?:Metadata|PlaybackState|TransportControls|PlaybackInfo|Queue|QueueTitle|Extras|SessionActivity|RatingType|Flags|Tag)\(/;
 const METADATA_OTHER = /\.description\b|getDescription|getBitmap|getRating|getText\(|keySet|\.size\(\)/;
+// Every way to declare a name `MUSIC_APP`: a val, var or const, a parameter, a lambda or loop
+// variable, an import alias. Exactly one may exist, the constant, so no member shadows it.
+const MUSIC_APP_DECLARED =
+  /\b(?:val|var|const)\b[^=\n]*\bMUSIC_APP\b|\bMUSIC_APP\s*(?::|=(?!=)|->)|\bas\s+MUSIC_APP\b|\bfor\s*\(\s*MUSIC_APP\b/g;
+// The only members the reader may name (after `.`, `?.` or `::`, string literals and the package
+// and import lines left out): listing and filtering the sessions, the track's four keys, the play
+// state and position, and the three transport commands. Anything else (`queue`, `playbackInfo`,
+// `extras`, `seekTo`, `setVolumeTo`, …) is a read or a command the reader does not need.
+const READER_MEMBERS = [
+  "METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE",
+  "NEXT", "PAUSE", "PLAY", "STATE_PLAYING", "class", "filter", "getActiveSessions", "getLong", "getString", "getSystemService", "java", "lastPositionUpdateTime",
+  "let", "map", "metadata", "orEmpty", "packageName", "pause", "play", "playbackState", "position", "skipToNext",
+  "state", "takeIf", "transportControls",
+];
+// Calls that bring an object's members into scope, so they could be named without a dot.
+const IMPLICIT_RECEIVER = /\bwith\s*\(|\.(?:run|apply|also)\b|\bthis\b/;
+
+/** The members the reader's code names; see READER_MEMBERS. */
+function readerMembers(c: string): string[] {
+  const body = c.replace(/^\s*(?:package|import)\b.*$/gm, "").replace(/"(?:[^"\\\n]|\\.)*"/g, '""');
+  const names = [...body.matchAll(/(?:\?\.|\.|::)\s*([A-Za-z_]\w*)/g)].map((m) => m[1]!);
+  return [...new Set(names)].sort();
+}
 
 /** The problems in the session reader's source, one line each; empty when its rules hold. */
 function readerProblems(text: string): string[] {
@@ -421,12 +444,15 @@ function readerProblems(text: string): string[] {
   const filtered = [...c.matchAll(SESSION_FILTERED)];
   if (listed === 0 || filtered.length !== listed) found.push("a session list without the package filter");
   if (!/^private const val MUSIC_APP = "com\.spotify\.music"$/m.test(c)) found.push("the package is not the constant");
+  if ([...c.matchAll(MUSIC_APP_DECLARED)].length !== 1) found.push("the package is not the constant");
   if (SESSION_OTHER_WAYS.test(c)) found.push("another way to a session");
   const firstRead = c.search(SESSION_READ);
   if (firstRead >= 0 && (filtered.length === 0 || firstRead < filtered[0]!.index!)) found.push("a read before the filter");
   const keys = [...new Set([...c.matchAll(/METADATA_KEY_\w+/g)].map((m) => m[0]))].sort();
   const allowed = ["METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE"];
   if (keys.some((k) => !allowed.includes(k)) || METADATA_OTHER.test(c)) found.push("metadata beyond the track's identity");
+  const extra = readerMembers(c).filter((m) => !READER_MEMBERS.includes(m));
+  if (extra.length > 0 || IMPLICIT_RECEIVER.test(c)) found.push("a member beyond the track, the state and the position");
   return found;
 }
 
@@ -448,6 +474,21 @@ test("the session reader filters to the music app before any read, and reads onl
     ["override fun active()", "fun make(t: MediaSession.Token) = MediaController(c, t)\n    override fun active()", "another way to a session"],
     ["METADATA_KEY_TITLE", "METADATA_KEY_ALBUM_ART", "metadata beyond the track's identity"],
     ["it.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)", "it.description.mediaId", "metadata beyond the track's identity"],
+    // A member shadowing the constant, in either class (#856).
+    ["override val app: String = MUSIC_APP", 'private val MUSIC_APP = "com.other.music"\n    override val app: String = MUSIC_APP', "the package is not the constant"],
+    ["override val app: String = controller.packageName", 'private val MUSIC_APP: String = "com.other.music"\n    override val app: String = controller.packageName', "the package is not the constant"],
+    ["class AndroidSessions(context: Context)", "class AndroidSessions(context: Context, MUSIC_APP: String = \"\")", "the package is not the constant"],
+    // Reads after the filter and transport beyond play, pause and next (#856).
+    ...["queue", "playbackInfo", "extras", "queueTitle", "sessionActivity", "ratingType"].map(
+      (m): [string, string, string] => ["controller.metadata?.let", `controller.${m}.let { }\n        controller.metadata?.let`, "a member beyond the track, the state and the position"],
+    ),
+    ...["seekTo(0)", "setVolumeTo(0, 0)", "rewind()", "fastForward()", "stop()", "skipToPrevious()", "playFromMediaId(\"x\", null)", "setPlaybackSpeed(2f)"].map(
+      (m): [string, string, string] => ["TransportCommand.NEXT -> controls.skipToNext()", `TransportCommand.NEXT -> controls.${m}`, "a member beyond the track, the state and the position"],
+    ),
+    ["controller.playbackState?.let {", "controller.playbackState?.let { controller.adjustVolume(1, 0)", "a member beyond the track, the state and the position"],
+    ["controller.playbackState?.let {", "controller.playbackState?.let { val q = controller::getQueue", "a member beyond the track, the state and the position"],
+    ["controller.playbackState?.let {", "with(controller) { queue }; controller.playbackState?.let {", "a member beyond the track, the state and the position"],
+    ["controller.playbackState?.let {", "controller.run { queue }; controller.playbackState?.let {", "a member beyond the track, the state and the position"],
   ];
   for (const [from, to, problem] of mutations) {
     const mutated = file.text.replace(from, to);

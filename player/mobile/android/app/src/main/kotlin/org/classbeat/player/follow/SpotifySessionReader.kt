@@ -49,7 +49,7 @@ private class ControllerSession(private val controller: MediaController) : Sessi
         )
     }
 
-    // lastPositionUpdateTime is on the elapsed-realtime clock, the follower's clock (rule 8).
+    // lastPositionUpdateTime is on the elapsed-realtime clock, the clock MainActivity gives the follower.
     override fun state(): SessionState? = controller.playbackState?.let {
         SessionState(it.state == PlaybackState.STATE_PLAYING, it.position, it.lastPositionUpdateTime)
     }
