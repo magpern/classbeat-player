@@ -514,7 +514,6 @@ jobs:
     timeout-minutes: 45
     env:
       XCODE_APP: /Applications/Xcode_16.4.app
-      IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
       SIM_NAME: iPhone 16
       SIM_OS: "18.5"
     steps:
@@ -538,6 +537,8 @@ jobs:
         run: pod install
       - name: Build and test on the pinned simulator (no signing)
         working-directory: player/mobile
+        env:
+          IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
         run: |
           set -euo pipefail
           xcrun simctl list devices available "iOS $SIM_OS" | grep -F "$SIM_NAME" >/dev/null \
@@ -549,6 +550,8 @@ jobs:
             | tail -n 200
       - name: Verify the built app (plists, entitlements, project)
         working-directory: player/mobile
+        env:
+          IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
         run: npm run --if-present ios:verify
 
   # The single required check. Add lane jobs to `needs` as they appear.
