@@ -100,5 +100,5 @@ export async function pageStylesheetDoesNotReachTheCue(open: Open): Promise<void
     // After the close, so an error raised after the last check (a late frame, a rejected promise) is still collected.
     for (const p of problems) failures.push(`${where}: ${p}`);
   }
-  assert.deepEqual(failures, [], "the page stylesheet reaches the text layer");
+  assert.deepEqual(failures, [], `the page stylesheet reaches the text layer: ${failures.join("; ")}`);
 }
