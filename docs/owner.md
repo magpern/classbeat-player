@@ -35,14 +35,20 @@ with other work; nothing in the development loop waits for an answer.
   app's rider mode may read a treadmill (default: only the rider's own web page reads one), and
   whether riders' running readings may be sent to the instructor (default: no; the live contract
   carries none).
-
+  The owner has no FTMS treadmill but can use an **indoor bike with FTMS** (2026-11-26). The bike
+  reading (Indoor Bike Data) is built on fakes too, so the live check runs on the bike: pair it on
+  the rider's web page and, once the app's rider mode reads sensors, in the app, and see power and
+  cadence arrive. The treadmill check stays open.
 - **Phone and tablet apps** (PL12, owner, 2026-11-15): Android first, as a self-signed APK
   installed by hand, so no store account is needed now. For spike 3, an Android phone or tablet
   with Spotify on it. Before the first APK that studios keep: an Android signing key, made once
   and added as a repository secret (agents never hold it; the runbook will give the commands).
   Losing it means users must uninstall to update. iOS after the Android app (owner, 2026-11-24): the owner's Apple silicon Mac to run
   it; later an iPhone or iPad and the Apple Developer membership above.
-
+  **Temporary key (2026-11-26):** at the owner's request an agent generated a temporary key and
+  handed it over; it is replaced later (users then uninstall once). Still open: add it as the
+  repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and
+  `ANDROID_KEY_ALIAS` (Settings, Secrets and variables, Actions). Agents do not change settings.
 - **Let design reviews see the CI screenshots** (2026-11-25). Pick one:
   - Allow a wildcard or unrestricted network for the agents' cloud environment (claude.ai, the
     environment's Settings). This is the simplest.
@@ -92,31 +98,16 @@ with other work; nothing in the development loop waits for an answer.
   music" is not on the class list; and a rider's nickname is never remembered (ADR 0007), while FTP
   and maximum heart rate are kept only with "Remember on this phone" and are cleared when the
   rider leaves, the app changes mode, the class ends or the rider is dropped (#633).
-- **The phone app's backend calls and the Kotlin network guard (#631, #649, 2026-11-24).** ADR 0011
-  (sections 3 and 5) has the app's native code make the fixed backend calls (pairing, the device
-  check, the class list and sync) with the device token, because the web view can reach no network.
-  The guard added in #637 forbids every network call in the app's Kotlin code, with no exception.
-  Agents do not loosen a guard, so this is yours, as the desktop's live connection was (#173).
-  Proposal, like option 1 there: one file (`BackendTransport.kt`) may use `HttpsURLConnection`, only
-  to the backend address fixed in the build, with no redirects, a 64 KiB answer limit and a 10 s
-  timeout; every other file keeps the full check, and a test pins it. Rider mode (#633) needs the
-  same for the rider's join call and, in one more file, a WebSocket to the same fixed address for
-  the rider connection. Until you decide, the app is built with stand-ins that fail every backend
-  call and the rider connection as offline, so pairing and joining show their offline states;
-  nothing else waits.
-- **The phone app's music follower and the Kotlin audio and Spotify guard (#632, #653, 2026-11-24).**
-  ADR 0011 (section 6) has the app follow Spotify by reading its media session (the song and
-  whether it plays, never the audio). The guard added in #637 bans every `android.media` and
-  `MediaSession` name and the word "spotify" in all the app's Kotlin code, so the reader cannot be
-  written without an exception. Proposal, like #173: one file (`SpotifySessionReader.kt`) may name
-  only the media-session types it reads (the session manager, `MediaController`, `MediaMetadata`,
-  `PlaybackState` and its `TransportControls`) and the package `com.spotify.music`. Everything
-  else stays banned in that file too: audio playback and recording (`MediaPlayer`, `AudioTrack`,
-  `AudioRecord`), players and the network; every other
-  file keeps the full check, and a test pins it. New guards come with it: the notification listener
-  stays empty, the package filter comes before any read, and no Spotify SDK or `spotify:` link.
-  Until you decide, the app is built with a stand-in reader that reports "unavailable", so the
-  phone runs on the manual clock; nothing else waits.
+- **Decided (owner, 2026-11-26): the phone app's backend calls (#631, #649).** Approved as proposed:
+  one file (`BackendTransport.kt`) may use `HttpsURLConnection`, only to the backend address fixed
+  in the build, with no redirects, a 64 KiB answer limit and a 10 s timeout; rider mode (#633) gets
+  the same for its join call and, in one more file, a WebSocket to the same fixed address. Every
+  other file keeps the full check, and a test pins it. Recorded in ADR 0011, section 8.
+- **Decided (owner, 2026-11-26): the phone app's music follower (#632, #653).** Approved as
+  proposed: one file (`SpotifySessionReader.kt`) may name only the media-session types it reads and
+  the package `com.spotify.music`; audio playback and recording, players and the network stay
+  banned there too, with the new guards (empty notification listener, package filter before any
+  read, no Spotify SDK, no `spotify:` link). Recorded in ADR 0011, section 8.
 - **Sensors and two rule guards (PL9, ADR 0012, 2026-11-24).** The player's guard bans
   `navigator.bluetooth` in all its code, and the live guard bans `power`, `cadence`, `rpm` and
   `ftms` in every live message, so two parts of PL9 need you. Proposals, like #173: (1) one player

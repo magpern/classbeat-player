@@ -218,6 +218,20 @@ and its Kotlin, in the first pull request that adds code there. For Kotlin they 
 (rule 3). The Bluetooth check allows exactly the one descriptor write of section 7. These are
 only additions; no existing check is loosened.
 
+**Two exceptions, decided by the owner (2026-11-26), each pinned to one file by a test:**
+
+- **Backend calls (#649).** `BackendTransport.kt` may use `HttpsURLConnection`, only to the
+  backend origin fixed in the build, with no redirects, a 64 KiB limit on the answer and a 10 s
+  timeout. For rider mode (#633), one more file may open a WebSocket to the same fixed origin for
+  the rider connection. Every other Kotlin file keeps the full network check.
+- **Spotify's media session (#653).** `SpotifySessionReader.kt` may name only the media-session
+  types it reads (the session manager, `MediaController`, `MediaMetadata`, `PlaybackState` and its
+  `TransportControls`) and the package `com.spotify.music`. Everything else stays banned in that
+  file too: audio playback and recording (`MediaPlayer`, `AudioTrack`, `AudioRecord`), players and
+  the network. New guards come with it: the notification listener stays empty and never calls
+  `getActiveNotifications`, the package filter comes before any read, and there is no Spotify SDK
+  and no `spotify:` link.
+
 ### 9. Building and signing
 
 - Lane: **player**, under `player/mobile/`. It imports the room screen and the core the way the
@@ -229,6 +243,11 @@ only additions; no existing check is loosened.
   (plan, PL12). Agents never hold it. Until it exists, APKs are signed with a throwaway key and are
   published only as test builds (a CI artifact or a pre-release marked as such), never as a
   regular release: Android cannot update an app across signing keys.
+- **A temporary project key (owner, 2026-11-26).** The owner has no key yet and asked for one to be
+  generated for now and replaced later. One was generated in an agent session and handed to the
+  owner, who adds it as repository secrets. Because it passed through an agent session it counts
+  as temporary: builds signed with it are test builds as above, and replacing it means users
+  uninstall once.
 - Releases go to GitHub Releases beside the desktop builds. No store, for now (decision 15).
 
 ### 10. Spike 3 comes first
