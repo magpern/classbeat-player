@@ -102,6 +102,21 @@ else
   bad "assets: complete set"
 fi
 
+# The notes promise no APK (#853): android-sign may still fail after they are written, so every line
+# that mentions Android or an APK is exactly the conditional paragraph below, and nothing else.
+android_notes_want="$(cat <<'WANT'
+The signed Android app is attached separately, only after it has been signed and verified. If this
+release lists `classbeat-player-android.apk`, check it against `SHA256SUMS-android`; if it does
+not, this release has no Android app.
+WANT
+)"
+android_notes="$(grep -Ei 'android|apk' "$tmp/a1/RELEASE_NOTES.md" || true)"
+if [ "$android_notes" = "$android_notes_want" ]; then
+  ok "assets: the release notes mention the APK only conditionally"
+else
+  bad "assets: the release notes' Android lines are not the conditional paragraph: $android_notes"
+fi
+
 make_set "$tmp/a2" linux-x64 macos-arm64 windows-x64
 if assets "$tmp/a2"; then bad "assets: a missing target was accepted"; else ok "assets: missing target refused"; fi
 
