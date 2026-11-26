@@ -48,8 +48,10 @@ final class PairingUiTests: XCTestCase {
     func testOpenTheSiteGoesToSafari() {
         open()
         rig.backend.ok(FakeBackend.startBody())
-        screens.press("Open the site")
+        // The service opens the page once the code arrives; the key opens it again.
         XCTAssertEqual(rig.ports.pages, [FakeBackend.origin + "/pair"])
+        screens.press("Open the site")
+        XCTAssertEqual(rig.ports.pages, [FakeBackend.origin + "/pair", FakeBackend.origin + "/pair"])
         XCTAssertTrue(ui.showing)
     }
 
