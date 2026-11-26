@@ -101,9 +101,13 @@ demo class, as Android did before #649.
 
 ### 5. The music: the manual clock
 
-The iOS app has **no music follower**. The native follow intent answers `unavailable`, so the
-room screen's existing path (`withoutReader`) runs the manual clock, and the room screen does not
-offer Follow. If the owner later clears a follower (decision 15), it gets its own ADR. No Swift
+The iOS app has **no music follower**. The room screen learns this from the platform, with no
+native call: one pure function, `hasMusicReader(platform)` (`player/mobile/src/room/reader-platform.ts`),
+is false on `ios`, so the room builds no follower, never offers Follow and runs the manual clock
+from the first frame. Nothing is asked of native code about the music before Follow is pressed
+(the #872 pin). As a second line of defence the native intents answer `unavailable` (`follow`, and
+`followAccess` as `{granted:false, state:"unavailable"}`), and the room then hides Follow and
+shows no sheet. *(As built, #903, 2026-11-26.)* If the owner later clears a follower (decision 15), it gets its own ADR. No Swift
 code plays, records or reads audio, and none names Spotify (section 8).
 
 ### 6. Keep-awake and the external display
