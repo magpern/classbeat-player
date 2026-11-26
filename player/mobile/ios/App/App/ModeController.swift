@@ -1,6 +1,8 @@
 // The iOS side of the mode holder (issue #895): it puts the current mode's plugin on the bridge,
 // loads the mode's pages and no other, shows the native screens and asks the device owner's
-// authentication. The holder decides; this only carries it out, as Android's ModeController.kt.
+// authentication. It also keeps the idle timer and the external display in step with the mode,
+// the page and the foreground (issue #897). The holder and the policies decide; this only carries
+// it out, as Android's ModeController.kt.
 // Every method runs on the main thread. Pure: no import at all; the screen lock, the screens and
 // the web view come in through the protocols in ModeSeams.swift, so the tests fake every one of them
 // (AppTests/ModeControllerTests.swift).
@@ -15,6 +17,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     private let screens: ModeScreens
     private let loader: PageLoader
     private let pairing: PairingUi
+    private let awake: KeepAwake
+    private let display: ExternalDisplay
     private let secrets: () -> [String]
     private let stop: ([String]) -> Void
     private var holder: ModeHolder?
@@ -25,6 +29,11 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     /// The mode whose plugin is on the bridge; nil while none is.
     private var exposedMode: Mode?
 
+    /// The main-frame page last committed, and whether the app is in the foreground: the inputs of
+    /// KeepAwake and ExternalDisplay besides the mode (issue #897).
+    private var page: String?
+    private var foreground = false
+
     /// `secrets` are the tokens the device holds, which no answer may carry; `stop` ends the app
     /// when a switch could not drop everything.
     init(
@@ -32,6 +41,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         screens: ModeScreens,
         loader: PageLoader,
         pairing: PairingUi,
+        awake: KeepAwake,
+        display: ExternalDisplay,
         secrets: @escaping () -> [String] = { [] },
         stop: @escaping ([String]) -> Void
     ) {
@@ -39,6 +50,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         self.screens = screens
         self.loader = loader
         self.pairing = pairing
+        self.awake = awake
+        self.display = display
         self.secrets = secrets
         self.stop = stop
         question = PageQuestion<Held>(
@@ -53,7 +66,11 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     func start(device: Device, store: ModeStore, parts: [Teardown]) throws {
         let holder = try ModeHolder(store: store, device: device, effects: self, parts: parts)
         self.holder = holder
+        // The app opens in the foreground; UIKit sends no foreground event for the launch.
+        foreground = true
+        display.start()
         holder.start()
+        follow()
     }
 
     var current: Mode? { holder?.current }
@@ -68,7 +85,9 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     }
 
     func shown(_ path: String) {
+        page = path
         opener.committed(path)
+        follow()
     }
 
     // From the page, through the mode plugins.
@@ -128,6 +147,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     /// Back in the app: a passcode may have been set meanwhile, and a code may have been confirmed.
     func resumed() {
         pairing.resumed()
+        foreground = true
+        follow()
         guard let holder = holder, holder.pending == .noLock else { return }
         holder.noLockReturned()
         // No longer paired: nothing to ask, so the screen goes and the page hears so.
@@ -140,6 +161,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     /// Leaving the app while the rider or the unpair question shows means "Stay". The pairing
     /// screen stays, as the site opens in Safari, but asks the server nothing until the app is back.
     func stopped() {
+        foreground = false
+        follow()
         pairing.stopped()
         if holder?.pending == .riderQuestion || unpairing.showing { stay() }
     }
@@ -155,6 +178,10 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         expose(nil)
         pairing.drop()
         unpairing.close()
+        // Between modes: the screen is released at once, before the drops run.
+        page = nil
+        awake.release()
+        display.update(current, page, foreground: foreground)
         // The page that asked is being replaced: its question ends here, with the one refused word.
         question.drop()
     }
@@ -255,6 +282,13 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
 
     func unpairNow() {
         pairing.service.unpair()
+    }
+
+    /// The idle timer and the external display follow the pure decisions. iOS has no rider session
+    /// yet, so no rider is ever joined.
+    private func follow() {
+        awake.sync(current, page, riderJoined: false, foreground: foreground)
+        display.update(current, page, foreground: foreground)
     }
 
     /// Every answer is checked once more: none may carry a token the device holds.

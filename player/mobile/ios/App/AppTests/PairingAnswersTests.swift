@@ -59,7 +59,15 @@ final class PairingAnswersTests: XCTestCase {
         pairing = FakePairingScreens()
         answered = [:]
         let service = rig.service
-        controller = ModeController(lock: lock, screens: screens, loader: Loader(), pairing: rig.ui(pairing), secrets: { service.secrets() }) { _ in
+        controller = ModeController(
+            lock: lock,
+            screens: screens,
+            loader: Loader(),
+            pairing: rig.ui(pairing),
+            awake: KeepAwake(FakeFlag()),
+            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface()),
+            secrets: { service.secrets() }
+        ) { _ in
             XCTFail("a switch could not drop everything")
         }
     }
