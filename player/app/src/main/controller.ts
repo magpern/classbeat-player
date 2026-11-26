@@ -5,7 +5,7 @@ import type { WebContents } from "electron";
 import classSchema from "../../../../schema/class-format/v1/class.schema.json" with { type: "json" };
 import { CH_UPDATE } from "../core/channels.ts";
 import type { ClockCommand } from "../core/commands.ts";
-import { advance, alignClock, answerLoad, command, INITIAL, isFollowing, openText, playlistAtStart, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
+import { advance, alignClock, answerLoad, command, INITIAL, isFollowing, openText, playlistAtStart, readerStopped, refuse, snapshotOf, transportFor, withoutReader } from "../core/player-state.ts";
 import { createLoadGate } from "../core/link/load-gate.ts";
 import { fallsBack, PLAYLIST_CONFIRM_MS } from "../core/link/playlist-load.ts";
 import { canLoadPlaylist } from "../core/link/playlist.ts";
@@ -59,6 +59,11 @@ export function createController(now: () => number = () => performance.now(), re
   /** Brings the state up to the music's latest reading at t. */
   const catchUp = (t: number): void => {
     if (reader.unavailable?.() === true) state = withoutReader(state);
+    // Access taken back while following (macOS Automation): the clock goes on by hand at once, announced; the reader goes quiet.
+    if (isFollowing(state) && reader.reason?.() === "not-permitted") {
+      state = readerStopped(state, t);
+      sync();
+    }
     state = advance(state, t, reader.latest(t));
   };
   const snapshot = (): Snapshot => {

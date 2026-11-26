@@ -204,3 +204,14 @@ test("on the manual clock Start loads nothing (the music app is not asked), and 
     assert.equal(m.snapshot().link?.playlistNotLoaded, false);
   }
 });
+
+test("Start right after the first lock, before any frame: play, not a load from track 1 (catch-up runs before playlistAtStart)", () => {
+  const { f, c, clock } = shell();
+  clock.t = 1500;
+  f.obs = { ...song(0, clock.t), positionMs: 20_000 };
+  // No snapshot in between: only the press itself brings the state up to the reading.
+  c.command({ type: "start" });
+  assert.deepEqual(f.requests, [], "song 1 is already playing: the playlist is not loaded over it");
+  assert.deepEqual(f.sent, ["play"]);
+  assert.equal(c.snapshot().link?.state, "Locked");
+});
