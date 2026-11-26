@@ -44,7 +44,7 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    audio itself (section 4). The plan is that the instructor's own Spotify desktop app plays, and
    the player **follows** it by reading the playing track and position from the operating system.
 3. **Following can be better than a fixed timeline.** A timeline that assumes the playlist plays
-   in order with a set crossfade: classbeat measured 1 to 3 s of error at best with one.
+   in order with a set crossfade drifts: classbeat measured 1 to 3 s of error at best.
    A player that reads the real position follows pauses, skips and seeks.
    This is the main thing to prove first (section 12, spike 1).
 4. **Recommended technology:** a web-technology application on every device (in a desktop
@@ -117,9 +117,11 @@ version and every later feature. A change to one of them is the owner's decision
    equipment**: no resistance, incline, brake or speed.
 3. **Spotify's music stays in Spotify's own app**: the player never downloads, stores or plays
    it. Audio from a licensed provider that allows it (Swedebeat) may be played by the player,
-   fetched from the provider straight to the device. No class audio or video is ever streamed
-   from our server, and music is never chosen, stretched or shifted from a measured cadence. The
-   song sets the target, never the other way round.
+   fetched from the provider straight to the device. An audio file the instructor keeps on their
+   own device may be played by the player, and never leaves that device (owner, 2026-11-26;
+   ADR 0017). No class audio or video is ever streamed from our server, and music is never
+   chosen, stretched or shifted from a measured cadence. The song sets the target, never the
+   other way round.
 
 *What the screen shows*
 
@@ -233,7 +235,7 @@ Options:
 | B | Follow and control through the Spotify Web API | No: 5 users, non-commercial, Premium | A few seconds, by polling | Only as an optional extra for the beta circle |
 | C | Play Spotify inside the player | No | Exact | Rejected: not workable in our shell and not permitted for our use |
 | D | **Manual clock:** press Start with the music, nudge earlier or later | Yes | As good as the instructor's timing | **Always available**; the only mode for Swedebeat and soundless classes at first |
-| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below). Also possible later for a gym's own files | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
+| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below). The same engine plays the instructor's own local files (ADR 0017) | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
 
 **Recommended design: follow, never depend.**
 
@@ -743,6 +745,10 @@ reversible defaults.
     real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider
     (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on
     iOS may use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
+16. **Local music files: decided (owner, 2026-11-26; ADR 0017).** A class may use the
+    instructor's own audio files (for example mp3) as its music source, besides Spotify and
+    Swedebeat. The files stay on the instructor's device; the player plays them itself, exactly
+    timed. Desktop first.
 
 ## 14. Not verified
 
