@@ -40,6 +40,14 @@ derived-data folder, run `npm run ios:verify` in `player/mobile`. It reads the b
 plists and entitlements and the project against the allowlists, and fails on any finding. The
 first run on your Mac may need adjusting; to be checked on the first run.
 
+## Where the CI screenshots are
+
+The `ios` job runs the tests with `-resultBundlePath` and keeps every XCTest attachment named
+`ios-<screen>-<state>` as one PNG each, in the workflow artifact `ios-screenshots` (14 days), on the
+run's summary page. `scripts/export-xcresult-screenshots.sh` does the export with
+`xcrun xcresulttool`; it also runs after a failed test run and never fails the job itself. A run
+with no such attachments uploads nothing.
+
 ## Your own iPhone, free personal team
 
 Select your iPhone as the run destination, sign in to Xcode with your own Apple ID under Settings,

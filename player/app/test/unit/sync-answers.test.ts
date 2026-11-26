@@ -140,7 +140,7 @@ test("a class of a newer major is kept, for the player to say it needs updating 
 const ACCOUNT = "c".repeat(64);
 
 // An unknown music source, from the server's answer to a row of the list (ADR 0017 section 1).
-for (const version of ["1.0", "1.4"]) {
+for (const version of ["1.4", "1.5"]) {
   test(`a class with source local, format ${version}, is kept, cached and listed as unknown`, () => {
     const doc = document("Local ride");
     doc.format_version = version;

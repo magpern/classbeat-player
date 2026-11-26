@@ -44,10 +44,21 @@ def _check_songs(doc: dict[str, Any], out: list[Violation]) -> None:
         out.append(("songs_last_end_mismatch", f"/songs/{len(songs) - 1}/end_ms"))
 
 
+def _check_local_files(doc: dict[str, Any], out: list[Violation]) -> None:
+    local = doc["music"]["source"] == "local"
+    for i, s in enumerate(doc["songs"]):
+        has = "local_file" in s.get("ids", {})
+        if local and not has:
+            out.append(("local_file_missing", f"/songs/{i}"))
+        elif has and not local:
+            out.append(("local_file_without_local_source", f"/songs/{i}/ids/local_file"))
+
+
 def _check_music(doc: dict[str, Any], out: list[Violation]) -> None:
     music = doc["music"]
     if "spotify_playlist" in music and music["source"] != "spotify":
         out.append(("playlist_without_spotify_source", "/music/spotify_playlist"))
+    _check_local_files(doc, out)
     mix = music.get("swedebeat_mix")
     if mix is None:
         return

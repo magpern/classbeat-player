@@ -1,0 +1,446 @@
+{
+  "format_version": "1.4",
+  "class": {
+    "title": "Forty-five minute ride",
+    "sport": "cycling",
+    "length_ms": 2700000
+  },
+  "music": {
+    "source": "local",
+    "design_crossfade_ms": 9000,
+    "song_timing": "estimated"
+  },
+  "zone_scale": [
+    {
+      "zone": 1,
+      "name": "Recovery",
+      "ftp_pct": [
+        0,
+        55
+      ],
+      "rpe": [
+        1,
+        2
+      ]
+    },
+    {
+      "zone": 2,
+      "name": "Endurance",
+      "ftp_pct": [
+        56,
+        75
+      ],
+      "rpe": [
+        3,
+        4
+      ]
+    },
+    {
+      "zone": 3,
+      "name": "Tempo",
+      "ftp_pct": [
+        76,
+        90
+      ],
+      "hrmax_pct": [
+        75,
+        85
+      ],
+      "rpe": [
+        5,
+        6
+      ]
+    },
+    {
+      "zone": 4,
+      "name": "Threshold",
+      "ftp_pct": [
+        91,
+        105
+      ],
+      "rpe": [
+        7,
+        8
+      ]
+    },
+    {
+      "zone": 5,
+      "name": "VO2 max",
+      "ftp_pct": [
+        106,
+        120
+      ],
+      "rpe": [
+        9,
+        10
+      ]
+    }
+  ],
+  "totals": {
+    "length_ms": 2700000,
+    "time_in_zone_ms": {
+      "1": 420000,
+      "2": 900000,
+      "3": 240000,
+      "4": 780000,
+      "5": 360000
+    },
+    "planned_load": 62.5
+  },
+  "segments": [
+    {
+      "name": "Warm up",
+      "kind": "warmup",
+      "start_ms": 0,
+      "end_ms": 600000
+    },
+    {
+      "name": "Main set",
+      "kind": "main",
+      "start_ms": 600000,
+      "end_ms": 2580000
+    },
+    {
+      "name": "Cool down",
+      "kind": "cooldown",
+      "start_ms": 2580000,
+      "end_ms": 2700000
+    }
+  ],
+  "intervals": [
+    {
+      "start_ms": 0,
+      "length_ms": 300000,
+      "zone": 1,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Warm up, easy legs"
+    },
+    {
+      "start_ms": 300000,
+      "length_ms": 300000,
+      "zone": 2,
+      "cadence": {
+        "from": 85,
+        "to": 95
+      },
+      "position": "seated",
+      "cue": "Build the base"
+    },
+    {
+      "start_ms": 600000,
+      "length_ms": 240000,
+      "zone": 3,
+      "cadence": {
+        "from": 90,
+        "to": 100
+      },
+      "position": "seated",
+      "cue": "Tempo, steady breathing"
+    },
+    {
+      "start_ms": 840000,
+      "length_ms": 120000,
+      "zone": 2,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Recover"
+    },
+    {
+      "start_ms": 960000,
+      "length_ms": 240000,
+      "zone": 4,
+      "cadence": {
+        "from": 85,
+        "to": 95
+      },
+      "position": "seated",
+      "cue": "Threshold, hold it"
+    },
+    {
+      "start_ms": 1200000,
+      "length_ms": 120000,
+      "zone": 2,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Recover"
+    },
+    {
+      "start_ms": 1320000,
+      "length_ms": 240000,
+      "zone": 4,
+      "cadence": {
+        "from": 85,
+        "to": 95
+      },
+      "position": "seated",
+      "cue": "Threshold again"
+    },
+    {
+      "start_ms": 1560000,
+      "length_ms": 120000,
+      "zone": 2,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Recover"
+    },
+    {
+      "start_ms": 1680000,
+      "length_ms": 180000,
+      "zone": 5,
+      "cadence": "beat",
+      "position": "standing",
+      "cue": "Climb on the beat"
+    },
+    {
+      "start_ms": 1860000,
+      "length_ms": 120000,
+      "zone": 2,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Recover"
+    },
+    {
+      "start_ms": 1980000,
+      "length_ms": 180000,
+      "zone": 5,
+      "cadence": "beat",
+      "position": "standing",
+      "cue": "Last climb"
+    },
+    {
+      "start_ms": 2160000,
+      "length_ms": 120000,
+      "zone": 2,
+      "cadence": {
+        "from": 80,
+        "to": 90
+      },
+      "position": "seated",
+      "cue": "Recover"
+    },
+    {
+      "start_ms": 2280000,
+      "length_ms": 300000,
+      "zone": 4,
+      "cadence": {
+        "from": 85,
+        "to": 95
+      },
+      "position": "seated",
+      "cue": "Five minute test, pace it evenly",
+      "test": {
+        "kind": "ftp",
+        "minutes": 5
+      }
+    },
+    {
+      "start_ms": 2580000,
+      "length_ms": 120000,
+      "zone": 1,
+      "cadence": {
+        "from": 70,
+        "to": 80
+      },
+      "position": "seated",
+      "cue": "Cool down"
+    }
+  ],
+  "songs": [
+    {
+      "title": "Song 1",
+      "artist": "Artist 1",
+      "length_ms": 234000,
+      "start_ms": 0,
+      "end_ms": 225000,
+      "bpm": 120,
+      "ids": {
+        "local_file": {
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+          "size_bytes": 1000000,
+          "file_name": "test-tone-01.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 2",
+      "artist": "Artist 2",
+      "length_ms": 234000,
+      "start_ms": 225000,
+      "end_ms": 450000,
+      "bpm": 124,
+      "ids": {
+        "local_file": {
+          "sha256": "41511488b52a90a2bb01c2249c8840dc7f4dae86557a62411da9a12d8432d5ec",
+          "size_bytes": 1001000,
+          "file_name": "test-tone-02.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 3",
+      "artist": "Artist 3",
+      "length_ms": 234000,
+      "start_ms": 450000,
+      "end_ms": 675000,
+      "bpm": 128,
+      "ids": {
+        "local_file": {
+          "sha256": "2626cd6bb635ca1878642ea426104e20179d5f2aac87f56a0df9b60af339ed95",
+          "size_bytes": 1002000,
+          "file_name": "test-tone-03.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 4",
+      "artist": "Artist 4",
+      "length_ms": 234000,
+      "start_ms": 675000,
+      "end_ms": 900000,
+      "bpm": 132,
+      "ids": {
+        "local_file": {
+          "sha256": "3edec1d69d56c5adda6cb6f73abb1e8a843c6faf587199799dec91235678e81e",
+          "size_bytes": 1003000,
+          "file_name": "test-tone-04.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 5",
+      "artist": "Artist 1",
+      "length_ms": 234000,
+      "start_ms": 900000,
+      "end_ms": 1125000,
+      "bpm": 120,
+      "ids": {
+        "local_file": {
+          "sha256": "71fdc4cd8d787f9af2e07cbda3a49393123e4cf9f1ab857feef0ca8b2f267bd0",
+          "size_bytes": 1004000,
+          "file_name": "test-tone-05.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 6",
+      "artist": "Artist 2",
+      "length_ms": 234000,
+      "start_ms": 1125000,
+      "end_ms": 1350000,
+      "bpm": 124,
+      "ids": {
+        "local_file": {
+          "sha256": "b861c60678d6a3c30fa347e1718757cd984f9624e2702d6edc6fa98e82635387",
+          "size_bytes": 1005000,
+          "file_name": "test-tone-06.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 7",
+      "artist": "Artist 3",
+      "length_ms": 234000,
+      "start_ms": 1350000,
+      "end_ms": 1575000,
+      "bpm": 128,
+      "ids": {
+        "local_file": {
+          "sha256": "890f5c55cc1eadf3b0a9fc2259fb9b0d83f1dc762b8c6fc06889565f029788ba",
+          "size_bytes": 1006000,
+          "file_name": "test-tone-07.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 8",
+      "artist": "Artist 4",
+      "length_ms": 234000,
+      "start_ms": 1575000,
+      "end_ms": 1800000,
+      "bpm": 132,
+      "ids": {
+        "local_file": {
+          "sha256": "de0b77c8d81a28e692c3cdcb5d851b9d575f51425a20d38948800838f2d43bd0",
+          "size_bytes": 1007000,
+          "file_name": "test-tone-08.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 9",
+      "artist": "Artist 1",
+      "length_ms": 234000,
+      "start_ms": 1800000,
+      "end_ms": 2025000,
+      "bpm": 120,
+      "ids": {
+        "local_file": {
+          "sha256": "7e4905a31b691179d5bc3dc740ba66680d0431720f46b945258714f125779369",
+          "size_bytes": 1008000,
+          "file_name": "test-tone-09.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 10",
+      "artist": "Artist 2",
+      "length_ms": 234000,
+      "start_ms": 2025000,
+      "end_ms": 2250000,
+      "bpm": 124,
+      "ids": {
+        "local_file": {
+          "sha256": "debab0324797b425fbde68ee2bd82e89db1cb1bd88bea5f7cd39d761f55f92bd",
+          "size_bytes": 1009000,
+          "file_name": "test-tone-10.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 11",
+      "artist": "Artist 3",
+      "length_ms": 234000,
+      "start_ms": 2250000,
+      "end_ms": 2475000,
+      "bpm": 128,
+      "ids": {
+        "local_file": {
+          "sha256": "57341ed5ec9a46c9f8fe934a9f40064d7dc1aa639ee73cada9e0bdcba971a94a",
+          "size_bytes": 1010000,
+          "file_name": "test-tone-11.mp3"
+        }
+      }
+    },
+    {
+      "title": "Song 12",
+      "artist": "Artist 4",
+      "length_ms": 234000,
+      "start_ms": 2475000,
+      "end_ms": 2700000,
+      "bpm": 132,
+      "ids": {
+        "local_file": {
+          "sha256": "e8ed0e1589db067db9fe0ab46e0513ccf76cf1256340173b18c622cbedbb6681",
+          "size_bytes": 1011000,
+          "file_name": "test-tone-12.mp3"
+        }
+      }
+    }
+  ]
+}

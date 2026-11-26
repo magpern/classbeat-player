@@ -68,7 +68,7 @@ The valid vectors are hand-maintained. Changing a valid document means recomputi
    `song_timing: missing`; any other source requires at least one song. Anchors or moments of
    quality `missing` must be empty lists; of any other quality, non-empty.
 5. **Producers strict, readers lax.** One schema file, strict (`additionalProperties: false`
-   everywhere, `format_version` `"1.0"`, `"1.1"` or `"1.2"`, the minors this schema knows). The reader schema is derived from it in code
+   everywhere, `format_version` `"1.0"` to `"1.4"`, the minors this schema knows). The reader schema is derived from it in code
    (`reader_schema`): unknown fields allowed, any `1.x` accepted. A reader first checks the
    version string: an unknown major gives `unsupported_major` (the plain "needs a newer version"
    message is the player's), a malformed string a `schema` error. Everything else (types,
@@ -189,7 +189,7 @@ ignores the field.
 Vectors: `valid/class-spotify-playlist.json`, `invalid/schema-spotify-playlist-malformed`,
 `invalid/schema-spotify-playlist-in-format-1-0`, `invalid/schema-spotify-playlist-in-format-1-1`,
 `invalid/playlist-without-spotify-source`; the strict future-minor vector is now
-`schema-strict-refuses-minor-1-4` (it was 1.3 until minor 1.3 existed). The reference converter writes the field (format 1.2) when
+`schema-strict-refuses-minor-1-5` (it was 1.3 until minor 1.3 existed). The reference converter writes the field (format 1.2) when
 the fixture has a playlist id (`converter/fixtures/class-30min-spotify-playlist.*`).
 
 ## Format 1.3: Swedebeat mix (issue #689, contract part; ADR 0013 section 4)
@@ -231,6 +231,49 @@ id empty, 65 characters, URL, trailing newline, missing length, unknown field),
 `-offset-pushes-past-end`. The reference converter writes the field (format 1.3) for
 `converter/fixtures/class-30min-swedebeat-mix.*`.
 
+## Format 1.4: music source `local` (ADR 0017 section 1)
+
+Minor 1.4 adds a **value** to `music.source` and one optional song field. That goes beyond ADR
+0003 section 7 as first written ("a minor version only adds optional fields"); ADR 0017 section 8
+amends it: **a minor version may also add a value to `music.source`.** A reader that meets a
+source value it does not know lists the class as "This class needs a newer version of the
+player" (the player lane's job, issue #917) and keeps playing its other classes. A player built
+before that change does not list a class with source `local`.
+
+```json
+"music": { "source": "local", "design_crossfade_ms": 9000, "song_timing": "estimated" },
+"songs": [ { "title": "Song 1", "artist": "Artist 1", "length_ms": 234000, "start_ms": 0, "end_ms": 225000,
+             "ids": { "local_file": { "sha256": "<64 lowercase hex>", "size_bytes": 4012345, "file_name": "song-1.mp3" } } } ]
+```
+
+1. **`music.source: "local"`:** the instructor's own audio files, played by the player from the
+   device. Every other rule for songs (windows, anchors, timing quality) is as for any source.
+2. **`songs[].ids.local_file`** `{sha256, size_bytes, file_name}`: `sha256` is exactly 64
+   lowercase hex characters (of the whole file's bytes; a trailing newline is refused);
+   `size_bytes` a positive integer; `file_name` 1 to 255 characters with no `/` and no `\`.
+   Unknown fields are refused. `file_name` is only a hint shown to the instructor; matching never
+   uses it. The document holds no path.
+3. **Strict producers must write `"1.4"` to use it.** A label before `1.4` with source `local`
+   (pointer `/music/source`) or with an `ids.local_file` (pointer `/songs/<n>/ids`) is a schema
+   error in both modes.
+4. **Semantic rules:** with source `local` every song has `ids.local_file`
+   (`local_file_missing` at `/songs/<n>`); `ids.local_file` appears only with source `local`
+   (`local_file_without_local_source` at `/songs/<n>/ids/local_file`). Source `none` still
+   requires no songs, so a local file beside it is a schema error at `/songs`.
+5. **Data only.** The audio, its path and which files were found never leave the device
+   (plan section 3, rule 3); this contract carries only the identity of a file.
+
+Vectors: `valid/class-local-files` (the SHA-256 values are of fixed ASCII strings, the file
+names are made up: no real song, no audio), `invalid/local-file-missing`,
+`invalid/local-file-with-spotify-source`, `invalid/schema-source-local-in-format-1-3`,
+`invalid/schema-local-file-in-format-1-3-spotify`, `invalid/schema-local-file-with-source-none`,
+`invalid/schema-local-file-sha256-*` (uppercase, 63 and 65 characters, trailing newline),
+`-size-zero`, `-size-not-integer`, `-name-slash`, `-name-backslash`, `-name-empty`,
+`-name-256-chars`, `-missing-sha256`, `-unknown-field`. The strict future-minor vector is now
+`schema-strict-refuses-minor-1-5`. The reference converter does not write source `local`:
+classbeat designs those classes (ADR 0017, Consequences), so there is no converter fixture
+for it; the valid vector stands in as the licence-free test class.
+
 ## Where each ADR rule is enforced
 
 `S` = JSON Schema, `V` = semantic validator (`semantic.py` / `semantic.ts`), `P` = publication
@@ -242,7 +285,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | s1 types generated; stale types fail CI | `generate.sh`, `check-generated.sh` | edit-without-regenerating check; `tests/test_generated.py`, `test/generated-types.test.ts` (round trip) |
 | s2 times are whole milliseconds | S (`integer`) | `schema-time-not-integer` |
 | s2 cue at most 120 characters, names at most 80 | S | `schema-cue-over-120-chars`, `schema-title-over-80-chars` |
-| s3 `format_version` `"1.0"` to `"1.3"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-4`, `reader/` |
+| s3 `format_version` `"1.0"` to `"1.4"` | S (strict), reader pattern | `schema-strict-refuses-minor-1-5`, `reader/` |
 | s3 required top-level fields, no unknown fields (no games, no colour) | S | `schema-missing-required-music`, `schema-unknown-field-games`, `schema-unknown-nested-field-colour` |
 | s3 sport, music source, `design_crossfade_ms` at least 0, `song_timing` values | S | `schema-sport-unknown`, `schema-source-none-timing-not-missing` |
 | s3 zone scale: unique numbers, ranges | S, V | `zone-scale-duplicate`, `zone-scale-range-inverted`, `schema-zone-out-of-1-to-7` |
@@ -265,6 +308,7 @@ check or `sequence`. Vector names are files in `examples/invalid/` unless a fold
 | 1.2 playlist only with a 1.2 label | S (strict and reader) | `schema-spotify-playlist-in-format-1-0`, `-1-1`; `test_playlist_document_is_1_2_and_older_labels_are_refused` |
 | 1.2 playlist only with source `spotify` | V (`playlist_without_spotify_source`) | `playlist-without-spotify-source`, `playlist-with-swedebeat-source` |
 | 1.3 `music.swedebeat_mix`: id, bounds, label, source, covers class | S, V | see "Format 1.3" above; `test_swedebeat_mix_*` |
+| 1.4 `music.source: local`, `ids.local_file`: hash, size, name, label, every song has one, only with `local` (ADR 0017 s1) | S, V | see "Format 1.4" above; `test_local_file_*` |
 | s6 repeat, stale, removal marker (and the carried cases) | P (`sequence`) | `sequences.json` |
 | s7 producers strict, readers lax, any minor of a known major | `check` modes | `reader/accepted-future-minor-unknown-fields`, `test_producer_is_strict_where_reader_is_lax` |
 | s7 unknown major refused | `check` reader mode | `reader/rejected-unknown-major` |

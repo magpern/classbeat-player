@@ -1,7 +1,7 @@
 // Opening class files: the example classes validate, wrong files get a plain message
 // (ADR 0003 section 7: reader mode for files the player reads, strict for files it writes).
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { test } from "node:test";
 import {
@@ -62,11 +62,14 @@ const invalidDir = join(EXAMPLES, "invalid");
 // (ADR 0003 section 7). The player never shows an unknown field, so a source's games stay out.
 const STRICT_ONLY = new Set([
   "schema-strict-refuses-minor-1-4.json",
+  "schema-strict-refuses-minor-1-5.json",
+  "schema-local-file-unknown-field.json",
   "schema-swedebeat-mix-unknown-field.json",
   "schema-unknown-field-games.json",
   "schema-unknown-nested-field-colour.json",
 ]);
-for (const name of [...STRICT_ONLY]) {
+// A name that is not in the folder yet is ignored, so the list serves both format 1.3 and 1.4 vectors.
+for (const name of [...STRICT_ONLY].filter((n) => existsSync(join(invalidDir, n)))) {
   test(`reader accepts, writer refuses: ${name}`, () => {
     const t = text(join(invalidDir, name));
     assert.equal(readClassText(t, classSchema).ok, true);

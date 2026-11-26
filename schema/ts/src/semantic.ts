@@ -24,11 +24,21 @@ function checkIntervals(doc: Doc, out: Violation[]): void {
   if (expected !== doc.class.length_ms) out.push(["intervals_end_mismatch", "/intervals"]);
 }
 
+function checkLocalFiles(doc: Doc, out: Violation[]): void {
+  const local = doc.music.source === "local";
+  (doc.songs as Doc[]).forEach((s, i) => {
+    const has = s.ids !== undefined && "local_file" in s.ids;
+    if (local && !has) out.push(["local_file_missing", `/songs/${i}`]);
+    else if (has && !local) out.push(["local_file_without_local_source", `/songs/${i}/ids/local_file`]);
+  });
+}
+
 function checkMusic(doc: Doc, out: Violation[]): void {
   const music = doc.music;
   if ("spotify_playlist" in music && music.source !== "spotify") {
     out.push(["playlist_without_spotify_source", "/music/spotify_playlist"]);
   }
+  checkLocalFiles(doc, out);
   const mix = music.swedebeat_mix;
   if (mix === undefined) return;
   if (music.source !== "swedebeat") {
