@@ -5,7 +5,7 @@ Kept by the Orchestrator only (AGENTS.md, section 3). Updated in batches with me
 GitHub milestones cannot be created from the agents' tools, so each phase is a label (`PL0`, …)
 until the owner creates the milestones.
 
-Updated 2026-11-25 (after #818; `main` at 99a4d16).
+Updated 2026-11-26 (after #832; `main` at 28e592f).
 
 ## PL0: repository setup, ADRs and spike harnesses (done on fakes)
 
@@ -129,7 +129,7 @@ tested); keep-awake while a class runs (#157, #159). **Done on fakes:** the Veri
 `main` at `e2d7c6c` (#159) and filed no gap issues; #165 merged after it. The lasting-fault plate and the display removal are covered by unit tests
 only (memory keychain, one xvfb display).
 
-## PL6: the room scene (web 3D, ADR 0009)
+## PL6: the room scene (web 3D, ADR 0009) (done on fakes)
 
 Merged: the scene direction (#471), a pure scene model (#526), the turn-rate limiter and moments
 gate in the web 3D renderer (#536), the render-callback and lint fences (#549, #557, #564), the
@@ -152,16 +152,26 @@ gate in every case. The revised sweep and sway spec is merged (#635: a turning b
 near-miss turns join one dark span, zone 7 beams dimmed by a brightness scalar instead of widened).
 
 Also merged: the player's state-rate test made deterministic (#624, #626), the 4.15 s sweep
-windows with a burst's decay counted in the shared budget and gated (#618, #622; this closes the
-known S6 gap above and #592), and scene.md as built after #592 (#671).
+windows with a burst's decay counted in the shared budget and gated (#618, #622), which closes the
+known S6 gap above and #592, and scene.md as built after #592 (#671).
 
 Also merged: the scene mounted in the room window, with the plain 2D fallback and reduced motion
 (#677, #680).
 
-Open: stepping the quality level down on a low frame rate (#678, PR #740), then the plain level
-after a sustained low frame rate (#717, after #740 because both change the quality monitor).
-Design follow-up: the scene folds the grey circle and square markers into one round dot;
-scene.md or `text.css` is to settle this.
+Also merged: stepping the quality level down on a low frame rate, with the frame-rate log (#678,
+#740), and the plain level after a sustained low frame rate (#717, #780).
+
+The Verifier ran PL6 on `main` at 99a4d16 and found five gaps, all merged since: the link marker
+drawn per state in the text layer, following the plain screen (#822, #830; scene.md #825), the
+plain screen's `.cue` rules kept off the scene's cue at 5:4 (#823, #828), an e2e test of the real
+scene in the room window and its step down to the plain screen (#824, #826), the plain screen's
+text colours kept off the scene's link, labels and segment name (#829, #831), and a guard for the
+scene text's places and colours on the room page (#827, #832).
+
+**Done on fakes:** the Verifier ran PL6 again on `main` at 28e592f and filed no gap issues. Not
+measurable on fakes: S9's frame rate on a studio-class computer (software GL gives about 19 fps);
+that is the owner's spike 2 run ([owner.md](owner.md)). No real GPU, display removal or music
+link was used.
 
 ## PL12: installed phone and tablet apps
 
@@ -239,10 +249,10 @@ and notice (#798, #808; spec as built #812), the site's `releases.json` from the
 #813), the updater's guard gaps (#810, #815) and the "No check has run yet" wording (#811, #816).
 
 The Verifier ran PL7's "done when" on `main` at c3e698c and found one gap, ADR 0014 still
-marked Proposed (#819, fixed here). Not run on fakes: packaging with `scripts/package-desktop.sh`,
-which needs the Electron runtime download; the release workflow's test covers it. Signing, notarisation, the first deploy and
-the repository setting that lets the release workflow open its pull request wait for the owner
-([owner.md](owner.md)).
+marked Proposed (#819, #820). Not run on fakes: packaging with
+`scripts/package-desktop.sh`, which needs the Electron runtime download; the release workflow's
+test covers it. Signing, notarisation, the first deploy and the repository setting that lets
+the release workflow open its pull request wait for the owner ([owner.md](owner.md)).
 
 ## PL3: the classbeat side
 
