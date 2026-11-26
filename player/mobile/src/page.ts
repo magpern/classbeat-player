@@ -42,9 +42,6 @@ export function pageHtml(name: PageName): string {
     ...(bundle ? [`<link rel="stylesheet" href="${bundle}.css">`, `<script src="${bundle}.js" defer></script>`] : []),
     "</head>",
     room ? '<body data-band="hidden" data-join="closed">' : "<body>",
-    // The room screen's module mounts the mix's player on this element as it runs (room-mix.ts). On the
-    // phone nothing cues it (clock-room.ts: onMix does nothing), so it never has a source and plays nothing.
-    ...(room ? ['<audio id="mix" preload="none"></audio>'] : []),
     ...(name in IDLE_LINES ? [`<main class="idle"><span data-tier="text" data-lines="2">${IDLE_LINES[name as keyof typeof IDLE_LINES]}</span></main>`] : []),
     "</body>",
     "</html>",

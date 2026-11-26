@@ -1,17 +1,20 @@
 // Opens the class the instructor picked on the class list (issue #871): room.html?id=<class id>.
 // The id is checked, the class asked of native code through the getClass intent (IntentPolicy.kt),
 // and checked by the class format's reader (class-answer.ts). Only a class that opens gets a
-// `window.room` and the room screen; any other end goes back to the class list with its plate (plate-words.ts), so the room screen
-// never draws without a class and never from a fixture. Side effects come in as `deps`.
-import type { InstructorModePlugin } from "../modes/bridge.ts";
+// `window.room` and the room screen; any other end goes back to the class list with its plate
+// (plate-words.ts), so the room screen never draws without a class and never from a fixture. A room
+// screen that fails to load goes back to the plate too, never to a blank page. Side effects come in
+// as `deps`.
 import { classIdOf } from "./address.ts";
 import { readClassAnswer } from "./class-answer.ts";
+import type { RoomClassSource } from "./class-source.ts";
 import { type ClockRoom, clockRoom, type ClockRoomDeps } from "./clock-room.ts";
 import { listAfter, type NoClass } from "./plate-words.ts";
 
 export interface OpenRoomDeps extends ClockRoomDeps {
   readonly search: string;
-  readonly native: Pick<InstructorModePlugin, "getClass">;
+  /** Native code narrowed to getClass (class-source.ts). */
+  readonly native: RoomClassSource;
   /** Puts the room where the room screen reads it (`window.room`). */
   readonly install: (room: ClockRoom) => void;
   /** Loads the room screen's module, which reads the room as it first runs. */
@@ -25,8 +28,14 @@ export async function openRoom(deps: OpenRoomDeps): Promise<"open" | NoClass> {
   const id = classIdOf(deps.search);
   const why = id === null ? "missing" : await opened(id, deps);
   if (why === "open") {
-    await deps.mount();
-    return why;
+    try {
+      await deps.mount();
+      return why;
+    } catch {
+      // The class was read, but its screen could not run: the list says it cannot be opened.
+      deps.go(listAfter("invalid"));
+      return "invalid";
+    }
   }
   deps.go(listAfter(why));
   return why;

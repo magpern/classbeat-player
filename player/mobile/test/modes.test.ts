@@ -1,7 +1,7 @@
 // The modes' start pages (issue #630): the words follow docs/design/app-modes.md, native answers are
 // read strictly, and each mode's page reaches only its own mode's plugin.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -44,10 +44,27 @@ test("each mode's page reaches only its own mode's plugin, and only through brid
     assert.doesNotMatch(text, /@capacitor\/core|registerPlugin|Capacitor\./, name);
   }
   // The room screen's page has no mode plugin and no strip: no switch with a class open.
-  assert.doesNotMatch(source("main.ts"), /modes\//);
+  assert.doesNotMatch(source("main.ts"), /modes\/|instructorMode|riderMode/);
 });
 
-test("the bridge names exactly the native intents, and only join takes arguments: the code and the nickname", () => {
+test("the room page reaches native code only through getClass, never instructor mode's whole plugin", () => {
+  const main = source("main.ts");
+  assert.match(main, /^import \{ roomClass \} from "\.\/room\/native\.ts";$/m);
+  assert.match(main, /^ {2}native: roomClass\(\),$/m);
+  const native = source("room/native.ts");
+  assert.equal([...native.matchAll(/instructorMode\(\)/g)].length, 1);
+  assert.match(native, /=> roomClassSource\(instructorMode\(\)\);$/m);
+  // The narrowing: a frozen object with getClass alone, passing on the id and nothing else.
+  const narrow = source("room/class-source.ts");
+  assert.match(narrow, /^ {2}return Object\.freeze\(\{ getClass: \(args: \{ id: string \}\) => plugin\.getClass\(\{ id: args\.id \}\) \}\);$/m);
+  // class-source.ts takes the plugin's type only, never the plugin.
+  assert.doesNotMatch(narrow, /instructorMode\(|riderMode|registerPlugin|^import \{/m);
+  for (const name of readdirSync(join(SRC, "room")).filter((n) => n.endsWith(".ts") && n !== "native.ts" && n !== "class-source.ts")) {
+    assert.doesNotMatch(source(join("room", name)), /instructorMode|riderMode|@capacitor\/core|registerPlugin|Capacitor\./, name);
+  }
+});
+
+test("the bridge names exactly the native intents, and only join and getClass take arguments: the code and nickname, the class id", () => {
   const bridge = source("modes/bridge.ts");
   const plugins = [...bridge.matchAll(/registerPlugin<\w+>\("(\w+)"\)/g)].map((m) => m[1]);
   assert.deepEqual(plugins, ["RiderMode", "InstructorMode"]);
@@ -62,6 +79,8 @@ test("the bridge names exactly the native intents, and only join takes arguments
     ["leave", ""],
     ["askRiderMode", ""],
     ["listClasses", ""],
+    // The room page's one intent (issue #871), narrowed to it by room/class-source.ts.
+    ["getClass", "args: { id: string }"],
     ["syncNow", ""],
     ["unpair", ""],
     ["pairAgain", ""],

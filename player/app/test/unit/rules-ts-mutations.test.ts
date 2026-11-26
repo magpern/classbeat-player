@@ -29,7 +29,7 @@ const HTML = '<audio id="mix" preload="auto"></audio>';
 const DIAL = "const dial = (at: string, on: SocketEvents): LiveSocket => d.connect(liveSocketUrl(at), on);";
 const URL_LINE = 'const url = new URL("/api/live/ws", origin);';
 const IMPORT = 'import { app, BrowserWindow, ipcMain } from "electron";';
-const PHONE = 'import "./install.ts";';
+const PHONE = 'import { openRoom } from "./room/open-room.ts";';
 const hidden = (anchor: string, after: string): string => `${anchor} const s = "//"; ${after}`;
 // A "/*" in a string: `code` takes out everything up to the "*/" in a later string, lines included.
 const spanned = (anchor: string, lines: string): string => `${anchor}\nconst s = "/*";\n${lines}\nconst t = "*/";`;

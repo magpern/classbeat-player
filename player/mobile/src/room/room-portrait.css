@@ -1,0 +1,28 @@
+/* The phone's room screen held upright (issue #871; docs/design/play.md, "Portrait"): the player's
+   control band (player/app/src/renderer/room-band.css) laid over the score's box of /play's portrait
+   grid (web/src/play/play-room.css), with /play's band numbers: the score's box exactly, 1.5 vh above
+   the bottom edge; buttons at least 64 x 64 CSS px and 12 px apart, words in Big Shoulders 800 so one
+   row of four fits at 360 px; the End question on its own line above its two answers. `.play` is on
+   the body only while the viewport is portrait (room/phone-layouts.ts), so the band elsewhere, and the
+   desktop's, are as room-band.css draws them. `body.play` outranks room-band.css and play-room.css. */
+
+@media (max-aspect-ratio: 1/1) {
+  body.play .band {
+    top: auto; bottom: calc(1.5 * var(--dh)); height: var(--score-h);
+    padding: 0 4vw; gap: max(0.8vw, 12px);
+  }
+  body.play .band .transport, body.play .band .ask { gap: max(0.8vw, 12px); }
+  body.play .band .btn { height: max(calc(7.6 * var(--dh)), 64px); min-width: 64px; padding: 0 1.8vw; gap: calc(0.3 * var(--dh)); }
+  body.play .band .btn .w { font-family: var(--face-number); font-weight: 800; font-size: var(--p-minor); }
+  body.play .band .btn .sub { font-size: var(--p-label); }
+  body.play .band .btn.main { min-width: max(18vw, 64px); }
+  body.play .band .quit { min-width: 64px; }
+  body.play .band .ask {
+    flex: 1; display: grid; grid-template-columns: auto 1fr auto;
+    grid-template-areas: "q q q" "yes gap keep"; row-gap: calc(0.8 * var(--dh));
+  }
+  body.play .band .ask .q { grid-area: q; font-size: var(--p-minor); margin: 0; }
+  body.play .band .ask .btn:first-of-type { grid-area: yes; }
+  body.play .band .ask .quit { grid-area: keep; }
+  body.play .band .ask .gap { grid-area: gap; width: auto; }
+}

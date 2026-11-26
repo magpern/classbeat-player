@@ -18,7 +18,10 @@ export const PUSH_EVERY_MS = 100;
 
 export interface ClockRoomDeps {
   readonly now: () => number;
-  readonly every: (fn: () => void, ms: number) => void;
+  /** Runs [fn] every [ms] until the returned stop is called. */
+  readonly every: (fn: () => void, ms: number) => () => void;
+  /** Calls [fn] once as the page closes (pagehide). */
+  readonly onClose: (fn: () => void) => void;
   /** End class: back to the class list. */
   readonly leave: () => void;
 }
@@ -56,14 +59,22 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
     return Promise.resolve(frame());
   };
   const listeners: ((f: RoomFrame) => void)[] = [];
-  let pushing = false;
+  // The push timer starts with the first listener and stops for good when the class ends or the
+  // page closes, so nothing keeps reading the clock behind a page that is gone.
+  let pushing: "no" | "yes" | "stopped" = "no";
+  let stopPush = (): void => {};
+  const stop = (): void => {
+    pushing = "stopped";
+    stopPush();
+  };
+  deps.onClose(stop);
   return {
     state: () => Promise.resolve(frame()),
     onUpdate(cb) {
       listeners.push(cb);
-      if (pushing) return;
-      pushing = true;
-      deps.every(() => {
+      if (pushing !== "no") return;
+      pushing = "yes";
+      stopPush = deps.every(() => {
         const f = frame();
         for (const l of listeners) l(f);
       }, PUSH_EVERY_MS);
@@ -79,6 +90,7 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
     // No reader on the phone yet: the core leaves the manual clock as it is.
     follow: () => run({ type: "follow" }),
     endClass() {
+      stop();
       deps.leave();
       return Promise.resolve(true);
     },

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { INVALID_MESSAGE, NEWER_VERSION_MESSAGE, readClassText } from "../../app/src/core/class-file.ts";
 import { classIdOf, roomFor } from "../src/room/address.ts";
 import { readClassAnswer } from "../src/room/class-answer.ts";
+import { roomClassSource } from "../src/room/class-source.ts";
 import { openRoom } from "../src/room/open-room.ts";
 import { listAfter, PLATE_WORDS, plateFor } from "../src/room/plate-words.ts";
 import { classDoc, harness, ID } from "./room-fakes.ts";
@@ -33,6 +34,33 @@ test("opening a class from the list shows that class's first interval before Sta
   // Only the manual clock: Follow is not offered and every band key goes to the clock.
   assert.equal(frame.link?.available, false);
   assert.deepEqual(new Set(Object.values(frame.band ?? {})), new Set(["clock"]));
+});
+
+test("a room screen that fails to load goes back to the list's plate, never a blank page", async () => {
+  const h = harness(() => Promise.resolve({ document: classDoc() }));
+  h.mountResult = () => Promise.reject(new Error("module failed"));
+  assert.equal(await openRoom(h.deps), "invalid");
+  assert.equal(h.mounted, 1);
+  assert.deepEqual(h.went, [listAfter("invalid")]);
+  // One that loads stays on the room screen.
+  const ok = harness(() => Promise.resolve({ document: classDoc() }));
+  assert.equal(await openRoom(ok.deps), "open");
+  assert.deepEqual(ok.went, []);
+});
+
+test("the room's native side is getClass alone, and it passes on the id and nothing else", async () => {
+  const calls: unknown[] = [];
+  const plugin = new Proxy({} as Record<string, unknown>, {
+    get: (_t, name) => (args: unknown) => {
+      calls.push([name, args]);
+      return Promise.resolve({ error: "not_found" });
+    },
+  });
+  const source = roomClassSource(plugin as never);
+  assert.deepEqual(Object.keys(source), ["getClass"]);
+  assert.ok(Object.isFrozen(source));
+  await source.getClass({ id: ID, token: "x", path: "../a" } as { id: string });
+  assert.deepEqual(calls, [["getClass", { id: ID }]]);
 });
 
 const NOT_FOUND = { error: "not_found" };

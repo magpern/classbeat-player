@@ -75,6 +75,33 @@ test("the room screen is sent a frame every 100 ms, on the clock it drives", asy
   assert.equal(got.length, 6);
 });
 
+test("the push timer stops when the class ends or the page closes, and never starts again", async () => {
+  {
+    const { h, room } = await opened();
+    room.onUpdate(() => {});
+    assert.equal(h.timers(), 1);
+    await room.endClass();
+    assert.equal(h.timers(), 0);
+    room.onUpdate(() => {});
+    assert.equal(h.timers(), 0);
+  }
+  {
+    const { h, room } = await opened();
+    const got: RoomFrame[] = [];
+    room.onUpdate((f) => got.push(f));
+    h.close();
+    assert.equal(h.timers(), 0);
+    h.tick(PUSH_EVERY_MS * 5);
+    assert.equal(got.length, 0);
+  }
+  {
+    const { h, room } = await opened();
+    h.close();
+    room.onUpdate(() => {});
+    assert.equal(h.timers(), 0);
+  }
+});
+
 test("End goes back to the class list; there is no live session and no mix", async () => {
   const { h, room } = await opened();
   assert.equal(await room.endClass(), true);

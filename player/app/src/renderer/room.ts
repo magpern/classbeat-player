@@ -104,5 +104,10 @@ void api.state().then((frame) => {
 api.onRemote(remote);
 void api.remoteState().then(remote);
 // The mix's <audio>: cued by the shell only, and its reports go back through the one fixed call.
-const mix = mountMix(document.getElementById("mix") as HTMLAudioElement, (seq, positionMs, playing, failed, durationMs) => void api.mixReport(seq, positionMs, playing, failed, durationMs));
-api.onMix((cue) => mix.cue(cue));
+// Only the desktop's page has the element (room.html). The phone's room page has none (rule 3; issue
+// #871), so there the screen mounts no player and takes no cue.
+const mixElement = document.getElementById("mix");
+if (mixElement instanceof HTMLAudioElement) {
+  const mix = mountMix(mixElement, (seq, positionMs, playing, failed, durationMs) => void api.mixReport(seq, positionMs, playing, failed, durationMs));
+  api.onMix((cue) => mix.cue(cue));
+}

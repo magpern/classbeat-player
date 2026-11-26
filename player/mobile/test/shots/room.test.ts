@@ -51,6 +51,27 @@ async function fitsAcross(page: Page, width: number): Promise<void> {
   assert.ok(scroll <= width, `scrolls sideways: ${scroll} > ${width}`);
 }
 
+/** The band is shown, and every one of its keys (and the End question) lies whole inside the viewport, none over another. */
+async function bandInView(page: Page, w: number, h: number, words: string[]): Promise<void> {
+  const shown = await page.evaluate(() => document.querySelector(".band")?.getAttribute("data-phase"));
+  assert.notEqual(shown, "hidden");
+  const boxes = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".band .btn, .band .q")].map((e) => {
+      const r = e.getBoundingClientRect();
+      return { t: e.innerText.replace(/\s+/g, " ").trim(), l: r.left, r: r.right, t0: r.top, b: r.bottom };
+    }),
+  );
+  assert.deepEqual(boxes.map((b) => b.t), words);
+  for (const b of boxes) assert.ok(b.l >= 0 && b.r <= w && b.t0 >= 0 && b.b <= h, `${b.t} outside ${w}x${h}: ${JSON.stringify(b)}`);
+  for (const a of boxes) for (const b of boxes) {
+    if (a !== b) assert.ok(a.r <= b.l || b.r <= a.l || a.b <= b.t0 || b.b <= a.t0, `${a.t} overlaps ${b.t}`);
+  }
+  // Upright, each key is a touch target of at least 64 x 64 CSS px (play.md, "Portrait"); on its side
+  // the band is the desktop's, unchanged.
+  if (h < w) return;
+  for (const b of boxes.filter((x) => !x.t.endsWith("?"))) assert.ok(b.r - b.l >= 64 && b.b - b.t0 >= 64, `${b.t} under 64 px`);
+}
+
 for (const size of [...KEPT, ...CHECKED]) {
   const [w, h] = size;
   const kept = KEPT.includes(size);
@@ -77,8 +98,21 @@ for (const size of [...KEPT, ...CHECKED]) {
       await fitsAcross(p.page, w);
       if (kept) await shoot(p.page, `room-running-${w}x${h}`);
 
-      // The mix's element is there for the room screen's module, but nothing gave it a source.
-      assert.deepEqual(await p.page.evaluate(() => [...document.querySelectorAll("audio")].map((a) => [a.id, a.currentSrc, a.paused])), [["mix", "", true]]);
+      // A tap shows the band over the score's box: every key in sight.
+      await p.page.mouse.click(Math.round(w / 2), Math.round(h / 3));
+      await p.page.clock.runFor(100);
+      await bandInView(p.page, w, h, ["Previous Interval", "Pause", "Next Interval", "End"]);
+      await fitsAcross(p.page, w);
+      if (kept) await shoot(p.page, `room-running-band-${w}x${h}`);
+      // End asks first, and its question and both answers are in sight.
+      await p.page.click(".band .quit");
+      await p.page.clock.runFor(600); // the question is a change of its own: a frame 500 ms after the band's
+      await bandInView(p.page, w, h, ["End the class?", "End class Back to the class list", "Keep going"]);
+      await fitsAcross(p.page, w);
+      if (kept) await shoot(p.page, `room-running-end-${w}x${h}`);
+
+      // The phone page has no media element at all (rule 3), and the room screen runs without one.
+      assert.equal(await p.page.evaluate(() => document.querySelectorAll("audio, video").length), 0);
       // The checked class ran in the page under its CSP: no error, and nothing left the files.
       assert.deepEqual(p.errors, []);
       assert.deepEqual(p.external, []);
@@ -94,10 +128,10 @@ const PLATES: readonly [NoClass, unknown][] = [
   ["newer", { document: { ...doc, format_version: "2.0" } }],
 ];
 
-for (const [why, answer] of PLATES) {
-  test(`a class that is ${why} goes back to the list's plate, and no room screen is drawn`, async () => {
-    const [w, h] = KEPT[0];
-    const p = await openPhonePage(browser, site.dir, `room.html?id=${ID}`, KEPT[0], answers(answer));
+for (const [why, answer] of PLATES) for (const size of KEPT) {
+  const [w, h] = size;
+  test(`${w}x${h}: a class that is ${why} goes back to the list's plate, and no room screen is drawn`, async () => {
+    const p = await openPhonePage(browser, site.dir, `room.html?id=${ID}`, size, answers(answer));
     try {
       await p.page.waitForURL((u) => u.pathname.endsWith("/instructor.html"));
       await p.page.waitForSelector(".plate");

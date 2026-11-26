@@ -24,11 +24,18 @@ export interface Harness {
   left: number;
   /** The room in `window.room` when the room screen's module was loaded. */
   roomAtMount: (ClockRoom | null)[];
+  /** How many push timers are running. */
+  timers(): number;
+  /** Closes the page (pagehide). */
+  close(): void;
+  /** What loading the room screen's module gives: it loads by default. */
+  mountResult: () => Promise<unknown>;
 }
 
 export function harness(answer: (args: unknown) => Promise<unknown>, search = `?id=${ID}`): Harness {
   let t = 1000;
   const timers: { fn: () => void; ms: number; due: number }[] = [];
+  const closers: (() => void)[] = [];
   const h: Harness = {
     asked: [],
     installed: [],
@@ -36,6 +43,9 @@ export function harness(answer: (args: unknown) => Promise<unknown>, search = `?
     went: [],
     left: 0,
     roomAtMount: [],
+    timers: () => timers.length,
+    close: () => closers.splice(0).forEach((fn) => fn()),
+    mountResult: () => Promise.resolve(),
     tick(ms) {
       const end = t + ms;
       for (;;) {
@@ -56,13 +66,21 @@ export function harness(answer: (args: unknown) => Promise<unknown>, search = `?
         },
       },
       now: () => t,
-      every: (fn, ms) => void timers.push({ fn, ms, due: t + ms }),
+      every: (fn, ms) => {
+        const timer = { fn, ms, due: t + ms };
+        timers.push(timer);
+        return () => {
+          const at = timers.indexOf(timer);
+          if (at >= 0) timers.splice(at, 1);
+        };
+      },
+      onClose: (fn) => void closers.push(fn),
       leave: () => void (h.left += 1),
       install: (room) => void h.installed.push(room),
       mount: () => {
         h.mounted += 1;
         h.roomAtMount.push(h.installed.at(-1) ?? null);
-        return Promise.resolve();
+        return h.mountResult();
       },
       go: (href) => void h.went.push(href),
     },
