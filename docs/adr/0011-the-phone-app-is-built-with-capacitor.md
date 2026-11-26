@@ -146,6 +146,11 @@ intents** with checked arguments and answers, never a general channel. In partic
   - Never `unsafe-eval`, and never a script source from outside the bundle.
   - `'wasm-unsafe-eval'` or `blob:` workers are allowed only if that desktop pull request
     justifies them.
+  - **Checking a class in the page (amended 2026-11-26, #871, #874).** The room screen checks a
+    class document it gets from native code with the class format's reader-only entry, whose
+    validator is compiled at build time. It generates no code at run time and imports no `node:`
+    module, so the policy above needs no widening. A run-time Ajv compile, an `unsafe-eval`
+    exception or a stub for a missing module are not used.
 - **Plugins: an allowlist, including the core ones.** Only our own plugins are installed.
   Capacitor's Android bridge registers some core plugins by itself (in recent versions
   `CapacitorHttp`, `CapacitorCookies` and `WebView`; the first pull request confirms the list for
