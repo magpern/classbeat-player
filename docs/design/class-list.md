@@ -181,6 +181,7 @@ states that need the instructor (the system's only alert form, as on the room sc
 | Long titles | 80-character titles, wide capitals, one unbroken word | unchanged | Rows grow to the lines they need; footer clamps to two lines | [long titles](mockups/class-list-long-titles.html) |
 | Class playing | `SyncView.pinned` is set | As the state of the sync | The pinned row, in its own A to Z place, marked "Playing now" and carrying the bar and outline of the selection (it is not moved to the top), with "Newer version after this class" when `after: "newer"` or "Removed: plays to the end" when `after: "removed"`; every other row greyed (light-2) and not startable; the footer button reads "Back to the class" and the line under the title "Other classes can start when this one has ended" | [class playing](mockups/class-list-pinned-newer.html) |
 | Class could not be updated | The server answered `unusable` for the class (#113): it is skipped, the older cached copy stays and nothing is marked newer (`SyncView` has no flag for it today, see "Data") | Unchanged ("Up to date": sync itself went well) | That row's second line carries the outlined tag "Could not be updated: older copy shown"; the class still starts, as the copy it is. The tag goes when a later sync keeps a version. No ranking, no rider data, no count of failures | [not updated](mockups/class-list-not-updated.html) |
+| Class needs a newer player | The class has a music source or a format major this player does not know (#917, #931; the same tests that stop the class playing, so the list never offers what Start cannot do) | Unchanged ("Up to date") | That row's meta line (the second line, where the source and song count usually are) reads "This class needs a newer version of the player", in the same 16 px light-2 type, with no tag and no marker. The row stays selectable and keeps its title, length and date. When it is selected, the footer detail reads the same sentence and Start is disabled (see "A class that needs a newer player"). Nothing else on the screen changes | [needs newer](mockups/class-list-needs-newer.html) |
 | Class file not opened | a failed read | A **second plate** under the status: the message (`INVALID_MESSAGE`, `NOT_JSON_MESSAGE`, `TOO_LARGE_MESSAGE` or `NEWER_VERSION_MESSAGE`), the file's name, up to five `details` lines, "Close" (Esc) | The list as it was | [file error](mockups/class-list-file-error.html) |
 
 Notes on the states:
@@ -194,6 +195,37 @@ Notes on the states:
   simply shows its newest cached version.
 - Status changes are written into one live region (`role="status"`, polite) so a screen reader
   says "Up to date" or "Offline" once; the file-error plate is `role="alert"`.
+
+### A class that needs a newer player
+
+The state is a fact about one class, so it follows the selection and changes nothing else.
+
+- **Words.** The meta line and the footer detail use one sentence, verbatim: "This class needs
+  a newer version of the player". No full stop (a status line, see "Wording"), no version number,
+  no link, no name of the music source. The sentence is text in the page (L9).
+- **Selectable.** The row keeps its look and takes the bar and outline of the selection like any
+  other. Up, Down, Home, End, Page Up, Page Down, a click and the filter work as before; the
+  instructor can see which class it is and why it cannot start.
+- **Start, disabled.** The button keeps its place, size (at least 44 px high) and label "Start
+  class". It takes the disabled look: no fill, a 1 px
+  `--stage-line` border, the label in `--light-3`. **The "Enter" hint is not shown** (it would
+  promise a key that does nothing); the button is narrower by the hint and does not move the
+  footer's detail. Enter on the list and a click on the button do nothing, and no message
+  appears for them: the reason is already on screen.
+- **Minimum contrast for disabled text.** The disabled label is at least 4.5 : 1 against the
+  button fill (`--light-3` on `--stage-raised` measures 6.1 : 1). This is below L2's 7 : 1 for
+  an active button, on purpose: a disabled control reads as unavailable, and the words next to
+  it carry the meaning. The footer detail is ordinary detail text at 7 : 1 or more.
+- **Focus.** A disabled button takes no focus, so Tab skips it; the list stays the one Tab stop. The list's focus ring is unchanged.
+  When selection moves to a startable class, Start is enabled at once and its hint returns.
+- **Screen reader.** The button carries `aria-describedby` pointing at the footer detail, so a
+  screen reader reading the button says "Start class, dimmed" followed by "This class needs a
+  newer version of the player". The selected row's meta line is read with the row. The change
+  of selection is not announced separately (the live region is for the sync status only).
+- **Not a plate.** Nothing in this state needs the instructor to act in the player now, so it
+  uses no white plate and no marker; the sentence is the whole cue (L5). A class file opened
+  from disk that needs a newer player is not this state: it is refused with
+  `NEWER_VERSION_MESSAGE` on the file-error plate.
 
 ## Keyboard
 
@@ -223,14 +255,14 @@ is still there); with no classes, the primary button of the panel.
 ## Measurable criteria
 
 Checked by the mock-up checks in [mockups/measure.js](mockups/measure.js) on every state at
-every window size below (57 renderings: 19 states at three sizes); the product's CI screenshots are
+every window size below (60 renderings: 20 states at three sizes); the product's CI screenshots are
 held to the same
 numbers.
 
 | # | Check | Number |
 |---|---|---|
 | L1 | Cap height of text (a capital H in its face), as pixels and as a share of the window height at 1000×720 | Row title and the selected class's title in the footer (22 px type): at least 15 px (2.1 %). Status line and plate headline (20 px): at least 14 px (1.9 %). Buttons (17 px; Start 22 px): at least 12 px (1.7 %); Start at least 15 px. The code in the pairing state: at least 40 px (5.6 %). Length (Big Shoulders 26 px): at least 18 px (2.5 %). Second lines, details, dates (16 px): at least 11 px (1.5 %). Labels, column heads, shortcuts, tags (14 px): at least 9.5 px (1.3 %). **No text is set below 14 px** |
-| L2 | Contrast of text against the pixels behind it, worst pixel | Titles, lengths, status line, buttons, details, dates: at least 7 : 1. Labels (14 px grey, `--light-3`): at least 4.5 : 1. The measured worst pixel on the mock-ups is 19.1 : 1 for primary text |
+| L2 | Contrast of text against the pixels behind it, worst pixel | Titles, lengths, status line, buttons, details, dates: at least 7 : 1. Labels (14 px grey, `--light-3`): at least 4.5 : 1, and the label of a disabled button (checked as a label, with the cap height of its own type): at least 4.5 : 1. The measured worst pixel on the mock-ups is 19.1 : 1 for primary text |
 | L3 | What is visible at once | Header with count, Settings and Open, status, list header, at least **5 full rows** and the footer with Start, at every size with titles that fit one line (the table above: 5 to 11 rows; 5 rows is the minimum when a plate is shown (expired, file error) at 1000×720; the worst case of wide capitals at 1000×720 shows 4; with the update notice shown, [updates.md](updates.md) U4 holds: at least 5 with the filter, 6 without); the selected row always fully visible |
 | L4 | Colour | **No hue anywhere** on this screen (the checker's "hue outside a zone" test, which every element must pass): it shows no zone, so it uses no zone colour (rule 7). States are carried by words and by the marker shapes |
 | L5 | Words with every marker | Every marker, plate and tag has its words beside it; the selected row also carries the bar and the outline |
@@ -271,6 +303,7 @@ fields below, no account key. The gaps this spec first listed were closed by #13
 | Pinned row, "Newer version", "Removed" | `SyncView.pinned.{id, after}` |
 | Rows | `classListView` in `core/sync/class-list.ts`: `{id, hash, title, lengthMs, sport, source, songs, updated, playing, newer, notUpdated}`, only those fields, sorted A to Z |
 | Row: updated | `published_at` kept with each cached class (an optional field in the cache file), in the row's `updated`, shown through `updatedText` in `core/sync/updated-text.ts` |
+| "Needs a newer player" | The row's meta line and the footer's `aria-describedby` detail, from the same check that disables Start (#917, #931) |
 | "Could not be updated" tag | `SyncView.notUpdated` and the row's `notUpdated`, cleared for an id when a version is kept again or the class is removed |
 | Cache being wiped | `SyncView.wiping` |
 | Start | `pin` event (`id`, `hash`): the pin is of the version the instructor saw |
