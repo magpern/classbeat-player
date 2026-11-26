@@ -34,6 +34,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/ModeController.swift": [],
   "ios/App/App/ModeHolder.swift": [],
   "ios/App/App/ModeSeams.swift": [],
+  "ios/App/App/ScreenFollower.swift": [],
   "ios/App/App/ModeParts.swift": ["WebKit"],
   "ios/App/App/ModePlugins.swift": ["Foundation", "Capacitor"],
   "ios/App/App/PageOpener.swift": [],

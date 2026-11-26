@@ -12,6 +12,9 @@ final class PairingScreenView: NSObject, PairingScreens {
     private var press: (PairingScreenModel.Action) -> Void = { _ in }
     private var setters: [(ScreenLine) -> Void] = []
     private var kinds: [Int] = []
+    /// The app is not in front: a page built now starts hidden, so a screen shown in the
+    /// background (a poll answered, a notice) never reaches the app switcher's snapshot.
+    private var away = false
 
     /// The cross-fade, under the spec's 300 ms; none with Reduce Motion.
     static let fade = 0.2
@@ -38,7 +41,7 @@ final class PairingScreenView: NSObject, PairingScreens {
     var shown: UIView? { root }
 
     /// Whether the page is concealed (the app is not in front).
-    var concealed: Bool { page?.isHidden ?? false }
+    var concealed: Bool { page?.isHidden ?? away }
 
     func show(_ screen: PairingScreenModel.Screen, press: @escaping (PairingScreenModel.Action) -> Void) {
         hide()
@@ -66,6 +69,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         page.axis = landscape ? .horizontal : .vertical
         page.spacing = 16
         page.translatesAutoresizingMaskIntoConstraints = false
+        page.isHidden = away
         if landscape {
             page.distribution = .fillEqually
             page.alignment = .center
@@ -124,10 +128,12 @@ final class PairingScreenView: NSObject, PairingScreens {
 
     /// The app is leaving the front: the page goes, so the app switcher shows a blank stage.
     @objc private func conceal() {
+        away = true
         page?.isHidden = true
     }
 
     @objc private func reveal() {
+        away = false
         page?.isHidden = false
     }
 

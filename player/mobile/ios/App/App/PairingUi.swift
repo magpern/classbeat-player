@@ -98,6 +98,8 @@ final class PairingUi {
         case .cancel, .rider:
             close(false)
         case .open:
+            // The only way the page opens. With no browser the screen still shows the code and the
+            // address, to type in on another device.
             if case let .waiting(_, page, _) = service.view() { _ = ports.openPage(page) }
         // Checks again from the start, the Keychain too: a passcode may have been set meanwhile.
         case .startAgain:

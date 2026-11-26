@@ -48,10 +48,13 @@ final class PairingUiTests: XCTestCase {
     func testOpenTheSiteGoesToSafari() {
         open()
         rig.backend.ok(FakeBackend.startBody())
-        // The service opens the page once the code arrives; the key opens it again.
-        XCTAssertEqual(rig.ports.pages, [FakeBackend.origin + "/pair"])
+        // The code shows first, to compare or to type on another device: nothing opens by itself.
+        XCTAssertEqual(rig.ports.pages, [])
         screens.press("Open the site")
-        XCTAssertEqual(rig.ports.pages, [FakeBackend.origin + "/pair", FakeBackend.origin + "/pair"])
+        XCTAssertEqual(rig.ports.pages, [FakeBackend.origin + "/pair"])
+        // Through the ports (Safari), never the app's web view, and never carrying the codes.
+        XCTAssertFalse(rig.ports.pages[0].contains("BCDF"))
+        XCTAssertFalse(rig.ports.pages[0].contains(Secrets.deviceCode()))
         XCTAssertTrue(ui.showing)
     }
 

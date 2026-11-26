@@ -32,15 +32,18 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertEqual(rig.backend.open, 0)
     }
 
-    func testThePairingPageOpensThroughThePortsNeverTheAppsWebView() {
+    /// Issue #925: the code shows first; the service never opens the page by itself (only the
+    /// screen's "Open the site" does, PairingUiTests).
+    func testTheServiceNeverOpensThePairingPageByItself() {
         let rig = PairingRig()
         rig.service.begin()
-        XCTAssertEqual(rig.ports.pages, [])
         rig.backend.ok(FakeBackend.startBody())
-        XCTAssertEqual(rig.ports.pages, [origin + "/pair"])
-        // The page never carries the codes.
-        XCTAssertFalse(rig.ports.pages[0].contains("BCDF"))
-        XCTAssertFalse(rig.ports.pages[0].contains(Secrets.deviceCode()))
+        XCTAssertEqual(rig.service.view(), .waiting(userCode: "BCDF-GHJK", page: origin + "/pair", expiresAt: 601_000))
+        rig.ports.fireNext()
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.ports.pages, [])
     }
 
     func testSecretsAreTheDeviceCodeWhileWaitingAndTheTokenOncePaired() {

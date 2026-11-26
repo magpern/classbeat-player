@@ -22,6 +22,7 @@
 		B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7139ED9D7F9F962E8B8875 /* PairingService.swift */; };
 		078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 197A8BE9EB00002751D22CF7 /* PairingStates.swift */; };
 		59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */; };
+		E15EE94D004A3EE52B0C5229 /* ScreenFollower.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C52294558C3D7F04B7E5D /* ScreenFollower.swift */; };
 		BAADB4C342D7D79670967C2D /* ModeSeams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70967C2D0EA1CEBEE1E31227 /* ModeSeams.swift */; };
 		C18E95A9F5AB5B9B7E86F4B6 /* PairingScreenViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E86F4B6733D1070103CBA72 /* PairingScreenViewTests.swift */; };
 		6B312838D25EE7C0EAA531D6 /* PairingUiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA531D6DAB2940CAA506A19 /* PairingUiTests.swift */; };
@@ -118,6 +119,7 @@
 		3E7139ED9D7F9F962E8B8875 /* PairingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingService.swift; sourceTree = "<group>"; };
 		197A8BE9EB00002751D22CF7 /* PairingStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingStates.swift; sourceTree = "<group>"; };
 		85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingMachine.swift; sourceTree = "<group>"; };
+		2B0C52294558C3D7F04B7E5D /* ScreenFollower.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFollower.swift; sourceTree = "<group>"; };
 		70967C2D0EA1CEBEE1E31227 /* ModeSeams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSeams.swift; sourceTree = "<group>"; };
 		7E86F4B6733D1070103CBA72 /* PairingScreenViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScreenViewTests.swift; sourceTree = "<group>"; };
 		EAA531D6DAB2940CAA506A19 /* PairingUiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingUiTests.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				1A3280315D62019931262705 /* FirstLaunch.swift */,
 				B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */,
 				3E7139ED9D7F9F962E8B8875 /* PairingService.swift */,
+				2B0C52294558C3D7F04B7E5D /* ScreenFollower.swift */,
 				70967C2D0EA1CEBEE1E31227 /* ModeSeams.swift */,
 				020AF6DDBA274815E3F9F718 /* PairingScreenView.swift */,
 				AED902449A101B649EC95A3F /* UnpairQuestion.swift */,
@@ -604,6 +607,7 @@
 				59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */,
 				078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */,
 				B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */,
+				E15EE94D004A3EE52B0C5229 /* ScreenFollower.swift in Sources */,
 				BAADB4C342D7D79670967C2D /* ModeSeams.swift in Sources */,
 				A1FB17627A5E0970020AF6DD /* PairingScreenView.swift in Sources */,
 				0F244C209B245B25AED90244 /* UnpairQuestion.swift in Sources */,

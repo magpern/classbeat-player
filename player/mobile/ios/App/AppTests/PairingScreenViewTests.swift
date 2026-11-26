@@ -144,6 +144,27 @@ final class PairingScreenViewTests: XCTestCase {
         XCTAssertTrue(view.concealed)
     }
 
+    /// A screen shown while the app is away (a poll answered in the background) starts concealed,
+    /// and a screen shown after the app is back is not.
+    func testAScreenShownWhileAwayStartsConcealed() {
+        center.post(name: UIApplication.willResignActiveNotification, object: nil)
+        show(waiting)
+        XCTAssertTrue(view.concealed)
+        let pages = all(view.shown).filter { !($0 is UILabel) && $0.isHidden }
+        XCTAssertFalse(pages.isEmpty, "the page is built hidden")
+        XCTAssertTrue(labels.contains { $0.accessibilityIdentifier == "pairing.code" })
+        show(.paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil))
+        XCTAssertTrue(view.concealed)
+        center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertFalse(view.concealed)
+        show(waiting)
+        XCTAssertFalse(view.concealed)
+        view.hide()
+        center.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+        show(waiting)
+        XCTAssertTrue(view.concealed)
+    }
+
     func testAKeyPressesItsAction() {
         show(waiting)
         button("Open the site")?.sendActions(for: .primaryActionTriggered)

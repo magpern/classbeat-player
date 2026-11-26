@@ -166,9 +166,6 @@ final class PairingService {
             transport.call(Calls.pairingStart(origin, version)) { [weak self] answer in
                 self?.dispatch(.started(attempt: attempt, answer: PairingProtocol.parseStart(answer, origin)))
             }
-        // No browser: the screen still shows the code and the address, to type in on another device.
-        case let .openPage(page):
-            _ = ports.openPage(page)
         case let .wake(attempt, at):
             wakes += 1
             let wake = wakes
