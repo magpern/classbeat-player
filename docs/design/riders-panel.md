@@ -31,7 +31,7 @@ and open questions".
 
 | Rule | How |
 |---|---|
-| 6. None of MOWL's look | A **plain list of names**: no grid of rider circles, no bar per rider, no ring, no coloured chip per rider, no avatar. One text row each |
+| 6. Its own look | A **plain list of names**: no grid of rider circles, no bar per rider, no ring, no coloured chip per rider, no avatar. One text row each |
 | 7. Colour means the planned zone | White, grey and black only; **no zone colour** on anything about riders (the only zone colours in the window stay the room preview's and the next intervals') |
 | 13. Rider data one way | The panel shows the nickname and nothing else of a rider. No number beside a name, **no numbering**, no sorting by anything but the order they joined, no totals but the count, no comparison. Nothing from a rider's phone reaches this panel but `rider_joined` and `rider_left` |
 | 14. Join code is a session id only | New code makes another session id; it grants no control |

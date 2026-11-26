@@ -178,6 +178,11 @@ final class ModeController: ModeEffects, PageSteps {
         if holder?.pending == .riderQuestion { stay() }
     }
 
+    /// The pairing's token was deleted (unpaired, revoked or unknown on the site): instructor mode closes.
+    func unpaired() {
+        holder?.unpaired()
+    }
+
     // ModeEffects.
 
     func closeBridge() {

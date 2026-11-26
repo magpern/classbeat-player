@@ -27,7 +27,7 @@ with the intervals above the songs, like a track in a music editor.
   States of the player, the music link and the controls are shown in white, grey and black, so
   a link problem can never be read as a zone.
 
-Why this is not MOWL's look (plan sections 2 and 3, rule 6): no rings of any kind, no row of
+Why this look is our own (plan section 3, rule 6): no rings of any kind, no row of
 class bars along the top, no grid or bars per rider, no owl, flames or game names. Our profile is
 a moving score at the bottom with the songs under the intervals and a fixed "now" line; the zone
 is a full-height panel, not a ring; the palette below is our own and runs from sky to

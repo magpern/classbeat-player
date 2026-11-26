@@ -919,7 +919,7 @@ Spec, numbers and mock-ups: [running-class.md](running-class.md) (`runclass-room
 | 3. Spotify's music stays in Spotify's app | The screen only names the song and shows the link state; nothing here plays, stores or downloads audio |
 | 4. No road, ribbon, track, terrain or world | The score is a flat strip of equal-height blocks moving sideways like a music editor; no block has a height, slope or shape from an interval; no perspective, no horizon, nothing travelled along |
 | 5. No viewpoint or rider moving through a scene | Nothing moves at a speed from data; the instructor's own sensor strip ([sensors.md](sensors.md); owner-gated, ADR 0012 section 6, so not built until decided) is off by default and shows numbers and a gauge, changing in a step at most once a second |
-| 6. None of MOWL's look | No ring trio or ring of any kind, no row of class bars along the top, no grid of rider circles, no bar per rider against a target, no owl, flames, player or game names; our own palette (system.md) |
+| 6. Its own look | No ring trio or ring of any kind, no row of class bars along the top, no grid of rider circles, no bar per rider against a target, no owl, flames, player or game names; our own palette (system.md) |
 | 7. Colour means the planned zone | Hue only on things that stand for a planned zone; every state, plate, control and the QR code is white, grey or black (check C6) |
 | 8. No hand-position icons, no "adjust by your heart rate" | Position is a word; no hand icon; no heart-rate instruction |
 | 9. Own names for load figures | "Class load" (from `totals.planned_load`); never TSS, Training Stress Score, Normalized Power or Intensity Factor |

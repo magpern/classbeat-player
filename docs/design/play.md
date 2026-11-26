@@ -436,7 +436,7 @@ Rule-sensitive for this issue: rules 1, 4, 6 and 7.
 | 3. Spotify's music stays in Spotify's app | No audio and no music read: no link state but the manual clock, no beat dot |
 | **4. No road, ribbon, track, terrain or world** | The plain score at every size: a flat strip of blocks under a fixed "now", nothing travelled along, no slope, height or shape from an interval. Portrait shows the same strip over 3 minutes, never a path or a perspective |
 | 5. No viewpoint moving through a scene | None: no scene |
-| **6. None of MOWL's look** | Our gel, score and palette (tokens.css); no ring trio, no row of class bars per rider, no rider circles, none of MOWL's palette, names, owl or flames. The phone layouts rearrange our own parts; they borrow no other player's layout |
+| **6. Its own look** | Our gel, score and palette (tokens.css); no ring trio, no row of class bars per rider, no rider circles, no owl or flames, and no other player's palette or names. The phone layouts rearrange our own parts; they borrow no other player's layout |
 | **7. Colour means the planned zone** | Hue only on the gel, the next chip, the score's blocks and the time-in-zone chips, always with the zone number, and with the name on the gel, the next row and the list (P7, P8). The band, notices and states are white, grey and black |
 | 8. No hand icons, no heart-rate advice | Positions are words; no advice |
 | 9. Own names | "Class load" as on the room screen |

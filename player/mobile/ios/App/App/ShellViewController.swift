@@ -11,6 +11,7 @@ final class ShellViewController: CAPBridgeViewController {
     private var controller: ModeController?
     private var screens: AlertScreens?
     private var loader: WebPageLoader?
+    private var pairing: PairingService?
 
     override func instanceDescriptor() -> InstanceDescriptor {
         WebViewFactory.descriptor()
@@ -36,15 +37,19 @@ final class ShellViewController: CAPBridgeViewController {
         let screens = AlertScreens(host: self)
         let loader = WebPageLoader(webView)
         let display = ExternalDisplay(source: DisplayScenes.shared, surface: SceneRoomSurface(scenes: DisplayScenes.shared))
+        let pairing = Self.makePairing()
         let controller = ModeController(
             lock: DeviceLock(),
             screens: screens,
             loader: loader,
             awake: KeepAwake(AppIdleTimer()),
-            display: display
+            display: display,
+            secrets: { pairing.secrets() }
         ) { failed in
             fatalError("classbeat: the mode switch could not drop \(failed)")
         }
+        pairing.forgotten = { [weak controller] in controller?.unpaired() }
+        self.pairing = pairing
         let rider = RiderModePlugin()
         rider.controller = controller
         let instructor = InstructorModePlugin()
@@ -60,11 +65,14 @@ final class ShellViewController: CAPBridgeViewController {
     override func viewDidLoad() {
         // Capacitor asks for its start URL here; the gate refuses it, as no mode is open yet.
         super.viewDidLoad()
-        guard let controller = controller else {
+        guard let controller = controller, let pairing = pairing else {
             fatalError("classbeat: the mode holder is missing")
         }
+        // The stored pairing is read before the mode starts, so the holder sees it.
+        pairing.load()
+        let device = PhoneDevice(lock: DeviceLock()) { [weak pairing] in pairing?.paired ?? false }
         do {
-            try controller.start(device: PhoneDevice(lock: DeviceLock()), store: DefaultsModeStore(), parts: ModeParts.teardown())
+            try controller.start(device: device, store: DefaultsModeStore(), parts: ModeParts.teardown())
         } catch {
             fatalError("classbeat: the mode holder could not start")
         }
@@ -82,6 +90,29 @@ final class ShellViewController: CAPBridgeViewController {
 
     @objc private func resumed() {
         controller?.resumed()
+    }
+
+    /// The pairing (issue #896): the first-launch wipe runs before anything reads the Keychain, the
+    /// class cache is made excluded from backup, and with no backend in the build yet (ADR 0016
+    /// section 4) the origin is nil and the transport is offline, so the phone pairs nothing.
+    private static func makePairing() -> PairingService {
+        let store = FirstLaunch.store(defaults: .standard, keychain: SystemKeychain())
+        let cache: ClassCacheFolder
+        do {
+            cache = ClassCacheFolder(base: try ClassCacheFolder.applicationSupport())
+            try cache.prepare()
+        } catch {
+            fatalError("classbeat: the class cache could not be excluded from backup")
+        }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        return PairingService(
+            origin: nil,
+            allowLoopbackHttp: BuildFlavor.isDebug,
+            version: version,
+            transport: OfflineTransport { DispatchQueue.main.async(execute: $0) },
+            store: store,
+            ports: PhonePairingPorts(cache: cache)
+        )
     }
 }
 

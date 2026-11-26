@@ -59,6 +59,6 @@ dropped and a 20 minute FTP test that is kept).
 | (no field in classbeat) | `zone_scale` names and ranges come from a default table in the converter; classbeat's data carries none | s3 (a converter choice, not data) |
 | (no field in classbeat) | no `beat_anchors`, `moments`, `planned_load` | s3 optional fields; s5 |
 
-Not in the fixture shape, so not mapped: MOWL ids and links, cover images, roles and
+Not in the fixture shape, so not mapped: another product's ids and links, cover images, roles and
 anything else of classbeat's that the format has no field for (strict schema: such a field
 cannot be carried).

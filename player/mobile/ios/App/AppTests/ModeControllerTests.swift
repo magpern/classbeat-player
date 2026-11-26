@@ -358,8 +358,13 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertNil(controller.exposed)
     }
 
-    func testThePhoneIsNeverPairedAndItsLockIsTheDevicesPasscode() {
-        let phone = PhoneDevice(lock: lock)
+    func testThePhoneIsPairedOnlyWhileThePairingHoldsATokenAndItsLockIsTheDevicesPasscode() {
+        var held = false
+        let phone = PhoneDevice(lock: lock) { held }
+        XCTAssertFalse(phone.paired)
+        held = true
+        XCTAssertTrue(phone.paired)
+        held = false
         XCTAssertFalse(phone.paired)
         lock.isSet = false
         XCTAssertFalse(phone.secureLock)

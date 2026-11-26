@@ -98,7 +98,7 @@ add('pair-done', 'app-pairing.md', 'App: paired', 'State: the approval came and 
     + p('Confirm your screen lock to open instructor mode.', true), duo(key('continue', 'Continue', { main: true })))));
 
 // A pairing notice: NOTICE_TEXT (core/pairing/view.ts) in the app's words, on a plate.
-const notice = (name, title, text, detail, again = true) => add(`pair-${name}`, 'app-pairing.md', `App: pairing, ${title}`, `State: pairing ended with ${name.replace('-', '_')}. The plate carries the notice; ${again ? '"Start again" asks for a new code' : 'there is nothing to try again'}.`,
+const notice = (name, title, text, detail, again = true, state = name.replace('-', '_')) => add(`pair-${name}`, 'app-pairing.md', `App: pairing, ${title}`, `State: pairing ended with ${state}. The plate carries the notice; ${again ? '"Start again" asks for a new code' : 'there is nothing to try again'}.`,
   native(page(mode('Instructor mode') + h1('Pair this phone') + plate(text, detail), again ? duo(key('stay_rider', 'Rider mode'), key('pair_again', 'Start again', { main: true })) : duo(key('stay_rider', 'Back to rider mode', { main: true })))));
 notice('denied', 'refused', 'Refused on the website.', 'Nothing was kept on this phone.');
 notice('code-expired', 'code ran out', 'The code ran out.', 'It was not confirmed in time. Start again for a new code.');
@@ -108,6 +108,14 @@ notice('too-many', 'too many pairings', 'Too many pairings were started.', 'Try 
 notice('unexpected', 'answer not understood', 'The answer was not understood.', "The app could not read the server's answer. Try again later.");
 notice('save-failed', 'not kept', 'The pairing could not be kept.', 'The Android Keystore did not keep it, so the pairing was undone. Start again.');
 notice('revoked', 'unpaired on the site', 'Unpaired on the website.', 'The classes saved on this phone were removed.');
+
+// iOS (app-pairing-ios.md): only the pages whose words differ from Android's. Every other iOS
+// pairing page is the Android page above, unchanged.
+add('pair-ios-done', 'app-pairing-ios.md', 'App (iOS): paired', 'State: the approval came and the token is kept in the Keychain. Next: the system prompt (Face ID, Touch ID or the passcode), then the class list.',
+  native(page(mode('Instructor mode') + h1('This phone is paired') + `<div class="status m">${T('minor', 'Paired as anna@example.com', 2, ' class="ok"')}</div>`
+    + p('Confirm it is you to open instructor mode.', true), duo(key('continue', 'Continue', { main: true })))));
+notice('ios-no-passcode', 'no passcode (iOS)', 'This phone cannot be paired.', 'Pairing needs a passcode to keep it safe. Set one in Settings, then start again. Rider mode works without it.', true, 'no_keychain');
+notice('ios-save-failed', 'not kept (iOS)', 'The pairing could not be kept.', 'The Keychain did not keep it, so the pairing was undone. Start again.', true, 'save_failed');
 
 // ---------- Following the music (app-follow.md) ----------
 const TITLE = 'Tempo builder';

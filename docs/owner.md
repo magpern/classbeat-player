@@ -64,12 +64,12 @@ with other work; nothing in the development loop waits for an answer.
 
 - **Swedebeat playback (PL11, ADR 0013, 2026-11-24).** Built and tested on a fake source; the
   shipped player has no real source until you answer these:
-  - **Where the real audio comes from (plan, section 13, decision 11).** The two routes there: ask
-    Swedebeat for an agreement and a source of the audio (recommended), or get the audio through
-    the user's MOWL account. Either way the audio goes from the provider straight to the device,
-    never through a server of ours. Until you name a source, `UnavailableMixSource` stays the
-    default and classes designed with a mix play on the manual clock. Issue 7 (the real source
-    client) is not opened until then.
+  - **Where the real audio comes from (plan, section 13, decision 11).** The route left: ask
+    Swedebeat for an agreement and a source of the audio. The route through another cycling
+    product is closed (your decision, 2026-11-26). The audio goes from the provider straight to
+    the device, never through a server of ours. Until you name a source, `UnavailableMixSource`
+    stays the default and classes designed with a mix play on the manual clock. Issue 7 (the real
+    source client) is not opened until then.
   - **Whether your SwedeBeat gateway has any part in it.** ADR 0013 does not accept it as a route.
     If you propose it, you decide with it how the audio still goes from the provider straight to
     the device, how a player outside your network reaches it, and that it is `https:`.
@@ -226,6 +226,9 @@ How to set up a Mac for them: [runbooks/owner-mac.md](runbooks/owner-mac.md).
   access, Android 13+ may first make you allow restricted settings in the app's system page. The
   words on that page differ between phone makers; on your phone, note the exact words and steps
   so the app's help text (docs/design/app-follow.md) can match them.
+- **iOS external display (#913).** On an iPhone or iPad with the app, connect an AirPlay
+  receiver or a cable display, start a class in instructor mode, and check that the room screen
+  appears on the external display and the screen stays awake for the whole class.
 - **Spike 2 (scene):** run the scene builds on a studio-class computer with its one screen
   mirrored on the projector, as in the studio (owner, 2026-11-14). The harness gets a one-screen
   mode first (#447).

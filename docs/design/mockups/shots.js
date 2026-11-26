@@ -160,6 +160,12 @@ const { NAMES: SW_NAMES, ROOM_NAMES: SW_ROOMS } = require('./swedebeat-pages');
 const swList = (name, w, h) => ({ file: `class-list-swedebeat-${name}.html`, png: `class-list-swedebeat-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || w === 1280 || (name === 'signed-in' && w === 1920) });
 const SW_ROOM_SIZES = [[1920, 1080], [1280, 1024], [1024, 768]];
 
+// The instructor's music files state (music-files.md): the class list at its three window sizes
+// (1000x720 kept, the main state also at 1280x800), and the presenter window mid-class at its two.
+const { NAMES: MF_NAMES, PRES_NAMES: MF_PRES } = require('./music-files-pages');
+const mfList = (name, w, h) => ({ file: `class-list-music-files-${name}.html`, png: `class-list-music-files-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || (w === 1280 && ['found', 'missing'].includes(name)) });
+const mfPres = (name, w, h) => ({ file: `presenter-music-${name}.html`, png: `presenter-music-${name}-${w}x${h}.png`, w, h, room: false, presenter: true, save: w === 1000 || (w === 1280 && name === 'stopped') });
+
 // The update notice and the "Updates" settings (updates.md): the settings page and the class list
 // with the notice, at the class list's three window sizes (1000x720 kept, the main states also at 1920x1080).
 const { NAMES: UPD_NAMES, LIST_NAMES: UPD_LISTS } = require('./updates-pages');
@@ -200,6 +206,8 @@ const SHOTS = [
   ...LIST_STATES.flatMap((s) => LIST_SIZES.map(([w, h]) => list(s, w, h))),
   ...SW_NAMES.flatMap((n) => LIST_SIZES.map(([w, h]) => swList(n, w, h))),
   ...SW_ROOMS.flatMap((n) => SW_ROOM_SIZES.map(([w, h]) => room(`mix-${n}`, w, h, true))),
+  ...MF_NAMES.flatMap((n) => LIST_SIZES.map(([w, h]) => mfList(n, w, h))),
+  ...MF_PRES.flatMap((n) => [[1000, 720], [1280, 800]].map(([w, h]) => mfPres(n, w, h))),
   ...[...UPD_NAMES, ...UPD_LISTS].flatMap((n) => LIST_SIZES.map(([w, h]) => upd(n, w, h))),
   ...SITE_NAMES.flatMap((n) => SITE_WIDTHS.map((w) => site(n, w))),
   ...SITE_MAIN.map((n) => ({ ...site(n, 320), save: false })),

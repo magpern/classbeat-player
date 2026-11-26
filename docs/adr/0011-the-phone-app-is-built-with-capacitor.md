@@ -37,7 +37,7 @@ native plugins**, written in Kotlin on Android. One web code base serves the des
 `/play` and the app.
 
 **Amended (owner, 2026-11-15): one app, two modes.** The app has two modes, **instructor** and
-**rider** (the owner says MOWL's app works the same way). It replaces "The app is the
+**rider**. It replaces "The app is the
 instructor's player only; it hosts no rider page." What follows are the safest reversible
 defaults the Orchestrator picked; the owner may change them (owner.md).
 

@@ -12,7 +12,7 @@ Until the first CI and the branch rules exist (phase PL0), only documents change
 | Agents decide and do, without asking | Only the owner |
 |---|---|
 | Issues, branches, pull requests, reviews, merges (through the gate in section 5) | Money: signing accounts, paid services, domains |
-| Technical design, recorded as ADRs | Anything involving another company: Swedebeat, Spotify, MOWL, GitHub Support |
+| Technical design, recorded as ADRs | Anything involving another company: Swedebeat, Spotify, GitHub Support |
 | Tests, CI, tooling, refactoring | Real accounts, real audio from a provider, real hardware |
 | Visual design inside the product rules (section 7) | Deploying, DNS, TLS |
 | Releases to GitHub Releases | The product rules (plan, section 3), the name, the licence, repository visibility |

@@ -7,8 +7,11 @@
 #   package  a package name; forbidden in dependency manifests and lockfiles, and in an
 #            import, from, require or use statement in source files.
 #
-# Allowed places, where the names may appear: documents under docs/, AGENTS.md, README.md at
-# the repository root, and this file.
+#   name     a product name, matched case-insensitively as text in any tracked file, outside the
+#            two places named at the "name" entries below.
+#
+# Allowed places for host and package entries, where the names may appear: documents under
+# docs/, AGENTS.md, README.md at the repository root, and this file.
 
 # Spotify Web API and OAuth (ADR 0004, section 2: no Spotify developer interface).
 host api.spotify.com
@@ -42,6 +45,15 @@ package cpal
 # MOWL endpoint hosts (ADR 0004, section 4: this product never calls a MOWL server).
 host mowl.com
 host intelligent-cycling.com
+# The mowl-workouts package and its import name (ADR 0004, section 4).
+package mowl-workouts
+package mowl
+# The name itself (owner, 2026-11-26: the player never accesses nor mentions MOWL). A "name"
+# entry is forbidden in every tracked file except this list and docs/adr/0004-provider-terms.md;
+# "-" matches any run of non-alphanumerics, so intelligent-cycling also matches "Intelligent
+# Cycling".
+name mowl
+name intelligent-cycling
 
 # Swedebeat endpoint hosts (ADR 0004, section 5; no credentials or keys from its apps).
 host swedebeat.se

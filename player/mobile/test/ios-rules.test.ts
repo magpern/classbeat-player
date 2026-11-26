@@ -20,12 +20,15 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/AlertScreens.swift": ["UIKit"],
   "ios/App/App/AppDelegate.swift": ["UIKit"],
   "ios/App/App/BridgeFilter.swift": ["WebKit"],
+  "ios/App/App/ClassCacheFolder.swift": ["Foundation"],
   "ios/App/App/DefaultsModeStore.swift": ["Foundation"],
   "ios/App/App/DeviceLock.swift": ["Foundation", "LocalAuthentication"],
   "ios/App/App/DisplayNavigation.swift": ["Foundation", "WebKit"],
   "ios/App/App/DisplayScene.swift": ["UIKit", "WebKit"],
   "ios/App/App/ExternalDisplay.swift": [],
+  "ios/App/App/FirstLaunch.swift": ["Foundation"],
   "ios/App/App/KeepAwake.swift": [],
+  "ios/App/App/KeychainSecretStore.swift": ["Foundation", "Security"],
   "ios/App/App/LockedNavigation.swift": ["UIKit", "WebKit", "Capacitor"],
   "ios/App/App/LockedSchemeHandler.swift": ["Foundation", "WebKit"],
   "ios/App/App/ModeController.swift": [],
@@ -34,27 +37,40 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/ModePlugins.swift": ["Foundation", "Capacitor"],
   "ios/App/App/PageOpener.swift": [],
   "ios/App/App/PageQuestion.swift": [],
+  "ios/App/App/PairingService.swift": [],
+  "ios/App/App/PhonePairingPorts.swift": ["UIKit"],
   "ios/App/App/Policy/AnswerPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/BuildFlavor.swift": [],
+  "ios/App/App/Policy/Calls.swift": [],
   "ios/App/App/Policy/ExternalDisplayPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/IntentAnswers.swift": [],
   "ios/App/App/Policy/IntentPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/KeepAwakePolicy.swift": [],
   "ios/App/App/Policy/ModePolicy.swift": [],
   "ios/App/App/Policy/NavigationPolicy.swift": ["Foundation"],
+  "ios/App/App/Policy/OriginPolicy.swift": ["Foundation"],
+  "ios/App/App/Policy/PairingMachine.swift": [],
+  "ios/App/App/Policy/PairingProtocol.swift": ["Foundation"],
+  "ios/App/App/Policy/PairingRecord.swift": ["Foundation"],
+  "ios/App/App/Policy/PairingStates.swift": [],
   "ios/App/App/Policy/PluginPolicy.swift": ["Foundation"],
+  "ios/App/App/Policy/TransportContract.swift": [],
+  "ios/App/App/Policy/WholeMatch.swift": ["Foundation"],
   "ios/App/App/SceneDelegate.swift": ["UIKit"],
   "ios/App/App/ShellViewController.swift": ["UIKit", "WebKit", "Capacitor"],
   "ios/App/App/WebViewFactory.swift": ["UIKit", "WebKit", "Capacitor"],
   "ios/App/AppTests/AnswerPolicyTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/ClassCacheFolderTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/DefaultsModeStoreTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/DisplayTests.swift": ["XCTest", "WebKit", "@testable App"],
   "ios/App/AppTests/ExternalDisplayPolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ExternalDisplayTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/FirstLaunchTests.swift": ["XCTest", "Security", "@testable App"],
   "ios/App/AppTests/IntentAnswersTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/IntentPolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/KeepAwakePolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/KeepAwakeTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/KeychainSecretStoreTests.swift": ["XCTest", "Security", "@testable App"],
   "ios/App/AppTests/ModeControllerTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ModeHolderTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ModePluginsTests.swift": ["XCTest", "Capacitor", "@testable App"],
@@ -62,6 +78,11 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/AppTests/NavigationPolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/PageOpenerTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/PageQuestionTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/PairingAnswersTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/PairingFakes.swift": ["XCTest", "Security", "@testable App"],
+  "ios/App/AppTests/PairingMachineTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/PairingProtocolTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/PairingServiceTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/PluginPolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ShellTests.swift": ["XCTest", "UIKit", "WebKit", "Capacitor", "@testable App"],
 };
@@ -157,9 +178,23 @@ const INSPECT_USE = [
 const count = (v: string, re: RegExp): number => (v.match(re) ?? []).length;
 /** A script message handler or a user script put on a web view (issue #897): in the app, only
  * the factory's lock puts one on, the bridge's filter on the phone's web view, so the external
- * display's web view has none of any name. Tests may plant one to show their probe sees it. */
-const SCRIPT_HANDLER = /\.add(?:ScriptMessageHandler)?\s*\(|\baddScriptMessageHandler\w*|\baddUserScript\b|\bWKUserScript\b/g;
+ * display's web view has none of any name. Tests may plant one to show their probe sees it.
+ * `.add(` counts only with a `name:` argument (a handler's), so a keychain or set add is not one. */
+const SCRIPT_NAMED = /\baddScriptMessageHandler\w*|\baddUserScript\b|\bWKUserScript\b/g;
 const OBJC_SCRIPT_HANDLER = /\baddScriptMessageHandler|\baddUserScript\b|\bWKUserScript\b/;
+/** The `.add(` calls whose arguments, up to the matching parenthesis, carry a `name:` label. */
+function namedAdds(v: string): number {
+  let n = 0;
+  for (const m of v.matchAll(/\.add\s*\(/g)) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const start = i;
+    for (; i < v.length && depth > 0; i++) depth += v[i] === "(" ? 1 : v[i] === ")" ? -1 : 0;
+    if (/(^|[\s,(])name\s*:/.test(v.slice(start, i))) n++;
+  }
+  return n;
+}
+const scriptHandlers = (v: string): number => count(v, SCRIPT_NAMED) + namedAdds(v);
 const isApp = (path: string): boolean => posix(path).startsWith("ios/App/App/");
 
 const CHECKS = new Map<string, Check>([
@@ -184,7 +219,7 @@ const CHECKS = new Map<string, Check>([
     hitsWhen((path, v) => {
       if (!isSwift(path)) return OBJC_SCRIPT_HANDLER.test(v);
       if (!isApp(path)) return false;
-      return count(v, SCRIPT_HANDLER) !== (posix(path) === FACTORY ? 1 : 0);
+      return scriptHandlers(v) !== (posix(path) === FACTORY ? 1 : 0);
     }),
   ],
   [
@@ -306,6 +341,7 @@ const MUTATIONS: Mutation[] = [
     false,
   ],
   ["script handlers only in the factory's lock", FACTORY_PATH, "scripts.add(BridgeFilter(", "_ = (BridgeFilter(", false],
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(\n        h,\n        name: String("x")\n    ) }'),
   objc("script handlers only in the factory's lock", '- (void)p { [c addScriptMessageHandler:h name:@"x"]; }'),
   ["inspection in debug only", FACTORY_PATH, "descriptor.isWebDebuggable = BuildFlavor.isDebug", "descriptor.isWebDebuggable = true", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", "webView.isInspectable = !BuildFlavor.isDebug", false],

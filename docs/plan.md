@@ -7,18 +7,18 @@ only on the owner's word. Section 13 lists what is decided and what is still ope
 
 This is a **new product in its own repository, separate from classbeat**, with its own backend,
 accounts and releases. classbeat is where classes are made; it sends a finished class to this
-product over an API, the same way it saves a class to Intelligent Cycling (MOWL) today, and keeps
-doing that too. Nothing is imported from classbeat's code and nothing here reads classbeat's
-database. "classbeat Player" is only a working name (decision 12).
+product over an API. This product is not associated with any other cycling product and never
+mentions or accesses one (owner, 2026-11-26). Nothing is imported from classbeat's code and
+nothing here reads classbeat's database. "classbeat Player" is only a working name (decision 12).
 
 Requirements as given by the owner (2026-11-12):
 
 - Shows the class, the time left, the target effort, cadence and BPM and what comes next.
-- The same features as the MOWL player, and clearly different from it.
+- The features of an established studio player, and clearly different from it.
 - No class editing. Classes are made in classbeat and sync to the player.
 - A desktop application first: macOS and Windows, Linux if it comes cheaply.
 - 3D and visually appealing. HTML5 is one option; a free game engine is welcome if it serves us
-  better. Not MOWL's engine.
+  better.
 - Future proof: portable across devices. (A virtual 3D world was considered and is ruled out by
   the product rules in section 3.)
 - Possibly a web app on a phone, and phones joining a class the instructor is running.
@@ -43,8 +43,8 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
 2. **The hard part is the music, not the graphics.** No application of ours can play Spotify
    audio itself (section 4). The plan is that the instructor's own Spotify desktop app plays, and
    the player **follows** it by reading the playing track and position from the operating system.
-3. **Following can be better than what MOWL does.** MOWL's timeline assumes the playlist plays in
-   order with a set crossfade; classbeat's MOWL library measured 1 to 3 s of error at best.
+3. **Following can be better than a fixed timeline.** A timeline that assumes the playlist plays
+   in order with a set crossfade drifts: classbeat measured 1 to 3 s of error at best.
    A player that reads the real position follows pauses, skips and seeks.
    This is the main thing to prove first (section 12, spike 1).
 4. **Recommended technology:** a web-technology application on every device (in a desktop
@@ -52,23 +52,22 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    3D scene is a replaceable part, drawn with web 3D (three.js), decided after a small trial
    (sections 8 and 9; ADR 0009). For the
    backend, Python with FastAPI and PostgreSQL (section 5).
-5. **An own player does not make classbeat independent of MOWL yet.** Class design still reads
-   each song's length, BPM and sections through the user's MOWL account. The
-   player removes MOWL from the room, not from the design. Section 11.
-6. **Spotify in a studio is a terms problem for every player, MOWL's included.** Spotify's own
+5. **Classes come from classbeat.** How classbeat designs a class and where it gets music
+   analysis is classbeat's business; the player receives only the finished class document, which
+   says which music source the class uses: Spotify, Swedebeat or none (section 5, ADR 0003).
+6. **Spotify in a studio is a terms problem for every player.** Spotify's own
    terms do not allow playing it publicly from a business. Swedebeat is the licensed route; the
    player could play its mixes itself, given a sanctioned source of the audio (section 4).
 7. **The niche is the instructor.** Every product in this field draws for the riders. This one
    is built for the person teaching: it follows them when they improvise, and it puts their cues
    and controls on their own handlebar (section 3).
 
-## 2. What the MOWL player does, and what ours would do
+## 2. What an established studio player does, and what ours would do
 
-MOWL facts are from the owner's screenshot of its player choice (2026-11-12) and from its help
-centre, App Store listing and press releases as shown in search excerpts (the help centre refused
-direct reading), so treat the latter as indicative.
+The comparison column is from the owner's screenshot of an established studio player (2026-11-12)
+and from public excerpts, so treat it as indicative.
 
-| Feature | MOWL | classbeat Player, first version | Later |
+| Feature | Established player | classbeat Player, first version | Later |
 |---|---|---|---|
 | Class profile as coloured blocks | Yes, along the top | Yes | |
 | Current interval: zone, target | Zone colour with %FTP or %HRmax | Zone number, name and colour; RPE; %FTP and %HRmax ranges | |
@@ -78,7 +77,7 @@ direct reading), so treat the latter as indicative.
 | Time in the class | Total time and segment time | Time left, elapsed and segment time | |
 | Up next | Next interval: intensity, time, %FTP, RPM, position | Next interval and next song | |
 | Song now playing, BPM | Not on the screens seen | Yes (title, artist, BPM) | Cover art |
-| Coaching cue per interval | No: cues are classbeat's and are never sent to MOWL | Yes | |
+| Coaching cue per interval | No | Yes | |
 | Planned load | Not confirmed | A load score under our own name, and time in zone | Actual against planned, with a sensor |
 | Music | Starts and controls the Spotify app; needs Premium and public playlists; also Swedebeat and others | Follows the Spotify desktop app; manual clock for anything else | Swedebeat, own files (section 4) |
 | Sensors | Bluetooth LE through each rider's phone | None | The instructor's bike, heart rate; treadmill (section 7) |
@@ -93,7 +92,8 @@ section 3.
 
 ## 3. How ours is different, and the rules the player keeps
 
-**What MOWL's screens look like** (the owner's screenshot of MOWL's player choice, 2026-11-12):
+**What an established player's screens look like** (the owner's screenshot, 2026-11-12), so
+ours looks different:
 
 - **THE PLAYER:** total time and segment time top left; the class as a row of coloured bars along
   the top; an "up next" strip (intensity dot, time, %FTP, RPM, position); below it **three
@@ -117,9 +117,11 @@ version and every later feature. A change to one of them is the owner's decision
    equipment**: no resistance, incline, brake or speed.
 3. **Spotify's music stays in Spotify's own app**: the player never downloads, stores or plays
    it. Audio from a licensed provider that allows it (Swedebeat) may be played by the player,
-   fetched from the provider straight to the device. No class audio or video is ever streamed
-   from our server, and music is never chosen, stretched or shifted from a measured cadence. The
-   song sets the target, never the other way round.
+   fetched from the provider straight to the device. An audio file the instructor keeps on their
+   own device may be played by the player, and never leaves that device (owner, 2026-11-26;
+   ADR 0017). No class audio or video is ever streamed from our server, and music is never
+   chosen, stretched or shifted from a measured cadence. The song sets the target, never the
+   other way round.
 
 *What the screen shows*
 
@@ -127,8 +129,8 @@ version and every later feature. A change to one of them is the owner's decision
    scene has a slope, height or shape taken from an interval.
 5. **No viewpoint or rider moving through a scene** at a speed or slope taken from sensor data.
    Sensor values are numbers and gauges against the target.
-6. **None of MOWL's look:** no ring trio, no grid of rider circles, no bar per rider against a
-   target line, and none of its palette, player names, owl, flames or game names.
+6. **Its own look:** no ring trio, no grid of rider circles, no bar per rider against a
+   target line, and no other player's palette, player names, owl, flames or game names.
 7. **Colour means the planned intensity zone**, never a measured heart-rate zone.
 8. **No hand-position icons** and no "adjust by your heart rate" instructions.
 9. **Its own names for load figures.** Not TSS, Training Stress Score, Normalized Power or
@@ -151,9 +153,9 @@ version and every later feature. A change to one of them is the owner's decision
 
 **The niche: the instructor's player** (added 2026-11-12 at the owner's request)
 
-On the room's screen MOWL is years ahead, and the rules above close off worlds, group displays
-and games. A nicer scene alone is not why a studio changes product. What nobody in this field
-serves well is the person teaching, who is also the person who chooses the product.
+On the room's screen established players are years ahead, and the rules above close off worlds,
+group displays and games. A nicer scene alone is not why a studio changes product. What nobody
+in this field serves well is the person teaching, who is also the person who chooses the product.
 
 - **It follows the instructor, not a plan.** Skip a song, replay a chorus, pause for a late
   arrival: the class follows the music, so the instructor can improvise without the screen going
@@ -164,8 +166,7 @@ serves well is the person teaching, who is also the person who chooses the produ
 - **The handlebar companion.** The instructor teaches from a bike, metres from the computer.
   Their phone on the handlebar is a teleprompter and a remote: the coaching cue in large type,
   the next intervals, the next song change, and buttons to start, pause, skip and nudge. It is a
-  web page, nothing to install. classbeat already writes the cues, and they are never sent to
-  MOWL.
+  web page, nothing to install. classbeat already writes the cues.
   - It shows and steers the player. It never controls a bike or any equipment (rule 2).
   - Controlling the class needs the instructor's own sign-in or a one-time code shown only on
     the instructor's screen, never the riders' join code (rule 14).
@@ -176,8 +177,8 @@ serves well is the person teaching, who is also the person who chooses the produ
   (decision 13). In a field of closed systems that is unusual, and it gives a small product a
   trust it cannot buy.
 
-*Considered and not chosen:* studio lights that follow the zone and the beat. MOWL already
-drives studio lighting this way and so does at least one other product, so it would be catching
+*Considered and not chosen:* studio lights that follow the zone and the beat. Other products
+already drive studio lighting this way, so it would be catching
 up, not a niche. It is also ruled out: external hardware such as lighting is not part of this
 product (owner, 2026-11-12).
 
@@ -191,8 +192,8 @@ product (owner, 2026-11-12).
   bursts on a drop. The class itself is read from a **score**: a flat strip moving sideways under
   a fixed "now" line, with the songs as clips and the intervals above them, like a track in a
   music editor.
-- It uses what a classbeat class carries and MOWL's screens do not show: the beat, the song
-  boundaries, the song now playing and the coaching cue.
+- It uses what a classbeat class carries and established players' screens do not show: the beat,
+  the song boundaries, the song now playing and the coaching cue.
 - **Text stays text.** Numbers and cues are large type over the scene, sized to be read from the
   back of a room, never baked into the picture. The zone is always a number and a name as well
   as a colour. Which part draws that text depends on the scene technology (section 9).
@@ -221,12 +222,10 @@ What the research found:
   users. The Developer Policy forbids commercial streaming integrations (IV.2), products aimed at
   businesses such as studios (III.10) and synchronising recordings "with any visual media" (III.6;
   whether a workout timeline counts is not settled). Play, pause and seek need the user's Premium.
-- **MOWL itself** starts and controls the Spotify app, asks users for a 10 s crossfade, and
-  recently shipped a "compatibility update for Spotify changes, so music stays in sync when
-  seeking". Staying in step with Spotify is ongoing work for everyone.
-- **Swedebeat** shows only phone apps and no public API or SDK. MOWL plays a Swedebeat mix by
-  downloading it to a cache, playing while it downloads (the owner, 2026-11-12). classbeat reads
-  a mix's audio only for analysis and deletes it.
+- **Established players** start and control the Spotify app and ship regular compatibility
+  updates to stay in sync when seeking. Staying in step with Spotify is ongoing work for everyone.
+- **Swedebeat** shows only phone apps and no public API or SDK. A mix can be played by
+  downloading it to a cache, playing while it downloads (the owner, 2026-11-12).
 
 Options:
 
@@ -236,7 +235,7 @@ Options:
 | B | Follow and control through the Spotify Web API | No: 5 users, non-commercial, Premium | A few seconds, by polling | Only as an optional extra for the beta circle |
 | C | Play Spotify inside the player | No | Exact | Rejected: not workable in our shell and not permitted for our use |
 | D | **Manual clock:** press Start with the music, nudge earlier or later | Yes | As good as the instructor's timing | **Always available**; the only mode for Swedebeat and soundless classes at first |
-| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below). Also possible later for a gym's own files | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
+| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below) | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
 
 **Recommended design: follow, never depend.**
 
@@ -307,7 +306,7 @@ not give. Passing the first does not prove the second. If the beat target fails,
 at the song's tempo without claiming to hit each beat, and bursts are tied to interval changes.
 
 **Swedebeat: the player plays the mix itself** (owner, 2026-11-12: download and cache, or play
-while downloading, as MOWL does)
+while downloading)
 
 - **Why it is the best case technically.** A mix is one long file. When the player plays it, the
   player knows the position exactly, so interval timing and beat effects are exact, there is no
@@ -317,10 +316,9 @@ while downloading, as MOWL does)
   our backend. It plays while it downloads into a cache on the device. The cache is encrypted,
   tied to the signed-in account, usable only by the player, and removed when the class is removed
   or the account signs out.
-- **The open question is the source of the audio, not the playback.** Today the only route
-  classbeat knows is through the user's MOWL account, which hands out a short-lived link to the
-  mix. Using that would make the player depend on MOWL for every Swedebeat class. The other route
-  is Swedebeat's own service, which has no public interface for it.
+- **The open question is the source of the audio, not the playback.** The route is Swedebeat's
+  own service, which has no public interface for it. The audio never comes through another
+  cycling product (owner, 2026-11-26).
 - **Permission.** Swedebeat's licence is what makes the music legal in the room, and it is given
   through Swedebeat's app and its partners. Playing and caching its audio in our player needs
   Swedebeat's agreement. Without one, the manual clock stays the Swedebeat mode: the mix plays
@@ -328,13 +326,13 @@ while downloading, as MOWL does)
 
 This still uses the instructor's personal Spotify in a room, which Spotify's terms do not allow for
 a business whichever player shows the class. That stays the instructor's and the gym's
-responsibility, as it is with MOWL today (section 11).
+responsibility (section 11).
 
 ## 5. The backend, and getting classes into the player
 
 The backend is small on purpose. It keeps accounts, a library of classes and the list of paired
-devices. It designs nothing, calls no model, analyses no music, holds no audio and has no Spotify,
-MOWL or Swedebeat connection.
+devices. It designs nothing, calls no model, analyses no music, holds no audio and has no Spotify
+or Swedebeat connection.
 
 **What it does**
 
@@ -395,7 +393,7 @@ listed and revocable on the website.
 
 **Linking classbeat.** In classbeat the user chooses "Connect player", approves on this product's
 website and classbeat receives a source token that can only write that user's classes. classbeat
-stores it encrypted like its other connections and gains "Send to player" beside "Save to MOWL".
+stores it encrypted like its other connections and gains "Send to player".
 That part is work in the classbeat repository, planned there once this API exists (phase PL3).
 
 **Offline.** The application keeps its classes and asks only for changes. A studio with no
@@ -571,7 +569,7 @@ strong at the scene and weak at the application; web technology is the reverse.
   and notification access are instructor mode only. The mode is held in native code and the app
   reopens in the last mode used; entering instructor mode on a paired device always needs the
   phone's screen lock (ADR 0011, section 1).
-- Unreal is excluded: it is probably MOWL's engine (not confirmed) and the heaviest to build.
+- Unreal is excluded: the heaviest to build.
 
 **The room's 3D scene is a separate, replaceable part.** The shell owns everything that is not
 drawing: sign-in, class selection, sync, the class clock, following the music, Bluetooth. A scene
@@ -581,9 +579,6 @@ plain 2D screen (always there, also the phone's view and the fallback for weak c
 the 3D scene.
 
 ## 9. Drawing the scene
-
-MOWL's engine is **probably Unreal** (its iOS binary follows Unreal's naming and the app is about
-485 MB; not confirmed).
 
 | | For | Against |
 |---|---|---|
@@ -655,12 +650,6 @@ No choice here changes the music question: no engine can play Spotify itself, an
   non-commercial) do not apply to the player as they do to classbeat's song picking. That is our
   reading, not a ruling. Spotify's consumer terms still make studio use the instructor's risk. If
   option B is added, the player becomes a Spotify application with all those limits.
-- **MOWL.** classbeat uses MOWL's undocumented API with the user's own account. Shipping a
-  competing player makes it more likely that MOWL objects or blocks it. classbeat's design depends
-  on MOWL for music analysis, so that would stop new classes, not only saving.
-- **Independence later.** Replacing MOWL's analysis needs another source of BPM and song
-  structure: the user's own licensed audio analysed on their device, or a provider agreement.
-  Not planned here.
 - **Fragility of following.** The local interfaces are not contracts: a Spotify or system update
   can change them. The manual clock is the guaranteed fallback, and the music link sits behind one
   interface so a replacement is one module.
@@ -742,23 +731,29 @@ reversible defaults.
    name, and whether to use the Microsoft Store and Mac App Store instead.
 10. **Hosting:** the backend's domain, and whether it runs beside classbeat on the same server.
 11. **Swedebeat:** the owner wants download-and-cache playback (2026-11-12). Open: whether to
-    ask Swedebeat for an agreement and a source of the audio, or to get the audio through the
-    user's MOWL account. classbeat's standing decision is that providers are not contacted;
-    asking would be the first exception. Recommended: ask Swedebeat.
+    ask Swedebeat for an agreement and a source of the audio (the route through another cycling
+    product is closed, owner 2026-11-26). classbeat's standing decision is that providers are not
+    contacted; asking would be the first exception. Recommended: ask Swedebeat.
 12. **Name and look:** the product's name, and whether it shares classbeat's design or gets its
     own.
 13. **Repository and openness:** public or private, and the licence. Recommended: the class
     format under a permissive open licence, and the player as open source.
 14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
 15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Android first,
-    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS follows once the Android app is finished, on the simulator and the owner's Mac, with real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on iOS may
-    use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
+    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS
+    follows once the Android app is finished, on the simulator and the owner's Mac, with
+    real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider
+    (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on
+    iOS may use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
+16. **Local music files: decided (owner, 2026-11-26; ADR 0017).** A class may use the
+    instructor's own audio files (for example mp3) as its music source, besides Spotify and
+    Swedebeat. The files stay on the instructor's device; the player plays them itself, exactly
+    timed. Desktop first. Plan option E's engine is reused.
 
 ## 14. Not verified
 
-- MOWL: its engine, prices, casting, how it holds its Spotify access, and the terms under which
-  it plays Swedebeat mixes.
-- Swedebeat: whether its own service can deliver a user's mix to anything but its app and MOWL. Its help centre could be read only as search excerpts.
+- Swedebeat: whether its own service can deliver a user's mix to anything but its own app. Its
+  help centre could be read only as search excerpts.
 - Spotify: no ruling on whether a workout timeline or a tempo-driven scene is "visual media" under
   III.6; whether the Web API sees an offline desktop app; current position accuracy of the Windows
   media session and of AppleScript with crossfade on (spike 1 measures both).
