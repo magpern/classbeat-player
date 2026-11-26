@@ -32,6 +32,8 @@ export async function joinStepsTheQuality(browser: Browser): Promise<void> {
   assert.deepEqual(widths, want, "the canvas is drawn at High, then Medium, then Low as the join steps the level down");
   const last = seen.at(-1)!;
   assert.equal(last.mode, "off", `the plain screen shows once Low is too slow too (${last.why})`);
-  assert.deepEqual([...problems, ...(await violations(page))], [], problems.join("; "));
+  const trapped = await violations(page);
   await page.close();
+  // After the close, so an error raised after the last check (a late frame, a rejected promise) is still collected.
+  assert.deepEqual([...problems, ...trapped], [], "the join page raised errors or tripped the guard");
 }
