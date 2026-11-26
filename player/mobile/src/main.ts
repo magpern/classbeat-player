@@ -7,7 +7,9 @@
 // the list's plate. Native code is reached only through getClass and the follow intents
 // (room/native.ts), never instructor mode's plugin.
 import type { ClockRoom } from "./room/clock-room.ts";
+import { hasMusicReader } from "./room/reader-platform.ts";
 import { roomClass, roomFollow } from "./room/native.ts";
+import { roomPlatform } from "./room/native.ts";
 import { usePhoneLayouts } from "./room/phone-layouts.ts";
 import { phoneFollower } from "./room/phone-follower.ts";
 import { openRoom } from "./room/open-room.ts";
@@ -26,6 +28,8 @@ void openRoom({
   now,
   every,
   follower: () => phoneFollower(roomFollow(), window, { now, every }),
+  // No reader on this platform (reader-platform.ts): no follower is built, so no Follow and no native music call.
+  hasReader: hasMusicReader(roomPlatform()),
   leave: () => window.location.replace("instructor.html"),
   onClose: (fn) => window.addEventListener("pagehide", fn, { once: true }),
   install: (room: ClockRoom) => {

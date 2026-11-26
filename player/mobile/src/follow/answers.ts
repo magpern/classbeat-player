@@ -46,6 +46,15 @@ export function parseAccess(reply: unknown): boolean {
   return isRecord(reply) && keysAre(reply, ["granted"]) && reply.granted === true;
 }
 
+/**
+ * True when `followAccess` says this platform has no music reader at all: {granted: false, state:
+ * "unavailable"} (ADR 0016, section 5). Android never sends it; anything else, or an unknown
+ * answer, is false, and parseAccess still reads it as no access.
+ */
+export function parseAccessUnavailable(reply: unknown): boolean {
+  return isRecord(reply) && keysAre(reply, ["granted", "state"]) && reply.granted === false && reply.state === "unavailable";
+}
+
 /** A command's answer (FollowAnswers.kt): taken or not by the music app, or why nothing was sent. */
 export type CommandState = "sent" | "notSent" | "stopped" | "noAccess";
 

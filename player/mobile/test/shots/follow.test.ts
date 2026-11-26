@@ -163,3 +163,36 @@ for (const size of [[390, 844], [844, 390]] as const) {
     }
   });
 }
+
+// A platform with no music reader (ADR 0016, section 5; issue #899): on iOS (the web view says so)
+// the band has no Follow key from the first frame, no sheet and no native music call at all.
+for (const size of [[390, 844], [844, 390]] as const) {
+  const [w, h] = size;
+  test(`${w}x${h}: no reader on this platform: the manual clock, no Follow`, async () => {
+    const answers = { listClasses: LIST, syncNow: LIST, getClass: { document: doc } };
+    const p = await openPhonePage(browser, site.dir, "instructor.html", size, answers, "ios");
+    try {
+      await p.page.click(".row");
+      await p.page.waitForSelector(".room");
+      await p.page.evaluate(() => document.fonts.ready);
+      await p.page.clock.runFor(650);
+      await showBand(p.page, w, h);
+      const words = await bandWords(p.page);
+      assert.ok(words.length > 0 && words.every((x) => !x.startsWith("Follow")), words.join("|"));
+      assert.equal(await p.page.locator(".band .btn.follow").count(), 0);
+      assert.deepEqual([(await frameOf(p.page)).link?.mode, (await frameOf(p.page)).followKey], ["manual", false]);
+      await shoot(p.page, `follow-no-reader-${w}x${h}`);
+      await p.page.evaluate(() => (window as unknown as { room: { start(): Promise<unknown> } }).room.start());
+      await p.page.clock.runFor(2_000);
+      assert.equal((await frameOf(p.page)).view?.status, "running");
+      assert.equal(await sheetTitle(p.page), null);
+      const asked = (await p.native()).map(([, m]) => String(m));
+      assert.deepEqual(asked.filter((m) => /follow|Follow|reading|send/.test(m)), [], asked.join());
+      assert.equal(await p.page.locator(".follow-sheet").count(), 0);
+      assert.deepEqual(p.errors, []);
+      assert.deepEqual(p.external, []);
+    } finally {
+      await p.close();
+    }
+  });
+}
