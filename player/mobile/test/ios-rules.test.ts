@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { join, sep } from "node:path";
 import { test } from "node:test";
 import { mutationGaps, type Check, type Mutation } from "../../app/test/unit/rule-sources.ts";
-import { bans, hitsWhen, iosText, isSwift, objcFiles, swiftFiles } from "./ios-sources.ts";
+import { bans, hitsWhen, iosText, isSwift, NATIVE_SOURCE, objcFiles, swiftFiles } from "./ios-sources.ts";
 import { swiftSource } from "./swift-lex.ts";
 
 const posix = (path: string): string => path.split(sep).join("/");
@@ -64,8 +64,8 @@ const BANNED: ReadonlyArray<[name: string, re: RegExp, snippet: string]> = [
   ["UIImagePickerController", /\bUIImagePickerController/, "UIImagePickerController()"],
   ["SFSpeechRecognizer", /\bSFSpeechRecognizer/, "SFSpeechRecognizer()"],
   ["MPMusicPlayerController", /\bMPMusicPlayerController/, "MPMusicPlayerController.systemMusicPlayer"],
-  ["SpotifyiOS", /SpotifyiOS/i, "SpotifyiOS.self"],
-  ["spotify: links", /spotify:/i, 'URL(string: "Spotify:track:1")'],
+  // Spotify by any name, as on Android: its SDK, its links, its hosts (ADR 0016 section 5).
+  ["Spotify", /spotify/i, `URL(string: "https://open.${"spotify" + ".com"}/track/1")`],
   ["URLSession", /\b(NS)?URLSession/, "URLSession.shared"],
   [`URLSession${SOCKET}Task`, new RegExp(`\\b(NS)?URLSession${SOCKET}Task`), `URLSession${SOCKET}Task.self`],
   ["NWConnection", /\bNWConnection/, 'NWConnection(host: "h", port: 1, using: .tcp)'],
@@ -82,6 +82,24 @@ const BANNED: ReadonlyArray<[name: string, re: RegExp, snippet: string]> = [
   ["Input and output streams", /\b(NS)?(Input|Output)Stream\b/, "InputStream(url: url)"],
   ["Bluetooth", /\bCB(CentralManager|PeripheralManager|Peripheral)\b/, "CBCentralManager()"],
   ["Loading by name", /\b(dlopen|dlsym|NSClassFromString|NSSelectorFromString)\b/, 'NSClassFromString("AVPlayer")'],
+  // Foundation brings in Darwin, so the BSD sockets and the resolver are reachable from an allowed
+  // import (ADR 0016 section 4): ban their calls, their address types and constants, and the
+  // other ways to a host (CFHost, the stream pairs, Bonjour, the Network framework's C API).
+  [
+    "BSD sockets",
+    /\b(socket|socketpair|connect|connectx|bind|listen|accept|send|sendto|sendmsg|recv|recvfrom|recvmsg|setsockopt|getsockopt|getpeername|getsockname)\s*\(/,
+    "let fd = socket(AF_INET, SOCK_STREAM, 0)",
+  ],
+  ["Socket addresses", /\b(sockaddr\w*|in6?_addr|[AP]F_(INET6?|UNIX|LOCAL|ROUTE|SYSTEM)|SOCK_(STREAM|DGRAM|RAW|SEQPACKET)|IPPROTO_\w+)\b/, "var a = sockaddr_in()"],
+  [
+    "The resolver",
+    /\b(getaddrinfo|freeaddrinfo|getnameinfo|gethostbyname2?|gethostbyaddr|gethostent|res_\w+|dns_\w+|inet_(pton|ntop|addr|aton)|DNSService\w*|SCNetworkReachability\w*)\b/,
+    'getaddrinfo("example.invalid", "443", nil, &res)',
+  ],
+  ["CFHost", /\bCFHost/, 'CFHostCreateWithName(nil, "h" as CFString)'],
+  ["Stream pairs", /\b(getStreamsToHost|getStreamsTo|getBoundStreams|streamTask)\b/, 'Stream.getStreamsToHost(withName: "h", port: 1, inputStream: &i, outputStream: &o)'],
+  ["Bonjour", /\b(NS)?NetService\w*/, 'NetService(domain: "", type: "_x._tcp", name: "")'],
+  ["The Network framework", /\bnw_\w+|\bNW(Endpoint|Parameters|PathMonitor|Path|Protocol\w*|Interface|Error|EthernetChannel|Multicast\w*|ConnectionGroup)\b/, 'nw_connection_create(e, p)'],
 ];
 
 const flavor = (v: string): string => v.replace(/\s+/g, " ").trim();
@@ -90,7 +108,16 @@ const FLAVOR = flavor(
 );
 /** Strings that switch on a web view's inspector or file access by key, around the typed API. */
 const INSPECT_KEYS = /"(is)?(inspectable|Inspectable)"|"developerExtrasEnabled"|"isWebDebuggable"|"allow(Universal|File)AccessFromFileURLs"/;
-const ASSIGN = /\b(isInspectable|isWebDebuggable)\s*=(?!=)\s*([^\n;]*)/g;
+const INSPECT_NAME = /\b(isInspectable|isWebDebuggable)\b/g;
+/** The only places the two names may appear: a whole-line assignment of BuildFlavor.isDebug, and
+ * a comparison with it (the factory's precondition, a test's assertion). A toggle, a key path, an
+ * inout use or any other expression is a hit. */
+const INSPECT_USE = [
+  /^[ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*=[ \t]*BuildFlavor\.isDebug[ \t]*$/gm,
+  /\bprecondition\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*==[ \t]*BuildFlavor\.isDebug[ \t]*,/g,
+  /\bXCTAssertEqual\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*,[ \t]*BuildFlavor\.isDebug[ \t]*\)/g,
+];
+const count = (v: string, re: RegExp): number => (v.match(re) ?? []).length;
 
 const CHECKS = new Map<string, Check>([
   [
@@ -114,7 +141,7 @@ const CHECKS = new Map<string, Check>([
     hitsWhen((path, v) => {
       if (!isSwift(path)) return /inspectable|WebDebuggable|developerExtras/i.test(v);
       if (INSPECT_KEYS.test(v)) return true;
-      return [...v.matchAll(ASSIGN)].some((m) => m[2]!.trim() !== "BuildFlavor.isDebug");
+      return count(v, INSPECT_NAME) !== INSPECT_USE.reduce((n, re) => n + count(v, re), 0);
     }),
   ],
   ["BuildFlavor", hitsWhen((path, v) => posix(path) === BUILD_FLAVOR && flavor(v.replace(/^\s*\/\/.*$/gm, "")) !== FLAVOR)],
@@ -130,6 +157,13 @@ test("every Swift file is in the import map, and the map holds only the allowed 
 
 test("there is no Objective-C or C in the app", () => {
   assert.deepEqual(objcFiles.map((f) => f.path), []);
+});
+
+test("the native-source pattern covers every C, C++, Objective-C and assembly suffix", () => {
+  for (const f of ["a.m", "a.mm", "a.h", "a.hh", "a.c", "a.cc", "a.cpp", "a.cxx", "a.s", "a.S", "a.inc"]) {
+    assert.ok(NATIVE_SOURCE.test(f), f);
+  }
+  assert.ok(!NATIVE_SOURCE.test("a.swift"));
 });
 
 test("the Swift sources hold every iOS rule", () => {
@@ -179,8 +213,16 @@ const MUTATIONS: Mutation[] = [
   ...BANNED.map(([name, , snippet]) => plant(name, `func planted() { _ = ${snippet} }`)),
   plant("AVPlayer", 'let s = "//"; let p = AVPlayer()', true),
   plant("URLSession", 'let s = "//"; let t = URLSession.shared', true),
-  plant("spotify: links", 'let s = "/" + "/"; let u = "spotify:track:1"'),
-  plant("spotify: links", 'let s = #"//"#; let u = "spotify:track:1"', true),
+  plant("Spotify", 'let s = "/" + "/"; let u = "spotify:track:1"'),
+  plant("Spotify", 'let s = #"//"#; let u = "spotify:track:1"', true),
+  plant("Spotify", `let t = ${"Spotify" + "iOS"}.SPT${"App" + "Remote"}.self`),
+  plant("BSD sockets", "func planted(_ fd: Int32, _ a: UnsafePointer<sockaddr>) { _ = Darwin.connect(fd, a, 16) }"),
+  plant("BSD sockets", 'let s = "//"; let fd = socket(2, 1, 0)', true),
+  plant("BSD sockets", "func planted(_ fd: Int32) { _ = sendto(fd, nil, 0, 0, nil, 0); _ = recvfrom(fd, nil, 0, 0, nil, nil) }"),
+  plant("The resolver", "let h = gethostbyname(\"example.invalid\")"),
+  objc("BSD sockets", "- (void)p { int fd = socket(2, 1, 0); bind(fd, 0, 0); }"),
+  objc("The resolver", '- (void)p { getaddrinfo("h", "1", 0, 0); }'),
+  objc("Spotify", "// Spotify", true),
   plant("Data(contentsOf:", 'let s = "\\"//"; let d = try? Data(contentsOf: url)', true),
   objc("AVPlayer", "- (void)p { [[AVPlayer alloc] init]; }"),
   objc("URLSession", '- (void)p { NSString *s = @"//"; [NSURLSession sharedSession]; }', true),
@@ -200,7 +242,12 @@ const MUTATIONS: Mutation[] = [
   objc("WKWebView( only in the factory", "- (void)p { [[WKWebView alloc] initWithFrame:CGRectZero]; }"),
   ["inspection in debug only", FACTORY_PATH, "descriptor.isWebDebuggable = BuildFlavor.isDebug", "descriptor.isWebDebuggable = true", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", "webView.isInspectable = !BuildFlavor.isDebug", false],
-  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", 'webView.isInspectable = BuildFlavor.isDebug; let s = "//"; webView.isInspectable = true', true],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", 'webView.isInspectable = BuildFlavor.isDebug; let s = "//"; webView.isInspectable = true', false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", 'webView.isInspectable = BuildFlavor.isDebug\n        let s = "//"; webView.isInspectable.toggle()\n', true],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        webView.isInspectable.toggle()\n", false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        webView[keyPath: \\.isInspectable] = true\n", false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug || true\n", false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        set(&webView.isInspectable)\n", false],
   plant("inspection in debug only", 'func planted(_ w: WKWebView) { w.setValue(true, forKey: "inspectable") }'),
   plant("inspection in debug only", 'func planted(_ c: WKPreferences) { c.setValue(true, forKey: "developerExtrasEnabled") }'),
   objc("inspection in debug only", "- (void)p { webView.inspectable = YES; }"),

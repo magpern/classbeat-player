@@ -9,7 +9,9 @@ import { swiftSource } from "./swift-lex.ts";
 export const IOS = join(MOBILE, "ios");
 const read = (ext: RegExp) => mobileFiles(IOS, ext).map((p) => ({ path: relative(MOBILE, p), text: readFileSync(p, "utf8") }));
 export const swiftFiles = read(/\.swift$/);
-export const objcFiles = read(/\.(m|mm|h|c|cc|cpp|hpp)$/);
+/** Objective-C, C, C++ and assembly sources and headers: everything a target compiles besides Swift. */
+export const NATIVE_SOURCE = /\.(m|mm|h|hh|hxx|hpp|c|cc|cpp|cxx|inc|s|S)$/;
+export const objcFiles = read(NATIVE_SOURCE);
 export const isSwift = (path: string): boolean => path.endsWith(".swift");
 
 /**
