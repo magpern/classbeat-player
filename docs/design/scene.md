@@ -1650,7 +1650,7 @@ See [running-class.md](running-class.md).
 | 3. Spotify stays in Spotify | The scene hears nothing: it follows the class clock and the beat anchors from the class file |
 | 4. No road, track, terrain or world | No ground, horizon or path; nothing travelled along; no beam direction from an interval, only scalars (S7). The score is flat |
 | 5. No moving viewpoint | The camera is fixed |
-| 6. None of MOWL's look | No rings, no row of class bars on top, no rider grid or bars, no flames; our palette; the rig is a stage, not their world |
+| 6. Its own look | No rings, no row of class bars on top, no rider grid or bars, no flames; our palette; the rig is a stage, not another player's world |
 | 7. Colour is the planned zone | S5; link states are white plates as in 2D |
 | 8 to 12 | No hand icons, no heart-rate advice, our own load names, cues as written, nothing generated, no camera |
 | 13 to 15 | No rider data on the room screen at all |

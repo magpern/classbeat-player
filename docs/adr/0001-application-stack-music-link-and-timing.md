@@ -165,7 +165,7 @@ and option B for the beta circle, and the rest of the plan is unchanged.
 
 - **A game engine as the whole application** (Godot, Unity, Unreal): strong at the scene, weak
   at sign-in, forms, the website and phones, which would need web code beside it anyway. Unreal
-  is excluded: probably MOWL's engine and the heaviest to build.
+  is excluded: the heaviest to build.
 - **Tauri instead of Electron:** a much smaller download. Kept as the alternative.
 - **Spotify Web API (B):** 5 named users per app in Development Mode, Premium required, accuracy
   of a few seconds by polling. Only an optional extra for the beta circle.

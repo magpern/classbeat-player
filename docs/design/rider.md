@@ -343,7 +343,7 @@ than 3 s. Rows, states, numbers and mock-ups: [running-class.md](running-class.m
 | 2. Software only, no equipment | Sensors are only read ([sensors.md](sensors.md)); no equipment command; the actions of R5 |
 | 3. Spotify's music stays in Spotify's app | No audio, no song |
 | 4, 5. No road, world or moving viewpoint | Nothing travelled along; no strip, no scene |
-| 6. None of MOWL's look | No ring trio, no row of class bars, no circle or bar per rider (R12); our gel and palette |
+| 6. Its own look | No ring trio, no row of class bars, no circle or bar per rider (R12); our gel and palette |
 | 7. Colour means the planned zone | Hue only on the gel and the chips (R8); the effort, including beats per minute, is white text; no measured heart-rate zone anywhere |
 | 8. No hand icons, no heart-rate advice | No icons for positions (the position is a word); the effort is the planned range, never "adjust by your heart rate" |
 | 9. Own names | No load figures shown |

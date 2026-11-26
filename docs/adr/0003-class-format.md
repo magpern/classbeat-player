@@ -163,8 +163,8 @@ is what PL3 ports, not a dependency.
 
 ## Alternatives
 
-- **Reuse classbeat's or MOWL's shape.** Ties the player to another product's changes and carries
-  fields the rules exclude (games). Rejected; the plan makes the format this project's own.
+- **Reuse classbeat's or another product's shape.** Ties the player to another product's changes
+  and carries fields the rules exclude (games). Rejected; the plan makes the format this project's own.
 - **Seconds as decimals.** Simpler to read, but sums drift. Rejected for integer milliseconds.
 - **Song windows derived by the player from lengths and the crossfade.** Would hide the source's
   intent and break when a source trims a song. Rejected: windows are explicit and the crossfade

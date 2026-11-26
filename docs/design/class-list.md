@@ -284,7 +284,7 @@ fields below, no account key. The gaps this spec first listed were closed by #13
 | 2. Software only, never controls equipment | Nothing on the screen refers to a bike or a machine |
 | 3. Spotify's music stays in Spotify's app | The list names the music source only ("Spotify, 11 songs"); nothing plays or loads here |
 | 4, 5. No road, ribbon, terrain or moving viewpoint | There is no scene and no sensor value |
-| 6. None of MOWL's look | A plain list on black; no rings, no rider circles, no bars against a target line, none of its palette or names |
+| 6. Its own look | A plain list on black; no rings, no rider circles, no bars against a target line, no other player's palette or names |
 | 7. Colour is the planned zone | No hue at all (L4) |
 | 8. No hand-position icons, no "adjust by heart rate" | None |
 | 9. Own names for load figures | The list shows no load figure |

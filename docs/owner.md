@@ -64,11 +64,11 @@ with other work; nothing in the development loop waits for an answer.
 
 - **Swedebeat playback (PL11, ADR 0013, 2026-11-24).** Built and tested on a fake source; the
   shipped player has no real source until you answer these:
-  - **Where the real audio comes from (plan, section 13, decision 11).** The two routes there: ask
-    Swedebeat for an agreement and a source of the audio (recommended), or get the audio through
-    the user's MOWL account. Either way the audio goes from the provider straight to the device,
-    never through a server of ours. Until you name a source, `UnavailableMixSource` stays the
-    default and classes designed with a mix play on the manual clock. Issue 7 (the real source
+  - **Where the real audio comes from (plan, section 13, decision 11).** The route left: ask
+    Swedebeat for an agreement and a source of the audio. The route through another cycling
+    product is closed (your decision, 2026-11-26). The audio goes from the provider straight to
+    the device, never through a server of ours. Until you name a source, `UnavailableMixSource`
+    stays the default and classes designed with a mix play on the manual clock. Issue 7 (the real source
     client) is not opened until then.
   - **Whether your SwedeBeat gateway has any part in it.** ADR 0013 does not accept it as a route.
     If you propose it, you decide with it how the audio still goes from the provider straight to

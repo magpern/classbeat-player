@@ -271,7 +271,7 @@ The renderer holds no address, path, feed setting or install control, and shows 
 | 1. A finished class and nothing more | No class is edited or chosen here |
 | 2. Software only | Nothing refers to a bike or machine, and no control sets resistance, speed, incline or a brake |
 | 3. Spotify's music stays in Spotify's app | No music source is named or loaded here |
-| 4, 5, 6 | No scene, road or ribbon, no sensor value, none of MOWL's look |
+| 4, 5, 6 | No scene, road or ribbon, no sensor value, its own look |
 | 7. Colour means the planned zone | No hue at all (U6) |
 | 8, 9 | No hand-position icon, no load figure |
 | 10, 11. Cues written at design time; nothing from past sessions | No cue and no history: no "last checked", no count of checks |

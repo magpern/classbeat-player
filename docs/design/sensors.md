@@ -377,7 +377,7 @@ displays).
 | 3. Spotify's music stays in Spotify's app | No audio, no song. **A reading never reaches the music link** (ADR 0012 section 4): nothing is chosen, stretched or shifted from cadence or any reading. Build check: no sensor module is imported by the music-link code and none of it by a sensor module (an import-graph test); it lands with #664 |
 | 4. No road, ribbon, track, terrain or world | The gauge is a straight line with a band; it is not travelled along |
 | 5. No viewpoint or rider moving through a scene | A number and a gauge, changing in a step at most once a second; nothing moves because of a reading |
-| 6. None of MOWL's look | No ring, no row of class bars, no circle or bar per rider: one straight gauge for one's own reading, never for several riders; our palette |
+| 6. Its own look | No ring, no row of class bars, no circle or bar per rider: one straight gauge for one's own reading, never for several riders; our palette |
 | 7. Colour means the planned zone | The only hue is a gauge's band, which is the planned zone; a reading, a tick and every state are white, grey or black; **no measured heart-rate zone** anywhere |
 | 8. No hand-position icons, no "adjust by your heart rate" | No icon; no advice; the "Never" words are tested (S9) |
 | 9. Own names for load figures | "Power" in watts and "Cadence" in rpm are readings, not load figures; no TSS, normalised power or intensity factor |

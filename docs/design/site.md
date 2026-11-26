@@ -477,7 +477,7 @@ web issue or a backend issue.
 | 2. Software only, never controls equipment | Nothing refers to a bike or a machine; "device" means a computer running the player |
 | 3. Spotify's music stays in Spotify's app | The page names the music source and lists songs as text; nothing plays or loads |
 | 4, 5. No road, ribbon, terrain or moving viewpoint | No scene and no sensor value |
-| 6. None of MOWL's look | Plain text on black; no rings, circles, bars against a line, none of its palette or names |
+| 6. Its own look | Plain text on black; no rings, circles, bars against a line, no other player's palette or names |
 | 7. Colour is the planned zone | No hue at all (S4); a zone is a number and a name |
 | 8. No hand-position icons, no "adjust by heart rate" | The details show `seated` or `standing` as the word the class holds, never as an icon, and no heart-rate advice |
 | 9. Own names for load figures | No load figure is shown until its name is chosen |

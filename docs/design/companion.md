@@ -468,7 +468,7 @@ From ADR 0005, section 8, for the page that builds this spec:
 | 2. Software only, no equipment | The contract's six actions only (K5); no Bluetooth or sensor on this page |
 | 3. Spotify's music stays in Spotify's app | Only titles and the link state; no audio |
 | 4, 5. No road, world or moving viewpoint | Nothing travelled along; no score strip on the phone |
-| 6. None of MOWL's look | No rings, no row of class bars, no rider grid; our gel and palette |
+| 6. Its own look | No rings, no row of class bars, no rider grid; our gel and palette |
 | 7. Colour means the planned zone | Hue only on the gel and chips (K8); states are white, grey and black |
 | 8. No hand icons, no heart-rate advice | No icons for positions; no advice |
 | 9. Own names | No load figures shown |
