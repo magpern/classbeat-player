@@ -1,6 +1,6 @@
 // Builds the pages the app carries into android/app/src/main/assets/public/ (issues #627, #630): the
-// room screen and the fake room (src/main.ts, room.html), each mode's start page (src/rider.ts,
-// src/instructor.ts), their styles and fonts, and the HTML with the desktop room screen's Content
+// room screen (src/main.ts, room.html: the class picked on the class list, issue #871), each
+// mode's start page (src/rider.ts, src/instructor.ts), their styles and fonts, and the HTML with the desktop room screen's Content
 // Security Policy (src/page.ts). The Capacitor CLI is not used:
 // capacitor.config.json and capacitor.plugins.json are committed in the assets folder as they are
 // shipped, so no tool rewrites the locked config. Run with tsx (npm run build) to read page.ts.

@@ -57,22 +57,30 @@ class ExternalDisplayTest {
     private fun classOpen() = ext.update(Mode.INSTRUCTOR, "/room.html", foreground = true)
 
     @Test
-    fun `a display connected during a class shows the room screen`() {
+    fun `a display connected during a class shows the idle stage (issue 871)`() {
         classOpen()
         assertEquals(emptyList<String>(), surface.log)
         displays.connect(2)
-        assertEquals(listOf("show 2 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html"), surface.log)
     }
 
     @Test
-    fun `a display already there shows the idle stage on the class list, then the room screen when the class opens`() {
+    fun `a display already there keeps the idle stage through a class, with no reload`() {
         displays.connect(2)
         ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
         assertEquals(listOf("show 2 /display.html"), surface.log)
         classOpen()
-        assertEquals(listOf("show 2 /display.html", "load /room.html"), surface.log)
         ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
-        assertEquals(listOf("show 2 /display.html", "load /room.html", "load /display.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html"), surface.log)
+    }
+
+    @Test
+    fun `a change of page on a display already showing loads it there`() {
+        displays.connect(2)
+        classOpen()
+        ext.update(Mode.RIDER, "/rider.html", foreground = true)
+        classOpen()
+        assertEquals(listOf("show 2 /display.html", "load /display-rider.html", "load /display.html"), surface.log)
     }
 
     @Test
@@ -80,9 +88,9 @@ class ExternalDisplayTest {
         classOpen()
         displays.connect(2)
         displays.disconnect(2)
-        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss"), surface.log)
         displays.connect(3)
-        assertEquals(listOf("show 2 /room.html", "dismiss", "show 3 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss", "show 3 /display.html"), surface.log)
     }
 
     @Test
@@ -92,11 +100,11 @@ class ExternalDisplayTest {
         ext.update(Mode.RIDER, "/room.html", foreground = true)
         // Rider mode shows the rider's line (issue #759); between modes the instructor's.
         assertEquals(listOf("show 2 /display-rider.html"), surface.log)
-        classOpen()
         ext.update(null, null, foreground = true)
-        assertEquals(listOf("show 2 /display-rider.html", "load /room.html", "load /display.html"), surface.log)
+        classOpen()
+        assertEquals(listOf("show 2 /display-rider.html", "load /display.html"), surface.log)
         ext.update(Mode.RIDER, null, foreground = false)
-        assertEquals(listOf("show 2 /display-rider.html", "load /room.html", "load /display.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display-rider.html", "load /display.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -105,7 +113,7 @@ class ExternalDisplayTest {
         classOpen()
         ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
         classOpen()
-        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss", "show 2 /display.html"), surface.log)
     }
 
     @Test
@@ -114,7 +122,7 @@ class ExternalDisplayTest {
         classOpen()
         classOpen()
         displays.connect(5)
-        assertEquals(listOf("show 2 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html"), surface.log)
     }
 
     @Test
@@ -123,7 +131,7 @@ class ExternalDisplayTest {
         classOpen()
         surface.gone!!.invoke()
         classOpen()
-        assertEquals(listOf("show 2 /room.html", "show 2 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "show 2 /display.html"), surface.log)
     }
 
     @Test
@@ -131,10 +139,10 @@ class ExternalDisplayTest {
         displays.connect(2)
         classOpen()
         surface.crashed!!.invoke()
-        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss", "show 2 /display.html"), surface.log)
         ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
         surface.crashed!!.invoke()
-        assertEquals(listOf("show 2 /room.html", "dismiss", "show 2 /room.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss", "show 2 /display.html", "dismiss"), surface.log)
     }
 
     @Test
@@ -143,7 +151,7 @@ class ExternalDisplayTest {
         classOpen()
         surface.crashed!!.invoke()
         surface.crashed!!.invoke()
-        val down = listOf("show 2 /room.html", "dismiss", "show 2 /room.html", "dismiss")
+        val down = listOf("show 2 /display.html", "dismiss", "show 2 /display.html", "dismiss")
         assertEquals(down, surface.log)
         // The same inputs again, a display event, and a trip to the background and back: still down.
         classOpen()
@@ -151,11 +159,14 @@ class ExternalDisplayTest {
         ext.update(Mode.INSTRUCTOR, "/room.html", foreground = false)
         classOpen()
         assertEquals(down, surface.log)
-        // A change of page shows again, with its own re-present.
+        // The class list shows the same page in the same mode: still down (issue #871).
         ext.update(Mode.INSTRUCTOR, "/instructor.html", foreground = true)
-        assertEquals(down + "show 2 /display.html", surface.log)
+        assertEquals(down, surface.log)
+        // A change of page shows again, with its own re-present.
+        ext.update(Mode.RIDER, "/rider.html", foreground = true)
+        assertEquals(down + "show 2 /display-rider.html", surface.log)
         surface.crashed!!.invoke()
-        assertEquals(down + listOf("show 2 /display.html", "dismiss", "show 2 /display.html"), surface.log)
+        assertEquals(down + listOf("show 2 /display-rider.html", "dismiss", "show 2 /display-rider.html"), surface.log)
     }
 
     @Test
@@ -181,7 +192,7 @@ class ExternalDisplayTest {
         val firstCrashed = surface.crashed!!
         val firstGone = surface.gone!!
         firstCrashed()
-        val reshown = listOf("show 2 /room.html", "dismiss", "show 2 /room.html")
+        val reshown = listOf("show 2 /display.html", "dismiss", "show 2 /display.html")
         assertEquals(reshown, surface.log)
         // The first show's callbacks again, after the re-show: nothing comes down, and the budget is not spent.
         firstCrashed()
@@ -203,8 +214,8 @@ class ExternalDisplayTest {
         assertEquals(emptyList<String>(), surface.log)
         displays.connect(2)
         ext.stop()
-        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss"), surface.log)
         displays.connect(3)
-        assertEquals(listOf("show 2 /room.html", "dismiss"), surface.log)
+        assertEquals(listOf("show 2 /display.html", "dismiss"), surface.log)
     }
 }

@@ -1,7 +1,7 @@
 // The page's only calls into native code (ADR 0011 section 3, issue #630): each mode's plugin and
-// its named intents. Only rider mode's join takes arguments: the class code and the nickname, both
-// strings, and nothing else (IntentPolicy.kt); getClass, which takes a class id, waits for the room
-// screen to leave its fakes. No intent takes or answers the rider token: native code holds it. Only the current mode's plugin is on the bridge, and
+// its named intents. Only two take arguments, each strings and nothing else (IntentPolicy.kt): rider
+// mode's join, the class code and the nickname, and instructor mode's getClass, the class id the
+// room screen opens (issue #871). No intent takes or answers the rider token: native code holds it. Only the current mode's plugin is on the bridge, and
 // native code checks every call again, so a call from the wrong mode is refused there, not here.
 // Nothing here selects, changes or unlocks a mode: the page asks, and native code decides.
 import { registerPlugin } from "@capacitor/core";
@@ -26,6 +26,8 @@ export interface InstructorModePlugin {
   askRiderMode(): Promise<unknown>;
   /** The classes saved on this phone and the last sync's status: {classes, status} (issue #631). */
   listClasses(): Promise<unknown>;
+  /** One saved class for the room screen: {document} or {error: "not_found"} (room/class-answer.ts reads it). */
+  getClass(args: { id: string }): Promise<unknown>;
   /** Syncs now with the paired account, then answers as listClasses. Native code makes the call. */
   syncNow(): Promise<unknown>;
   /**
