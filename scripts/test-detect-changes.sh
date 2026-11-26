@@ -141,6 +141,9 @@ before_mob="$(git rev-parse HEAD)"
 commit player/mobile/android/app/x.kt
 check "a player/mobile change runs player, mobile and desktop (#629)" "player mobile desktop" "$(flags push "$before_mob" HEAD)"
 before_mob="$(git rev-parse HEAD)"
+commit player/mobile/test/shots/room.shots.ts
+check "a player/mobile/test/shots change runs the mobile job (#875)" "player mobile desktop" "$(flags push "$before_mob" HEAD)"
+before_mob="$(git rev-parse HEAD)"
 commit player/app/src/core/y.ts
 check "a change outside player/mobile does not run the mobile job (#629)" "player desktop" "$(flags push "$before_mob" HEAD)"
 before_mob="$(git rev-parse HEAD)"
