@@ -40,8 +40,19 @@ export interface AndroidReaderDeps {
 /** How often native code is asked: well inside the 3 s after which a reading is stale. */
 export const POLL_MS = 500;
 
-export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderDeps): MusicReader & MusicTransport {
+/** The phone's reader, which also says when it stopped following on its own. */
+export interface AndroidReader extends MusicReader, MusicTransport {
+  /**
+   * True once native code stopped following, or would not start it (refused, failed or "stopped"),
+   * since following last went on: the reader asks nothing more, so the clock must not go on
+   * following it. False again when following goes on.
+   */
+  stopped(): boolean;
+}
+
+export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderDeps): AndroidReader {
   let gone = false;
+  let halted = false;
   let reason: NoReadingReason | null = null;
   /** Bumped on every start and stop: an answer to an older run is dropped. */
   let run = 0;
@@ -96,6 +107,7 @@ export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderD
 
   const stopped = (why: NoReadingReason, forGood: boolean): void => {
     reason = why;
+    halted = true;
     if (forGood) gone = true;
     life.setActive(false);
   };
@@ -145,11 +157,15 @@ export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderD
     latest: () => life.latest(),
     setActive(on) {
       if (on && gone) return;
-      if (on) reason = null;
+      if (on) {
+        reason = null;
+        halted = false;
+      }
       life.setActive(on);
     },
     unavailable: () => gone,
     reason: () => reason,
+    stopped: () => halted,
     send: (action) => life.send(action),
   };
 }

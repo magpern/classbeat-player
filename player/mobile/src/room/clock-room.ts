@@ -10,8 +10,7 @@ import type { ClockCommand } from "../../../app/src/core/commands.ts";
 import { advance, command, INITIAL, isFollowing, openDocument, playlistAtStart, readerStopped, snapshotOf, transportFor, withoutReader } from "../../../app/src/core/player-reducers.ts";
 import type { PlayerState } from "../../../app/src/core/player-reducers.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
-import type { MusicReader } from "../../../app/src/core/link/reader.ts";
-import type { MusicTransport } from "../../../app/src/core/link/transport.ts";
+import type { AndroidReader } from "../follow/android-reader.ts";
 import { roomFrameOf } from "../../../app/src/core/room/frame.ts";
 import type { RoomFrame } from "../../../app/src/core/room/frame.ts";
 import { REMOTE_ABSENT } from "../../../app/src/core/room/remote.ts";
@@ -22,7 +21,7 @@ export const PUSH_EVERY_MS = 100;
 
 /** The phone's follower (phone-follower.ts): the reader, and Follow's access ask. */
 export interface RoomFollower {
-  readonly reader: MusicReader & MusicTransport;
+  readonly reader: AndroidReader;
   /** Follow pressed: [turnOn] runs once Notification access is there (follow-ask.ts). */
   press(turnOn: () => void): void;
 }
@@ -70,8 +69,10 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
   // Brings the state up to now with what the reader has heard since the last frame.
   const catchUp = (t: number): void => {
     if (reader?.unavailable?.() === true) s = withoutReader(s);
-    // Access taken back while following: the clock goes on by hand at once, announced (app-follow.md).
-    if (isFollowing(s) && reader?.reason?.() === "not-permitted") {
+    // Access taken back while following, or native code stopped following or would not start it:
+    // the clock goes on by hand at once, announced (app-follow.md), and never coasts on a reader
+    // that asks nothing more.
+    if (isFollowing(s) && (reader?.reason?.() === "not-permitted" || reader?.stopped() === true)) {
       s = readerStopped(s, t);
       sync();
     }
@@ -95,9 +96,12 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
     return Promise.resolve(frame());
   };
   // Follow works only while the band offers its key; the core then follows once access is there.
+  // Access may come much later (back from Android's setting), so the key is checked again then: a
+  // class that ended, or a clock no longer manual, meanwhile does not start following.
   const follow = (): Promise<RoomFrame> => {
     if (follower !== null && frame().followKey === true) {
       follower.press(() => {
+        if (frame().followKey !== true) return;
         s = command(s, { type: "follow" }, deps.now(), canSend);
         sync();
       });
