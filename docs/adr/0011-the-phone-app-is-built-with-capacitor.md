@@ -90,6 +90,21 @@ defaults the Orchestrator picked; the owner may change them (owner.md).
 On an external display the app shows only the room view, as the desktop room window does. The
 riders' list is never shown there ([ADR 0007](0007-riders-in-a-live-session.md), section 4).
 
+**As built (2026-11-26, #871, PR #880).**
+
+- The room page opens a class in three steps:
+  - It checks the id.
+  - It asks native code for the class through `getClass({ id })`. The page reaches this only
+    through `player/mobile/src/room/class-source.ts`, a frozen object whose one member passes on
+    the id and nothing else.
+  - It checks the answer with `checkClassDocument` from `schema/ts/src/reader.ts`. That reader-only
+    entry uses a validator compiled at build time (`reader-validator.generated.ts`), so the web
+    view runs no Ajv and needs no `unsafe-eval`. The page imports it by path, not through
+    `schema/ts`'s index.
+- The external display keeps its idle stage while a class runs on the phone. The presentation's
+  web view may not load `room.html`. Showing the room view there, as the paragraph above says, is
+  left for a later decision.
+
 This is more than a thin shell: on the desktop about 1,950 lines of the main process do pairing,
 sync and the live host. What moves to Kotlin is the part that holds a secret or needs the
 system: pairing, the token, the authenticated requests, the cache and the socket.
