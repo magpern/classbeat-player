@@ -232,12 +232,94 @@ const KOTLIN_FORBIDDEN: readonly [string, RegExp][] = [
   ],
 ];
 
+// The one Kotlin exception (owner, 2026-11-26, #649; ADR 0011 section 8): the phone's backend
+// calls (ADR 0011 sections 3 and 5) may use `HttpsURLConnection`, and `openConnection` to get one, in
+// backend/BackendTransport.kt and only there. Those two words are taken out of the network check
+// alone: every other way onto the network stays a hit in that file, the other checks stay in full
+// there, and every other Kotlin file keeps the full network check.
+const KT_NETWORK = "a network request";
+const KT_BACKEND = ["android", "app", "src", "main", "kotlin", "org", "classbeat", "player", "backend"];
+const BACKEND_TRANSPORT = join(...KT_BACKEND, "BackendTransport.kt");
+const KOTLIN_NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[BACKEND_TRANSPORT, /\bHttpsURLConnection\b|\bopenConnection\b/g]]);
+const ktChecked = (path: string, text: string, what: string): string => {
+  const strip = what === KT_NETWORK ? KOTLIN_NETWORK_EXCEPTIONS.get(path) : undefined;
+  return strip ? text.replace(strip, " ") : text;
+};
+
 for (const [what, re] of KOTLIN_FORBIDDEN) {
   test(`no ${what} anywhere in the phone shell's Kotlin`, () => {
-    const hits = mobileKt.filter((s) => re.test(code(s.text))).map((s) => s.path);
+    const hits = mobileKt.filter((s) => re.test(ktChecked(s.path, code(s.text), what))).map((s) => s.path);
     assert.deepEqual(hits, []);
   });
 }
+
+test("the backend transport's exception is one file and two words, for the network check only", () => {
+  const network = KOTLIN_FORBIDDEN.find(([w]) => w === KT_NETWORK)![1];
+  assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.keys()], [BACKEND_TRANSPORT]);
+  assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.values()].map((r) => r.source), ["\\bHttpsURLConnection\\b|\\bopenConnection\\b"]);
+  const file = mobileKt.find((s) => s.path === BACKEND_TRANSPORT);
+  assert.ok(file, "the exception names a file that exists");
+  // The file uses what it is allowed, and without the exception it would be a hit.
+  assert.match(code(file.text), /\bHttpsURLConnection\b/);
+  assert.match(code(file.text), /\bopenConnection\(\)/);
+  assert.match(code(file.text), network);
+  // In that file every other way onto the network is still a hit, the plain HTTP connection too.
+  for (const bad of [
+    "conn as HttpURLConnection",
+    "val c: URLConnection = u",
+    "URL(u).openStream()",
+    "import java.net.URL",
+    "import java.net.Socket",
+    "import java.net.http.HttpClient",
+    "DatagramSocket()",
+    "import okhttp3.OkHttpClient",
+    "val w: WebSocket = s",
+    "import io.ktor.client.HttpClient",
+    "import retrofit2.Retrofit",
+    "cronet.newUrlRequestBuilder(u, cb, e)",
+    "DownloadManager.Request(u)",
+  ]) {
+    assert.match(ktChecked(BACKEND_TRANSPORT, `URI(a).toURL().openConnection() as? HttpsURLConnection; ${bad}`, KT_NETWORK), network, bad);
+  }
+  // The other checks take no exception there.
+  const others: [string, string][] = [
+    ["audio playback or recording (rule 3)", "MediaPlayer()"],
+    ["a Spotify interface (rule 3)", "spotify"],
+    ["the camera (rule 12)", "import androidx.camera.core.ImageCapture"],
+    ["equipment control (rule 2)", "gatt.writeCharacteristic(c)"],
+  ];
+  assert.equal(others.length, KOTLIN_FORBIDDEN.length - 1);
+  for (const [what, bad] of others) {
+    assert.match(ktChecked(BACKEND_TRANSPORT, `HttpsURLConnection openConnection ${bad}`, what), KOTLIN_FORBIDDEN.find(([w]) => w === what)![1], what);
+  }
+  // Any other file, the backend's other files too: both words are network requests.
+  const elsewhere = [
+    join(...KT_BACKEND, "TransportContract.kt"),
+    join(...KT_BACKEND, "Calls.kt"),
+    join(...KT_BACKEND.slice(0, -1), "MainActivity.kt"),
+    join(...KT_BACKEND.slice(0, -1), "rider", "RiderTransport.kt"),
+    join("android", "app", "src", "test", "kotlin", "org", "classbeat", "player", "backend", "BackendTransport.kt"),
+    "BackendTransport.kt",
+  ];
+  for (const path of elsewhere) {
+    assert.match(ktChecked(path, "u.openConnection()", KT_NETWORK), network, path);
+    assert.match(ktChecked(path, "c as HttpsURLConnection", KT_NETWORK), network, path);
+  }
+});
+
+test("only the backend transport handles TLS, and it never loosens the system's checks", () => {
+  // A trust manager or hostname verifier could accept any certificate: none in the app's Kotlin.
+  const loosen = /\bTrustManager\w*|\bX509TrustManager\b|\bHostnameVerifier\b|\bhostnameVerifier\b|\bSSLContext\b|\bsetDefault\w*Factory\b|\bALLOW_ALL\w*/;
+  const main = mobileKt.filter((s) => s.path.startsWith(join("android", "app", "src", "main") + sep));
+  assert.ok(main.some((s) => s.path === BACKEND_TRANSPORT));
+  assert.deepEqual(main.filter((s) => loosen.test(code(s.text))).map((s) => s.path), []);
+  // A socket factory is named only in the transport, where the tests hand in theirs.
+  assert.deepEqual(main.filter((s) => /\bSSLSocketFactory\b/.test(code(s.text))).map((s) => s.path), [BACKEND_TRANSPORT]);
+  // The app builds the transport without one: the system's trust store.
+  const activity = code(main.find((s) => s.path.endsWith(sep + "MainActivity.kt"))!.text);
+  assert.deepEqual([...activity.matchAll(/HttpsBackendTransport\(([^()]*)\)/g)].map((m) => m[1]), ["origin, main"]);
+  assert.match(code("val v = HostnameVerifier { _, _ -> true }"), loosen);
+});
 
 test("the Kotlin guard catches what it looks for, and not comments or java.net.URI", () => {
   const samples: readonly string[][] = [

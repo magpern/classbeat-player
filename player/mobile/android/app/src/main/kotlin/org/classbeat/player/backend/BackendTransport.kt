@@ -1,89 +1,118 @@
 package org.classbeat.player.backend
 
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.InterruptedIOException
+import java.net.URI
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocketFactory
+
 /**
- * The one way the phone's native code reaches the backend (ADR 0011 §3 and §5), as a contract.
- * Pure: the rules every transport keeps are here, the I/O lives in the implementation.
+ * The real transport (#649): HTTPS to the backend origin fixed in the build, and nothing else.
  *
- * A transport calls only the origin fixed in the build, only the fixed paths in [Calls], sends JSON
- * with the token only in `Authorization: Bearer`, never follows a redirect, gives up after
- * [TIMEOUT_MS], reads at most the request's body cap, never sends `Sec-Fetch-Site`, never throws and
- * never logs: every failure is [HttpAnswer.Unreachable]. It answers on the main thread, later,
- * never from inside [BackendTransport.send].
- *
- * The real HTTPS transport is not built yet (#649, owner item #650); the app wires [OfflineTransport].
+ * This is the one Kotlin file the network guard lets use `HttpsURLConnection` (owner, 2026-11-26;
+ * ADR 0011 §8; `player/app/test/unit/rules.test.ts` pins it). It keeps [TransportContract]: it calls
+ * only what [TransportContract.address] allows (the build's origin and the fixed paths in [Calls]),
+ * only over HTTPS with the system's certificate checks, follows no redirect (a 3xx is
+ * [HttpAnswer.Unreachable]), uses no cache, reads at most [TransportContract.MAX_BODY_BYTES] of an
+ * answer and gives the whole call [TransportContract.TIMEOUT_MS]. It never throws and never logs;
+ * every answer goes through [post] (the main thread), never from inside [send].
  */
-interface BackendTransport {
-    fun send(request: BackendRequest, answer: (HttpAnswer) -> Unit)
-}
+class HttpsBackendTransport internal constructor(
+    private val buildOrigin: String,
+    private val post: (Runnable) -> Unit,
+    /** Null in the app: the system's trust store. Only the loopback tests pass their own. */
+    private val tls: SSLSocketFactory?,
+    internal val timeoutMs: Int,
+) : BackendTransport {
+    constructor(buildOrigin: String, post: (Runnable) -> Unit) : this(buildOrigin, post, null, TransportContract.TIMEOUT_MS)
 
-enum class Method { GET, POST, DELETE }
+    private val daemon = ThreadFactory { r -> Thread(r, "classbeat-backend").apply { isDaemon = true } }
+    private val worker = Executors.newCachedThreadPool(daemon)
+    private val timer = Executors.newSingleThreadScheduledExecutor(daemon)
 
-/** One call. Its text never shows the token: a request is safe to put in a test failure. */
-class BackendRequest(
-    val origin: String,
-    val method: Method,
-    val path: String,
-    /** A JSON object of text values, or null for no body. */
-    val body: Map<String, String>? = null,
-    val token: String? = null,
-    val maxBodyBytes: Int = TransportContract.MAX_BODY_BYTES,
-) {
-    override fun toString(): String = "$method $path" + if (token == null) "" else " (with the device token)"
-}
-
-/** What the transport hands back: a status with its JSON body (null when none or not JSON), or nothing. */
-sealed class HttpAnswer {
-    data class Http(val status: Int, val body: Any?, val retryAfterS: Int?) : HttpAnswer()
-
-    object Unreachable : HttpAnswer()
-}
-
-object TransportContract {
-    const val TIMEOUT_MS = 10_000
-    const val MAX_BODY_BYTES = 64 * 1024
-    const val FOLLOWS_REDIRECTS = false
-    private const val MAX_RETRY_AFTER_S = 3600
-
-    /** The request's headers, in full. Nothing else is sent: no cookie, no `Sec-Fetch-Site`. */
-    fun headers(request: BackendRequest): Map<String, String> {
-        val out = linkedMapOf("Accept" to "application/json")
-        if (request.body != null) out["Content-Type"] = "application/json"
-        if (request.token != null) out["Authorization"] = "Bearer ${request.token}"
-        return out
-    }
-
-    /** The body as JSON text, or null for none. */
-    fun body(request: BackendRequest): String? = request.body?.let { CanonicalJson.write(it) }
-
-    /** The address to call: the fixed origin and one of the fixed paths, or null to refuse the call. */
-    fun address(request: BackendRequest, buildOrigin: String): String? {
-        if (request.origin != buildOrigin || !Calls.allowed(request.method, request.path, request.token != null)) return null
-        if (request.maxBodyBytes !in 1..Calls.MAX_CLASS_BYTES) return null
-        return request.origin + request.path
-    }
-
-    /** `Retry-After` in whole seconds, capped at an hour; null when absent or not plain digits. */
-    fun retryAfter(raw: String?): Int? {
-        val text = raw?.trim() ?: return null
-        if (!Regex("^[0-9]{1,5}$").matches(text)) return null
-        return minOf(text.toInt(), MAX_RETRY_AFTER_S)
-    }
-
-    /** The answer's body read as JSON, or null when it is empty, too large or not JSON. */
-    fun readBody(bytes: ByteArray, max: Int): Any? {
-        if (bytes.isEmpty() || bytes.size > max) return null
-        val text = try {
-            Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
-        } catch (e: java.nio.charset.CharacterCodingException) {
-            return null
-        }
-        return Json.tryParse(text).getOrNull()
-    }
-}
-
-/** The stub the app runs until the real transport exists: every call is "offline". */
-class OfflineTransport(private val post: (Runnable) -> Unit) : BackendTransport {
     override fun send(request: BackendRequest, answer: (HttpAnswer) -> Unit) {
-        post(Runnable { answer(HttpAnswer.Unreachable) })
+        val address = TransportContract.address(request, buildOrigin)
+        if (address == null || !address.startsWith("https://")) return reply(answer, HttpAnswer.Unreachable)
+        // One deadline for the whole call: at [timeoutMs] the caller hears "unreachable", whatever
+        // the connection is doing, and the call's own answer, if it comes later, is dropped.
+        val once = AtomicBoolean(false)
+        val finish = { a: HttpAnswer -> if (once.compareAndSet(false, true)) reply(answer, a) }
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.toLong())
+        try {
+            timer.schedule({ finish(HttpAnswer.Unreachable) }, timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            worker.execute { finish(call(request, address, deadline)) }
+        } catch (e: Exception) {
+            finish(HttpAnswer.Unreachable)
+        }
+    }
+
+    private fun reply(answer: (HttpAnswer) -> Unit, a: HttpAnswer) = post(Runnable { answer(a) })
+
+    private fun call(request: BackendRequest, address: String, deadline: Long): HttpAnswer {
+        val conn = try {
+            URI(address).toURL().openConnection() as? HttpsURLConnection
+        } catch (e: Exception) {
+            null
+        } ?: return HttpAnswer.Unreachable
+        return try {
+            val a = exchange(conn, request, deadline)
+            if (System.nanoTime() > deadline) HttpAnswer.Unreachable else a
+        } catch (e: Exception) {
+            HttpAnswer.Unreachable
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Past the deadline the call stops: between reads, so a server sending slowly cannot hold it. */
+    private fun inTime(deadline: Long) {
+        if (System.nanoTime() > deadline) throw InterruptedIOException("past the deadline")
+    }
+
+    private fun exchange(conn: HttpsURLConnection, request: BackendRequest, deadline: Long): HttpAnswer {
+        conn.instanceFollowRedirects = TransportContract.FOLLOWS_REDIRECTS
+        conn.useCaches = false
+        conn.allowUserInteraction = false
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs
+        tls?.let { conn.sslSocketFactory = it }
+        conn.requestMethod = request.method.name
+        for ((name, value) in TransportContract.headers(request)) conn.setRequestProperty(name, value)
+        val body = TransportContract.body(request)?.toByteArray(Charsets.UTF_8)
+        if (body != null) {
+            conn.doOutput = true
+            conn.setFixedLengthStreamingMode(body.size)
+            conn.outputStream.use { it.write(body) }
+        }
+        val status = conn.responseCode
+        inTime(deadline)
+        // A redirect is not followed and is no answer from the backend; nor is anything outside HTTP's codes.
+        if (status !in 200..599 || status in 300..399) return HttpAnswer.Unreachable
+        // The owner's limit (2026-11-26) holds for every call, even one whose request allows more.
+        val cap = minOf(request.maxBodyBytes, TransportContract.MAX_BODY_BYTES)
+        val retryAfter = TransportContract.retryAfter(conn.getHeaderField("Retry-After"))
+        if (conn.contentLengthLong > cap) return HttpAnswer.Http(status, null, retryAfter)
+        val stream = if (status >= 400) conn.errorStream else conn.inputStream
+        // Not closed here: closing may wait to drain the rest; disconnect() in [call] drops it.
+        val bytes = stream?.let { readAtMost(it, cap, deadline) }
+        return HttpAnswer.Http(status, bytes?.let { TransportContract.readBody(it, cap) }, retryAfter)
+    }
+
+    /** The whole stream, or null as soon as it is longer than [cap]: the rest is never read. */
+    private fun readAtMost(input: InputStream, cap: Int, deadline: Long): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val chunk = ByteArray(8192)
+        while (true) {
+            inTime(deadline)
+            val n = input.read(chunk)
+            if (n < 0) return out.toByteArray()
+            if (out.size() + n > cap) return null
+            out.write(chunk, 0, n)
+        }
     }
 }
