@@ -46,6 +46,15 @@ export function parseAccess(reply: unknown): boolean {
   return isRecord(reply) && keysAre(reply, ["granted"]) && reply.granted === true;
 }
 
+/** A command's answer (FollowAnswers.kt): taken or not by the music app, or why nothing was sent. */
+export type CommandState = "sent" | "notSent" | "stopped" | "noAccess";
+
+/** `sendPlay`, `sendPause` or `sendNext`'s answer, or null when it cannot be used. */
+export function parseCommand(reply: unknown): CommandState | null {
+  const s = stateOf(reply);
+  return s === "sent" || s === "notSent" || s === "stopped" || s === "noAccess" ? s : null;
+}
+
 const FIELDS = ["trackId", "title", "artist", "lengthMs", "playing", "positionMs", "ageMs"] as const;
 
 function parseFields(v: unknown): ReadingFields | null {

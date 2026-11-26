@@ -11,7 +11,7 @@ import { createReaderLifecycle } from "../../../app/src/core/link/reader-lifecyc
 import type { MusicReader, NoReadingReason } from "../../../app/src/core/link/reader.ts";
 import { isTransportAction } from "../../../app/src/core/link/transport.ts";
 import type { MusicTransport, TransportAction } from "../../../app/src/core/link/transport.ts";
-import { observationOf, parseFollow, parseReading } from "./answers.ts";
+import { observationOf, parseCommand, parseFollow, parseReading } from "./answers.ts";
 
 /** Instructor mode's follow intents, as bridge.ts carries them. */
 export interface FollowIntents {
@@ -124,12 +124,18 @@ export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderD
       },
       // The lifecycle lets one command through at a time, only after a good answer while following.
       // Whatever native code answers ("sent", "notSent", a refusal), the command has been taken.
+      // "noAccess" also means native code has stopped following (issue #867): the reader stops at
+      // once, with the reason the instructor can act on, before the slot frees for a waiting command.
       command(action, taken) {
         if (!isTransportAction(action)) return taken();
+        const mine = run;
         const done = (): void => taken();
         Promise.resolve()
           .then(() => COMMANDS[action](intents))
-          .then(done, done);
+          .then((reply) => {
+            if (mine === run && parseCommand(reply) === "noAccess") stopped("not-permitted", false);
+            done();
+          }, done);
       },
     },
   );

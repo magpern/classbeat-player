@@ -164,3 +164,62 @@ test("an intent that throws at once is taken as failed and frees the slot", asyn
   await flush();
   assert.deepEqual(commandsOf(f), ["play", "pause"]);
 });
+
+test("a command answered noAccess stops the reader at once as not permitted, and the waiting command never goes (#867)", async () => {
+  const f = fake();
+  const { r, tick } = reader(f);
+  r.setActive?.(true);
+  await flush();
+  await tick();
+  f.hold = true;
+  r.send("play");
+  r.send("next");
+  await flush();
+  f.pending.shift()?.resolve({ state: "noAccess" });
+  await flush();
+  assert.equal(r.reason?.(), "not-permitted", "stopped now, with the reason the instructor can act on");
+  assert.equal(f.calls.at(-1), "unfollow");
+  assert.deepEqual(commandsOf(f), ["play"], "the waiting command was dropped");
+  await tick();
+  assert.equal(f.calls.filter((c) => c === "reading").length, 1, "no poll after stopping");
+  r.setActive?.(true);
+  await flush();
+  assert.equal(f.calls.at(-1), "follow", "not stopped for good: the page may follow again");
+});
+
+test("any other command answer leaves the reader following (#867)", async () => {
+  for (const reply of [{ state: "sent" }, { state: "notSent" }, { state: "stopped" }, { state: "garbage" }, null]) {
+    const f = fake();
+    const { r, tick } = reader(f);
+    r.setActive?.(true);
+    await flush();
+    await tick();
+    f.hold = true;
+    r.send("pause");
+    await flush();
+    f.pending.shift()?.resolve(reply);
+    await flush();
+    assert.equal(r.reason?.(), "not-running", JSON.stringify(reply));
+    assert.ok(!f.calls.includes("unfollow"), JSON.stringify(reply));
+  }
+});
+
+test("a noAccess answer to a command from an earlier run is dropped (#867)", async () => {
+  const f = fake();
+  const { r, tick } = reader(f);
+  r.setActive?.(true);
+  await flush();
+  await tick();
+  f.hold = true;
+  r.send("play");
+  await flush();
+  r.setActive?.(false);
+  await flush();
+  r.setActive?.(true);
+  await flush();
+  await tick();
+  f.pending.shift()?.resolve({ state: "noAccess" });
+  await flush();
+  assert.equal(r.reason?.(), "not-running", "the new run keeps following");
+  assert.equal(f.calls.filter((c) => c === "unfollow").length, 1, "only the page's own stop");
+});

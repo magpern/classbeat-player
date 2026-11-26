@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   observationOf,
   parseAccess,
+  parseCommand,
   parseFollow,
   parseReading,
 } from "../src/follow/answers.ts";
@@ -75,6 +76,24 @@ test("follow and access answers: anything unexpected means the manual clock", ()
     { granted: false },
   ])
     assert.equal(parseAccess(b), false);
+});
+
+test("a command answer is one of its four states, read strictly; anything else cannot be used (#867)", () => {
+  for (const s of ["sent", "notSent", "stopped", "noAccess"] as const) assert.equal(parseCommand({ state: s }), s);
+  for (const bad of [
+    null,
+    undefined,
+    "noAccess",
+    [],
+    {},
+    { state: "NoAccess" },
+    { state: "following" },
+    { state: "reading" },
+    { state: "noAccess", extra: 1 },
+    { state: ["noAccess"] },
+  ]) {
+    assert.equal(parseCommand(bad), null, JSON.stringify(bad));
+  }
 });
 
 test("a reading is dated on the page's clock: the call's midpoint less its age; a call running backwards is not dated", () => {
