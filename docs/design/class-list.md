@@ -217,8 +217,8 @@ The state is a fact about one class, so it follows the selection and changes not
   button fill (`--light-3` on `--stage-raised` measures 6.1 : 1). This is below L2's 7 : 1 for
   an active button, on purpose: a disabled control reads as unavailable, and the words next to
   it carry the meaning. It stays `--light-3`, as #927 built it, which is the one disabled label on
-  this screen at 6.1 : 1 (other screens use `--light-2`). The footer detail is ordinary detail text at 7 : 1
-  or more.
+  this screen at 6.1 : 1 (other screens use `--light-2`). The footer
+  detail is ordinary detail text at 7 : 1 or more.
 - **Focus.** A disabled button takes no focus, so Tab skips it; the list stays the one Tab
   stop and its focus ring is unchanged. When selection moves to a startable class, Start is
   enabled at once and its hint returns.
