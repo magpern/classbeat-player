@@ -114,6 +114,9 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertEqual(controller.current, .rider, file: file, line: line)
         XCTAssertEqual(controller.exposed, "RiderMode", file: file, line: line)
         XCTAssertEqual(loader.paths, ["/index.html", "/rider.html"], file: file, line: line)
+        // The start page hides the screens; each test then reads only its own steps.
+        XCTAssertEqual(screens.log, ["hide"], file: file, line: line)
+        screens.log = []
     }
 
     private func call(_ plugin: Mode, _ name: String, _ args: [String: Any] = [:]) -> FakeCall {
