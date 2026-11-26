@@ -34,13 +34,14 @@ class Follower(
         return FollowAnswers.state(if (access.openSetting()) "opened" else UNOPENED)
     }
 
-    /** Turns following on: "following", or why not ("noAccess", "unavailable"). */
+    /** Turns following on: "following", or why not ("unavailable", "noAccess"). */
     fun follow(): Map<String, Any?> {
-        if (!access.granted()) return FollowAnswers.state(FollowAnswers.NO_ACCESS)
+        // The reader first: a source that cannot follow must not send the instructor to the setting.
         if (source.status() == SourceStatus.UNAVAILABLE) {
             stopSource()
             return FollowAnswers.state(FollowAnswers.UNAVAILABLE)
         }
+        if (!access.granted()) return FollowAnswers.state(FollowAnswers.NO_ACCESS)
         access.enable(true)
         if (!following) source.start()
         following = true

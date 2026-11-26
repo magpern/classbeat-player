@@ -94,6 +94,16 @@ class FollowerTest {
     }
 
     @Test
+    fun `an unavailable reader answers unavailable even without access, so no one is sent to the setting`() {
+        val access = FakeAccess(grant = false)
+        val f = follower(UnavailableSource, access)
+        assertEquals(mapOf("state" to "unavailable"), f.follow())
+        assertFalse(f.following)
+        assertEquals(emptyList<Boolean>(), access.switches)
+        assertEquals(0, access.opened)
+    }
+
+    @Test
     fun `with access it follows, starts the source once and answers each reading dated by its age`() {
         val access = FakeAccess(grant = true)
         val source = FakeSource(SourceStatus.READING, reading)
