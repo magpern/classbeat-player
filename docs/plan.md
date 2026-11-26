@@ -235,7 +235,7 @@ Options:
 | B | Follow and control through the Spotify Web API | No: 5 users, non-commercial, Premium | A few seconds, by polling | Only as an optional extra for the beta circle |
 | C | Play Spotify inside the player | No | Exact | Rejected: not workable in our shell and not permitted for our use |
 | D | **Manual clock:** press Start with the music, nudge earlier or later | Yes | As good as the instructor's timing | **Always available**; the only mode for Swedebeat and soundless classes at first |
-| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below). The same engine plays the instructor's own local files (ADR 0017) | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
+| E | **Play a Swedebeat mix ourselves:** download it to a cache on the device, playing while it downloads (below) | Yes | Exact | The intended Swedebeat mode; needs a sanctioned source of the audio, its own ADR and a provider's agreement |
 
 **Recommended design: follow, never depend.**
 
@@ -748,7 +748,7 @@ reversible defaults.
 16. **Local music files: decided (owner, 2026-11-26; ADR 0017).** A class may use the
     instructor's own audio files (for example mp3) as its music source, besides Spotify and
     Swedebeat. The files stay on the instructor's device; the player plays them itself, exactly
-    timed. Desktop first.
+    timed. Desktop first. Plan option E's engine is reused.
 
 ## 14. Not verified
 
