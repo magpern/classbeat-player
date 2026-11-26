@@ -115,8 +115,8 @@ with other work; nothing in the development loop waits for an answer.
   read, no Spotify SDK, no `spotify:` link). Recorded in ADR 0011, section 8.
 - **The iOS app's backend calls (PL12, ADR 0016, 2026-11-26).** The guards ban network use in the
   app's native code; your exception for Android (#649) names one Kotlin file. Proposal: the same
-  exception for one Swift file, `BackendTransport.swift` (`URLSession`, only the backend origin
-  fixed in the build, no redirects, a 64 KiB answer limit, a 10 s timeout, no relaxed certificate
+  exception for one Swift file, `BackendTransport.swift` (`URLSession` with an ephemeral
+  configuration, only the backend origin fixed in the build, no redirects, a 64 KiB answer limit, a 10 s timeout, no relaxed certificate
   or host checks), and for one Swift file holding the rider socket to the same origin. Until you
   decide, the iOS app is built with these calls faked: it pairs nothing and syncs no classes.
 - **Sensors and two rule guards (PL9, ADR 0012, 2026-11-24).** The player's guard bans

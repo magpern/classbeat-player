@@ -60,7 +60,8 @@ ADR 0011, section 4, carried to WKWebView:
 - Web view inspection (`isInspectable`) is on only in debug builds; CI checks the release
   configuration.
 - **Info.plist and entitlements: an allowlist.** A test reads them and fails on any key not on the
-  list. Never a camera, microphone, photo library or location usage key (rule 12). No
+  list. The list names `NSFaceIDUsageDescription` (section 3) and `UIApplicationSceneManifest`
+  (section 6) besides Capacitor's own keys. Never a camera, microphone, photo library or location usage key (rule 12). No
   `NSAllowsArbitraryLoads`; App Transport Security allows only HTTPS, with a loopback exception
   in debug builds only. No background modes. No entitlements beyond the default (no iCloud, no app
   groups, no associated domains).
@@ -70,9 +71,16 @@ ADR 0011, section 4, carried to WKWebView:
 - Pairing is the desktop's and Android's (ADR 0002, ADR 0011 section 5). Sign-in on the site opens
   in Safari, never in the app's web view.
 - The device token never enters the web view's JavaScript. It is stored in the **Keychain** as a
-  generic password with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`: not synced to iCloud and
-  not restored to another device from a backup. If the Keychain refuses, the app does not pair;
-  there is no plain-text fallback.
+  generic password with `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly`: not synced to iCloud,
+  not restored to another device from a backup, readable only while the device is unlocked, and
+  deleted by iOS if the passcode is removed. If the Keychain refuses, the app does not pair; there
+  is no plain-text fallback.
+- **Uninstalling forgets the pairing.** On iOS, Keychain items outlive an uninstall, so ADR 0011
+  section 5's "uninstalling removes it" does not hold by itself. On launch, before anything reads
+  the Keychain, the app looks for a first-launch marker in `UserDefaults` (which an uninstall
+  deletes). With no marker, it deletes every Keychain item of the app, then writes the marker, and
+  starts unpaired and in rider mode. A test covers it: a stored token with no marker is gone after
+  launch.
 - The mode is held in native code, in storage the web view cannot reach, exactly as on Android.
 - **Entering instructor mode on a paired device** asks for the device owner's authentication
   through LocalAuthentication (`deviceOwnerAuthentication`: Face ID, Touch ID or the passcode),
@@ -103,10 +111,14 @@ code plays, records or reads audio, and none names Spotify (section 8).
 - Keep-awake sets `UIApplication.shared.isIdleTimerDisabled` while a class runs in instructor
   mode, under the same pure rule as Android's `KeepAwakePolicy`, and clears it otherwise and
   when the app leaves the foreground.
-- **The external display.** When a display is connected (AirPlay or a cable), the room screen
-  runs in a second bundled web view in a scene with the role
-  `windowExternalDisplayNonInteractive`, under the same pure rule as Android's
-  `ExternalDisplayPolicy`, with the same lockdown as section 2. It is instructor mode only.
+- **The external display, as Android has it.** When a display is connected (AirPlay or a cable),
+  the app shows on it, in a scene with the role `windowExternalDisplayNonInteractive`, a second
+  web view that loads only a bundled page, under a Swift twin of Android's `ExternalDisplayPolicy`
+  (issue #738) and the lockdown of section 2. That web view has **no bridge** and receives **no
+  data**: no class, no token, no rider's reading, in either mode. It never mirrors the phone's
+  screen. So, as on Android, the display shows the idle stage while a class runs on the phone.
+  Showing the open class there needs a bridge to that web view and is a later decision, as ADR
+  0011 left it.
 
 ### 7. Bluetooth waits for the sensor decision
 
@@ -119,11 +131,19 @@ proposals (docs/owner.md); until then the app declares no Bluetooth usage key.
 ### 8. The rule guards cover `player/mobile/ios/`
 
 The checks of ADR 0011 section 8 are extended to all Swift and Objective-C under
-`player/mobile/ios/` in the first pull request that adds code there. They forbid, besides what
-they forbid already: `AVAudioPlayer`, `AVPlayer`, `AVQueuePlayer`, `AVAudioEngine`,
-`AVAudioRecorder`, `AVCaptureSession`, `MPMusicPlayerController`, `SpotifyiOS` and any Spotify
-SDK, `spotify:` links (rule 3); `URLSession`, `NWConnection`, `URLSessionWebSocketTask` and any
-other network API (until section 4 is decided); `writeValue` (rule 2). The Info.plist and
+`player/mobile/ios/` in the first pull request that adds code there.
+- **Imports are an allowlist per file**: `Foundation`, `UIKit`, `WebKit`, `LocalAuthentication`,
+  `Security` and `Capacitor`, and for each file only those it needs. Any other import fails, so
+  `AVFoundation`, `MediaPlayer`, `AudioToolbox`, `Network`, `Speech`, `CoreBluetooth` (until PL9)
+  and any Spotify SDK are out without being listed.
+- **Names banned besides the import list**, because some come in through `Foundation` or `UIKit`:
+  `AVAudioPlayer`, `AVPlayer`, `AVPlayerLayer`, `AVQueuePlayer`, `AVAudioEngine`,
+  `AVAudioRecorder`, `AudioQueue`, `AVCaptureSession`, `AVCaptureDevice`,
+  `UIImagePickerController`, `SFSpeechRecognizer`, `MPMusicPlayerController`, `SpotifyiOS`,
+  `spotify:` links (rules 3 and 12); `URLSession`, `URLSessionWebSocketTask`, `NWConnection`,
+  `CFStream`, `Data(contentsOf:` and `String(contentsOf:` (network, until section 4 is decided);
+  `writeValue` (rule 2); and a `WKWebView(` created anywhere but the one factory that applies
+  section 2. The Info.plist and
 entitlement allowlists of section 2 are guards too. These are only additions; no existing check is
 loosened. The Podfile or Swift package list is an allowlist: only Capacitor's own iOS packages.
 
@@ -155,14 +175,21 @@ loosened. The Podfile or Swift package list is an allowlist: only Capacitor's ow
 ## Consequences
 
 - The iOS app is built in this order, one issue each:
-  1. The iOS project and the macOS CI job on the simulator, with the guards of section 8 and the
-     allowlists of section 2 (infra and player; security-critical: the shell's hardening).
-  2. The mode holder, the bridge lockdown and the screen-lock check in Swift (security-critical).
-  3. The Keychain store and pairing, with the transport faked (security-critical).
-  4. Keep-awake and the external display.
-  5. Rider mode in Swift, with its traffic faked.
-  6. The room screen offers no Follow where the reader is `unavailable`, if it does not already.
-  7. The runbook for the owner's Mac.
+  1. The macOS CI job on the simulator (infra lane; not security-critical; it builds an empty
+     target until item 2 lands, then runs its tests).
+  2. The iOS project, the guards of section 8 and the allowlists of section 2 (player lane;
+     security-critical: the shell's hardening; rule-sensitive).
+  3. The mode holder, the bridge lockdown and the screen-lock check in Swift (player;
+     security-critical).
+  4. The Keychain store, the first-launch wipe and pairing, with the transport faked (player;
+     security-critical).
+  5. Keep-awake and the external display (player; security-critical and rule-sensitive: the
+     display's web view and what it may receive).
+  6. Rider mode in Swift, with its traffic faked (player; security-critical and rule-sensitive: it
+     holds the rider token and carries rider data, rules 13 to 15).
+  7. The room screen offers no Follow where the reader is `unavailable`, if it does not already
+     (screens lane; a user sees it, so it needs a design review).
+  8. The runbook for the owner's Mac (docs).
   The backend transport, the rider socket and Bluetooth follow the owner's decisions.
 - The guards grow by a Swift section; nothing in them is loosened.
 - macOS CI minutes are spent only on changes to the app.
