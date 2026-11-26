@@ -92,9 +92,9 @@ ADR 0011, section 4, carried to WKWebView:
 
 The guards (ADR 0011, section 8) ban network use in native code. The owner's exception for
 Android (#649, 2026-11-26) names one Kotlin file. iOS needs the same exception for one Swift file
-(`BackendTransport.swift`, `URLSession` with an ephemeral configuration, the fixed origin, no
-redirects, a 64 KiB answer limit, a 10 s timeout, no relaxed certificate or host checks) and for
-the rider socket. That is a new guard exception, so it is proposed to the owner (docs/owner.md)
+(`BackendTransport.swift`: `URLSession` with an ephemeral configuration, only the backend origin
+fixed in the build, no redirects, a 64 KiB answer limit, a 10 s timeout, no relaxed certificate or
+host checks) and for one Swift file holding the rider socket to the same origin. That is a new guard exception, so it is proposed to the owner (docs/owner.md)
 and not built until the owner decides. Until then the iOS app pairs nothing and syncs no classes:
 it is built and tested with the native transport faked, and the room screen runs on a bundled
 demo class, as Android did before #649.
