@@ -14,6 +14,7 @@ class FormatVersion(Enum):
     field_1_1 = '1.1'
     field_1_2 = '1.2'
     field_1_3 = '1.3'
+    field_1_4 = '1.4'
 
 
 class Ms(RootModel[int]):
@@ -60,7 +61,21 @@ class ClassInfo(BaseModel):
 class Source(Enum):
     spotify = 'spotify'
     swedebeat = 'swedebeat'
+    local = 'local'
     none = 'none'
+
+
+class LocalFile(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    sha256: Annotated[
+        str, Field(max_length=64, min_length=64, pattern='^[0-9a-f]{64}$')
+    ]
+    size_bytes: Annotated[int, Field(ge=1)]
+    file_name: Annotated[
+        str, Field(max_length=255, min_length=1, pattern='^[^/\\\\]+$')
+    ]
 
 
 class SwedebeatMix(BaseModel):
@@ -197,6 +212,7 @@ class Ids(BaseModel):
     spotify_track: Annotated[str | None, Field(pattern='^[A-Za-z0-9]{22}$')] = None
     isrc: Annotated[str | None, Field(pattern='^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$')] = None
     swedebeat_mix: Annotated[str | None, Field(max_length=100, min_length=1)] = None
+    local_file: LocalFile | None = None
 
 
 class Anchor(BaseModel):
@@ -257,7 +273,12 @@ class Music(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    source: Source
+    source: Annotated[
+        Source,
+        Field(
+            description="Format 1.4 adds local: the instructor's own audio files, played by the player from the device (ADR 0017). Before 1.4 only spotify, swedebeat and none."
+        ),
+    ]
     design_crossfade_ms: Annotated[int, Field(ge=0, le=30000)]
     song_timing: Quality
     spotify_playlist: Annotated[

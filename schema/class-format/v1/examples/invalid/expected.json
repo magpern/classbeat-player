@@ -607,10 +607,156 @@
       "/music/swedebeat_mix"
     ]
   ],
-  "schema-strict-refuses-minor-1-4.json": [
+  "schema-strict-refuses-minor-1-5.json": [
     [
       "schema",
       "/format_version"
+    ]
+  ],
+  "local-file-missing.json": [
+    [
+      "local_file_missing",
+      "/songs/1"
+    ]
+  ],
+  "local-file-with-spotify-source.json": [
+    [
+      "local_file_without_local_source",
+      "/songs/0/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/1/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/10/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/11/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/2/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/3/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/4/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/5/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/6/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/7/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/8/ids/local_file"
+    ],
+    [
+      "local_file_without_local_source",
+      "/songs/9/ids/local_file"
+    ]
+  ],
+  "schema-local-file-with-source-none.json": [
+    [
+      "schema",
+      "/songs"
+    ]
+  ],
+  "schema-source-local-in-format-1-3.json": [
+    [
+      "schema",
+      "/music/source"
+    ]
+  ],
+  "schema-local-file-in-format-1-3-spotify.json": [
+    [
+      "schema",
+      "/songs/0/ids"
+    ]
+  ],
+  "schema-local-file-sha256-uppercase.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/sha256"
+    ]
+  ],
+  "schema-local-file-sha256-63-chars.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/sha256"
+    ]
+  ],
+  "schema-local-file-sha256-65-chars.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/sha256"
+    ]
+  ],
+  "schema-local-file-sha256-trailing-newline.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/sha256"
+    ]
+  ],
+  "schema-local-file-size-zero.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/size_bytes"
+    ]
+  ],
+  "schema-local-file-size-not-integer.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/size_bytes"
+    ]
+  ],
+  "schema-local-file-name-slash.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/file_name"
+    ]
+  ],
+  "schema-local-file-name-backslash.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/file_name"
+    ]
+  ],
+  "schema-local-file-name-empty.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/file_name"
+    ]
+  ],
+  "schema-local-file-name-256-chars.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file/file_name"
+    ]
+  ],
+  "schema-local-file-missing-sha256.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file"
+    ]
+  ],
+  "schema-local-file-unknown-field.json": [
+    [
+      "schema",
+      "/songs/0/ids/local_file"
     ]
   ]
 }
