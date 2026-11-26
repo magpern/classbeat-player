@@ -32,13 +32,28 @@ expect() { # expect <pass|fail> <name>
 
 hosts=()
 packages=()
+names=()
 while read -r kind value _; do
   case "$kind" in
     host) hosts+=("$value") ;;
     package) packages+=("$value") ;;
+    name) names+=("$value") ;;
   esac
 done <"$here/provider-guard.txt"
 [ "${#hosts[@]}" -gt 0 ] && [ "${#packages[@]}" -gt 0 ] || { echo "FAIL: guard list has no hosts or no packages"; exit 1; }
+
+[ "${#names[@]}" -gt 0 ] || { echo "FAIL: guard list has no names"; exit 1; }
+
+# A value is name-covered when a "name" entry matches it; such a value is allowed only in the
+# ADR and the list, not in the other documents.
+covered() { # covered <value>
+  local n pat
+  for n in "${names[@]}"; do
+    pat="$(printf '%s' "$n" | sed -E 's#-#[^A-Za-z0-9]*#g')"
+    if printf '%s' "$1" | grep -qiE -e "$pat"; then return 0; fi
+  done
+  return 1
+}
 
 new_repo
 expect pass "clean tree"
@@ -62,13 +77,25 @@ for h in "${hosts[@]}"; do
 
   new_repo
   echo "const u = 'https://x$h/';" >"$r/player/a.ts"
-  expect pass "longer name ending the same way is not the host: $h"
+  want=pass; covered "$h" && want=fail; expect "$want" "longer name ending the same way is not the host: $h"
 
-  new_repo
-  echo "see $h" >"$r/docs/note.md"
-  echo "see $h" >"$r/AGENTS.md"
-  echo "see $h" >"$r/README.md"
-  expect pass "host in allowed places: $h"
+  if covered "$h"; then
+    new_repo
+    mkdir -p "$r/docs/adr"
+    echo "see $h" >"$r/docs/adr/0004-provider-terms.md"
+    expect pass "name-covered host in ADR 0004: $h"
+    for f in docs/note.md AGENTS.md README.md; do
+      new_repo
+      echo "see $h" >"$r/$f"
+      expect fail "name-covered host in $f: $h"
+    done
+  else
+    new_repo
+    echo "see $h" >"$r/docs/note.md"
+    echo "see $h" >"$r/AGENTS.md"
+    echo "see $h" >"$r/README.md"
+    expect pass "host in allowed places: $h"
+  fi
 
   new_repo
   echo "see $h" >"$r/player/README.md"
@@ -102,16 +129,64 @@ for p in "${packages[@]}"; do
 
   new_repo
   echo "// the $p package is banned" >"$r/player/a.ts"
-  expect pass "package named in a comment is not an import: $p"
+  want=pass; covered "$p" && want=fail; expect "$want" "package named in a comment is not an import: $p"
 
   new_repo
   printf '{"dependencies":{"%s-extra":"1.0.0"}}\n' "$p" >"$r/player/package.json"
-  expect pass "different package with the same prefix: $p"
+  want=pass; covered "$p" && want=fail; expect "$want" "different package with the same prefix: $p"
+
+  if covered "$p"; then
+    new_repo
+    mkdir -p "$r/docs/adr"
+    echo "$p" >"$r/docs/adr/0004-provider-terms.md"
+    expect pass "name-covered package in ADR 0004: $p"
+    new_repo
+    echo "$p" >"$r/docs/note.md"
+    expect fail "name-covered package in another doc: $p"
+  else
+    new_repo
+    echo "$p" >"$r/docs/note.md"
+    echo "$p" >"$r/AGENTS.md"
+    expect pass "package in allowed places: $p"
+  fi
+done
+
+for n in "${names[@]}"; do
+  words="$(printf '%s' "$n" | tr '-' ' ')"
+  upper="$(printf '%s' "$words" | tr '[:lower:]' '[:upper:]')"
+  title="$(printf '%s' "$words" | sed -E 's/(^| )(.)/\1\u\2/g')"
+  for spelling in "$words" "$upper" "$title"; do
+    new_repo
+    echo "// $spelling" >"$r/player/a.ts"
+    expect fail "name in a source file: $spelling"
+
+    new_repo
+    mkdir -p "$r/player/test"
+    echo "it('$spelling', () => {});" >"$r/player/test/a.test.ts"
+    expect fail "name in a test: $spelling"
+
+    new_repo
+    mkdir -p "$r/player/test/fixtures"
+    printf '{"title":"%s"}\n' "$spelling" >"$r/player/test/fixtures/class.json"
+    expect fail "name in a fixture: $spelling"
+
+    new_repo
+    echo "see $spelling" >"$r/docs/note.md"
+    expect fail "name in a docs page other than ADR 0004: $spelling"
+
+    new_repo
+    echo "see $spelling" >"$r/README.md"
+    expect fail "name in README.md: $spelling"
+
+    new_repo
+    mkdir -p "$r/docs/adr"
+    echo "see $spelling" >"$r/docs/adr/0004-provider-terms.md"
+    expect pass "name in ADR 0004: $spelling"
+  done
 
   new_repo
-  echo "$p" >"$r/docs/note.md"
-  echo "$p" >"$r/AGENTS.md"
-  expect pass "package in allowed places: $p"
+  echo "// $(printf '%s' "$n" | tr -d '-')" >"$r/player/a.ts"
+  expect fail "name without separator: $n"
 done
 
 new_repo
