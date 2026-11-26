@@ -53,7 +53,13 @@ test("open an example class, start, pause and skip", { timeout: 60_000 }, async 
   assert.equal(await text("status"), "ready");
 
   await page.click("#start");
-  await page.waitForFunction(() => document.getElementById("class-time")?.textContent === "0:02");
+  // Wait for the clock to REACH 2 s, never to show exactly "0:02": the main process pushes every
+  // 100 ms, and a stalled push on a slow runner (macOS CI) can go from 0:01 to 0:03, so an exact
+  // match never comes while the class keeps running (#840).
+  await page.waitForFunction(() => {
+    const [m, s] = (document.getElementById("class-time")?.textContent ?? "").split(":").map(Number);
+    return m * 60 + s >= 2;
+  });
   assert.equal(await text("status"), "running");
 
   await page.click("#pause");
