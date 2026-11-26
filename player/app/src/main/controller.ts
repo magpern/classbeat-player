@@ -56,15 +56,22 @@ export function createController(now: () => number = () => performance.now(), re
   const enders: (() => void)[] = [];
   const openers: (() => void)[] = [];
   const watchers: ((s: Snapshot) => void)[] = [];
+  /** True once the reader has given a reading in this stretch of following. */
+  let heard = false;
   /** Brings the state up to the music's latest reading at t. */
   const catchUp = (t: number): void => {
     if (reader.unavailable?.() === true) state = withoutReader(state);
-    // Access taken back while following (macOS Automation): the clock goes on by hand at once, announced; the reader goes quiet.
-    if (isFollowing(state) && reader.reason?.() === "not-permitted") {
+    const obs = reader.latest(t);
+    // Access taken back while the clock followed the music (macOS Automation): the clock goes on by hand at once,
+    // announced. Access never given (the first prompt refused) keeps following, with the reason shown to act on.
+    if (!isFollowing(state)) heard = false;
+    else if (obs !== null) heard = true;
+    if (heard && reader.reason?.() === "not-permitted") {
       state = readerStopped(state, t);
+      heard = false;
       sync();
     }
-    state = advance(state, t, reader.latest(t));
+    state = advance(state, t, obs);
   };
   const snapshot = (): Snapshot => {
     const t = now();

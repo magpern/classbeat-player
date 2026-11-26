@@ -89,6 +89,19 @@ test("other reasons do not hand over: a reader that is only not answering keeps 
   }
 });
 
+test("access never given (the first prompt refused, no reading yet): following stays, with the reason shown", () => {
+  const f = fake();
+  const clock = { t: 1000 };
+  const c = createController(() => clock.t, f, f);
+  c.open("class.json", TEXT);
+  c.command({ type: "follow" });
+  f.why = "not-permitted";
+  clock.t = 2000;
+  const snap = c.snapshot();
+  assert.equal(snap.link?.mode, "following");
+  assert.equal(snap.link?.noReading, "not-permitted");
+});
+
 test("Follow can be picked again after the hand-over", () => {
   const { f, c, clock } = following();
   f.why = "not-permitted";
