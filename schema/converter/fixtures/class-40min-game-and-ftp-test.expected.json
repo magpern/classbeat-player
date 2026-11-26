@@ -2,7 +2,7 @@
   "format_version": "1.0",
   "class": {
     "title": "Forty minutes with a game and a test",
-    "description": "Carries a MOWL game on one interval and a twenty minute FTP test.",
+    "description": "Carries a game on one interval and a twenty minute FTP test.",
     "sport": "cycling",
     "length_ms": 2400000
   },
