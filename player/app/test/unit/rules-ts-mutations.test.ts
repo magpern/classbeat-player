@@ -42,7 +42,7 @@ const MUTATIONS: readonly Mutation[] = [
   [AUDIO, ROOM_HTML, HTML, `${HTML}<p>//</p><video></video>`, true],
   [AUDIO, ROOM_HTML, HTML, `${HTML}<p>//</p><audio src="x"></audio>`, true],
   [SPOTIFY, LIVE_SOCKET, SOCK, hidden(SOCK, "new Spotify.Player(o);"), true],
-  [SPOTIFY, ROOM_MIX, MIX, hidden(MIX, 'load("https://api.spotify.com/v1");'), true],
+  [SPOTIFY, ROOM_MIX, MIX, hidden(MIX, 'load("spotify-web-api");'), true],
   [EQUIPMENT, LIVE_SOCKET, SOCK, hidden(SOCK, "c.writeValue(b);"), true],
   [EQUIPMENT, ROOM_MIX, MIX, hidden(MIX, "navigator.usb.requestDevice(o);"), true],
   [NETWORK, LIVE_SOCKET, SOCK, hidden(SOCK, "fetch(u);"), true],

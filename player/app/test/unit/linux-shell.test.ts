@@ -228,7 +228,7 @@ test('each check catches code a "//" in a string hides from the old view (issue 
     ["imports", "main/main.ts", MAIN, hide(MAIN, 'import { BUSCTL } from "../core/link/linux-calls.ts";'), true],
     ["secrets", "main/linux-reader.ts", EXEC, hide(EXEC, "void fetch(u);"), true],
     ["secrets", CALLS, BASE, hide(BASE, "const t = process.env.X;"), true],
-    ["secrets", "core/link/linux-parse.ts", PARSE, hide(PARSE, 'const u = "https://api.spotify.com";'), true],
+    ["secrets", "core/link/linux-parse.ts", PARSE, hide(PARSE, 'const u = "http://127.0.0.1";'), true],
   ];
   assert.deepEqual(mutationGaps(table, new Map(Object.entries(C)), raw, oldView(slashCode)), []);
   assert.deepEqual([...new Set(table.map(([c]) => c))].sort(), Object.keys(C).sort());
