@@ -8,6 +8,7 @@ import { test } from "node:test";
 import type { MusicReader, MusicTransport, Observation, TransportAction } from "../../src/core/link/index.ts";
 import type { NoReadingReason } from "../../src/core/link/reader.ts";
 import { createController } from "../../src/main/controller.ts";
+import { createMacMusic } from "../../src/main/macos-reader.ts";
 import { CONVERTER_FIXTURES } from "./fixtures.ts";
 
 const doc = JSON.parse(readFileSync(join(CONVERTER_FIXTURES, "class-30min-spotify-playlist.expected.json"), "utf8")) as { songs: { title: string; artist: string; length_ms: number }[] };
@@ -113,4 +114,83 @@ test("Follow can be picked again after the hand-over", () => {
   c.command({ type: "follow" });
   assert.equal(c.snapshot().link?.mode, "following");
   assert.equal(f.active.at(-1), true);
+});
+
+test("the reset of `heard`: a stretch of following that was heard does not carry over to the next one", () => {
+  const { f, c, clock } = following();
+  c.command({ type: "manual" });
+  assert.equal(c.snapshot().link?.mode, "manual");
+  f.obs = null;
+  f.why = "not-permitted";
+  clock.t = 2000;
+  c.command({ type: "follow" });
+  clock.t = 2100;
+  const snap = c.snapshot();
+  assert.equal(snap.link?.mode, "following", "nothing heard in this stretch: access never given, so no hand-over");
+  assert.equal(snap.link?.noReading, "not-permitted", "the reason is shown to act on");
+});
+
+// The real macOS reader, over a fake osascript. Its `stopped()` clears the reason when following
+// ends, so after the hand-over the screen shows the announcement and no reason line: the hand-over
+// has said what happened, and nothing is left to act on until Follow is picked again.
+type Answer = (error: Error | null, out: string) => void;
+
+function realMac(): { c: ReturnType<typeof createController>; answers: Answer[]; poll: () => void; clock: { t: number } } {
+  const answers: Answer[] = [];
+  const clock = { t: 1000 };
+  let running: (() => void)[] = [];
+  const mac = createMacMusic({
+    exec: (_file, _args, _options, done) => {
+      answers.push(done);
+      return undefined;
+    },
+    now: () => clock.t,
+    every: (fn) => {
+      running.push(fn);
+      return () => void (running = running.filter((f) => f !== fn));
+    },
+  });
+  const c = createController(() => clock.t, mac, mac);
+  c.open("class.json", TEXT);
+  return { c, answers, poll: () => running.forEach((f) => f()), clock };
+}
+
+const PLAYING = (): string => `playing\tspotify:track:X\t${doc.songs[0].title}\t${doc.songs[0].artist}\t0.0\t${doc.songs[0].length_ms}\n`;
+const REFUSED = Object.assign(new Error("Command failed\nNot authorized to send Apple events to Spotify. (-1743)"), { code: 1 });
+
+/** Following on the real reader, music heard, then Automation refused on the next read. */
+function takenBack(): ReturnType<typeof realMac> {
+  const r = realMac();
+  r.c.command({ type: "follow" });
+  r.answers[0](null, PLAYING());
+  r.clock.t = 1500;
+  assert.equal(r.c.snapshot().link?.mode, "following", "heard the music");
+  r.clock.t = 1750;
+  r.poll();
+  r.answers[1](REFUSED, "");
+  r.clock.t = 2000;
+  return r;
+}
+
+test("real macOS reader: access taken back hands the clock over, announced, and the reason goes with it", () => {
+  const r = takenBack();
+  const snap = r.c.snapshot();
+  assert.equal(snap.link?.mode, "manual", "the clock goes on by hand");
+  assert.equal(snap.view?.status, "running");
+  assert.notEqual(snap.link?.announcement ?? null, null, "Following stopped is announced");
+  assert.equal(snap.link?.noReading ?? null, null, "stopping the reader cleared the reason: the screen has no reason line");
+  r.clock.t = 2100;
+  assert.equal(r.c.snapshot().link?.mode, "manual", "and it stays on the manual clock");
+});
+
+test("real macOS reader: Follow picked again after the hand-over asks again and shows the reason when refused again", () => {
+  const r = takenBack();
+  assert.equal(r.c.snapshot().link?.mode, "manual");
+  r.c.command({ type: "follow" });
+  assert.equal(r.c.snapshot().link?.mode, "following", "Follow is offered again");
+  r.answers[r.answers.length - 1](REFUSED, "");
+  r.clock.t = 2100;
+  const snap = r.c.snapshot();
+  assert.equal(snap.link?.mode, "following", "never heard since: following stays, as for access never given");
+  assert.equal(snap.link?.noReading, "not-permitted", "the reason is shown to act on");
 });
