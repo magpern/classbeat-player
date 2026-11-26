@@ -465,23 +465,32 @@ function readerMembers(k: string): string[] {
 
 /** The problems in the session reader's source, one line each; empty when its rules hold. */
 function readerProblems(text: string): string[] {
+  // Every check runs on what the compiler sees (kotlinCode: comments and string text out, string
+  // templates in), so neither a comment marker in a string nor code in a template hides anything.
+  // `code()` is naive about strings (a "//" cuts the rest of its line) and keeps only the original
+  // value pin and declaration count, each repeated on the lexer's output.
   const c = code(text);
+  const k = kotlinCode(text);
+  const literals: string[] = [];
+  const kl = kotlinCode(text, literals);
+  const names = kotlinNames(text);
   const found: string[] = [];
-  const listed = [...c.matchAll(/getActiveSessions/g)].length;
-  const filtered = [...c.matchAll(SESSION_FILTERED)];
+  const listed = [...k.matchAll(/getActiveSessions/g)].length;
+  const filtered = [...k.matchAll(SESSION_FILTERED)];
   if (listed === 0 || filtered.length !== listed) found.push("a session list without the package filter");
   if (!/^private const val MUSIC_APP = "com\.spotify\.music"$/m.test(c)) found.push("the package is not the constant");
-  if ([...c.matchAll(MUSIC_APP_DECLARED)].length !== 1) found.push("the package is not the constant");
-  const k = kotlinCode(text);
-  const names = kotlinNames(text);
+  const pinned = [...kl.matchAll(/^private const val MUSIC_APP = "#(\d+)"$/gm)];
+  if (pinned.length !== 1 || literals[Number(pinned[0]![1])] !== "com.spotify.music") found.push("the package is not the constant");
+  if ([...c.matchAll(MUSIC_APP_DECLARED)].length !== 1 || [...k.matchAll(MUSIC_APP_DECLARED)].length !== 1)
+    found.push("the package is not the constant");
   if (names.filter((n) => n === "MUSIC_APP").length !== MUSIC_APP_USES.length || !MUSIC_APP_USES.every((u) => u.test(k)))
     found.push("the package is not the constant");
-  if (SESSION_OTHER_WAYS.test(c)) found.push("another way to a session");
-  const firstRead = c.search(SESSION_READ);
+  if (SESSION_OTHER_WAYS.test(k)) found.push("another way to a session");
+  const firstRead = k.search(SESSION_READ);
   if (firstRead >= 0 && (filtered.length === 0 || firstRead < filtered[0]!.index!)) found.push("a read before the filter");
-  const keys = [...new Set([...c.matchAll(/METADATA_KEY_\w+/g)].map((m) => m[0]))].sort();
+  const keys = [...new Set([...k.matchAll(/METADATA_KEY_\w+/g)].map((m) => m[0]))].sort();
   const allowed = ["METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE"];
-  if (keys.some((k) => !allowed.includes(k)) || METADATA_OTHER.test(c)) found.push("metadata beyond the track's identity");
+  if (keys.some((key) => !allowed.includes(key)) || METADATA_OTHER.test(k)) found.push("metadata beyond the track's identity");
   const extra = readerMembers(k).filter((m) => !READER_MEMBERS.includes(m));
   if (extra.length > 0 || IMPLICIT_RECEIVER.test(k) || RECEIVER_TYPE.test(k))
     found.push("a member beyond the track, the state and the position");
@@ -495,6 +504,8 @@ test("the session reader filters to the music app before any read, and reads onl
   // Each rule can fail.
   const filter = "?.filter { it.packageName == MUSIC_APP }";
   assert.ok(file.text.includes(filter));
+  const F = "manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) }";
+  assert.ok(file.text.includes(F));
   const mutations: [string, string, string][] = [
     [filter, "", "a session list without the package filter"],
     [filter, "?.filter { it.packageName != MUSIC_APP }", "a session list without the package filter"],
@@ -524,12 +535,8 @@ test("the session reader filters to the music app before any read, and reads onl
     ["controller.playbackState?.let {", "controller.run { queue }; controller.playbackState?.let {", "a member beyond the track, the state and the position"],
     // Review of #858: a destructured or multi-parameter shadow, members inside string templates,
     // members named without a dot through a receiver type, and code a string hides from `code`.
-    ["manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) }",
-      '("com.other.music" to 0).let { (MUSIC_APP, _) -> manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) } }',
-      "the package is not the constant"],
-    ["manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) }",
-      'listOf("com.other.music").fold(0) { MUSIC_APP, _ -> 0 }.let { manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) } }',
-      "the package is not the constant"],
+    [F, `("com.other.music" to 0).let { (MUSIC_APP, _) -> ${F} }`, "the package is not the constant"],
+    [F, `listOf("com.other.music").fold(0) { MUSIC_APP, _ -> 0 }.let { ${F} }`, "the package is not the constant"],
     ["override fun exists()", 'fun f() { for ((MUSIC_APP, v) in listOf("a" to 1)) { } }\n    override fun exists()', "the package is not the constant"],
     ["override fun exists()", 'fun f() = "${MUSIC_APP}"\n    override fun exists()', "the package is not the constant"],
     ["TransportCommand.PAUSE -> controls.pause()", 'TransportCommand.PAUSE -> "${controls.seekTo(0)}"', "a member beyond the track, the state and the position"],
@@ -545,6 +552,16 @@ test("the session reader filters to the music app before any read, and reads onl
     ["override fun state()", 'val s = "//"; fun q() = controller.queue\n    override fun state()', "a member beyond the track, the state and the position"],
     ["override fun state()", 'val s = "/*"; fun q() = controller.queue /* */\n    override fun state()', "a name the reader does not use"],
     ["override fun state()", "fun q() = controller.`queue`\n    override fun state()", "a member beyond the track, the state and the position"],
+    // Review of #858, round 2: a "//" or "/*" in a string must not hide code from any reader check.
+    [F, `${F}?.takeIf { "//" == "" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(it) }`, "a session list without the package filter"],
+    [F, `${F}?.takeIf { "/*" == "*/" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(it) }`, "a session list without the package filter"],
+    ["controller.metadata?.let {", 'controller.metadata?.takeIf { "//" == "" }?.let { it.getString(MediaMetadata.METADATA_KEY_ALBUM) }\n        controller.metadata?.let {', "metadata beyond the track's identity"],
+    ["controller.metadata?.let {", 'controller.metadata?.takeIf { "//" == "" }?.let { it.description }\n        controller.metadata?.let {', "metadata beyond the track's identity"],
+    [F, `${F}?.takeIf { "//" == "" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(MediaController(context, it.sessionToken)) }`, "another way to a session"],
+    [F, `manager?.takeIf { "//" == "" }?.let { it.getActiveSessions(listener)?.map { s -> s.metadata } }.let { ${F} }`, "a read before the filter"],
+    // Any letters make a name, and a backticked template reference is a name.
+    ["override fun state()", "fun q() = listOf(1).map { é -> é }\n    override fun state()", "a name the reader does not use"],
+    ["override fun state()", 'fun q() = "$`controller`"\n    override fun state()', "a name the reader does not use"],
   ];
   for (const [from, to, problem] of mutations) {
     const mutated = file.text.replace(from, to);

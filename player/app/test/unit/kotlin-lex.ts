@@ -3,12 +3,16 @@
 // guard cannot be passed by hiding code in a string template or a string in a comment, or a
 // comment marker in a string.
 
+const NAME_START = /[\p{L}_]/u;
+const NAME_PART = /[\p{L}\p{N}_]/u;
+
 /**
  * The source with comments removed (nested block comments too), each string and character
  * literal emptied to `""` or `''`, the contents of its templates kept in its place, and backticks
- * dropped from quoted names.
+ * dropped from quoted names. With `literals`, each string's text (its templates left out) is pushed
+ * there and the string ends in `#<index>"`, so a value can be pinned to the code that holds it.
  */
-export function kotlinCode(src: string): string {
+export function kotlinCode(src: string, literals?: string[]): string {
   let i = 0;
   const out: string[] = [];
 
@@ -58,35 +62,50 @@ export function kotlinCode(src: string): string {
 
   function string(raw: boolean): void {
     out.push('"');
+    let text = "";
+    const close = (): void => {
+      out.push(literals ? `#${literals.push(text) - 1}"` : '"');
+    };
     while (i < src.length) {
       if (raw ? src.startsWith('"""', i) : src[i] === '"') {
         i += raw ? 3 : 1;
-        while (raw && src[i] === '"') i++;
-        out.push('"');
+        while (raw && src[i] === '"') {
+          text += '"';
+          i++;
+        }
+        close();
         return;
       }
       if (!raw && src[i] === "\n") break;
-      if (!raw && src[i] === "\\") i += 2;
-      else if (src.startsWith("${", i)) {
+      if (!raw && src[i] === "\\") {
+        text += src.slice(i, i + 2);
+        i += 2;
+      } else if (src.startsWith("${", i)) {
         i += 2;
         out.push(" ");
         code(true);
         out.push(" ");
-      } else if (src[i] === "$" && /[A-Za-z_]/.test(src[i + 1] ?? "")) {
+      } else if (src[i] === "$" && src[i + 1] === "`") {
+        i += 2;
+        out.push(" ");
+        while (i < src.length && src[i] !== "`" && src[i] !== "\n") out.push(src[i++]!);
         i++;
         out.push(" ");
-        while (/\w/.test(src[i] ?? "")) out.push(src[i++]!);
+      } else if (src[i] === "$" && NAME_START.test(src[i + 1] ?? "")) {
+        i++;
         out.push(" ");
-      } else i++;
+        while (NAME_PART.test(src[i] ?? "")) out.push(src[i++]!);
+        out.push(" ");
+      } else text += src[i++];
     }
-    out.push('"');
+    close();
   }
 
   code(false);
   return out.join("");
 }
 
-/** Every name in the code as the lexer above leaves it (numbers' suffixes are not names). */
+/** Every name in the code as the lexer above leaves it, any letters (numbers' suffixes are not names). */
 export function kotlinNames(src: string): string[] {
-  return [...kotlinCode(src).matchAll(/(?<!\w)[A-Za-z_]\w*/g)].map((m) => m[0]);
+  return [...kotlinCode(src).matchAll(/(?<![\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*/gu)].map((m) => m[0]);
 }
