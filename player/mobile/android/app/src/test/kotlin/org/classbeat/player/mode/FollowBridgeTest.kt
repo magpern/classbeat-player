@@ -1,5 +1,7 @@
 package org.classbeat.player.mode
 
+import com.getcapacitor.JSObject
+import com.getcapacitor.PluginCall
 import org.classbeat.player.follow.Follower
 import org.classbeat.player.follow.ListenerAccess
 import org.classbeat.player.follow.MusicSource
@@ -75,6 +77,27 @@ class FollowBridgeTest {
         return sent
     }
 
+    /** A page call that records how it was answered; it reaches no WebView. */
+    private class FakeCall(method: String) : PluginCall(null, "Mode", "1", method, null) {
+        val answers = mutableListOf<String>()
+
+        override fun resolve(data: JSObject) {
+            answers += "resolved"
+        }
+
+        override fun reject(msg: String) {
+            answers += "rejected $msg"
+        }
+    }
+
+    /** The three transport intents as the page calls them (#857, #867): no command named by the page. */
+    private val intents: List<Pair<String, (PluginCall) -> Unit>> =
+        listOf(
+            "sendPlay" to { call: PluginCall -> bridge.sendPlay(call) },
+            "sendPause" to { call: PluginCall -> bridge.sendPause(call) },
+            "sendNext" to { call: PluginCall -> bridge.sendNext(call) },
+        )
+
     @Test
     fun `outside instructor mode every follow intent is refused and the follower is never asked`() {
         for (other in listOf(Mode.RIDER, null)) {
@@ -125,5 +148,33 @@ class FollowBridgeTest {
     fun `before following a command answers stopped and sends nothing`() {
         assertEquals(List(3) { """{"state":"stopped"}""" }, commandAll())
         assertEquals(emptyList<String>(), log)
+    }
+
+    @Test
+    fun `each transport intent sends its own one command and answers the call once`() {
+        bridge.follow { }
+        val expected = mapOf("sendPlay" to "command PLAY", "sendPause" to "command PAUSE", "sendNext" to "command NEXT")
+        for ((name, intent) in intents) {
+            log.clear()
+            val call = FakeCall(name)
+            intent(call)
+            assertEquals(name, listOf(expected.getValue(name)), log)
+            assertEquals(name, 1, call.answers.size)
+        }
+    }
+
+    @Test
+    fun `outside instructor mode each transport intent is refused and nothing reaches the music app`() {
+        bridge.follow { }
+        for (other in listOf(Mode.RIDER, null)) {
+            mode = other
+            for ((name, intent) in intents) {
+                log.clear()
+                val call = FakeCall(name)
+                intent(call)
+                assertEquals("$other $name", listOf("rejected ${ModePlugin.REFUSED}"), call.answers)
+                assertEquals("$other $name", emptyList<String>(), log)
+            }
+        }
     }
 }
