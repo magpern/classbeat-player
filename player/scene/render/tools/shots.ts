@@ -19,6 +19,7 @@ import { beamFloor } from "./beam-floor-shots.ts";
 import { reportS6 } from "./flash-shots.ts";
 import { reportSteady } from "./steady-shots.ts";
 import { settleTransitions } from "./settle.ts";
+import { joinStepsTheQuality } from "./join-quality-shots.ts";
 import { pageStylesheetDoesNotReachTheCue } from "./room-css-shots.ts";
 import { lightMeasurement, reducedMotion, unmaskedTextIsCaught, worstCase, zoneShots } from "./text-shots.ts";
 import { reportShared } from "./shared-shots.ts";
@@ -173,6 +174,7 @@ try {
   await zoneShots(opener, SHOTS);
   await worstCase(opener, SHOTS);
   await pageStylesheetDoesNotReachTheCue(opener); // #823: the plain screen's stylesheet on the same page
+  await joinStepsTheQuality(browser); // #834: the room window's real mount hands each level the join steps to the renderer
   await lightMeasurement(opener);
   await beamFloor(opener); // S5b: the house look's beams keep their floor, and the check fails the look without it
   await reportS6(opener, ARTIFACTS);

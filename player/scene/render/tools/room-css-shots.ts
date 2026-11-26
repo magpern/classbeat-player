@@ -4,7 +4,7 @@
 // check injects the real one (read-only) and asserts the cue still ends at its spec line and that nothing overlaps.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Page } from "playwright-core";
 import { overlapScript } from "./page-checks.ts";
 import { RENDER_DIR } from "./tokens-file.ts";
@@ -13,13 +13,22 @@ type Open = (w: number, h: number, query: string) => Promise<{ page: Page; probl
 
 const ROOM_CSS = join(RENDER_DIR, "..", "..", "..", "web", "src", "room", "room.css");
 
+/** One `@import` rule's text after the keyword: a quoted or unquoted `url(...)` or a bare string, and nothing else. The sheet is
+ *  inlined as it is, so a media, layer or supports condition (which would have to wrap it) is refused, not dropped. */
+const IMPORT_TARGET = /^\s*(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s"']+))\s*\)|"([^"]*)"|'([^']*)')\s*$/;
+
 /** The sheet with its `@import "./x.css";` lines replaced by the imported sheets' text, depth first. A constructed sheet drops
- *  `@import` silently, so each one is inlined here; one that is not a relative file inside the room folder, or is missing, throws. */
+ *  `@import` silently, so each one is inlined here; one that is not a relative file inside the room folder (whole path segments:
+ *  `../roomx` is not inside `room`), carries a condition, or is missing, throws. */
 export function withImports(file: string, root = dirname(file), seen: string[] = []): string {
   if (seen.includes(file)) throw new Error(`room.css: @import cycle at ${file}`);
-  return readFileSync(file, "utf8").replace(/@import\s+(?:url\()?["']([^"']+)["']\)?[^;]*;/g, (_m, ref: string) => {
+  return readFileSync(file, "utf8").replace(/@import\b([^;]*);/g, (_m, rule: string) => {
+    const found = IMPORT_TARGET.exec(rule);
+    if (found === null) throw new Error(`room.css: @import${rule} has a condition or a form that is not inlined`);
+    const ref = found.slice(1).find((x) => x !== undefined) ?? "";
     const target = resolve(dirname(file), ref);
-    if (!/^\.\.?\//.test(ref) || !target.startsWith(root)) throw new Error(`room.css: @import "${ref}" is not a relative sheet inside ${root}`);
+    const inside = relative(root, target);
+    if (!/^\.\.?\//.test(ref) || inside === "" || inside.split(/[\\/]/)[0] === ".." || isAbsolute(inside)) throw new Error(`room.css: @import "${ref}" is not a relative sheet inside ${root}`);
     return withImports(target, root, [...seen, file]);
   });
 }
@@ -41,17 +50,28 @@ const colourScript = `(() => {
     seen.lbl++; check(".lbl outside the gel", getComputedStyle(el).color, light1);
   }
   for (const el of all(".rail .seg")) { seen.seg++; check(".rail .seg", getComputedStyle(el).color, light1); }
-  // The marker shapes (#822), in the colour of the text beside them: the dot, the square and the hollow ring.
+  // The marker shapes (#822), in the colour of the text beside them and in their own geometry: the dot and the ring are round, the square is not, all 1.4 vh across.
   const link = all(".link:not(.alert)")[0];
   if (link) {
     const keep = link.className;
-    for (const shape of ["sq", "rg"]) {
-      link.className = "link " + shape;
+    const side = innerHeight * 0.014;
+    for (const shape of ["dot", "sq", "rg"]) {
+      link.className = shape === "dot" ? "link" : "link " + shape;
       const b = getComputedStyle(link, "::before");
-      check(".link." + shape + " marker", shape === "rg" ? (b.backgroundImage.match(/rgb\\([^)]*\\)/g) || []).slice(-1)[0] || b.backgroundImage : b.backgroundColor, light1);
+      const what = ".link." + shape + " marker";
+      if (shape === "rg") check(what + " colour", (b.backgroundImage.match(/rgb\\([^)]*\\)/g) || []).slice(-1)[0] || b.backgroundImage, light1);
+      else check(what + " colour", b.backgroundColor, light1);
+      check(what + " corners", b.borderTopLeftRadius, shape === "sq" ? "0px" : "50%");
+      for (const side2 of ["width", "height"]) if (Math.abs(parseFloat(b[side2]) - side) > 0.6) out.push(what + " " + side2 + " is " + b[side2] + ", not " + side.toFixed(1) + "px (1.4 vh)");
+      if (shape === "rg" && !/^radial-gradient\\(circle/.test(b.backgroundImage)) out.push(what + " is not a ring: " + b.backgroundImage);
     }
     link.className = keep;
   }
+  // The cue box is placed by bottom alone: the plain screen's .cue rules (top, which the end position below holds, and max-height, overflow, text-wrap) must not reach it (#823).
+  const cue = getComputedStyle(text.querySelector(".cue"));
+  check(".cue max-height", cue.maxHeight, "none");
+  check(".cue overflow", cue.overflow, "visible");
+  check(".cue text-wrap", cue.textWrap || cue.textWrapMode + " " + cue.textWrapStyle, "wrap");
   for (const [k, n] of Object.entries(seen)) if (n === 0) out.push("no " + k + " element on the page to check");
   return out;
 })()`;
@@ -76,8 +96,9 @@ export async function pageStylesheetDoesNotReachTheCue(open: Open): Promise<void
     for (const c of await page.evaluate(colourScript) as string[]) failures.push(`${where}: ${c}`);
     if (Math.abs(m.bottom / m.vh * 100 - endVh) >= 0.3) failures.push(`${where}: the cue ends at ${(m.bottom / m.vh * 100).toFixed(1)} vh, not ${endVh}`);
     for (const o of await page.evaluate(overlapScript) as string[]) failures.push(`${where}: S16 ${o}`);
-    for (const p of problems) failures.push(`${where}: ${p}`);
     await page.close();
+    // After the close, so an error raised after the last check (a late frame, a rejected promise) is still collected.
+    for (const p of problems) failures.push(`${where}: ${p}`);
   }
   assert.deepEqual(failures, [], "the page stylesheet reaches the text layer");
 }
