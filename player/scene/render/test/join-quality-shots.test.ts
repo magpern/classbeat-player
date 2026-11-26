@@ -38,7 +38,8 @@ test("a page error raised by the close fails the run", async () => {
 test("a violation the guard trap reports fails the run and is named in the message", async () => {
   await assert.rejects(joinStepsTheQuality(browserWith(null, ["trap: setResistance"])), (e: Error) => {
     assert.ok(e.message.includes("the join page raised errors"));
-    assert.ok(e.message.includes("trap: setResistance"));
+    // Node appends the diff to a custom message, so only the start proves the problems are in the message itself.
+    assert.ok(e.message.startsWith("the join page raised errors or tripped the guard: trap: setResistance\n"));
     assert.deepEqual((e as { actual?: unknown }).actual, ["trap: setResistance"]);
     return true;
   });

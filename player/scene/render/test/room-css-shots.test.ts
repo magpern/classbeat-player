@@ -61,7 +61,8 @@ test("a page error raised after the last check fails the run", async () => {
     return { page, problems };
   };
   await assert.rejects(pageStylesheetDoesNotReachTheCue(open), (e: Error) => {
-    assert.ok(e.message.includes("the page stylesheet reaches the text layer"));
+    // Node appends the diff to a custom message, so only the start proves the problems are in the message itself.
+    assert.ok(e.message.startsWith("the page stylesheet reaches the text layer: room.css loaded, 16x9: page error: late; room.css loaded, 4x3: page error: late; room.css loaded, 5x4: page error: late\n"));
     assert.deepEqual((e as { actual?: unknown }).actual, ["room.css loaded, 16x9: page error: late", "room.css loaded, 4x3: page error: late", "room.css loaded, 5x4: page error: late"]);
     return true;
   });
