@@ -3,9 +3,9 @@
 // hands each answer to the shared lifecycle (player/app/src/core/link/reader-lifecycle.ts), so the
 // phone follows by the same rules as the desktop: a garbage or failed answer changes nothing and
 // the last good reading ages (rule 8), and stopping forgets it. Native code that cannot follow
-// ("unavailable", which the stand-in source always says until #653) stops the reader for good, and
+// ("unavailable": the phone has no media sessions at all) stops the reader for good, and
 // the shell stays on the manual clock. Nothing here plays, fetches or stores audio, and it sends
-// no command to the music app: transport comes with the real reader.
+// no command to the music app.
 import { createReaderLifecycle } from "../../../app/src/core/link/reader-lifecycle.ts";
 import type { MusicReader, NoReadingReason } from "../../../app/src/core/link/reader.ts";
 import { observationOf, parseFollow, parseReading } from "./answers.ts";

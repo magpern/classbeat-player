@@ -3,8 +3,7 @@ package org.classbeat.player.follow
 /**
  * What the phone can tell about the music the instructor's music app is playing (ADR 0011 §6,
  * issue #632): the track, whether it plays, and its position with the moment the system set it.
- * Nothing here reads, plays or stores audio. The only implementation for now is [UnavailableSource]:
- * the real reader is issue #653, so following stays on the manual clock until it lands.
+ * Nothing here reads, plays or stores audio. The phone's implementation is [SessionReader] (#653).
  */
 interface MusicSource {
     /** Begin reading. Called only once notification access is granted, in instructor mode. */
@@ -43,14 +42,3 @@ data class SourceReading(
     val positionMs: Long,
     val positionAt: Long,
 )
-
-/** The stand-in until issue #653: it never reads anything and always says it cannot follow. */
-object UnavailableSource : MusicSource {
-    override fun start() {}
-
-    override fun stop() {}
-
-    override fun status() = SourceStatus.UNAVAILABLE
-
-    override fun latest(): SourceReading? = null
-}

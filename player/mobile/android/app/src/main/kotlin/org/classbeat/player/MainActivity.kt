@@ -13,8 +13,9 @@ import org.classbeat.player.classes.ClassSync
 import org.classbeat.player.classes.FileClassCache
 import org.classbeat.player.classes.InstructorIntents
 import org.classbeat.player.follow.AndroidListenerAccess
+import org.classbeat.player.follow.AndroidSessions
 import org.classbeat.player.follow.Follower
-import org.classbeat.player.follow.UnavailableSource
+import org.classbeat.player.follow.SessionReader
 import org.classbeat.player.mode.AndroidDevice
 import org.classbeat.player.mode.InstructorModePlugin
 import org.classbeat.player.mode.InstructorParts
@@ -73,9 +74,9 @@ class MainActivity : BridgeActivity(), ModeHost {
         val ports = AndroidPairingPorts(this, cache)
         val pairing = PairingService(origin, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, transport, KeystoreSecretStore(this), ports)
         val intents = InstructorIntents(pairing, cache, ClassSync(transport, cache, pairing::credential, pairing::refused))
-        // Following stays on the manual clock until the real reader (#653): the source is the stand-in.
-        // Built dropped (Follower's init): nothing follows at start-up and the listener stays off.
-        val follower = Follower(UnavailableSource, AndroidListenerAccess(this), SystemClock::elapsedRealtime)
+        // The music app's media session (#653), read only while the instructor follows. Built dropped
+        // (Follower's init): nothing follows at start-up and the listener stays off.
+        val follower = Follower(SessionReader(AndroidSessions(this)), AndroidListenerAccess(this), SystemClock::elapsedRealtime)
         // Rider mode's live link waits on the same decision (#649): every join and link is "offline".
         val rider = RiderSession(OfflineRiderTransport { Handler(Looper.getMainLooper()).post(it) })
         this.rider = rider
