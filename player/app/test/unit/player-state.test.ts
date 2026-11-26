@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { NEWER_VERSION_MESSAGE } from "../../src/core/class-file.ts";
-import { advance, command, INITIAL, openText, refuse, routeFor, snapshotOf, withoutReader } from "../../src/core/player-state.ts";
+import { advance, command, INITIAL, isFollowing, openText, readerStopped, refuse, routeFor, snapshotOf, withoutReader } from "../../src/core/player-state.ts";
 import { classSchema, converterExamples, EXAMPLES } from "./fixtures.ts";
 
 const good = readFileSync(converterExamples()[0], "utf8");
@@ -76,6 +76,21 @@ test("a reader that cannot work is reported as the reason, but not for a class t
   const noMusic = readFileSync(join(EXAMPLES, "valid", "short-class-no-music.json"), "utf8");
   const manualOnly = snapshotOf(withoutReader(openText(INITIAL, "b.json", noMusic, classSchema, 0, true)), 0);
   assert.equal(manualOnly.link?.unavailable, false, "nothing was to be followed, so there is nothing to explain");
+});
+
+test("a reader that stops while following hands over to the manual clock, announced, and can be followed again (issue #872)", () => {
+  const following = command(openText(INITIAL, "a.json", good, classSchema, 0, true), { type: "start" }, 0);
+  assert.equal(isFollowing(following), true);
+  const stopped = readerStopped(following, 1000);
+  assert.equal(isFollowing(stopped), false);
+  const snap = snapshotOf(stopped, 1000);
+  assert.equal(snap.link?.mode, "manual");
+  assert.notEqual(snap.link?.announcement ?? null, null, "the hand-over is announced");
+  assert.equal(snap.link?.available, true, "following can be picked again");
+  assert.equal(snap.view?.classMs, snapshotOf(following, 1000).view?.classMs, "the clock is not moved");
+  // On the manual clock already: nothing changes.
+  assert.equal(readerStopped(stopped, 2000), stopped);
+  assert.equal(readerStopped(INITIAL, 0), INITIAL);
 });
 
 test("the snapshot's band routes come from the same link and transport as the commands (issue #198)", () => {

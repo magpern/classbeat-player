@@ -101,7 +101,7 @@ for (const size of [...KEPT, ...CHECKED]) {
       // A tap shows the band over the score's box: every key in sight.
       await p.page.mouse.click(Math.round(w / 2), Math.round(h / 3));
       await p.page.clock.runFor(100);
-      await bandInView(p.page, w, h, ["Previous Interval", "Pause", "Next Interval", "End"]);
+      await bandInView(p.page, w, h, ["Follow The music", "Previous Interval", "Pause", "Next Interval", "End"]);
       await fitsAcross(p.page, w);
       if (kept) await shoot(p.page, `room-running-band-${w}x${h}`);
       // End asks first, and its question and both answers are in sight.
@@ -113,6 +113,9 @@ for (const size of [...KEPT, ...CHECKED]) {
 
       // The phone page has no media element at all (rule 3), and the room screen runs without one.
       assert.equal(await p.page.evaluate(() => document.querySelectorAll("audio, video").length), 0);
+      // Follow was offered but not pressed: native code was asked nothing about the music (#872).
+      const asked = (await p.native()).map(([, m]) => String(m));
+      assert.deepEqual(asked.filter((m) => /follow|Follow|reading|send/.test(m)), [], asked.join());
       // The checked class ran in the page under its CSP: no error, and nothing left the files.
       assert.deepEqual(p.errors, []);
       assert.deepEqual(p.external, []);

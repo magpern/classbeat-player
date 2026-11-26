@@ -5,7 +5,7 @@ import type { BandRoute, BandRoutes } from "./band-routes.ts";
 import { joinAddress } from "./remote.ts";
 import type { RemoteView } from "./remote.ts";
 
-export type ButtonId = "previous" | "main" | "next" | "remote" | "end" | "close" | "end-class" | "keep-going";
+export type ButtonId = "follow" | "previous" | "main" | "next" | "remote" | "end" | "close" | "end-class" | "keep-going";
 
 export interface ButtonView {
   readonly id: ButtonId;
@@ -23,7 +23,7 @@ export interface CodeView {
 }
 
 export type BandView =
-  | { readonly mode: "buttons"; readonly transport: readonly ButtonView[]; readonly remote: ButtonView | null; readonly code: CodeView | null; readonly end: ButtonView }
+  | { readonly mode: "buttons"; readonly follow: ButtonView | null; readonly transport: readonly ButtonView[]; readonly remote: ButtonView | null; readonly code: CodeView | null; readonly end: ButtonView }
   | { readonly mode: "ask"; readonly question: string; readonly endClass: ButtonView; readonly keepGoing: ButtonView }
   | { readonly mode: "finished"; readonly close: ButtonView };
 
@@ -61,8 +61,11 @@ export const SHEET_LINE = "J hides the codes";
 
 const REMOTE_SUB = { none: "Show the class code", in_use: "In use elsewhere", unreachable: "Can't reach site", ended: "Phone remote ended" } as const;
 
-/** `sheetOpen`: the join sheet shows both codes, so the slot draws no QR code and says how to hide them (room-join.md). */
-export function bandView(status: ClockStatus, routes: BandRoutes | null, remote: RemoteView, asking: boolean, sheetOpen = false): BandView {
+/**
+ * `sheetOpen`: the join sheet shows both codes, so the slot draws no QR code and says how to hide them (room-join.md).
+ * `followKey`: the phone app's Follow the music, at the band's left (app-follow.md); never on the desktop.
+ */
+export function bandView(status: ClockStatus, routes: BandRoutes | null, remote: RemoteView, asking: boolean, sheetOpen = false, followKey = false): BandView {
   if (status === "ended") return { mode: "finished", close: button("close", "Close class", "Back to the class list") };
   if (asking) return { mode: "ask", question: "End the class?", endClass: button("end-class", "End class", "Back to the class list"), keepGoing: button("keep-going", "Keep going") };
   const r = routes ?? ALL_CLOCK;
@@ -74,5 +77,5 @@ export function bandView(status: ClockStatus, routes: BandRoutes | null, remote:
   else if (remote.slot === "starting") remoteButton = button("remote", "Phone remote", "Getting a code", true);
   else if (remote.slot === "on" && sheetOpen) code = { code: remote.joinCode, line: SHEET_LINE, address: null };
   else if (remote.slot === "on") code = { code: remote.joinCode, line: codeLine(remote), address: remote.site ? joinAddress(remote.site, remote.joinCode) : null };
-  return { mode: "buttons", transport, remote: remoteButton, code, end: button("end", "End") };
+  return { mode: "buttons", follow: followKey ? button("follow", "Follow", "The music") : null, transport, remote: remoteButton, code, end: button("end", "End") };
 }

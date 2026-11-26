@@ -1,13 +1,17 @@
 // The phone's `window.room` (issue #871): the room screen's calls (player/app/src/renderer/room.ts)
 // served by the shared player core (core/player-reducers.ts, which carries no schema checker), as
 // the desktop's main process serves them (main/controller.ts, main/room/room-handlers.ts), on the
-// manual clock only. There is no music reader, so Follow does
-// nothing and the link says it is not available; no live session, so the remote slot is absent;
-// no mix audio. The clock reads the injected `now`, so tests drive it with fake time.
+// manual clock until the instructor picks Follow (issue #872, app-follow.md). With a follower, the
+// band's Follow asks for access (follow-ask.ts) and the clock then follows the phone's reader by the
+// desktop's rules: each frame reads it, each press while following that the music answers goes to
+// it as play, pause or next, and nothing goes to it otherwise. No live session, so the remote slot
+// is absent; no mix audio. The clock reads the injected `now`, so tests drive it with fake time.
 import type { ClockCommand } from "../../../app/src/core/commands.ts";
-import { advance, command, INITIAL, openDocument, snapshotOf } from "../../../app/src/core/player-reducers.ts";
+import { advance, command, INITIAL, isFollowing, openDocument, playlistAtStart, readerStopped, snapshotOf, transportFor, withoutReader } from "../../../app/src/core/player-reducers.ts";
 import type { PlayerState } from "../../../app/src/core/player-reducers.ts";
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
+import type { MusicReader } from "../../../app/src/core/link/reader.ts";
+import type { MusicTransport } from "../../../app/src/core/link/transport.ts";
 import { roomFrameOf } from "../../../app/src/core/room/frame.ts";
 import type { RoomFrame } from "../../../app/src/core/room/frame.ts";
 import { REMOTE_ABSENT } from "../../../app/src/core/room/remote.ts";
@@ -15,6 +19,13 @@ import type { RemoteView } from "../../../app/src/core/room/remote.ts";
 
 /** How often the room screen is sent a frame while it shows: the desktop's rate. */
 export const PUSH_EVERY_MS = 100;
+
+/** The phone's follower (phone-follower.ts): the reader, and Follow's access ask. */
+export interface RoomFollower {
+  readonly reader: MusicReader & MusicTransport;
+  /** Follow pressed: [turnOn] runs once Notification access is there (follow-ask.ts). */
+  press(turnOn: () => void): void;
+}
 
 export interface ClockRoomDeps {
   readonly now: () => number;
@@ -24,6 +35,8 @@ export interface ClockRoomDeps {
   readonly onClose: (fn: () => void) => void;
   /** End class: back to the class list. */
   readonly leave: () => void;
+  /** The phone's follower; without one the class stays on the manual clock. */
+  readonly follower?: () => RoomFollower;
 }
 
 export interface ClockRoom {
@@ -46,16 +59,49 @@ export interface ClockRoom {
   mixReport(): Promise<null>;
 }
 
-/** The room for a class checked by class-answer.ts, on the manual clock. */
+/** The room for a class checked by class-answer.ts, on the manual clock until Follow. */
 export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): ClockRoom {
-  let s: PlayerState = openDocument(INITIAL, fileName, doc, deps.now(), false);
+  const follower = deps.follower?.() ?? null;
+  const reader = follower?.reader ?? null;
+  const canSend = reader !== null;
+  let s: PlayerState = openDocument(INITIAL, fileName, doc, deps.now(), canSend, false);
+  // The reader asks native code for readings only while the clock follows the music.
+  const sync = (): void => reader?.setActive?.(isFollowing(s));
+  // Brings the state up to now with what the reader has heard since the last frame.
+  const catchUp = (t: number): void => {
+    if (reader?.unavailable?.() === true) s = withoutReader(s);
+    // Access taken back while following: the clock goes on by hand at once, announced (app-follow.md).
+    if (isFollowing(s) && reader?.reason?.() === "not-permitted") {
+      s = readerStopped(s, t);
+      sync();
+    }
+    s = advance(s, t, reader?.latest(t) ?? null);
+  };
   const frame = (): RoomFrame => {
     const t = deps.now();
-    s = advance(s, t);
-    return roomFrameOf(snapshotOf(s, t));
+    catchUp(t);
+    return phoneFrame(roomFrameOf(snapshotOf(s, t, canSend, reader?.reason?.() ?? null)));
   };
   const run = (cmd: ClockCommand): Promise<RoomFrame> => {
-    s = command(s, cmd, deps.now());
+    const t = deps.now();
+    // A press is routed on the state as it is now, not as the last frame left it (a lock since).
+    catchUp(t);
+    // Start with a playlist stays off in the app (app-follow.md): the follower never loads one.
+    s = playlistAtStart(s, cmd, t, canSend, false).state;
+    const action = transportFor(s, cmd, canSend);
+    if (reader !== null && action !== null) reader.send(action);
+    s = command(s, cmd, t, canSend);
+    sync();
+    return Promise.resolve(frame());
+  };
+  // Follow works only while the band offers its key; the core then follows once access is there.
+  const follow = (): Promise<RoomFrame> => {
+    if (follower !== null && frame().followKey === true) {
+      follower.press(() => {
+        s = command(s, { type: "follow" }, deps.now(), canSend);
+        sync();
+      });
+    }
     return Promise.resolve(frame());
   };
   const listeners: ((f: RoomFrame) => void)[] = [];
@@ -66,6 +112,7 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
   const stop = (): void => {
     pushing = "stopped";
     stopPush();
+    reader?.setActive?.(false);
   };
   deps.onClose(stop);
   return {
@@ -87,8 +134,7 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
     forward: () => run({ type: "jump", deltaMs: 5000 }),
     back: () => run({ type: "jump", deltaMs: -5000 }),
     undo: () => run({ type: "undo" }),
-    // No reader on the phone yet: the core leaves the manual clock as it is.
-    follow: () => run({ type: "follow" }),
+    follow,
     endClass() {
       stop();
       deps.leave();
@@ -100,4 +146,16 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
     onMix: () => {},
     mixReport: () => Promise.resolve(null),
   };
+}
+
+/**
+ * The phone's frame: the link words never say "F to follow" (no keyboard; the band's Follow key
+ * stands in, app-follow.md), and the key shows while the clock is manual, the music could be
+ * followed and the class has not ended.
+ */
+function phoneFrame(f: RoomFrame): RoomFrame {
+  const link = f.link;
+  if (link === null) return f;
+  const followKey = link.available && link.mode === "manual" && f.view?.status !== "ended";
+  return { ...f, link: { ...link, available: false }, followKey };
 }

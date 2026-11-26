@@ -39,7 +39,7 @@ export type Answers = Readonly<Record<string, unknown>>;
 const BRIDGE = `
   window.__native = [];
   window.Capacitor = {
-    PluginHeaders: [{ name: "InstructorMode", methods: ["askRiderMode", "listClasses", "getClass", "syncNow", "unpair", "pairAgain"].map((name) => ({ name, rtype: "promise" })) }],
+    PluginHeaders: [{ name: "InstructorMode", methods: ["askRiderMode", "listClasses", "getClass", "syncNow", "unpair", "pairAgain", "followAccess", "openFollowSetting", "follow", "unfollow", "reading", "sendPlay", "sendPause", "sendNext"].map((name) => ({ name, rtype: "promise" })) }],
     nativePromise: (plugin, method, options) => {
       window.__native.push([plugin, method, options ?? null]);
       if (!(method in window.__answers)) return new Promise(() => {});

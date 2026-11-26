@@ -68,7 +68,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
   function wanted(): { st: ClockStatus | null; want: boolean; v: BandView | null; key: string } {
     const st = status();
     const want = state.phase === "shown" && st !== null;
-    const v = st === null ? null : bandView(st, frame?.band ?? null, shownSlot(note), state.asking, opts.sheet?.isOpen() ?? false);
+    const v = st === null ? null : bandView(st, frame?.band ?? null, shownSlot(note), state.asking, opts.sheet?.isOpen() ?? false, frame?.followKey === true);
     return { st, want, v, key: v === null ? "" : JSON.stringify(v) };
   }
 
@@ -167,7 +167,7 @@ export function mountBand(host: HTMLElement, h: BandHost, opts: BandOptions): Ba
     if (id === "main" && drawnStatus) {
       const c = mainCommand(drawnStatus);
       if (c) h.command({ type: c });
-    } else if (id === "next" || id === "previous") h.command({ type: id });
+    } else if (id === "next" || id === "previous" || id === "follow") h.command({ type: id });
     else if (id === "end") openAsk();
     else if (id === "keep-going") closeAsk();
     else if (id === "end-class" || id === "close") {

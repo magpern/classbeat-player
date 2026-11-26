@@ -78,3 +78,13 @@ test("the band's --t-control is the design token's value", () => {
   assert.ok(value("design/tokens.css"));
   assert.equal(value("room-band.css"), value("design/tokens.css"));
 });
+
+test("Follow the music is in the band only where the phone app offers it (app-follow.md)", () => {
+  assert.equal(buttons(bandView("running", null, ABSENT, false)).follow, null);
+  assert.equal(buttons(bandView("ready", null, ABSENT, false, false, false)).follow, null);
+  for (const st of ["ready", "running", "paused"] as const) {
+    assert.deepEqual(buttons(bandView(st, null, ABSENT, false, false, true)).follow, { id: "follow", word: "Follow", sub: "The music", disabled: false });
+  }
+  // The End question still replaces every button, Follow too.
+  assert.equal(bandView("running", null, ABSENT, true, false, true).mode, "ask");
+});
