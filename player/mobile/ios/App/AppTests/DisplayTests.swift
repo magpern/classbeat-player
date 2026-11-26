@@ -33,26 +33,58 @@ final class DisplayTests: XCTestCase {
         XCTAssertFalse(other.configuration.userContentController === config.userContentController)
     }
 
-    func testTheIdlePageLoadsWithNoBridgeAndNoPluginToCall() throws {
+    /// Loads the idle page into `webView` and waits for it.
+    private func loadIdlePage(_ webView: WKWebView) throws {
+        webView.load(URLRequest(url: try XCTUnwrap(URL(string: NavigationPolicy.appOrigin + ExternalDisplayPolicy.idlePage))))
+        wait { webView.url?.path == ExternalDisplayPolicy.idlePage && !webView.isLoading }
+        XCTAssertEqual(webView.url?.path, ExternalDisplayPolicy.idlePage)
+    }
+
+    /// The string a script gives back in `world`, or nil.
+    private func evaluate(_ webView: WKWebView, _ script: String, in world: WKContentWorld) -> String? {
+        var answer: String?
+        var done = false
+        webView.evaluateJavaScript(script, in: nil, in: world) { result in
+            answer = try? result.get() as? String
+            done = true
+        }
+        wait { done }
+        return answer
+    }
+
+    // WebKit puts `window.webkit` in a content world only while a script message handler of any
+    // name is registered for that world, so `typeof window.webkit` is "undefined" exactly when the
+    // page has no handler to post to, whatever it would be called. The next test shows the probe
+    // sees a handler of a name nobody could guess.
+    private static let probe = """
+    [typeof window.Capacitor,
+     typeof window.webkit,
+     typeof window.androidBridge,
+     document.body ? "body" : "none"].join(",")
+    """
+
+    func testTheIdlePageLoadsWithNoScriptMessageHandlerOfAnyNameAndNoPluginToCall() throws {
         let webView = WebViewFactory.makeDisplay(frame: .zero)
         let navigation = DisplayNavigation(crashed: {})
         webView.navigationDelegate = navigation
         webView.uiDelegate = navigation
-        webView.load(URLRequest(url: try XCTUnwrap(URL(string: NavigationPolicy.appOrigin + ExternalDisplayPolicy.idlePage))))
-        wait { webView.url?.path == ExternalDisplayPolicy.idlePage && !webView.isLoading }
-        XCTAssertEqual(webView.url?.path, ExternalDisplayPolicy.idlePage)
-
-        let probe = """
-        [typeof window.Capacitor,
-         typeof (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bridge),
-         typeof window.androidBridge,
-         document.body ? "body" : "none"].join(",")
-        """
-        var answer: String?
-        webView.evaluateJavaScript(probe) { value, _ in answer = value as? String }
-        wait { answer != nil }
-        XCTAssertEqual(answer, "undefined,undefined,undefined,body")
+        try loadIdlePage(webView)
+        XCTAssertEqual(evaluate(webView, Self.probe, in: .page), "undefined,undefined,undefined,body")
+        XCTAssertEqual(evaluate(webView, Self.probe, in: .defaultClient), "undefined,undefined,undefined,body")
         withExtendedLifetime(navigation) {}
+    }
+
+    func testTheProbeSeesAScriptMessageHandlerOfAnyName() throws {
+        for world in [WKContentWorld.page, .defaultClient] {
+            let webView = WebViewFactory.makeDisplay(frame: .zero)
+            let navigation = DisplayNavigation(crashed: {})
+            webView.navigationDelegate = navigation
+            let name = "h" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+            webView.configuration.userContentController.add(IgnoredMessages(), contentWorld: world, name: name)
+            try loadIdlePage(webView)
+            XCTAssertEqual(evaluate(webView, Self.probe, in: world), "undefined,object,undefined,body", name)
+            withExtendedLifetime(navigation) {}
+        }
     }
 
     func testEveryNavigationIsDecidedByThePolicyAndNoLinkOrFormIsFollowed() {
@@ -108,6 +140,10 @@ final class DisplayTests: XCTestCase {
         wait { crashed > 0 }
         XCTAssertEqual(crashed, 1)
     }
+}
+
+private final class IgnoredMessages: NSObject, WKScriptMessageHandler {
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {}
 }
 
 private final class DisplayFrame: WKFrameInfo {

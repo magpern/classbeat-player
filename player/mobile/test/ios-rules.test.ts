@@ -1,6 +1,6 @@
 // The rule guards over the iOS app's Swift and Objective-C (issue #894, ADR 0016 sections 2 and 8):
 // a per-file import allowlist, the banned names (no player or recorder, no camera, no speech, no
-// Spotify, no network, no file reads, no Bluetooth writes), the one web view factory, and web view
+// Spotify, no network, no file reads, no Bluetooth writes), the one web view factory, script handlers only in its lock, and web view
 // inspection in a debug build only. Each check is shown to fail on a planted example.
 import assert from "node:assert/strict";
 import { join, sep } from "node:path";
@@ -155,6 +155,12 @@ const INSPECT_USE = [
   /\bXCTAssertEqual\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*,[ \t]*BuildFlavor\.isDebug[ \t]*\)/g,
 ];
 const count = (v: string, re: RegExp): number => (v.match(re) ?? []).length;
+/** A script message handler or a user script put on a web view (issue #897): in the app, only
+ * the factory's lock puts one on, the bridge's filter on the phone's web view, so the external
+ * display's web view has none of any name. Tests may plant one to show their probe sees it. */
+const SCRIPT_HANDLER = /\.add(?:ScriptMessageHandler)?\s*\(|\baddScriptMessageHandler\w*|\baddUserScript\b|\bWKUserScript\b/g;
+const OBJC_SCRIPT_HANDLER = /\baddScriptMessageHandler|\baddUserScript\b|\bWKUserScript\b/;
+const isApp = (path: string): boolean => posix(path).startsWith("ios/App/App/");
 
 const CHECKS = new Map<string, Check>([
   [
@@ -171,6 +177,14 @@ const CHECKS = new Map<string, Check>([
     hitsWhen((path, v) => {
       const made = (v.match(/\bWKWebView\s*(?:\.init\s*)?\(|\[\s*WKWebView\s+(?:alloc|new)\b/g) ?? []).length;
       return made !== (posix(path) === FACTORY ? 1 : 0);
+    }),
+  ],
+  [
+    "script handlers only in the factory's lock",
+    hitsWhen((path, v) => {
+      if (!isSwift(path)) return OBJC_SCRIPT_HANDLER.test(v);
+      if (!isApp(path)) return false;
+      return count(v, SCRIPT_HANDLER) !== (posix(path) === FACTORY ? 1 : 0);
     }),
   ],
   [
@@ -279,6 +293,20 @@ const MUTATIONS: Mutation[] = [
   ],
   ["WKWebView( only in the factory", FACTORY_PATH, "let webView = WKWebView(frame: frame, configuration: config)", "let webView = make(frame: frame)", false],
   objc("WKWebView( only in the factory", "- (void)p { [[WKWebView alloc] initWithFrame:CGRectZero]; }"),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(h, name: "x") }'),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add (h, contentWorld: .defaultClient, name: "x") }'),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandlerWithReply) { c.addScriptMessageHandler(h, contentWorld: .page, name: \"x\") }"),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController) { c.addUserScript(WKUserScript(source: "", injectionTime: .atDocumentStart, forMainFrameOnly: true)) }'),
+  plant("script handlers only in the factory's lock", 'let s = "//"; func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(h, name: "x") }', true),
+  [
+    "script handlers only in the factory's lock",
+    FACTORY_PATH,
+    "config.userContentController = WKUserContentController()\n",
+    "config.userContentController = WKUserContentController()\n        config.userContentController.add(BridgeFilter(wrapping: inner, exposed: { nil }), name: BridgeFilter.name)\n",
+    false,
+  ],
+  ["script handlers only in the factory's lock", FACTORY_PATH, "scripts.add(BridgeFilter(", "_ = (BridgeFilter(", false],
+  objc("script handlers only in the factory's lock", '- (void)p { [c addScriptMessageHandler:h name:@"x"]; }'),
   ["inspection in debug only", FACTORY_PATH, "descriptor.isWebDebuggable = BuildFlavor.isDebug", "descriptor.isWebDebuggable = true", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", "webView.isInspectable = !BuildFlavor.isDebug", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", 'webView.isInspectable = BuildFlavor.isDebug; let s = "//"; webView.isInspectable = true', false],

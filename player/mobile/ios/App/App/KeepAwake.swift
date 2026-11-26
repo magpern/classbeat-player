@@ -1,6 +1,6 @@
 // Carries out KeepAwakePolicy's decision on the idle timer (issue #897): the Swift twin of
 // Android's KeepAwake.kt. It decides nothing itself. Pure: no import at all; the idle timer comes in
-// through ScreenFlag (AppIdleTimer in DisplayScene.swift, a fake in AppTests/KeepAwakeTests.swift).
+// through ScreenFlag (AppIdleTimer in ShellViewController.swift, a fake in AppTests/KeepAwakeTests.swift).
 
 /// The screen's keep-on flag, as KeepAwake needs it.
 protocol ScreenFlag: AnyObject {
