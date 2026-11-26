@@ -3,10 +3,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { forbids, type Mutation, mutationGaps, oldView, slashCode } from "./rule-sources.ts";
 
-const main = readFileSync(new URL("../../src/main/main.ts", import.meta.url), "utf8")
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/(^|[^:])\/\/.*$/gm, "$1");
+const raw = readFileSync(new URL("../../src/main/main.ts", import.meta.url), "utf8");
+const main = slashCode(raw);
+// The one negative check reads a second view too (rule-sources.ts, issue #861): the file with only
+// its real comments out, so a "//" in a string hides no call from it.
+const startsRemote = forbids(/\b(remote|roomRemote|phoneRemote)\??\.start\(/, slashCode);
 
 test("the class ending releases the list's pin and snapshot", () => {
   assert.match(main, /controller\.onEnded\(\s*\(\)\s*=>\s*list\?\.release\(\)\s*\)/);
@@ -63,5 +66,11 @@ test("the room's phone-remote slot is the live client's, refreshed with every sn
   // The room's slot is wired before its handlers, so room:remote-start reaches the live client.
   assert.ok(main.indexOf("remote = roomRemote;") < main.indexOf("registerRoomHandlers("));
   // Nothing in the shell starts the phone remote: only the room's handler and the presenter's do.
-  assert.doesNotMatch(main, /\b(remote|roomRemote|phoneRemote)\??\.start\(/);
+  assert.ok(!startsRemote("main.ts", raw));
+});
+
+test('the check that nothing starts the phone remote catches a call a "//" in a string hides (issue #861)', () => {
+  const A = 'import { app, BrowserWindow, ipcMain } from "electron";';
+  const table: readonly Mutation[] = [["start", "main.ts", A, `${A} const s = "//"; void phoneRemote?.start();`, true]];
+  assert.deepEqual(mutationGaps(table, new Map([["start", startsRemote]]), () => raw, oldView(slashCode)), []);
 });

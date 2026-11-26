@@ -8,8 +8,12 @@ import { test } from "node:test";
 import { REPO } from "./fixtures.ts";
 import {
   BACKEND_TRANSPORT, code, KT_BACKEND, KT_FOLLOW, ktFile, type KtMutation, ktViews, MAIN_ACTIVITY, MOBILE, MOBILE_SKIP, mobileFiles,
-  mobileKt, mobileTs, mutationGaps, SESSION_READER, type Views,
+  mobileKt, mobileTs, mutationGaps, SESSION_READER, type Views, withSource,
 } from "./rule-sources.ts";
+import {
+  asksFor, AUDIO, AUDIO_EXCEPTIONS, callsSocket, checked, connects, coreIo, FORBIDDEN, forbidden, importsSocket, LIVE_SETUP, LIVE_SOCKET,
+  liveLiterals, mixOnce, namesSdkTs, namesSpikesTs, NETWORK, NETWORK_EXCEPTIONS, permissions, permissionTags, ROOM_HTML, ROOM_MIX, SDK, wireUrls,
+} from "./rules-ts.ts";
 
 const SRC = join(REPO, "player", "app", "src");
 
@@ -20,42 +24,12 @@ function files(dir: string): string[] {
   });
 }
 const sources = files(SRC).map((p) => ({ path: relative(SRC, p), text: readFileSync(p, "utf8") }));
-// Comments may name a rule; the guard looks at code only (`code`, in rule-sources.ts).
+// Comments may name a rule; the guards look at code only, in two views (rules-ts.ts, rule-sources.ts).
+// The list, its exceptions and each check are in rules-ts.ts; rules-ts-mutations.test.ts tests them.
 
-const FORBIDDEN: readonly [string, RegExp][] = [
-  ["audio playback (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bwebkitAudioContext\b|\bMediaSource\b|\.play\(\)/],
-  ["a Spotify interface (rule 3)", /spotify\.com|api\.spotify|sdk\.scdn|Spotify\.Player|spotify-web-api/i],
-  ["equipment control (rule 2)", /\bwriteValue\w*\(|\bnavigator\.bluetooth\b|\bnavigator\.usb\b|\bnavigator\.serial\b|\bnavigator\.hid\b|\bresistance\b|\bincline\s*=|\bsetSpeed\b|\bbrake\b/i],
-  ["a network request", /\bfetch\(|XMLHttpRequest|WebSocket|EventSource|\bnet\.request\b|node:https?\b|require\(["']https?["']\)/],
-];
-
-// The one exception (owner, 2026-11-13, #173): the host's live connection to our own backend
-// (ADR 0005 section 1) may name the runtime's `WebSocket` in main/live/live-socket.ts, and only
-// there. It is taken out of the network check alone: audio, Spotify and equipment control stay
-// fully enforced in that file, and every other file keeps the full network check.
-const LIVE_SOCKET = join("main", "live", "live-socket.ts");
-const LIVE_SETUP = join("main", "live", "setup.ts");
-const NETWORK = "a network request";
-const NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[LIVE_SOCKET, /\bWebSocket\b/g]]);
-// The second exception (ADR 0013 section 5, #693): the room window plays a Swedebeat mix, which
-// plan rule 3 allows, through one `<audio>` element. Exactly that element in renderer/room.html and
-// exactly its `audio.play()` in renderer/room-mix.ts are taken out of the audio check alone. Every
-// other way to make sound stays a hit in those two files, and both words stay hits everywhere else.
-const AUDIO = "audio playback (rule 3)";
-const ROOM_HTML = join("renderer", "room.html");
-const ROOM_MIX = join("renderer", "room-mix.ts");
-const AUDIO_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([
-  [ROOM_HTML, /<audio id="mix" preload="auto"><\/audio>/g],
-  [ROOM_MIX, /\baudio\.play\(\)/g],
-]);
-const checked = (path: string, text: string, what: string): string => {
-  const strip = what === NETWORK ? NETWORK_EXCEPTIONS.get(path) : what === AUDIO ? AUDIO_EXCEPTIONS.get(path) : undefined;
-  return strip ? text.replace(strip, "") : text;
-};
-
-for (const [what, re] of FORBIDDEN) {
+for (const [what] of FORBIDDEN) {
   test(`no ${what} anywhere in the app's source`, () => {
-    const hits = sources.filter((s) => re.test(checked(s.path, code(s.text), what))).map((s) => s.path);
+    const hits = sources.filter((s) => forbidden(what)(s.path, s.text)).map((s) => s.path);
     assert.deepEqual(hits, []);
   });
 }
@@ -82,11 +56,11 @@ test("the live connection's exception is one file and one word, for the network 
 test("the mix's exception is one element and one call, in two files, for the audio check only", () => {
   assert.deepEqual([...AUDIO_EXCEPTIONS.keys()], [ROOM_HTML, ROOM_MIX]);
   assert.deepEqual([...AUDIO_EXCEPTIONS.values()].map((r) => r.source), ['<audio id="mix" preload="auto"><\\/audio>', "\\baudio\\.play\\(\\)"]);
-  for (const [path, re] of AUDIO_EXCEPTIONS) {
+  for (const path of AUDIO_EXCEPTIONS.keys()) {
     const s = sources.find((x) => x.path === path);
     assert.ok(s, `${path} exists`);
-    // Exactly one element and one call: the exception covers no second one.
-    assert.equal(code(s.text).match(re)?.length, 1, path);
+    // Exactly one element and one call, in either view: the exception covers no second one.
+    assert.ok(!mixOnce(path, s.text), path);
   }
   // In those files every other way to make sound is still a hit.
   for (const path of [ROOM_HTML, ROOM_MIX]) {
@@ -106,25 +80,20 @@ test("the mix's exception is one element and one call, in two files, for the aud
 });
 
 test("the live socket reaches only the backend's /api/live/ paths", () => {
-  const text = code(sources.find((s) => s.path === LIVE_SOCKET)!.text);
+  const text = (path: string): string => sources.find((s) => s.path === path)!.text;
   // It has no address of its own: no scheme or host, and any path is under /api/live/.
-  const literals = [...text.matchAll(/(["'`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2]);
-  for (const l of literals) {
-    assert.doesNotMatch(l, /:\/\/|^wss?:|^https?:/i, l);
-    if (l.includes("/")) assert.match(l, /^\/api\/live\//, l);
-  }
+  assert.ok(!liveLiterals(LIVE_SOCKET, text(LIVE_SOCKET)));
   // The only address it is handed is the live socket's, built in core/live/host-wire.ts.
-  const service = code(sources.find((s) => s.path === join("main", "live", "live-service.ts"))!.text);
-  assert.deepEqual([...service.matchAll(/\bconnect\(([^,(]+)\(/g)].map((m) => m[1].trim()), ["liveSocketUrl"]);
-  const wire = code(sources.find((s) => s.path === join("core", "live", "host-wire.ts"))!.text);
-  assert.deepEqual([...wire.matchAll(/new URL\(("[^"]*")/g)].map((m) => JSON.parse(m[1])), ["/api/live/ws"]);
+  const service = join("main", "live", "live-service.ts");
+  assert.ok(!connects(service, text(service)));
+  const wire = join("core", "live", "host-wire.ts");
+  assert.ok(!wireUrls(wire, text(wire)));
 });
 
 test("only main/live/setup.ts calls into the live socket", () => {
-  const valueImport = /^import\s+(?!type\b)[^;]*from\s+["'][^"']*live-socket(?:\.ts)?["']/m;
-  const importers = sources.filter((s) => valueImport.test(code(s.text))).map((s) => s.path);
+  const importers = sources.filter((s) => importsSocket(s.path, s.text)).map((s) => s.path);
   assert.deepEqual(importers, [LIVE_SETUP]);
-  const callers = sources.filter((s) => s.path !== LIVE_SOCKET && /\bwebSocketConnect\b/.test(code(s.text))).map((s) => s.path);
+  const callers = sources.filter((s) => s.path !== LIVE_SOCKET && callsSocket(s.path, s.text)).map((s) => s.path);
   assert.deepEqual(callers, [LIVE_SETUP]);
 });
 
@@ -134,10 +103,8 @@ test("the guard itself catches what it looks for", () => {
   assert.doesNotMatch(code("// new Audio() is never used"), FORBIDDEN[0][1]);
 });
 
-const IO = /from\s+["'](electron|node:fs|node:fs\/promises|fs|node:net|node:http|node:https|node:child_process|node:path|node:os|node:perf_hooks)["']|\b(window|document|process)\./;
-
 test("the core is pure: no Electron, filesystem, network, process or DOM", () => {
-  const hits = sources.filter((s) => s.path.startsWith("core") && IO.test(code(s.text))).map((s) => s.path);
+  const hits = sources.filter((s) => s.path.startsWith("core") && coreIo(s.path, s.text)).map((s) => s.path);
   assert.deepEqual(hits, []);
 });
 
@@ -150,7 +117,7 @@ test("source files stay under about 300 lines (150 for the clock and link rule m
 });
 
 test("nothing is imported from the spikes", () => {
-  const hits = sources.filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path);
+  const hits = sources.filter((s) => namesSpikesTs(s.path, s.text)).map((s) => s.path);
   assert.deepEqual(hits, []);
 });
 
@@ -196,7 +163,8 @@ test("the phone shell's walk skips a folder by its exact path, never by its name
 
 for (const [what, re] of FORBIDDEN) {
   test(`no ${what} anywhere in the phone shell's TypeScript`, () => {
-    const hits = mobileTs.filter((s) => re.test(code(s.text))).map((s) => s.path);
+    // No exception here: the rule's own pattern, in either view.
+    const hits = mobileTs.filter((s) => withSource(code, s.path)(s.text).some((v) => re.test(v))).map((s) => s.path);
     assert.deepEqual(hits, []);
   });
 }
@@ -390,7 +358,6 @@ test("the session reader's exception is one file, the media-session types and th
   }
 });
 
-const SDK = /com\.spotify\.(?!music")|spotify[-_.]?(?:sdk|auth|android|app-?remote)|appremote|SpotifyAppRemote/i;
 const namesSdk = (_path: string, text: string, views: Views = ktViews): boolean => views(text).some((v) => SDK.test(v));
 
 test("no Spotify SDK and no spotify: link anywhere in the phone shell", () => {
@@ -398,7 +365,7 @@ test("no Spotify SDK and no spotify: link anywhere in the phone shell", () => {
   // The SDK nowhere. A link nowhere in the app's sources, strings included; test fixtures may hold
   // a Spotify-style track id as the data a session reports, never as something opened.
   const isTest = (p: string): boolean => p.startsWith(`test${sep}`) || p.includes(`${sep}src${sep}test${sep}`);
-  assert.deepEqual(mobileTs.filter((s) => SDK.test(code(s.text))).map((s) => s.path), []);
+  assert.deepEqual(mobileTs.filter((s) => namesSdkTs(s.path, s.text)).map((s) => s.path), []);
   assert.deepEqual(mobileKt.filter((s) => namesSdk(s.path, s.text)).map((s) => s.path), []);
   const app = [...mobileTs, ...mobileKt].filter((s) => !isTest(s.path));
   assert.ok(app.some((s) => s.path === SESSION_READER));
@@ -443,22 +410,17 @@ test("the Kotlin guard catches what it looks for, and not comments or java.net.U
   }
 });
 
-// The one permission the phone shell asks for is INTERNET, for the HTTPS calls to the backend
-// (owner, 2026-11-26, #649); ManifestTest checks the merged manifest against PermissionPolicy.
-const asksFor = (manifest: string): string[] =>
-  [...code(manifest).matchAll(/<uses-permission[\w-]*\b[^>]*?android:name="([^"]+)"/g)].map((m) => m[1]!);
-const permissionTags = (manifest: string): number => [...code(manifest).matchAll(/<uses-permission/g)].length;
-
 test("the phone shell's Android manifest asks for INTERNET and nothing else", () => {
   const manifest = readFileSync(MANIFEST, "utf8");
-  assert.deepEqual(asksFor(manifest), ["android.permission.INTERNET"]);
-  assert.equal(permissionTags(manifest), 1);
+  // In both views (rules-ts.ts): `code`, and the manifest with only its <!-- --> comments out.
+  assert.ok(!permissions(MANIFEST, manifest));
   // One more permission, in either tag, is caught.
   for (const extra of ["android.permission.CAMERA", "android.permission.ACCESS_NETWORK_STATE"]) {
     for (const tag of ["uses-permission", "uses-permission-sdk-23"]) {
       const more = manifest.replace("<application", `<${tag} android:name="${extra}" />\n    <application`);
-      assert.notDeepEqual(asksFor(more), ["android.permission.INTERNET"], `${tag} ${extra}`);
-      assert.notEqual(permissionTags(more), 1, `${tag} ${extra}`);
+      assert.notDeepEqual(asksFor(code(more)), ["android.permission.INTERNET"], `${tag} ${extra}`);
+      assert.notEqual(permissionTags(code(more)), 1, `${tag} ${extra}`);
+      assert.ok(permissions(MANIFEST, more), `${tag} ${extra}`);
     }
   }
 });
@@ -466,7 +428,7 @@ test("the phone shell's Android manifest asks for INTERNET and nothing else", ()
 const namesSpikes = (_path: string, text: string, views: Views = ktViews): boolean => views(text).some((v) => /spikes?\//.test(v));
 
 test("the phone shell imports nothing from the spikes", () => {
-  assert.deepEqual(mobileTs.filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path), []);
+  assert.deepEqual(mobileTs.filter((s) => namesSpikesTs(s.path, s.text)).map((s) => s.path), []);
   assert.deepEqual(mobileKt.filter((s) => namesSpikes(s.path, s.text)).map((s) => s.path), []);
 });
 

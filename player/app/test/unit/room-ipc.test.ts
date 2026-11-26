@@ -18,10 +18,30 @@ import type { Snapshot } from "../../src/core/snapshot.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
 import { LIST_CSP, ROOM_CSP } from "../../src/main/web-preferences.ts";
+import { type Check, differs, forbids, type Mutation, mutationGaps, oldView, slashCode } from "./rule-sources.ts";
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (...p: string[]): string => readFileSync(join(APP, ...p), "utf8");
-const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+const code = slashCode;
+// The negative and exact-list checks on the preloads and the room's scripts, each in two views
+// (rule-sources.ts, issue #861): `slashCode`, as before, and the file with only its real comments
+// out, so a "//" or "/*" in a string hides nothing from them. The last test shows each catches that.
+const sortedSet = (re: RegExp) => (v: string): (string | undefined)[] => [...new Set([...v.matchAll(re)].map((m) => m[1]))].sort();
+const R = {
+  roomNames: differs((v) => [...v.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]).sort(), ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"], code),
+  invoked: differs(sortedSet(/ipcRenderer\.invoke\((\w+)/g), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_MIX_REPORT", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"], code),
+  pushes: differs((v) => [...v.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_MIX"], code),
+  sends: forbids(/ipcRenderer\.(send|sendSync|postMessage|addListener|once)\b/, code),
+  presenterRoom: forbids(/CH_ROOM_|room:/, code),
+  used: differs(sortedSet(/api\.(\w+)/g), ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"], code),
+  writesPage: forbids(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, code),
+  takesRoom: differs((v) => [...v.matchAll(/\.room\b|\["room"\]|\['room'\]/g)].map((m) => m[0]), [".room"], code),
+  bareApi: differs((v) => [...v.matchAll(/\bapi\b(?!\.\w)/g)].length, 1, code),
+  aroundApi: forbids(/\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, code),
+  roomElsewhere: forbids(/\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, code),
+} satisfies Record<string, Check>;
+const at = (path: string): string => read(...path.split("/"));
+const holds = (check: keyof typeof R, path: string): boolean => R[check](path, at(path));
 
 const ROOM = { roomId: 9, roomUrl: "file:///app/dist/room.html" };
 const MAIN = { presenterId: 7, presenterUrl: "file:///app/dist/presenter.html", listUrl: "file:///app/dist/classlist.html" };
@@ -103,21 +123,15 @@ test("every room handler refuses every other sender without reading the clock or
 });
 
 test("the room preload exposes exactly the room's functions, and uses only the room's channels", () => {
-  const src = code(read("src", "preload", "room-preload.ts"));
-  assert.deepEqual(
-    [...src.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]).sort(),
-    ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "stopRemote", "undo"],
-  );
-  const invoked = [...src.matchAll(/ipcRenderer\.invoke\((\w+)/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(invoked)].sort(), ["CH_ROOM_COMMAND", "CH_ROOM_END", "CH_ROOM_MIX_REPORT", "CH_ROOM_REMOTE_START", "CH_ROOM_REMOTE_STATE", "CH_ROOM_REMOTE_STOP", "CH_ROOM_STATE"]);
-  assert.deepEqual([...src.matchAll(/ipcRenderer\.on\((\w+)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE", "CH_ROOM_REMOTE_UPDATE", "CH_ROOM_MIX"]);
+  const PRELOAD = "src/preload/room-preload.ts";
+  const src = code(at(PRELOAD));
+  for (const check of ["roomNames", "invoked", "pushes", "sends"] as const) assert.ok(!holds(check, PRELOAD), check);
   // The one function that takes values from the page sends exactly the report's four fields, rebuilt.
   assert.match(src, /invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number\.isFinite\(durationMs\) \? durationMs : null \}\)/);
-  assert.doesNotMatch(src, /ipcRenderer\.(send|sendSync|postMessage|addListener|once)\b/);
   assert.deepEqual(ROOM_CHANNELS, [CH_ROOM_STATE, CH_ROOM_COMMAND, CH_ROOM_END, CH_ROOM_REMOTE_STATE, CH_ROOM_REMOTE_START, CH_ROOM_REMOTE_STOP, CH_ROOM_MIX_REPORT]);
   assert.deepEqual(ROOM_PUSH_CHANNELS, [CH_ROOM_UPDATE, CH_ROOM_REMOTE_UPDATE, CH_ROOM_MIX]);
   // The presenter's preload knows nothing of the room.
-  assert.doesNotMatch(code(read("src", "preload", "preload.ts")), /CH_ROOM_|room:/);
+  assert.ok(!holds("presenterRoom", "src/preload/preload.ts"));
   assert.equal(new Set([...ROOM_CHANNELS, ...ROOM_PUSH_CHANNELS]).size, ROOM_CHANNELS.length + ROOM_PUSH_CHANNELS.length);
 });
 
@@ -137,18 +151,41 @@ test("room.html carries exactly the room's policy, before any script, and no inl
 });
 
 test("the room page uses only the room's fixed calls (issue #198: the band's commands, End class, the phone remote)", () => {
-  const src = code(read("src", "renderer", "room.ts"));
-  const used = [...new Set([...src.matchAll(/api\.(\w+)/g)].map((m) => m[1]))].sort();
-  assert.deepEqual(used, ["back", "endClass", "follow", "forward", "mixReport", "next", "onMix", "onRemote", "onUpdate", "pause", "previous", "remoteState", "resume", "start", "startRemote", "state", "undo"]);
-  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|player\.|\bfetch\b|XMLHttpRequest|WebSocket/, f);
+  assert.ok(!holds("used", "src/renderer/room.ts"));
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.ok(!holds("writesPage", `src/renderer/${f}`), f);
 });
 
 test("the preload is reached once, by name, in room.ts only: no other way round the list of calls", () => {
   const room = code(read("src", "renderer", "room.ts"));
   // The one place the preload is taken, and the only bare `api` (no alias, no passing it on).
-  assert.deepEqual([...room.matchAll(/\.room\b|\["room"\]|\['room'\]/g)].map((m) => m[0]), [".room"]);
-  assert.deepEqual([...room.matchAll(/\bapi\b(?!\.\w)/g)].length, 1);
+  assert.ok(!holds("takesRoom", "src/renderer/room.ts"));
+  assert.ok(!holds("bareApi", "src/renderer/room.ts"));
   assert.match(room, /const api = \(window as unknown as \{ room: RoomApi \}\)\.room;/);
-  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\bapi\s*\[|\bapi\?\.|globalThis|\bself\b|\btop\b\.|\bparent\b\./, f);
-  for (const f of ["room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.doesNotMatch(code(read("src", "renderer", f)), /\.room\b|\[["']room["']\]|\bapi\b|\bwindow\s*\[/, f);
+  for (const f of ["room.ts", "room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.ok(!holds("aroundApi", `src/renderer/${f}`), f);
+  for (const f of ["room-band.ts", "room-qr.ts", "room-mix.ts"]) assert.ok(!holds("roomElsewhere", `src/renderer/${f}`), f);
+});
+
+test('each check on the preloads and the room\'s scripts catches code a "//" or "/*" in a string hides (issue #861)', () => {
+  const ROOM_PRELOAD = ["src/preload/room-preload.ts", "  state: (): Promise<unknown> => ipcRenderer.invoke(CH_ROOM_STATE),"] as const;
+  const PRESENTER = ["src/preload/preload.ts", "  getState: (): Promise<unknown> => ipcRenderer.invoke(CH_STATE),"] as const;
+  const ROOM_TS = ["src/renderer/room.ts", 'import "./room-band.css";'] as const;
+  const BAND = ["src/renderer/room-band.ts", 'import * as M from "../core/room/band-model.ts";'] as const;
+  const QR = ["src/renderer/room-qr.ts", 'import { encodeQr } from "../core/qr/qr-encode.ts";'] as const;
+  const hidden = (check: keyof typeof R, [path, anchor]: readonly [string, string], after: string): Mutation => [check, path, anchor, `${anchor} const s = "//"; ${after}`, true];
+  const spanned = (check: keyof typeof R, [path, anchor]: readonly [string, string], line: string): Mutation => [check, path, anchor, `${anchor}\nconst s = "/*";\n${line}\nconst t = "*/";`, true];
+  const table: readonly Mutation[] = [
+    spanned("roomNames", ROOM_PRELOAD, "  steal: () => 1,"),
+    hidden("invoked", ROOM_PRELOAD, "ipcRenderer.invoke(CH_LIST_START);"),
+    hidden("pushes", ROOM_PRELOAD, "ipcRenderer.on(CH_UPDATE, f);"),
+    hidden("sends", ROOM_PRELOAD, 'ipcRenderer.send("x");'),
+    hidden("presenterRoom", PRESENTER, "ipcRenderer.invoke(CH_ROOM_END);"),
+    hidden("used", ROOM_TS, "api.unpair();"),
+    hidden("writesPage", QR, "el.innerHTML = x;"),
+    hidden("takesRoom", ROOM_TS, 'const r = window["room"];'),
+    hidden("bareApi", ROOM_TS, "keep(api);"),
+    hidden("aroundApi", ROOM_TS, "globalThis.x = 1;"),
+    hidden("roomElsewhere", BAND, "const r = window.room;"),
+  ];
+  assert.deepEqual(mutationGaps(table, new Map(Object.entries(R)), at, oldView(code)), []);
+  assert.deepEqual([...new Set(table.map(([c]) => c))].sort(), Object.keys(R).sort());
 });

@@ -15,6 +15,7 @@ import { createLinuxMusic } from "../../src/main/linux-reader.ts";
 import type { ExecFileFn } from "../../src/main/linux-reader.ts";
 import { selectMusic } from "../../src/main/select-music.ts";
 import { converterExamples, REPO } from "./fixtures.ts";
+import { type Check, differs, forbids, type Mutation, mutationGaps, oldView, slashCode } from "./rule-sources.ts";
 
 const SRC = join(REPO, "player", "app", "src");
 const FIXTURES = join(REPO, "player", "app", "test", "fixtures", "linux");
@@ -171,35 +172,66 @@ function files(dir: string): string[] {
   });
 }
 const sources = files(SRC).map((p) => ({ path: relative(SRC, p).split(sep).join("/"), text: readFileSync(p, "utf8") }));
-const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const src = (path: string): string => code(sources.find((s) => s.path === path)?.text ?? assert.fail(`missing ${path}`));
+const raw = (path: string): string => sources.find((s) => s.path === path)?.text ?? assert.fail(`missing ${path}`);
+const src = (path: string): string => slashCode(raw(path));
+// Each negative or exact-list check reads two views (rule-sources.ts, issue #861): `slashCode`, as
+// before, and the file with only its real comments out, so a "//" in a string hides nothing from it.
+const CALLS = "core/link/linux-calls.ts";
+const C = {
+  joins: forbids(/`|\$\{|\+|\.concat\(|\.replace\(|\.join\(|\.push\(|\.map\(/, slashCode),
+  spreads: differs((v) => [...v.matchAll(/\.\.\.(\w+)/g)].map((m) => m[1]), ["CALL", "BASE", "GET_ALL", "BASE", "BASE", "BASE", "CALL", "CALL", "GET_ALL", "BASE"], slashCode),
+  names: forbids(/busctl"|org\.mpris|org\.freedesktop|--user|--auto-start|dbus/i, slashCode),
+  mpris: differs((v) => v.match(/org\.mpris\.MediaPlayer2\.\w+/g)?.join(), "org.mpris.MediaPlayer2.spotify,org.mpris.MediaPlayer2.Player", slashCode),
+  builds: forbids(/\bcreateLinuxMusic\b/, slashCode),
+  imports: forbids(/linux-reader|linux-calls|linux-parse/, slashCode),
+  secrets: forbids(/token|oauth|client.?id|bearer|authoriz|https?:|fetch\(|node:net|node:http|node:dns|node:fs|process\.env|\benv\b/i, slashCode),
+} satisfies Record<string, Check>;
+const holders = (check: Check): string[] => sources.filter((s) => check(s.path, s.text)).map((s) => s.path).sort();
 
 test("the calls are constants: no template text, no joining with data, and one place names busctl and the bus", () => {
-  const calls = src("core/link/linux-calls.ts");
-  assert.doesNotMatch(calls, /`|\$\{|\+|\.concat\(|\.replace\(|\.join\(|\.push\(|\.map\(/);
+  const calls = src(CALLS);
+  assert.ok(!C.joins(CALLS, raw(CALLS)));
   // The only spreading is of the frozen constant lists. The values that are not constants are
   // another player's bus name, checked where it is used (test/unit/linux-others.test.ts), and
   // Start's playlist link, built only by playlistUri from a re-checked id (test/unit/playlist-edge.test.ts).
-  assert.deepEqual([...calls.matchAll(/\.\.\.(\w+)/g)].map((m) => m[1]), ["CALL", "BASE", "GET_ALL", "BASE", "BASE", "BASE", "CALL", "CALL", "GET_ALL", "BASE"]);
+  assert.ok(!C.spreads(CALLS, raw(CALLS)));
   assert.match(calls, /return isOtherPlayer\(name\) \? Object\.freeze\(\[\.\.\.CALL, name, PATH, \.\.\.GET_ALL\]\) : null;/);
   assert.match(calls, /const uri = playlistUri\(id\);\n {2}return uri === null \? null : Object\.freeze\(\[\.\.\.BASE, PLAYER, "OpenUri", "s", uri\]\);/);
-  const namers = sources.filter((s) => /busctl"|org\.mpris|org\.freedesktop|--user|--auto-start|dbus/i.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(namers, ["core/link/linux-calls.ts"]);
-  assert.equal(calls.match(/org\.mpris\.MediaPlayer2\.\w+/g)?.join(), "org.mpris.MediaPlayer2.spotify,org.mpris.MediaPlayer2.Player");
+  assert.deepEqual(holders(C.names), [CALLS]);
+  assert.ok(!C.mpris(CALLS, raw(CALLS)));
 });
 
 test("the Linux reader is built in the main process only, by platform", () => {
-  const builders = sources.filter((s) => /\bcreateLinuxMusic\b/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(builders.sort(), ["main/linux-reader.ts", "main/select-music.ts"]);
-  const importers = sources.filter((s) => /linux-reader|linux-calls|linux-parse/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(importers.sort(), ["core/link/linux-parse.ts", "main/linux-reader.ts", "main/select-music.ts"]);
+  assert.deepEqual(holders(C.builds), ["main/linux-reader.ts", "main/select-music.ts"]);
+  assert.deepEqual(holders(C.imports), ["core/link/linux-parse.ts", "main/linux-reader.ts", "main/select-music.ts"]);
   assert.match(src("main/select-music.ts"), /platform === "linux" \? makeLinux : null/);
 });
 
 test("no Spotify token, sign-in or developer interface, no network and no file, in the Linux reader", () => {
   for (const path of ["main/linux-reader.ts", "core/link/linux-calls.ts", "core/link/linux-parse.ts"]) {
-    assert.doesNotMatch(src(path), /token|oauth|client.?id|bearer|authoriz|https?:|fetch\(|node:net|node:http|node:dns|node:fs|process\.env|\benv\b/i, path);
+    assert.ok(!C.secrets(path, raw(path)), path);
   }
+});
+
+test('each check catches code a "//" in a string hides from the old view (issue #861)', () => {
+  const BASE = "const BASE = Object.freeze([...CALL, MPRIS_NAME, PATH] as const);";
+  const EXEC = "const systemExec: ExecFileFn = (file, args, options, done) => {";
+  const PARSE = 'const GARBAGE: LinuxParse = { kind: "garbage" };';
+  const MAIN = 'import { app, BrowserWindow, ipcMain } from "electron";';
+  const hide = (anchor: string, after: string): string => `${anchor} const s = "//"; ${after}`;
+  const table: readonly Mutation[] = [
+    ["joins", CALLS, BASE, hide(BASE, "const x = [a].concat(b);"), true],
+    ["spreads", CALLS, BASE, hide(BASE, "const x = [...CALL, ...extra];"), true],
+    ["names", "main/main.ts", MAIN, hide(MAIN, 'const bus = "dbus";'), true],
+    ["mpris", CALLS, BASE, hide(BASE, 'const o = "org.mpris.MediaPlayer2.vlc";'), true],
+    ["builds", "main/main.ts", MAIN, hide(MAIN, "createLinuxMusic();"), true],
+    ["imports", "main/main.ts", MAIN, hide(MAIN, 'import { BUSCTL } from "../core/link/linux-calls.ts";'), true],
+    ["secrets", "main/linux-reader.ts", EXEC, hide(EXEC, "void fetch(u);"), true],
+    ["secrets", CALLS, BASE, hide(BASE, "const t = process.env.X;"), true],
+    ["secrets", "core/link/linux-parse.ts", PARSE, hide(PARSE, 'const u = "http://127.0.0.1";'), true],
+  ];
+  assert.deepEqual(mutationGaps(table, new Map(Object.entries(C)), raw, oldView(slashCode)), []);
+  assert.deepEqual([...new Set(table.map(([c]) => c))].sort(), Object.keys(C).sort());
 });
 
 test("the recorded outputs hold no real account's data", () => {

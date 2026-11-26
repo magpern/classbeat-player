@@ -9,6 +9,7 @@ import { END_TRY_MS } from "../../src/main/live/ender.ts";
 import { QUIT_WAIT_MS, quitAfterLive } from "../../src/main/live/quit.ts";
 import { HOST_TOKEN, rig, started } from "./live-relay.ts";
 import type { Rig } from "./live-relay.ts";
+import { appText, type Check, forbids, lineCode, type Mutation, mutationGaps, oldView, withSource } from "./rule-sources.ts";
 
 const SRC = join(import.meta.dirname, "..", "..", "src");
 const sources = (dir = SRC): string[] =>
@@ -233,13 +234,37 @@ test("the shell's will-quit ends the phone remote through the bounded wait, and 
   assert.doesNotMatch(main, /"will-quit", \(\) => phoneRemote/);
 });
 
+// The listeners in one view of main.ts: each `will-quit` listener, from its handler to the line's end.
+const listenersIn = (code: string): string[] =>
+  [...code.matchAll(/\b(?:app\.)?(?:on|once|addListener|prependListener|prependOnceListener)\(\s*["']will-quit["']\s*,\s*([^\n]*)/g)].map((m) => m[1]!);
+// Each check reads two views (rule-sources.ts, issue #861): every "//" to the end of its line out, as
+// before, and the file with only its real comments out, so a "//" in a string hides no listener.
+const LAST = "quitAfterLive is the one and last will-quit listener";
+const ELSEWHERE = "a will-quit listener elsewhere";
+const quitChecks = new Map<string, Check>([
+  [LAST, (_p, text, views = withSource(lineCode)) => views(text).some((v) => {
+    const l = listenersIn(v);
+    return l.filter((x) => x.startsWith("quit.willQuit")).length !== 1 || !/^quit\.willQuit\)/.test(l.at(-1) ?? "");
+  })],
+  [ELSEWHERE, forbids(/["']will-quit["']/, lineCode)],
+]);
+
 test("quitAfterLive stays the last will-quit listener, so the rest has stopped before it waits", () => {
-  const code = MAIN.replace(/\/\/.*$/gm, "");
-  const listeners = [...code.matchAll(/\b(?:app\.)?(?:on|once|addListener|prependListener|prependOnceListener)\(\s*["']will-quit["']\s*,\s*([^\n]*)/g)].map((m) => m[1]);
+  const listeners = listenersIn(lineCode(MAIN));
   assert.ok(listeners.length >= 5, String(listeners.length));
-  assert.equal(listeners.filter((l) => l.startsWith("quit.willQuit")).length, 1);
-  assert.match(listeners[listeners.length - 1], /^quit\.willQuit\)/);
+  assert.ok(!quitChecks.get(LAST)!("main.ts", MAIN));
   // No will-quit listener is added anywhere else in the app's source.
-  const others = sources().filter((p) => p !== join("main", "main.ts") && /["']will-quit["']/.test(readFileSync(join(SRC, p), "utf8").replace(/\/\/.*$/gm, "")));
+  const others = sources().filter((p) => p !== join("main", "main.ts") && quitChecks.get(ELSEWHERE)!(p, readFileSync(join(SRC, p), "utf8")));
   assert.deepEqual(others, []);
+});
+
+test('the will-quit checks catch a listener a "//" in a string hides (issue #861)', () => {
+  const Q = 'app.on("will-quit", quit.willQuit);';
+  const A = 'import { screen } from "electron";';
+  const table: readonly Mutation[] = [
+    [LAST, join("main", "main.ts"), Q, `${Q}\nconst s = "//"; app.on("will-quit", late);`, true],
+    [LAST, join("main", "main.ts"), Q, `const s = "//"; app.on("will-quit", quit.willQuit);\n${Q}`, true],
+    [ELSEWHERE, join("main", "live", "setup.ts"), A, `${A} const s = "//"; app.once("will-quit", f);`, true],
+  ];
+  assert.deepEqual(mutationGaps(table, quitChecks, appText, oldView(lineCode)), []);
 });
