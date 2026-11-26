@@ -186,9 +186,8 @@ the mobile tests (#629, #642).
 Then: the mode holder (#630, #643), pairing with the Keystore token store and its plates (#631,
 #651; spec as built #652, #655; the status row on wide screens #657, #658) and the music follower
 behind a neutral reader (#632, #656). The app's backend calls and its Spotify reader wait for the
-owner (#649, #653, [owner.md](owner.md)): until then pairing runs on a stand-in that fails as
-offline, and the follower's stand-in reader reports "unavailable", so the phone runs on the manual
-clock.
+owner (#649, #653, [owner.md](owner.md)); the owner approved both on 2026-11-26, and both issues
+are closed.
 
 Since then: rider mode on a stand-in transport (#633, #666), hardening batch 1 (#670) and a
 second mode question refused so the unpair call is always answered (#675). The owner decided on
@@ -202,16 +201,23 @@ Also merged: a test of ModeController's keep-screen-on wiring (#749, #761) and a
 often a crashed external display is shown again (#752, #755).
 
 Also merged: the rider line on the external display's idle stage (#787 spec, #790; its policy test
-hardened in #807). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
-reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
+hardened in #807). Waiting for the owner: the signing key and native Bluetooth sensors (the PL9
+guard decision). The iOS app starts after Android (#684).
 
 Also merged: the app's room screen plays the class opened from the list on the manual clock (#871,
 #880), checked by a class reader the phone pages run without `unsafe-eval` (#874, #879); the
 external display keeps its idle stage while a class runs on the phone (specs and ADR 0011 as built,
 #881, #882); and following the music on the app's room screen, with the Follow key, the access
 sheet and play, pause and next sent to the music app only on the instructor's press (#872, #883).
-CI keeps the app's screenshots (#875, #878). In progress: hardening of following on the phone
-(#884) and the same press-routing check on the desktop (#885).
+CI keeps the app's screenshots (#875, #878). Then: hardening of following on the phone (#884,
+#888) and a band press routed on the music's current state on the desktop (#885, #887). In
+progress: pinning Start after a lock and stopping following on lost access on the desktop (#889).
+
+Verifier at 27316e5 (Android): the web bundle (121 tests) and the debug APK build, the 268 JVM
+tests pass, and the APK is signed with the debug key. Every built item is met on fakes, with no
+gaps. Waiting for the owner: the release signing secrets, the Spotify follower's live run (spike
+3), the Android 13 restricted-settings wording and native Bluetooth (the PL9 guard decision). Not
+checked on a device or emulator. Android is done on fakes; the iOS app is next (#684).
 
 Verifier at 28e592f: the debug and release APKs build, the manifest check passes, and the 57 web
 and 238 JVM tests per variant pass. Every built item is met on fakes. One gap: the follower asked
