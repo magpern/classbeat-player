@@ -64,9 +64,9 @@ them at all six sizes of app.md. In short:
 | Text | Live text in the bundled fonts; no word in a picture |
 
 Sizes: the reference phone 390 × 844 each way up (the shots kept), 360 × 640 each way up and a
-tablet 768 × 1024 each way up (checked). The iPhone SE at 375 × 667 sits between the first two in both
-dimensions and is covered by them: the tiers are shares of height, and no page wraps beyond its
-slot at either.
+tablet 768 × 1024 each way up (checked). The iPhone SE at 375 × 667 sits between the first two
+in both dimensions and is covered by them: the tiers are shares of height, and no page wraps
+beyond its slot at either.
 
 ## Motion and reduced motion
 
