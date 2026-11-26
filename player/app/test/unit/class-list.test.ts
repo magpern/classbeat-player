@@ -148,7 +148,7 @@ test("a time that is not known, or is not a time, shows nothing", () => {
 
 test("the pure modules import no I/O: no database, network, filesystem, process, window or React", () => {
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src", "core", "sync");
-  for (const name of ["class-list.ts", "updated-text.ts", "fault-policy.ts", "view.ts"]) {
+  for (const name of ["class-list.ts", "updated-text.ts", "fault-policy.ts", "view.ts", "unknown-source.ts"]) {
     const source = readFileSync(join(dir, name), "utf8");
     const imports = [...source.matchAll(/^import .* from "(.*)";$/gm)].map((m) => m[1]);
     assert.deepEqual(imports.filter((from) => !from.startsWith("./")), [], name);

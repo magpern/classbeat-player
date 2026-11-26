@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { classCache } from "../../src/main/sync/cache.ts";
 import { classListView } from "../../src/core/sync/class-list.ts";
+import { sourceFreeSchema } from "../../src/core/sync/unknown-source.ts";
 import { INITIAL } from "../../src/core/sync/sync-model.ts";
 import type { SyncState } from "../../src/core/sync/sync-model.ts";
 import { contentHash } from "classformat/src/index.ts";
@@ -171,4 +172,25 @@ test("a class whose music source is not a non-empty string, or breaks anything e
   (doc.music as Record<string, unknown>).source = "local";
   (doc.class as Record<string, unknown>).length_ms = "long";
   assert.equal(held(classBody(ID_A, doc)).kind, "unusable");
+});
+
+test("a class with a known music source that breaks only a rule reading the source is still unusable", () => {
+  const cases: [string, unknown[]][] = [["spotify", []], ["swedebeat", []], ["none", [{ title: "x" }]]];
+  for (const [kind, songs] of cases) {
+    const doc = document();
+    (doc.music as Record<string, unknown>).source = kind;
+    doc.songs = songs;
+    assert.equal(held(classBody(ID_A, doc)).kind, "unusable", kind);
+  }
+});
+
+test("the source-free schema drops only the rule whose if tests exactly music.source", () => {
+  const rule = (cond: unknown) => ({ if: cond, then: {} });
+  const exact = { properties: { music: { properties: { source: { const: "none" } } } } };
+  const more = { properties: { music: { properties: { source: { const: "none" } } } }, required: ["music"] };
+  const other = { properties: { music: { properties: { source: { const: "none" }, bpm: { const: 1 } } } } };
+  const schema = { properties: { music: { properties: { source: { enum: ["spotify", "swedebeat", "none"] } } } }, allOf: [rule(exact), rule(more), rule(other), rule({ properties: { format_version: { const: "1.0" } } })] };
+  const out = sourceFreeSchema(schema) as { allOf: { if: unknown }[]; properties: { music: { properties: { source: unknown } } } };
+  assert.deepEqual(out.allOf.map((r) => r.if), [more, other, { properties: { format_version: { const: "1.0" } } }]);
+  assert.deepEqual(out.properties.music.properties.source, { type: "string", minLength: 1 });
 });
