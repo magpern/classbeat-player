@@ -8,8 +8,8 @@ only on the owner's word. Section 13 lists what is decided and what is still ope
 This is a **new product in its own repository, separate from classbeat**, with its own backend,
 accounts and releases. classbeat is where classes are made; it sends a finished class to this
 product over an API. This product is not associated with any other cycling product and never
-mentions or accesses one (owner, 2026-11-26). Nothing is imported from classbeat's code and nothing here reads classbeat's
-database. "classbeat Player" is only a working name (decision 12).
+mentions or accesses one (owner, 2026-11-26). Nothing is imported from classbeat's code and
+nothing here reads classbeat's database. "classbeat Player" is only a working name (decision 12).
 
 Requirements as given by the owner (2026-11-12):
 
@@ -44,7 +44,7 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    audio itself (section 4). The plan is that the instructor's own Spotify desktop app plays, and
    the player **follows** it by reading the playing track and position from the operating system.
 3. **Following can be better than a fixed timeline.** A timeline that assumes the playlist plays
-   in order with a set crossfade drifts by 1 to 3 s at best.
+   in order with a set crossfade: classbeat measured 1 to 3 s of error at best with one.
    A player that reads the real position follows pauses, skips and seeks.
    This is the main thing to prove first (section 12, spike 1).
 4. **Recommended technology:** a web-technology application on every device (in a desktop
@@ -54,7 +54,7 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
    backend, Python with FastAPI and PostgreSQL (section 5).
 5. **Classes come from classbeat.** How classbeat designs a class and where it gets music
    analysis is classbeat's business; the player receives only the finished class document, which
-   says for each song whether it is Spotify or Swedebeat. Section 5.
+   says which music source the class uses: Spotify, Swedebeat or none (section 5, ADR 0003).
 6. **Spotify in a studio is a terms problem for every player.** Spotify's own
    terms do not allow playing it publicly from a business. Swedebeat is the licensed route; the
    player could play its mixes itself, given a sanctioned source of the audio (section 4).
@@ -64,8 +64,8 @@ same day. What could not be opened or confirmed is listed in section 14. Nothing
 
 ## 2. What an established studio player does, and what ours would do
 
-The comparison column is from the owner's notes on an established studio player (2026-11-12) and
-from public excerpts, so treat it as indicative.
+The comparison column is from the owner's screenshot of an established studio player (2026-11-12)
+and from public excerpts, so treat it as indicative.
 
 | Feature | Established player | classbeat Player, first version | Later |
 |---|---|---|---|
@@ -92,8 +92,8 @@ section 3.
 
 ## 3. How ours is different, and the rules the player keeps
 
-**What an established player's screens look like** (the owner's notes, 2026-11-12), so ours
-looks different:
+**What an established player's screens look like** (the owner's screenshot, 2026-11-12), so
+ours looks different:
 
 - **THE PLAYER:** total time and segment time top left; the class as a row of coloured bars along
   the top; an "up next" strip (intensity dot, time, %FTP, RPM, position); below it **three
@@ -151,9 +151,9 @@ version and every later feature. A change to one of them is the owner's decision
 
 **The niche: the instructor's player** (added 2026-11-12 at the owner's request)
 
-On the room's screen established players are years ahead, and the rules above close off worlds, group displays
-and games. A nicer scene alone is not why a studio changes product. What nobody in this field
-serves well is the person teaching, who is also the person who chooses the product.
+On the room's screen established players are years ahead, and the rules above close off worlds,
+group displays and games. A nicer scene alone is not why a studio changes product. What nobody
+in this field serves well is the person teaching, who is also the person who chooses the product.
 
 - **It follows the instructor, not a plan.** Skip a song, replay a chorus, pause for a late
   arrival: the class follows the music, so the instructor can improvise without the screen going
@@ -190,8 +190,8 @@ product (owner, 2026-11-12).
   bursts on a drop. The class itself is read from a **score**: a flat strip moving sideways under
   a fixed "now" line, with the songs as clips and the intervals above them, like a track in a
   music editor.
-- It uses what a classbeat class carries and established players' screens do not show: the beat, the song
-  boundaries, the song now playing and the coaching cue.
+- It uses what a classbeat class carries and established players' screens do not show: the beat,
+  the song boundaries, the song now playing and the coaching cue.
 - **Text stays text.** Numbers and cues are large type over the scene, sized to be read from the
   back of a room, never baked into the picture. The zone is always a number and a name as well
   as a colour. Which part draws that text depends on the scene technology (section 9).
@@ -730,20 +730,24 @@ reversible defaults.
 10. **Hosting:** the backend's domain, and whether it runs beside classbeat on the same server.
 11. **Swedebeat:** the owner wants download-and-cache playback (2026-11-12). Open: whether to
     ask Swedebeat for an agreement and a source of the audio (the route through another cycling
-    product is closed, owner 2026-11-26). classbeat's standing decision is that providers are not contacted;
-    asking would be the first exception. Recommended: ask Swedebeat.
+    product is closed, owner 2026-11-26). classbeat's standing decision is that providers are not
+    contacted; asking would be the first exception. Recommended: ask Swedebeat.
 12. **Name and look:** the product's name, and whether it shares classbeat's design or gets its
     own.
 13. **Repository and openness:** public or private, and the licence. Recommended: the class
     format under a permissive open licence, and the player as open source.
 14. **The niche:** "the instructor's player" (section 3) as the thing this product is known for.
 15. **Installed phone and tablet apps: decided (owner, 2026-11-15), phase PL12.** Android first,
-    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS follows once the Android app is finished, on the simulator and the owner's Mac, with real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on iOS may
-    use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
+    as a self-signed APK installed by hand, with no store, built with Capacitor (ADR 0011). iOS
+    follows once the Android app is finished, on the simulator and the owner's Mac, with
+    real-device checks later (owner, 2026-11-24). One app with two modes, instructor and rider
+    (owner, 2026-11-15). Open: whether to publish through Google Play later; whether a follower on
+    iOS may use Spotify's own iOS SDK (until then the iOS app uses the manual clock).
 
 ## 14. Not verified
 
-- Swedebeat: whether its own service can deliver a user's mix to anything but its own app. Its help centre could be read only as search excerpts.
+- Swedebeat: whether its own service can deliver a user's mix to anything but its own app. Its
+  help centre could be read only as search excerpts.
 - Spotify: no ruling on whether a workout timeline or a tempo-driven scene is "visual media" under
   III.6; whether the Web API sees an offline desktop app; current position accuracy of the Windows
   media session and of AppleScript with crossfade on (spike 1 measures both).

@@ -15,8 +15,9 @@ service and on users' devices, visuals shown in time with Spotify playback, and 
 The rules this ADR turns into checkable operating rules come from the plan's product rules
 (section 3, rules 1 to 3), the music link (section 4, ADR 0001), the class format (ADR 0003) and
 the owner's open decisions 9 to 13 (section 13). Which companies are involved: Spotify (the
-music the instructor plays), MOWL (named only in section 4: this product has no connection with it),
-Swedebeat (a licensed music provider, later) and classbeat (our own class source).
+music the instructor plays), one other cycling product (section 4: this product has no
+connection with it), Swedebeat (a licensed music provider, later) and classbeat (our own class
+source).
 
 ## Decision
 
@@ -76,10 +77,10 @@ the player never selects songs or builds a class from a playlist.
 - classbeat stays the only party that talks to MOWL. What reaches this product is classbeat's own
   class document (ADR 0003), never MOWL's data in MOWL's format.
 - **The player is not associated with MOWL and never mentions it** (owner, 2026-11-26). The name
-  appears in exactly two places, because a rule needs it: this section and the guard list of
-  section 7. Product code, screens, tests, fixtures, specs, the plan, the other ADRs and the README
-  name it nowhere. Classes come from classbeat; a song's music source (Spotify or Swedebeat) is in
-  the class document.
+  appears in exactly two places, because a rule needs it: this section and the guard of section 7
+  (its description here and the guard list itself). Product code, screens, tests, fixtures,
+  specs, the plan, the other ADRs and the README name it nowhere. Classes come from classbeat; the
+  class document says which music source the class uses (Spotify, Swedebeat or none, ADR 0003).
 
 ### 5. Swedebeat
 
@@ -111,7 +112,7 @@ from a provider writes it in `docs/owner.md` and carries on.
 - Any owner decision on payment, openness or distribution (decisions 9, 12 and 13).
 - Adding option B (section 2).
 - PL11 and the owner's answer on Swedebeat (decision 11). Swedebeat audio never comes through
-  MOWL (owner, 2026-11-26).
+  another cycling product (owner, 2026-11-26, section 4).
 - Any new music provider or new class source.
 
 ## Alternatives

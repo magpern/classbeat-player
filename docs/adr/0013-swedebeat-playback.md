@@ -16,10 +16,10 @@ is that ADR. It rests on:
   to the device, never through our backend. The cache is encrypted, tied to the signed-in
   account, usable only by the player, and removed when the class is removed or the account signs
   out.
-- **Plan decision 11**, open: where the audio comes from. The owner closed one route on 2026-11-26: the player
-  is not associated with any other cycling product and never gets audio through one (ADR 0004,
-  section 4). Until a source is named, "the manual
-  clock stays the Swedebeat mode" (plan section 4; ADR 0001, option D; ADR 0004, section 5).
+- **Plan decision 11**, open: where the audio comes from. The owner closed one route on
+  2026-11-26: the player is not associated with any other cycling product and never gets audio
+  through one (ADR 0004, section 4). Until a source is named, "the manual clock stays the
+  Swedebeat mode" (plan section 4; ADR 0001, option D; ADR 0004, section 5).
 - **Plan section 3, rule 3**: Spotify's music stays in Spotify's own app; the player never
   downloads, stores or plays it. Audio from a licensed provider that allows it (Swedebeat) may be
   played by the player. No class audio is ever streamed from our server.
