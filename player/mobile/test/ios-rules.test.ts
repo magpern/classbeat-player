@@ -179,18 +179,27 @@ const count = (v: string, re: RegExp): number => (v.match(re) ?? []).length;
 /** A script message handler or a user script put on a web view (issue #897): in the app, only
  * the factory's lock puts one on, the bridge's filter on the phone's web view, so the external
  * display's web view has none of any name. Tests may plant one to show their probe sees it.
- * `.add(` counts only with a `name:` argument (a handler's), so a keychain or set add is not one. */
+ * `add` counts as a handler unless it is declared (`func add`) or called with no `name:` label
+ * (the keychain's `add(query)`): a call or method reference with `name:` (`c.add(h, name: n)`,
+ * `c.add(_:name:)`, `c.add(_:contentWorld:name:)`) and any bare `add` not followed by `(` (a
+ * reference kept to call later, `let f = c.add`) are hits, as the socket guard bans names. */
 const SCRIPT_NAMED = /\baddScriptMessageHandler\w*|\baddUserScript\b|\bWKUserScript\b/g;
 const OBJC_SCRIPT_HANDLER = /\baddScriptMessageHandler|\baddUserScript\b|\bWKUserScript\b/;
-/** The `.add(` calls whose arguments, up to the matching parenthesis, carry a `name:` label. */
+/** The uses of `add` that may put a handler on: see SCRIPT_NAMED's note. */
 function namedAdds(v: string): number {
   let n = 0;
-  for (const m of v.matchAll(/\.add\s*\(/g)) {
-    let depth = 1;
+  for (const m of v.matchAll(/\badd\b/g)) {
+    if (/\bfunc\s+$/.test(v.slice(0, m.index))) continue;
     let i = m.index + m[0].length;
-    const start = i;
+    while (i < v.length && /\s/.test(v[i]!)) i++;
+    if (v[i] !== "(") {
+      n++;
+      continue;
+    }
+    const start = ++i;
+    let depth = 1;
     for (; i < v.length && depth > 0; i++) depth += v[i] === "(" ? 1 : v[i] === ")" ? -1 : 0;
-    if (/(^|[\s,(])name\s*:/.test(v.slice(start, i))) n++;
+    if (/(^|[\s,(:])name\s*:/.test(v.slice(start, i))) n++;
   }
   return n;
 }
@@ -342,6 +351,11 @@ const MUTATIONS: Mutation[] = [
   ],
   ["script handlers only in the factory's lock", FACTORY_PATH, "scripts.add(BridgeFilter(", "_ = (BridgeFilter(", false],
   plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(\n        h,\n        name: String("x")\n    ) }'),
+  plant("script handlers only in the factory's lock", "let f = WKUserContentController.add(_:name:)"),
+  plant("script handlers only in the factory's lock", "let f = WKUserContentController.add(_:contentWorld:name:)"),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController) { let f = c.add; _ = f }"),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController) -> Any { c . add }"),
+  plant("script handlers only in the factory's lock", 'let s = "//"; func planted(_ c: WKUserContentController) { let f = c.add; _ = f }', true),
   objc("script handlers only in the factory's lock", '- (void)p { [c addScriptMessageHandler:h name:@"x"]; }'),
   ["inspection in debug only", FACTORY_PATH, "descriptor.isWebDebuggable = BuildFlavor.isDebug", "descriptor.isWebDebuggable = true", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", "webView.isInspectable = !BuildFlavor.isDebug", false],
