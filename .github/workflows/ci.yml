@@ -78,6 +78,7 @@ jobs:
           bash scripts/test-release-player.sh
           bash scripts/test-sign-android-apk.sh
           bash scripts/test-check-screenshot-uploads.sh
+          bash scripts/test-export-xcresult-screenshots.sh
           bash scripts/check-screenshot-uploads.sh
       # Backend deploy files (issue #95): `docker compose config` with placeholder secret files,
       # the roles, the secrets and the purge scheduler. Reads files only; starts nothing.
@@ -487,7 +488,7 @@ jobs:
   # costing macOS minutes, and this can merge before the project. The macOS job runs for the same paths as
   # `mobile` (player/mobile/ and workflow changes). Runner image and Xcode are pinned; Xcode 16.4 ships the
   # iOS 18.5 simulator runtime, and the simulator is pinned by name and OS. Simulator only: CODE_SIGNING_ALLOWED=NO,
-  # no secret, no Apple credential, no device, no signed build, no artifact. Only npm and CocoaPods
+  # no secret, no Apple credential, no device, no signed build. The only artifact is the XCTest screenshots (#941). Only npm and CocoaPods
   # downloads happen during setup; no test touches the network.
   ios-check:
     needs: changes
@@ -539,15 +540,33 @@ jobs:
         working-directory: player/mobile
         env:
           IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
+          IOS_RESULT_BUNDLE: ${{ runner.temp }}/ios-tests.xcresult
         run: |
           set -euo pipefail
+          rm -rf "$IOS_RESULT_BUNDLE" # xcodebuild refuses an existing bundle
           xcrun simctl list devices available "iOS $SIM_OS" | grep -F "$SIM_NAME" >/dev/null \
             || { echo "simulator '$SIM_NAME' on iOS $SIM_OS is not on the runner" >&2; exit 1; }
           xcodebuild test -workspace ios/App/App.xcworkspace -scheme App \
             -derivedDataPath "$IOS_DERIVED_DATA" \
             -destination "platform=iOS Simulator,name=$SIM_NAME,OS=$SIM_OS" \
+            -resultBundlePath "$IOS_RESULT_BUNDLE" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tail -n 200
+      # The XCTest screenshot attachments named ios-<screen>-<state> (#941), so the Designer can review the iOS
+      # screens as it does Android's. always() exports after a red test run too; the script never fails, so an
+      # export problem or zero attachments cannot hide a test failure or fail a green run. Only the ios-* PNGs
+      # are copied, and only that directory is uploaded.
+      - name: Export the XCTest screenshots
+        if: always()
+        run: bash scripts/export-xcresult-screenshots.sh "$RUNNER_TEMP/ios-tests.xcresult" "$RUNNER_TEMP/ios-screenshots"
+      - name: Keep the iOS screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-screenshots
+          path: ${{ runner.temp }}/ios-screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Verify the built app (plists, entitlements, project)
         working-directory: player/mobile
         env:
