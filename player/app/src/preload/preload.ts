@@ -20,6 +20,8 @@ import {
   CH_LIVE_VIEW,
   CH_MIX_SIGN_IN,
   CH_MIX_SIGN_OUT,
+  CH_MUSIC_FILES_FIND,
+  CH_MUSIC_FILES_FIND_CANCEL,
   CH_OPEN_DROPPED,
   CH_PAIRING_REOPEN,
   CH_PAIRING_START,
@@ -58,6 +60,9 @@ contextBridge.exposeInMainWorld("player", {
   // list, never a token or a value typed. Sign out takes nothing.
   mixSignIn: (credentials: unknown): Promise<unknown> => ipcRenderer.invoke(CH_MIX_SIGN_IN, credentials),
   mixSignOut: (): Promise<unknown> => ipcRenderer.invoke(CH_MIX_SIGN_OUT),
+  // The class list page's only (the main process checks the sender): a class id goes, never a path.
+  findMusicFiles: (classId: unknown): Promise<unknown> => ipcRenderer.invoke(CH_MUSIC_FILES_FIND, classId),
+  cancelMusicFilesFind: (): Promise<unknown> => ipcRenderer.invoke(CH_MUSIC_FILES_FIND_CANCEL),
   // The phone remote (presenter only): what the panel shows, start, end, a control code, Drop a
   // phone's place (1 or 2). The answer never holds the host token.
   liveView: (): Promise<unknown> => ipcRenderer.invoke(CH_LIVE_VIEW),

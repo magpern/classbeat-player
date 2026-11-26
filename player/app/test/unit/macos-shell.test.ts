@@ -204,7 +204,7 @@ test("the reader is built in the main process only, by platform", () => {
   assert.match(src("main/main.ts"), /selectMusic\(process\.platform\)/);
 });
 
-test("the preload bridge: the same four functions, those of pairing (#74), of the class list, of Swedebeat sign-in (#691), of the phone remote (#173), of the riders panel (#366) and of updates (#798); only startClass, mixSignIn, dropPhone, dropRider, lockJoining, setAutomaticChecks and setPrereleases take arguments", () => {
+test("the preload bridge: the same four functions, those of pairing (#74), of the class list, of Swedebeat sign-in (#691), of the phone remote (#173), of the riders panel (#366), of updates (#798) and of local music files (#920); only startClass, mixSignIn, findMusicFiles, dropPhone, dropRider, lockJoining, setAutomaticChecks and setPrereleases take arguments", () => {
   const preload = src("preload/preload.ts");
   assert.deepEqual([...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]), EXPOSED);
   assert.ok(!holds("exposed", "preload/preload.ts"));
@@ -220,6 +220,9 @@ test("the preload bridge: the same four functions, those of pairing (#74), of th
   // The update switches' one boolean each, passed on as it is; the shell takes only true or false (main/update/update-handlers.ts).
   assert.match(preload, /^ {2}setAutomaticChecks: \(on: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_UPDATE_SET_AUTO, on\),$/m);
   assert.match(preload, /^ {2}setPrereleases: \(on: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_UPDATE_SET_PRERELEASES, on\),$/m);
+  // The music files find's class id, passed on as it is; the shell takes only a class id and answers no path (main/music-files/handlers.ts).
+  assert.match(preload, /^ {2}findMusicFiles: \(classId: unknown\): Promise<unknown> => ipcRenderer\.invoke\(CH_MUSIC_FILES_FIND, classId\),$/m);
+  assert.match(preload, /^ {2}cancelMusicFilesFind: \(\): Promise<unknown> => ipcRenderer\.invoke\(CH_MUSIC_FILES_FIND_CANCEL\),$/m);
   for (const [name, channel] of [["startPairing", "CH_PAIRING_START"], ["pairingState", "CH_PAIRING_STATE"], ["reopenPairingPage", "CH_PAIRING_REOPEN"], ["unpair", "CH_UNPAIR"], ["listView", "CH_LIST_VIEW"], ["openClassFile", "CH_LIST_OPEN_FILE"], ["dismissFileError", "CH_LIST_DISMISS"], ["backToClass", "CH_LIST_BACK"], ["mixSignOut", "CH_MIX_SIGN_OUT"], ["liveView", "CH_LIVE_VIEW"], ["startLive", "CH_LIVE_START"], ["endLive", "CH_LIVE_END"], ["makeControlCode", "CH_LIVE_CODE"], ["riders", "CH_LIVE_RIDERS"], ["newJoinCode", "CH_LIVE_NEW_CODE"], ["updateStatus", "CH_UPDATE_STATUS"], ["checkForUpdate", "CH_UPDATE_CHECK"], ["openReleasePage", "CH_UPDATE_OPEN_RELEASE"]]) {
     assert.match(preload, new RegExp(`^ {2}${name}: \\(\\): Promise<unknown> => ipcRenderer\\.invoke\\(${channel}\\),$`, "m"), name);
   }

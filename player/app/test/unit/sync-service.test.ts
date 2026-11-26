@@ -95,11 +95,14 @@ test("a class is not pinned while the pairing is another account's, before sync 
   // Bob is paired now, and no sync has run since: the cache and the file both still say Ann.
   credential = credentialOf(BOB);
   assert.equal(s.pin(ID_A), null);
+  assert.equal(s.document(ID_A), null, "the music files find reads no class of another account (#920)");
   assert.deepEqual(s.list(), []);
   assert.equal(s.view().pinned, null);
   // Ann paired again: hers plays, and is listed.
   credential = credentialOf(ANN);
   assert.equal(s.list().length, 1);
+  assert.ok(s.document(ID_A) !== null && s.view().pinned === null, "read without pinning");
+  assert.equal(s.document("00000000-0000-4000-8000-000000000000"), null);
   assert.ok(s.pin(ID_A) !== null);
   assert.deepEqual(logged, []);
 });
@@ -230,6 +233,7 @@ test("the class list gives nothing of one account under another's pairing: Ann's
   credential = null;
   s.forgotten();
   assert.deepEqual(s.list(), []);
+  assert.equal(s.document(ID_A), null, "nothing while a wipe waits");
   credential = credentialOf(BOB);
   s.syncNow();
   await settle();

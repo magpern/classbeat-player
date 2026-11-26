@@ -15,6 +15,8 @@ import type { MixPlayer } from "./mix/mix-player.ts";
 import { setupPlayback } from "./mix/playback-setup.ts";
 import { createPlays } from "./mix/plays.ts";
 import { setupMix } from "./mix/setup.ts";
+import { registerMusicFilesHandlers } from "./music-files/handlers.ts";
+import { setupMusicFiles } from "./music-files/setup.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
@@ -232,6 +234,9 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
+    // The instructor's own music files: found by content, and no path ever leaves this process.
+    const musicFiles = setupMusicFiles(paired, { account: () => credentialOf(paired)?.account ?? null, classDocument: (id) => sync?.document(id) ?? null, window: live });
+    registerMusicFilesHandlers(ipcMain, trusted, musicFiles);
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     // The class gate: a class open in the room and presenter windows, or pinned (updates.md).
     updates = setupUpdates(() => roomMayOpen(controller.snapshot().doc !== null, onListPage(), pinned()));
