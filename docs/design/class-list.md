@@ -207,17 +207,21 @@ The state is a fact about one class, so it follows the selection and changes not
   other. Up, Down, Home, End, Page Up, Page Down, a click and the filter work as before; the
   instructor can see which class it is and why it cannot start.
 - **Start, disabled.** The button keeps its place, size (at least 44 px high) and label "Start
-  class". It takes the disabled look: no fill, a 1 px
-  `--stage-line` border, the label in `--light-3`. **The "Enter" hint is not shown** (it would
+  class". It takes the disabled look: the
+  `--stage-raised` fill in place of the white one, a 1 px `--stage-line` border, the label in
+  `--light-3`. **The "Enter" hint is not shown** (it would
   promise a key that does nothing); the button is narrower by the hint and does not move the
   footer's detail. Enter on the list and a click on the button do nothing, and no message
   appears for them: the reason is already on screen.
 - **Minimum contrast for disabled text.** The disabled label is at least 4.5 : 1 against the
   button fill (`--light-3` on `--stage-raised` measures 6.1 : 1). This is below L2's 7 : 1 for
   an active button, on purpose: a disabled control reads as unavailable, and the words next to
-  it carry the meaning. The footer detail is ordinary detail text at 7 : 1 or more.
-- **Focus.** A disabled button takes no focus, so Tab skips it; the list stays the one Tab stop. The list's focus ring is unchanged.
-  When selection moves to a startable class, Start is enabled at once and its hint returns.
+  it carry the meaning. It stays `--light-3`, as #927 built it, which is the one disabled label on
+  this screen at 6.1 : 1 (other screens use `--light-2`). The footer detail is ordinary detail text at 7 : 1
+  or more.
+- **Focus.** A disabled button takes no focus, so Tab skips it; the list stays the one Tab
+  stop and its focus ring is unchanged. When selection moves to a startable class, Start is
+  enabled at once and its hint returns.
 - **Screen reader.** The button carries `aria-describedby` pointing at the footer detail, so a
   screen reader reading the button says "Start class, dimmed" followed by "This class needs a
   newer version of the player". The selected row's meta line is read with the row. The change
