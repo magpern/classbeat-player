@@ -32,6 +32,7 @@ button.primary { background: var(--light-1); color: var(--ink); border-color: va
 button.primary[disabled] { background: var(--stage-raised); color: var(--light-3); border-color: var(--stage-line); }
 .kbd { font-size: 14px; font-weight: 400; color: var(--light-2); }
 .primary .kbd { color: var(--ink); }
+button.primary[disabled] .kbd { display: none; }
 .plate button { background: var(--ink); color: var(--light-1); border-color: var(--ink); }
 .plate button .kbd { color: var(--light-2); }
 

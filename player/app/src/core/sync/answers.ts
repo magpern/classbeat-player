@@ -3,6 +3,7 @@
 // exactly an expected answer is "unexpected": the app never guesses, and never deletes on it.
 import { checkDocument, contentHash } from "classformat/src/index.ts";
 import type { HttpAnswer } from "../pairing/protocol.ts";
+import { hasUnknownSource, sourceFreeSchema } from "./unknown-source.ts";
 
 /** A class the account holds now, or a removal marker, as one page lists it. No content. */
 export interface Change {
@@ -126,7 +127,11 @@ export function parseClass(a: HttpAnswer, id: string, classSchema: unknown): Fet
   try {
     if (contentHash(document) !== hash) return { kind: "unusable" };
     const violations = checkDocument(classSchema, document, "reader");
-    return violations.every(([code]) => code === "unsupported_major") ? { kind: "class", hash, document } : { kind: "unusable" };
+    // A music source this player does not know is kept too: the class list shows it as needing a
+    // newer player (ADR 0017 section 1). Only a non-empty string is such a source.
+    const major = ([code]: readonly [string, string]): boolean => code === "unsupported_major";
+    const kept = violations.every(major) || (hasUnknownSource(document) && checkDocument(sourceFreeSchema(classSchema), document, "reader").every(major));
+    return kept ? { kind: "class", hash, document } : { kind: "unusable" };
   } catch {
     return { kind: "unusable" };
   }

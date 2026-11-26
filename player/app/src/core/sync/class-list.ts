@@ -11,7 +11,8 @@ export interface ClassRow {
   readonly title: string;
   readonly lengthMs: number;
   readonly sport: "cycling" | "running";
-  readonly source: "spotify" | "swedebeat" | "none";
+  /** "unknown": a music source this player does not know (a later minor of the format added it); the row says so and is not startable (ADR 0017 section 1). */
+  readonly source: "spotify" | "swedebeat" | "none" | "unknown";
   readonly songs: number;
   /** When the server published this version (ISO 8601), or null when not known. */
   readonly updated: string | null;
@@ -34,8 +35,9 @@ function fields(doc: Readonly<Record<string, unknown>>): Pick<ClassRow, "title" 
   const { title, length_ms: length, sport } = cls;
   if (typeof title !== "string" || typeof length !== "number" || !Number.isFinite(length) || length < 0) return null;
   if (sport !== "cycling" && sport !== "running") return null;
-  if (!SOURCES.has(music.source)) return null;
-  return { title, lengthMs: length, sport, source: music.source as ClassRow["source"], songs: songs.length };
+  const kind = music.source;
+  if (typeof kind !== "string" || kind === "") return null;
+  return { title, lengthMs: length, sport, source: SOURCES.has(kind) ? (kind as ClassRow["source"]) : "unknown", songs: songs.length };
 }
 
 /** `documents`: the cached documents by class id; a class with none that reads as a class has no row. */

@@ -148,11 +148,23 @@ test("a time that is not known, or is not a time, shows nothing", () => {
 
 test("the pure modules import no I/O: no database, network, filesystem, process, window or React", () => {
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src", "core", "sync");
-  for (const name of ["class-list.ts", "updated-text.ts", "fault-policy.ts", "view.ts"]) {
+  for (const name of ["class-list.ts", "updated-text.ts", "fault-policy.ts", "view.ts", "unknown-source.ts"]) {
     const source = readFileSync(join(dir, name), "utf8");
     const imports = [...source.matchAll(/^import .* from "(.*)";$/gm)].map((m) => m[1]);
     assert.deepEqual(imports.filter((from) => !from.startsWith("./")), [], name);
     assert.equal(/\b(fetch|process|require|electron)\b\s*[.(]/.test(source), false, name);
     assert.ok(source.split("\n").length <= 150, `${name} is over 150 lines`);
   }
+});
+
+test("a class whose music source this player does not know is listed as unknown, beside the others (ADR 0017 section 1)", () => {
+  const { state } = listed([[1, "Alpha"], [2, "Local ride"], [3, "Zulu"]]);
+  const docs = new Map([[id(1), doc("Alpha")], [id(2), doc("Local ride", { source: "local", songs: 4 })], [id(3), doc("Zulu", { source: "none", songs: 0 })]]);
+  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Alpha", "spotify"], ["Local ride", "unknown"], ["Zulu", "none"]]);
+});
+
+test("a music source that is not a non-empty string is still no row", () => {
+  const { state } = listed([[1, "A"], [2, "B"]]);
+  const docs = new Map([[id(1), { ...doc("A"), music: { source: 7 } }], [id(2), { ...doc("B"), music: { source: "" } }]]);
+  assert.deepEqual(classListView(state, docs), []);
 });

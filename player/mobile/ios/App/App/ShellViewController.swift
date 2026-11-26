@@ -5,7 +5,8 @@ import Capacitor
 // The shell (issue #894, ADR 0016 section 2): Capacitor's bridge view controller with every
 // setting it reads taken from WebViewFactory, the one place that makes and locks the web view.
 // It also starts the mode holder (issue #895): the two mode plugins go on the bridge before it is
-// locked, and the app opens in rider mode once the view has loaded.
+// locked, and the app opens in rider mode once the view has loaded. The mode holder also keeps the
+// idle timer and the external display in step (issue #897).
 final class ShellViewController: CAPBridgeViewController {
     private var controller: ModeController?
     private var screens: AlertScreens?
@@ -35,8 +36,16 @@ final class ShellViewController: CAPBridgeViewController {
         }
         let screens = AlertScreens(host: self)
         let loader = WebPageLoader(webView)
+        let display = ExternalDisplay(source: DisplayScenes.shared, surface: SceneRoomSurface(scenes: DisplayScenes.shared))
         let pairing = Self.makePairing()
-        let controller = ModeController(lock: DeviceLock(), screens: screens, loader: loader, secrets: { pairing.secrets() }) { failed in
+        let controller = ModeController(
+            lock: DeviceLock(),
+            screens: screens,
+            loader: loader,
+            awake: KeepAwake(AppIdleTimer()),
+            display: display,
+            secrets: { pairing.secrets() }
+        ) { failed in
             fatalError("classbeat: the mode switch could not drop \(failed)")
         }
         pairing.forgotten = { [weak controller] in controller?.unpaired() }
@@ -118,5 +127,12 @@ final class WebPageLoader: PageLoader {
     func load(_ path: String) {
         guard let url = URL(string: NavigationPolicy.appOrigin + path) else { return }
         webView?.load(URLRequest(url: url))
+    }
+}
+
+/// KeepAwake's ScreenFlag on a device: the app's idle timer (issue #897).
+final class AppIdleTimer: ScreenFlag {
+    func keepOn(_ on: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = on
     }
 }

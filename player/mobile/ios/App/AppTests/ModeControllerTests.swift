@@ -80,6 +80,9 @@ final class ModeControllerTests: XCTestCase {
     private var loader: FakeLoader!
     private var device: PairedDevice!
     private var store: MemoryStore!
+    private var flag: FakeFlag!
+    private var displays: FakeDisplays!
+    private var surface: FakeSurface!
     private var stops: [[String]] = []
     private var tokens: [String] = []
     private var controller: ModeController!
@@ -91,12 +94,17 @@ final class ModeControllerTests: XCTestCase {
         loader = FakeLoader()
         device = PairedDevice(lock: lock)
         store = MemoryStore()
+        flag = FakeFlag()
+        displays = FakeDisplays()
+        surface = FakeSurface()
         stops = []
         tokens = []
         controller = ModeController(
             lock: lock,
             screens: screens,
             loader: loader,
+            awake: KeepAwake(flag),
+            display: ExternalDisplay(source: displays, surface: surface),
             secrets: { [unowned self] in self.tokens },
             stop: { [unowned self] failed in self.stops.append(failed) }
         )
@@ -362,5 +370,72 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertFalse(phone.secureLock)
         lock.isSet = true
         XCTAssertTrue(phone.secureLock)
+    }
+
+    // The idle timer and the external display (issue #897).
+
+    func testAnOpenClassKeepsTheScreenOnAndLeavingItOrTheForegroundClearsIt() {
+        enterInstructor()
+        XCTAssertFalse(flag.set)
+        controller.shown("/room.html")
+        XCTAssertTrue(flag.set)
+        controller.stopped()
+        XCTAssertFalse(flag.set)
+        controller.resumed()
+        XCTAssertTrue(flag.set)
+        controller.shown("/instructor.html")
+        XCTAssertFalse(flag.set)
+    }
+
+    func testRiderModeNeverKeepsTheScreenOnWithNoRiderSessionOnIOS() {
+        startInRider()
+        controller.resumed()
+        XCTAssertFalse(flag.set)
+        XCTAssertFalse(flag.calls.contains(true))
+    }
+
+    func testASwitchToRiderModeReleasesTheScreenAtOnce() {
+        enterInstructor()
+        controller.shown("/room.html")
+        XCTAssertTrue(flag.set)
+        let toRider = call(.instructor, "askRiderMode")
+        screens.toRider?()
+        XCTAssertTrue(toRider.refusedOnly)
+        XCTAssertFalse(flag.set)
+        controller.shown(PageOpener.blank)
+        controller.shown("/rider.html")
+        XCTAssertEqual(controller.current, .rider)
+        XCTAssertFalse(flag.set)
+    }
+
+    func testTheExternalDisplayShowsTheIdleStageAndNeverAPageOfThePhone() {
+        displays.plugIn(1)
+        startInRider()
+        XCTAssertEqual(surface.log.last, "show 1 /display-rider.html")
+        let ask = call(.rider, "askInstructorMode")
+        lock.answer(true)
+        XCTAssertTrue(ask.refusedOnly)
+        controller.shown(PageOpener.blank)
+        controller.shown("/instructor.html")
+        controller.shown("/room.html")
+        XCTAssertEqual(surface.log.last, "load /display.html")
+        controller.stopped()
+        XCTAssertEqual(surface.log.last, "dismiss")
+        controller.resumed()
+        XCTAssertEqual(surface.log.last, "show 1 /display.html")
+        // The display going away leaves the class on the phone.
+        displays.unplug(1)
+        XCTAssertEqual(surface.log.last, "dismiss")
+        XCTAssertEqual(controller.current, .instructor)
+        XCTAssertTrue(flag.set)
+        for entry in surface.log where entry != "dismiss" {
+            XCTAssertTrue(entry.hasSuffix(" /display.html") || entry.hasSuffix(" /display-rider.html"), entry)
+        }
+    }
+
+    func testWithNoDisplayNothingIsShown() {
+        enterInstructor()
+        controller.shown("/room.html")
+        XCTAssertEqual(surface.log, [])
     }
 }

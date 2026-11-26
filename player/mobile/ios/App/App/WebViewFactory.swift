@@ -3,8 +3,9 @@ import WebKit
 import Capacitor
 
 // The one web view factory (issue #894, ADR 0016 section 2), the iOS twin of Android's
-// BridgeLockdown. It holds the app's only `WKWebView(`, a test checks that, and applies every
-// lock the issue asks for:
+// BridgeLockdown. It holds the app's only `WKWebView(`, a test checks that, for the phone's web
+// view and the external display's (issue #897, makeDisplay), and applies every lock the issue
+// asks for:
 // - the bundle only: no server URL, no allowed navigation hosts, no error or start path,
 //   Capacitor's scheme narrowed to the bundle (LockedSchemeHandler), navigation through
 //   NavigationPolicy (LockedNavigation), browser links opened in Safari;
@@ -59,6 +60,27 @@ enum WebViewFactory {
         let config = configuration()
         config.userContentController = incoming.userContentController
         config.setURLSchemeHandler(LockedSchemeHandler(wrapping: capacitor), forURLScheme: NavigationPolicy.scheme)
+        return build(frame: frame, configuration: config)
+    }
+
+    /// The external display's web view (issue #897): no bridge and no data. It gets a fresh
+    /// hardened configuration with a script controller of its own that has no message handler and
+    /// no script, so the page there has nothing native to call; web storage that lives only as long
+    /// as the web view, so it shares nothing with the phone's page; and Capacitor's file server for
+    /// the bundle with no bridge behind it, narrowed by LockedSchemeHandler. What it loads is
+    /// ExternalDisplayPolicy's (DisplayNavigation).
+    static func makeDisplay(frame: CGRect) -> WKWebView {
+        let bundle = WebViewAssetHandler(router: CapacitorRouter())
+        bundle.setAssetPath(descriptor().appLocation.path)
+        let config = configuration()
+        config.userContentController = WKUserContentController()
+        config.websiteDataStore = .nonPersistent()
+        config.setURLSchemeHandler(LockedSchemeHandler(wrapping: bundle), forURLScheme: NavigationPolicy.scheme)
+        return build(frame: frame, configuration: config)
+    }
+
+    /// The app's one web view construction, for both web views.
+    private static func build(frame: CGRect, configuration config: WKWebViewConfiguration) -> WKWebView {
         let webView = WKWebView(frame: frame, configuration: config)
         webView.allowsLinkPreview = false
         if #available(iOS 16.4, *) {

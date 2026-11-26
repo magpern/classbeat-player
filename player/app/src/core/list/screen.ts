@@ -35,6 +35,10 @@ export interface Footer {
   readonly button: Button;
   /** What Enter or the button does. */
   readonly action: "start" | "back";
+  /** The button is shown but cannot be used: the class needs a newer player. */
+  readonly disabled: boolean;
+  /** The id of the footer detail the disabled button points at (aria-describedby), or null. */
+  readonly describedBy: typeof FOOT_DETAIL_ID | null;
   /** The row the footer is about. */
   readonly id: string;
 }
@@ -66,9 +70,13 @@ export interface Screen {
   readonly announce: string;
 }
 
-const SOURCE: Readonly<Record<ListRow["source"], string>> = { spotify: "Spotify", swedebeat: "Swedebeat", none: "" };
+/** The id the renderer gives the footer detail line. */
+export const FOOT_DETAIL_ID = "foot-detail";
+export const NEEDS_NEWER_PLAYER = "This class needs a newer version of the player";
+const SOURCE: Readonly<Record<ListRow["source"], string>> = { spotify: "Spotify", swedebeat: "Swedebeat", none: "", unknown: "" };
 
 export function metaText(r: Pick<ListRow, "sport" | "source" | "songs">): string {
+  if (r.source === "unknown") return NEEDS_NEWER_PLAYER;
   const music = r.source === "none" ? "Manual clock, no music" : `${SOURCE[r.source]}, ${r.songs} ${r.songs === 1 ? "song" : "songs"}`;
   return r.sport === "running" ? `Running, ${music}` : music;
 }
@@ -82,10 +90,10 @@ const START = "Starting opens the room screen and the presenter window";
 /** `reason`: the end of the line for a Swedebeat class that plays on the manual clock. */
 function footerOf(r: ListRow | undefined, pinned: boolean, reason: string | null): Footer | null {
   if (r === undefined) return null;
-  const detail = r.source === "swedebeat" && reason !== null ? `${START}. ${reason}` : START;
+  const detail = r.source === "unknown" ? NEEDS_NEWER_PLAYER : r.source === "swedebeat" && reason !== null ? `${START}. ${reason}` : START;
   return pinned
-    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", id: r.id }
-    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", id: r.id };
+    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", disabled: false, describedBy: null, id: r.id }
+    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", disabled: r.source === "unknown", describedBy: r.source === "unknown" ? FOOT_DETAIL_ID : null, id: r.id };
 }
 
 const NO_MIX: MixHead = { line: null, plate: null, panel: null, form: null };

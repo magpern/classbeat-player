@@ -1,6 +1,6 @@
 // The rule guards over the iOS app's Swift and Objective-C (issue #894, ADR 0016 sections 2 and 8):
 // a per-file import allowlist, the banned names (no player or recorder, no camera, no speech, no
-// Spotify, no network, no file reads, no Bluetooth writes), the one web view factory, and web view
+// Spotify, no network, no file reads, no Bluetooth writes), the one web view factory, script handlers only in its lock, and web view
 // inspection in a debug build only. Each check is shown to fail on a planted example.
 import assert from "node:assert/strict";
 import { join, sep } from "node:path";
@@ -23,7 +23,11 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/ClassCacheFolder.swift": ["Foundation"],
   "ios/App/App/DefaultsModeStore.swift": ["Foundation"],
   "ios/App/App/DeviceLock.swift": ["Foundation", "LocalAuthentication"],
+  "ios/App/App/DisplayNavigation.swift": ["Foundation", "WebKit"],
+  "ios/App/App/DisplayScene.swift": ["UIKit", "WebKit"],
+  "ios/App/App/ExternalDisplay.swift": [],
   "ios/App/App/FirstLaunch.swift": ["Foundation"],
+  "ios/App/App/KeepAwake.swift": [],
   "ios/App/App/KeychainSecretStore.swift": ["Foundation", "Security"],
   "ios/App/App/LockedNavigation.swift": ["UIKit", "WebKit", "Capacitor"],
   "ios/App/App/LockedSchemeHandler.swift": ["Foundation", "WebKit"],
@@ -38,8 +42,10 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/Policy/AnswerPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/BuildFlavor.swift": [],
   "ios/App/App/Policy/Calls.swift": [],
+  "ios/App/App/Policy/ExternalDisplayPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/IntentAnswers.swift": [],
   "ios/App/App/Policy/IntentPolicy.swift": ["Foundation"],
+  "ios/App/App/Policy/KeepAwakePolicy.swift": [],
   "ios/App/App/Policy/ModePolicy.swift": [],
   "ios/App/App/Policy/NavigationPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/OriginPolicy.swift": ["Foundation"],
@@ -56,9 +62,14 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/AppTests/AnswerPolicyTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ClassCacheFolderTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/DefaultsModeStoreTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/DisplayTests.swift": ["XCTest", "WebKit", "@testable App"],
+  "ios/App/AppTests/ExternalDisplayPolicyTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/ExternalDisplayTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/FirstLaunchTests.swift": ["XCTest", "Security", "@testable App"],
   "ios/App/AppTests/IntentAnswersTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/IntentPolicyTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/KeepAwakePolicyTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/KeepAwakeTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/KeychainSecretStoreTests.swift": ["XCTest", "Security", "@testable App"],
   "ios/App/AppTests/ModeControllerTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ModeHolderTests.swift": ["XCTest", "@testable App"],
@@ -165,6 +176,35 @@ const INSPECT_USE = [
   /\bXCTAssertEqual\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*,[ \t]*BuildFlavor\.isDebug[ \t]*\)/g,
 ];
 const count = (v: string, re: RegExp): number => (v.match(re) ?? []).length;
+/** A script message handler or a user script put on a web view (issue #897): in the app, only
+ * the factory's lock puts one on, the bridge's filter on the phone's web view, so the external
+ * display's web view has none of any name. Tests may plant one to show their probe sees it.
+ * `add` counts as a handler unless it is declared (`func add`) or called with no `name:` label
+ * (the keychain's `add(query)`): a call or method reference with `name:` (`c.add(h, name: n)`,
+ * `c.add(_:name:)`, `c.add(_:contentWorld:name:)`) and any bare `add` not followed by `(` (a
+ * reference kept to call later, `let f = c.add`) are hits, as the socket guard bans names. */
+const SCRIPT_NAMED = /\baddScriptMessageHandler\w*|\baddUserScript\b|\bWKUserScript\b/g;
+const OBJC_SCRIPT_HANDLER = /\baddScriptMessageHandler|\baddUserScript\b|\bWKUserScript\b/;
+/** The uses of `add` that may put a handler on: see SCRIPT_NAMED's note. */
+function namedAdds(v: string): number {
+  let n = 0;
+  for (const m of v.matchAll(/\badd\b/g)) {
+    if (/\bfunc\s+$/.test(v.slice(0, m.index))) continue;
+    let i = m.index + m[0].length;
+    while (i < v.length && /\s/.test(v[i]!)) i++;
+    if (v[i] !== "(") {
+      n++;
+      continue;
+    }
+    const start = ++i;
+    let depth = 1;
+    for (; i < v.length && depth > 0; i++) depth += v[i] === "(" ? 1 : v[i] === ")" ? -1 : 0;
+    if (/(^|[\s,(:])name\s*:/.test(v.slice(start, i))) n++;
+  }
+  return n;
+}
+const scriptHandlers = (v: string): number => count(v, SCRIPT_NAMED) + namedAdds(v);
+const isApp = (path: string): boolean => posix(path).startsWith("ios/App/App/");
 
 const CHECKS = new Map<string, Check>([
   [
@@ -181,6 +221,14 @@ const CHECKS = new Map<string, Check>([
     hitsWhen((path, v) => {
       const made = (v.match(/\bWKWebView\s*(?:\.init\s*)?\(|\[\s*WKWebView\s+(?:alloc|new)\b/g) ?? []).length;
       return made !== (posix(path) === FACTORY ? 1 : 0);
+    }),
+  ],
+  [
+    "script handlers only in the factory's lock",
+    hitsWhen((path, v) => {
+      if (!isSwift(path)) return OBJC_SCRIPT_HANDLER.test(v);
+      if (!isApp(path)) return false;
+      return scriptHandlers(v) !== (posix(path) === FACTORY ? 1 : 0);
     }),
   ],
   [
@@ -289,6 +337,26 @@ const MUTATIONS: Mutation[] = [
   ],
   ["WKWebView( only in the factory", FACTORY_PATH, "let webView = WKWebView(frame: frame, configuration: config)", "let webView = make(frame: frame)", false],
   objc("WKWebView( only in the factory", "- (void)p { [[WKWebView alloc] initWithFrame:CGRectZero]; }"),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(h, name: "x") }'),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add (h, contentWorld: .defaultClient, name: "x") }'),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandlerWithReply) { c.addScriptMessageHandler(h, contentWorld: .page, name: \"x\") }"),
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController) { c.addUserScript(WKUserScript(source: "", injectionTime: .atDocumentStart, forMainFrameOnly: true)) }'),
+  plant("script handlers only in the factory's lock", 'let s = "//"; func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(h, name: "x") }', true),
+  [
+    "script handlers only in the factory's lock",
+    FACTORY_PATH,
+    "config.userContentController = WKUserContentController()\n",
+    "config.userContentController = WKUserContentController()\n        config.userContentController.add(BridgeFilter(wrapping: inner, exposed: { nil }), name: BridgeFilter.name)\n",
+    false,
+  ],
+  ["script handlers only in the factory's lock", FACTORY_PATH, "scripts.add(BridgeFilter(", "_ = (BridgeFilter(", false],
+  plant("script handlers only in the factory's lock", 'func planted(_ c: WKUserContentController, _ h: WKScriptMessageHandler) { c.add(\n        h,\n        name: String("x")\n    ) }'),
+  plant("script handlers only in the factory's lock", "let f = WKUserContentController.add(_:name:)"),
+  plant("script handlers only in the factory's lock", "let f = WKUserContentController.add(_:contentWorld:name:)"),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController) { let f = c.add; _ = f }"),
+  plant("script handlers only in the factory's lock", "func planted(_ c: WKUserContentController) -> Any { c . add }"),
+  plant("script handlers only in the factory's lock", 'let s = "//"; func planted(_ c: WKUserContentController) { let f = c.add; _ = f }', true),
+  objc("script handlers only in the factory's lock", '- (void)p { [c addScriptMessageHandler:h name:@"x"]; }'),
   ["inspection in debug only", FACTORY_PATH, "descriptor.isWebDebuggable = BuildFlavor.isDebug", "descriptor.isWebDebuggable = true", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", "webView.isInspectable = !BuildFlavor.isDebug", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug", 'webView.isInspectable = BuildFlavor.isDebug; let s = "//"; webView.isInspectable = true', false],

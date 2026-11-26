@@ -216,3 +216,26 @@ test("the screen carries no hue and no word of rider data", () => {
   const text = JSON.stringify(CASES.map(([, v]) => screen(v)));
   assert.doesNotMatch(text, /#[0-9a-f]{6}|rgb|zone|rider|popular|last taught/i);
 });
+
+test("a row with an unknown music source says it needs a newer version, in the row and the footer", () => {
+  const s = screen(view({ rows: [row("Alpha", 1, { source: "unknown" })] }));
+  assert.equal(s.body.kind, "list");
+  if (s.body.kind !== "list") return;
+  assert.equal(s.body.rows[0].meta, "This class needs a newer version of the player");
+  assert.equal(s.body.footer.detail, "This class needs a newer version of the player");
+});
+
+test("the footer of an unknown row shows a disabled Start with the newer-version detail; other rows stay enabled", () => {
+  const s = screen(view({ rows: [row("Alpha", 1, { source: "unknown" }), row("Bravo", 2)] }), { selectedId: row("Alpha", 1).id });
+  assert.equal(s.body.kind, "list");
+  if (s.body.kind !== "list") return;
+  assert.equal(s.body.footer.disabled, true);
+  assert.equal(s.body.footer.describedBy, "foot-detail");
+  // The unstartable row stays selectable.
+  assert.equal(s.selectedId, row("Alpha", 1).id);
+  assert.equal(s.body.rows[0].selected, true);
+  assert.equal(s.body.footer.button.label, "Start class");
+  assert.equal(s.body.footer.detail, "This class needs a newer version of the player");
+  const other = screen(view({ rows: [row("Alpha", 1, { source: "unknown" }), row("Bravo", 2)] }), { selectedId: row("Bravo", 2).id });
+  if (other.body.kind === "list") { assert.equal(other.body.footer.disabled, false); assert.equal(other.body.footer.describedBy, null); }
+});
