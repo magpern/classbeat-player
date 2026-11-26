@@ -83,11 +83,12 @@ const BANNED: ReadonlyArray<[name: string, re: RegExp, snippet: string]> = [
   ["Bluetooth", /\bCB(CentralManager|PeripheralManager|Peripheral)\b/, "CBCentralManager()"],
   ["Loading by name", /\b(dlopen|dlsym|NSClassFromString|NSSelectorFromString)\b/, 'NSClassFromString("AVPlayer")'],
   // Foundation brings in Darwin, so the BSD sockets and the resolver are reachable from an allowed
-  // import (ADR 0016 section 4): ban their calls, their address types and constants, and the
+  // import (ADR 0016 section 4): ban their names as whole words (a call, a reference kept to call
+  // later, Darwin.socket), their address types and constants, and the
   // other ways to a host (CFHost, the stream pairs, Bonjour, the Network framework's C API).
   [
     "BSD sockets",
-    /\b(socket|socketpair|connect|connectx|bind|listen|accept|send|sendto|sendmsg|recv|recvfrom|recvmsg|setsockopt|getsockopt|getpeername|getsockname)\s*\(/,
+    /\b(socket|socketpair|connect|connectx|bind|listen|accept|send|sendto|sendmsg|recv|recvfrom|recvmsg|setsockopt|getsockopt|getpeername|getsockname)\b/,
     "let fd = socket(AF_INET, SOCK_STREAM, 0)",
   ],
   ["Socket addresses", /\b(sockaddr\w*|in6?_addr|[AP]F_(INET6?|UNIX|LOCAL|ROUTE|SYSTEM)|SOCK_(STREAM|DGRAM|RAW|SEQPACKET)|IPPROTO_\w+)\b/, "var a = sockaddr_in()"],
@@ -113,7 +114,9 @@ const INSPECT_NAME = /\b(isInspectable|isWebDebuggable)\b/g;
  * a comparison with it (the factory's precondition, a test's assertion). A toggle, a key path, an
  * inout use or any other expression is a hit. */
 const INSPECT_USE = [
-  /^[ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*=[ \t]*BuildFlavor\.isDebug[ \t]*$/gm,
+  // The next line must start a new statement: one that starts with an operator, a dot or a
+  // bracket would carry the expression on (`|| true`, `.toggle()`).
+  /^[ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*=[ \t]*BuildFlavor\.isDebug[ \t]*$(?![\s]*[^\s\w}#@])/gm,
   /\bprecondition\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*==[ \t]*BuildFlavor\.isDebug[ \t]*,/g,
   /\bXCTAssertEqual\([ \t]*[A-Za-z_][\w.]*\.(?:isInspectable|isWebDebuggable)[ \t]*,[ \t]*BuildFlavor\.isDebug[ \t]*\)/g,
 ];
@@ -218,6 +221,8 @@ const MUTATIONS: Mutation[] = [
   plant("Spotify", `let t = ${"Spotify" + "iOS"}.SPT${"App" + "Remote"}.self`),
   plant("BSD sockets", "func planted(_ fd: Int32, _ a: UnsafePointer<sockaddr>) { _ = Darwin.connect(fd, a, 16) }"),
   plant("BSD sockets", 'let s = "//"; let fd = socket(2, 1, 0)', true),
+  plant("BSD sockets", "let mk = Darwin.socket; _ = mk(2, 1, 0)"),
+  plant("BSD sockets", "let c = connect"),
   plant("BSD sockets", "func planted(_ fd: Int32) { _ = sendto(fd, nil, 0, 0, nil, 0); _ = recvfrom(fd, nil, 0, 0, nil, nil) }"),
   plant("The resolver", "let h = gethostbyname(\"example.invalid\")"),
   objc("BSD sockets", "- (void)p { int fd = socket(2, 1, 0); bind(fd, 0, 0); }"),
@@ -247,6 +252,8 @@ const MUTATIONS: Mutation[] = [
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        webView.isInspectable.toggle()\n", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        webView[keyPath: \\.isInspectable] = true\n", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug || true\n", false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n            || true\n", false],
+  ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n\n            ? true : true\n", false],
   ["inspection in debug only", FACTORY_PATH, "webView.isInspectable = BuildFlavor.isDebug\n", "webView.isInspectable = BuildFlavor.isDebug\n        set(&webView.isInspectable)\n", false],
   plant("inspection in debug only", 'func planted(_ w: WKWebView) { w.setValue(true, forKey: "inspectable") }'),
   plant("inspection in debug only", 'func planted(_ c: WKPreferences) { c.setValue(true, forKey: "developerExtrasEnabled") }'),

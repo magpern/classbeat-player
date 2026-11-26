@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { MOBILE, mobileFiles } from "../../app/test/unit/rule-sources.ts";
 import { IOS, swiftFiles } from "./ios-sources.ts";
-import { buildConfigs, fileRefs, groups, objectKinds, setting, settingKeys, shellScripts } from "./pbxproj.ts";
+import { buildConfigs, decodeString, fileRefs, groups, objectKinds, parsePbxproj, setting, settingKeys, shellScripts } from "./pbxproj.ts";
 import { readPlist, type PlistValue } from "./plist.ts";
 
 const APP = join(IOS, "App");
@@ -128,17 +128,25 @@ const GROUPS = ["||<group>", "Pods|Pods|<group>", "App|App|<group>", "AppTests|A
 /** CocoaPods' own script phases, as pod install writes them: the lock check (twice) and the framework embed. */
 const CHECK_LOCK =
   'diff \\"${PODS_PODFILE_DIR_PATH}/Podfile.lock\\" \\"${PODS_ROOT}/Manifest.lock\\" > /dev/null\\nif [ $? != 0 ] ; then\\n    # print error to STDERR\\n    echo \\"error: The sandbox is not in sync with the Podfile.lock. Run \'pod install\' or update your CocoaPods installation.\\" >&2\\n    exit 1\\nfi\\n# This output is used by Xcode \'outputs\' to avoid re-running this script phase.\\necho \\"SUCCESS\\" > \\"${SCRIPT_OUTPUT_FILE_0}\\"\\n';
-const SCRIPTS = [CHECK_LOCK, CHECK_LOCK, '\\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\\"\\n'];
+const SCRIPTS = [CHECK_LOCK, CHECK_LOCK, '\\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\\"\\n'].map(
+  (s) => `/bin/sh|${decodeString(s)}`,
+);
 
 /** What is wrong with the Xcode project, one line each. */
 export function projectFindings(pbxproj: string): string[] {
+  try {
+    return readProjectFindings(pbxproj);
+  } catch (e) {
+    return [`the project could not be read: ${(e as Error).message}`];
+  }
+}
+
+function readProjectFindings(pbxproj: string): string[] {
   const found: string[] = [];
   const configs = buildConfigs(pbxproj);
-  const isa = [...pbxproj.matchAll(/isa = XCBuildConfiguration;/g)].length;
-  if (configs.length !== isa || isa === 0) found.push("a build configuration could not be read");
   for (const c of configs) {
-    const flags = c.settings.replace(/^\s*(DEBUG_INFORMATION_FORMAT|MTL_ENABLE_DEBUG_INFO) = .*$/gm, "");
-    if (c.name !== "Debug" && /DEBUG/.test(flags)) found.push(`${c.name}: compiles with DEBUG`);
+    const flags = Object.entries(c.settings).filter(([k]) => !/^(DEBUG_INFORMATION_FORMAT|MTL_ENABLE_DEBUG_INFO)$/.test(k));
+    if (c.name !== "Debug" && /DEBUG/.test(JSON.stringify(flags))) found.push(`${c.name}: compiles with DEBUG`);
     const target = setting(c, "IPHONEOS_DEPLOYMENT_TARGET");
     if (target !== undefined && target !== "16.0") found.push(`${c.name}: deployment target ${target}`);
     const info = setting(c, "INFOPLIST_FILE");
@@ -149,7 +157,7 @@ export function projectFindings(pbxproj: string): string[] {
   const infos = configs.filter((c) => setting(c, "INFOPLIST_FILE") !== undefined).map((c) => c.name).sort();
   if (!isDeepStrictEqual(infos, ["Debug", "Release"])) found.push(`the app's Info.plist is set for ${infos.join(", ") || "nothing"}`);
   for (const banned of ["CODE_SIGN_ENTITLEMENTS", "SystemCapabilities", "XCRemoteSwiftPackageReference", "XCLocalSwiftPackageReference", "XCSwiftPackageProductDependency"]) {
-    if (pbxproj.includes(banned)) found.push(`the project has ${banned}`);
+    if (pbxproj.includes(banned) || decoded(pbxproj).includes(banned)) found.push(`the project has ${banned}`);
   }
   return [...found, ...infoSourceFindings(pbxproj), ...shapeFindings(pbxproj)];
 }
@@ -162,6 +170,10 @@ export function projectFindings(pbxproj: string): string[] {
  */
 function infoSourceFindings(pbxproj: string): string[] {
   const found: string[] = [];
+  // A second line of defence: no INFOPLIST_ name but the file anywhere, as written or decoded.
+  for (const text of [pbxproj, decoded(pbxproj)]) {
+    for (const m of text.matchAll(/INFOPLIST_(?!FILE\b)\w*/g)) found.push(`the project names ${m[0]}`);
+  }
   for (const c of buildConfigs(pbxproj)) {
     const generate = setting(c, "GENERATE_INFOPLIST_FILE");
     if (setting(c, "INFOPLIST_FILE") !== undefined && generate !== "NO") found.push(`${c.name}: the app's Info.plist is generated`);
@@ -173,6 +185,9 @@ function infoSourceFindings(pbxproj: string): string[] {
   }
   return found;
 }
+
+/** Every key and string of the parsed project, decoded, as one text. */
+const decoded = (pbxproj: string): string => JSON.stringify(parsePbxproj(pbxproj));
 
 /** The project holds only the objects, files, groups, base configurations and scripts above. */
 function shapeFindings(pbxproj: string): string[] {
@@ -195,10 +210,23 @@ function shapeFindings(pbxproj: string): string[] {
   return found;
 }
 
+const SCHEME_ELEMENTS = new Set(
+  ("AnalyzeAction ArchiveAction BuildAction BuildActionEntries BuildActionEntry BuildableProductRunnable BuildableReference " +
+    "LaunchAction MacroExpansion ProfileAction Scheme TestAction TestableReference Testables").split(" "),
+);
 /** What is wrong with the shared scheme: an archive (the build that ships) is a release build. */
 export function schemeFindings(scheme: string): string[] {
-  const actions = new Map([...scheme.matchAll(/<(\w+Action)\b[^>]*?\bbuildConfiguration\s*=\s*"([^"]*)"/g)].map((m) => [m[1]!, m[2]!]));
-  const found = ["ArchiveAction", "ProfileAction"].filter((a) => actions.get(a) !== "Release").map((a) => `${a} is not Release`);
+  const found: string[] = [];
+  // Each of the two actions once, its configuration Release, however the tag is laid out.
+  for (const action of ["ArchiveAction", "ProfileAction"]) {
+    const tags = [...scheme.matchAll(new RegExp(`<\\s*${action}\\b([^>]*)>`, "g"))].map((m) => m[1]!);
+    const configs = tags.map((t) => /\bbuildConfiguration\s*=\s*"([^"]*)"/.exec(t)?.[1]);
+    if (configs.length !== 1 || configs[0] !== "Release") found.push(`${action} is not Release`);
+  }
+  // Only the elements the scheme has now: no other element, comment, CDATA, entity or instruction.
+  const extra = [...scheme.replace(/^<\?xml [^>]*\?>/, "").matchAll(/<\s*\/?\s*([^\s/>]+)/g)].map((m) => m[1]!).filter((n) => !SCHEME_ELEMENTS.has(n));
+  for (const n of new Set(extra)) found.push(`the scheme has <${n}>`);
+  if (/&/.test(scheme)) found.push("the scheme has an entity");
   // A scheme action can run a script or change the launch (pre and post actions, environment
   // variables, arguments); the project runs only the pinned CocoaPods phases.
   for (const m of scheme.matchAll(/<(PreActions|PostActions|ExecutionAction|EnvironmentVariables?|CommandLineArguments?|AdditionalOptions)\b|DYLD_/g)) {
@@ -226,7 +254,8 @@ const PODFILE_LINES = [
 /** What is wrong with the Podfile: only Capacitor's own pods, from the pinned package, iOS 16. */
 export function podfileFindings(podfile: string): string[] {
   const found: string[] = [];
-  const lines = podfile.split("\n").map((l) => l.replace(/#.*$/, "").trim()).filter(Boolean);
+  // Whole-line comments only: a "#" after a statement may sit inside a Ruby string.
+  const lines = podfile.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "" && !l.startsWith("#"));
   const pods = lines.filter((l) => /^pod\b/.test(l));
   const expected = ["Capacitor", "CapacitorCordova"].map((n) => `pod '${n}', :path => '${CAPACITOR_PATH}'`);
   if (!isDeepStrictEqual(pods, expected)) found.push(`the pods are ${pods.join("; ")}`);
@@ -237,6 +266,17 @@ export function podfileFindings(podfile: string): string[] {
   return found;
 }
 
+const LOCK_FROM = '"../../node_modules/@capacitor/ios"';
+const LOCK_LINES = [
+  "PODS:", "  - Capacitor (8.6.0):", "    - CapacitorCordova", "  - CapacitorCordova (8.6.0)", "",
+  "DEPENDENCIES:", '  - "Capacitor (from `../../node_modules/@capacitor/ios`)"', '  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"', "",
+  "EXTERNAL SOURCES:", "  Capacitor:", `    :path: ${LOCK_FROM}`, "  CapacitorCordova:", `    :path: ${LOCK_FROM}`, "",
+  "SPEC CHECKSUMS:", "  Capacitor: @sum", "  CapacitorCordova: @sum", "",
+  "PODFILE CHECKSUM: @sum", "", "COCOAPODS: @version",
+];
+const LOCK = new RegExp(
+  `^${LOCK_LINES.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\n").replaceAll("@sum", "[0-9a-f]{40}").replace("@version", "\\d+\\.\\d+\\.\\d+")}\n?$`,
+);
 /** What is wrong with Podfile.lock: the same two pods at 8.6.0, nothing from a spec repository. */
 export function podlockFindings(lock: string): string[] {
   const found: string[] = [];
@@ -244,6 +284,8 @@ export function podlockFindings(lock: string): string[] {
   const pods = [...section.matchAll(/^ {2}- "?([^\s"(]+) \(([^)]*)\)/gm)].map((m) => `${m[1]} ${m[2]}`);
   if (!isDeepStrictEqual(pods, ["Capacitor 8.6.0", "CapacitorCordova 8.6.0"])) found.push(`the locked pods are ${pods.join(", ")}`);
   if (/^SPEC REPOS:/m.test(lock)) found.push("a pod comes from a spec repository");
+  // The whole file, as pod install writes it for the two path pods: only the checksums may differ.
+  if (!LOCK.test(lock)) found.push("Podfile.lock is not the two pinned pods");
   return found;
 }
 
@@ -325,7 +367,8 @@ const swap = (t: string, from: string | RegExp, to: string): string => {
 const dictEnd = (xml: string, add: string): string => swap(xml, /<\/dict>\s*<\/plist>/, `${add}</dict></plist>`);
 
 test("each project check fails on a planted example", () => {
-  const planted: ReadonlyArray<[name: string, findings: () => string[]]> = [
+  // An entry may name the finding it must give, so a plant shows the check it is for.
+  const planted: ReadonlyArray<[name: string, findings: () => string[], expect?: string]> = [
     ["camera", () => infoFindings(dictEnd(RELEASE, "<key>NSCameraUsageDescription</key><string>x</string>"), DEBUG)],
     ["microphone in debug", () => infoFindings(RELEASE, dictEnd(DEBUG, "<key>NSMicrophoneUsageDescription</key><string>x</string>"))],
     ["photo library", () => infoFindings(dictEnd(RELEASE, "<key>NSPhotoLibraryAddUsageDescription</key><string>x</string>"), DEBUG)],
@@ -345,6 +388,20 @@ test("each project check fails on a planted example", () => {
     ["a conditional key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", 'INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t"INFOPLIST_KEY_NSMicrophoneUsageDescription[sdk=iphoneos*]" = x;'))],
     ["a preprocessed plist", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_PREPROCESS = YES;"))],
     ["a generated plist elsewhere", () => projectFindings(swap(PBXPROJ, "ENABLE_NS_ASSERTIONS = NO;", "ENABLE_NS_ASSERTIONS = NO;\n\t\t\t\tGENERATE_INFOPLIST_FILE = YES;"))],
+    ["a camera key on a deeper line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\tINFOPLIST_KEY_NSCameraUsageDescription = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["a camera key on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; INFOPLIST_KEY_NSCameraUsageDescription = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["a camera key over several lines", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\nINFOPLIST_KEY_NSCameraUsageDescription\n=\n\"x\"\n;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["a quoted camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_KEY_NSCameraUsageDescription\" = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["an escaped camera key", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"INFOPLIST_\\U004BEY_NSCameraUsageDescription\" = x;")), "Release: sets INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["a camera key in a comment", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; /* INFOPLIST_KEY_NSCameraUsageDescription */")), "the project names INFOPLIST_KEY_NSCameraUsageDescription"],
+    ["linker flags on the plist's line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist; OTHER_LDFLAGS = \"-ObjC\";")), "Release: OTHER_LDFLAGS is not an allowed setting"],
+    ["linker flags behind a comment", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_LDFLAGS /* = */ = (\n\"-ObjC\",\n);")), "Release: OTHER_LDFLAGS is not an allowed setting"],
+    ["a conditional setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\t\"OTHER_LDFLAGS[sdk=iphoneos*]\" = x;")), "is not an allowed setting"],
+    ["a repeated setting", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_FILE = App/Other.plist;")), "is repeated"],
+    ["an escaped configuration kind", () => projectFindings(swap(PBXPROJ, "isa = XCBuildConfiguration;", "isa = \"XCBuild\\U0043onfiguration\";")), "build configurations read"],
+    ["settings on another object", () => projectFindings(swap(PBXPROJ, "isa = PBXProject;", "isa = PBXProject;\n\t\t\tbuildSettings = {\n\t\t\t\tOTHER_LDFLAGS = x;\n\t\t\t};")), "has build settings"],
+    ["a script run by another shell", () => projectFindings(swap(PBXPROJ, "shellPath = /bin/sh;", "shellPath = /usr/bin/python3;")), "a script phase is not one of CocoaPods' own"],
+    ["a framework written over several lines", () => projectFindings(swap(PBXPROJ, "/* Begin PBXFileReference section */", "/* Begin PBXFileReference section */\n\t\tAA0000000000000000000001 = {\nisa = PBXFileReference;\n\"lastKnownFileType\" = wrapper.framework;\npath = Vendor.framework;\nsourceTree = \"<group>\";\n};")), "the project names wrapper.framework|<group>|Vendor.framework"],
     ["linker flags", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", 'INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tOTHER_LDFLAGS = "-framework AVFoundation";'))],
     ["an unreadable setting line", () => projectFindings(swap(PBXPROJ, "INFOPLIST_FILE = App/Info.plist;", "INFOPLIST_FILE = App/Info.plist;\n\t\t\t\tINFOPLIST_KEY_X=1;"))],
     ["a base xcconfig of our own", () => projectFindings(swap(PBXPROJ, "path = \"Target Support Files/Pods-App/Pods-App.release.xcconfig\"", "path = ../Camera.xcconfig"))],
@@ -376,6 +433,15 @@ test("each project check fails on a planted example", () => {
     ["another pod", () => podfileFindings(swap(PODFILE, "  target 'AppTests'", "  pod 'Alamofire'\n  target 'AppTests'"))],
     ["a pod from git", () => podfileFindings(swap(PODFILE, `pod 'Capacitor', :path => '${CAPACITOR_PATH}'`, "pod 'Capacitor', :git => 'https://example.invalid/c.git'"))],
     ["a post_install body", () => podfileFindings(swap(PODFILE, "  assertDeploymentTarget(installer)\n", "  assertDeploymentTarget(installer)\n  system('true')\n"))],
+    ["a second, debug archive", () => schemeFindings(swap(SCHEME, /(\s*)<ArchiveAction\b/, '$1<ArchiveAction buildConfiguration = "Debug"></ArchiveAction>$1<ArchiveAction')), "ArchiveAction is not Release"],
+    ["a pre-action over lines", () => schemeFindings(swap(SCHEME, /(<BuildAction\b[^>]*>)/, "$1\n<\n  PreActions\n></PreActions>")), "the scheme has <PreActions>"],
+    ["an element in a comment", () => schemeFindings(swap(SCHEME, /(<BuildAction\b[^>]*>)/, "$1<!-- x -->")), "the scheme has <!--"],
+    ["an encoded launch variable", () => schemeFindings(swap(SCHEME, /(<LaunchAction\b)/, '$1 x = "&#68;YLD_X"')), "the scheme has an entity"],
+    ["a post_install call on the same line", () => podfileFindings(swap(PODFILE, "assertDeploymentTarget(installer)\n", "assertDeploymentTarget(installer); system('true')\n")), "not exactly the allowed statements"],
+    ["a post_install call after a carriage return", () => podfileFindings(swap(PODFILE, "assertDeploymentTarget(installer)\n", "assertDeploymentTarget(installer)\rsystem('true')\n")), "not exactly the allowed statements"],
+    ["a call after a hash", () => podfileFindings(swap(PODFILE, "use_frameworks!\n", "use_frameworks! # x\n")), "not exactly the allowed statements"],
+    ["a locked pod indented further", () => podlockFindings(swap(PODLOCK, "  - CapacitorCordova (8.6.0)\n", "  - CapacitorCordova (8.6.0)\n   - Alamofire (5.0.0)\n")), "not the two pinned pods"],
+    ["a quoted spec repo", () => podlockFindings(`${PODLOCK}\n"SPEC REPOS":\n  trunk:\n    - Alamofire\n`), "not the two pinned pods"],
     ["another hook", () => podfileFindings(`${PODFILE}\npre_install do |i|\nend\n`)],
     ["a spec source", () => podfileFindings(`source 'https://cdn.cocoapods.org/'\n${PODFILE}`)],
     ["iOS 15", () => podfileFindings(swap(PODFILE, "platform :ios, '16.0'", "platform :ios, '15.0'"))],
@@ -388,7 +454,12 @@ test("each project check fails on a planted example", () => {
     ["HTTP switched on", () => configFindings(swap(CONFIG_JSON, '"CapacitorHttp": { "enabled": false }', '"CapacitorHttp": { "enabled": true }'))],
     ["a plugin class", () => configFindings(swap(CONFIG_JSON, '"packageClassList": []', '"packageClassList": ["SpeechPlugin"]'))],
   ];
-  const missed = planted.filter(([, findings]) => findings().length === 0).map(([name]) => name);
+  const missed = planted
+    .filter(([, findings, expect]) => {
+      const f = findings();
+      return f.length === 0 || (expect !== undefined && !f.some((l) => l.includes(expect)));
+    })
+    .map(([name]) => name);
   assert.deepEqual(missed, []);
 });
 
@@ -399,4 +470,9 @@ test("the plist reader reads what the files use and refuses the rest", () => {
   assert.throws(() => readPlist("<plist><dict><key>a</key><real>1.5</real></dict></plist>"));
   assert.throws(() => readPlist("<plist><dict><key>a</key><true/><key>a</key><false/></dict></plist>"));
   assert.throws(() => readPlist("<plist><dict><key>a</key><true/></dict><dict/></plist>"));
+  // Parts the reader would otherwise pass over: CDATA, an instruction, an entity declared or used.
+  assert.throws(() => readPlist("<plist><dict><key>a</key><string><![CDATA[x]]></string></dict></plist>"));
+  assert.throws(() => readPlist("<plist><?pi x?><dict/></plist>"));
+  assert.throws(() => readPlist('<!DOCTYPE plist [<!ENTITY e "x">]><plist><dict><key>a</key><string>&e;</string></dict></plist>'));
+  assert.throws(() => readPlist("<plist><dict><key>a</key><string>&#65;</string></dict></plist>"));
 });

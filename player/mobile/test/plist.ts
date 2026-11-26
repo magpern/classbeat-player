@@ -11,7 +11,12 @@ export function readPlist(xml: string): PlistValue {
     .replace(/<\?xml[^>]*\?>/, "")
     .replace(/<!DOCTYPE[^>]*>/, "")
     .replace(/<!--[\s\S]*?-->/g, "");
-  const tokens = [...body.matchAll(TOKEN)]
+  const matches = [...body.matchAll(TOKEN)];
+  // Every character is in a token: a CDATA section, an instruction or an entity declaration
+  // matches no token, and would otherwise be passed over.
+  if (matches.reduce((n, m) => n + m[0].length, 0) !== body.length) throw new Error("the property list has a part it cannot read");
+  if (/&(?!(lt|gt|quot|apos|amp);)/.test(body)) throw new Error("the property list has an entity it does not read");
+  const tokens = matches
     .map((m) => ({ close: m[1] === "/", tag: m[2], attrs: m[3] ?? "", empty: m[4] === "/", text: m[5] }))
     .filter((t) => t.tag !== undefined || t.text!.trim() !== "");
   let at = 0;
