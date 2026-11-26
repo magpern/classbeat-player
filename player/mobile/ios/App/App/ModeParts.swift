@@ -1,17 +1,20 @@
 import WebKit
 
-// What the iOS holder runs on (issue #895). The phone is never paired on iOS yet (pairing is a
-// later issue), so instructor mode's way in is pairing and the page hears "unpaired". Of the parts
-// a switch drops only the web view's storage exists on iOS yet; the others have nothing to drop
-// and finish at once, in the order ModePolicy.teardown names them.
+// What the iOS holder runs on (issues #895 and #896). The phone is paired while the pairing holds
+// a token (PairingService.paired); with no backend in the build yet it never is, so instructor
+// mode's way in is pairing and the page hears "unpaired". Of the parts a switch drops only the web
+// view's storage exists on iOS yet; the others have nothing to drop and finish at once, in the
+// order ModePolicy.teardown names them.
 final class PhoneDevice: Device {
     private let lock: ScreenLock
+    private let isPaired: () -> Bool
 
-    init(lock: ScreenLock) {
+    init(lock: ScreenLock, paired: @escaping () -> Bool) {
         self.lock = lock
+        self.isPaired = paired
     }
 
-    var paired: Bool { false }
+    var paired: Bool { isPaired() }
 
     var secureLock: Bool { lock.isSet }
 }
