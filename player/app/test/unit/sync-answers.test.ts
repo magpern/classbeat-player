@@ -2,12 +2,19 @@
 // (schema/player-api/v1/examples) gets the reading its route gives it, and the table must name
 // every example, so a new one cannot go untested.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { classCache } from "../../src/main/sync/cache.ts";
+import { classListView } from "../../src/core/sync/class-list.ts";
+import { INITIAL } from "../../src/core/sync/sync-model.ts";
+import type { SyncState } from "../../src/core/sync/sync-model.ts";
 import { contentHash } from "classformat/src/index.ts";
 import { parseChanges, parseClass } from "../../src/core/sync/answers.ts";
 import type { FetchResult, ListResult } from "../../src/core/sync/answers.ts";
 import { classSchema } from "./fixtures.ts";
-import { allExamples, changeOf, classBody, document, err, example, ID_A, ID_B, OFFLINE, ok, page } from "./sync-fixtures.ts";
+import { allExamples, changeOf, classBody, document, err, example, ID_A, ID_B, OFFLINE, ok, page, STAMP } from "./sync-fixtures.ts";
 
 const changes = (rel: string, after = 0): ListResult => parseChanges(ok(example(rel)), after);
 const held = (body: unknown, id = ID_A): FetchResult => parseClass(ok(body), id, classSchema);
@@ -127,4 +134,41 @@ test("a class is kept only for the id asked, with its own hash", () => {
 test("a class of a newer major is kept, for the player to say it needs updating when opened", () => {
   const doc = { ...document(), format_version: "2.0" };
   assert.equal(held(classBody(ID_A, doc)).kind, "class");
+});
+
+const ACCOUNT = "c".repeat(64);
+
+// An unknown music source, from the server's answer to a row of the list (ADR 0017 section 1).
+for (const version of ["1.0", "1.4"]) {
+  test(`a class with source local, format ${version}, is kept, cached and listed as unknown`, () => {
+    const doc = document("Local ride");
+    doc.format_version = version;
+    (doc.music as Record<string, unknown>).source = "local";
+    const got = held(classBody(ID_A, doc));
+    assert.equal(got.kind, "class");
+    if (got.kind !== "class") return;
+    const dir = join(mkdtempSync(join(tmpdir(), "cbp-unknown-")), "class-cache");
+    try {
+      const cache = classCache(dir);
+      cache.keep(ACCOUNT, ID_A, got.hash, got.document, STAMP);
+      cache.commit(ACCOUNT, 1);
+      const state = { ...INITIAL, unread: false, held: new Map([[ID_A, got.hash]]), published: new Map([[ID_A, STAMP]]) } as SyncState;
+      const docs = new Map([[ID_A, cache.read(ID_A)?.document ?? {}]]);
+      assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Local ride", "unknown"]]);
+    } finally {
+      rmSync(join(dir, ".."), { recursive: true, force: true });
+    }
+  });
+}
+
+test("a class whose music source is not a non-empty string, or breaks anything else, is still unusable", () => {
+  for (const bad of [7, "", null, ["local"]]) {
+    const doc = document();
+    (doc.music as Record<string, unknown>).source = bad;
+    assert.equal(held(classBody(ID_A, doc)).kind, "unusable", JSON.stringify(bad));
+  }
+  const doc = document();
+  (doc.music as Record<string, unknown>).source = "local";
+  (doc.class as Record<string, unknown>).length_ms = "long";
+  assert.equal(held(classBody(ID_A, doc)).kind, "unusable");
 });

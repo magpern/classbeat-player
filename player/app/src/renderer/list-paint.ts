@@ -123,6 +123,7 @@ export function footerEl(f: Footer, act: () => void): HTMLElement {
   const b = h("button", "primary") as HTMLButtonElement;
   b.type = "button";
   b.dataset.action = f.action;
+  b.disabled = f.disabled;
   b.append(h("span", null, f.button.label), " ", h("span", "kbd", shortcut(f.button.key ?? "Enter")));
   b.addEventListener("click", act);
   foot.append(sel, b);

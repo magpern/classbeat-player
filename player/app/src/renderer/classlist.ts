@@ -52,6 +52,7 @@ const rowsOf = (): readonly { id: string; hash: string; title: string }[] => (sc
 function primary(): void {
   if (screen?.body.kind !== "list") return;
   const f = screen.body.footer;
+  if (f.disabled) return;
   const row = screen.body.rows.find((r) => r.id === f.id);
   if (f.action === "back") void api.backToClass().then(take);
   else if (row !== undefined) {

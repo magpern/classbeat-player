@@ -35,6 +35,8 @@ export interface Footer {
   readonly button: Button;
   /** What Enter or the button does. */
   readonly action: "start" | "back";
+  /** The button is shown but cannot be used: the class needs a newer player. */
+  readonly disabled: boolean;
   /** The row the footer is about. */
   readonly id: string;
 }
@@ -86,8 +88,8 @@ function footerOf(r: ListRow | undefined, pinned: boolean, reason: string | null
   if (r === undefined) return null;
   const detail = r.source === "unknown" ? NEEDS_NEWER_PLAYER : r.source === "swedebeat" && reason !== null ? `${START}. ${reason}` : START;
   return pinned
-    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", id: r.id }
-    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", id: r.id };
+    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", disabled: false, id: r.id }
+    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", disabled: r.source === "unknown", id: r.id };
 }
 
 const NO_MIX: MixHead = { line: null, plate: null, panel: null, form: null };
