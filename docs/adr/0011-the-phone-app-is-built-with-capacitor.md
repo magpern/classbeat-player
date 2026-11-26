@@ -224,6 +224,10 @@ only additions; no existing check is loosened.
   backend origin fixed in the build, with no redirects, a 64 KiB limit on the answer and a 10 s
   timeout. For rider mode (#633), one more file may open a WebSocket to the same fixed origin for
   the rider connection. Every other Kotlin file keeps the full network check.
+  As built (#851): the manifest asks for exactly `android.permission.INTERNET`, which these calls
+  need on Android, and nothing else (pinned by `ManifestTest` and the rules test). The web view
+  still blocks network loads. No app Kotlin file may loosen certificate or hostname checks, and
+  only `MainActivity.kt` constructs the transport.
 - **Spotify's media session (#653).** `SpotifySessionReader.kt` may name only the media-session
   types it reads (the session manager, `MediaController`, `MediaMetadata`, `PlaybackState` and its
   `TransportControls`) and the package `com.spotify.music`. Everything else stays banned in that
