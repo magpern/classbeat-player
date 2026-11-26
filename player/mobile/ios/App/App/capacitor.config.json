@@ -1,0 +1,20 @@
+{
+  "appId": "org.classbeat.player",
+  "appName": "classbeat",
+  "webDir": "public",
+  "loggingBehavior": "debug",
+  "server": {
+    "iosScheme": "capacitor",
+    "hostname": "localhost"
+  },
+  "ios": {
+    "allowsLinkPreview": false,
+    "limitsNavigationsToAppBoundDomains": false,
+    "zoomEnabled": false
+  },
+  "plugins": {
+    "CapacitorCookies": { "enabled": false },
+    "CapacitorHttp": { "enabled": false }
+  },
+  "packageClassList": []
+}

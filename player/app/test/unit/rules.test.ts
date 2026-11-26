@@ -151,8 +151,8 @@ test("the phone shell's walk skips a folder by its exact path, never by its name
       mkdirSync(join(p, ".."), { recursive: true });
       writeFileSync(p, "");
     };
-    const skipped = ["node_modules/a.ts", "android/app/build/b.kt", "android/app/src/main/assets/public/c.js"];
-    const scanned = ["src/node_modules/d.ts", "src/build/e.ts", "src/public/f.ts", "android/app/src/main/build/G.kt", "build/h.ts"];
+    const skipped = ["node_modules/a.ts", "android/app/build/b.kt", "android/app/src/main/assets/public/c.js", "ios/App/App/public/i.js", "ios/App/Pods/j.ts"];
+    const scanned = ["src/node_modules/d.ts", "src/build/e.ts", "src/public/f.ts", "android/app/src/main/build/G.kt", "build/h.ts", "ios/App/public/k.ts", "ios/Pods/l.ts"];
     for (const p of [...skipped, ...scanned]) put(p);
     const found = mobileFiles(root, /\.(ts|js|kt)$/, root).map((p) => relative(root, p).split(sep).join("/"));
     assert.deepEqual(found.sort(), [...scanned].sort());
