@@ -9,9 +9,9 @@ name: release-player
 #  - A pull request that changes this workflow or its scripts runs the same dry run.
 # Desktop signing and notarisation wait for the owner (docs/owner.md: Apple Developer membership and
 # a Windows signing identity, plan decision 9): the desktop builds are unsigned and the notes say so.
-# The Android APK (#849) is built by android-build and signed by android-sign, the only job that
-# sees a secret, and only on a publishing tag; publish-android attaches it with SHA256SUMS-android. This workflow never creates, moves or deletes a
-# tag: `gh release create --verify-tag` refuses to run unless the pushed tag already exists.
+# The Android APK (#849): android-build builds and checks it, alignment included, with no secret;
+# android-sign (the only job with a secret, only on a publishing tag) signs it; publish-android
+# attaches it. `gh release create --verify-tag` never creates a tag; none is moved or deleted.
 # Checks of this file: scripts/test-release-player.sh (run by the verify job below).
 
 on:
@@ -224,6 +224,7 @@ jobs:
           set -euo pipefail
           apk=player/mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
           AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2" bash scripts/check-apk-manifest.sh release "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c 4 "$apk"
           mkdir -p "$RUNNER_TEMP/android"
           cp "$apk" "$RUNNER_TEMP/android/classbeat-player-android-unsigned.apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

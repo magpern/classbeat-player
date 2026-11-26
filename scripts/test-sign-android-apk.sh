@@ -20,7 +20,8 @@ bad() { echo "FAIL: $*"; fail=1; }
 
 # --- fake build tools ----------------------------------------------------------------------------
 # The fake apksigner records its arguments and the keystore's mode at signing time, copies the input
-# to --out, and prints a verify report shaped by FAKE_V2, FAKE_V3, FAKE_SIGNERS and FAKE_DIGEST.
+# to --out, and prints a verify report shaped by FAKE_V2, FAKE_V3, FAKE_SIGNERS, FAKE_DIGEST and an
+# optional second digest line FAKE_DIGEST2.
 bin="$tmp/bin"
 mkdir -p "$bin"
 cat >"$bin/apksigner" <<'FAKE'
@@ -54,6 +55,7 @@ case "$cmd" in
     echo "Number of signers: ${FAKE_SIGNERS:-1}"
     echo "Signer #1 certificate DN: CN=test"
     echo "Signer #1 certificate SHA-256 digest: ${FAKE_DIGEST}"
+    if [ -n "${FAKE_DIGEST2:-}" ]; then echo "Signer #2 certificate SHA-256 digest: ${FAKE_DIGEST2}"; fi
     ;;
   *) exit 2 ;;
 esac
@@ -64,6 +66,7 @@ chmod +x "$bin/apksigner" "$bin/zipalign"
 cert='10:3E:E1:B1:0D:73:44:25:AB:C6:7A:74:14:B3:06:F2:D2:EE:DD:EA:7E:A6:A6:6C:0D:A6:DF:35:D0:9B:DC:CA'
 cert_hex="$(printf '%s' "$cert" | tr -d ':' | tr 'A-F' 'a-f')"
 password='pw-not-real-7f3a'
+alias='alias-not-real-c41d'
 keystore_text='fake keystore bytes'
 keystore_b64="$(printf '%s' "$keystore_text" | base64 -w0)"
 printf 'unsigned apk' >"$tmp/in.apk"
@@ -82,7 +85,7 @@ run_sign() {
   rc=0
   env -i PATH="$bin:/usr/bin:/bin" SIGN_DIR="$dir" FAKE_LOG="$log" FAKE_DIGEST="$cert_hex" \
     ANDROID_CERT_SHA256="$cert" ANDROID_KEYSTORE_BASE64="$keystore_b64" \
-    ANDROID_KEYSTORE_PASSWORD="$password" ANDROID_KEY_ALIAS=upload "$@" \
+    ANDROID_KEYSTORE_PASSWORD="$password" ANDROID_KEY_ALIAS="$alias" "$@" \
     bash "$here/sign-android-apk.sh" "$tmp/in.apk" "$out" >"$d/output" 2>&1 || rc=$?
   output="$d/output"
 }
@@ -101,7 +104,7 @@ fi
 signline="$(grep '^sign ' "$log" || true)"
 for want in '--ks-pass env:ANDROID_KEYSTORE_PASSWORD' '--key-pass env:ANDROID_KEYSTORE_PASSWORD' \
   '--ks-type PKCS12' '--v2-signing-enabled true' '--v3-signing-enabled true' \
-  '--v1-signing-enabled false' '--v4-signing-enabled false' '--ks-key-alias upload'; do
+  '--v1-signing-enabled false' '--v4-signing-enabled false' "--ks-key-alias $alias"; do
   if grep -qF -- "$want" <<<"$signline"; then ok "apksigner sign gets $want"; else bad "apksigner sign lacks $want"; fi
 done
 if grep -qF -- "$password" "$log" "$output"; then bad "the password reached a command line or the output"; else ok "the password is on no command line and in no output"; fi
@@ -148,16 +151,38 @@ run_sign FAKE_V3=false
 refused "no v3 signature refused"
 run_sign FAKE_SIGNERS=2
 refused "two signers refused"
-run_sign FAKE_DIGEST="${cert_hex%?}0"
-refused "another certificate refused"
+# The certificate must match exactly (#853): a digest that is not the pinned one, a near miss at
+# either end, a prefix or an extension of it, or a second certificate beside it, is refused.
+other_cert="$(printf '%s' "$cert_hex" | tr '0-9a-f' '1-9a-f0')"
+for d in "$other_cert" "${cert_hex%?}0" "f${cert_hex#?}" "${cert_hex%??}" "${cert_hex}00" "00${cert_hex}"; do
+  run_sign FAKE_DIGEST="$d"
+  refused "certificate ${d:0:8}..${d: -4} (${#d} hex) refused"
+done
+run_sign FAKE_DIGEST2="$other_cert"
+refused "a second, different certificate digest refused"
+# The pin is compared after normalising: the report's digest in upper case is accepted.
+run_sign FAKE_DIGEST="$(printf '%s' "$cert_hex" | tr 'a-f' 'A-F')"
+if [ "$rc" -eq 0 ] && [ -s "$out" ]; then ok "the pinned certificate in upper case is accepted"; else bad "upper-case digest (rc=$rc)"; fi
 n=$((n + 1))
 mkdir -p "$tmp/run-$n/signing"
 dir_before="$tmp/run-$n/signing"
 rc=0
 env -i PATH="$bin:/usr/bin:/bin" SIGN_DIR="$dir_before" FAKE_LOG=/dev/null FAKE_DIGEST="$cert_hex" \
   ANDROID_CERT_SHA256="$cert" ANDROID_KEYSTORE_BASE64="$keystore_b64" ANDROID_KEYSTORE_PASSWORD="$password" \
-  ANDROID_KEY_ALIAS=upload bash "$here/sign-android-apk.sh" "$tmp/in.apk" "$tmp/run-$n/out.apk" >/dev/null 2>&1 || rc=$?
+  ANDROID_KEY_ALIAS="$alias" bash "$here/sign-android-apk.sh" "$tmp/in.apk" "$tmp/run-$n/out.apk" >/dev/null 2>&1 || rc=$?
 if [ "$rc" -ne 0 ] && [ -d "$dir_before" ]; then ok "an existing SIGN_DIR refused and left alone"; else bad "existing SIGN_DIR (rc=$rc)"; fi
+
+# No run, passing or failing, printed a secret (#853): the alias is on apksigner's command line
+# (sign-android-apk.sh says why) but never in the script's output, so xtrace or an echo fails here.
+leaked=0
+for o in "$tmp"/run-*/output; do
+  if grep -qF -e "$alias" -e "$password" -e "$keystore_b64" -e "$keystore_text" -- "$o"; then
+    leaked=1
+    bad "a secret in $o"
+  fi
+done
+[ "$leaked" -eq 1 ] || ok "no run printed the alias, the password or the keystore"
+if [ "$(grep -o -- '--ks-key-alias' "$tmp/run-1/log" | wc -l)" -eq 1 ]; then ok "the alias is passed once"; else bad "the alias is not passed exactly once"; fi
 
 # --- the workflow --------------------------------------------------------------------------------
 wf_check() { # wf_check <description> <command...>: the command must succeed
@@ -203,6 +228,7 @@ pins_cert() { grep -qx "          ANDROID_CERT_SHA256: \"$cert\"" "$wf"; }
 build_checks_manifest() {
   job_block "$wf" android-build && grep -q 'assembleRelease' "$tmp/job-android-build" &&
     grep -q 'check-apk-manifest.sh release' "$tmp/job-android-build" &&
+    grep -qxF '          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c 4 "$apk"' "$tmp/job-android-build" &&
     ! grep -q 'secrets\.' "$tmp/job-android-build"
 }
 # ci.yml keeps building and checking the unsigned release APK with no secret (AC 5).
@@ -219,7 +245,7 @@ wf_check "publish-android is guarded and checks SHA256SUMS-android" publish_andr
 wf_check "android-sign has no write access and runs no npm or Gradle" sign_cannot_write
 wf_check "the keystore directory is removed in an always() step" sign_cleans_up
 wf_check "the expected certificate is pinned" pins_cert
-wf_check "android-build runs assembleRelease and the release manifest check" build_checks_manifest
+wf_check "android-build runs assembleRelease, the release manifest check and zipalign -c 4" build_checks_manifest
 wf_check "Android artifacts stay out of checksums' release-player-*-* pattern" artifacts_apart
 wf_check "ci.yml still builds and checks the unsigned APK" ci_unsigned
 

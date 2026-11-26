@@ -5,6 +5,8 @@
 #  - writes SHA256SUMS (sha256sum format, file names relative to <dir>);
 #  - writes RELEASE_NOTES.md, the text put above GitHub's generated notes. The builds are
 #    UNSIGNED and unnotarized until the owner provides signing (docs/owner.md), and it says so.
+#    It promises no Android APK: android-sign may fail after this runs, so the APK is mentioned
+#    only as conditional on being listed (issue #853).
 # Uses no secrets and publishes nothing.
 # Usage: release-player-assets.sh <dir> <version>
 set -euo pipefail
@@ -52,8 +54,9 @@ yet, so macOS Gatekeeper and Windows SmartScreen warn when the app is opened.
 
 Check a download against \`SHA256SUMS\`: \`sha256sum -c SHA256SUMS --ignore-missing\`.
 
-The Android app, \`classbeat-player-android.apk\`, is signed and is attached with its own
-\`SHA256SUMS-android\` once it has been signed and verified.
+The signed Android app is attached separately, only after it has been signed and verified. If this
+release lists \`classbeat-player-android.apk\`, check it against \`SHA256SUMS-android\`; if it does
+not, this release has no Android app.
 NOTES
 
 echo "release-player-assets: wrote SHA256SUMS and RELEASE_NOTES.md for ${#want[@]} archives" >&2

@@ -3,11 +3,17 @@
 # section 9). Run by the android-sign job of .github/workflows/release-player.yml, only on a
 # publishing player-v tag; tested with fake tools by scripts/test-sign-android-apk.sh.
 # Usage: sign-android-apk.sh <unsigned.apk> <signed.apk>
-# Secrets, read from the environment only (never an argument, never printed):
-#   ANDROID_KEYSTORE_BASE64     the PKCS12 keystore, base64
+# Secrets, read from the environment only (never a script argument, never printed):
+#   ANDROID_KEYSTORE_BASE64     the PKCS12 keystore, base64; decoded through a pipe to a mode-600 file
 #   ANDROID_KEYSTORE_PASSWORD   its password (also the key's: PKCS12 has one), handed to apksigner
 #                               as `env:ANDROID_KEYSTORE_PASSWORD`, so the value is on no command line
-#   ANDROID_KEY_ALIAS           the key's alias
+#   ANDROID_KEY_ALIAS           the key's alias, the one secret on a command line (apksigner sign's
+#                               --ks-key-alias). apksigner reads passwords from env:, file: or stdin
+#                               but takes the alias only as a literal argument, with no env or file
+#                               form, and leaving it out works only for a one-key keystore. The alias
+#                               opens nothing without the keystore and its password, the argv is
+#                               visible only on this ephemeral runner, and this script never prints
+#                               it (no xtrace; scripts/test-sign-android-apk.sh checks every output).
 # Not secret:
 #   ANDROID_CERT_SHA256  the signing certificate's SHA-256, hex with or without colons; the signed
 #                        APK must carry exactly this certificate
