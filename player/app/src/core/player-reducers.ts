@@ -1,0 +1,199 @@
+// The shell's state: the open class, its clock and the last file error. Pure reducers; the
+// shell holds the state and passes a monotonic `now`. Reading a class file's text is in
+// player-state.ts (openText); this module takes a document already read, so a page whose CSP
+// forbids run-time code generation (the phone app, ADR 0011) can use the clock without the
+// schema checker that class-file.ts carries (issue #871).
+import type { Class } from "../../../../schema/generated/ts/class.d.ts";
+import { createClock, moveTo, positionAt, tick } from "./clock/clock.ts";
+import { applyToClock } from "./clock/apply.ts";
+import type { ClockState } from "./clock/clock.ts";
+import { planFrom } from "./clock/plan.ts";
+import type { ClockPlan } from "./clock/plan.ts";
+import { viewAt } from "./clock/view.ts";
+import type { ClockCommand } from "./commands.ts";
+import { goManual, handOver, pickOccurrence, relink, undo } from "./link/commands.ts";
+import type { CommandResult } from "./link/commands.ts";
+import { step } from "./link/follower.ts";
+import { linkPlanFrom } from "./link/plan.ts";
+import { confirmLoad, loadAnswered, loadAtStart, NO_LOAD, playlistNoticeAt } from "./link/playlist-load.ts";
+import type { PlaylistLoad } from "./link/playlist-load.ts";
+import type { LoadOutcome } from "./link/playlist.ts";
+import { initialLink } from "./link/types.ts";
+import type { LinkModel, LinkPlan, Observation } from "./link/types.ts";
+import type { NoReadingReason } from "./link/reader.ts";
+import { linkViewAt } from "./link/view.ts";
+import { controlLabels, routeWhileFollowing } from "./link/while-following.ts";
+import { patternSnapshotAt } from "./pattern-snapshot.ts";
+import { bandRoutes } from "./room/band-routes.ts";
+import type { Routed } from "./link/while-following.ts";
+import type { TransportAction } from "./link/transport.ts";
+import type { FileError, Snapshot } from "./snapshot.ts";
+
+export interface Loaded {
+  readonly fileName: string;
+  readonly doc: Class;
+  readonly plan: ClockPlan;
+  readonly clock: ClockState;
+  readonly linkPlan: LinkPlan;
+  readonly link: LinkModel;
+  /** False when no music reader exists: the clock is manual only. */
+  readonly following: boolean;
+  /** The reader said following cannot work on this computer; shown as the reason. */
+  readonly unavailable: boolean;
+  /** Whether Start loaded the class playlist (link/playlist-load.ts). */
+  readonly playlist: PlaylistLoad;
+}
+
+export interface PlayerState {
+  readonly loaded: Loaded | null;
+  readonly error: FileError | null;
+  readonly loadId: number;
+}
+
+export const INITIAL: PlayerState = { loaded: null, error: null, loadId: 0 };
+
+/**
+ * Opens a class document that has been read and checked. It replaces the open class with a fresh
+ * clock. `following` says a reader exists; with `followAtOnce` false the class opens on the manual
+ * clock until the instructor picks Follow.
+ */
+export function openDocument(s: PlayerState, fileName: string, doc: Class, now: number, following = false, followAtOnce = following): PlayerState {
+  const plan = planFrom(doc);
+  const linkPlan = linkPlanFrom(doc);
+  const link = initialLink(following && followAtOnce && !linkPlan.manualOnly);
+  const loaded: Loaded = { fileName, doc, plan, clock: createClock(plan.lengthMs, now), linkPlan, link, following, unavailable: false, playlist: NO_LOAD };
+  return { loaded, error: null, loadId: s.loadId + 1 };
+}
+
+/** A file that could not even be read: the open class is kept, the message recorded. */
+export function refuse(s: PlayerState, message: string): PlayerState {
+  return { ...s, error: { message, details: [] } };
+}
+
+/** A reader exists and the class has song timing: there is something to follow. */
+function canFollow(l: Loaded): boolean {
+  return l.following && !l.linkPlan.manualOnly;
+}
+
+function applyToLink(l: Loaded, cmd: ClockCommand, now: number): CommandResult | null {
+  switch (cmd.type) {
+    case "undo":
+      return undo(l.link, l.clock, now);
+    case "manual":
+      return goManual(l.link, l.clock);
+    case "follow":
+      return relink(l.link, l.clock, canFollow(l));
+    case "pick":
+      return pickOccurrence(l.link, l.clock, cmd.songIndex);
+    default:
+      return null;
+  }
+}
+
+function routeOf(l: Loaded, cmd: ClockCommand, canSend: boolean): Routed | null {
+  return routeWhileFollowing(l.link, canFollow(l), cmd, canSend);
+}
+
+/** The route a clock control takes now, as the presenter's path takes it (the live intake asks too). */
+export function routeFor(s: PlayerState, cmd: ClockCommand, canSend: boolean): Routed | null {
+  return s.loaded === null ? null : routeOf(s.loaded, cmd, canSend);
+}
+
+/**
+ * The music app command a clock control turns into while the clock follows the music, or null
+ * when the control is applied here. The shell sends it; the clock then follows the music's answer.
+ */
+export function transportFor(s: PlayerState, cmd: ClockCommand, canSend: boolean): TransportAction | null {
+  const r = routeFor(s, cmd, canSend);
+  return r?.kind === "transport" ? r.action : null;
+}
+
+/**
+ * `canSend` says a transport exists. While following, Start, Pause, Resume and Next are not applied to
+ * the clock (see `transportFor`), and the other moves (previous, plus or minus 5 s) switch the
+ * link to manual, announced, before they are applied.
+ */
+export function command(s: PlayerState, cmd: ClockCommand, now: number, canSend = false): PlayerState {
+  const l = s.loaded;
+  if (l === null) return s;
+  const viaLink = applyToLink(l, cmd, now);
+  if (viaLink) return { ...s, loaded: { ...l, link: viaLink.link, clock: viaLink.clock } };
+  const route = routeOf(l, cmd, canSend);
+  if (route?.kind === "transport" && route.alsoClock !== true) return s;
+  const link = route?.kind === "manual" ? handOver(l.link, l.clock, now).link : l.link;
+  return { ...s, loaded: { ...l, link, clock: applyToClock(l.clock, l.plan, cmd, now) } };
+}
+
+/**
+ * What Start asks the follower to load, decided before the command is applied (link/playlist-load.ts),
+ * and the state that records it. `canLoad` says the follower can load a playlist. The clock is not
+ * touched: the command then goes on exactly as before.
+ */
+export function playlistAtStart(s: PlayerState, cmd: ClockCommand, now: number, canSend: boolean, canLoad: boolean): { readonly state: PlayerState; readonly ask: string | null } {
+  const l = s.loaded;
+  if (l === null || cmd.type !== "start") return { state: s, ask: null };
+  const atZero = l.clock.status === "ready" && positionAt(l.clock, now) === 0;
+  const toMusic = transportFor(s, cmd, canSend) !== null;
+  const r = loadAtStart(l.playlist, { isStart: true, playlist: l.doc.music.spotify_playlist, atZero, toMusic, canLoad }, now);
+  return { state: r.load === l.playlist ? s : { ...s, loaded: { ...l, playlist: r.load } }, ask: r.ask };
+}
+
+/** The follower's answer to a load; ignored when another class was opened since (`loadId`). */
+export function answerLoad(s: PlayerState, loadId: number, outcome: LoadOutcome, now: number): PlayerState {
+  const l = s.loaded;
+  if (l === null || s.loadId !== loadId) return s;
+  return { ...s, loaded: { ...l, playlist: loadAnswered(l.playlist, outcome, now) } };
+}
+
+/** One tick: follow the music (when there is a reader) and advance the clock. */
+export function advance(s: PlayerState, now: number, obs: Observation | null = null): PlayerState {
+  const l = s.loaded;
+  if (l === null) return s;
+  const r = step(l.link, l.clock, l.linkPlan, obs, now);
+  const playlist = confirmLoad(l.playlist, l.linkPlan, obs, now);
+  return { ...s, loaded: { ...l, link: r.link, clock: tick(r.clock, now), playlist } };
+}
+
+/**
+ * The reader cannot work on this computer: the open class goes to the manual clock, the clock
+ * keeps going as it is, and following is no longer offered (the link is not `available`, and
+ * says it is `unavailable`, so the screen can give the reason).
+ */
+export function withoutReader(s: PlayerState): PlayerState {
+  const l = s.loaded;
+  if (l === null || !l.following) return s;
+  const manual = goManual(l.link, l.clock);
+  return { ...s, loaded: { ...l, following: false, unavailable: true, link: manual.link, clock: manual.clock } };
+}
+
+/**
+ * Mix playback: the running clock goes to the class time of the audio (ADR 0013 section 4, class
+ * time = audio position - offset_ms). A clock that is not running is left as it is.
+ */
+export function alignClock(s: PlayerState, classMs: number, now: number): PlayerState {
+  const l = s.loaded;
+  if (l === null || tick(l.clock, now).status !== "running") return s;
+  return { ...s, loaded: { ...l, clock: moveTo(l.clock, classMs, now) } };
+}
+
+/** True while the instructor follows the music: only then does the shell ask for readings. */
+export function isFollowing(s: PlayerState): boolean {
+  const l = s.loaded;
+  return l !== null && canFollow(l) && l.link.mode === "following";
+}
+
+export function snapshotOf(s: PlayerState, now: number, canSend = false, noReading: NoReadingReason | null = null): Snapshot {
+  const l = s.loaded;
+  const view = l ? viewAt(l.clock, l.plan, now) : null;
+  return {
+    loadId: s.loadId,
+    fileName: l?.fileName ?? null,
+    doc: l?.doc ?? null,
+    view,
+    link: l ? linkViewAt(l.link, l.clock, l.linkPlan, l.plan.lengthMs, now, canFollow(l), l.unavailable && !l.linkPlan.manualOnly, playlistNoticeAt(l.playlist, l.link, now), noReading) : null,
+    controls: l ? controlLabels(l.link, canFollow(l), canSend) : null,
+    band: l ? bandRoutes(l.link, canFollow(l), canSend) : null,
+    pattern: l && view ? patternSnapshotAt(l.plan, view.classMs) : null,
+    error: s.error,
+  };
+}

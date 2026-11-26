@@ -31,7 +31,8 @@ export const PAIR_AGAIN = "Pair again";
 export const UNPAIR = "Unpair this phone";
 
 const STATUSES = Object.keys(STATUS_WORDS) as Status[];
-const CLASS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** A class id as native code checks it (Calls.isClassId): a lower-case UUID. */
+export const CLASS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** The list from listClasses or syncNow, or null when the answer is not exactly that shape. */
 export function parseClassList(reply: unknown): ClassList | null {

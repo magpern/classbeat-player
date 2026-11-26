@@ -31,7 +31,9 @@ import org.classbeat.player.policy.NavigationPolicy
  * for it and no script interface is added, so the page has no native method to call. It has the
  * same settings (BridgeLockdown.harden: no network, no file or content access) and the same chrome
  * client (no permission), and the bundle is served by an asset loader that answers only what
- * [ExternalDisplayPolicy.mayLoad] allows. The page runs on the fake room (fake-room.ts) as on the phone.
+ * [ExternalDisplayPolicy.mayLoad] allows. The room screen opens a class only through the bridge, which
+ * this view lacks, so while a class runs on the phone it shows the idle stage (issue #871); showing
+ * the open class here is a later issue.
  */
 class RoomPresentation(
     private val activity: Activity,

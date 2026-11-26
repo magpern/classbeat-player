@@ -1,8 +1,9 @@
 // Instructor mode's start page, instructor.html (docs/design/app-modes.md): the mode tag, the class
 // list and the mode strip. Only the InstructorMode plugin is on the bridge while this page shows.
 // The list is the one native code keeps (issue #631): it holds the device token and makes every
-// backend call; the page only asks by intent. A class opens the room screen, room.html, which is
-// still on fakes (fake-room.ts); Back there returns here.
+// backend call; the page only asks by intent. A class opens the room screen with its id,
+// room.html?id=<id> (issue #871); End and Back there return here. A class that did not open comes
+// back here with a closed name in the fragment, and its plate shows above the list (room/plate-words.ts).
 import "../../../web/src/design/tokens.css";
 import "../../../web/src/companion/companion.css";
 import "../../../web/src/rider/rider.css";
@@ -12,6 +13,8 @@ import { instructorMode } from "./modes/bridge.ts";
 import { type ClassList, PAIR_AGAIN, parseClassList, STATUS_WORDS, UNPAIR } from "./modes/classes.ts";
 import { page, h1, key, modeTag, plate, strip } from "./modes/view.ts";
 import { INSTRUCTOR } from "./modes/words.ts";
+import { roomFor } from "./room/address.ts";
+import { plateFor } from "./room/plate-words.ts";
 
 const native = instructorMode();
 let busy = false;
@@ -26,6 +29,13 @@ const rows = el("div", { class: "rows" }, []);
 let shownPlate: HTMLElement | null = null;
 const s = strip(INSTRUCTOR.key, () => void once(() => native.askRiderMode()));
 document.body.append(page([modeTag(INSTRUCTOR.tag), h1(INSTRUCTOR.title), status], [rows, s.nav]));
+
+// The class that did not open, once: the fragment goes, so a reload shows the list alone.
+const notOpened = plateFor(window.location.hash);
+if (notOpened !== null) {
+  status.after(plate(notOpened.head, notOpened.detail));
+  history.replaceState(null, "", window.location.pathname);
+}
 
 // The saved list at once, then a sync now; each answer replaces the list.
 void native.listClasses().then(show, () => undefined).then(() => native.syncNow().then(show, () => undefined));
@@ -53,7 +63,7 @@ function render(list: ClassList): void {
   }
   rows.replaceChildren(
     ...list.classes.map((c) =>
-      key("key row", "open_class", c.title, () => window.location.assign("room.html"), [
+      key("key row", "open_class", c.title, () => window.location.assign(roomFor(c.id)), [
         el("span", { class: "kl", tier: "minor", lines: 2, text: c.title }),
         el("span", { class: "kh", tier: "label", lines: 1, text: c.facts }),
       ]),
