@@ -56,11 +56,15 @@ export function createController(now: () => number = () => performance.now(), re
   const enders: (() => void)[] = [];
   const openers: (() => void)[] = [];
   const watchers: ((s: Snapshot) => void)[] = [];
+  /** Brings the state up to the music's latest reading at t. */
+  const catchUp = (t: number): void => {
+    if (reader.unavailable?.() === true) state = withoutReader(state);
+    state = advance(state, t, reader.latest(t));
+  };
   const snapshot = (): Snapshot => {
     const t = now();
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
-    if (reader.unavailable?.() === true) state = withoutReader(state);
-    state = advance(state, t, reader.latest(t));
+    catchUp(t);
     const snap = snapshotOf(state, t, transport !== null, reader.reason?.() ?? null);
     if (snap.view?.status === "ended" && endedLoad !== snap.loadId) {
       endedLoad = snap.loadId;
@@ -111,8 +115,7 @@ export function createController(now: () => number = () => performance.now(), re
     snapshot,
     read() {
       const t = now();
-      if (reader.unavailable?.() === true) state = withoutReader(state);
-      state = advance(state, t, reader.latest(t));
+      catchUp(t);
       return { state, now: t, canSend: transport !== null };
     },
     open(fileName, text) {
@@ -132,6 +135,8 @@ export function createController(now: () => number = () => performance.now(), re
       moves += 1;
       const t = now();
       gate.expire(t);
+      // A press is routed on the state as it is now, not as the last snapshot left it (a lock since).
+      catchUp(t);
       // Start at class time 0 of a class with a playlist asks the follower to load it (playlist-load.ts).
       const start = playlistAtStart(state, cmd, t, transport !== null, loader !== null);
       state = start.state;
@@ -147,7 +152,9 @@ export function createController(now: () => number = () => performance.now(), re
     },
     music(action) {
       moves += 1;
-      gate.expire(now());
+      const t = now();
+      gate.expire(t);
+      catchUp(t);
       if (transport !== null && isFollowing(state)) gate.send(action);
       return snapshot();
     },
