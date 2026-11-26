@@ -40,22 +40,24 @@ final class DisplayTests: XCTestCase {
         XCTAssertEqual(webView.url?.path, ExternalDisplayPolicy.idlePage)
     }
 
-    /// The string a script gives back in `world`, or nil.
-    private func evaluate(_ webView: WKWebView, _ script: String, in world: WKContentWorld) -> String? {
+    /// The string a script in the page gives back, or nil. (The content-world variant comes from
+    /// WebKit's Swift overlay, which the simulator's test host cannot load.)
+    private func evaluate(_ webView: WKWebView, _ script: String) -> String? {
         var answer: String?
         var done = false
-        webView.evaluateJavaScript(script, in: nil, in: world) { result in
-            answer = try? result.get() as? String
+        webView.evaluateJavaScript(script) { value, _ in
+            answer = value as? String
             done = true
         }
         wait { done }
         return answer
     }
 
-    // WebKit puts `window.webkit` in a content world only while a script message handler of any
-    // name is registered for that world, so `typeof window.webkit` is "undefined" exactly when the
-    // page has no handler to post to, whatever it would be called. The next test shows the probe
-    // sees a handler of a name nobody could guess.
+    // WebKit puts `window.webkit` in the page only while a script message handler of any name is
+    // registered for it, so `typeof window.webkit` is "undefined" exactly when the page has no
+    // handler to post to, whatever it would be called. The next test shows the probe sees a
+    // handler of a name nobody could guess. A handler in another content world is kept out by the
+    // node guard (test/ios-rules.test.ts): only the factory's lock puts one on.
     private static let probe = """
     [typeof window.Capacitor,
      typeof window.webkit,
@@ -69,22 +71,19 @@ final class DisplayTests: XCTestCase {
         webView.navigationDelegate = navigation
         webView.uiDelegate = navigation
         try loadIdlePage(webView)
-        XCTAssertEqual(evaluate(webView, Self.probe, in: .page), "undefined,undefined,undefined,body")
-        XCTAssertEqual(evaluate(webView, Self.probe, in: .defaultClient), "undefined,undefined,undefined,body")
+        XCTAssertEqual(evaluate(webView, Self.probe), "undefined,undefined,undefined,body")
         withExtendedLifetime(navigation) {}
     }
 
     func testTheProbeSeesAScriptMessageHandlerOfAnyName() throws {
-        for world in [WKContentWorld.page, .defaultClient] {
-            let webView = WebViewFactory.makeDisplay(frame: .zero)
-            let navigation = DisplayNavigation(crashed: {})
-            webView.navigationDelegate = navigation
-            let name = "h" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-            webView.configuration.userContentController.add(IgnoredMessages(), contentWorld: world, name: name)
-            try loadIdlePage(webView)
-            XCTAssertEqual(evaluate(webView, Self.probe, in: world), "undefined,object,undefined,body", name)
-            withExtendedLifetime(navigation) {}
-        }
+        let webView = WebViewFactory.makeDisplay(frame: .zero)
+        let navigation = DisplayNavigation(crashed: {})
+        webView.navigationDelegate = navigation
+        let name = "h" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        webView.configuration.userContentController.add(IgnoredMessages(), name: name)
+        try loadIdlePage(webView)
+        XCTAssertEqual(evaluate(webView, Self.probe), "undefined,object,undefined,body", name)
+        withExtendedLifetime(navigation) {}
     }
 
     func testEveryNavigationIsDecidedByThePolicyAndNoLinkOrFormIsFollowed() {
