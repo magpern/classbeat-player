@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { DISPLAY_EVENTS, watchDisplays } from "../../src/main/live/displays.ts";
 import type { DisplayEvent } from "../../src/main/live/displays.ts";
 import { CONTROL_CODE, started } from "./live-relay.ts";
+import { forbids, type Mutation, mutationGaps, oldView, slashCode } from "./rule-sources.ts";
 
 function fakeScreen(): { on(event: DisplayEvent, listener: () => void): void; emit(event: string): void } {
   const listeners = new Map<string, (() => void)[]>();
@@ -48,9 +49,12 @@ test("display-metrics-changed with the displays mirrored: the control code ends 
 });
 
 test("setup.ts watches Electron's screen through watchDisplays, into the live service's check", () => {
-  const setup = readFileSync(new URL("../../src/main/live/setup.ts", import.meta.url), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
-  assert.match(setup, /watchDisplays\(screen,\s*\(\)\s*=>\s*live\.displaysChanged\(\)\)/);
-  assert.doesNotMatch(setup, /screen\.on\(/, "every display event goes through watchDisplays");
+  const raw = readFileSync(new URL("../../src/main/live/setup.ts", import.meta.url), "utf8");
+  assert.match(slashCode(raw), /watchDisplays\(screen,\s*\(\)\s*=>\s*live\.displaysChanged\(\)\)/);
+  // In two views (rule-sources.ts, issue #861): a "//" in a string hides no listener from it.
+  const listens = forbids(/screen\.on\(/, slashCode);
+  assert.ok(!listens("setup.ts", raw), "every display event goes through watchDisplays");
+  const A = 'import { screen } from "electron";';
+  const table: readonly Mutation[] = [["listens", "setup.ts", A, `${A} const s = "//"; screen.on("display-removed", f);`, true]];
+  assert.deepEqual(mutationGaps(table, new Map([["listens", listens]]), () => raw, oldView(slashCode)), []);
 });

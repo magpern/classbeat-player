@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLOSE_ABNORMAL } from "../../src/core/live/session-model.ts";
 import { webSocketConnect } from "../../src/main/live/live-socket.ts";
+import { forbids, lineCode, type Mutation, mutationGaps, oldView } from "./rule-sources.ts";
 
 type Fn = (e: { data?: unknown; code?: number }) => void;
 class FakeWs {
@@ -98,7 +99,12 @@ test("a close without a code is told with the code it is handed: 1006 has one de
   assert.deepEqual(events, [4999, 4998]);
   // The socket file names no close code of its own and imports nothing; setup.ts hands it core's.
   const src = join(import.meta.dirname, "..", "..", "src", "main", "live");
-  const socket = readFileSync(join(src, "live-socket.ts"), "utf8").replace(/\/\/.*$/gm, "");
-  assert.doesNotMatch(socket, /\b1006\b|^import\b/m);
+  // In two views (rule-sources.ts, issue #861): a "//" or "/*" in a string hides nothing from it.
+  const socket = readFileSync(join(src, "live-socket.ts"), "utf8");
+  const own = forbids(/\b1006\b|^import\b/m, lineCode);
+  assert.ok(!own("live-socket.ts", socket));
+  const A = "const runtimeSocket: OpenSocket = (url) => new WebSocket(url);";
+  const table: readonly Mutation[] = [["own", "live-socket.ts", A, `${A} const s = "//"; const abnormal = 1006;`, true]];
+  assert.deepEqual(mutationGaps(table, new Map([["own", own]]), () => socket, oldView(lineCode)), []);
   assert.match(readFileSync(join(src, "setup.ts"), "utf8"), /webSocketConnect\(CLOSE_ABNORMAL\)/);
 });

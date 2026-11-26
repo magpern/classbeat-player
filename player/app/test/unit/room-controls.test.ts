@@ -20,10 +20,10 @@ import type { Snapshot } from "../../src/core/snapshot.ts";
 import type { IpcBus } from "../../src/main/ipc-handlers.ts";
 import { refusalLine, registerRoomHandlers } from "../../src/main/room/room-handlers.ts";
 import { REPO } from "./fixtures.ts";
+import { type Check, differs, forbids, type Mutation, mutationGaps, oldView, slashCode } from "./rule-sources.ts";
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (...p: string[]): string => readFileSync(join(APP, ...p), "utf8");
-const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 const ACCEPTED: readonly ClockCommand[] = [
   { type: "start" },
@@ -204,11 +204,22 @@ test("no control code, token or controller detail reaches the room window on any
 
 const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "main/room/room-window.ts", "core/room/remote.ts", "core/room/commands.ts", "core/room/frame.ts", "core/room/band-routes.ts", "core/room/band-model.ts", "core/room/band-view.ts", "core/room/keys.ts", "core/room/qr.ts", "core/room/qr-ecc.ts", "renderer/room.ts", "renderer/room-band.ts", "renderer/room-qr.ts", "core/live/room-slot.ts", "main/live/room-remote.ts"];
 
+// Each check reads two views (rule-sources.ts, issue #861): every comment out as before, and the file
+// with only its real comments out, so a "//" or "/*" in a string hides nothing from it.
+const groups = (re: RegExp) => (v: string): (string | undefined)[] => [...v.matchAll(re)].map((m) => m[1]);
+const C = {
+  names: forbids(/control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, slashCode),
+  pushes: differs(groups(/\bpush\(([^)]*\))\)/g), ["CH_ROOM_UPDATE, frame(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)", "CH_ROOM_MIX, mixCueOf(c)"], slashCode),
+  sends: differs(groups(/\.send\((\w+)/g), ["channel"], slashCode),
+  plays: forbids(/\bnew\s+Audio\b|AudioContext|\.play\(\)|writeValue|navigator\.bluetooth/, slashCode),
+} satisfies Record<string, Check>;
+const source = (p: string): string => read("src", ...p.split("/"));
+const WINDOW = "main/room/room-window.ts";
+
 test("the room's sources name no control code, token or controller, and each push goes through its filter", () => {
-  for (const p of ROOM_SOURCES) assert.doesNotMatch(code(read("src", ...p.split("/"))), /control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, p);
-  const win = code(read("src", "main", "room", "room-window.ts"));
-  assert.deepEqual([...win.matchAll(/\bpush\(([^)]*\))\)/g)].map((m) => m[1]), ["CH_ROOM_UPDATE, frame(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)", "CH_ROOM_MIX, mixCueOf(c)"]);
-  assert.deepEqual([...win.matchAll(/\.send\((\w+)/g)].map((m) => m[1]), ["channel"]);
+  for (const p of ROOM_SOURCES) assert.ok(!C.names(p, source(p)), p);
+  assert.ok(!C.pushes(WINDOW, source(WINDOW)));
+  assert.ok(!C.sends(WINDOW, source(WINDOW)));
 });
 
 test("no room command is an equipment command, and none plays audio", () => {
@@ -217,5 +228,21 @@ test("no room command is an equipment command, and none plays audio", () => {
     .map((l) => l.trim())
     .filter((l) => l !== "" && !l.startsWith("#"));
   for (const t of ROOM_COMMAND_TYPES) assert.ok(!words.includes(t), t);
-  for (const p of ROOM_SOURCES) assert.doesNotMatch(code(read("src", ...p.split("/"))), /\bnew\s+Audio\b|AudioContext|\.play\(\)|writeValue|navigator\.bluetooth/, p);
+  for (const p of ROOM_SOURCES) assert.ok(!C.plays(p, source(p)), p);
+});
+
+test('each check on the room\'s sources catches code a "//" in a string hides (issue #861)', () => {
+  const W = 'import { BrowserWindow, screen } from "electron";';
+  const B = 'import * as M from "../core/room/band-model.ts";';
+  const hide = (anchor: string, after: string): string => `${anchor} const s = "//"; ${after}`;
+  const table: readonly Mutation[] = [
+    ["names", WINDOW, W, hide(W, "send(hostToken);"), true],
+    ["names", "renderer/room-band.ts", B, hide(B, "show(controlCode);"), true],
+    ["pushes", WINDOW, W, hide(W, "push(CH_ROOM_UPDATE, s));"), true],
+    ["sends", WINDOW, W, hide(W, "w.webContents.send(CH_ROOM_UPDATE, s);"), true],
+    ["plays", "renderer/room-band.ts", B, hide(B, "void el.play();"), true],
+    ["plays", WINDOW, W, hide(W, "c.writeValue(b);"), true],
+  ];
+  assert.deepEqual(mutationGaps(table, new Map(Object.entries(C)), source, oldView(slashCode)), []);
+  assert.deepEqual([...new Set(table.map(([c]) => c))].sort(), Object.keys(C).sort());
 });

@@ -21,6 +21,7 @@ import { allowedActions } from "../../src/core/live/allowed.ts";
 import { companionStateOf } from "../../src/core/live/companion-state.ts";
 import { intake } from "../../src/core/live/intake.ts";
 import { REPO } from "./fixtures.ts";
+import { type Check, forbids, type Mutation, mutationGaps, oldView, slashCode, withSource } from "./rule-sources.ts";
 import { CLOCK_STATUSES, forwarded, id, LINK_STATES, liveSchema, loaded, NOW, published, RUN, undoable, validCompanionState } from "./live-rig.ts";
 
 interface Case {
@@ -170,7 +171,7 @@ test("the phone's actions are exactly the contract's, in every live schema that 
 });
 
 const LIVE_SRC = join(REPO, "player", "app", "src", "core", "live");
-const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+const code = slashCode;
 const words = (t: string): string[] =>
   t
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -183,13 +184,25 @@ const EQUIPMENT = readFileSync(join(REPO, "schema", "live", "guard", "equipment-
   .map((l) => l.trim())
   .filter((l) => l.length > 0 && !l.startsWith("#"));
 const liveFiles = readdirSync(LIVE_SRC).filter((n) => n.endsWith(".ts"));
+const liveText = (n: string): string => readFileSync(join(LIVE_SRC, n), "utf8");
+// Each check reads two views (rule-sources.ts, issue #861): `slashCode`, as before, and the file with
+// only its real comments out, so a "//" or "/*" in a string hides nothing from it.
+const equipmentIn = (v: string): string[] => words(v).filter((w) => EQUIPMENT.includes(w));
+const allowedImport = (p: string | undefined): boolean =>
+  /^\.\/[a-z-]+\.ts$/.test(p ?? "") || /^\.\.\/(?!\.\.)[a-z/-]+\.ts$/.test(p ?? "") || /schema\/generated\/ts\/(class|live-[a-z-]+)\.d\.ts$/.test(p ?? "");
+const importsIn = (v: string): (string | undefined)[] => [...v.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+const L = {
+  equipment: ((p, t, views = withSource(code, p)) => views(t).some((v) => equipmentIn(v).length > 0)) as Check,
+  imports: ((p, t, views = withSource(code, p)) => views(t).some((v) => !importsIn(v).every(allowedImport))) as Check,
+  transport: forbids(/\bMusicTransport\b|\.send\(/, code),
+} satisfies Record<string, Check>;
 
 test("no equipment word (schema/live/guard/equipment-words.txt) as a whole word in the live modules' code", () => {
   assert.ok(EQUIPMENT.includes("resistance") && EQUIPMENT.length >= 10);
   assert.ok(liveFiles.length >= 5);
   for (const n of liveFiles) {
-    const hits = words(code(readFileSync(join(LIVE_SRC, n), "utf8"))).filter((w) => EQUIPMENT.includes(w));
-    assert.deepEqual(hits, [], n);
+    assert.deepEqual(equipmentIn(code(liveText(n))), [], n);
+    assert.ok(!L.equipment(n, liveText(n)), n);
   }
 });
 
@@ -200,8 +213,20 @@ test("the equipment guard catches what it looks for", () => {
 
 test("the live modules reach nothing but the core and the contract's types", () => {
   for (const n of liveFiles) {
-    const imports = [...code(readFileSync(join(LIVE_SRC, n), "utf8")).matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
-    for (const p of imports) assert.ok(/^\.\/[a-z-]+\.ts$/.test(p) || /^\.\.\/(?!\.\.)[a-z/-]+\.ts$/.test(p) || /schema\/generated\/ts\/(class|live-[a-z-]+)\.d\.ts$/.test(p), `${n}: ${p}`);
-    assert.doesNotMatch(code(readFileSync(join(LIVE_SRC, n), "utf8")), /\bMusicTransport\b|\.send\(/, n);
+    for (const p of importsIn(code(liveText(n)))) assert.ok(allowedImport(p), `${n}: ${p}`);
+    assert.ok(!L.imports(n, liveText(n)), n);
+    assert.ok(!L.transport(n, liveText(n)), n);
   }
+});
+
+test('each check on the live modules catches code a "//" in a string hides (issue #861)', () => {
+  const A = 'const url = new URL("/api/live/ws", origin);';
+  const hide = (after: string): string => `${A} const s = "//"; ${after}`;
+  const table: readonly Mutation[] = [
+    ["equipment", "host-wire.ts", A, hide("setResistance(x);"), true],
+    ["imports", "host-wire.ts", A, hide('import { readFileSync } from "node:fs";'), true],
+    ["transport", "host-wire.ts", A, hide("t.send(x);"), true],
+  ];
+  assert.deepEqual(mutationGaps(table, new Map(Object.entries(L)), liveText, oldView(code)), []);
+  assert.deepEqual([...new Set(table.map(([c]) => c))].sort(), Object.keys(L).sort());
 });
