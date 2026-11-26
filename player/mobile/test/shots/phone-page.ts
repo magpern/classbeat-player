@@ -59,11 +59,13 @@ export interface PhonePage {
 }
 
 /** Opens [path] of the built site (with its query and fragment) at [size], time paused. */
-export async function openPhonePage(browser: Browser, dir: string, path: string, size: readonly [number, number], answers: Answers): Promise<PhonePage> {
+export async function openPhonePage(browser: Browser, dir: string, path: string, size: readonly [number, number], answers: Answers, platform: "web" | "ios" = "web"): Promise<PhonePage> {
   const context = await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: 1, hasTouch: true });
   // Code serialised into the page by `evaluate` may be wrapped by the transpiler's `__name` helper.
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(`window.__answers = ${JSON.stringify(answers)};`);
+  // Capacitor reads the platform from the web view: WKWebView's message handler is what says iOS.
+  if (platform === "ios") await context.addInitScript("window.webkit = { messageHandlers: { bridge: { postMessage() {} } } };");
   await context.addInitScript(BRIDGE);
   const page = await context.newPage();
   await page.clock.install({ time: new Date("2026-11-26T18:00:00Z") });

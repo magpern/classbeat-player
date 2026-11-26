@@ -482,9 +482,81 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # The iOS app (player/mobile/ios/, ADR 0016 section 9, #893). The check job runs on a cheap Linux runner
+  # and only says whether player/mobile/ios/ exists, so while it does not the macOS job is skipped without
+  # costing macOS minutes, and this can merge before the project. The macOS job runs for the same paths as
+  # `mobile` (player/mobile/ and workflow changes). Runner image and Xcode are pinned; Xcode 16.4 ships the
+  # iOS 18.5 simulator runtime, and the simulator is pinned by name and OS. Simulator only: CODE_SIGNING_ALLOWED=NO,
+  # no secret, no Apple credential, no device, no signed build, no artifact. Only npm and CocoaPods
+  # downloads happen during setup; no test touches the network.
+  ios-check:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      present: ${{ steps.present.outputs.present }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - id: present
+        run: |
+          if [ -d player/mobile/ios ]; then
+            echo "present=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "present=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::player/mobile/ios/ does not exist yet; the iOS build is skipped (ADR 0016)."
+          fi
+
+  ios:
+    needs: [changes, ios-check]
+    if: needs.changes.outputs.mobile == 'true' && needs.ios-check.outputs.present == 'true'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      XCODE_APP: /Applications/Xcode_16.4.app
+      SIM_NAME: iPhone 16
+      SIM_OS: "18.5"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: player/mobile/package-lock.json
+      - name: Select the pinned Xcode
+        run: |
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+      - name: Install and build the bundled page
+        working-directory: player/mobile
+        run: |
+          npm ci
+          npm run build
+      - name: Install CocoaPods dependencies
+        working-directory: player/mobile/ios/App
+        run: pod install
+      - name: Build and test on the pinned simulator (no signing)
+        working-directory: player/mobile
+        env:
+          IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available "iOS $SIM_OS" | grep -F "$SIM_NAME" >/dev/null \
+            || { echo "simulator '$SIM_NAME' on iOS $SIM_OS is not on the runner" >&2; exit 1; }
+          xcodebuild test -workspace ios/App/App.xcworkspace -scheme App \
+            -derivedDataPath "$IOS_DERIVED_DATA" \
+            -destination "platform=iOS Simulator,name=$SIM_NAME,OS=$SIM_OS" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tail -n 200
+      - name: Verify the built app (plists, entitlements, project)
+        working-directory: player/mobile
+        env:
+          IOS_DERIVED_DATA: ${{ runner.temp }}/ios-derived-data
+        run: npm run --if-present ios:verify
+
   # The single required check. Add lane jobs to `needs` as they appear.
   ci:
-    needs: [changes, repo-checks, node-packages, scene-shots, desktop-app, web, web-specs, schema, backend, android, mobile]
+    needs: [changes, repo-checks, node-packages, scene-shots, desktop-app, web, web-specs, schema, backend, android, mobile, ios-check, ios]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

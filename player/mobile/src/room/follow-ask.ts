@@ -4,7 +4,7 @@
 // access is checked again: given, the sheet closes by itself and following goes on; still off, the
 // sheet says how to turn it on. "Not now" (or Back) closes the sheet and the clock stays manual.
 // No DOM and no bridge here: the sheet, the access check and the app's return come in as deps.
-import { parseAccess } from "../follow/answers.ts";
+import { parseAccess, parseAccessUnavailable } from "../follow/answers.ts";
 
 export type SheetKind = "ask" | "still-off";
 
@@ -26,7 +26,7 @@ export interface FollowAskDeps {
 
 export interface FollowAsk {
   /** Follow pressed: following goes on through [turnOn] once access is there. */
-  press(turnOn: () => void): void;
+  press(turnOn: () => void, noReader?: () => void): void;
   /** The sheet's "Open the setting". */
   openSetting(): void;
   /** The sheet's "Not now: manual clock", or Back. */
@@ -41,13 +41,15 @@ export function createFollowAsk(deps: FollowAskDeps): FollowAsk {
   let checking = false;
 
   // A failed or garbled answer counts as no access: the sheet asks, nothing is turned on.
-  const check = (then: (granted: boolean) => void): void => {
+  // `none` runs instead of [then] when native code says there is no reader at all.
+  const check = (then: (granted: boolean) => void, none?: () => void): void => {
     if (checking) return;
     checking = true;
     deps.access().then(
       (reply) => {
         checking = false;
-        then(parseAccess(reply));
+        if (parseAccessUnavailable(reply) && none !== undefined) none();
+        else then(parseAccess(reply));
       },
       () => {
         checking = false;
@@ -68,13 +70,16 @@ export function createFollowAsk(deps: FollowAskDeps): FollowAsk {
   });
 
   return {
-    press(on) {
+    press(on, noReader) {
       if (deps.sheet.isOpen()) return;
       turnOn = on;
-      check((granted) => {
-        if (granted) on();
-        else deps.sheet.show("ask");
-      });
+      check(
+        (granted) => {
+          if (granted) on();
+          else deps.sheet.show("ask");
+        },
+        noReader,
+      );
     },
     openSetting() {
       if (!deps.sheet.isOpen()) return;

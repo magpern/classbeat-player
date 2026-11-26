@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   observationOf,
   parseAccess,
+  parseAccessUnavailable,
   parseCommand,
   parseFollow,
   parseReading,
@@ -197,4 +198,22 @@ test("access taken back while following stops the reader, which may start again 
   assert.equal(reader.unavailable?.(), false);
   reader.setActive?.(true);
   assert.equal(n.calls.filter((c) => c === "follow").length, 2);
+});
+
+test("followAccess may say there is no reader at all: only the exact answer, and it still reads as no access", () => {
+  const none = { granted: false, state: "unavailable" };
+  assert.equal(parseAccessUnavailable(none), true);
+  assert.equal(parseAccess(none), false);
+  for (const b of [
+    undefined,
+    { granted: true },
+    { granted: false },
+    { granted: true, state: "unavailable" },
+    { granted: false, state: "noAccess" },
+    { granted: false, state: "Unavailable" },
+    { granted: false, state: "unavailable", x: 1 },
+    { state: "unavailable" },
+    "unavailable",
+  ])
+    assert.equal(parseAccessUnavailable(b), false);
 });

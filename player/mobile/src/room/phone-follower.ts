@@ -29,5 +29,5 @@ export function phoneFollower(source: RoomFollowSource, win: Window, deps: Phone
       }),
   });
   const asked = ask;
-  return { reader, press: (turnOn) => asked.press(turnOn) };
+  return { reader, press: (turnOn, noReader) => asked.press(turnOn, noReader) };
 }
