@@ -2,7 +2,6 @@
 // (follow/android-reader.ts) over the narrowed follow intents (follow-source.ts), and Follow's access
 // ask (follow-ask.ts) with its sheet (follow-sheet.ts). Access is checked only when Follow is pressed;
 // the app's return from Android's setting is the page becoming visible again.
-import { parseAccessUnavailable } from "../follow/answers.ts";
 import { createAndroidReader } from "../follow/android-reader.ts";
 import type { RoomFollower } from "./clock-room.ts";
 import { createFollowAsk } from "./follow-ask.ts";
@@ -30,10 +29,5 @@ export function phoneFollower(source: RoomFollowSource, win: Window, deps: Phone
       }),
   });
   const asked = ask;
-  return {
-    reader,
-    press: (turnOn) => asked.press(turnOn),
-    // One read-only question as the room opens, so Follow is never offered where there is no reader.
-    noReader: () => source.followAccess().then(parseAccessUnavailable, () => false),
-  };
+  return { reader, press: (turnOn, noReader) => asked.press(turnOn, noReader) };
 }

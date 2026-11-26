@@ -4,7 +4,10 @@
 // room screen opens (issue #871). No intent takes or answers the rider token: native code holds it. Only the current mode's plugin is on the bridge, and
 // native code checks every call again, so a call from the wrong mode is refused there, not here.
 // Nothing here selects, changes or unlocks a mode: the page asks, and native code decides.
-import { registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+/** "ios", "android" or "web": which web view this is, no native call (room/reader-platform.ts). */
+export const platformName = (): string => Capacitor.getPlatform();
 
 export interface RiderModePlugin {
   /** "pair" on an unpaired phone, "lock" on a paired one: the strip's lead line. */

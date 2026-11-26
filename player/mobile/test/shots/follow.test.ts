@@ -164,13 +164,13 @@ for (const size of [[390, 844], [844, 390]] as const) {
   });
 }
 
-// A platform with no music reader (ADR 0016, section 5; issue #899): followAccess says `unavailable`,
-// so the band has no Follow key, no sheet is ever mounted open and `follow` is never called.
+// A platform with no music reader (ADR 0016, section 5; issue #899): on iOS (the web view says so)
+// the band has no Follow key from the first frame, no sheet and no native music call at all.
 for (const size of [[390, 844], [844, 390]] as const) {
   const [w, h] = size;
   test(`${w}x${h}: no reader on this platform: the manual clock, no Follow`, async () => {
-    const answers = { listClasses: LIST, syncNow: LIST, getClass: { document: doc }, followAccess: { granted: false, state: "unavailable" } };
-    const p = await openPhonePage(browser, site.dir, "instructor.html", size, answers);
+    const answers = { listClasses: LIST, syncNow: LIST, getClass: { document: doc } };
+    const p = await openPhonePage(browser, site.dir, "instructor.html", size, answers, "ios");
     try {
       await p.page.click(".row");
       await p.page.waitForSelector(".room");
@@ -187,7 +187,8 @@ for (const size of [[390, 844], [844, 390]] as const) {
       assert.equal((await frameOf(p.page)).view?.status, "running");
       assert.equal(await sheetTitle(p.page), null);
       const asked = (await p.native()).map(([, m]) => String(m));
-      assert.ok(!asked.includes("follow") && !asked.includes("reading"), asked.join());
+      assert.deepEqual(asked.filter((m) => /follow|Follow|reading|send/.test(m)), [], asked.join());
+      assert.equal(await p.page.locator(".follow-sheet").count(), 0);
       assert.deepEqual(p.errors, []);
       assert.deepEqual(p.external, []);
     } finally {
