@@ -31,9 +31,9 @@ A new value of `music.source` is more than an optional field, so this ADR amends
 section 7 (section 8 below): **a minor version may also add a value to `music.source`.** A reader
 that meets a `music.source` value it does not know lists the class with the same plain message as
 for an unknown major, "This class needs a newer version of the player", and keeps playing its
-other classes. The contract pull request makes the player's reader do that: today the schema's
-enum and the class list's `SOURCES` (`player/app/src/core/list/class-list.ts`) refuse the value
-and the class is not listed. A player built before that change does not list a class with source
+other classes. A player-lane pull request makes the player's reader do that, before the
+contract pull request merges: today the schema's enum and the class list's `SOURCES`
+(`player/app/src/core/sync/class-list.ts`) refuse the value and the class is not listed. A player built before that change does not list a class with source
 `local`.
 
 A contract pull request then adds, in format version `1.4`:
@@ -64,7 +64,8 @@ The instructor shows the player where the files are, once per device:
   date are never used to match.
 - **Remembering.** Per classbeat-player account, the player keeps a local index `sha256 → (path,
   size, modification time)` in its app data folder, beside the class cache and wiped with it.
-  The chosen folders are remembered too, so a new class's files are found without asking again.
+  The chosen folders are kept in the same index store, so a new class's files are found without
+  asking again.
 - **Checking before playing.** Before a class starts, each song's indexed file is checked: same
   size and modification time as indexed, or else hashed again. A file that changed or went
   missing is dropped from the index and its song counts as missing.
@@ -140,11 +141,12 @@ decided here).
 
 | # | Lane | What | Security-critical | Depends on |
 |---|---|---|---|---|
-| 1 | contract | Format 1.4: source `local`, `ids.local_file`, the semantic rules, generated types, converter fixtures; the player's reader lists an unknown source as "needs a newer version" | No (rule-sensitive) | this ADR |
-| 2 | docs | Design spec for the instructor's "music files" state: found, missing, finding | No | this ADR |
-| 3 | player | The local file index, folder picking and `player:music-files-find` | **Yes** (bridge to native helpers) | 1 |
-| 4 | player | Local playback: `cbp-local:`, per-song play ids, the request filter and CSP, the two `<audio>` elements, the timing, the `local` music link, the hardening tests | **Yes** (shell hardening) | 1, 3 |
-| 5 | player | The instructor's "music files" state on screen | No (user-visible) | 2, 3 |
+| 1 | player | The class list's reader lists a class with an unknown `music.source` as "This class needs a newer version of the player" | No | this ADR |
+| 2 | contract | Format 1.4: source `local`, `ids.local_file`, the semantic rules, generated types, converter fixtures | No (rule-sensitive) | 1 |
+| 3 | docs | Design spec for the instructor's "music files" state: found, missing, finding | No | this ADR |
+| 4 | player | The local file index, folder picking and `player:music-files-find` | **Yes** (bridge to native helpers) | 2 |
+| 5 | player | Local playback: `cbp-local:`, per-song play ids, the request filter and CSP, the two `<audio>` elements, the timing, the `local` music link, the hardening tests | **Yes** (shell hardening) | 2, 4 |
+| 6 | player | The instructor's "music files" state on screen | No (user-visible) | 3, 4 |
 
 Every one of them is rule-sensitive (music handling) and gets a top-tier Reviewer.
 
@@ -168,16 +170,16 @@ The audio of a local file reaches only the room window's `<audio>` elements thro
   the phone apps may need a copy and decide that in their own issue.
 - **Match by file name or tags.** Breaks when a file is renamed or retagged, and can play the wrong
   song. Rejected for the SHA-256.
-- **A major version 2.0 for source `local`.** Old players would show "needs a newer version",
-  but the backend would have to convert every stored class to the previous major, and a local
-  class cannot be converted. Rejected for the amendment in section 1.
+- **A major version 2.0 for source `local`.** The backend would convert every stored class up to
+  the new major when it serves it, so every older player would then refuse every class, not only
+  the local ones. Rejected for the amendment in section 1.
 - **Upload the files to our backend.** Breaks rule 3 (no class audio from our server). Rejected.
 - **Play what is found and leave gaps.** A class that drops songs at random is worse than the
   manual clock. Rejected for all or nothing.
 
 ## Consequences
 
-- Five issues (section 6); two are security-critical.
+- Six issues (section 6); two are security-critical.
 - classbeat, a separate product, needs its own work to design a class from local files (choosing
   the files in the browser, measuring their length, SHA-256 and beats there) and to send source
   `local`. That is planned in classbeat's repository, not here.
