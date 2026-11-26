@@ -165,4 +165,75 @@ final class PairingRig {
         toWaiting()
         backend.ok(FakeBackend.tokenBody(token))
     }
+
+    /// The pairing screen's logic on this rig's service.
+    func ui(_ screens: FakePairingScreens, _ ticker: FakeTicker = FakeTicker()) -> PairingUi {
+        PairingUi(service: service, ports: ports, screens: screens, ticker: ticker)
+    }
+}
+
+/// The pairing screen in memory (issue #925): every screen shown, and the keys pressed by label.
+final class FakePairingScreens: PairingScreens {
+    var shown: [PairingScreenModel.Screen] = []
+    var current: PairingScreenModel.Screen?
+    var shows = 0
+    var retexts = 0
+    var hides = 0
+    private var pressing: ((PairingScreenModel.Action) -> Void)?
+
+    func show(_ screen: PairingScreenModel.Screen, press: @escaping (PairingScreenModel.Action) -> Void) {
+        shows += 1
+        shown.append(screen)
+        current = screen
+        pressing = press
+    }
+
+    func retext(_ screen: PairingScreenModel.Screen) -> Bool {
+        guard current != nil else { return false }
+        retexts += 1
+        shown.append(screen)
+        current = screen
+        return true
+    }
+
+    func hide() {
+        hides += 1
+        current = nil
+        pressing = nil
+    }
+
+    /// Every word the screen shows now.
+    var words: [String] { (current?.lines.map { $0.words } ?? []) + (current?.keys.map { $0.label } ?? []) }
+
+    /// Every word any screen showed.
+    var everyWord: [String] { shown.flatMap { $0.lines.map { $0.words } + $0.keys.map { $0.label } } }
+
+    /// Presses the key with `label`; fails the test when the screen has none.
+    func press(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
+        guard let key = current?.keys.first(where: { $0.label == label }) else {
+            return XCTFail("no key \(label) in \(words)", file: file, line: line)
+        }
+        pressing?(key.action)
+    }
+
+    /// The edge swipe: "Cancel".
+    func swipe() { pressing?(.cancel) }
+}
+
+final class FakeTicker: Ticker {
+    var tick: (() -> Void)?
+    var starts = 0
+    var stops = 0
+
+    var running: Bool { tick != nil }
+
+    func start(_ tick: @escaping () -> Void) {
+        starts += 1
+        self.tick = tick
+    }
+
+    func stop() {
+        stops += 1
+        tick = nil
+    }
 }

@@ -26,6 +26,7 @@ final class ModeControllerTests: XCTestCase {
         var log: [String] = []
         var stay: (() -> Void)?
         var toRider: (() -> Void)?
+        var unpair: (() -> Void)?
 
         func noLock(stay: @escaping () -> Void) {
             log.append("noLock")
@@ -36,6 +37,12 @@ final class ModeControllerTests: XCTestCase {
             log.append("question")
             self.stay = stay
             toRider = `switch`
+        }
+
+        func unpairQuestion(stay: @escaping () -> Void, unpair: @escaping () -> Void) {
+            log.append("unpair")
+            self.stay = stay
+            self.unpair = unpair
         }
 
         func switching(rider: Bool) { log.append(rider ? "switching rider" : "switching instructor") }
@@ -83,6 +90,8 @@ final class ModeControllerTests: XCTestCase {
     private var stops: [[String]] = []
     private var tokens: [String] = []
     private var controller: ModeController!
+    private var rig: PairingRig!
+    private var pairingScreens: FakePairingScreens!
 
     override func setUp() {
         super.setUp()
@@ -93,10 +102,13 @@ final class ModeControllerTests: XCTestCase {
         store = MemoryStore()
         stops = []
         tokens = []
+        rig = PairingRig()
+        pairingScreens = FakePairingScreens()
         controller = ModeController(
             lock: lock,
             screens: screens,
             loader: loader,
+            pairing: rig.ui(pairingScreens),
             secrets: { [unowned self] in self.tokens },
             stop: { [unowned self] failed in self.stops.append(failed) }
         )
@@ -291,9 +303,89 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertEqual(call(.rider, "instructorWay").answers.first?["way"] as? String, "lock")
         device.paired = false
         XCTAssertEqual(call(.rider, "instructorWay").answers.first?["way"] as? String, "pair")
+        // The strip's key opens the native pairing screen, which asks the server for a code.
         let ask = call(.rider, "askInstructorMode")
-        XCTAssertEqual(ask.result, "unpaired")
+        XCTAssertNil(ask.result)
+        XCTAssertEqual(pairingScreens.shows, 1)
+        XCTAssertEqual(rig.backend.requests.count, 1)
         XCTAssertEqual(lock.asks, 0)
+        pairingScreens.press("Cancel")
+        XCTAssertEqual(ask.result, "stayed")
+        XCTAssertEqual(controller.current, .rider)
+    }
+
+    /// Issue #925: a pairing made from rider mode goes on to the screen lock, as the key now would.
+    func testAPairingMadeFromRiderModeGoesOnToTheLock() {
+        device.paired = false
+        startInRider()
+        let ask = call(.rider, "askInstructorMode")
+        rig.backend.ok(FakeBackend.startBody())
+        rig.ports.fireNext()
+        rig.backend.ok(FakeBackend.tokenBody())
+        device.paired = true
+        XCTAssertEqual(lock.asks, 0, "nothing is asked before Continue")
+        pairingScreens.press("Continue")
+        XCTAssertEqual(lock.asks, 1)
+        lock.answer(true)
+        XCTAssertTrue(ask.refusedOnly)
+        controller.shown(PageOpener.blank)
+        controller.shown("/instructor.html")
+        XCTAssertEqual(controller.current, .instructor)
+    }
+
+    func testPairAgainOpensThePairingScreenInInstructorMode() {
+        enterInstructor()
+        let again = call(.instructor, "pairAgain")
+        XCTAssertEqual(pairingScreens.shows, 1)
+        XCTAssertTrue(call(.instructor, "pairAgain").refusedOnly, "one at a time")
+        pairingScreens.press("Cancel")
+        XCTAssertEqual(again.result, "stayed")
+        XCTAssertEqual(controller.current, .instructor)
+        XCTAssertEqual(lock.asks, 1, "no lock asked from instructor mode")
+    }
+
+    func testUnpairAsksFirstAndStayKeepsThePairing() {
+        rig.pair()
+        enterInstructor()
+        let unpair = call(.instructor, "unpair")
+        XCTAssertEqual(screens.log.last, "unpair")
+        XCTAssertNil(unpair.result)
+        screens.stay?()
+        XCTAssertEqual(unpair.result, "stayed")
+        XCTAssertEqual(rig.store.deletes, 0)
+        XCTAssertNotNil(rig.store.text)
+        XCTAssertEqual(controller.current, .instructor)
+        XCTAssertTrue(call(.rider, "unpair").refusedOnly, "not from rider mode's plugin")
+    }
+
+    func testLeavingTheAppDuringTheUnpairQuestionStays() {
+        rig.pair()
+        enterInstructor()
+        let unpair = call(.instructor, "unpair")
+        controller.stopped()
+        XCTAssertEqual(unpair.result, "stayed")
+        // An "Unpair" tapped on the question left behind does nothing.
+        screens.unpair?()
+        XCTAssertEqual(unpair.answers.count, 1)
+        XCTAssertEqual(rig.store.deletes, 0)
+        XCTAssertTrue(rig.service.paired)
+    }
+
+    func testUnpairDeletesTheTokenAndTheClassesAndOpensRiderMode() {
+        rig.pair()
+        enterInstructor()
+        let unpair = call(.instructor, "unpair")
+        screens.unpair?()
+        XCTAssertEqual(unpair.result, "unpaired")
+        XCTAssertNil(rig.store.text)
+        XCTAssertGreaterThanOrEqual(rig.store.deletes, 1)
+        XCTAssertEqual(rig.ports.cacheForgets, 1)
+        XCTAssertEqual(rig.backend.requests.last?.description, "DELETE /api/player/device (with the device token)")
+        XCTAssertEqual(screens.log.last, "switching rider")
+        controller.shown(PageOpener.blank)
+        controller.shown("/rider.html")
+        XCTAssertEqual(controller.current, .rider)
+        XCTAssertEqual(controller.exposed, "RiderMode")
     }
 
     func testTheRiderQuestionStaysOrSwitches() {

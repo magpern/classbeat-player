@@ -13,8 +13,13 @@ final class PairingAnswersTests: XCTestCase {
 
     private final class Screens: ModeScreens {
         var stay: (() -> Void)?
+        var unpair: (() -> Void)?
         func noLock(stay: @escaping () -> Void) { self.stay = stay }
         func riderQuestion(stay: @escaping () -> Void, switch: @escaping () -> Void) { self.stay = stay }
+        func unpairQuestion(stay: @escaping () -> Void, unpair: @escaping () -> Void) {
+            self.stay = stay
+            self.unpair = unpair
+        }
         func switching(rider: Bool) {}
         func hide() {}
     }
@@ -42,6 +47,7 @@ final class PairingAnswersTests: XCTestCase {
     private var rig: PairingRig!
     private var lock: Lock!
     private var screens: Screens!
+    private var pairing: FakePairingScreens!
     private var controller: ModeController!
     private var answered: [String: [[String: Any]]] = [:]
 
@@ -50,9 +56,10 @@ final class PairingAnswersTests: XCTestCase {
         rig = PairingRig()
         lock = Lock()
         screens = Screens()
+        pairing = FakePairingScreens()
         answered = [:]
         let service = rig.service
-        controller = ModeController(lock: lock, screens: screens, loader: Loader(), secrets: { service.secrets() }) { _ in
+        controller = ModeController(lock: lock, screens: screens, loader: Loader(), pairing: rig.ui(pairing), secrets: { service.secrets() }) { _ in
             XCTFail("a switch could not drop everything")
         }
     }
@@ -86,9 +93,9 @@ final class PairingAnswersTests: XCTestCase {
         return call
     }
 
-    /// Every intent of `mode` but the one that leaves it.
-    private func callAll(_ mode: Mode, but leaving: String) {
-        for name in IntentPolicy.of(mode).sorted() where name != leaving {
+    /// Every intent of `mode` but the ones that open a native screen, which the test answers itself.
+    private func callAll(_ mode: Mode, but asking: Set<String>) {
+        for name in IntentPolicy.of(mode).sorted() where !asking.contains(name) {
             call(mode, name)
         }
     }
@@ -103,6 +110,12 @@ final class PairingAnswersTests: XCTestCase {
                 }
             }
         }
+        // Nor does any word of the native pairing screen.
+        for word in pairing.everyWord {
+            for secret in [Secrets.token(), Secrets.deviceCode()] {
+                XCTAssertFalse(word.contains(secret), "the pairing screen showed a secret", file: file, line: line)
+            }
+        }
     }
 
     func testNoAnswerCarriesTheTokenInEitherMode() throws {
@@ -110,7 +123,7 @@ final class PairingAnswersTests: XCTestCase {
         XCTAssertEqual(rig.service.secrets(), [Secrets.token()])
         try start()
 
-        callAll(.rider, but: "askInstructorMode")
+        callAll(.rider, but: ["askInstructorMode"])
         XCTAssertEqual(answered["instructorWay"]?.first?["way"] as? String, "lock")
         XCTAssertEqual(answered["leave"]?.first?["result"] as? String, "left")
 
@@ -121,7 +134,18 @@ final class PairingAnswersTests: XCTestCase {
         controller.shown("/instructor.html")
         XCTAssertEqual(controller.current, .instructor)
 
-        callAll(.instructor, but: "askRiderMode")
+        callAll(.instructor, but: ["askRiderMode", "pairAgain", "unpair"])
+        // "Pair again" on a pairing that still works shows it paired; "Continue" goes back.
+        let again = call(.instructor, "pairAgain")
+        XCTAssertEqual(pairing.current?.keys.map { $0.label }, ["Continue"])
+        pairing.press("Continue")
+        XCTAssertEqual(again.answers.first?["result"] as? String, "paired")
+        answered["pairAgain"] = again.answers
+        let unpair = call(.instructor, "unpair")
+        screens.stay?()
+        XCTAssertEqual(unpair.answers.first?["result"] as? String, "stayed")
+        answered["unpair"] = unpair.answers
+        XCTAssertEqual(rig.service.secrets(), [Secrets.token()], "Stay keeps the pairing")
         let back = call(.instructor, "askRiderMode")
         screens.stay?()
         XCTAssertEqual(back.answers.first?["result"] as? String, "stayed")
@@ -136,9 +160,15 @@ final class PairingAnswersTests: XCTestCase {
         rig.toWaiting()
         XCTAssertEqual(rig.service.secrets(), [Secrets.deviceCode()])
         try start()
-        callAll(.rider, but: "")
+        let ask = call(.rider, "askInstructorMode")
+        callAll(.rider, but: ["askInstructorMode"])
         XCTAssertEqual(answered["instructorWay"]?.first?["way"] as? String, "pair")
-        XCTAssertEqual(answered["askInstructorMode"]?.first?["result"] as? String, "unpaired")
+        // The pairing screen shows the code the user types, never the device code.
+        XCTAssertTrue(pairing.words.contains("BCDF-GHJK"))
+        XCTAssertNil(ask.answers.first)
+        pairing.press("Cancel")
+        XCTAssertEqual(ask.answers.first?["result"] as? String, "stayed")
+        answered["askInstructorMode"] = ask.answers
         try assertNoSecret()
     }
 
@@ -148,18 +178,51 @@ final class PairingAnswersTests: XCTestCase {
         XCTAssertTrue(AnswerPolicy.mayAnswer(["way": "lock"], rig.service.secrets()))
     }
 
-    func testUnpairingClosesInstructorMode() throws {
+    /// The page's "unpair" (AC1): the page hears "unpaired", the Keychain token and the cached
+    /// classes go, and instructor mode closes.
+    func testUnpairWipesTheTokenAndClosesInstructorMode() throws {
         rig.pair()
-        rig.service.forgotten = { [weak c = controller] in c?.unpaired() }
         try start()
         call(.rider, "askInstructorMode")
         lock.done?(true)
         controller.shown(PageOpener.blank)
         controller.shown("/instructor.html")
         XCTAssertEqual(controller.current, .instructor)
-        rig.service.unpair()
+        let unpair = call(.instructor, "unpair")
+        XCTAssertNotNil(rig.store.text, "nothing is deleted before the answer")
+        screens.unpair?()
+        XCTAssertEqual(unpair.answers.first?["result"] as? String, "unpaired")
+        XCTAssertNil(rig.store.text)
+        XCTAssertGreaterThanOrEqual(rig.store.deletes, 1)
+        XCTAssertEqual(rig.ports.cacheForgets, 1)
+        XCTAssertEqual(rig.service.secrets(), [])
         controller.shown(PageOpener.blank)
         controller.shown("/rider.html")
         XCTAssertEqual(controller.current, .rider)
+        XCTAssertEqual(controller.exposed, "RiderMode")
+    }
+
+    /// The page's "pairAgain" (AC1) reaches the pairing service: a pairing the backend no longer
+    /// takes asks the server for a new code; Cancel keeps the expired pairing and its classes.
+    func testPairAgainAsksTheServerForANewCode() throws {
+        rig.pair()
+        try start()
+        call(.rider, "askInstructorMode")
+        lock.done?(true)
+        controller.shown(PageOpener.blank)
+        controller.shown("/instructor.html")
+        rig.service.refused(.expired)
+        let requests = rig.backend.requests.count
+        let again = call(.instructor, "pairAgain")
+        XCTAssertEqual(rig.backend.requests.count, requests + 1, "pair again asks for a new code")
+        rig.backend.ok(FakeBackend.startBody())
+        XCTAssertTrue(pairing.words.contains("BCDF-GHJK"))
+        XCTAssertEqual(call(.instructor, "unpair").refusals, 1, "no unpair while the pairing screen shows")
+        pairing.swipe()
+        XCTAssertEqual(again.answers.first?["result"] as? String, "stayed")
+        XCTAssertNil(pairing.current)
+        XCTAssertTrue(rig.service.paired, "the expired pairing is kept")
+        XCTAssertEqual(controller.current, .instructor)
+        try assertNoSecret()
     }
 }

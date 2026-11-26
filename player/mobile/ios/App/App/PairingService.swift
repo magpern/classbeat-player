@@ -48,6 +48,11 @@ final class PairingService {
     private var queue: [PairingMachine.Event] = []
     private var running = false
 
+    /// Each wake set and each move to the back or the front counts one, so only the latest wake
+    /// still runs: nothing polls while the app is in the background (issue #925).
+    private var wakes = 0
+    private var inFront = true
+
     init(origin: String?, allowLoopbackHttp: Bool, version: String, transport: BackendTransport, store: SecretStore, ports: PairingPorts) {
         self.origin = origin
         self.allowLoopbackHttp = allowLoopbackHttp
@@ -86,6 +91,22 @@ final class PairingService {
 
     /// The pairing screen closed: a notice it showed is not shown again.
     func seen() { dispatch(.seen) }
+
+    /// The app went to the background: a wake already set does nothing, and none is set until it
+    /// comes back, so the phone asks the server nothing meanwhile.
+    func stopped() {
+        inFront = false
+        wakes += 1
+    }
+
+    /// Back in front: a code still waiting is asked about at once, as the site may have confirmed it
+    /// while the phone was in Safari.
+    func resumed() {
+        inFront = true
+        wakes += 1
+        guard case let .waiting(w) = state else { return }
+        dispatch(.pollDue(attempt: w.attempt))
+    }
 
     /// A player call was refused with a 401 that ends or pauses the pairing.
     func refused(_ refusal: PairingProtocol.Refusal) {
@@ -149,7 +170,13 @@ final class PairingService {
         case let .openPage(page):
             _ = ports.openPage(page)
         case let .wake(attempt, at):
-            ports.at(at) { [weak self] in self?.dispatch(.pollDue(attempt: attempt)) }
+            wakes += 1
+            let wake = wakes
+            guard inFront else { return }
+            ports.at(at) { [weak self] in
+                guard let self = self, self.wakes == wake else { return }
+                self.dispatch(.pollDue(attempt: attempt))
+            }
         case let .pollCall(attempt, origin, deviceCode):
             transport.call(Calls.pairingToken(origin, deviceCode)) { [weak self] answer in
                 self?.dispatch(.polled(attempt: attempt, origin: origin, answer: PairingProtocol.parsePoll(answer)))

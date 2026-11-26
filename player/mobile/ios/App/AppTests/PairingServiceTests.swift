@@ -175,6 +175,50 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertNil(store.text)
     }
 
+    /// Issue #925: in the background the phone asks the server nothing; back in front it asks at once.
+    func testNothingIsAskedInTheBackgroundAndTheServerIsAskedAtOnceOnReturn() {
+        let rig = PairingRig()
+        rig.toWaiting()
+        rig.service.stopped()
+        // The poll in flight answers "pending" in the background: no wake is set.
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        XCTAssertTrue(rig.ports.timers.isEmpty)
+        let asked = rig.backend.requests.count
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1, "asked at once on return")
+        XCTAssertEqual(rig.backend.requests.last?.body, ["device_code": Secrets.deviceCode()])
+        rig.backend.ok(FakeBackend.tokenBody())
+        XCTAssertTrue(rig.service.paired)
+    }
+
+    func testAWakeSetBeforeTheBackgroundDoesNothing() {
+        let rig = PairingRig()
+        rig.toWaiting()
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        XCTAssertEqual(rig.ports.timers.count, 1)
+        rig.service.stopped()
+        let asked = rig.backend.requests.count
+        rig.ports.fireNext()
+        XCTAssertEqual(rig.backend.requests.count, asked, "a stale wake asks nothing")
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1)
+        // A second return while that poll is out asks nothing more.
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1)
+    }
+
+    func testResumingWithNoCodeWaitingAsksNothing() {
+        let rig = PairingRig()
+        rig.service.stopped()
+        rig.service.resumed()
+        rig.pair()
+        let asked = rig.backend.requests.count
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked)
+    }
+
     func testTheShippedBuildHasNoBackendSoItNeverPairs() {
         let rig = PairingRig(origin: nil)
         rig.service.begin()
