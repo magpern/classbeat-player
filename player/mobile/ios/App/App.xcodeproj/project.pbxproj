@@ -7,6 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F04EDEE8180B7D7B93248D49 /* PairingAnswersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */; };
+		7FBA37CD17FD3423B09AE0CA /* ClassCacheFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */; };
+		C4ACD246EB2F4BE588AA0EBF /* FirstLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */; };
+		FE857AC2371981A2363524FA /* KeychainSecretStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1807255A6736750822C7F67A /* KeychainSecretStoreTests.swift */; };
+		C944C41F4822B48F31733125 /* PairingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF78D2931850D8E149A00EC4 /* PairingServiceTests.swift */; };
+		085E0EE07D823FBDF865A2F8 /* PairingProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B259852DEF0363C0AFFDE0A7 /* PairingProtocolTests.swift */; };
+		CCA2F42189E7E28726AA74FE /* PairingMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1566B2F7CF9C0F6A56445355 /* PairingMachineTests.swift */; };
+		8893A802C2A14968B71CC910 /* PairingFakes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C096EDA3CA6C8887067452 /* PairingFakes.swift */; };
+		5F6C6DC1740FC73FB1E9868A /* PhonePairingPorts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B3D9EFAC1213D3C0DA23C3 /* PhonePairingPorts.swift */; };
+		7BA1EC1B87DBC19A9D6BA30E /* ClassCacheFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067BF634EFDAF8D83814E431 /* ClassCacheFolder.swift */; };
+		4FB2BFD6098F35DBD0F9E2EC /* FirstLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3280315D62019931262705 /* FirstLaunch.swift */; };
+		AAF7EF72DD493CA66903D8A0 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */; };
+		B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7139ED9D7F9F962E8B8875 /* PairingService.swift */; };
+		078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 197A8BE9EB00002751D22CF7 /* PairingStates.swift */; };
+		59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */; };
+		260B0DA776102C3F072CE2EF /* TransportContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB05B4CF5C26ED0FE200DE26 /* TransportContract.swift */; };
+		FDC957A820C29BF40E2A2198 /* Calls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52EEA74001A4F282D56B84B /* Calls.swift */; };
+		4EAED4FAAA41B9D88C6A13BA /* PairingRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFBF1517F30FF1B7F4598E7 /* PairingRecord.swift */; };
+		057CB3C82581B7EE5903584F /* PairingProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41EB9DD69DBBC54780EF8E6 /* PairingProtocol.swift */; };
+		90D18EAF086DCD94C5BE9F02 /* OriginPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633A229032BB18815A243D6C /* OriginPolicy.swift */; };
+		E6ABDC56FC8326D44F2AB423 /* WholeMatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FB675777C7F33A03B80D7E /* WholeMatch.swift */; };
 		02DE92B77A814F21FF172BA6 /* ModePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD77969B284C709F3A7077BE /* ModePolicyTests.swift */; };
 		1ACFE71864FA94B16262AA30 /* PageOpenerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9D529F315BB20A356C8A46 /* PageOpenerTests.swift */; };
 		21BBF68E557C032C5490D729 /* Pods_AppTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B41DB33334CFB5F0DF53412F /* Pods_AppTests.framework */; };
@@ -62,6 +83,27 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingAnswersTests.swift; sourceTree = "<group>"; };
+		2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassCacheFolderTests.swift; sourceTree = "<group>"; };
+		E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchTests.swift; sourceTree = "<group>"; };
+		1807255A6736750822C7F67A /* KeychainSecretStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStoreTests.swift; sourceTree = "<group>"; };
+		CF78D2931850D8E149A00EC4 /* PairingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingServiceTests.swift; sourceTree = "<group>"; };
+		B259852DEF0363C0AFFDE0A7 /* PairingProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingProtocolTests.swift; sourceTree = "<group>"; };
+		1566B2F7CF9C0F6A56445355 /* PairingMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingMachineTests.swift; sourceTree = "<group>"; };
+		E1C096EDA3CA6C8887067452 /* PairingFakes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingFakes.swift; sourceTree = "<group>"; };
+		53B3D9EFAC1213D3C0DA23C3 /* PhonePairingPorts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePairingPorts.swift; sourceTree = "<group>"; };
+		067BF634EFDAF8D83814E431 /* ClassCacheFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassCacheFolder.swift; sourceTree = "<group>"; };
+		1A3280315D62019931262705 /* FirstLaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunch.swift; sourceTree = "<group>"; };
+		B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
+		3E7139ED9D7F9F962E8B8875 /* PairingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingService.swift; sourceTree = "<group>"; };
+		197A8BE9EB00002751D22CF7 /* PairingStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingStates.swift; sourceTree = "<group>"; };
+		85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingMachine.swift; sourceTree = "<group>"; };
+		CB05B4CF5C26ED0FE200DE26 /* TransportContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportContract.swift; sourceTree = "<group>"; };
+		C52EEA74001A4F282D56B84B /* Calls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Calls.swift; sourceTree = "<group>"; };
+		2FFBF1517F30FF1B7F4598E7 /* PairingRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingRecord.swift; sourceTree = "<group>"; };
+		F41EB9DD69DBBC54780EF8E6 /* PairingProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingProtocol.swift; sourceTree = "<group>"; };
+		633A229032BB18815A243D6C /* OriginPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OriginPolicy.swift; sourceTree = "<group>"; };
+		70FB675777C7F33A03B80D7E /* WholeMatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WholeMatch.swift; sourceTree = "<group>"; };
 		01AD7E63F2A2B668A27A9C1C /* Pods-AppTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AppTests.debug.xcconfig"; path = "Target Support Files/Pods-AppTests/Pods-AppTests.debug.xcconfig"; sourceTree = "<group>"; };
 		0362170B97B6B2BBA309B084 /* ModeHolder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ModeHolder.swift; sourceTree = "<group>"; };
 		0B656F40A1C1B4667F5E457F /* AnswerPolicy.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AnswerPolicy.swift; sourceTree = "<group>"; };
@@ -161,6 +203,11 @@
 		430B860E3DA06EC400BCC5A5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				53B3D9EFAC1213D3C0DA23C3 /* PhonePairingPorts.swift */,
+				067BF634EFDAF8D83814E431 /* ClassCacheFolder.swift */,
+				1A3280315D62019931262705 /* FirstLaunch.swift */,
+				B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */,
+				3E7139ED9D7F9F962E8B8875 /* PairingService.swift */,
 				8A7D50F1308B76B16E0E5AB9 /* Policy */,
 				58A6ED1F0E70C3FE17592052 /* AlertScreens.swift */,
 				3C15F7238280630424F6779D /* AppDelegate.swift */,
@@ -190,6 +237,14 @@
 		6A8C5ECB2CED19AC32C7B9AB /* AppTests */ = {
 			isa = PBXGroup;
 			children = (
+				26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */,
+				2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */,
+				E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */,
+				1807255A6736750822C7F67A /* KeychainSecretStoreTests.swift */,
+				CF78D2931850D8E149A00EC4 /* PairingServiceTests.swift */,
+				B259852DEF0363C0AFFDE0A7 /* PairingProtocolTests.swift */,
+				1566B2F7CF9C0F6A56445355 /* PairingMachineTests.swift */,
+				E1C096EDA3CA6C8887067452 /* PairingFakes.swift */,
 				521659EFFC64F01584F3097D /* AnswerPolicyTests.swift */,
 				F01FFB69E02FF5AAC04C5440 /* DefaultsModeStoreTests.swift */,
 				58431064FC41FC5AFD17CF56 /* IntentAnswersTests.swift */,
@@ -221,6 +276,14 @@
 		8A7D50F1308B76B16E0E5AB9 /* Policy */ = {
 			isa = PBXGroup;
 			children = (
+				197A8BE9EB00002751D22CF7 /* PairingStates.swift */,
+				85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */,
+				CB05B4CF5C26ED0FE200DE26 /* TransportContract.swift */,
+				C52EEA74001A4F282D56B84B /* Calls.swift */,
+				2FFBF1517F30FF1B7F4598E7 /* PairingRecord.swift */,
+				F41EB9DD69DBBC54780EF8E6 /* PairingProtocol.swift */,
+				633A229032BB18815A243D6C /* OriginPolicy.swift */,
+				70FB675777C7F33A03B80D7E /* WholeMatch.swift */,
 				0B656F40A1C1B4667F5E457F /* AnswerPolicy.swift */,
 				F51DF05BB7FA104DEF0BDF8C /* BuildFlavor.swift */,
 				7A19F338D22936259316E977 /* IntentAnswers.swift */,
@@ -420,6 +483,14 @@
 				7201C472CAA7E082D58AC869 /* PageQuestionTests.swift in Sources */,
 				B4371E4D4B710E26200A2013 /* PluginPolicyTests.swift in Sources */,
 				ECBDC80A580EC1682DD87C90 /* ShellTests.swift in Sources */,
+				8893A802C2A14968B71CC910 /* PairingFakes.swift in Sources */,
+				CCA2F42189E7E28726AA74FE /* PairingMachineTests.swift in Sources */,
+				085E0EE07D823FBDF865A2F8 /* PairingProtocolTests.swift in Sources */,
+				C944C41F4822B48F31733125 /* PairingServiceTests.swift in Sources */,
+				FE857AC2371981A2363524FA /* KeychainSecretStoreTests.swift in Sources */,
+				C4ACD246EB2F4BE588AA0EBF /* FirstLaunchTests.swift in Sources */,
+				7FBA37CD17FD3423B09AE0CA /* ClassCacheFolderTests.swift in Sources */,
+				F04EDEE8180B7D7B93248D49 /* PairingAnswersTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -450,6 +521,19 @@
 				4827DA4FBB7B826FDD9DFB6A /* ModePolicy.swift in Sources */,
 				98325ACDED6E517DDCD9E656 /* NavigationPolicy.swift in Sources */,
 				B4FFA97A7DAD0D3C372D0257 /* PluginPolicy.swift in Sources */,
+				E6ABDC56FC8326D44F2AB423 /* WholeMatch.swift in Sources */,
+				90D18EAF086DCD94C5BE9F02 /* OriginPolicy.swift in Sources */,
+				057CB3C82581B7EE5903584F /* PairingProtocol.swift in Sources */,
+				4EAED4FAAA41B9D88C6A13BA /* PairingRecord.swift in Sources */,
+				FDC957A820C29BF40E2A2198 /* Calls.swift in Sources */,
+				260B0DA776102C3F072CE2EF /* TransportContract.swift in Sources */,
+				59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */,
+				078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */,
+				B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */,
+				AAF7EF72DD493CA66903D8A0 /* KeychainSecretStore.swift in Sources */,
+				4FB2BFD6098F35DBD0F9E2EC /* FirstLaunch.swift in Sources */,
+				7BA1EC1B87DBC19A9D6BA30E /* ClassCacheFolder.swift in Sources */,
+				5F6C6DC1740FC73FB1E9868A /* PhonePairingPorts.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
