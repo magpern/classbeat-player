@@ -24,6 +24,8 @@ export interface RoomFollower {
   readonly reader: AndroidReader;
   /** Follow pressed: [turnOn] runs once Notification access is there (follow-ask.ts). */
   press(turnOn: () => void): void;
+  /** Resolves true when the platform has no music reader at all (followAccess says `unavailable`). */
+  noReader?(): Promise<boolean>;
 }
 
 export interface ClockRoomDeps {
@@ -63,6 +65,11 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
   const follower = deps.follower?.() ?? null;
   const reader = follower?.reader ?? null;
   const canSend = reader !== null;
+  // The platform has no music reader at all (followAccess said so, ADR 0016, section 5): no Follow
+  // key from the answer on, no access ask, and `follow` is never called. The question is one
+  // read-only call as the room opens; an answer that never comes leaves Follow as it was.
+  let noReader = false;
+  follower?.noReader?.().then((none) => void (noReader = none), () => undefined);
   let s: PlayerState = openDocument(INITIAL, fileName, doc, deps.now(), canSend, false);
   // The reader asks native code for readings only while the clock follows the music.
   const sync = (): void => reader?.setActive?.(isFollowing(s));
@@ -81,7 +88,7 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
   const frame = (): RoomFrame => {
     const t = deps.now();
     catchUp(t);
-    return phoneFrame(roomFrameOf(snapshotOf(s, t, canSend, reader?.reason?.() ?? null)));
+    return phoneFrame(roomFrameOf(snapshotOf(s, t, canSend, reader?.reason?.() ?? null)), noReader);
   };
   const run = (cmd: ClockCommand): Promise<RoomFrame> => {
     const t = deps.now();
@@ -99,7 +106,7 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
   // Access may come much later (back from Android's setting), so the key is checked again then: a
   // class that ended, or a clock no longer manual, meanwhile does not start following.
   const follow = (): Promise<RoomFrame> => {
-    if (follower !== null && frame().followKey === true) {
+    if (follower !== null && !noReader && frame().followKey === true) {
       follower.press(() => {
         if (frame().followKey !== true) return;
         s = command(s, { type: "follow" }, deps.now(), canSend);
@@ -157,9 +164,9 @@ export function clockRoom(fileName: string, doc: Class, deps: ClockRoomDeps): Cl
  * stands in, app-follow.md), and the key shows while the clock is manual, the music could be
  * followed and the class has not ended.
  */
-function phoneFrame(f: RoomFrame): RoomFrame {
+function phoneFrame(f: RoomFrame, noReader: boolean): RoomFrame {
   const link = f.link;
   if (link === null) return f;
-  const followKey = link.available && link.mode === "manual" && f.view?.status !== "ended";
+  const followKey = !noReader && link.available && link.mode === "manual" && f.view?.status !== "ended";
   return { ...f, link: { ...link, available: false }, followKey };
 }
