@@ -130,6 +130,19 @@ test("the reset of `heard`: a stretch of following that was heard does not carry
   assert.equal(snap.link?.noReading, "not-permitted", "the reason is shown to act on");
 });
 
+test("the reset of `heard` in the same call: access taken back, then Follow in the call that notices it, stays following", () => {
+  const { f, c, clock } = following();
+  f.obs = null;
+  f.why = "not-permitted";
+  clock.t = 2000;
+  // No snapshot in between: the command's own catch-up hands over, and Follow then re-follows.
+  c.command({ type: "follow" });
+  clock.t = 2100;
+  const snap = c.snapshot();
+  assert.equal(snap.link?.mode, "following", "nothing heard in the new stretch: no hand-over at once");
+  assert.equal(snap.link?.noReading, "not-permitted");
+});
+
 // The real macOS reader, over a fake osascript. Its `stopped()` clears the reason when following
 // ends, so after the hand-over the screen shows the announcement and no reason line: the hand-over
 // has said what happened, and nothing is left to act on until Follow is picked again.
