@@ -1,6 +1,6 @@
 # Screen spec: following the music in the app
 
-Status: proposed in the pull request for issue #628, for [ADR 0011](../adr/0011-the-phone-app-is-built-with-capacitor.md)
+Status: as built, with the no-reader state from #903 (merged as 602a564). Proposed in the pull request for issue #628, for [ADR 0011](../adr/0011-the-phone-app-is-built-with-capacitor.md)
 section 6. Overview, sizes and checks: [app.md](app.md). The class screen is `/play`'s
 ([play.md](play.md)) with the room's link words ([room-2d.md](room-2d.md)). Mock-ups:
 `mockups/app-follow-*.html` and their `-390x844.png` and `-844x390.png` shots.
@@ -52,6 +52,7 @@ On the **follow sheet** (native, over the class screen):
 | Following, running | (play.md and room-2d.md's link states) | The link slot follows room-2d.md: the song, coasting, re-locking, with Undo where the room shows it |
 | Access taken away during a class | `app-follow-lost` | The clock goes on by hand at once. For 30 s the link slot says "Following stopped" in white (room-2d.md's hand-over), then "Manual clock". No plate, no sound: nothing is wrong |
 | Running on the manual clock | `app-follow-manual` | The link slot "Manual clock"; the band with Follow, Previous, Pause, Next, End. Follow opens the sheet again |
+| No music reader on this platform (iOS, [ADR 0016](../adr/0016-the-ios-app.md) section 5) | CI shots `follow-no-reader-390x844` and `follow-no-reader-844x390` (player/mobile `test/shots`) | The link slot "Press Start" in grey with a square marker. The band shows Previous, Start, Next and End with no Follow key and no gap where it was, and Start is focused. There is no sheet, and nothing is asked of native code about the music. The clock is the manual clock throughout |
 
 **Start with a playlist stays off.** ADR 0001 (amendment, #486) lets Start ask Spotify to play the
 class's playlist. In the app it is off until a phone run shows it works (ADR 0011, amendment of
