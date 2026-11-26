@@ -3,7 +3,8 @@ package org.classbeat.player.follow
 /**
  * What the phone can tell about the music the instructor's music app is playing (ADR 0011 §6,
  * issue #632): the track, whether it plays, and its position with the moment the system set it.
- * Nothing here reads, plays or stores audio. The phone's implementation is [SessionReader] (#653).
+ * Nothing here reads, plays or stores audio, and the only commands are [TransportCommand]'s three.
+ * The phone's implementation is [SessionReader] (#653).
  */
 interface MusicSource {
     /** Begin reading. Called only once notification access is granted, in instructor mode. */
@@ -16,6 +17,12 @@ interface MusicSource {
 
     /** The latest reading, or null when there is none (see [status]). */
     fun latest(): SourceReading?
+
+    /**
+     * Play, pause or next, through the music app's own session, only while reading (issue #857).
+     * False when there is no session to send it to. Nothing else is ever sent.
+     */
+    fun command(command: TransportCommand): Boolean
 }
 
 enum class SourceStatus {

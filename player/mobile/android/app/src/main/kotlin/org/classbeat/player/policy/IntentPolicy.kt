@@ -43,6 +43,12 @@ object IntentPolicy {
         "follow" to Spec(Mode.INSTRUCTOR, emptyMap()),
         "unfollow" to Spec(Mode.INSTRUCTOR, emptyMap()),
         "reading" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        // Instructor mode (#857): play, pause and next, pressed by the instructor while following,
+        // and only these three. Native code sends each through the music app's own media session
+        // (ADR 0011 section 6). None takes an argument: the page names no command, app or position.
+        "sendPlay" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "sendPause" to Spec(Mode.INSTRUCTOR, emptyMap()),
+        "sendNext" to Spec(Mode.INSTRUCTOR, emptyMap()),
     )
 
     /** The intents [mode] has, and only those. */

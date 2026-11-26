@@ -5,6 +5,7 @@ import org.classbeat.player.follow.ListenerAccess
 import org.classbeat.player.follow.MusicSource
 import org.classbeat.player.follow.SourceReading
 import org.classbeat.player.follow.SourceStatus
+import org.classbeat.player.follow.TransportCommand
 import org.classbeat.player.policy.Mode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -41,6 +42,11 @@ class FollowBridgeTest {
         override fun status() = SourceStatus.READING
 
         override fun latest() = SourceReading("track:1", "Song A", "Band A", 180_000, true, 10_000, 49_200)
+
+        override fun command(command: TransportCommand): Boolean {
+            log += "command $command"
+            return true
+        }
     }
 
     private val follower = Follower(source, access) { 50_000L }.also { log.clear() }
@@ -57,6 +63,15 @@ class FollowBridgeTest {
         bridge.follow { sent += it }
         bridge.reading { sent += it }
         bridge.unfollow { sent += it }
+        return sent
+    }
+
+    /** Play, pause and next once each (#857), with what each sent the page. */
+    private fun commandAll(): List<String?> {
+        val sent = mutableListOf<String?>()
+        bridge.command(TransportCommand.PLAY) { sent += it }
+        bridge.command(TransportCommand.PAUSE) { sent += it }
+        bridge.command(TransportCommand.NEXT) { sent += it }
         return sent
     }
 
@@ -85,5 +100,30 @@ class FollowBridgeTest {
         var sent: String? = "unset"
         bridge.reading { sent = it }
         assertNull(sent)
+    }
+
+    @Test
+    fun `outside instructor mode play, pause and next are refused and nothing reaches the music app`() {
+        bridge.follow { }
+        for (other in listOf(Mode.RIDER, null)) {
+            mode = other
+            log.clear()
+            assertEquals("$other", List(3) { null }, commandAll())
+            assertEquals("$other", emptyList<String>(), log)
+        }
+    }
+
+    @Test
+    fun `while following, play, pause and next each send their own command once`() {
+        bridge.follow { }
+        log.clear()
+        assertEquals(List(3) { """{"state":"sent"}""" }, commandAll())
+        assertEquals(listOf("command PLAY", "command PAUSE", "command NEXT"), log)
+    }
+
+    @Test
+    fun `before following a command answers stopped and sends nothing`() {
+        assertEquals(List(3) { """{"state":"stopped"}""" }, commandAll())
+        assertEquals(emptyList<String>(), log)
     }
 }

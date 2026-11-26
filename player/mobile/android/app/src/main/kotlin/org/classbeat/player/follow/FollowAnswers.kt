@@ -55,4 +55,8 @@ object FollowAnswers {
     const val UNAVAILABLE = "unavailable"
     const val NOTHING = "nothing"
     const val READING = "reading"
+
+    /** A command's answer (issue #857): the music app's session took it, or there was none to take it. */
+    const val SENT = "sent"
+    const val NOT_SENT = "notSent"
 }

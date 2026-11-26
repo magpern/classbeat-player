@@ -37,6 +37,13 @@ class FollowerTest {
         override fun status() = status
 
         override fun latest() = reading
+
+        var sends = true
+
+        override fun command(command: TransportCommand): Boolean {
+            calls += "command:$command"
+            return sends
+        }
     }
 
     private var now = 50_000L
@@ -157,5 +164,45 @@ class FollowerTest {
         assertEquals(listOf("start", "stop"), source.calls)
         assertEquals(listOf(true, false), access.switches)
         assertEquals(mapOf("state" to "stopped"), f.reading())
+    }
+
+    @Test
+    fun `a command while not following answers stopped and reaches no music app`() {
+        val source = FakeSource(SourceStatus.READING, reading)
+        val f = follower(source, FakeAccess(grant = true))
+        for (c in TransportCommand.values()) assertEquals(mapOf("state" to "stopped"), f.command(c))
+        assertEquals(emptyList<String>(), source.calls)
+    }
+
+    @Test
+    fun `while following each command goes to the source once and answers sent`() {
+        val source = FakeSource(SourceStatus.READING, reading)
+        val f = follower(source, FakeAccess(grant = true))
+        f.follow()
+        assertEquals(mapOf("state" to "sent"), f.command(TransportCommand.PLAY))
+        assertEquals(mapOf("state" to "sent"), f.command(TransportCommand.PAUSE))
+        assertEquals(mapOf("state" to "sent"), f.command(TransportCommand.NEXT))
+        assertEquals(listOf("start", "command:PLAY", "command:PAUSE", "command:NEXT"), source.calls)
+    }
+
+    @Test
+    fun `a command with no session to send it to answers notSent`() {
+        val source = FakeSource(SourceStatus.NOTHING)
+        val f = follower(source, FakeAccess(grant = true))
+        f.follow()
+        source.sends = false
+        assertEquals(mapOf("state" to "notSent"), f.command(TransportCommand.NEXT))
+    }
+
+    @Test
+    fun `a command after access is taken back sends nothing and ends following`() {
+        val access = FakeAccess(grant = true)
+        val source = FakeSource(SourceStatus.READING, reading)
+        val f = follower(source, access)
+        f.follow()
+        access.grant = false
+        assertEquals(mapOf("state" to "noAccess"), f.command(TransportCommand.PLAY))
+        assertFalse(f.following)
+        assertEquals(listOf("start", "stop"), source.calls)
     }
 }
