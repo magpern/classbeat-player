@@ -14,6 +14,10 @@
 #                               opens nothing without the keystore and its password, the argv is
 #                               visible only on this ephemeral runner, and this script never prints
 #                               it (no xtrace; scripts/test-sign-android-apk.sh checks every output).
+#                               apksigner itself can: when signing fails (for example, no key under
+#                               that alias), the real tool may name the alias in its error on stderr,
+#                               which this script passes through. GitHub Actions masks the value of
+#                               every secret in the job log, so the log shows *** in its place.
 # Not secret:
 #   ANDROID_CERT_SHA256  the signing certificate's SHA-256, hex with or without colons; the signed
 #                        APK must carry exactly this certificate
