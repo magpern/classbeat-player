@@ -74,6 +74,8 @@ export function createListController(d: ListDeps): ListController {
       if (d.mix().signingOut) return false;
       // Only a row the instructor was shown; the pin then checks that it is still that version.
       const row = cached.find((r) => r.id === id && r.hash === hash);
+      // A class whose music is of a kind this player does not know is listed but never started.
+      if (row !== undefined && row.source === "unknown") return false;
       const document = row === undefined ? null : d.sync.pin(id, hash);
       if (row === undefined || document === null) {
         stale();
