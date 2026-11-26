@@ -36,6 +36,18 @@
       "then": { "properties": { "music": { "not": { "required": ["swedebeat_mix"] } } } }
     },
     {
+      "if": {
+        "properties": { "format_version": { "enum": ["1.0", "1.1", "1.2", "1.3"] } },
+        "required": ["format_version"]
+      },
+      "then": {
+        "properties": {
+          "music": { "properties": { "source": { "not": { "const": "local" } } } },
+          "songs": { "items": { "properties": { "ids": { "not": { "required": ["local_file"] } } } } }
+        }
+      }
+    },
+    {
       "if": { "properties": { "music": { "properties": { "source": { "const": "none" } } } } },
       "then": {
         "properties": {
@@ -67,7 +79,7 @@
     }
   ],
   "$defs": {
-    "formatVersion": { "enum": ["1.0", "1.1", "1.2", "1.3"] },
+    "formatVersion": { "enum": ["1.0", "1.1", "1.2", "1.3", "1.4"] },
     "ms": { "type": "integer", "minimum": 0 },
     "positiveMs": { "type": "integer", "minimum": 1 },
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
@@ -94,7 +106,10 @@
       "additionalProperties": false,
       "required": ["source", "design_crossfade_ms", "song_timing"],
       "properties": {
-        "source": { "enum": ["spotify", "swedebeat", "none"] },
+        "source": {
+          "description": "Format 1.4 adds local: the instructor's own audio files, played by the player from the device (ADR 0017). Before 1.4 only spotify, swedebeat and none.",
+          "enum": ["spotify", "swedebeat", "local", "none"]
+        },
         "design_crossfade_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
         "song_timing": { "$ref": "#/$defs/quality" },
         "spotify_playlist": {
@@ -105,6 +120,17 @@
           "pattern": "^[A-Za-z0-9]{22}$"
         },
         "swedebeat_mix": { "$ref": "#/$defs/swedebeatMix" }
+      }
+    },
+    "localFile": {
+      "description": "Format 1.4. Identifies the instructor's own audio file for a song by the SHA-256 of the whole file's bytes (ADR 0017 section 1). file_name is only a hint shown to the instructor and is never used to match. Only with music source local and format 1.4 (semantic rule local_file_without_local_source; a version before 1.4 is a schema error). The audio never leaves the device.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "size_bytes", "file_name"],
+      "properties": {
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "file_name": { "type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[^/\\\\]+$" }
       }
     },
     "swedebeatMix": {
@@ -236,7 +262,8 @@
           "properties": {
             "spotify_track": { "type": "string", "pattern": "^[A-Za-z0-9]{22}$" },
             "isrc": { "type": "string", "pattern": "^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$" },
-            "swedebeat_mix": { "type": "string", "minLength": 1, "maxLength": 100 }
+            "swedebeat_mix": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "local_file": { "$ref": "#/$defs/localFile" }
           }
         },
         "beat_anchors": {

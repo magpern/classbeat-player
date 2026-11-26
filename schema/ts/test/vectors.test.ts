@@ -185,7 +185,30 @@ for (const id of ["", "a".repeat(65), "a.b", "a b", "a/b", "a\n", "\nabc", "é"]
 
 test("an older reader ignores the mix in a future minor", () => {
   const doc = load(join(EXAMPLES, "valid", "class-swedebeat-mix.json"));
-  doc.format_version = "1.4";
+  doc.format_version = "1.5";
   doc.music.swedebeat_mix.future = 1;
+  assert.deepEqual(checkDocument(classSchema, doc, "reader"), []);
+});
+
+test("local_file name bounds are accepted", () => {
+  for (const name of ["a", "x".repeat(255), "Song – é.mp3", "a.b c"]) {
+    const doc = load(join(EXAMPLES, "valid", "class-local-files.json"));
+    doc.songs[0].ids.local_file.file_name = name;
+    assert.deepEqual(checkDocument(classSchema, doc, "strict"), [], name);
+  }
+});
+
+test("local_file is refused in both modes when the label is before 1.4", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-local-files.json"));
+  doc.format_version = "1.3";
+  for (const mode of ["strict", "reader"] as const) {
+    const found = checkDocument(classSchema, doc, mode).map((v) => v.join(" "));
+    assert.ok(found.includes("schema /music/source"), `${mode}: ${found}`);
+  }
+});
+
+test("a local class is accepted in reader mode with unknown fields", () => {
+  const doc = load(join(EXAMPLES, "valid", "class-local-files.json"));
+  doc.songs[0].ids.local_file.future = 1;
   assert.deepEqual(checkDocument(classSchema, doc, "reader"), []);
 });

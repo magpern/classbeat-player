@@ -34,7 +34,7 @@ export type Class = {
   intervals: [Interval, ...Interval[]];
   songs: Song[];
 };
-export type FormatVersion = "1.0" | "1.1" | "1.2" | "1.3";
+export type FormatVersion = "1.0" | "1.1" | "1.2" | "1.3" | "1.4";
 export type Name = string;
 export type Quality = "measured" | "estimated" | "missing";
 export type PositiveMs = number;
@@ -58,7 +58,10 @@ export interface ClassInfo {
   length_ms: number;
 }
 export interface Music {
-  source: "spotify" | "swedebeat" | "none";
+  /**
+   * Format 1.4 adds local: the instructor's own audio files, played by the player from the device (ADR 0017). Before 1.4 only spotify, swedebeat and none.
+   */
+  source: "spotify" | "swedebeat" | "local" | "none";
   design_crossfade_ms: number;
   song_timing: Quality;
   /**
@@ -146,6 +149,7 @@ export interface Song {
     spotify_track?: string;
     isrc?: string;
     swedebeat_mix?: string;
+    local_file?: LocalFile;
   };
   beat_anchors?: {
     quality: Quality;
@@ -161,4 +165,12 @@ export interface Song {
       kind: "drop" | "breakdown" | "build" | "other";
     }[];
   };
+}
+/**
+ * Format 1.4. Identifies the instructor's own audio file for a song by the SHA-256 of the whole file's bytes (ADR 0017 section 1). file_name is only a hint shown to the instructor and is never used to match. Only with music source local and format 1.4 (semantic rule local_file_without_local_source; a version before 1.4 is a schema error). The audio never leaves the device.
+ */
+export interface LocalFile {
+  sha256: string;
+  size_bytes: number;
+  file_name: string;
 }

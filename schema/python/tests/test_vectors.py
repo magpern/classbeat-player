@@ -183,6 +183,27 @@ def test_swedebeat_mix_id_outside_the_alphabet_refused_in_both_modes(mix_id) -> 
 
 def test_older_reader_ignores_the_mix_in_a_future_minor() -> None:
     doc = load(EXAMPLES / "valid" / "class-swedebeat-mix.json")
-    doc["format_version"] = "1.4"
+    doc["format_version"] = "1.5"
     doc["music"]["swedebeat_mix"]["future"] = 1
+    assert check_document(CLASS_SCHEMA, doc, "reader") == []
+
+
+def test_local_file_name_bounds_accepted() -> None:
+    for name in ("a", "x" * 255, "Song – é.mp3", "a.b c"):
+        doc = load(EXAMPLES / "valid" / "class-local-files.json")
+        doc["songs"][0]["ids"]["local_file"]["file_name"] = name
+        assert check_document(CLASS_SCHEMA, doc, "strict") == [], name
+
+
+def test_local_file_refused_in_both_modes_when_label_is_before_1_4() -> None:
+    doc = load(EXAMPLES / "valid" / "class-local-files.json")
+    doc["format_version"] = "1.3"
+    for mode in ("strict", "reader"):
+        found = check_document(CLASS_SCHEMA, doc, mode)
+        assert ("schema", "/music/source") in found, mode
+
+
+def test_local_file_class_is_accepted_in_reader_mode() -> None:
+    doc = load(EXAMPLES / "valid" / "class-local-files.json")
+    doc["songs"][0]["ids"]["local_file"]["future"] = 1
     assert check_document(CLASS_SCHEMA, doc, "reader") == []
