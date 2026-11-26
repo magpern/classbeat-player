@@ -41,11 +41,19 @@ export const lineCode = (t: string): string => t.replace(/\/\/.*$/gm, "");
 /** The view a check read before #861, alone: the mutation tables show a "//" hid code from it. */
 export const oldView = (old: (text: string) => string): Views => (text) => [old(text)];
 
-/** A check that hits when `re` (not global) matches any view of the file. */
-export const forbids =
-  (re: RegExp, old: (text: string) => string = code): Check =>
-  (path, text, views = withSource(old, path)) =>
-    views(text).some((v) => re.test(v));
+/**
+ * `re`, refused when it is global or sticky: `test` on such a regex starts at the `lastIndex` the
+ * last call left, so a hit in one view or file could hide a hit in the next (issue #870).
+ */
+export function fresh(re: RegExp): RegExp {
+  if (re.global || re.sticky) throw new Error(`${re}: a check's regex must not be global or sticky`);
+  return re;
+}
+/** A check that hits when `re` (neither global nor sticky) matches any view of the file. */
+export const forbids = (re: RegExp, old: (text: string) => string = code): Check => {
+  fresh(re);
+  return (path, text, views = withSource(old, path)) => views(text).some((v) => re.test(v));
+};
 /** A check that hits when what `extract` finds in any view of the file is not `expected`. */
 export const differs =
   <T>(extract: (view: string) => T, expected: T, old: (text: string) => string = code): Check =>

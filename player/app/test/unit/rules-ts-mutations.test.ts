@@ -48,6 +48,8 @@ const MUTATIONS: readonly Mutation[] = [
   [NETWORK, LIVE_SOCKET, SOCK, hidden(SOCK, "fetch(u);"), true],
   [NETWORK, LIVE_SOCKET, SOCK, spanned(SOCK, "new EventSource(u);"), true],
   [NETWORK, ROOM_MIX, MIX, hidden(MIX, "fetch(u);"), true],
+  // A regex right after an `if` condition (issue #870): `code` takes its "//" for a comment.
+  [NETWORK, ROOM_MIX, MIX, `${MIX} if (ok) /[//]/.test(s); fetch(u);`, true],
   [NETWORK, MAIN, IMPORT, hidden(IMPORT, "new WebSocket(u);"), true],
   [MIX_ONCE, ROOM_MIX, MIX, hidden(MIX, "audio.play();"), true],
   [MIX_ONCE, ROOM_HTML, HTML, `${HTML}<p>//</p>${HTML}`, true],
