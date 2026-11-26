@@ -3,15 +3,14 @@
 // unknown fields ignored). The reader schema is derived from the strict one. Pure given the
 // schema objects; the caller loads the files.
 import { Ajv2020 } from "ajv/dist/2020.js";
-import type { ErrorObject } from "ajv/dist/2020.js";
 import { contentHash } from "./hashing.ts";
-import { checkSemantics, sortViolations } from "./semantic.ts";
+import { violationsFromErrors } from "./schema-errors.ts";
+import { checkSemantics } from "./semantic.ts";
 import type { Violation } from "./semantic.ts";
+import { versionProblem } from "./version.ts";
 
 export type Mode = "strict" | "reader";
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-const KNOWN_MAJOR = 1;
 
 export function readerSchema(strict: Json): Json {
   const lax = structuredClone(strict);
@@ -34,23 +33,7 @@ function schemaViolations(schema: Json, instance: unknown, prefix: string): Viol
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   const validate = ajv.compile(schema);
   if (validate(instance)) return [];
-  const seen = new Set<string>();
-  const out: Violation[] = [];
-  for (const e of validate.errors as ErrorObject[]) {
-    const pointer = prefix + e.instancePath;
-    if (!seen.has(pointer)) {
-      seen.add(pointer);
-      out.push(["schema", pointer]);
-    }
-  }
-  return sortViolations(out);
-}
-
-function versionProblem(version: unknown): Violation | null {
-  const m = typeof version === "string" ? /^(\d+)\.(\d+)$/.exec(version) : null;
-  if (m === null) return ["schema", "/format_version"];
-  if (Number(m[1]) !== KNOWN_MAJOR) return ["unsupported_major", "/format_version"];
-  return null;
+  return violationsFromErrors(validate.errors ?? [], prefix);
 }
 
 /** All violations of a class document; empty means valid. */
