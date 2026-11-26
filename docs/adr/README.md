@@ -22,6 +22,7 @@ ADR that changes a decision says which one it replaces.
 | [0014](0014-player-updater.md) | The desktop player's updater: tell now, install once signed | Accepted |
 | [0015](0015-running-classes.md) | Running classes and treadmill reading: no format change, notifications only | Proposed |
 | [0016](0016-the-ios-app.md) | The iOS app: the same Capacitor app, on the manual clock | Proposed |
+| [0017](0017-local-music-files.md) | Local music files: the instructor's own audio files, played by the player | Proposed |
 
 ## Template
 
