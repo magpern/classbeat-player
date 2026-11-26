@@ -211,7 +211,8 @@ Point (0x2AD9) or any other characteristic that sets resistance, speed, incline 
 
 ### 8. The rule guards cover all of `player/mobile/`
 
-The checks of `player/app/test/unit/rules.test.ts` (no audio playback, no Spotify interfaces, no
+The checks of `player/app/test/unit/rules.test.ts`, `follow-rules.test.ts` and
+`transport-rules.test.ts` (no audio playback, no Spotify interfaces, no
 equipment control, no stray network use) are extended to all of `player/mobile/`, its TypeScript
 and its Kotlin, in the first pull request that adds code there. For Kotlin they also forbid
 `MediaPlayer`, ExoPlayer and Media3 players, `AudioTrack`, `AudioRecord` and any Spotify SDK
@@ -224,8 +225,10 @@ only additions; no existing check is loosened.
   backend origin fixed in the build, with no redirects, a 64 KiB limit on the answer and a 10 s
   timeout. For rider mode (#633), one more file may open a WebSocket to the same fixed origin for
   the rider connection. Every other Kotlin file keeps the full network check.
-  As built (#851): the manifest asks for exactly `android.permission.INTERNET`, which these calls
-  need on Android, and nothing else (pinned by `ManifestTest` and the rules test). The web view
+  As built (#851): the app's own manifest asks for exactly `android.permission.INTERNET`, which
+  these calls need on Android (pinned by the rules test). The merged manifest adds only androidx's
+  own `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, and `ManifestTest` allows those two and nothing
+  else. The web view
   still blocks network loads. No app Kotlin file may loosen certificate or hostname checks, and
   only `MainActivity.kt` constructs the transport.
 - **Spotify's media session (#653).** `SpotifySessionReader.kt` may name only the media-session
