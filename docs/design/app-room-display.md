@@ -2,26 +2,27 @@
 
 Status: proposed in the pull request for issue #628, for [ADR 0011](../adr/0011-the-phone-app-is-built-with-capacitor.md)
 section 2 ("an external display"). Overview and checks: [app.md](app.md). The room view is
-[room-2d.md](room-2d.md)'s, unchanged. Mock-ups: `mockups/app-display-idle.html` and `app-display-idle-rider.html` (1920 × 1080 and
+[room-2d.md](room-2d.md)'s, unchanged, but the app's display no longer shows it (issue #871, as
+built in #880). Mock-ups: `mockups/app-display-idle.html` and `app-display-idle-rider.html` (1920 × 1080 and
 1280 × 720 each) and `app-display-lost.html` (the phone).
 
 ## Purpose
 
 When the phone or tablet is connected to a screen (HDMI, USB-C, or a cast that Android presents as
-a display), the screen shows the room view for the class open on the phone, as the desktop's room
-window does, and the phone keeps the class screen and its band. The display never shows the
+a display), the screen shows the idle stage in every mode, and the phone keeps the class screen
+and its band. A class run on the phone in instructor mode is the phone's room screen (app.md,
+"The room screen on the phone"); the display does not mirror it. The display never shows the
 riders' list or anything of the instructor's (ADR 0007 section 4).
 
 ## Content, in priority order
 
 On the display:
 
-1. A class open: room-2d.md's room screen, with the room's tiers, the room's 5 % safe area and the
-   zone always as a number and a name as well as its colour. No band, no keys, no pointer: the
-   display is watched, not touched.
-2. No class open: the dark stage and one line in the middle, "The class shows here when it opens
-   on the phone", at the room's text tier.
-3. Rider mode, any page: the same stage and one rider line, "Your class is on your phone" (see
+1. Instructor mode, any page, a class open on the phone included: the dark stage and one line in
+   the middle, "The class shows here when it opens on the phone", at the room's text tier. The
+   app's display policy no longer allows the room screen, and the display's page loader refuses
+   `/room.html`. No band, no keys, no pointer: the display is watched, not touched.
+2. Rider mode, any page: the same stage and one rider line, "Your class is on your phone" (see
    "The rider's idle line").
 
 On the phone, while a display is connected: the class screen as in app-follow.md, unchanged.
@@ -33,7 +34,7 @@ the app's own, so Android never mirrors the phone's screen onto it:
 
 | Phone | Display |
 |---|---|
-| Instructor mode, a class open | The room screen |
+| Instructor mode, a class open or running on the phone | The idle stage: the display keeps it while the class runs, never the room screen |
 | Instructor mode, any other page | The idle stage |
 | Rider mode, any page, a joined class included | The idle stage: never the room screen, nothing of the rider's |
 | Between modes (a switch, a native screen) | The idle stage |
@@ -74,23 +75,23 @@ covers both lines.
 
 ## Layout
 
-The display uses room-2d.md's layouts at its own size: 1920 × 1080 the reference, 1280 × 720 the
-smallest checked. A display squarer than 16 : 10 uses the room's 4 : 3 layout. The phone's own
-layout does not change.
+The idle stage is checked at its own size: 1920 × 1080 the reference, 1280 × 720 the smallest
+checked, and a display squarer than 16 : 10 keeps the same centred line. The phone's own layout
+does not change.
 
 ## States
 
 | State | Mock-up | What shows |
 |---|---|---|
 | Display, no class open | `app-display-idle` | The idle line |
-| Display, class open | room-2d.md's room mock-ups | The room screen, every state of room-2d.md |
+| Display, class open or running on the phone | `app-display-idle` | The same idle stage and line; the room screen is not shown on the display |
 | Display, between modes | `app-display-idle` | The instructor idle line, as with no class open |
 | Display, rider mode, any page or a joined class | `app-display-idle-rider` | The rider idle line, "Your class is on your phone" |
-| Display gone during a class | `app-display-lost` | The phone goes on as it was; for 30 s its link slot says "Room screen disconnected" in white, then the clock's usual words. Reconnecting shows the room view again with no question |
+| Display gone during a class | `app-display-lost` | The phone goes on as it was; for 30 s its link slot says "Room screen disconnected" in white, then the clock's usual words. Reconnecting shows the idle stage again with no question |
 
 ## Motion and reduced motion
 
-room-2d.md's on the display; app.md's on the phone.
+The idle stage has no motion. app.md's on the phone.
 
 ## Wording
 
@@ -98,16 +99,16 @@ room-2d.md's on the display; app.md's on the phone.
 
 ## A running class (issue #769, ADR 0015)
 
-The display shows [room-2d.md](room-2d.md)'s room screen, so a running class shows the incline
-target as the room screen does ("A running class"; mock-ups `runclass-room*`). The idle stage is
-unchanged. In rider mode the display stays on the idle stage, so no treadmill or foot-pod reading
-can reach it (ADR 0015 section 5).
+The display stays on the idle stage while a class runs, so it shows no incline target either; the
+phone's room screen shows it as the room screen does ("A running class"; mock-ups `runclass-room*`).
+In rider mode the display stays on the idle stage, so no treadmill or foot-pod reading can reach
+it (ADR 0015 section 5).
 
 ## Rules (plan section 3)
 
 | Rule | How these screens keep it |
 |---|---|
-| 7. Colour means the planned zone | room-2d.md's; the idle lines are grey on the stage |
+| 7. Colour means the planned zone | The idle lines are grey on the stage; no zone is shown on the display |
 | 12. No camera | None |
 | 13. Rider data one way | The display never shows the riders' list, a count of riders or a nickname; in rider mode it shows only the idle stage with a fixed line, never the rider's own screen |
 | 15. No team games | None |
