@@ -186,6 +186,15 @@ for n in "${names[@]}"; do
   upper="$(printf '%s' "$words" | tr '[:lower:]' '[:upper:]')"
   # Portable title case (GNU sed's \u is not in BSD sed): upper-case each word's first letter.
   title="$(printf '%s' "$words" | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
+  # The title-case step must really upper-case (a BSD sed `\u` would give a lower-case "u").
+  case "$title" in
+    [A-Z]*) [ "$title" != "$words" ] || { echo "FAIL: title case equals lower case: $n"; fail=1; } ;;
+    *) echo "FAIL: title case does not start upper-case: $n"; fail=1 ;;
+  esac
+  if [ "$(printf '%s' "$title" | tr -cd '[:upper:]' | wc -c)" -ne "$(printf '%s' "$words" | wc -w)" ]; then
+    echo "FAIL: title case must upper-case each word: $n"
+    fail=1
+  fi
   for spelling in "$words" "$upper" "$title"; do
     new_repo
     echo "// $spelling" >"$r/player/a.ts"
@@ -236,6 +245,13 @@ for n in "${names[@]}"; do
   mkdir -p "$r/player/$n"
   : >"$r/player/$n/index.ts"
   expect fail "name in a directory name: $n"
+
+  # Separators that git ls-files would quote (tab, newline, non-ASCII) must not hide the name.
+  for sep in $'\t' $'\n' $'\xc2\xa0' ' ' '_'; do
+    new_repo
+    : >"$r/player/${n//-/$sep}.txt"
+    expect fail "name in a file name with separator $(printf '%q' "$sep"): $n"
+  done
 
   new_repo
   : >"$r/player/$(printf '%s' "$n" | tr -d '-' | tr '[:lower:]' '[:upper:]').txt"

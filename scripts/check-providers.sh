@@ -59,10 +59,10 @@ while read -r kind value extra; do
       # "a-b" matches "a b", "a_b" and "ab".
       pat="$(printf '%s' "$esc" | sed -E 's#-#[^A-Za-z0-9]*#g')"
       # -a: binary files are searched too (a name inside an image or an archive is still a name).
-      found="$(git grep -a -i -n -E -e "$pat" -- . "${name_allowed[@]}" || true)"
+      found="$(git grep -a -i -n -E -e "$pat" -- . "${name_allowed[@]}" | tr -d "\\000" || true)"
       report "name $value" "$found"
       # File and directory names too. Only the path is printed, as with a content match.
-      pathfound="$(git ls-files -- . "${name_allowed[@]}" | grep -i -E -e "$pat" || true)"
+      pathfound="$(git ls-files -z -- . "${name_allowed[@]}" | tr "\\n\\0" " \\n" | grep -i -E -e "$pat" || true)"
       if [ -n "$pathfound" ]; then
         while IFS= read -r file; do
           echo "forbidden (name $value in a path): $file"
