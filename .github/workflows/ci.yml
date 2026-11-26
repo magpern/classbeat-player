@@ -487,7 +487,7 @@ jobs:
   # costing macOS minutes, and this can merge before the project. The macOS job runs for the same paths as
   # `mobile` (player/mobile/ and workflow changes). Runner image and Xcode are pinned; Xcode 16.4 ships the
   # iOS 18.5 simulator runtime, and the simulator is pinned by name and OS. Simulator only: CODE_SIGNING_ALLOWED=NO,
-  # no secret, no Apple credential, no device, no signed build, no artifact. Only npm and Swift package
+  # no secret, no Apple credential, no device, no signed build, no artifact. Only npm and CocoaPods
   # downloads happen during setup; no test touches the network.
   ios-check:
     needs: changes
@@ -532,17 +532,16 @@ jobs:
         run: |
           npm ci
           npm run build
-      - name: Sync the web bundle into the iOS project
-        working-directory: player/mobile
-        run: npx cap sync ios
-      - name: Build and test on the pinned simulator (no signing)
+      - name: Install CocoaPods dependencies
         working-directory: player/mobile/ios/App
+        run: pod install
+      - name: Build and test on the pinned simulator (no signing)
+        working-directory: player/mobile
         run: |
           set -euo pipefail
-          if [ -d App.xcworkspace ]; then target=(-workspace App.xcworkspace); else target=(-project App.xcodeproj); fi
           xcrun simctl list devices available "iOS $SIM_OS" | grep -F "$SIM_NAME" >/dev/null \
             || { echo "simulator '$SIM_NAME' on iOS $SIM_OS is not on the runner" >&2; exit 1; }
-          xcodebuild test "${target[@]}" -scheme App \
+          xcodebuild test -workspace ios/App/App.xcworkspace -scheme App \
             -destination "platform=iOS Simulator,name=$SIM_NAME,OS=$SIM_OS" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tail -n 200
