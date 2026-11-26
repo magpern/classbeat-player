@@ -105,6 +105,20 @@ export function kotlinCode(src: string, literals?: string[]): string {
   return out.join("");
 }
 
+/**
+ * The source with its comments removed and nothing else lost: kotlinCode's output with each
+ * string's text put back between its quotes (after the string's template expressions, which stay
+ * in place). A check reads the code and the strings' contents, and no comment marker in a string
+ * hides the code after it.
+ */
+export function kotlinSource(src: string): string {
+  const literals: string[] = [];
+  return kotlinCode(src, literals).replace(/#(\d+)"/g, (pin: string, n: string) => {
+    const text = literals[Number(n)];
+    return text === undefined ? pin : `${text}"`;
+  });
+}
+
 /** Every name in the code as the lexer above leaves it, any letters (numbers' suffixes are not names). */
 export function kotlinNames(src: string): string[] {
   return [...kotlinCode(src).matchAll(/(?<![\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*/gu)].map((m) => m[0]);

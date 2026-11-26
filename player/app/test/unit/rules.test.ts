@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { REPO } from "./fixtures.ts";
-import { kotlinCode, kotlinNames } from "./kotlin-lex.ts";
+import {
+  BACKEND_TRANSPORT, code, KT_BACKEND, KT_FOLLOW, ktFile, type KtMutation, ktViews, MAIN_ACTIVITY, MOBILE, MOBILE_SKIP, mobileFiles,
+  mobileKt, mobileTs, mutationGaps, SESSION_READER, type Views,
+} from "./rule-sources.ts";
 
 const SRC = join(REPO, "player", "app", "src");
 
@@ -17,8 +20,7 @@ function files(dir: string): string[] {
   });
 }
 const sources = files(SRC).map((p) => ({ path: relative(SRC, p), text: readFileSync(p, "utf8") }));
-// Comments may name a rule; the guard looks at code only.
-const code = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1").replace(/<!--[\s\S]*?-->/g, "");
+// Comments may name a rule; the guard looks at code only (`code`, in rule-sources.ts).
 
 const FORBIDDEN: readonly [string, RegExp][] = [
   ["audio playback (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bwebkitAudioContext\b|\bMediaSource\b|\.play\(\)/],
@@ -152,25 +154,8 @@ test("nothing is imported from the spikes", () => {
   assert.deepEqual(hits, []);
 });
 
-// The phone shell (player/mobile, issue #627) is held to the same rules: its TypeScript to the
-// list above, with no exception, and its Kotlin to the list below. Installed packages, build
-// output and the bundled page (built from the sources checked here) are not sources. They are
-// skipped by their exact paths, so a source folder that happens to be called "build" or "public"
-// elsewhere is still checked.
-const MOBILE = join(REPO, "player", "mobile");
-const MOBILE_SKIP = new Set(
-  ["node_modules", "android/.gradle", "android/.kotlin", "android/build", "android/app/build", "android/app/src/main/assets/public"].map((p) => join(...p.split("/"))),
-);
-function mobileFiles(dir: string, ext: RegExp, root = MOBILE): string[] {
-  return readdirSync(dir).flatMap((n) => {
-    const p = join(dir, n);
-    if (statSync(p).isDirectory()) return MOBILE_SKIP.has(relative(root, p)) ? [] : mobileFiles(p, ext, root);
-    return ext.test(n) ? [p] : [];
-  });
-}
-const mobileSource = (ext: RegExp) => mobileFiles(MOBILE, ext).map((p) => ({ path: relative(MOBILE, p), text: readFileSync(p, "utf8") }));
-const mobileTs = mobileSource(/\.(ts|mjs|js|html)$/);
-const mobileKt = mobileSource(/\.(kt|kts|java)$/);
+// The phone shell (player/mobile, issue #627; its sources in rule-sources.ts) is held to the same
+// rules: its TypeScript to the list above, with no exception, and its Kotlin to the list below.
 const MANIFEST = join(MOBILE, "android", "app", "src", "main", "AndroidManifest.xml");
 
 test("the phone shell has TypeScript and Kotlin sources to check", () => {
@@ -241,16 +226,12 @@ const KOTLIN_FORBIDDEN: readonly [string, RegExp][] = [
 // alone: every other way onto the network stays a hit in that file, the other checks stay in full
 // there, and every other Kotlin file keeps the full network check.
 const KT_NETWORK = "a network request";
-const KT_BACKEND = ["android", "app", "src", "main", "kotlin", "org", "classbeat", "player", "backend"];
-const BACKEND_TRANSPORT = join(...KT_BACKEND, "BackendTransport.kt");
 // The second exception (owner, 2026-11-26, #653; ADR 0011 section 8): follow/SpotifySessionReader.kt
 // may name the media-session types it reads, for the audio check alone, and the music app's package,
 // for the Spotify check alone. Every other audio, player, recording and Spotify word stays a hit
 // there, the other checks stay in full, and every other Kotlin file keeps the full checks.
 const KT_AUDIO = "audio playback or recording (rule 3)";
 const KT_SPOTIFY = "a Spotify interface (rule 3)";
-const KT_FOLLOW = [...KT_BACKEND.slice(0, -1), "follow"];
-const SESSION_READER = join(...KT_FOLLOW, "SpotifySessionReader.kt");
 const SESSION_WORDS =
   /\bandroid\.media\.session\.(?:MediaSessionManager|MediaController|PlaybackState)\b|\bandroid\.media\.MediaMetadata\b|\bMediaSessionManager\b/g;
 const MUSIC_APP = /"com\.spotify\.music"/g;
@@ -272,9 +253,14 @@ const ktChecked = (path: string, text: string, what: string): string => {
   return strip ? text.replace(strip, " ") : text;
 };
 
-for (const [what, re] of KOTLIN_FORBIDDEN) {
+const ktRule = (what: string): RegExp => KOTLIN_FORBIDDEN.find(([w]) => w === what)![1];
+/** Whether a Kotlin file breaks one of the checks above, in any of its views, its exceptions taken out. */
+const ktForbidden = (what: string) => (path: string, text: string, views: Views = ktViews): boolean =>
+  views(text).some((v) => ktRule(what).test(ktChecked(path, v, what)));
+
+for (const [what] of KOTLIN_FORBIDDEN) {
   test(`no ${what} anywhere in the phone shell's Kotlin`, () => {
-    const hits = mobileKt.filter((s) => re.test(ktChecked(s.path, code(s.text), what))).map((s) => s.path);
+    const hits = mobileKt.filter((s) => ktForbidden(what)(s.path, s.text)).map((s) => s.path);
     assert.deepEqual(hits, []);
   });
 }
@@ -283,12 +269,13 @@ test("the backend transport's exception is one file and two words, for the netwo
   const network = KOTLIN_FORBIDDEN.find(([w]) => w === KT_NETWORK)![1];
   assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.keys()], [BACKEND_TRANSPORT]);
   assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.values()].map((r) => r.source), ["\\bHttpsURLConnection\\b|\\bopenConnection\\b"]);
-  const file = mobileKt.find((s) => s.path === BACKEND_TRANSPORT);
-  assert.ok(file, "the exception names a file that exists");
-  // The file uses what it is allowed, and without the exception it would be a hit.
-  assert.match(code(file.text), /\bHttpsURLConnection\b/);
-  assert.match(code(file.text), /\bopenConnection\(\)/);
-  assert.match(code(file.text), network);
+  const file = ktFile(BACKEND_TRANSPORT);
+  // The file uses what it is allowed, and without the exception it would be a hit, in both views.
+  for (const view of ktViews(file.text)) {
+    assert.match(view, /\bHttpsURLConnection\b/);
+    assert.match(view, /\bopenConnection\(\)/);
+    assert.match(view, network);
+  }
   // In that file every other way onto the network is still a hit, the plain HTTP connection too.
   for (const bad of [
     "conn as HttpURLConnection",
@@ -333,8 +320,6 @@ test("the backend transport's exception is one file and two words, for the netwo
   }
 });
 
-const ktRule = (what: string): RegExp => KOTLIN_FORBIDDEN.find(([w]) => w === what)![1];
-
 test("the Kotlin exceptions are two files, each for the checks and words the owner allowed", () => {
   assert.deepEqual([...KOTLIN_EXCEPTIONS.keys()], [BACKEND_TRANSPORT, SESSION_READER]);
   assert.deepEqual([...KOTLIN_EXCEPTIONS.get(BACKEND_TRANSPORT)!.keys()], [KT_NETWORK]);
@@ -348,14 +333,18 @@ test("the Kotlin exceptions are two files, each for the checks and words the own
   );
 });
 
+/** Whether the music app's package, the Spotify exception's one string, is named other than once. */
+const musicAppNamedAgain = (_path: string, text: string, views: Views = ktViews): boolean =>
+  views(text).some((v) => [...v.matchAll(MUSIC_APP)].length !== 1);
+
 test("the session reader's exception is one file, the media-session types and the music app's package", () => {
-  const file = mobileKt.find((s) => s.path === SESSION_READER);
-  assert.ok(file, "the exception names a file that exists");
-  const own = code(file.text);
-  // The file uses what it is allowed, and without the exception it would be a hit.
-  assert.match(own, ktRule(KT_AUDIO));
-  assert.match(own, ktRule(KT_SPOTIFY));
-  assert.equal([...own.matchAll(MUSIC_APP)].length, 1, "the package is named once");
+  const file = ktFile(SESSION_READER);
+  // The file uses what it is allowed, and without the exception it would be a hit, in both views.
+  for (const own of ktViews(file.text)) {
+    assert.match(own, ktRule(KT_AUDIO));
+    assert.match(own, ktRule(KT_SPOTIFY));
+  }
+  assert.ok(!musicAppNamedAgain(SESSION_READER, file.text), "the package is named once");
   // In that file every other audio, player, recording and Spotify word is still a hit.
   for (const bad of [
     "MediaPlayer()",
@@ -401,288 +390,25 @@ test("the session reader's exception is one file, the media-session types and th
   }
 });
 
-// What only the session reader may name: the media-session types and calls, in any form, so no
-// other file reads a session through a value it got without naming a type.
-const SESSION_NAMES =
-  /MediaController|MediaMetadata|PlaybackState|TransportControls|transportControls|ActiveSessions|MediaSessionManager|MEDIA_SESSION_SERVICE|METADATA_KEY|sessionToken|SessionToken|playbackState|\.metadata\b/;
-// How the reader may get a session: only the listed ones, filtered on the package before anything else.
-const SESSION_FILTERED = /getActiveSessions\(listener\)\?\.filter \{ it\.packageName == MUSIC_APP \}/g;
-const SESSION_OTHER_WAYS =
-  /OnActiveSessionsChangedListener|Session2Token|MediaKeyEventSession|NotificationListenerSessions|MediaController\s*\(|MediaSession\.Token|addOnSession|\bToken\b/;
-// Every read of a session, and of its metadata beyond the four keys it needs.
-const SESSION_READ =
-  /\.(?:metadata|playbackState|transportControls|playbackInfo|queue|queueTitle|extras|sessionActivity|ratingType|flags|sessionInfo|tag)\b|\bget(?:Metadata|PlaybackState|TransportControls|PlaybackInfo|Queue|QueueTitle|Extras|SessionActivity|RatingType|Flags|Tag)\(/;
-const METADATA_OTHER = /\.description\b|getDescription|getBitmap|getRating|getText\(|keySet|\.size\(\)/;
-// Every way to declare a name `MUSIC_APP`: a val, var or const, a parameter, a lambda or loop
-// variable, an import alias. Exactly one may exist, the constant, so no member shadows it.
-const MUSIC_APP_DECLARED =
-  /\b(?:val|var|const)\b[^=\n]*\bMUSIC_APP\b|\bMUSIC_APP\s*(?::|=(?!=)|->)|\bas\s+MUSIC_APP\b|\bfor\s*\(\s*MUSIC_APP\b/g;
-// The only members the reader may name (after `.`, `?.` or `::`, string literals and the package
-// and import lines left out): listing and filtering the sessions, the track's four keys, the play
-// state and position, and the three transport commands. Anything else (`queue`, `playbackInfo`,
-// `extras`, `seekTo`, `setVolumeTo`, …) is a read or a command the reader does not need.
-const READER_MEMBERS = [
-  "METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE",
-  "NEXT", "PAUSE", "PLAY", "STATE_PLAYING", "class", "filter", "getActiveSessions", "getLong", "getString", "getSystemService", "java", "lastPositionUpdateTime",
-  "let", "map", "metadata", "orEmpty", "packageName", "pause", "play", "playbackState", "position", "skipToNext",
-  "state", "takeIf", "transportControls",
-];
-// Calls that bring an object's members into scope, so they could be named without a dot.
-const IMPLICIT_RECEIVER = /\bwith\s*\(|\.(?:run|apply|also)\b|\bthis\b/;
-// A receiver type does the same: a function type with a receiver (`T.() -> R`), an extension
-// function or an extension property (`fun T.f()`, `val T.p`).
-const RECEIVER_TYPE =
-  /[\w>?)]\s*\.\s*\(|\bfun\s+(?:<[^>]*>\s*)?[\w.?<>]+\.\w+\s*\(|\b(?:val|var)\s+(?:<[^>]*>\s*)?[\w?<>]+\.\w+/;
-// Every name the reader's code may contain, as kotlinNames gives them (comments and string text
-// left out, template expressions kept): an allowlist over every way to reach a member, with or
-// without a dot, so a new name of any kind (a member, a local, a parameter) fails until it is
-// added here on purpose.
-const READER_NAMES = [
-  "AndroidSessions", "Boolean", "ComponentName", "Context", "ControllerSession", "FollowListener", "List",
-  "METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE", "MUSIC_APP",
-  "MediaController", "MediaMetadata", "MediaSessionManager", "NEXT", "PAUSE", "PLAY", "PlaybackState", "STATE_PLAYING",
-  "SecurityException", "Session", "SessionState", "SessionTrack", "Sessions", "String", "TransportCommand", "active",
-  "android", "app", "artist", "catch", "class", "classbeat", "command", "const", "content", "context", "controller",
-  "controls", "e", "exists", "filter", "follow", "fun", "getActiveSessions", "getLong", "getString", "getSystemService",
-  "id", "import", "it", "java", "lastPositionUpdateTime", "lengthMs", "let", "listener", "manager", "map", "media",
-  "metadata", "ms", "null", "orEmpty", "org", "override", "package", "packageName", "pause", "play", "playbackState",
-  "player", "position", "private", "send", "session", "skipToNext", "state", "takeIf", "title", "track",
-  "transportControls", "try", "val", "when",
-];
-// The three places `MUSIC_APP` may appear, and nowhere else: the constant, the app it names and the filter.
-const MUSIC_APP_USES = [
-  /^private const val MUSIC_APP = ""$/m,
-  /^ {4}override val app: String = MUSIC_APP$/m,
-  /\?\.filter \{ it\.packageName == MUSIC_APP \}/,
-];
-
-/** The members the reader's code names, from kotlinCode's output; see READER_MEMBERS. */
-function readerMembers(k: string): string[] {
-  const body = k.replace(/^\s*(?:package|import)\b.*$/gm, "");
-  const names = [...body.matchAll(/(?:\?\.|\.|::)\s*([A-Za-z_]\w*)/g)].map((m) => m[1]!);
-  return [...new Set(names)].sort();
-}
-
-/** The problems in the session reader's source, one line each; empty when its rules hold. */
-function readerProblems(text: string): string[] {
-  // Every check runs on what the compiler sees (kotlinCode: comments and string text out, string
-  // templates in), so neither a comment marker in a string nor code in a template hides anything.
-  // `code()` is naive about strings (a "//" cuts the rest of its line) and keeps only the original
-  // value pin and declaration count, each repeated on the lexer's output.
-  const c = code(text);
-  const k = kotlinCode(text);
-  const literals: string[] = [];
-  const kl = kotlinCode(text, literals);
-  const names = kotlinNames(text);
-  const found: string[] = [];
-  const listed = [...k.matchAll(/getActiveSessions/g)].length;
-  const filtered = [...k.matchAll(SESSION_FILTERED)];
-  if (listed === 0 || filtered.length !== listed) found.push("a session list without the package filter");
-  if (!/^private const val MUSIC_APP = "com\.spotify\.music"$/m.test(c)) found.push("the package is not the constant");
-  const pinned = [...kl.matchAll(/^private const val MUSIC_APP = "#(\d+)"$/gm)];
-  if (pinned.length !== 1 || literals[Number(pinned[0]![1])] !== "com.spotify.music") found.push("the package is not the constant");
-  if ([...c.matchAll(MUSIC_APP_DECLARED)].length !== 1 || [...k.matchAll(MUSIC_APP_DECLARED)].length !== 1)
-    found.push("the package is not the constant");
-  if (names.filter((n) => n === "MUSIC_APP").length !== MUSIC_APP_USES.length || !MUSIC_APP_USES.every((u) => u.test(k)))
-    found.push("the package is not the constant");
-  if (SESSION_OTHER_WAYS.test(k)) found.push("another way to a session");
-  const firstRead = k.search(SESSION_READ);
-  if (firstRead >= 0 && (filtered.length === 0 || firstRead < filtered[0]!.index!)) found.push("a read before the filter");
-  const keys = [...new Set([...k.matchAll(/METADATA_KEY_\w+/g)].map((m) => m[0]))].sort();
-  const allowed = ["METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE"];
-  if (keys.some((key) => !allowed.includes(key)) || METADATA_OTHER.test(k)) found.push("metadata beyond the track's identity");
-  const extra = readerMembers(k).filter((m) => !READER_MEMBERS.includes(m));
-  if (extra.length > 0 || IMPLICIT_RECEIVER.test(k) || RECEIVER_TYPE.test(k))
-    found.push("a member beyond the track, the state and the position");
-  if (names.some((n) => !READER_NAMES.includes(n))) found.push("a name the reader does not use");
-  return found;
-}
-
-test("the session reader filters to the music app before any read, and reads only the track, the state and the position", () => {
-  const file = mobileKt.find((s) => s.path === SESSION_READER)!;
-  assert.deepEqual(readerProblems(file.text), []);
-  // Each rule can fail.
-  const filter = "?.filter { it.packageName == MUSIC_APP }";
-  assert.ok(file.text.includes(filter));
-  const F = "manager?.getActiveSessions(listener)?.filter { it.packageName == MUSIC_APP }?.map { ControllerSession(it) }";
-  assert.ok(file.text.includes(F));
-  const mutations: [string, string, string][] = [
-    [filter, "", "a session list without the package filter"],
-    [filter, "?.filter { it.packageName != MUSIC_APP }", "a session list without the package filter"],
-    [filter, "?.filter { it.metadata != null && it.packageName == MUSIC_APP }", "a session list without the package filter"],
-    ["override fun active()", "fun all() = manager?.getActiveSessions(listener)\n    override fun active()", "a session list without the package filter"],
-    ["override fun active()", "fun peek() = manager?.getActiveSessions(listener)?.map { it.metadata }\n    override fun active()", "a session list without the package filter"],
-    ["override fun active()", "fun peek(c: MediaController) = c.metadata\n    override fun active()", "a read before the filter"],
-    ['MUSIC_APP = "com.spotify.music"', 'MUSIC_APP = "com.other.music"', "the package is not the constant"],
-    ["override fun active()", "fun more() = manager?.addOnActiveSessionsChangedListener({ }, listener)\n    override fun active()", "another way to a session"],
-    ["override fun active()", "fun make(t: MediaSession.Token) = MediaController(c, t)\n    override fun active()", "another way to a session"],
-    ["METADATA_KEY_TITLE", "METADATA_KEY_ALBUM_ART", "metadata beyond the track's identity"],
-    ["it.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)", "it.description.mediaId", "metadata beyond the track's identity"],
-    // A member shadowing the constant, in either class (#856).
-    ["override val app: String = MUSIC_APP", 'private val MUSIC_APP = "com.other.music"\n    override val app: String = MUSIC_APP', "the package is not the constant"],
-    ["override val app: String = controller.packageName", 'private val MUSIC_APP: String = "com.other.music"\n    override val app: String = controller.packageName', "the package is not the constant"],
-    ["class AndroidSessions(context: Context)", "class AndroidSessions(context: Context, MUSIC_APP: String = \"\")", "the package is not the constant"],
-    // Reads after the filter and transport beyond play, pause and next (#856).
-    ...["queue", "playbackInfo", "extras", "queueTitle", "sessionActivity", "ratingType"].map(
-      (m): [string, string, string] => ["controller.metadata?.let", `controller.${m}.let { }\n        controller.metadata?.let`, "a member beyond the track, the state and the position"],
-    ),
-    ...["seekTo(0)", "setVolumeTo(0, 0)", "rewind()", "fastForward()", "stop()", "skipToPrevious()", "playFromMediaId(\"x\", null)", "setPlaybackSpeed(2f)"].map(
-      (m): [string, string, string] => ["TransportCommand.NEXT -> controls.skipToNext()", `TransportCommand.NEXT -> controls.${m}`, "a member beyond the track, the state and the position"],
-    ),
-    ["controller.playbackState?.let {", "controller.playbackState?.let { controller.adjustVolume(1, 0)", "a member beyond the track, the state and the position"],
-    ["controller.playbackState?.let {", "controller.playbackState?.let { val q = controller::getQueue", "a member beyond the track, the state and the position"],
-    ["controller.playbackState?.let {", "with(controller) { queue }; controller.playbackState?.let {", "a member beyond the track, the state and the position"],
-    ["controller.playbackState?.let {", "controller.run { queue }; controller.playbackState?.let {", "a member beyond the track, the state and the position"],
-    // Review of #858: a destructured or multi-parameter shadow, members inside string templates,
-    // members named without a dot through a receiver type, and code a string hides from `code`.
-    [F, `("com.other.music" to 0).let { (MUSIC_APP, _) -> ${F} }`, "the package is not the constant"],
-    [F, `listOf("com.other.music").fold(0) { MUSIC_APP, _ -> 0 }.let { ${F} }`, "the package is not the constant"],
-    ["override fun exists()", 'fun f() { for ((MUSIC_APP, v) in listOf("a" to 1)) { } }\n    override fun exists()', "the package is not the constant"],
-    ["override fun exists()", 'fun f() = "${MUSIC_APP}"\n    override fun exists()', "the package is not the constant"],
-    ["TransportCommand.PAUSE -> controls.pause()", 'TransportCommand.PAUSE -> "${controls.seekTo(0)}"', "a member beyond the track, the state and the position"],
-    ["override fun state()", 'fun q() = "${controller.queue}"\n    override fun state()', "a member beyond the track, the state and the position"],
-    ["override fun state()", 'fun q() = """x${controller.extras}"""\n    override fun state()', "a member beyond the track, the state and the position"],
-    ["override fun state()", 'fun q() = "$controller"\n    override fun state()', "a name the reader does not use"],
-    ["override fun state()", "private val q: MediaController.() -> Any? = { queue }\n    fun peek() = q(controller)\n    override fun state()", "a member beyond the track, the state and the position"],
-    ["override fun state()", "private fun MediaController.state() = queue\n    fun peek() = controller.state()\n    override fun state()", "a member beyond the track, the state and the position"],
-    ["override fun state()", "private val MediaController.q get() = queue\n    override fun state()", "a member beyond the track, the state and the position"],
-    ["override fun state()", "private fun MediaController.state() = metadata\n    override fun state()", "a member beyond the track, the state and the position"],
-    ["override fun state()", "private fun MediaController.state() = queue\n    override fun state()", "a name the reader does not use"],
-    ["TransportCommand.PAUSE -> controls.pause()", "TransportCommand.PAUSE -> controls.play { seekTo(0) }", "a name the reader does not use"],
-    ["override fun state()", 'val s = "//"; fun q() = controller.queue\n    override fun state()', "a member beyond the track, the state and the position"],
-    ["override fun state()", 'val s = "/*"; fun q() = controller.queue /* */\n    override fun state()', "a name the reader does not use"],
-    ["override fun state()", "fun q() = controller.`queue`\n    override fun state()", "a member beyond the track, the state and the position"],
-    // Review of #858, round 2: a "//" or "/*" in a string must not hide code from any reader check.
-    [F, `${F}?.takeIf { "//" == "" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(it) }`, "a session list without the package filter"],
-    [F, `${F}?.takeIf { "/*" == "*/" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(it) }`, "a session list without the package filter"],
-    ["controller.metadata?.let {", 'controller.metadata?.takeIf { "//" == "" }?.let { it.getString(MediaMetadata.METADATA_KEY_ALBUM) }\n        controller.metadata?.let {', "metadata beyond the track's identity"],
-    ["controller.metadata?.let {", 'controller.metadata?.takeIf { "//" == "" }?.let { it.description }\n        controller.metadata?.let {', "metadata beyond the track's identity"],
-    [F, `${F}?.takeIf { "//" == "" } ?: manager?.getActiveSessions(listener)?.map { ControllerSession(MediaController(context, it.sessionToken)) }`, "another way to a session"],
-    [F, `manager?.takeIf { "//" == "" }?.let { it.getActiveSessions(listener)?.map { s -> s.metadata } }.let { ${F} }`, "a read before the filter"],
-    // Any letters make a name, and a backticked template reference is a name.
-    ["override fun state()", "fun q() = listOf(1).map { é -> é }\n    override fun state()", "a name the reader does not use"],
-    ["override fun state()", 'fun q() = "$`controller`"\n    override fun state()', "a name the reader does not use"],
-  ];
-  for (const [from, to, problem] of mutations) {
-    const mutated = file.text.replace(from, to);
-    assert.notEqual(mutated, file.text, from);
-    assert.ok(readerProblems(mutated).includes(problem), `${to}: ${readerProblems(mutated).join("; ")}`);
-  }
-});
-
-test("only the session reader names the media-session types and calls", () => {
-  const naming = mobileKt.filter((s) => SESSION_NAMES.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(naming, [SESSION_READER]);
-  for (const bad of ["c.transportControls.play()", "val s: PlaybackState? = x", "m.getActiveSessions(l)", "val t = c.metadata", "c.getPlaybackState()", "MediaMetadata.METADATA_KEY_TITLE"]) {
-    assert.match(code(bad), SESSION_NAMES, bad);
-  }
-});
+const SDK = /com\.spotify\.(?!music")|spotify[-_.]?(?:sdk|auth|android|app-?remote)|appremote|SpotifyAppRemote/i;
+const namesSdk = (_path: string, text: string, views: Views = ktViews): boolean => views(text).some((v) => SDK.test(v));
 
 test("no Spotify SDK and no spotify: link anywhere in the phone shell", () => {
   const LINK = /spotify:/i;
-  const SDK = /com\.spotify\.(?!music")|spotify[-_.]?(?:sdk|auth|android|app-?remote)|appremote|SpotifyAppRemote/i;
   // The SDK nowhere. A link nowhere in the app's sources, strings included; test fixtures may hold
   // a Spotify-style track id as the data a session reports, never as something opened.
   const isTest = (p: string): boolean => p.startsWith(`test${sep}`) || p.includes(`${sep}src${sep}test${sep}`);
-  assert.deepEqual([...mobileTs, ...mobileKt].filter((s) => SDK.test(code(s.text))).map((s) => s.path), []);
+  assert.deepEqual(mobileTs.filter((s) => SDK.test(code(s.text))).map((s) => s.path), []);
+  assert.deepEqual(mobileKt.filter((s) => namesSdk(s.path, s.text)).map((s) => s.path), []);
   const app = [...mobileTs, ...mobileKt].filter((s) => !isTest(s.path));
   assert.ok(app.some((s) => s.path === SESSION_READER));
   assert.deepEqual(app.filter((s) => LINK.test(s.text)).map((s) => s.path), []);
   const pkg = readFileSync(join(MOBILE, "package.json"), "utf8");
   assert.doesNotMatch(pkg, /spotify/i);
   for (const bad of ['"spotify:playlist:abc"', "Uri.parse(\"SPOTIFY:track:x\")", "import com.spotify.android.appremote.api.SpotifyAppRemote", 'implementation("com.spotify.android:auth:2.1.0")', "import com.spotify.sdk.android.auth.AuthorizationClient"]) {
-    assert.ok(LINK.test(bad) || SDK.test(code(bad)), bad);
+    assert.ok(LINK.test(bad) || namesSdk("x.kt", bad), bad);
   }
-  assert.doesNotMatch(code('private const val MUSIC_APP = "com.spotify.music"'), SDK);
-});
-
-test("the notification listener stays empty and no Kotlin asks for the active notifications", () => {
-  const LISTENER = join(...KT_FOLLOW, "FollowListener.kt");
-  const EMPTY = /^package org\.classbeat\.player\.follow\s+import android\.service\.notification\.NotificationListenerService\s+class FollowListener : NotificationListenerService\(\)$/;
-  const READS = /getActiveNotifications|activeNotifications/;
-  const listener = mobileKt.find((s) => s.path === LISTENER)!;
-  assert.match(code(listener.text).trim(), EMPTY);
-  assert.deepEqual(mobileKt.filter((s) => READS.test(code(s.text))).map((s) => s.path), []);
-  // Both can fail.
-  const body = listener.text.replace("NotificationListenerService()", "NotificationListenerService() {\n    override fun onListenerConnected() {}\n}");
-  assert.notEqual(body, listener.text);
-  assert.doesNotMatch(code(body).trim(), EMPTY);
-  for (const bad of ["getActiveNotifications()", "val n = activeNotifications"]) assert.match(code(bad), READS, bad);
-});
-
-// Anything that could make TLS accept a certificate or a host the system would refuse: a trust
-// manager, a hostname verifier (set on a connection, as the default, or as a Kotlin property), an
-// SSL context, a default factory, an insecure factory, a hand-made certificate check. No word
-// boundary and any case, so the Java setters (`setHostnameVerifier`, `setDefaultHostnameVerifier`)
-// and Kotlin's properties (`hostnameVerifier = `) are hits too. Reading the system's own verifier
-// (`getDefaultHostnameVerifier()`) loosens nothing and is the one form left out.
-const TLS_LOOSEN =
-  /TrustManager|TrustAll|TrustEvery|(?<!getDefault)HostnameVerifier|SSLContext|(?<!get)Default\w*(Factory|Verifier)|ALLOW_ALL|getInsecure|SSLCertificateSocketFactory|checkServerTrusted|X509|NoopHostname|AllowAllHostname|InsecureTrust/i;
-// Any SSL socket factory, as a type, a setter or a property.
-const TLS_FACTORY = /SSLSocketFactory/i;
-const ktMain = () => mobileKt.filter((s) => s.path.startsWith(join("android", "app", "src", "main") + sep));
-
-test("only the backend transport handles TLS, and it never loosens the system's checks", () => {
-  const main = ktMain();
-  assert.ok(main.some((s) => s.path === BACKEND_TRANSPORT));
-  // Every app Kotlin file, the transport too.
-  assert.deepEqual(main.filter((s) => TLS_LOOSEN.test(code(s.text))).map((s) => s.path), []);
-  // A socket factory is named only in the transport, where the tests hand in theirs.
-  assert.deepEqual(main.filter((s) => TLS_FACTORY.test(code(s.text))).map((s) => s.path), [BACKEND_TRANSPORT]);
-  // The app builds the transport without one: the system's trust store.
-  const activity = code(main.find((s) => s.path.endsWith(sep + "MainActivity.kt"))!.text);
-  assert.deepEqual([...activity.matchAll(/HttpsBackendTransport\(([^()]*)\)/g)].map((m) => m[1]), ["origin, main"]);
-});
-
-test("the TLS check catches every usual way to switch off certificate or hostname checks", () => {
-  for (const bad of [
-    "val v = HostnameVerifier { _, _ -> true }",
-    "conn.setHostnameVerifier { _, _ -> true }",
-    "conn.hostnameVerifier = HostnameVerifier { _, _ -> true }",
-    "HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }",
-    "HttpsURLConnection.defaultHostnameVerifier = v",
-    "HttpsURLConnection.setDefaultSSLSocketFactory(f)",
-    "HttpsURLConnection.defaultSSLSocketFactory = f",
-    "conn.sslSocketFactory = SSLCertificateSocketFactory.getInsecure(0, null)",
-    "conn.sslSocketFactory = android.net.SSLCertificateSocketFactory.getDefault(0)",
-    "object : X509TrustManager { }",
-    "val tm = TrustManagerFactory.getInstance(a)",
-    "override fun checkServerTrusted(c: Array<java.security.cert.X509Certificate>, a: String) {}",
-    "val ctx = SSLContext.getInstance(\"TLS\")",
-    "val c = javax.net.ssl.SSLContext.getDefault()",
-    "SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER",
-    "NoopHostnameVerifier.INSTANCE",
-    "val trustAll = arrayOf(t)",
-  ]) {
-    assert.match(code(bad), TLS_LOOSEN, bad);
-  }
-  // Reading the system's own verifier, and the transport's own use of a handed-in factory, are not hits.
-  for (const fine of ["val v = HttpsURLConnection.getDefaultHostnameVerifier()", "tls?.let { conn.sslSocketFactory = it }", "conn.instanceFollowRedirects = false"]) {
-    assert.doesNotMatch(code(fine), TLS_LOOSEN, fine);
-  }
-  for (const f of ["conn.setSSLSocketFactory(f)", "conn.sslSocketFactory = f", "val f: SSLSocketFactory? = null"]) {
-    assert.match(code(f), TLS_FACTORY, f);
-  }
-});
-
-test("only MainActivity builds the HTTPS backend transport", () => {
-  // The origin is bound only by the constructor's argument, so no other file may name the class:
-  // not to build one, not as a function reference, not through a type alias.
-  const main = ktMain();
-  const naming = main.filter((s) => /HttpsBackendTransport/.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(naming.sort(), [BACKEND_TRANSPORT, join(...KT_BACKEND.slice(0, -1), "MainActivity.kt")].sort());
-  // The class's own file declares it and builds none, by call or by reference.
-  const own = code(main.find((s) => s.path === BACKEND_TRANSPORT)!.text);
-  assert.deepEqual([...own.matchAll(/HttpsBackendTransport\s*\(|::\s*HttpsBackendTransport/g)].length, 0);
-  assert.match(own, /class HttpsBackendTransport internal constructor\(/);
-  // MainActivity builds exactly one, and nothing else in it names the class but its import.
-  const activity = code(main.find((s) => s.path.endsWith(sep + "MainActivity.kt"))!.text);
-  assert.equal([...activity.matchAll(/HttpsBackendTransport/g)].length, 2);
-  assert.match(activity, /^import org\.classbeat\.player\.backend\.HttpsBackendTransport$/m);
-  assert.equal([...activity.matchAll(/HttpsBackendTransport\(origin, main\)/g)].length, 1);
-  // The check can fail: a second construction or a reference elsewhere is a hit.
-  assert.match(code("val t = HttpsBackendTransport(\"https://x.test\", p)"), /HttpsBackendTransport/);
-  assert.match(code("val f = ::HttpsBackendTransport"), /::\s*HttpsBackendTransport/);
+  assert.ok(!namesSdk("x.kt", 'private const val MUSIC_APP = "com.spotify.music"'));
 });
 
 test("the Kotlin guard catches what it looks for, and not comments or java.net.URI", () => {
@@ -707,12 +433,13 @@ test("the Kotlin guard catches what it looks for, and not comments or java.net.U
     ["URL(u).openConnection()", "URL(u).openStream()", "import java.net.http.HttpClient", "DatagramSocket()", "import okhttp3.OkHttpClient", "client.newWebSocket(r, l)", "CronetEngine.Builder(c).build()", "val c = HttpClientBuilder.create()", "MyHttpsURLConnection(u)"],
   ];
   assert.equal(samples.length, KOTLIN_FORBIDDEN.length);
-  KOTLIN_FORBIDDEN.forEach(([what, re], i) => {
-    for (const sample of samples[i]) assert.match(code(sample), re, `${what}: ${sample}`);
+  KOTLIN_FORBIDDEN.forEach(([what], i) => {
+    for (const sample of samples[i]) assert.ok(ktForbidden(what)("x.kt", sample), `${what}: ${sample}`);
   });
-  for (const [what, re] of KOTLIN_FORBIDDEN) {
-    assert.doesNotMatch(code("// a MediaPlayer or spotify or writeCharacteristic is never used"), re, what);
-    assert.doesNotMatch(code("import java.net.URI\nval u = URI(url).normalize()"), re, what);
+  for (const [what] of KOTLIN_FORBIDDEN) {
+    for (const fine of ["// a MediaPlayer or spotify or writeCharacteristic is never used", "import java.net.URI\nval u = URI(url).normalize()"]) {
+      assert.ok(!ktForbidden(what)("x.kt", fine), `${what}: ${fine}`);
+    }
   }
 });
 
@@ -736,9 +463,11 @@ test("the phone shell's Android manifest asks for INTERNET and nothing else", ()
   }
 });
 
+const namesSpikes = (_path: string, text: string, views: Views = ktViews): boolean => views(text).some((v) => /spikes?\//.test(v));
+
 test("the phone shell imports nothing from the spikes", () => {
-  const hits = [...mobileTs, ...mobileKt].filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path);
-  assert.deepEqual(hits, []);
+  assert.deepEqual(mobileTs.filter((s) => /spikes?\//.test(code(s.text))).map((s) => s.path), []);
+  assert.deepEqual(mobileKt.filter((s) => namesSpikes(s.path, s.text)).map((s) => s.path), []);
 });
 
 test("the phone shell's source files stay under about 300 lines (150 for its policy modules)", () => {
@@ -747,5 +476,44 @@ test("the phone shell's source files stay under about 300 lines (150 for its pol
     const lines = s.text.split("\n").length;
     const cap = s.path.includes(`${sep}policy${sep}`) ? 150 : 300;
     assert.ok(lines <= cap, `${s.path}: ${lines} lines`);
+  }
+});
+
+// Each Kotlin check above, shown to catch code that a "//" (or "/*") in a string on the same line
+// hides from `code` (issue #859): the mutation applied to a real Kotlin file, `code` alone missing it.
+const W = "val webView = bridge.webView";
+const T = "tls?.let { conn.sslSocketFactory = it }";
+const R = "override fun exists(): Boolean = manager != null";
+const hidden = (anchor: string, after: string): string => `${anchor}; val s = "//"; ${after}`;
+const KT_MUTATIONS: readonly KtMutation[] = [
+  [KT_AUDIO, MAIN_ACTIVITY, W, hidden(W, "MediaPlayer().start()"), true],
+  [KT_AUDIO, MAIN_ACTIVITY, W, `${W}; val s = "/*"; MediaPlayer().start() /* */`, true],
+  [KT_AUDIO, SESSION_READER, R, hidden(R, "val p = MediaPlayer()"), true],
+  [KT_SPOTIFY, MAIN_ACTIVITY, W, hidden(W, "spotifyLogin()"), true],
+  [KT_SPOTIFY, SESSION_READER, R, hidden(R, 'val d = "com.spotify.music.debug"'), true],
+  ["the camera (rule 12)", MAIN_ACTIVITY, W, hidden(W, "getSystemService(CameraManager::class.java)"), true],
+  ["equipment control (rule 2)", MAIN_ACTIVITY, W, hidden(W, "gatt.writeCharacteristic(c)"), true],
+  ["equipment control (rule 2)", BACKEND_TRANSPORT, T, hidden(T, "trainer.setResistanceLevel(5)"), true],
+  [KT_NETWORK, MAIN_ACTIVITY, W, hidden(W, "URL(u).openStream()"), true],
+  [KT_NETWORK, MAIN_ACTIVITY, W, `${W}; val s = "/*"; URL(u).openStream() /* */`, true],
+  [KT_NETWORK, BACKEND_TRANSPORT, T, hidden(T, "DatagramSocket()"), true],
+  [KT_NETWORK, SESSION_READER, R, hidden(R, "URL(u).openConnection()"), true],
+  ["the music app's package named once", SESSION_READER, R, hidden(R, 'val o = "com.spotify.music"'), true],
+  ["a Spotify SDK", MAIN_ACTIVITY, W, hidden(W, "SpotifyAppRemote.connect(c)"), true],
+  ["the spikes", MAIN_ACTIVITY, W, hidden(W, 'val p = "spikes/follower"'), true],
+];
+
+test("every Kotlin check catches code a string's \"//\" hides on the same line", () => {
+  const checks = new Map<string, (path: string, text: string, views?: Views) => boolean>([
+    ...KOTLIN_FORBIDDEN.map(([what]) => [what, ktForbidden(what)] as const),
+    ["the music app's package named once", musicAppNamedAgain],
+    ["a Spotify SDK", namesSdk],
+    ["the spikes", namesSpikes],
+  ]);
+  assert.deepEqual(mutationGaps(KT_MUTATIONS, checks), []);
+  // Every check has one, and each exception file has one for each check it is excepted from.
+  assert.deepEqual([...new Set(KT_MUTATIONS.map(([c]) => c))].sort(), [...checks.keys()].sort());
+  for (const [path, excepted] of KOTLIN_EXCEPTIONS) {
+    for (const what of excepted.keys()) assert.ok(KT_MUTATIONS.some(([c, p]) => c === what && p === path), `${path}: ${what}`);
   }
 });
