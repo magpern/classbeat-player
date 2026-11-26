@@ -1,0 +1,58 @@
+/* The follow sheet (docs/design/app-follow.md; mock-ups app-follow-ask and app-follow-still-off, drawn
+   by docs/design/mockups/companion.css and app.css): a full page over the class screen, the app's
+   instructor page look. Everything is scoped to `.follow-sheet`, so the room screen behind it keeps
+   its own styles. Colours: tokens.css only. It fades in over 200 ms; at once with reduced motion. */
+
+.follow-sheet {
+  --c-value: min(4.75vh, 9.8vw);
+  --c-minor: min(3.2vh, 6.6vw);
+  --c-label: min(2.4vh, 5vw);
+  --c-key-h: max(64px, 8.6vh);
+  --c-key-gap: 12px;
+  position: fixed; inset: 0; z-index: 30; box-sizing: border-box; overflow: auto;
+  background: var(--stage); color: var(--light-1); font-family: var(--face-text);
+  font-size: var(--c-label); line-height: 1.1; overflow-wrap: break-word; font-variant-numeric: lining-nums;
+  padding: 3vh 5vw; display: flex; flex-direction: column; gap: 2.2vh;
+  animation: follow-sheet-in 200ms ease-out;
+}
+.follow-sheet[hidden] { display: none; }
+@keyframes follow-sheet-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .follow-sheet { animation: none; } }
+
+.follow-sheet *, .follow-sheet *::before, .follow-sheet *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.follow-sheet .lead, .follow-sheet .act { display: flex; flex-direction: column; gap: max(12px, 2vh); min-width: 0; }
+.follow-sheet h1 { font-family: var(--face-number); font-weight: 800; font-size: var(--c-value); line-height: 1; }
+.follow-sheet p { font-size: var(--c-minor); line-height: 1.25; }
+.follow-sheet p.small { font-size: var(--c-label); color: var(--light-2); }
+.follow-sheet p.mode { font-size: var(--c-label); color: var(--light-2); font-weight: 700; display: flex; align-items: center; gap: 0.5em; }
+.follow-sheet p.mode::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--light-2); flex: none; }
+
+.follow-sheet .steps { list-style: none; display: flex; flex-direction: column; gap: max(8px, 1.2vh); }
+.follow-sheet .steps li { display: grid; grid-template-columns: 1.6em minmax(0, 1fr); column-gap: 0.6em; align-items: baseline; }
+.follow-sheet .steps .sn { font-family: var(--face-number); font-weight: 800; font-size: var(--c-minor); line-height: 1; }
+.follow-sheet .steps .st { font-size: var(--c-label); line-height: 1.25; }
+
+.follow-sheet .stack { display: flex; flex-direction: column; gap: var(--c-key-gap); }
+.follow-sheet .key {
+  width: 100%; min-height: var(--c-key-h); min-width: 64px; padding: 0.6vh 1vw;
+  font: inherit; color: var(--light-1); background: var(--stage-raised); border: 2px solid var(--light-3); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.follow-sheet .key .kl { font-size: var(--c-minor); font-weight: 700; line-height: 1.05; }
+.follow-sheet .key.main { background: var(--light-1); color: var(--ink); border-color: var(--light-1); }
+.follow-sheet .key:focus { outline: none; }
+.follow-sheet .key:focus-visible { outline: 3px solid var(--light-1); outline-offset: 3px; }
+
+/* On its side: the words at the left, the keys at the right. */
+@media (orientation: landscape) {
+  .follow-sheet {
+    --c-value: min(8.2vh, 4.3vw);
+    --c-minor: min(5.6vh, 3.1vw);
+    --c-label: min(4.4vh, 2.35vw);
+    --c-key-h: max(64px, 17vh);
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 5vw; align-content: start; padding: 4vh 4vw; row-gap: 2.4vh;
+  }
+  .follow-sheet > .lead { grid-column: 1; }
+  .follow-sheet > .act { grid-column: 2; grid-row: 1 / span 6; }
+}

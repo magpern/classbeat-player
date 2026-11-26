@@ -7,6 +7,7 @@
 import "../../../../web/src/main.ts";
 import "../../../../web/src/play/play-room.css";
 import "./room-portrait.css";
+import "./follow-band.css";
 import type { RoomOptions, RoomScreen } from "../../../../web/src/room/mount.ts";
 import { phoneRoomOptions, PORTRAIT, type Viewport } from "./phone-scale.ts";
 

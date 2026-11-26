@@ -167,6 +167,17 @@ export function withoutReader(s: PlayerState): PlayerState {
 }
 
 /**
+ * The reader stopped following for good reason while the clock followed it (the phone's
+ * Notification access taken back, app-follow.md): the clock goes on by hand at once, announced as
+ * a hand-over ("Following stopped" for 30 s). Following can be picked again; anything else is unchanged.
+ */
+export function readerStopped(s: PlayerState, now: number): PlayerState {
+  const l = s.loaded;
+  if (l === null || l.link.mode !== "following") return s;
+  return { ...s, loaded: { ...l, link: handOver(l.link, l.clock, now).link } };
+}
+
+/**
  * Mix playback: the running clock goes to the class time of the audio (ADR 0013 section 4, class
  * time = audio position - offset_ms). A clock that is not running is left as it is.
  */

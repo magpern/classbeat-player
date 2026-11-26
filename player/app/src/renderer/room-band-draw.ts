@@ -35,6 +35,7 @@ export function draw(band: HTMLElement, v: BandView): void {
     band.append(ask);
     return;
   }
+  if (v.follow) band.append(buttonEl(v.follow, "follow"));
   const transport = make("div", "transport");
   for (const b of v.transport) transport.append(buttonEl(b, b.id === "main" ? "main" : ""));
   band.append(transport);

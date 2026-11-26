@@ -1,0 +1,14 @@
+/* The band's Follow key on the phone (docs/design/app-follow.md; docs/design/mockups/app-room.css).
+   The band offers it only in the app (the frame's followKey), so the desktop's band is unchanged.
+   On its side: Follow at the left, apart from the transport and End at the right. Held upright: the
+   band takes two rows, Follow alone and full width on the first, and the score's box grows to hold
+   two rows of 64 px keys and their gap; the cue gives up the height. */
+
+.band .btn.follow { margin-right: auto; }
+.band .btn.follow ~ .quit { margin-left: 0; }
+
+@media (max-aspect-ratio: 1/1) {
+  body.play:has(.band .btn.follow) { --score-h: max(calc(19 * var(--dh)), 156px); }
+  body.play .band:has(.btn.follow) { flex-wrap: wrap; align-content: center; row-gap: 12px; }
+  body.play .band .btn.follow { flex: 1 0 100%; margin-right: 0; flex-direction: row; gap: 0.5em; }
+}

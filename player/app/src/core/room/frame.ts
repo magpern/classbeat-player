@@ -20,6 +20,11 @@ export interface RoomFrame {
   readonly playlistNotLoaded: boolean;
   /** The link line of a mix class (docs/design/swedebeat.md, "Room screen"), or null for any other class. */
   readonly mix: MixLine | null;
+  /**
+   * True while the band offers Follow (app-follow.md): the phone app sets it, while the clock is
+   * manual and the music could be followed. The desktop never does, and its band is unchanged.
+   */
+  readonly followKey?: boolean;
 }
 
 /** A closed copy: only the four pattern fields reach the window. */
