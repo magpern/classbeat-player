@@ -47,6 +47,13 @@ export interface InstructorModePlugin {
   unfollow(): Promise<unknown>;
   /** The latest reading while following, or why there is none. */
   reading(): Promise<unknown>;
+  // The music app's play, pause and next (issue #857), and no other command. Each is sent through
+  // the music app's own media session, only while following: {state: "sent" | "notSent" |
+  // "stopped" | "noAccess"}. None takes an argument. "send" because each only asks the music app:
+  // nothing on the phone plays.
+  sendPlay(): Promise<unknown>;
+  sendPause(): Promise<unknown>;
+  sendNext(): Promise<unknown>;
 }
 
 export const riderMode = (): RiderModePlugin => registerPlugin<RiderModePlugin>("RiderMode");

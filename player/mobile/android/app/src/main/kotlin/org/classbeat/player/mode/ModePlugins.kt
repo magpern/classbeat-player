@@ -110,6 +110,15 @@ class InstructorModePlugin : ModePlugin(Mode.INSTRUCTOR) {
 
     @PluginMethod
     fun reading(call: PluginCall) = handle(call) { c, k -> c.follow.reading(k) }
+
+    @PluginMethod
+    fun sendPlay(call: PluginCall) = handle(call) { c, k -> c.follow.sendPlay(k) }
+
+    @PluginMethod
+    fun sendPause(call: PluginCall) = handle(call) { c, k -> c.follow.sendPause(k) }
+
+    @PluginMethod
+    fun sendNext(call: PluginCall) = handle(call) { c, k -> c.follow.sendNext(k) }
 }
 
 /** The activity that holds the mode controller. */

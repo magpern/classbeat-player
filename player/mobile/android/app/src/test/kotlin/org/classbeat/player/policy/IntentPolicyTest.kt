@@ -32,6 +32,9 @@ class IntentPolicyTest {
             "follow" to Mode.INSTRUCTOR,
             "unfollow" to Mode.INSTRUCTOR,
             "reading" to Mode.INSTRUCTOR,
+            "sendPlay" to Mode.INSTRUCTOR,
+            "sendPause" to Mode.INSTRUCTOR,
+            "sendNext" to Mode.INSTRUCTOR,
         )
         assertEquals(expected, IntentPolicy.INTENTS.mapValues { it.value.mode })
     }
@@ -42,7 +45,7 @@ class IntentPolicyTest {
         val instructor = IntentPolicy.of(Mode.INSTRUCTOR)
         assertEquals(setOf("instructorWay", "askInstructorMode", "join", "open", "receive", "leave"), rider)
         assertEquals(
-            setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain", "followAccess", "openFollowSetting", "follow", "unfollow", "reading"),
+            setOf("askRiderMode", "listClasses", "syncNow", "getClass", "unpair", "pairAgain", "followAccess", "openFollowSetting", "follow", "unfollow", "reading", "sendPlay", "sendPause", "sendNext"),
             instructor,
         )
         assertTrue(rider.intersect(instructor).isEmpty())
@@ -125,6 +128,26 @@ class IntentPolicyTest {
             }
             // Notification access is asked for only in instructor mode: never from rider mode's plugin or page.
             assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(Mode.RIDER, Mode.RIDER, name, emptyMap()))
+        }
+    }
+
+    @Test
+    fun `the only music commands are play, pause and next, and none takes an argument`() {
+        // #857: the page sends one of three fixed intents and names no command, app, session or position.
+        val commands = setOf("sendPlay", "sendPause", "sendNext")
+        for (name in commands) {
+            assertNull(name, IntentPolicy.check(Mode.INSTRUCTOR, Mode.INSTRUCTOR, name, emptyMap()))
+            rejectsExtra(name)
+            for (extra in listOf("command", "action", "position", "package", "app", "session", "volume")) {
+                assertEquals("$name $extra", Refusal.UNEXPECTED_ARGUMENT, IntentPolicy.check(Mode.INSTRUCTOR, Mode.INSTRUCTOR, name, mapOf(extra to "x")))
+            }
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(Mode.RIDER, Mode.RIDER, name, emptyMap()))
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(Mode.INSTRUCTOR, Mode.RIDER, name, emptyMap()))
+            assertEquals(name, Refusal.OTHER_MODE, IntentPolicy.check(Mode.RIDER, Mode.INSTRUCTOR, name, emptyMap()))
+            assertEquals(name, Refusal.SWITCHING, IntentPolicy.check(null, Mode.INSTRUCTOR, name, emptyMap()))
+        }
+        for (name in listOf("play", "pause", "next", "sendStop", "sendSeek", "send", "stop", "seek", "seekTo", "previous", "skipToPrevious", "setVolume", "rewind", "fastForward", "PLAY", "Next", "playPause", "command")) {
+            for (mode in Mode.entries) assertEquals(name, Refusal.UNKNOWN, IntentPolicy.check(mode, mode, name, emptyMap()))
         }
     }
 

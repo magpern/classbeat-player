@@ -44,7 +44,7 @@ class SessionReader(private val sessions: Sessions) : MusicSource {
      * Start, pause or next, sent through the music app's own session (ADR 0001's transport), and
      * only while following. False when there is no such session to send it to.
      */
-    fun command(command: TransportCommand): Boolean {
+    override fun command(command: TransportCommand): Boolean {
         if (!started || !sessions.exists()) return false
         val session = mine() ?: return false
         session.send(command)
@@ -91,4 +91,5 @@ data class SessionTrack(val id: String?, val title: String, val artist: String, 
 /** Playing or not, and the position with the elapsed-realtime moment (ms) the system set it. */
 data class SessionState(val playing: Boolean, val positionMs: Long, val positionAt: Long)
 
+/** The only commands the phone sends the music app (issue #857): no seek, volume, stop or other. */
 enum class TransportCommand { PLAY, PAUSE, NEXT }

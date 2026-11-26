@@ -4,10 +4,13 @@
 // phone follows by the same rules as the desktop: a garbage or failed answer changes nothing and
 // the last good reading ages (rule 8), and stopping forgets it. Native code that cannot follow
 // ("unavailable": the phone has no media sessions at all) stops the reader for good, and
-// the shell stays on the manual clock. Nothing here plays, fetches or stores audio, and it sends
-// no command to the music app.
+// the shell stays on the manual clock. Nothing here plays, fetches or stores audio. The only
+// commands are play, pause and next (issue #857): each is its own intent with no argument, so the
+// page names no command text, and native code sends it through the music app's own session.
 import { createReaderLifecycle } from "../../../app/src/core/link/reader-lifecycle.ts";
 import type { MusicReader, NoReadingReason } from "../../../app/src/core/link/reader.ts";
+import { isTransportAction } from "../../../app/src/core/link/transport.ts";
+import type { MusicTransport, TransportAction } from "../../../app/src/core/link/transport.ts";
 import { observationOf, parseFollow, parseReading } from "./answers.ts";
 
 /** Instructor mode's follow intents, as bridge.ts carries them. */
@@ -15,7 +18,17 @@ export interface FollowIntents {
   follow(): Promise<unknown>;
   unfollow(): Promise<unknown>;
   reading(): Promise<unknown>;
+  sendPlay(): Promise<unknown>;
+  sendPause(): Promise<unknown>;
+  sendNext(): Promise<unknown>;
 }
+
+/** Each transport action and the one intent it calls: a fixed table, never a name looked up. */
+const COMMANDS: Readonly<Record<TransportAction, (i: FollowIntents) => Promise<unknown>>> = Object.freeze({
+  play: (i: FollowIntents) => i.sendPlay(),
+  pause: (i: FollowIntents) => i.sendPause(),
+  next: (i: FollowIntents) => i.sendNext(),
+});
 
 export interface AndroidReaderDeps {
   /** Monotonic time in ms. */
@@ -27,7 +40,7 @@ export interface AndroidReaderDeps {
 /** How often native code is asked: well inside the 3 s after which a reading is stale. */
 export const POLL_MS = 500;
 
-export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderDeps): MusicReader {
+export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderDeps): MusicReader & MusicTransport {
   let gone = false;
   let reason: NoReadingReason | null = null;
   /** Bumped on every start and stop: an answer to an older run is dropped. */
@@ -109,9 +122,14 @@ export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderD
         halt();
         intents.unfollow().catch(() => undefined);
       },
-      // No command reaches the music app from here yet (the real reader, #653).
-      command(_action, taken) {
-        taken();
+      // The lifecycle lets one command through at a time, only after a good answer while following.
+      // Whatever native code answers ("sent", "notSent", a refusal), the command has been taken.
+      command(action, taken) {
+        if (!isTransportAction(action)) return taken();
+        const done = (): void => taken();
+        Promise.resolve()
+          .then(() => COMMANDS[action](intents))
+          .then(done, done);
       },
     },
   );
@@ -126,5 +144,6 @@ export function createAndroidReader(intents: FollowIntents, deps: AndroidReaderD
     },
     unavailable: () => gone,
     reason: () => reason,
+    send: (action) => life.send(action),
   };
 }

@@ -105,6 +105,9 @@ function manual() {
       follow: ask("follow"),
       unfollow: ask("unfollow"),
       reading: ask("reading"),
+      sendPlay: ask("play"),
+      sendPause: ask("pause"),
+      sendNext: ask("next"),
     },
   };
 }

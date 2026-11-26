@@ -64,6 +64,20 @@ class Follower(
         return FollowAnswers.reading(source.status(), source.latest(), clock())
     }
 
+    /**
+     * Play, pause or next, pressed by the instructor (issue #857): "sent" through the music app's own
+     * session, "notSent" when it has none, "stopped" when not following. Access lost meanwhile ends
+     * following, as for [reading], and nothing is sent.
+     */
+    fun command(command: TransportCommand): Map<String, Any?> {
+        if (!following) return FollowAnswers.state(FollowAnswers.STOPPED)
+        if (!access.granted()) {
+            stopSource()
+            return FollowAnswers.state(FollowAnswers.NO_ACCESS)
+        }
+        return FollowAnswers.state(if (source.command(command)) FollowAnswers.SENT else FollowAnswers.NOT_SENT)
+    }
+
     /** The teardown on a mode switch, and at construction: nothing follows and the listener is disabled. */
     fun drop() {
         stopSource()

@@ -86,6 +86,10 @@ function fakeNative(
       };
       return { state: "reading", reading };
     },
+    // No command is sent in these runs (follow-commands.test.ts covers them): each would be logged.
+    sendPlay: async () => (calls.push("play"), { state: "sent" }),
+    sendPause: async () => (calls.push("pause"), { state: "sent" }),
+    sendNext: async () => (calls.push("next"), { state: "sent" }),
   };
 }
 

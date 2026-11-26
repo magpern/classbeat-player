@@ -4,6 +4,7 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import org.classbeat.player.backend.CanonicalJson
 import org.classbeat.player.follow.Follower
+import org.classbeat.player.follow.TransportCommand
 import org.classbeat.player.policy.AnswerPolicy
 import org.classbeat.player.policy.Mode
 
@@ -11,7 +12,7 @@ import org.classbeat.player.policy.Mode
 typealias FollowSend = (String?) -> Unit
 
 /**
- * Instructor mode's follow intents on the bridge (issue #632). IntentPolicy has already checked
+ * Instructor mode's follow intents on the bridge (issue #632), and play, pause and next (#857). IntentPolicy has already checked
  * the call is instructor mode's; each answer is checked again here against the mode and passes
  * [AnswerPolicy], as the class answers do, before it is sent. The [FollowSend] forms decide; the
  * [PluginCall] forms only carry the answer to the page.
@@ -31,6 +32,13 @@ class FollowBridge(
 
     fun reading(call: PluginCall) = reading(send(call))
 
+    // The three transport intents (#857), each with its one fixed command: the page names none.
+    fun sendPlay(call: PluginCall) = command(TransportCommand.PLAY, send(call))
+
+    fun sendPause(call: PluginCall) = command(TransportCommand.PAUSE, send(call))
+
+    fun sendNext(call: PluginCall) = command(TransportCommand.NEXT, send(call))
+
     fun followAccess(send: FollowSend) = answer(send) { follower.followAccess() }
 
     fun openFollowSetting(send: FollowSend) = answer(send) { follower.openFollowSetting() }
@@ -40,6 +48,8 @@ class FollowBridge(
     fun unfollow(send: FollowSend) = answer(send) { follower.unfollow() }
 
     fun reading(send: FollowSend) = answer(send) { follower.reading() }
+
+    fun command(command: TransportCommand, send: FollowSend) = answer(send) { follower.command(command) }
 
     private fun answer(send: FollowSend, run: () -> Map<String, Any?>) {
         // Outside instructor mode the follower is not even asked.
