@@ -3,7 +3,7 @@
 // and the file with only its real comments out, so a "//" or "/*" in a string hides nothing from it.
 // rules-ts-mutations.test.ts shows each one catching code such a string hides from `code`.
 import { join } from "node:path";
-import { type Check, code, differs, forbids, withSource } from "./rule-sources.ts";
+import { type Check, code, differs, forbids, fresh, withSource } from "./rule-sources.ts";
 
 export const FORBIDDEN: readonly [string, RegExp][] = [
   ["audio playback (rule 3)", /\bnew\s+Audio\b|<audio\b|<video\b|\bAudioContext\b|\bwebkitAudioContext\b|\bMediaSource\b|\.play\(\)/],
@@ -36,13 +36,11 @@ export const checked = (path: string, text: string, what: string): string => {
   return strip ? text.replace(strip, "") : text;
 };
 
-/** A forbidden rule of the list above, with its exceptions, in either view. */
-export const forbidden =
-  (what: string): Check =>
-  (path, text, views = withSource(code, path)) => {
-    const re = FORBIDDEN.find(([w]) => w === what)![1];
-    return views(text).some((v) => re.test(checked(path, v, what)));
-  };
+/** A forbidden rule of the list above (or of `rules`), with its exceptions, in either view. */
+export const forbidden = (what: string, rules: readonly [string, RegExp][] = FORBIDDEN): Check => {
+  const re = fresh(rules.find(([w]) => w === what)![1]);
+  return (path, text, views = withSource(code, path)) => views(text).some((v) => re.test(checked(path, v, what)));
+};
 
 /** Each exception covers exactly one element or call: a second one in either view is a hit. */
 export const MIX_ONCE = "the mix's element and call, once each";

@@ -151,7 +151,7 @@ class FollowBridgeTest {
     }
 
     @Test
-    fun `each transport intent sends its own one command and answers the call once`() {
+    fun `in instructor mode each transport intent sends its own one command and resolves the call once`() {
         bridge.follow { }
         val expected = mapOf("sendPlay" to "command PLAY", "sendPause" to "command PAUSE", "sendNext" to "command NEXT")
         for ((name, intent) in intents) {
@@ -159,7 +159,7 @@ class FollowBridgeTest {
             val call = FakeCall(name)
             intent(call)
             assertEquals(name, listOf(expected.getValue(name)), log)
-            assertEquals(name, 1, call.answers.size)
+            assertEquals(name, listOf("resolved"), call.answers)
         }
     }
 

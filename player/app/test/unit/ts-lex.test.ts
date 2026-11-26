@@ -33,6 +33,22 @@ test("jsSource keeps regular expressions whole, and tells them from division", (
   assert.equal(jsSource("const x = f(a) / 2 / g[1] / 3; // c"), "const x = f(a) / 2 / g[1] / 3; ");
 });
 
+test("jsSource takes a / after the condition of if, while, for or with for a regex (issue #870)", () => {
+  const kept = [
+    "if (ok) /[//]/.test(s); fetch(u);",
+    "while (f(a)) /[/*]/.exec(s); fetch(u); const t = 1;",
+    "for (;;) /[//]/.test(s); fetch(u);",
+    "with (o) /[//]/.test(s); fetch(u);",
+    "if(ok)\n  /[//]/.test(s); fetch(u);",
+  ];
+  for (const s of kept) assert.equal(jsSource(s), s, s);
+  // Any other ")" still ends an operand, a call or a property named like a keyword included.
+  assert.equal(jsSource("const x = f(a) / 2; // c"), "const x = f(a) / 2; ");
+  assert.equal(jsSource("if (f(a) / 2 > 1) x = (b) / 2; // c"), "if (f(a) / 2 > 1) x = (b) / 2; ");
+  assert.equal(jsSource("const x = o.if(a) / 2; // c"), "const x = o.if(a) / 2; ");
+  assert.equal(jsSource("const x = notif(a) / 2; // c"), "const x = notif(a) / 2; ");
+});
+
 test("cssSource takes out comments and keeps strings whole", () => {
   assert.equal(cssSource("a { color: red; /* animation: x */ }"), "a { color: red;   }");
   assert.equal(cssSource('a::before { content: "/*"; animation: run 1s; } b { content: "*/"; }'), 'a::before { content: "/*"; animation: run 1s; } b { content: "*/"; }');

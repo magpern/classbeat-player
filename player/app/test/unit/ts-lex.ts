@@ -5,23 +5,40 @@
 // A "/" after one of these words starts a regular expression; after any other word, a division.
 const BEFORE_REGEX = new Set(["return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await"]);
 const WORD = /[\p{L}\p{N}_$]/u;
+// A ")" that closes the condition after one of these words ends no operand: `if (x) /re/` is a regex.
+const BEFORE_CONDITION = new Set(["if", "while", "for", "with"]);
 
 /** TypeScript or JavaScript with its comments removed; strings, templates and regexes kept whole. */
 export function jsSource(src: string): string {
   let i = 0;
   const out: string[] = [];
+  // For each "(" still open, whether it opens the condition of `if`, `while`, `for` or `with`; and
+  // whether the last ")" closed such a condition.
+  const conditions: boolean[] = [];
+  let closedCondition = false;
+
+  // The last few characters of the code so far, trailing blanks out.
+  function before(): string {
+    let text = "";
+    for (let k = out.length - 1; k >= 0 && text.trimStart().length < 16; k--) text = out[k] + text;
+    return text.trimEnd();
+  }
+
+  // The word the code so far ends with, or "" when it ends with a property name (`a.if`) or no word.
+  function lastWord(text: string): string {
+    const m = /(\.?)\s*([\p{L}\p{N}_$]+)$/u.exec(text);
+    return m && !m[1] ? m[2]! : "";
+  }
 
   // Whether a "/" here starts a regular expression: what came before it cannot end an operand.
   function regexAllowed(): boolean {
-    let before = "";
-    for (let k = out.length - 1; k >= 0 && before.trimStart().length < 16; k--) before = out[k] + before;
-    before = before.trimEnd();
-    const last = before.at(-1);
+    const text = before();
+    const last = text.at(-1);
     if (last === undefined) return true;
-    if (last === ")" || last === "]" || last === "}") return false;
+    if (last === ")") return closedCondition;
+    if (last === "]" || last === "}") return false;
     if (!WORD.test(last)) return true;
-    const word = /[\p{L}\p{N}_$]+$/u.exec(before)?.[0] ?? "";
-    return BEFORE_REGEX.has(word);
+    return BEFORE_REGEX.has(/[\p{L}\p{N}_$]+$/u.exec(text)?.[0] ?? "");
   }
 
   // Copies a quoted run up to its closing quote (or the line's end), escapes kept as they are.
@@ -81,6 +98,8 @@ export function jsSource(src: string): string {
       else if (ch === "`") template();
       else if (ch === "/" && regexAllowed()) regex();
       else {
+        if (ch === "(") conditions.push(BEFORE_CONDITION.has(lastWord(before())));
+        if (ch === ")") closedCondition = conditions.pop() ?? false;
         if (inTemplate && ch === "{") depth++;
         if (inTemplate && ch === "}") {
           if (depth === 0) {
