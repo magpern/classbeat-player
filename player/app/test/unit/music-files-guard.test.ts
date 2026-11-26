@@ -92,7 +92,11 @@ describe("the planted pattern", () => {
     registerMusicFilesHandlers({ handle: (ch, fn) => void handlers.set(ch, fn) }, () => TRUSTED, music);
     const answer = await handlers.get(CH_MUSIC_FILES_FIND)!(fromList, CLASS_ID);
     assert.deepEqual(answer, { status: "failed" });
-    assert.deepEqual(said, []);
+    // The test runner itself may report on stdout (it does under CI's child-process runner), so the
+    // check is on what a log line would carry: nothing of the disk and nothing of the error.
+    const text = said.join("\n");
+    assert.deepEqual(leaks(text), []);
+    assert.ok(!text.includes("EACCES"), "the error is not logged");
   });
 });
 
