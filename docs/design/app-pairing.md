@@ -5,6 +5,8 @@ section 5 and [ADR 0002](../adr/0002-accounts-sign-in-pairing-and-tokens.md) (pa
 [app.md](app.md). Mock-ups: `mockups/app-pair-*.html` and their `-390x844.png` and `-844x390.png`
 shots.
 
+On iOS the same screens apply with the differences of [app-pairing-ios.md](app-pairing-ios.md).
+
 ## Purpose
 
 Pair the phone with the instructor's account the way the desktop does: the app shows a code, the
