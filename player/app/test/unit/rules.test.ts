@@ -242,9 +242,32 @@ const KOTLIN_FORBIDDEN: readonly [string, RegExp][] = [
 const KT_NETWORK = "a network request";
 const KT_BACKEND = ["android", "app", "src", "main", "kotlin", "org", "classbeat", "player", "backend"];
 const BACKEND_TRANSPORT = join(...KT_BACKEND, "BackendTransport.kt");
-const KOTLIN_NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[BACKEND_TRANSPORT, /\bHttpsURLConnection\b|\bopenConnection\b/g]]);
+// The second exception (owner, 2026-11-26, #653; ADR 0011 section 8): follow/SpotifySessionReader.kt
+// may name the media-session types it reads, for the audio check alone, and the music app's package,
+// for the Spotify check alone. Every other audio, player, recording and Spotify word stays a hit
+// there, the other checks stay in full, and every other Kotlin file keeps the full checks.
+const KT_AUDIO = "audio playback or recording (rule 3)";
+const KT_SPOTIFY = "a Spotify interface (rule 3)";
+const KT_FOLLOW = [...KT_BACKEND.slice(0, -1), "follow"];
+const SESSION_READER = join(...KT_FOLLOW, "SpotifySessionReader.kt");
+const SESSION_WORDS =
+  /\bandroid\.media\.session\.(?:MediaSessionManager|MediaController|PlaybackState)\b|\bandroid\.media\.MediaMetadata\b|\bMediaSessionManager\b/g;
+const MUSIC_APP = /"com\.spotify\.music"/g;
+const KOTLIN_EXCEPTIONS: ReadonlyMap<string, ReadonlyMap<string, RegExp>> = new Map([
+  [BACKEND_TRANSPORT, new Map([[KT_NETWORK, /\bHttpsURLConnection\b|\bopenConnection\b/g]])],
+  [
+    SESSION_READER,
+    new Map([
+      [KT_AUDIO, SESSION_WORDS],
+      [KT_SPOTIFY, MUSIC_APP],
+    ]),
+  ],
+]);
+const KOTLIN_NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map(
+  [...KOTLIN_EXCEPTIONS].flatMap(([path, checks]) => (checks.has(KT_NETWORK) ? [[path, checks.get(KT_NETWORK)!] as const] : [])),
+);
 const ktChecked = (path: string, text: string, what: string): string => {
-  const strip = what === KT_NETWORK ? KOTLIN_NETWORK_EXCEPTIONS.get(path) : undefined;
+  const strip = KOTLIN_EXCEPTIONS.get(path)?.get(what);
   return strip ? text.replace(strip, " ") : text;
 };
 
@@ -307,6 +330,170 @@ test("the backend transport's exception is one file and two words, for the netwo
     assert.match(ktChecked(path, "u.openConnection()", KT_NETWORK), network, path);
     assert.match(ktChecked(path, "c as HttpsURLConnection", KT_NETWORK), network, path);
   }
+});
+
+const ktRule = (what: string): RegExp => KOTLIN_FORBIDDEN.find(([w]) => w === what)![1];
+
+test("the Kotlin exceptions are two files, each for the checks and words the owner allowed", () => {
+  assert.deepEqual([...KOTLIN_EXCEPTIONS.keys()], [BACKEND_TRANSPORT, SESSION_READER]);
+  assert.deepEqual([...KOTLIN_EXCEPTIONS.get(BACKEND_TRANSPORT)!.keys()], [KT_NETWORK]);
+  assert.deepEqual([...KOTLIN_EXCEPTIONS.get(SESSION_READER)!.keys()], [KT_AUDIO, KT_SPOTIFY]);
+  assert.deepEqual(
+    [...KOTLIN_EXCEPTIONS.get(SESSION_READER)!.values()].map((r) => r.source),
+    [
+      "\\bandroid\\.media\\.session\\.(?:MediaSessionManager|MediaController|PlaybackState)\\b|\\bandroid\\.media\\.MediaMetadata\\b|\\bMediaSessionManager\\b",
+      '"com\\.spotify\\.music"',
+    ],
+  );
+});
+
+test("the session reader's exception is one file, the media-session types and the music app's package", () => {
+  const file = mobileKt.find((s) => s.path === SESSION_READER);
+  assert.ok(file, "the exception names a file that exists");
+  const own = code(file.text);
+  // The file uses what it is allowed, and without the exception it would be a hit.
+  assert.match(own, ktRule(KT_AUDIO));
+  assert.match(own, ktRule(KT_SPOTIFY));
+  assert.equal([...own.matchAll(MUSIC_APP)].length, 1, "the package is named once");
+  // In that file every other audio, player, recording and Spotify word is still a hit.
+  for (const bad of [
+    "MediaPlayer()",
+    "AudioTrack.Builder().build()",
+    "AudioRecord.Builder().build()",
+    "MediaRecorder(c)",
+    "import android.media.AudioManager",
+    "import android.media.session.MediaSession",
+    "val s = MediaSession(c, \"x\")",
+    "MediaSessionCompat(c, \"x\")",
+    "import androidx.media3.session.MediaController",
+    "import androidx.media.session.MediaButtonReceiver",
+    "import com.google.android.exoplayer2.ExoPlayer",
+    "SoundPool.Builder().build()",
+  ]) {
+    assert.match(ktChecked(SESSION_READER, `import android.media.session.MediaController; MediaSessionManager; ${bad}`, KT_AUDIO), ktRule(KT_AUDIO), bad);
+  }
+  for (const bad of ['"com.spotify.music.debug"', '"spotify:playlist:x"', "import com.spotify.android.appremote.api.SpotifyAppRemote", "class SpotifyReader", '"com.spotify.mobile"']) {
+    assert.match(ktChecked(SESSION_READER, `"com.spotify.music" ${bad}`, KT_SPOTIFY), ktRule(KT_SPOTIFY), bad);
+  }
+  // The other checks take no exception there: the network, the camera, equipment control.
+  for (const [what, bad] of [
+    [KT_NETWORK, "URL(u).openConnection()"],
+    [KT_NETWORK, "c as HttpsURLConnection"],
+    ["the camera (rule 12)", "import androidx.camera.core.ImageCapture"],
+    ["equipment control (rule 2)", "gatt.writeCharacteristic(c)"],
+  ]) {
+    assert.match(ktChecked(SESSION_READER, `"com.spotify.music" MediaSessionManager ${bad}`, what), ktRule(what), bad);
+  }
+  // Any other file, the follow package's others too, keeps the full audio and Spotify checks.
+  const elsewhere = [
+    join(...KT_FOLLOW, "SessionReader.kt"),
+    join(...KT_FOLLOW, "FollowListener.kt"),
+    join(...KT_FOLLOW.slice(0, -1), "MainActivity.kt"),
+    BACKEND_TRANSPORT,
+    join("android", "app", "src", "test", "kotlin", "org", "classbeat", "player", "follow", "SpotifySessionReader.kt"),
+    "SpotifySessionReader.kt",
+  ];
+  for (const path of elsewhere) {
+    assert.match(ktChecked(path, "import android.media.session.MediaController", KT_AUDIO), ktRule(KT_AUDIO), path);
+    assert.match(ktChecked(path, "val m: MediaSessionManager? = null", KT_AUDIO), ktRule(KT_AUDIO), path);
+    assert.match(ktChecked(path, 'val app = "com.spotify.music"', KT_SPOTIFY), ktRule(KT_SPOTIFY), path);
+  }
+});
+
+// What only the session reader may name: the media-session types and calls, in any form, so no
+// other file reads a session through a value it got without naming a type.
+const SESSION_NAMES =
+  /MediaController|MediaMetadata|PlaybackState|TransportControls|transportControls|ActiveSessions|MediaSessionManager|MEDIA_SESSION_SERVICE|METADATA_KEY|sessionToken|SessionToken|playbackState|\.metadata\b/;
+// How the reader may get a session: only the listed ones, filtered on the package before anything else.
+const SESSION_FILTERED = /getActiveSessions\(listener\)\?\.filter \{ it\.packageName == MUSIC_APP \}/g;
+const SESSION_OTHER_WAYS =
+  /OnActiveSessionsChangedListener|Session2Token|MediaKeyEventSession|NotificationListenerSessions|MediaController\s*\(|MediaSession\.Token|addOnSession|\bToken\b/;
+// Every read of a session, and of its metadata beyond the four keys it needs.
+const SESSION_READ =
+  /\.(?:metadata|playbackState|transportControls|playbackInfo|queue|queueTitle|extras|sessionActivity|ratingType|flags|sessionInfo|tag)\b|\bget(?:Metadata|PlaybackState|TransportControls|PlaybackInfo|Queue|QueueTitle|Extras|SessionActivity|RatingType|Flags|Tag)\(/;
+const METADATA_OTHER = /\.description\b|getDescription|getBitmap|getRating|getText\(|keySet|\.size\(\)/;
+
+/** The problems in the session reader's source, one line each; empty when its rules hold. */
+function readerProblems(text: string): string[] {
+  const c = code(text);
+  const found: string[] = [];
+  const listed = [...c.matchAll(/getActiveSessions/g)].length;
+  const filtered = [...c.matchAll(SESSION_FILTERED)];
+  if (listed === 0 || filtered.length !== listed) found.push("a session list without the package filter");
+  if (!/^private const val MUSIC_APP = "com\.spotify\.music"$/m.test(c)) found.push("the package is not the constant");
+  if (SESSION_OTHER_WAYS.test(c)) found.push("another way to a session");
+  const firstRead = c.search(SESSION_READ);
+  if (firstRead >= 0 && (filtered.length === 0 || firstRead < filtered[0]!.index!)) found.push("a read before the filter");
+  const keys = [...new Set([...c.matchAll(/METADATA_KEY_\w+/g)].map((m) => m[0]))].sort();
+  const allowed = ["METADATA_KEY_ARTIST", "METADATA_KEY_DURATION", "METADATA_KEY_MEDIA_ID", "METADATA_KEY_TITLE"];
+  if (keys.some((k) => !allowed.includes(k)) || METADATA_OTHER.test(c)) found.push("metadata beyond the track's identity");
+  return found;
+}
+
+test("the session reader filters to the music app before any read, and reads only the track, the state and the position", () => {
+  const file = mobileKt.find((s) => s.path === SESSION_READER)!;
+  assert.deepEqual(readerProblems(file.text), []);
+  // Each rule can fail.
+  const filter = "?.filter { it.packageName == MUSIC_APP }";
+  assert.ok(file.text.includes(filter));
+  const mutations: [string, string, string][] = [
+    [filter, "", "a session list without the package filter"],
+    [filter, "?.filter { it.packageName != MUSIC_APP }", "a session list without the package filter"],
+    [filter, "?.filter { it.metadata != null && it.packageName == MUSIC_APP }", "a session list without the package filter"],
+    ["override fun active()", "fun all() = manager?.getActiveSessions(listener)\n    override fun active()", "a session list without the package filter"],
+    ["override fun active()", "fun peek() = manager?.getActiveSessions(listener)?.map { it.metadata }\n    override fun active()", "a session list without the package filter"],
+    ["override fun active()", "fun peek(c: MediaController) = c.metadata\n    override fun active()", "a read before the filter"],
+    ['MUSIC_APP = "com.spotify.music"', 'MUSIC_APP = "com.other.music"', "the package is not the constant"],
+    ["override fun active()", "fun more() = manager?.addOnActiveSessionsChangedListener({ }, listener)\n    override fun active()", "another way to a session"],
+    ["override fun active()", "fun make(t: MediaSession.Token) = MediaController(c, t)\n    override fun active()", "another way to a session"],
+    ["METADATA_KEY_TITLE", "METADATA_KEY_ALBUM_ART", "metadata beyond the track's identity"],
+    ["it.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)", "it.description.mediaId", "metadata beyond the track's identity"],
+  ];
+  for (const [from, to, problem] of mutations) {
+    const mutated = file.text.replace(from, to);
+    assert.notEqual(mutated, file.text, from);
+    assert.ok(readerProblems(mutated).includes(problem), `${to}: ${readerProblems(mutated).join("; ")}`);
+  }
+});
+
+test("only the session reader names the media-session types and calls", () => {
+  const naming = mobileKt.filter((s) => SESSION_NAMES.test(code(s.text))).map((s) => s.path);
+  assert.deepEqual(naming, [SESSION_READER]);
+  for (const bad of ["c.transportControls.play()", "val s: PlaybackState? = x", "m.getActiveSessions(l)", "val t = c.metadata", "c.getPlaybackState()", "MediaMetadata.METADATA_KEY_TITLE"]) {
+    assert.match(code(bad), SESSION_NAMES, bad);
+  }
+});
+
+test("no Spotify SDK and no spotify: link anywhere in the phone shell", () => {
+  const LINK = /spotify:/i;
+  const SDK = /com\.spotify\.(?!music")|spotify[-_.]?(?:sdk|auth|android|app-?remote)|appremote|SpotifyAppRemote/i;
+  // The SDK nowhere. A link nowhere in the app's sources, strings included; test fixtures may hold
+  // a Spotify-style track id as the data a session reports, never as something opened.
+  const isTest = (p: string): boolean => p.startsWith(`test${sep}`) || p.includes(`${sep}src${sep}test${sep}`);
+  assert.deepEqual([...mobileTs, ...mobileKt].filter((s) => SDK.test(code(s.text))).map((s) => s.path), []);
+  const app = [...mobileTs, ...mobileKt].filter((s) => !isTest(s.path));
+  assert.ok(app.some((s) => s.path === SESSION_READER));
+  assert.deepEqual(app.filter((s) => LINK.test(s.text)).map((s) => s.path), []);
+  const pkg = readFileSync(join(MOBILE, "package.json"), "utf8");
+  assert.doesNotMatch(pkg, /spotify/i);
+  for (const bad of ['"spotify:playlist:abc"', "Uri.parse(\"SPOTIFY:track:x\")", "import com.spotify.android.appremote.api.SpotifyAppRemote", 'implementation("com.spotify.android:auth:2.1.0")', "import com.spotify.sdk.android.auth.AuthorizationClient"]) {
+    assert.ok(LINK.test(bad) || SDK.test(code(bad)), bad);
+  }
+  assert.doesNotMatch(code('private const val MUSIC_APP = "com.spotify.music"'), SDK);
+});
+
+test("the notification listener stays empty and no Kotlin asks for the active notifications", () => {
+  const LISTENER = join(...KT_FOLLOW, "FollowListener.kt");
+  const EMPTY = /^package org\.classbeat\.player\.follow\s+import android\.service\.notification\.NotificationListenerService\s+class FollowListener : NotificationListenerService\(\)$/;
+  const READS = /getActiveNotifications|activeNotifications/;
+  const listener = mobileKt.find((s) => s.path === LISTENER)!;
+  assert.match(code(listener.text).trim(), EMPTY);
+  assert.deepEqual(mobileKt.filter((s) => READS.test(code(s.text))).map((s) => s.path), []);
+  // Both can fail.
+  const body = listener.text.replace("NotificationListenerService()", "NotificationListenerService() {\n    override fun onListenerConnected() {}\n}");
+  assert.notEqual(body, listener.text);
+  assert.doesNotMatch(code(body).trim(), EMPTY);
+  for (const bad of ["getActiveNotifications()", "val n = activeNotifications"]) assert.match(code(bad), READS, bad);
 });
 
 // Anything that could make TLS accept a certificate or a host the system would refuse: a trust

@@ -84,9 +84,9 @@ class FollowerTest {
     }
 
     @Test
-    fun `the stand-in source says unavailable, so the page stays on the manual clock`() {
+    fun `a source that can never follow says unavailable, so the page stays on the manual clock`() {
         val access = FakeAccess(grant = true)
-        val f = follower(UnavailableSource, access)
+        val f = follower(FakeSource(SourceStatus.UNAVAILABLE), access)
         assertEquals(mapOf("state" to "unavailable"), f.follow())
         assertFalse(f.following)
         assertEquals(mapOf("state" to "stopped"), f.reading())
@@ -96,7 +96,7 @@ class FollowerTest {
     @Test
     fun `an unavailable reader answers unavailable even without access, so no one is sent to the setting`() {
         val access = FakeAccess(grant = false)
-        val f = follower(UnavailableSource, access)
+        val f = follower(FakeSource(SourceStatus.UNAVAILABLE), access)
         assertEquals(mapOf("state" to "unavailable"), f.follow())
         assertFalse(f.following)
         assertEquals(emptyList<Boolean>(), access.switches)
