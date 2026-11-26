@@ -66,10 +66,11 @@ export const appText = (path: string): string => readFileSync(join(APP_SRC, ...p
 
 // The phone shell (player/mobile, issue #627). Installed packages, build output and the bundled
 // page (built from the sources checked here) are not sources. They are skipped by their exact
-// paths, so a source folder that happens to be called "build" or "public" elsewhere is still checked.
+// paths (the iOS ones since issue #894), so a source folder that happens to be called "build" or "public" elsewhere is still checked.
 export const MOBILE = join(REPO, "player", "mobile");
 export const MOBILE_SKIP = new Set(
-  ["node_modules", "android/.gradle", "android/.kotlin", "android/build", "android/app/build", "android/app/src/main/assets/public"].map((p) => join(...p.split("/"))),
+  ["node_modules", "android/.gradle", "android/.kotlin", "android/build", "android/app/build", "android/app/src/main/assets/public",
+    "ios/App/Pods", "ios/App/App/public", "ios/App/build", "ios/App/DerivedData", "ios/DerivedData"].map((p) => join(...p.split("/"))),
 );
 export function mobileFiles(dir: string, ext: RegExp, root = MOBILE): string[] {
   return readdirSync(dir).flatMap((n) => {

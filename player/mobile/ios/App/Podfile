@@ -1,0 +1,23 @@
+# The iOS app's pods (issue #894, ADR 0016 section 8): only Capacitor's own, from the pinned
+# @capacitor/ios in node_modules. A test (player/mobile/test/ios-project.test.ts) fails on any
+# other pod. The Capacitor CLI is not used, so nothing rewrites this file.
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '16.0'
+use_frameworks!
+
+# The input and output paths would make Xcode rebuild the pods on every change.
+install! 'cocoapods', :disable_input_output_paths => true
+
+target 'App' do
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+
+  target 'AppTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)
+end

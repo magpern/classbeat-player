@@ -1,0 +1,8 @@
+# Built or installed by the tools, never committed (issue #894).
+App/build/
+App/Pods/
+App/output/
+App/App/public/
+DerivedData/
+xcuserdata/
+*.xcuserstate

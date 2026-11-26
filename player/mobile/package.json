@@ -11,11 +11,13 @@
     "build": "node --import tsx build.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
+    "ios:verify": "node --import tsx ios-verify/main.ts",
     "test": "node --import tsx --test \"test/*.test.ts\" \"test/shots/*.test.ts\""
   },
   "dependencies": {
     "@capacitor/android": "8.6.0",
     "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0",
     "classformat": "file:../../schema/ts"
   },
   "devDependencies": {
