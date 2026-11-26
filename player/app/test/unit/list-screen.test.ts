@@ -216,3 +216,11 @@ test("the screen carries no hue and no word of rider data", () => {
   const text = JSON.stringify(CASES.map(([, v]) => screen(v)));
   assert.doesNotMatch(text, /#[0-9a-f]{6}|rgb|zone|rider|popular|last taught/i);
 });
+
+test("a row with an unknown music source says it needs a newer version, in the row and the footer", () => {
+  const s = screen(view({ rows: [row("Alpha", 1, { source: "unknown" })] }));
+  assert.equal(s.body.kind, "list");
+  if (s.body.kind !== "list") return;
+  assert.equal(s.body.rows[0].meta, "This class needs a newer version of the player");
+  assert.equal(s.body.footer.detail, "This class needs a newer version of the player");
+});

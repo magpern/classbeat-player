@@ -256,3 +256,13 @@ test("with the real sign-in service, Start is refused while its sign-out waits f
   assert.equal((await out)?.state, "signed_out");
   assert.equal(controller.start(first.id, first.hash), true, "allowed once it has finished");
 });
+
+test("Start is refused for a class with an unknown music source: nothing is pinned or opened", () => {
+  const { r, controller } = rig();
+  r.rows = [row("Alpha", 1, { source: "unknown" })];
+  controller.view();
+  r.pinResult = { class: { title: "Alpha" } };
+  assert.equal(controller.start(r.rows[0].id, r.rows[0].hash), false);
+  assert.deepEqual(r.pins, []);
+  assert.deepEqual(r.opened, []);
+});
