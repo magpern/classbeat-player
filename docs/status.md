@@ -205,6 +205,14 @@ Also merged: the rider line on the external display's idle stage (#787 spec, #79
 hardened in #807). Waiting for the owner: the signing key, the backend transport (#649), the Spotify
 reader (#653) and native Bluetooth sensors. The iOS app starts after Android (#684).
 
+Also merged: the app's room screen plays the class opened from the list on the manual clock (#871,
+#880), checked by a class reader the phone pages run without `unsafe-eval` (#874, #879); the
+external display keeps its idle stage while a class runs on the phone (specs and ADR 0011 as built,
+#881, #882); and following the music on the app's room screen, with the Follow key, the access
+sheet and play, pause and next sent to the music app only on the instructor's press (#872, #883).
+CI keeps the app's screenshots (#875, #878). In progress: hardening of following on the phone
+(#884) and the same press-routing check on the desktop (#885).
+
 Verifier at 28e592f: the debug and release APKs build, the manifest check passes, and the 57 web
 and 238 JVM tests per variant pass. Every built item is met on fakes. One gap: the follower asked
 for notification access before checking the reader (#836, fixed in #837). Not checked on a device
