@@ -15,7 +15,7 @@ service and on users' devices, visuals shown in time with Spotify playback, and 
 The rules this ADR turns into checkable operating rules come from the plan's product rules
 (section 3, rules 1 to 3), the music link (section 4, ADR 0001), the class format (ADR 0003) and
 the owner's open decisions 9 to 13 (section 13). Which companies are involved: Spotify (the
-music the instructor plays), MOWL (where classbeat gets music analysis and still saves classes),
+music the instructor plays), MOWL (named only in section 4: this product has no connection with it),
 Swedebeat (a licensed music provider, later) and classbeat (our own class source).
 
 ## Decision
@@ -66,8 +66,8 @@ the player never selects songs or builds a class from a playlist.
   first start, help) is a design decision; **its wording is the owner's** (AGENTS.md, section 1).
   Until the owner supplies it, agents use a placeholder marked `OWNER TEXT` and ship nothing
   that claims more.
-- The product never says or implies that it licenses music, or that it is endorsed by Spotify,
-  MOWL or Swedebeat.
+- The product never says or implies that it licenses music, or that it is endorsed by Spotify
+  or Swedebeat.
 
 ### 4. MOWL
 
@@ -75,10 +75,11 @@ the player never selects songs or builds a class from a playlist.
   palette or screen design of MOWL (rule 6). The backend and the player never call a MOWL server.
 - classbeat stays the only party that talks to MOWL. What reaches this product is classbeat's own
   class document (ADR 0003), never MOWL's data in MOWL's format.
-- MOWL is named in the repository only where a rule needs the name: the plan and ADRs (for
-  comparison and these rules), AGENTS.md (who may contact which company), the README's
-  non-affiliation line, and the guard list of section 7. Product code, screens and tests name it
-  nowhere else.
+- **The player is not associated with MOWL and never mentions it** (owner, 2026-11-26). The name
+  appears in exactly two places, because a rule needs it: this section and the guard list of
+  section 7. Product code, screens, tests, fixtures, specs, the plan, the other ADRs and the README
+  name it nowhere. Classes come from classbeat; a song's music source (Spotify or Swedebeat) is in
+  the class document.
 
 ### 5. Swedebeat
 
@@ -92,7 +93,7 @@ the player never selects songs or builds a class from a playlist.
 
 ### 6. Contacting providers
 
-Contacting Spotify, MOWL, Swedebeat or any other company, and signing up for any provider
+Contacting Spotify, Swedebeat or any other company, and signing up for any provider
 developer programme, is the owner's alone (AGENTS.md, section 1). An agent that needs something
 from a provider writes it in `docs/owner.md` and carries on.
 
@@ -109,8 +110,8 @@ from a provider writes it in `docs/owner.md` and carries on.
 
 - Any owner decision on payment, openness or distribution (decisions 9, 12 and 13).
 - Adding option B (section 2).
-- PL11 and the owner's answer on Swedebeat (decision 11). Getting Swedebeat audio through the
-  user's MOWL account, one route decision 11 names, would also reopen section 4.
+- PL11 and the owner's answer on Swedebeat (decision 11). Swedebeat audio never comes through
+  MOWL (owner, 2026-11-26).
 - Any new music provider or new class source.
 
 ## Alternatives

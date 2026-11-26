@@ -155,7 +155,7 @@ clock. That is all it does in this version:
 - **Rule 2:** no device commands.
 - **Rule 3:** no audio, and no music read.
 - **Rules 4 and 6:** the room screen is laid out again for phone and portrait sizes. It stays the
-  plain score, with no road, track or world, and none of MOWL's look (no ring trio and none of its
+  plain score, with no road, track or world, and its own look (no ring trio and no other player's
   palette).
 - **Rule 7:** colour means the planned zone, and the zone number and name stay.
 - **Rules 8 to 10:** carried unchanged by the room screen.

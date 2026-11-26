@@ -259,7 +259,7 @@ The renderer holds a view built field by field, as `SyncView` and `PairingView` 
 | 2. Never controls equipment | Nothing here refers to a bike or a machine |
 | 3. Spotify's music stays in Spotify's app | A mix is shown only on a Swedebeat class; a Spotify row never shows a mix state, a bar or a key. No audio from our server is named or implied |
 | 4, 5. No road, terrain or moving viewpoint | No scene change |
-| 6. None of MOWL's look | Plain words, markers and a bar on black |
+| 6. Its own look | Plain words, markers and a bar on black |
 | 7. Colour is the planned zone | No hue (W5) |
 | 8, 9 | No hand-position icon, no load figure |
 | 10, 11 | No cue and no history: no "last played", no "most used" |

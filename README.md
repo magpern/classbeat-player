@@ -23,4 +23,4 @@ Layout:
 | `docs/` | The plan, status, decision records (`docs/adr/`), design specs and runbooks |
 | `docker/`, `scripts/` | The backend's container files, build and CI scripts |
 
-Not made by or affiliated with Intelligent Cycling (MOWL), Spotify or Swedebeat.
+Not made by or affiliated with Spotify or Swedebeat.

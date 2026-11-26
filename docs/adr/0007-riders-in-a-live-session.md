@@ -150,7 +150,7 @@ it once and the server sends those bytes to every rider connection.
 - Unlike the companion page, the rider page keeps the join code in the address's fragment, so a
   rider whose token lapsed can join again from the same tab. The rider token never enters the
   address: it is kept in `sessionStorage` only (ADR 0002).
-- Rules 6, 7 and 15 hold on the page: none of MOWL's look (no ring trio), colour from the
+- Rules 6, 7 and 15 hold on the page: its own look (no ring trio), colour from the
   planned zone only, never a measured heart-rate zone (the effort in beats per minute is text),
   and nothing like a team game.
 - States: enter nickname (and optionally FTP and maximum heart rate); joining; in the class;

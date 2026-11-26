@@ -16,8 +16,9 @@ is that ADR. It rests on:
   to the device, never through our backend. The cache is encrypted, tied to the signed-in
   account, usable only by the player, and removed when the class is removed or the account signs
   out.
-- **Plan decision 11**, open: whether Swedebeat is asked for an agreement and a source of the
-  audio, or the audio comes through the user's MOWL account. Until it is answered, "the manual
+- **Plan decision 11**, open: where the audio comes from. The owner closed one route on 2026-11-26: the player
+  is not associated with any other cycling product and never gets audio through one (ADR 0004,
+  section 4). Until a source is named, "the manual
   clock stays the Swedebeat mode" (plan section 4; ADR 0001, option D; ADR 0004, section 5).
 - **Plan section 3, rule 3**: Spotify's music stays in Spotify's own app; the player never
   downloads, stores or plays it. Audio from a licensed provider that allows it (Swedebeat) may be
@@ -111,7 +112,7 @@ Implementations:
   decision 11's answer, the owner's. When the owner answers, a separate issue adds that client
   behind this interface, in the main process, with its origin a setting that defaults to empty
   (off), `https:` only, the host pinned by the setting and every request built by one module. No
-  credential or key taken from Swedebeat's, MOWL's or any other app is ever used (AGENTS.md
+  credential or key taken from Swedebeat's or any other app is ever used (AGENTS.md
   section 8).
 - **Agents never call a real source.** No test, script, fixture, CI job or developer default names
   a real Swedebeat or gateway host. Issue 3 adds:
@@ -273,9 +274,8 @@ as its fall back. ADR 0003 gains minor 1.3 through issue 2.
 
 ## Alternatives
 
-- **Get the mix through the user's MOWL account** (the short-lived link MOWL hands out). Makes
-  every Swedebeat class depend on MOWL, and is one of decision 11's two routes, so it is the
-  owner's. The interface of section 2 admits it as a source if the owner chooses it.
+- **Get the mix through another cycling product's account.** Rejected by the owner
+  (2026-11-26, ADR 0004 section 4).
 - **Download through our backend.** Rejected: rule 3 and plan section 4 say the audio goes from
   the provider straight to the device, never through our server.
 - **Stream only, no cache.** Loses offline play and exact start in a studio with a weak network;

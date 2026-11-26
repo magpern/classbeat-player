@@ -195,7 +195,7 @@ case), plus these; PL4's CI runs the same on the real screen.
 | Rule | How this addition keeps it |
 |---|---|
 | 1. A finished class only | No control beyond room-2d.md's; J shows a sheet and moves nothing |
-| 6. None of MOWL's look | A black sheet, two QR codes, the join code as text: no ring, no bar, no per-rider shape |
+| 6. Its own look | A black sheet, two QR codes, the join code as text: no ring, no bar, no per-rider shape |
 | 7. Colour means the planned zone | The sheet is white, grey and black; the QR codes are black on white |
 | 13. Rider data one way | No rider count, nickname, list, lock state or reading is on this screen or its channel to the room window |
 | 14. Join code is a session id only | Both QR codes carry the join code and nothing else; the control code is never on this screen |
