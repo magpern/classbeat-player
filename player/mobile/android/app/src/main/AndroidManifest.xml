@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The locked shell (issue #627). No permission is asked for here: the page is bundled and served
-     from the app's assets, so the app needs no INTERNET either. ManifestTest checks the merged
+<!-- The locked shell (issue #627). The page is bundled and served from the app's assets. The one
+     permission asked for here is INTERNET, for the HTTPS calls to the backend origin fixed in the
+     build (owner, 2026-11-26, #649): only backend/BackendTransport.kt opens a connection, and
+     rules.test.ts holds every other file to that. ManifestTest checks the merged
      manifest against PermissionPolicy's allowlist. Backup and cleartext are off. The notification
      listener (issue #632) is not a permission the app asks for: only the system may bind it, and
      it is disabled until the instructor turns following on in instructor mode. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="false"

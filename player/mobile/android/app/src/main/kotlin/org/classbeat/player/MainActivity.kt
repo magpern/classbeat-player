@@ -7,6 +7,7 @@ import android.os.Looper
 import android.os.SystemClock
 import androidx.activity.result.contract.ActivityResultContracts
 import com.getcapacitor.BridgeActivity
+import org.classbeat.player.backend.HttpsBackendTransport
 import org.classbeat.player.backend.OfflineTransport
 import org.classbeat.player.classes.ClassSync
 import org.classbeat.player.classes.FileClassCache
@@ -62,10 +63,11 @@ class MainActivity : BridgeActivity(), ModeHost {
         val controller = ModeController(this, lockPrompt)
         val locked = BridgeLockdown.apply(bridge, BuildConfig.DEBUG, controller)
         val webView = bridge.webView
-        // The backend fixed in the build: HTTPS, or loopback in a debug build (ADR 0011 §3). The
-        // real transport waits on the owner (#649, #650): until then every call is "offline".
+        // The backend fixed in the build: HTTPS, or loopback in a debug build (ADR 0011 §3). Only an
+        // HTTPS origin is called (#649); with none, or loopback HTTP, every call is "offline".
         val origin = OriginPolicy.parseBackendOrigin(BuildConfig.BACKEND_ORIGIN, BuildConfig.DEBUG)
-        val transport = OfflineTransport { Handler(Looper.getMainLooper()).post(it) }
+        val main: (Runnable) -> Unit = { Handler(Looper.getMainLooper()).post(it) }
+        val transport = if (origin?.startsWith("https://") == true) HttpsBackendTransport(origin, main) else OfflineTransport(main)
         // noBackupFilesDir: the classes stay out of backups, as the pairing does.
         val cache = FileClassCache(noBackupFilesDir)
         val ports = AndroidPairingPorts(this, cache)

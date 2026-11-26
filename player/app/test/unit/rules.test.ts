@@ -218,26 +218,171 @@ for (const [what, re] of FORBIDDEN) {
 // The Kotlin counterparts of the desktop's checks above: audio in or out (the desktop's audio
 // elements, AudioContext and MediaSource; issue #627 names AudioRecord), any Spotify SDK, the
 // camera (rule 12; the manifest test also bars its permission), equipment control and the network.
+// A class or method name has no leading word boundary, so a prefix (`setResistance`, `newWebSocket`,
+// `CronetEngine`, `ExoMediaPlayer`) cannot hide it; package names and short words keep theirs.
 const KOTLIN_FORBIDDEN: readonly [string, RegExp][] = [
   [
     "audio playback or recording (rule 3)",
-    /\bandroidx?\.media3?\b|\bMediaPlayer\b|\bexoplayer\w*|\bAudioTrack\b|\bAudioRecord\b|\bMediaRecorder\b|\bSoundPool\b|\bMediaSession\w*|\bAudioManager\b|\bJetPlayer\b|\bAsyncPlayer\b|\bToneGenerator\b|\bRingtone\w*|\bVideoView\b|\bMediaCodec\b|\bMediaExtractor\b|\bAAudio\b|\boboe\b/i,
+    /\bandroidx?\.media3?\b|MediaPlayer\b|\bexoplayer\w*|AudioTrack\b|AudioRecord\b|MediaRecorder\b|SoundPool\b|MediaSession\w*|AudioManager\b|JetPlayer\b|AsyncPlayer\b|ToneGenerator\b|\bRingtone\w*|VideoView\b|MediaCodec\b|MediaExtractor\b|\bAAudio\b|\boboe\b/i,
   ],
   ["a Spotify interface (rule 3)", /spotify/i],
-  ["the camera (rule 12)", /\bandroid\.hardware\.camera2?\b|\bandroidx\.camera\b|\bCameraManager\b|\bCameraDevice\b|\bACTION_IMAGE_CAPTURE\b|\bACTION_VIDEO_CAPTURE\b/],
-  ["equipment control (rule 2)", /\bwriteCharacteristic\b|\bBluetoothGatt\b|\bBluetoothSocket\b|\bUsbManager\b|\bandroid\.hardware\.usb\b|\bresistance\b|\bincline\b|\bsetSpeed\b|\bbrake\b/i],
+  ["the camera (rule 12)", /\bandroid\.hardware\.camera2?\b|\bandroidx\.camera\b|CameraManager\b|CameraDevice\b|\bACTION_IMAGE_CAPTURE\b|\bACTION_VIDEO_CAPTURE\b/],
+  ["equipment control (rule 2)", /writeCharacteristic\b|BluetoothGatt\b|BluetoothSocket\b|UsbManager\b|\bandroid\.hardware\.usb\b|resistance|incline|setSpeed|brake/i],
   [
     "a network request",
-    /\bHttpURLConnection\b|\bHttpsURLConnection\b|\bURLConnection\b|\bopenConnection\b|\bopenStream\b|\bokhttp3?\b|\bjava\.net\.(Socket|URL|http)\b|\bDatagramSocket\b|\bHttpClient\b|\bWebSocket\b|\bktor\b|\bretrofit2?\b|\bvolley\b|\bcronet\b|\bDownloadManager\b/i,
+    /HttpURLConnection\b|HttpsURLConnection\b|URLConnection\b|openConnection\b|openStream\b|\bokhttp3?\b|\bjava\.net\.(Socket|URL|http)\b|DatagramSocket\b|HttpClient|WebSocket|\bktor\b|\bretrofit2?\b|\bvolley\b|cronet|DownloadManager\b/i,
   ],
 ];
 
+// The one Kotlin exception (owner, 2026-11-26, #649; ADR 0011 section 8): the phone's backend
+// calls (ADR 0011 sections 3 and 5) may use `HttpsURLConnection`, and `openConnection` to get one, in
+// backend/BackendTransport.kt and only there. Those two words are taken out of the network check
+// alone: every other way onto the network stays a hit in that file, the other checks stay in full
+// there, and every other Kotlin file keeps the full network check.
+const KT_NETWORK = "a network request";
+const KT_BACKEND = ["android", "app", "src", "main", "kotlin", "org", "classbeat", "player", "backend"];
+const BACKEND_TRANSPORT = join(...KT_BACKEND, "BackendTransport.kt");
+const KOTLIN_NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[BACKEND_TRANSPORT, /\bHttpsURLConnection\b|\bopenConnection\b/g]]);
+const ktChecked = (path: string, text: string, what: string): string => {
+  const strip = what === KT_NETWORK ? KOTLIN_NETWORK_EXCEPTIONS.get(path) : undefined;
+  return strip ? text.replace(strip, " ") : text;
+};
+
 for (const [what, re] of KOTLIN_FORBIDDEN) {
   test(`no ${what} anywhere in the phone shell's Kotlin`, () => {
-    const hits = mobileKt.filter((s) => re.test(code(s.text))).map((s) => s.path);
+    const hits = mobileKt.filter((s) => re.test(ktChecked(s.path, code(s.text), what))).map((s) => s.path);
     assert.deepEqual(hits, []);
   });
 }
+
+test("the backend transport's exception is one file and two words, for the network check only", () => {
+  const network = KOTLIN_FORBIDDEN.find(([w]) => w === KT_NETWORK)![1];
+  assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.keys()], [BACKEND_TRANSPORT]);
+  assert.deepEqual([...KOTLIN_NETWORK_EXCEPTIONS.values()].map((r) => r.source), ["\\bHttpsURLConnection\\b|\\bopenConnection\\b"]);
+  const file = mobileKt.find((s) => s.path === BACKEND_TRANSPORT);
+  assert.ok(file, "the exception names a file that exists");
+  // The file uses what it is allowed, and without the exception it would be a hit.
+  assert.match(code(file.text), /\bHttpsURLConnection\b/);
+  assert.match(code(file.text), /\bopenConnection\(\)/);
+  assert.match(code(file.text), network);
+  // In that file every other way onto the network is still a hit, the plain HTTP connection too.
+  for (const bad of [
+    "conn as HttpURLConnection",
+    "val c: URLConnection = u",
+    "URL(u).openStream()",
+    "import java.net.URL",
+    "import java.net.Socket",
+    "import java.net.http.HttpClient",
+    "DatagramSocket()",
+    "import okhttp3.OkHttpClient",
+    "client.newWebSocket(r, l)",
+    "import io.ktor.client.HttpClient",
+    "import retrofit2.Retrofit",
+    "CronetEngine.Builder(c).build()",
+    "DownloadManager.Request(u)",
+  ]) {
+    assert.match(ktChecked(BACKEND_TRANSPORT, `URI(a).toURL().openConnection() as? HttpsURLConnection; ${bad}`, KT_NETWORK), network, bad);
+  }
+  // The other checks take no exception there.
+  const others: [string, string][] = [
+    ["audio playback or recording (rule 3)", "MediaPlayer()"],
+    ["a Spotify interface (rule 3)", "spotify"],
+    ["the camera (rule 12)", "import androidx.camera.core.ImageCapture"],
+    ["equipment control (rule 2)", "gatt.writeCharacteristic(c)"],
+  ];
+  assert.equal(others.length, KOTLIN_FORBIDDEN.length - 1);
+  for (const [what, bad] of others) {
+    assert.match(ktChecked(BACKEND_TRANSPORT, `HttpsURLConnection openConnection ${bad}`, what), KOTLIN_FORBIDDEN.find(([w]) => w === what)![1], what);
+  }
+  // Any other file, the backend's other files too: both words are network requests.
+  const elsewhere = [
+    join(...KT_BACKEND, "TransportContract.kt"),
+    join(...KT_BACKEND, "Calls.kt"),
+    join(...KT_BACKEND.slice(0, -1), "MainActivity.kt"),
+    join(...KT_BACKEND.slice(0, -1), "rider", "RiderTransport.kt"),
+    join("android", "app", "src", "test", "kotlin", "org", "classbeat", "player", "backend", "BackendTransport.kt"),
+    "BackendTransport.kt",
+  ];
+  for (const path of elsewhere) {
+    assert.match(ktChecked(path, "u.openConnection()", KT_NETWORK), network, path);
+    assert.match(ktChecked(path, "c as HttpsURLConnection", KT_NETWORK), network, path);
+  }
+});
+
+// Anything that could make TLS accept a certificate or a host the system would refuse: a trust
+// manager, a hostname verifier (set on a connection, as the default, or as a Kotlin property), an
+// SSL context, a default factory, an insecure factory, a hand-made certificate check. No word
+// boundary and any case, so the Java setters (`setHostnameVerifier`, `setDefaultHostnameVerifier`)
+// and Kotlin's properties (`hostnameVerifier = `) are hits too. Reading the system's own verifier
+// (`getDefaultHostnameVerifier()`) loosens nothing and is the one form left out.
+const TLS_LOOSEN =
+  /TrustManager|TrustAll|TrustEvery|(?<!getDefault)HostnameVerifier|SSLContext|(?<!get)Default\w*(Factory|Verifier)|ALLOW_ALL|getInsecure|SSLCertificateSocketFactory|checkServerTrusted|X509|NoopHostname|AllowAllHostname|InsecureTrust/i;
+// Any SSL socket factory, as a type, a setter or a property.
+const TLS_FACTORY = /SSLSocketFactory/i;
+const ktMain = () => mobileKt.filter((s) => s.path.startsWith(join("android", "app", "src", "main") + sep));
+
+test("only the backend transport handles TLS, and it never loosens the system's checks", () => {
+  const main = ktMain();
+  assert.ok(main.some((s) => s.path === BACKEND_TRANSPORT));
+  // Every app Kotlin file, the transport too.
+  assert.deepEqual(main.filter((s) => TLS_LOOSEN.test(code(s.text))).map((s) => s.path), []);
+  // A socket factory is named only in the transport, where the tests hand in theirs.
+  assert.deepEqual(main.filter((s) => TLS_FACTORY.test(code(s.text))).map((s) => s.path), [BACKEND_TRANSPORT]);
+  // The app builds the transport without one: the system's trust store.
+  const activity = code(main.find((s) => s.path.endsWith(sep + "MainActivity.kt"))!.text);
+  assert.deepEqual([...activity.matchAll(/HttpsBackendTransport\(([^()]*)\)/g)].map((m) => m[1]), ["origin, main"]);
+});
+
+test("the TLS check catches every usual way to switch off certificate or hostname checks", () => {
+  for (const bad of [
+    "val v = HostnameVerifier { _, _ -> true }",
+    "conn.setHostnameVerifier { _, _ -> true }",
+    "conn.hostnameVerifier = HostnameVerifier { _, _ -> true }",
+    "HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }",
+    "HttpsURLConnection.defaultHostnameVerifier = v",
+    "HttpsURLConnection.setDefaultSSLSocketFactory(f)",
+    "HttpsURLConnection.defaultSSLSocketFactory = f",
+    "conn.sslSocketFactory = SSLCertificateSocketFactory.getInsecure(0, null)",
+    "conn.sslSocketFactory = android.net.SSLCertificateSocketFactory.getDefault(0)",
+    "object : X509TrustManager { }",
+    "val tm = TrustManagerFactory.getInstance(a)",
+    "override fun checkServerTrusted(c: Array<java.security.cert.X509Certificate>, a: String) {}",
+    "val ctx = SSLContext.getInstance(\"TLS\")",
+    "val c = javax.net.ssl.SSLContext.getDefault()",
+    "SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER",
+    "NoopHostnameVerifier.INSTANCE",
+    "val trustAll = arrayOf(t)",
+  ]) {
+    assert.match(code(bad), TLS_LOOSEN, bad);
+  }
+  // Reading the system's own verifier, and the transport's own use of a handed-in factory, are not hits.
+  for (const fine of ["val v = HttpsURLConnection.getDefaultHostnameVerifier()", "tls?.let { conn.sslSocketFactory = it }", "conn.instanceFollowRedirects = false"]) {
+    assert.doesNotMatch(code(fine), TLS_LOOSEN, fine);
+  }
+  for (const f of ["conn.setSSLSocketFactory(f)", "conn.sslSocketFactory = f", "val f: SSLSocketFactory? = null"]) {
+    assert.match(code(f), TLS_FACTORY, f);
+  }
+});
+
+test("only MainActivity builds the HTTPS backend transport", () => {
+  // The origin is bound only by the constructor's argument, so no other file may name the class:
+  // not to build one, not as a function reference, not through a type alias.
+  const main = ktMain();
+  const naming = main.filter((s) => /HttpsBackendTransport/.test(code(s.text))).map((s) => s.path);
+  assert.deepEqual(naming.sort(), [BACKEND_TRANSPORT, join(...KT_BACKEND.slice(0, -1), "MainActivity.kt")].sort());
+  // The class's own file declares it and builds none, by call or by reference.
+  const own = code(main.find((s) => s.path === BACKEND_TRANSPORT)!.text);
+  assert.deepEqual([...own.matchAll(/HttpsBackendTransport\s*\(|::\s*HttpsBackendTransport/g)].length, 0);
+  assert.match(own, /class HttpsBackendTransport internal constructor\(/);
+  // MainActivity builds exactly one, and nothing else in it names the class but its import.
+  const activity = code(main.find((s) => s.path.endsWith(sep + "MainActivity.kt"))!.text);
+  assert.equal([...activity.matchAll(/HttpsBackendTransport/g)].length, 2);
+  assert.match(activity, /^import org\.classbeat\.player\.backend\.HttpsBackendTransport$/m);
+  assert.equal([...activity.matchAll(/HttpsBackendTransport\(origin, main\)/g)].length, 1);
+  // The check can fail: a second construction or a reference elsewhere is a hit.
+  assert.match(code("val t = HttpsBackendTransport(\"https://x.test\", p)"), /HttpsBackendTransport/);
+  assert.match(code("val f = ::HttpsBackendTransport"), /::\s*HttpsBackendTransport/);
+});
 
 test("the Kotlin guard catches what it looks for, and not comments or java.net.URI", () => {
   const samples: readonly string[][] = [
@@ -253,11 +398,12 @@ test("the Kotlin guard catches what it looks for, and not comments or java.net.U
       "val s = MediaSessionCompat(c, \"x\")",
       "val tone = ToneGenerator(0, 100)",
       "val pool = SoundPool.Builder().build()",
+      "val p = ExoMediaPlayer(c)",
     ],
     ["import com.spotify.android.appremote.api.SpotifyAppRemote"],
     ["import android.hardware.camera2.CameraManager", "import androidx.camera.core.ImageCapture", "Intent(MediaStore.ACTION_IMAGE_CAPTURE)"],
-    ["gatt.writeCharacteristic(c)", "socket: BluetoothSocket", "import android.hardware.usb.UsbDevice"],
-    ["URL(u).openConnection()", "URL(u).openStream()", "import java.net.http.HttpClient", "DatagramSocket()", "import okhttp3.OkHttpClient"],
+    ["gatt.writeCharacteristic(c)", "socket: BluetoothSocket", "import android.hardware.usb.UsbDevice", "trainer.setResistanceLevel(5)", "ftms.targetIncline = 2", "bike.setSpeedTarget(30)", "applyBrakeForce(1)"],
+    ["URL(u).openConnection()", "URL(u).openStream()", "import java.net.http.HttpClient", "DatagramSocket()", "import okhttp3.OkHttpClient", "client.newWebSocket(r, l)", "CronetEngine.Builder(c).build()", "val c = HttpClientBuilder.create()", "MyHttpsURLConnection(u)"],
   ];
   assert.equal(samples.length, KOTLIN_FORBIDDEN.length);
   KOTLIN_FORBIDDEN.forEach(([what, re], i) => {
@@ -269,9 +415,24 @@ test("the Kotlin guard catches what it looks for, and not comments or java.net.U
   }
 });
 
-test("the phone shell's Android manifest asks for no permission", () => {
-  assert.doesNotMatch(code(readFileSync(MANIFEST, "utf8")), /<uses-permission/);
-  assert.match(code('<uses-permission android:name="android.permission.CAMERA" />'), /<uses-permission/);
+// The one permission the phone shell asks for is INTERNET, for the HTTPS calls to the backend
+// (owner, 2026-11-26, #649); ManifestTest checks the merged manifest against PermissionPolicy.
+const asksFor = (manifest: string): string[] =>
+  [...code(manifest).matchAll(/<uses-permission[\w-]*\b[^>]*?android:name="([^"]+)"/g)].map((m) => m[1]!);
+const permissionTags = (manifest: string): number => [...code(manifest).matchAll(/<uses-permission/g)].length;
+
+test("the phone shell's Android manifest asks for INTERNET and nothing else", () => {
+  const manifest = readFileSync(MANIFEST, "utf8");
+  assert.deepEqual(asksFor(manifest), ["android.permission.INTERNET"]);
+  assert.equal(permissionTags(manifest), 1);
+  // One more permission, in either tag, is caught.
+  for (const extra of ["android.permission.CAMERA", "android.permission.ACCESS_NETWORK_STATE"]) {
+    for (const tag of ["uses-permission", "uses-permission-sdk-23"]) {
+      const more = manifest.replace("<application", `<${tag} android:name="${extra}" />\n    <application`);
+      assert.notDeepEqual(asksFor(more), ["android.permission.INTERNET"], `${tag} ${extra}`);
+      assert.notEqual(permissionTags(more), 1, `${tag} ${extra}`);
+    }
+  }
 });
 
 test("the phone shell imports nothing from the spikes", () => {
