@@ -55,6 +55,36 @@ covered() { # covered <value>
   return 1
 }
 
+# Pin a minimum set of "name" entries by the hash of the entry line ("name <value>"), so no
+# provider name is written in this file and deleting one from the list fails a test.
+sha() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
+pinned_hashes=(
+  5d45d9b74bccc7d5cfa6f057ad06de4e08a48fd717d31af19ea32ac396f41db1
+  79f9c23fe7c9bc8a1d99c96e09d68a1d7ac08847e3389ab1cfca84310b984297
+)
+pins_ok() { # pins_ok <list file>: every pinned entry is present
+  local have want l
+  have="$(grep -E '^name[[:space:]]' "$1" | sed -E 's/[[:space:]]+/ /g; s/ $//' | while read -r l; do printf '%s' "$l" | sha; done)"
+  for want in "${pinned_hashes[@]}"; do
+    grep -qx "$want" <<<"$have" || return 1
+  done
+}
+if pins_ok "$here/provider-guard.txt"; then
+  echo "ok: pinned name entries are in the list"
+else
+  echo "FAIL: a pinned name entry is missing from the guard list"
+  fail=1
+fi
+for n in "${names[@]}"; do
+  grep -vE "^name[[:space:]]+${n}[[:space:]]*\$" "$here/provider-guard.txt" >"$tmp/list-without"
+  if pins_ok "$tmp/list-without"; then
+    echo "FAIL: deleting a name entry is not caught by the pin"
+    fail=1
+  else
+    echo "ok: deleting a name entry is caught by the pin"
+  fi
+done
+
 new_repo
 expect pass "clean tree"
 
@@ -154,7 +184,8 @@ done
 for n in "${names[@]}"; do
   words="$(printf '%s' "$n" | tr '-' ' ')"
   upper="$(printf '%s' "$words" | tr '[:lower:]' '[:upper:]')"
-  title="$(printf '%s' "$words" | sed -E 's/(^| )(.)/\1\u\2/g')"
+  # Portable title case (GNU sed's \u is not in BSD sed): upper-case each word's first letter.
+  title="$(printf '%s' "$words" | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
   for spelling in "$words" "$upper" "$title"; do
     new_repo
     echo "// $spelling" >"$r/player/a.ts"
@@ -180,13 +211,35 @@ for n in "${names[@]}"; do
 
     new_repo
     mkdir -p "$r/docs/adr"
+    echo "see $spelling" >"$r/docs/adr/0005-other.md"
+    expect fail "name in an ADR other than 0004: $spelling"
+
+    new_repo
+    mkdir -p "$r/docs/adr"
     echo "see $spelling" >"$r/docs/adr/0004-provider-terms.md"
     expect pass "name in ADR 0004: $spelling"
+
+    new_repo
+    printf 'GIF89a\000\001%s\000\002' "$spelling" >"$r/player/logo.bin"
+    expect fail "name in a binary file: $spelling"
   done
 
   new_repo
   echo "// $(printf '%s' "$n" | tr -d '-')" >"$r/player/a.ts"
   expect fail "name without separator: $n"
+
+  new_repo
+  : >"$r/player/$n.ts"
+  expect fail "name in a file name: $n"
+
+  new_repo
+  mkdir -p "$r/player/$n"
+  : >"$r/player/$n/index.ts"
+  expect fail "name in a directory name: $n"
+
+  new_repo
+  : >"$r/player/$(printf '%s' "$n" | tr -d '-' | tr '[:lower:]' '[:upper:]').txt"
+  expect fail "name in a file name, upper case, no separator: $n"
 done
 
 new_repo

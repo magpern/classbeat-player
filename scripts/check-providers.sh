@@ -58,8 +58,17 @@ while read -r kind value extra; do
       # Case-insensitive; a "-" in the value stands for any run of non-alphanumerics, so
       # "a-b" matches "a b", "a_b" and "ab".
       pat="$(printf '%s' "$esc" | sed -E 's#-#[^A-Za-z0-9]*#g')"
-      found="$(git grep -I -i -n -E -e "$pat" -- . "${name_allowed[@]}" || true)"
+      # -a: binary files are searched too (a name inside an image or an archive is still a name).
+      found="$(git grep -a -i -n -E -e "$pat" -- . "${name_allowed[@]}" || true)"
       report "name $value" "$found"
+      # File and directory names too. Only the path is printed, as with a content match.
+      pathfound="$(git ls-files -- . "${name_allowed[@]}" | grep -i -E -e "$pat" || true)"
+      if [ -n "$pathfound" ]; then
+        while IFS= read -r file; do
+          echo "forbidden (name $value in a path): $file"
+        done <<<"$pathfound"
+        status=1
+      fi
       ;;
     *)
       echo "check-providers: unknown kind '$kind' in $list" >&2
