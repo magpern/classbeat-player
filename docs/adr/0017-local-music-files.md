@@ -33,8 +33,8 @@ that meets a `music.source` value it does not know lists the class with the same
 for an unknown major, "This class needs a newer version of the player", and keeps playing its
 other classes. A player-lane pull request makes the player's reader do that, before the
 contract pull request merges: today the schema's enum and the class list's `SOURCES`
-(`player/app/src/core/sync/class-list.ts`) refuse the value and the class is not listed. A player built before that change does not list a class with source
-`local`.
+(`player/app/src/core/sync/class-list.ts`) refuse the value and the class is not listed. A
+player built before that change does not list a class with source `local`.
 
 A contract pull request then adds, in format version `1.4`:
 
