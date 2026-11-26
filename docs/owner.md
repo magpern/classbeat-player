@@ -103,6 +103,11 @@ with other work; nothing in the development loop waits for an answer.
   in the build, with no redirects, a 64 KiB answer limit and a 10 s timeout; rider mode (#633) gets
   the same for its join call and, in one more file, a WebSocket to the same fixed address. Every
   other file keeps the full check, and a test pins it. Recorded in ADR 0011, section 8.
+  **Open question (2026-11-26):** the backend contract (#631) allows a change page up to 1 MiB and a
+  class document up to 2 MiB, but the approved limit is 64 KiB for every answer, so a larger class
+  does not sync (it fails safely as "unexpected"). Default until the owner answers: keep 64 KiB.
+  Proposal: per-call limits equal to the contract's (64 KiB for small calls, 1 MiB changes, 2 MiB
+  class documents).
 - **Decided (owner, 2026-11-26): the phone app's music follower (#632, #653).** Approved as
   proposed: one file (`SpotifySessionReader.kt`) may name only the media-session types it reads and
   the package `com.spotify.music`; audio playback and recording, players and the network stay
