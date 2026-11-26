@@ -183,7 +183,7 @@ test("the pairing forgotten during a find: the find keeps nothing, and every ind
   r.dialogGate = new Promise((res) => (open = res));
   const finding = r.service.find(CLASS_ID);
   await new Promise((res) => setImmediate(res));
-  r.service.forgotten();
+  r.service.wipe();
   assert.ok(!existsSync(r.indexDir));
   open();
   assert.deepEqual(await finding, { status: "cancelled" });

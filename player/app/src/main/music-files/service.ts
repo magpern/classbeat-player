@@ -33,8 +33,11 @@ export interface MusicFiles {
   check(classId: string): Promise<FindAnswer | null>;
   /** Stops the find or check running; false when none was. */
   cancel(): boolean;
-  /** The pairing ended: whatever runs is stopped and keeps nothing, and every index is deleted. */
-  forgotten(): void;
+  /**
+   * The class cache is being wiped (main/sync/service.ts `onWipe`, every cause): whatever runs is
+   * stopped and keeps nothing, and every account's index is deleted with the cache.
+   */
+  wipe(): void;
 }
 
 interface Run {
@@ -67,7 +70,8 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
     const before = index(d.store.load(account));
     const stillOurs = (): boolean => !run.stopped && gen === generation && d.account() === account;
     const m = await matchFiles(wanted, before, folders(before), limit, () => !stillOurs());
-    if (m === null || !stillOurs()) return CANCELLED;
+    // matchFiles checks `stillOurs` last, with no wait after it: null is the only stopped outcome.
+    if (m === null) return CANCELLED;
     // An index that could not be written leaves the answer true for now; the next find searches again.
     if (!sameIndex(before, m.index)) d.store.save(account, m.index);
     return doneAnswer(wanted, m.found, m.limitReached);
@@ -93,7 +97,7 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
       current.stopped = true;
       return true;
     },
-    forgotten() {
+    wipe() {
       if (current !== null) current.stopped = true;
       generation += 1;
       d.store.wipe();
