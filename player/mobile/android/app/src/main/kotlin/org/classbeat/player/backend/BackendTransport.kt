@@ -4,7 +4,9 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.InterruptedIOException
 import java.net.URI
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,10 +33,6 @@ class HttpsBackendTransport internal constructor(
 ) : BackendTransport {
     constructor(buildOrigin: String, post: (Runnable) -> Unit) : this(buildOrigin, post, null, TransportContract.TIMEOUT_MS)
 
-    private val daemon = ThreadFactory { r -> Thread(r, "classbeat-backend").apply { isDaemon = true } }
-    private val worker = Executors.newCachedThreadPool(daemon)
-    private val timer = Executors.newSingleThreadScheduledExecutor(daemon)
-
     override fun send(request: BackendRequest, answer: (HttpAnswer) -> Unit) {
         val address = TransportContract.address(request, buildOrigin)
         if (address == null || !address.startsWith("https://")) return reply(answer, HttpAnswer.Unreachable)
@@ -44,8 +42,11 @@ class HttpsBackendTransport internal constructor(
         val finish = { a: HttpAnswer -> if (once.compareAndSet(false, true)) reply(answer, a) }
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.toLong())
         try {
-            timer.schedule({ finish(HttpAnswer.Unreachable) }, timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            worker.execute { finish(call(request, address, deadline)) }
+            val late = timer.schedule({ finish(HttpAnswer.Unreachable) }, timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            worker.execute {
+                finish(call(request, address, deadline))
+                late.cancel(false)
+            }
         } catch (e: Exception) {
             finish(HttpAnswer.Unreachable)
         }
@@ -114,5 +115,14 @@ class HttpsBackendTransport internal constructor(
             if (out.size() + n > cap) return null
             out.write(chunk, 0, n)
         }
+    }
+
+    private companion object {
+        // Shared by every transport in the process, so re-creating the activity starts no new
+        // thread: the pool's idle workers end after a minute, and the timer is one daemon thread
+        // that drops a call's timeout as soon as the call has answered.
+        val daemon = ThreadFactory { r -> Thread(r, "classbeat-backend").apply { isDaemon = true } }
+        val worker: ExecutorService = Executors.newCachedThreadPool(daemon)
+        val timer = ScheduledThreadPoolExecutor(1, daemon).apply { removeOnCancelPolicy = true }
     }
 }

@@ -33,10 +33,27 @@ class ManifestTest {
     }
 
     @Test
+    fun `the allowlist is INTERNET and androidx's receiver permission, and nothing else`() {
+        val pkg = BuildConfig.APPLICATION_ID
+        assertEquals(
+            setOf("android.permission.INTERNET", "$pkg.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+            PermissionPolicy.allowed(pkg),
+        )
+        val asked = (elements("uses-permission") + elements("uses-permission-sdk-23")).map { it.attr("name")!! }
+        assertTrue("the backend transport needs INTERNET", "android.permission.INTERNET" in asked)
+    }
+
+    @Test
     fun `one extra permission is caught, and the never list holds whatever the allowlist says`() {
         val pkg = BuildConfig.APPLICATION_ID
         val ok = PermissionPolicy.allowed(pkg).toList()
-        for (extra in listOf("android.permission.INTERNET", "android.permission.BLUETOOTH_CONNECT", "com.example.ANY") + PermissionPolicy.NEVER) {
+        for (extra in listOf(
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.ACCESS_WIFI_STATE",
+            "android.permission.CHANGE_NETWORK_STATE",
+            "android.permission.BLUETOOTH_CONNECT",
+            "com.example.ANY",
+        ) + PermissionPolicy.NEVER) {
             assertEquals(extra, listOf(extra), PermissionPolicy.violations(ok + extra, pkg))
         }
         assertEquals(listOf("android.permission.FOO_LOCATION"), PermissionPolicy.violations(listOf("android.permission.FOO_LOCATION"), pkg))
