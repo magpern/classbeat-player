@@ -71,6 +71,21 @@ class PairingMachineTest {
     }
 
     @Test
+    fun `a pair again's new token is saved and the expired one given back, never kept`() {
+        val expired = State.Paired(1, PairingRecord(ORIGIN, Secrets.token(), null), null, true)
+        val begin = PairingMachine.step(expired, Event.Begin(ORIGIN, true), 0)
+        val code = PairingMachine.step(begin.state, Event.Started(2, started), 0)
+        val polling = PairingMachine.step(code.state, Event.PollDue(2), 5_500).state
+        val ok = PairingMachine.step(polling, Event.Polled(2, ORIGIN, Poll.Ok(Secrets.token('C'), null)), 5_600)
+        val record = PairingRecord(ORIGIN, Secrets.token('C'), null)
+        assertEquals(State.Paired(2, record, null, false), ok.state)
+        assertEquals(listOf(Effect.Save(2, record), Effect.Revoke(expired.record)), ok.effects)
+        // A first pairing has nothing to give back.
+        val first = PairingMachine.step(PairingMachine.step(waiting(), Event.PollDue(1), 0).state, Event.Polled(1, ORIGIN, Poll.Ok(Secrets.token(), null)), 0)
+        assertTrue(first.effects.single() is Effect.Save)
+    }
+
+    @Test
     fun `begin is ignored while pairing or paired, and allowed when expired`() {
         val record = PairingRecord(ORIGIN, Secrets.token(), null)
         val live = State.Paired(1, record, null, false)

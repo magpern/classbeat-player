@@ -125,7 +125,12 @@ object PairingMachine {
         when (answer) {
             is Poll.Ok -> {
                 val record = PairingRecord(s.origin, answer.token, answer.email)
-                Step(State.Paired(s.attempt, record, null, false), listOf(Effect.Save(s.attempt, record)))
+                // A "pair again" replaces the expired token, and it is given back too, whether the new
+                // one is kept or not (issue #952). Best effort only: the backend refuses an expired token
+                // (401 token_expired) before its revoke runs, and ends it by idle expiry (ADR 0002), so
+                // no answer changes anything here and the token is never kept or sent again.
+                val old = listOfNotNull(s.back?.let { Effect.Revoke(it.record) })
+                Step(State.Paired(s.attempt, record, null, false), listOf(Effect.Save(s.attempt, record)) + old)
             }
             is Poll.Retry -> wait(s, now, maxOf(s.intervalMs, minOf(answer.afterMs ?: 0L, MAX_INTERVAL_MS)))
             is Poll.Unexpected -> ended(s, s.attempt, Notice.UNEXPECTED)

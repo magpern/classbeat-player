@@ -71,7 +71,7 @@ class ModeController(
         this.holder = holder
         this.locked = locked
         this.webView = webView
-        pairing = PairingUi(screens, parts.pairing, parts.ports) { holder.secureLock }
+        pairing = PairingUi(screens, parts.pairing, parts.ports, WindowSecureFlag(activity.window)) { holder.secureLock }
         parts.pairing.changed = pairing::changed
         instructor = InstructorBridge(parts.intents) { current }
         follow = FollowBridge(parts.follower, parts.pairing::secrets) { current }
@@ -106,7 +106,8 @@ class ModeController(
 
     override fun ready() {
         webView.clearHistory()
-        hideScreen()
+        // A pair again's save-failed plate shows over rider mode (issue #952); any other screen goes.
+        if (pairing.pageReady()) back.isEnabled = true else hideScreen()
     }
 
     // ModeEffects.
