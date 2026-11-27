@@ -34,6 +34,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/ModeController.swift": [],
   "ios/App/App/ModeHolder.swift": [],
   "ios/App/App/ModeSeams.swift": [],
+  "ios/App/App/RiderBridge.swift": [],
   "ios/App/App/ScreenFollower.swift": [],
   "ios/App/App/ModeParts.swift": ["WebKit"],
   "ios/App/App/ModePlugins.swift": ["Foundation", "Capacitor"],
@@ -61,6 +62,9 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/Policy/PairingStates.swift": [],
   "ios/App/App/Policy/PairingTokenAnswers.swift": [],
   "ios/App/App/Policy/PluginPolicy.swift": ["Foundation"],
+  "ios/App/App/Policy/RiderSession.swift": ["Foundation"],
+  "ios/App/App/Policy/RiderTransport.swift": [],
+  "ios/App/App/Policy/RiderWire.swift": ["Foundation"],
   "ios/App/App/Policy/ScreenLine.swift": [],
   "ios/App/App/Policy/TransportContract.swift": [],
   "ios/App/App/Policy/WholeMatch.swift": ["Foundation"],
@@ -96,6 +100,9 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/AppTests/PairingServiceTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/PairingUiTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/PluginPolicyTests.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/RiderExamples.swift": [],
+  "ios/App/AppTests/RiderFakes.swift": ["XCTest", "@testable App"],
+  "ios/App/AppTests/RiderSessionTests.swift": ["XCTest", "@testable App"],
   "ios/App/AppTests/ShellTests.swift": ["XCTest", "UIKit", "WebKit", "Capacitor", "@testable App"],
 };
 const FACTORY = "ios/App/App/WebViewFactory.swift";
