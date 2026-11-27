@@ -234,11 +234,13 @@ The state is a fact about one class, so it follows the selection and changes not
 ### A class from Swedebeat in the iOS app
 
 In the iOS build with Swedebeat off (`swedebeatEnabled`, issue #932) a class whose `music.source` is
-`swedebeat` is listed and Start refuses it (on the phone, as built in #961, the row is not selectable and the message on the row is the whole cue: no dialog or further detail). This is the "needs a newer player" state
-above with different words: the same selectable row, the same dimmed Start (no Enter hint, no focus,
-`aria-describedby` on the footer detail, Enter and a tap do nothing, no message appears), and the
-sentence, verbatim, **Not available in this app yet** in the footer detail and at the end of the row's
-second line with a hollow grey square. No other reason is given. Its states, mock-ups and numbers are in
+`swedebeat` is listed and Start refuses it. On the phone, as built in #961, the row is not
+selectable and the message on the row is the whole cue: no dialog, footer or further detail. On the
+desktop sizes this is the "needs a newer player" state above with different words: the same
+selectable row, the same dimmed Start (no Enter hint, no focus, `aria-describedby` on the footer
+detail, Enter and a tap do nothing, no message appears), and the sentence, verbatim, **Not available
+in this app yet** in the footer detail and at the end of the row's second line with a hollow grey
+square. No other reason is given. Its states, mock-ups and numbers are in
 [swedebeat.md](swedebeat.md) ("The iOS app", W11 to W13); Spotify and local-file classes are unaffected.
 
 ## Keyboard

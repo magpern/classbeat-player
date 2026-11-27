@@ -182,7 +182,8 @@ Each state is read from the per-song answer, `found` or `missing`, and nothing e
   state, plus a **plate** above the list: "The music files could not be searched", detail
   "Nothing was changed. Try again, or start on the manual clock.", key "Try again". Five rows
   still fit at 1000×720, with the plate and with the held-with-answer detail line.
-  [failed](mockups/class-list-music-files-find-failed.html).
+  [failed](mockups/class-list-music-files-find-failed.html),
+  [failed, held](mockups/class-list-music-files-find-failed-held.html).
 - **The list.** When: "Show which files" pressed. Marker and
   words: Panel "Missing music files" (above). Keys: "Find music files" (main, Enter), "Back"
   (Esc). [list](mockups/class-list-music-files-list.html),
