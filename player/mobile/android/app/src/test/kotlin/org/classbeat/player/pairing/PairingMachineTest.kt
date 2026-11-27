@@ -23,8 +23,8 @@ class PairingMachineTest {
     @Test
     fun `waiting polls after the interval and the margin, one poll at a time`() {
         val step = PairingMachine.step(State.Starting(1, ORIGIN), Event.Started(1, started), 0)
-        assertEquals(Effect.OpenPage("$ORIGIN/pair"), step.effects[0])
-        assertEquals(Effect.Wake(1, 5_000 + PairingMachine.POLL_MARGIN_MS), step.effects[1])
+        // The code arrives and only the wake is asked for: the page opens on "Open the site" alone (#944).
+        assertEquals(listOf(Effect.Wake(1, 5_000 + PairingMachine.POLL_MARGIN_MS)), step.effects)
         val polling = PairingMachine.step(step.state, Event.PollDue(1), 5_500).state
         assertEquals(polling, PairingMachine.step(polling, Event.PollDue(1), 6_000).state)
     }
@@ -82,6 +82,20 @@ class PairingMachineTest {
         assertEquals(State.Starting(2, ORIGIN, expired), again.state)
         // No Keystore on a pair again: the expired pairing stays, with the reason.
         assertEquals(expired.copy(attempt = 2, notice = Notice.NO_KEYSTORE), PairingMachine.step(expired, Event.Begin(ORIGIN, false), 0).state)
+    }
+
+    @Test
+    fun `no step of a pairing opens the page by itself`() {
+        // Every effect a whole pairing asks for, from Begin to the saved token, is one the machine
+        // has a reason for; none is about the page (docs/design/app-pairing.md, item 5).
+        val begin = PairingMachine.step(PairingMachine.INITIAL, Event.Begin(ORIGIN, true), 0)
+        val code = PairingMachine.step(begin.state, Event.Started(1, started), 0)
+        val poll = PairingMachine.step(code.state, Event.PollDue(1), 5_500)
+        val pending = PairingMachine.step(poll.state, Event.Polled(1, ORIGIN, Poll.Refused(PairingProtocol.PENDING)), 5_600)
+        val again = PairingMachine.step(pending.state, Event.PollDue(1), 11_100)
+        val ok = PairingMachine.step(again.state, Event.Polled(1, ORIGIN, Poll.Ok(Secrets.token(), null)), 11_200)
+        val kinds = listOf(begin, code, poll, pending, again, ok).flatMap { it.effects }.map { it::class.simpleName }
+        assertEquals(listOf("StartCall", "Wake", "PollCall", "Wake", "PollCall", "Save"), kinds)
     }
 
     @Test

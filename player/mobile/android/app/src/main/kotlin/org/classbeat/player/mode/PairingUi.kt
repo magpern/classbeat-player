@@ -1,7 +1,5 @@
 package org.classbeat.player.mode
 
-import android.os.Handler
-import android.os.Looper
 import org.classbeat.player.pairing.PairingPorts
 import org.classbeat.player.pairing.PairingScreenModel
 import org.classbeat.player.pairing.PairingScreenModel.Action
@@ -15,12 +13,12 @@ import org.classbeat.player.pairing.PairingView
  * instructor mode. Main thread only.
  */
 class PairingUi(
-    private val screens: ModeScreens,
+    private val screens: PairingScreens,
     private val service: PairingService,
     private val ports: PairingPorts,
+    private val ticker: Ticker = MainTicker(),
     private val secureLock: () -> Boolean,
 ) {
-    private val handler = Handler(Looper.getMainLooper())
     private val tick = Runnable { if (showing) render() }
 
     var showing = false
@@ -64,12 +62,14 @@ class PairingUi(
         service.cancel()
         service.seen()
         showing = false
-        handler.removeCallbacks(tick)
+        ticker.cancel(tick)
     }
 
     private fun press(action: Action) {
         when (action) {
             Action.CANCEL, Action.RIDER -> close(false)
+            // The only place the page opens (docs/design/app-pairing.md, item 5). No browser: the
+            // screen still shows the code and the address, to type in on another device.
             Action.OPEN -> (service.view() as? PairingView.Waiting)?.let { ports.openPage(it.page) }
             Action.START_AGAIN -> {
                 returned = false
@@ -85,7 +85,7 @@ class PairingUi(
         service.cancel()
         service.seen()
         showing = false
-        handler.removeCallbacks(tick)
+        ticker.cancel(tick)
         screens.hide()
         leave(paired)
     }
@@ -99,8 +99,8 @@ class PairingUi(
             screens.screen(screen.lead, screen.act, screen.keys.map { k -> ModeScreens.Key(k.label, k.main) { press(k.action) } })
         }
         shown = screen
-        handler.removeCallbacks(tick)
-        if (view is PairingView.Waiting) handler.postDelayed(tick, TICK_MS)
+        ticker.cancel(tick)
+        if (view is PairingView.Waiting) ticker.after(TICK_MS, tick)
     }
 
     private companion object {

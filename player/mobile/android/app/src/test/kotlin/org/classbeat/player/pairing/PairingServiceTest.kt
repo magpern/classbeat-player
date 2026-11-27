@@ -44,9 +44,25 @@ class PairingServiceTest {
     }
 
     @Test
-    fun `pairs, opens the page in the browser and keeps the token in the store`() {
+    fun `the service never opens the pairing page by itself`() {
+        backend.route = { r -> if (r.path == "/api/pairing/start") FakeBackend.started() else FakeBackend.error(400, PairingProtocol.PENDING) }
+        val s = service()
+        s.load()
+        s.begin()
+        backend.flush()
+        // The code is on screen and nothing opened: only "Open the site" opens the page (#944).
+        assertEquals(PairingView.Waiting("BCDF-GHJK", "$ORIGIN/pair", ports.now + 600_000), s.view())
+        assertEquals(emptyList<String>(), ports.opened)
+        ports.fireNext()
+        backend.flush()
+        assertTrue(s.view() is PairingView.Waiting)
+        assertEquals(emptyList<String>(), ports.opened)
+    }
+
+    @Test
+    fun `pairs without opening the page and keeps the token in the store`() {
         val s = paired()
-        assertEquals(listOf("$ORIGIN/pair"), ports.opened)
+        assertEquals(emptyList<String>(), ports.opened)
         assertEquals(Secrets.token(), PairingRecord.parse(store.text!!, false)!!.token)
         assertEquals(Secrets.token(), s.credential()!!.token)
         assertEquals(PairingView.Paired("coach@example.test", null, false, null), s.view())
