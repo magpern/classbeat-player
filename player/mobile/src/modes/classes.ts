@@ -3,9 +3,11 @@
 // "unexpected" and shows nothing new, never a guess. Pure: no DOM, no bridge. The words of each
 // status follow docs/design/class-list.md, "States".
 
+import type { Music } from "../../../../schema/generated/ts/class.d.ts";
+
 export type Status = "syncing" | "synced" | "offline" | "waiting" | "expired" | "unpaired" | "unavailable";
 
-export type Source = "spotify" | "swedebeat" | "local" | "none";
+export type Source = Music["source"];
 const SOURCES: readonly Source[] = ["spotify", "swedebeat", "local", "none"];
 
 export interface ClassRow {

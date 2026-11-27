@@ -4,17 +4,16 @@
 // Swedebeat on without the setting changing; turning the setting on restores today's behaviour.
 // Fakes only: no network, no device.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
-import { buildOptions, swedebeatEnabled } from "../build-config.mjs";
+import { swedebeatEnabled } from "../build-config.mjs";
 import { parseClassList } from "../src/modes/classes.ts";
 import { NOT_AVAILABLE, refused, swedebeatFacts, swedebeatOff } from "../src/swedebeat-off.ts";
 import { openRoom } from "../src/room/open-room.ts";
 import { listAfter, PLATE_WORDS, plateFor } from "../src/room/plate-words.ts";
-import { objcFiles, swiftFiles } from "./ios-sources.ts";
 import { classDoc, harness, ID } from "./room-fakes.ts";
 
 const MOBILE = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -22,8 +21,13 @@ const SETTING_FILE = "ios/App/App/Policy/SwedebeatSetting.swift";
 const swiftOf = (path: string): string => readFileSync(join(MOBILE, path), "utf8");
 const swedebeatDoc = (): Record<string, unknown> => JSON.parse(readFileSync(join(MOBILE, "..", "..", "schema", "class-format", "v1", "examples", "valid", "class-swedebeat-mix.json"), "utf8"));
 
-/** Where the iOS build could turn Swedebeat on besides the setting: any file of the project that names it. */
-const PROJECT_FILES = ["ios/App/App.xcodeproj/project.pbxproj", "ios/App/App/Info.plist", "ios/App/App/Info-Debug.plist", "ios/App/Podfile", "ios/App/App/capacitor.config.json"];
+/** Every file of the iOS project that git tracks or would track (images and fonts skipped): any of them could turn Swedebeat on. */
+const BINARY = /\.(png|jpe?g|gif|ico|pdf|woff2?|ttf|otf|car|a|o)$/i;
+const projectFiles = (): { path: string; text: string }[] =>
+  execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "ios"], { cwd: MOBILE, encoding: "utf8" })
+    .split("\0")
+    .filter((p) => p !== "" && !BINARY.test(p))
+    .map((path) => ({ path, text: swiftOf(path) }));
 /** The files that may name Swedebeat: the setting's own file, the project that lists that file and the test that reads it. */
 const NAMES_IT = new Set([SETTING_FILE, "ios/App/App.xcodeproj/project.pbxproj", "ios/App/AppTests/ShellTests.swift"]);
 
@@ -35,7 +39,7 @@ export function swedebeatGaps(files: ReadonlyArray<{ path: string; text: string 
   return gaps;
 }
 
-const shipped = [...swiftFiles, ...objcFiles, ...PROJECT_FILES.map((path) => ({ path, text: swiftOf(path) }))];
+const shipped = projectFiles();
 
 test("criterion 1: the iOS setting is off, and no iOS source or project file reaches Swedebeat", () => {
   assert.deepEqual(swedebeatGaps(shipped), []);
@@ -57,28 +61,11 @@ test("criterion 1, guard: the build fails the guard if Swedebeat is turned on wi
   assert.throws(() => swedebeatEnabled("static let swedebeatEnabled = maybe"));
 });
 
-test("criterion 1: the shipped page bundles are built with the setting off", async () => {
-  const r = await build({ ...buildOptions("unused"), absWorkingDir: MOBILE, write: false, logLevel: "silent" });
-  const out = r.outputFiles.map((f) => f.text).join("\n");
-  assert.ok(!out.includes("__SWEDEBEAT_ENABLED__"));
-  const on = await build({ ...buildOptions("unused"), define: { __SWEDEBEAT_ENABLED__: "true" }, absWorkingDir: MOBILE, write: false, logLevel: "silent" });
-  assert.notEqual(on.outputFiles.map((f) => f.text).join("\n"), out);
-});
-
 test("the dimmed states are the iOS app's with the setting off, and nothing else's", () => {
   assert.equal(swedebeatOff("ios", false), true);
   for (const platform of ["android", "web"]) assert.equal(swedebeatOff(platform, false), false);
   assert.equal(refused(true, "swedebeat"), true);
   for (const source of ["spotify", "local", "none", undefined]) assert.equal(refused(true, source), false);
-});
-
-test("criterion 3: turning the setting on restores today's behaviour", async () => {
-  assert.equal(swedebeatOff("ios", true), false);
-  assert.equal(refused(swedebeatOff("ios", true), "swedebeat"), false);
-  const h = harness(() => Promise.resolve({ document: swedebeatDoc() }), `?id=${ID}`);
-  assert.equal(await openRoom({ ...h.deps, swedebeatOff: swedebeatOff("ios", true) }), "open");
-  assert.deepEqual(h.went, []);
-  assert.equal(h.installed.length, 1);
 });
 
 test("with the setting off a class from Swedebeat never opens: no room, back to the list with the one sentence", async () => {

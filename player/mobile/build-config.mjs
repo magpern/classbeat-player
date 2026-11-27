@@ -16,9 +16,10 @@ export function swedebeatEnabled(swift = readFileSync(join(import.meta.dirname, 
   return m[1] === "true";
 }
 
-export function buildOptions(outdir) {
+/** [swift] is the setting file's text; a test passes the real one with the setting turned on. */
+export function buildOptions(outdir, swift) {
   return {
-    define: { __SWEDEBEAT_ENABLED__: String(swedebeatEnabled()) },
+    define: { __SWEDEBEAT_ENABLED__: String(swedebeatEnabled(swift)) },
     // One bundle per mode's page (issue #630): rider.js, instructor.js and the room screen's main.js.
     entryPoints: ENTRY_POINTS,
     outdir,

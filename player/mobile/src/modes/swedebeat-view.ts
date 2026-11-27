@@ -9,20 +9,20 @@ import { NOT_AVAILABLE, SWEDEBEAT_LINE, swedebeatFacts } from "../swedebeat-off.
 const DETAIL_ID = "swedebeat-detail";
 
 /** A key that looks and reads as dimmed, describes itself by [detail] and does nothing when pressed. */
-function dimmed(cls: string, action: string, children: readonly HTMLElement[], detail: string): HTMLButtonElement {
+function dimmed(cls: string, action: string, children: readonly HTMLElement[], detail?: string): HTMLButtonElement {
   const b = el("button", { class: `${cls} dim` }, children);
   b.type = "button";
   b.dataset.action = action;
   b.setAttribute("aria-disabled", "true");
-  b.setAttribute("aria-describedby", detail);
+  if (detail !== undefined) b.setAttribute("aria-describedby", detail);
   b.addEventListener("click", (e) => e.preventDefault());
   return b;
 }
 
 /** The Swedebeat line: hollow square, "Swedebeat", the message, and the dimmed key under them. Always shown. */
 export function swedebeatLine(): HTMLElement {
-  const state = el("span", { class: "sw-state", tier: "label", lines: 1, text: SWEDEBEAT_LINE.state });
-  const detail = el("span", { class: "sw-detail", tier: "label", lines: 2, text: NOT_AVAILABLE });
+  const state = el("span", { class: "sw-state", tier: "minor", lines: 1, text: SWEDEBEAT_LINE.state });
+  const detail = el("span", { class: "sw-detail", tier: "minor", lines: 2, text: NOT_AVAILABLE });
   detail.id = DETAIL_ID;
   const k = dimmed("key full", "swedebeat_connect", [el("span", { class: "kl", tier: "minor", lines: 2, text: SWEDEBEAT_LINE.key })], DETAIL_ID);
   const box = el("div", { class: "swedebeat" }, [el("div", { class: "sw-words" }, [state, detail]), k]);
@@ -30,11 +30,12 @@ export function swedebeatLine(): HTMLElement {
   return box;
 }
 
-/** A class from Swedebeat: listed, never started. The message sits on its own line under the source and songs. */
+/**
+ * A class from Swedebeat: listed, never started. The message sits on its own line under the source and
+ * songs and is part of the row's name, so a screen reader reads it once (no aria-describedby here).
+ */
 export function swedebeatRow(c: ClassRow): HTMLButtonElement {
-  const id = `swedebeat-row-${c.id}`;
-  const message = el("span", { class: "kh sw-msg", tier: "label", lines: 2, text: NOT_AVAILABLE });
-  message.id = id;
+  const message = el("span", { class: "kh sw-msg", tier: "minor", lines: 2, text: NOT_AVAILABLE });
   return dimmed(
     "key row",
     "open_class",
@@ -43,6 +44,5 @@ export function swedebeatRow(c: ClassRow): HTMLButtonElement {
       el("span", { class: "kh", tier: "label", lines: 1, text: swedebeatFacts(c.songs) }),
       message,
     ],
-    id,
   );
 }
