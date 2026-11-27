@@ -87,8 +87,13 @@ test("Close closes the plate for the class; the line keeps the fact and the plat
 test("Esc closes the plate; with no plate Esc does nothing here", async () => {
   const { page, close } = await open(STOPPED);
   try {
+    // A listener added later, as the riders panel's is, never sees the press that closed the plate.
+    await page.evaluate(() => void ((window as unknown as { __esc: number }).__esc = 0, document.addEventListener("keydown", (e) => e.key === "Escape" && (window as unknown as { __esc: number }).__esc++)));
     await page.keyboard.press("Escape");
     assert.equal(await shown(page, "music-plate"), false);
+    assert.equal(await page.evaluate(() => (window as unknown as { __esc: number }).__esc), 0);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.evaluate(() => (window as unknown as { __esc: number }).__esc), 1, "with no plate Esc goes on to the others");
   } finally {
     await close();
   }

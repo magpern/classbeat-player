@@ -177,6 +177,42 @@ test("while any operation runs, Start of any local class waits (the check at Sta
   r.release();
 });
 
+test("the page and the gate agree: an answered class shows 'checking' exactly while Start would be refused because another class runs", async () => {
+  const { r, state, settle } = rig();
+  state.view(ROWS);
+  await settle();
+  state.view(ROWS);
+  await settle();
+  state.view(ROWS);
+  assert.deepEqual(state.view(ROWS).map((v) => v.phase), ["idle", "idle"]);
+  assert.equal(state.held(ROWS[0]!.id, ROWS[0]!.hash), false);
+  // A find for the second class runs: the first, already answered, is held on the page too.
+  r.gate = new Promise<void>((ok) => void (r.release = ok));
+  const found = state.find(ROWS[1]!.id);
+  const during = state.view(ROWS);
+  assert.equal(state.held(ROWS[0]!.id, ROWS[0]!.hash), true);
+  assert.equal(during[0]!.phase, "checking", "the page shows Start held, as the shell refuses it");
+  assert.equal(during[1]!.phase, "choosing");
+  r.release();
+  await found;
+  assert.deepEqual(state.view(ROWS).map((v) => v.phase), ["checking", "checking"], "the first is asked again after the index changed, and the other waits for that check");
+});
+
+test("reset forgets 'still missing' and a failed search, not only the answers", async () => {
+  const { r, state, settle } = rig();
+  state.view([ROWS[0]!]);
+  await settle();
+  await state.find(ROWS[0]!.id);
+  r.findAnswer = { status: "failed" };
+  await state.find(ROWS[0]!.id);
+  let v = state.view([ROWS[0]!])[0]!;
+  assert.deepEqual([v.searched, v.failed], [true, true]);
+  state.reset();
+  await settle();
+  v = state.view([ROWS[0]!])[0]!;
+  assert.deepEqual([v.searched, v.failed], [false, false]);
+});
+
 test("a find that changed the index asks every other class again; reset asks all again", async () => {
   const { r, state, settle } = rig();
   state.view(ROWS);

@@ -71,7 +71,8 @@ export function createFilesState(d: FilesStateDeps): FilesState {
     void d.music.check(id).then(done, () => done(FAILED));
   };
 
-  const phaseOf = (e: Entry): FilesPhase => (e.phase === "idle" && e.answer === null ? "checking" : e.phase);
+  /** What the page shows: a class waits for any check or find, so Start is held on the page exactly when the shell would refuse it. */
+  const phaseOf = (e: Entry): FilesPhase => (e.phase === "idle" && (e.answer === null || running !== null) ? "checking" : e.phase);
 
   return {
     view(rows) {
@@ -80,7 +81,7 @@ export function createFilesState(d: FilesStateDeps): FilesState {
         if (r.source !== "local") continue;
         const e = entryOf(r);
         if (running === null && e.phase === "idle" && e.answer === null && d.now() >= e.retryAt) check(r.id, e);
-        e.memo ??= filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), searched: e.searched, failed: e.failed });
+        if (e.memo === null || e.memo.phase !== phaseOf(e)) e.memo = filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), searched: e.searched, failed: e.failed });
         if (e.memo !== null) out.push(e.memo);
       }
       return out;
@@ -117,10 +118,10 @@ export function createFilesState(d: FilesStateDeps): FilesState {
     held(classId, hash) {
       // Also while another class's check runs: the check at Start would find the service busy and call it "not checked".
       const e = entries.get(classId);
-      return running !== null || (e !== undefined && e.hash === hash && phaseOf(e) !== "idle");
+      return e === undefined || e.hash !== hash ? running !== null : phaseOf(e) !== "idle";
     },
     reset() {
-      for (const e of entries.values()) touch(e, { answer: null, retryAt: 0 });
+      for (const e of entries.values()) touch(e, { answer: null, retryAt: 0, searched: false, failed: false });
     },
   };
 }

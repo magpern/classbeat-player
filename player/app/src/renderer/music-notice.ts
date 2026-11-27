@@ -43,6 +43,8 @@ export function mountMusicNotice(): (s: Snapshot) => void {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && plateShown) {
       e.preventDefault();
+      // This listener is added first: the riders panel's own Esc (keep, cancel) does not also act on this press.
+      e.stopImmediatePropagation();
       close();
     }
   });

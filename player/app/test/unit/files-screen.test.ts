@@ -46,7 +46,8 @@ test("the grey detail says what Start will do and why, and never names a folder 
   assert.equal(filesLineOf(fv(11, 2, { searched: true })).detail, "They were not in the folder you chose. Choose another folder, or start on the manual clock");
   assert.equal(filesLineOf(fv(11, 2, { phase: "choosing" })).detail, "A window from this computer is open. Starting waits until you have chosen");
   assert.equal(filesLineOf(fv(11, 2, { phase: "finding" })).detail, "Looking in the folder you chose and the folders inside it. Starting waits until this is done");
-  for (const v of [fv(11, 0), fv(11, 2), fv(11, 2, { searched: true }), fv(11, 2, { phase: "finding" })]) {
+  assert.equal(filesLineOf(fv(11, 2, { phase: "checking" })).detail, "Looking for them on this computer. Starting waits until this is done", "a background check chose no folder");
+  for (const v of [fv(11, 0), fv(11, 2), fv(11, 2, { searched: true }), fv(11, 2, { phase: "finding" }), fv(11, 2, { phase: "checking" })]) {
     const all = JSON.stringify(filesLineOf(v));
     assert.doesNotMatch(all, /[/\\]|C:|local|SHA|index|scan/i);
   }

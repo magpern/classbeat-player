@@ -5,8 +5,8 @@
 // control and bidi characters). Nothing here reads or shows a path.
 import type { FilesLine, FilesList } from "../core/list/files-screen.ts";
 import type { RowMix } from "../core/mix/list-model.ts";
-import { buttonEl, h } from "./list-paint.ts";
-import type { Act } from "./list-paint.ts";
+import { buttonEl, h } from "./paint-base.ts";
+import type { Act } from "./paint-base.ts";
 
 /** The marker and words of a row's second line, in the style of the mix marker. */
 export function rowFilesEl(f: RowMix): HTMLElement {

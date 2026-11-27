@@ -39,6 +39,8 @@ function lineOf(v: FilesView): FilesLine {
   const m = missingOf(v);
   const find = (held: boolean): Button => btn("files-find", "Find music files", null, false, held);
   if (v.phase === "choosing") return { marker: "work", text: "Choose the folder with your music", detail: "A window from this computer is open. Starting waits until you have chosen", show: null, find: find(true), startHeld: true };
+  // A check the player runs by itself: no folder was chosen, so the words do not speak of one.
+  if (v.phase === "checking") return { marker: "work", text: "Finding music files…", detail: "Looking for them on this computer. Starting waits until this is done", show: null, find: find(true), startHeld: true };
   if (busy(v)) return { marker: "work", text: "Finding music files…", detail: "Looking in the folder you chose and the folders inside it. Starting waits until this is done", show: null, find: find(true), startHeld: true };
   if (m === 0) {
     const one = v.total === 1;

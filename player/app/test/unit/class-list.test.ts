@@ -1,5 +1,6 @@
 // The class list's data (core/sync/class-list.ts, updated-text.ts): the rows, their order and
 // their fields, and the "Updated" text. Both modules are pure: they import no I/O.
+import { hasUnknownSource } from "../../src/core/sync/unknown-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -161,6 +162,12 @@ test("a class whose music source this player does not know is listed as unknown,
   const { state } = listed([[1, "Alpha"], [2, "Local ride"], [3, "Zulu"], [4, "Own files"]]);
   const docs = new Map([[id(1), doc("Alpha")], [id(2), doc("Local ride", { source: "podcast", songs: 4 })], [id(3), doc("Zulu", { source: "none", songs: 0 })], [id(4), doc("Own files", { source: "local", songs: 4 })]]);
   assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Alpha", "spotify"], ["Local ride", "unknown"], ["Own files", "local"], ["Zulu", "none"]]);
+});
+
+test("`local` is a known music source: the source-free fallback never treats it as unknown (#922)", () => {
+  assert.equal(hasUnknownSource({ music: { source: "local" } }), false);
+  for (const source of ["spotify", "swedebeat", "none"]) assert.equal(hasUnknownSource({ music: { source } }), false, source);
+  assert.equal(hasUnknownSource({ music: { source: "podcast" } }), true);
 });
 
 test("a music source that is not a non-empty string is still no row", () => {

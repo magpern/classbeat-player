@@ -280,12 +280,13 @@ test("Start runs the check again: a file that went missing since the class opene
   assert.equal(r.checks.length, 2);
   assert.deepEqual(r.player.state(), { kind: "manual", reason: "missing", missing: [1] });
   assert.ok(r.cues.every((c) => !c.playing));
-  // A second check that is busy is not a pass either.
+  // A second check that is busy is not a pass either: it waits and asks again (and ends as not_checked after CHECK_TIMEOUT_MS, below).
   const busy = rig();
   await busy.ready();
   busy.answer = null;
   await busy.start(0);
-  assert.deepEqual(busy.player.state(), { kind: "manual", reason: "not_checked" });
+  assert.deepEqual(busy.player.state(), { kind: "checking" });
+  assert.ok(busy.cues.every((c) => !c.playing));
 });
 
 test("Start waits for the second check, then plays from the class time reached meanwhile (#946 item 2)", async () => {
@@ -385,6 +386,49 @@ test("the presenter's notice names the song that failed and why, never a path; a
     assert.deepEqual(r.player.notice(), { line: stopped.line, detail, plate: { headline: stopped.headline, body } }, what);
     assert.doesNotMatch(JSON.stringify(r.player.notice()), /s\d\.mp3|sha|[/\\]/i, what);
   }
+});
+
+test("a check at Start that finds the files service busy is asked again when it is free, not called not_checked (#922)", async () => {
+  const r = rig();
+  await r.ready();
+  r.answer = null;
+  await r.start(0);
+  assert.deepEqual(r.player.state(), { kind: "checking" }, "waiting, not failed");
+  r.answer = done("found", "found", "found");
+  r.tick(RECHECK_MS);
+  r.snap("running", RECHECK_MS);
+  await Promise.resolve();
+  await Promise.resolve();
+  r.snap("running", RECHECK_MS);
+  assert.deepEqual(r.player.state(), { kind: "playing" });
+  // Busy for good: a defined outcome after CHECK_TIMEOUT_MS.
+  const stuck = rig();
+  await stuck.ready();
+  stuck.answer = null;
+  await stuck.start(0);
+  for (let t = RECHECK_MS; t <= CHECK_TIMEOUT_MS + RECHECK_MS; t += RECHECK_MS) {
+    stuck.tick(RECHECK_MS);
+    stuck.snap("running", t);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+  assert.deepEqual(stuck.player.state(), { kind: "manual", reason: "not_checked" });
+});
+
+test("the manual state and its notice end with the class (#922)", async () => {
+  const r = await playing();
+  r.player.fault(r.ids()[1]!);
+  r.snap("running", 103_000);
+  assert.notEqual(r.player.notice(), null);
+  r.snap("ended", 290_000);
+  assert.equal(r.player.notice(), null, "the plate closes as the class ends");
+  assert.equal(r.player.state(), null);
+  const missing = rig(done("found", "missing", "found"));
+  await missing.ready([LEN[0]!, LEN[2]!]);
+  await missing.start(0);
+  assert.notEqual(missing.player.notice(), null);
+  missing.snap("ended", 290_000);
+  assert.equal(missing.player.notice(), null);
 });
 
 test("a class started with files missing, or not checked, says so on the presenter with no plate (#922)", async () => {
