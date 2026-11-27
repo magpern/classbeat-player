@@ -35,6 +35,12 @@ export interface SyncDeps {
   readonly report: (kind: "gone" | "expired") => void;
   readonly setTimer: (fn: () => void, ms: number) => unknown;
   readonly clearTimer: (handle: unknown) => void;
+  /**
+   * Called each time the cache is wiped, whatever the cause (the pairing forgotten, another
+   * account's cache, a cache of no account, a wipe tried again), before the cache itself: what is
+   * kept with the cache (the music files index, ADR 0017 section 2) is wiped with it.
+   */
+  readonly onWipe?: () => void;
 }
 
 export type { NamedMixes } from "../../core/sync/named-policy.ts";
@@ -64,6 +70,8 @@ export interface SyncService {
    */
   pin(id: string, hash?: string): Readonly<Record<string, unknown>> | null;
   unpin(): void;
+  /** A listed class's document, read only, without pinning it: null when the class list would not show it. */
+  document(id: string): Readonly<Record<string, unknown>> | null;
   /** Calls the listener after a change to what the class list shows (a class, the pin, the status or the wipe). */
   watch(listener: () => void): void;
   stop(): void;
@@ -146,6 +154,11 @@ export function createSyncService(d: SyncDeps): SyncService {
         return write(e.run, () => d.cache.commit(e.account, e.cursor));
       case "wipe": {
         // Done only when the cache says so; otherwise tried again later and at every start.
+        try {
+          d.onWipe?.();
+        } catch {
+          // Its own fault; the cache is wiped all the same.
+        }
         let ok = true;
         try {
           d.cache.wipe();
@@ -240,6 +253,14 @@ export function createSyncService(d: SyncDeps): SyncService {
     },
     unpin() {
       dispatch({ type: "unpin" });
+    },
+    document(id) {
+      // The guards of listed(), for one class.
+      const hash = state.held.get(id);
+      const c = d.credential();
+      if (hash === undefined || state.account === null || state.wipeAfterPin || state.wipePending || (c !== null && c.account !== state.account)) return null;
+      const found = d.cache.read(id);
+      return found !== null && found.hash === hash && found.account === state.account ? found.document : null;
     },
     watch(listener) {
       listeners.push(listener);

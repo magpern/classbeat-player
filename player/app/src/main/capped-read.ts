@@ -14,9 +14,14 @@ export function readCapped(file: string, max: number): Buffer | null {
   try {
     const st = fstatSync(fd);
     if (!st.isFile() || st.size > max) return null;
-    const buf = Buffer.alloc(max + 1);
+    // Sized by the file, not the cap (a large cap is not allocated for a small file); one byte more
+    // shows growth, and the buffer then grows, never past `max + 1`.
+    let buf = Buffer.alloc(st.size + 1);
     let n = 0;
-    for (let got = -1; got !== 0 && n <= max; n += got) got = readSync(fd, buf, n, buf.length - n, null);
+    for (let got = -1; got !== 0 && n <= max; n += got) {
+      if (n === buf.length) buf = Buffer.concat([buf, Buffer.alloc(Math.min(buf.length, max + 1 - buf.length))]);
+      got = readSync(fd, buf, n, buf.length - n, null);
+    }
     return n > max ? null : buf.subarray(0, n);
   } finally {
     closeSync(fd);

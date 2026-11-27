@@ -63,3 +63,9 @@ export const CH_UPDATE_CHECK = "update:check";
 export const CH_UPDATE_OPEN_RELEASE = "update:open-release";
 export const CH_UPDATE_SET_AUTO = "update:set-auto";
 export const CH_UPDATE_SET_PRERELEASES = "update:set-prereleases";
+// Local music files (ADR 0017 section 2; owner's settlement on #920), the class list page's only.
+// `player:music-files-find` takes a class id and answers a FindAnswer (core/music-files/answer.ts):
+// per song `found` or `missing` and `limit_reached`, never a path, a folder or a file name.
+// `player:music-files-find-cancel` takes no argument and answers true or false.
+export const CH_MUSIC_FILES_FIND = "player:music-files-find";
+export const CH_MUSIC_FILES_FIND_CANCEL = "player:music-files-find-cancel";

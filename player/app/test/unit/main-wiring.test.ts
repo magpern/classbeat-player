@@ -27,6 +27,14 @@ test("the list's account key is the credential's, not the pairing email", () => 
   assert.match(main, /createListController\(\{[^}]*account:\s*\(\)\s*=>\s*credentialOf\(paired\)\?\.account/);
 });
 
+test("the music files index is wiped by every wipe of the class cache, from the cache's own hook (#920)", () => {
+  assert.match(main, /const musicFiles = setupMusicFiles\(\{[^\n]*\}\);\s*(?:\/\/[^\n]*\n\s*)*sync = setupSync\(paired, \(\) => musicFiles\.wipe\(\)\);/);
+  const setup = slashCode(readFileSync(new URL("../../src/main/sync/setup.ts", import.meta.url), "utf8"));
+  assert.match(setup, /createSyncService\(\{[^}]*\bonWipe,\s*\}\)/);
+  const music = slashCode(readFileSync(new URL("../../src/main/music-files/setup.ts", import.meta.url), "utf8"));
+  assert.doesNotMatch(music, /\bwatch\(|forgotten|\.wipe\(/, "no second trigger list that could drift from the cache's");
+});
+
 test("the room window opens with every class that opens, and is sent every snapshot", () => {
   assert.match(main, /controller\.onOpened\(\(\)\s*=>\s*room\.open\(\)\)/);
   assert.match(main, /controller\.watch\(\(s\)\s*=>\s*room\.send\(s\)\)/);

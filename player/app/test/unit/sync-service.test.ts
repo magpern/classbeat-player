@@ -14,6 +14,8 @@ import { FIRST_BACKOFF_MS } from "../../src/core/sync/backoff-policy.ts";
 import type { HttpAnswer } from "../../src/core/pairing/protocol.ts";
 import { readCapped } from "../../src/main/capped-read.ts";
 import type { BackendRequest } from "../../src/main/pairing/http.ts";
+import { indexStore, INDEX_DIR } from "../../src/main/music-files/index-store.ts";
+import { createMusicFiles } from "../../src/main/music-files/service.ts";
 import { classCache, CLASSES_DIR, SYNC_FILE, WIPE_FILE } from "../../src/main/sync/cache.ts";
 import { createSyncService } from "../../src/main/sync/service.ts";
 import type { SyncCredential, SyncService } from "../../src/main/sync/service.ts";
@@ -50,8 +52,9 @@ afterEach(() => {
 });
 
 /** A sync service on the folder; the fake API answers every page as empty at the cursor asked. */
-function service(cache = classCache(dir)): SyncService {
+function service(cache = classCache(dir), onWipe?: () => void): SyncService {
   sync = createSyncService({
+    onWipe,
     now: () => now,
     call: async (req): Promise<HttpAnswer> => {
       asked.push(req);
@@ -95,12 +98,71 @@ test("a class is not pinned while the pairing is another account's, before sync 
   // Bob is paired now, and no sync has run since: the cache and the file both still say Ann.
   credential = credentialOf(BOB);
   assert.equal(s.pin(ID_A), null);
+  assert.equal(s.document(ID_A), null, "the music files find reads no class of another account (#920)");
   assert.deepEqual(s.list(), []);
   assert.equal(s.view().pinned, null);
   // Ann paired again: hers plays, and is listed.
   credential = credentialOf(ANN);
   assert.equal(s.list().length, 1);
+  assert.ok(s.document(ID_A) !== null && s.view().pinned === null, "read without pinning");
+  assert.equal(s.document("00000000-0000-4000-8000-000000000000"), null);
   assert.ok(s.pin(ID_A) !== null);
+  assert.deepEqual(logged, []);
+});
+
+test("the pairing expires and another account pairs: the music files index is wiped with the cache (#920 review)", async () => {
+  annsCache();
+  const indexDir = join(dir, "..", INDEX_DIR);
+  const store = indexStore(indexDir);
+  assert.ok(store.save(ANN, { folders: ["/music"], files: new Map([["e".repeat(64), { path: "/music/a.mp3", size: 10, mtimeMs: 1 }]]) }));
+  const music = createMusicFiles({ account: () => credential?.account ?? null, classDocument: () => null, pickFolder: async () => null, store });
+  credential = credentialOf(ANN);
+  const s = service(classCache(dir), () => music.wipe());
+  s.start();
+  await settle();
+  // Ann's pairing expires: nothing is wiped yet, the classes may still be hers.
+  credential = { ...credentialOf(ANN), expired: true };
+  s.syncNow();
+  await settle();
+  assert.ok(existsSync(join(indexDir, `${ANN}.json`)));
+  // Bob pairs: Ann's cache is another account's, and her index goes with it.
+  credential = credentialOf(BOB);
+  s.syncNow();
+  await settle();
+  assert.equal(existsSync(dir), false);
+  assert.equal(existsSync(indexDir), false);
+  assert.deepEqual(logged, []);
+});
+
+test("every wipe of the cache calls onWipe first, whatever its cause, and a throwing hook does not stop the wipe", async () => {
+  let wipes = 0;
+  const count = (): void => void (wipes += 1);
+  // A cache of no account found at start.
+  annsCache();
+  rmSync(join(dir, SYNC_FILE));
+  service(classCache(dir), count).start();
+  assert.equal(wipes, 1);
+  sync?.stop();
+  // The pairing forgotten.
+  annsCache();
+  credential = credentialOf(ANN);
+  const s = service(classCache(dir), count);
+  s.start();
+  await settle();
+  credential = null;
+  s.forgotten();
+  assert.equal(wipes, 2);
+  assert.equal(existsSync(dir), false);
+  sync?.stop();
+  // Another account's cache at start, with a hook that throws: the cache is wiped all the same.
+  annsCache();
+  credential = credentialOf(BOB);
+  service(classCache(dir), () => {
+    wipes += 1;
+    throw new Error("index");
+  }).start();
+  assert.equal(wipes, 3);
+  assert.equal(existsSync(dir), false);
   assert.deepEqual(logged, []);
 });
 
@@ -230,6 +292,7 @@ test("the class list gives nothing of one account under another's pairing: Ann's
   credential = null;
   s.forgotten();
   assert.deepEqual(s.list(), []);
+  assert.equal(s.document(ID_A), null, "nothing while a wipe waits");
   credential = credentialOf(BOB);
   s.syncNow();
   await settle();

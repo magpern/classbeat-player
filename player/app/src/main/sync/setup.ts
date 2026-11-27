@@ -11,7 +11,8 @@ import type { SyncService } from "./service.ts";
 
 export const CACHE_DIR = "class-cache";
 
-export function setupSync(pairing: PairingService): SyncService {
+/** `onWipe`: what is wiped with the cache, on every wipe of it (main/sync/service.ts). */
+export function setupSync(pairing: PairingService, onWipe: () => void): SyncService {
   const sync = createSyncService({
     now: () => Date.now(),
     call: createBackendCall(),
@@ -20,6 +21,7 @@ export function setupSync(pairing: PairingService): SyncService {
     report: (kind) => pairing.tokenRefused(kind),
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
+    onWipe,
   });
   linkAndStart(pairing, sync);
   return sync;

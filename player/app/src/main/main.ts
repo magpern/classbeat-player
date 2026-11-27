@@ -15,6 +15,8 @@ import type { MixPlayer } from "./mix/mix-player.ts";
 import { setupPlayback } from "./mix/playback-setup.ts";
 import { createPlays } from "./mix/plays.ts";
 import { setupMix } from "./mix/setup.ts";
+import { registerMusicFilesHandlers } from "./music-files/handlers.ts";
+import { setupMusicFiles } from "./music-files/setup.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
 import { pickClassFile } from "./open-file.ts";
@@ -196,8 +198,11 @@ if (!app.requestSingleInstanceLock()) {
     hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD], (id, wc) => plays.liveFrom(id, wc) !== null);
     const paired = setupPairing();
     pairing = paired;
+    // The instructor's own music files: found by content, and no path ever leaves this process.
+    // Built before sync, as its index is wiped by every wipe of the class cache.
+    const musicFiles = setupMusicFiles({ account: () => credentialOf(paired)?.account ?? null, classDocument: (id) => sync?.document(id) ?? null, window: live });
     // Keeps the account's classes offline, and the class list shows them.
-    sync = setupSync(paired);
+    sync = setupSync(paired, () => musicFiles.wipe());
     // Swedebeat sign-in on the class list page; the token stays in the keychain and this process.
     const mixSetup = setupMix(paired, plays);
     const mix = mixSetup.service;
@@ -232,6 +237,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
+    registerMusicFilesHandlers(ipcMain, trusted, musicFiles);
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     // The class gate: a class open in the room and presenter windows, or pinned (updates.md).
     updates = setupUpdates(() => roomMayOpen(controller.snapshot().doc !== null, onListPage(), pinned()));
