@@ -109,6 +109,10 @@ add('find-failed', 'Class list: the search did not finish',
   'State: `player:music-files-find` failed. A plate above the list; nothing was changed. The footer drops its grey detail line, so five rows stay whole at 1000x720 (L3). No path or reason from the disk is shown.',
   page({ friday: ['ok'], recovery: ['miss', 3], sel: ['miss', 2] }, foot({ mark: 'away', words: missingWords(2, 11), show: true, find: true, detail: '' }), undefined, plate('The music files could not be searched', 'Nothing was changed. Try again, or start on the manual clock.', BTN('Try again'))));
 
+add('find-failed-held', 'Class list: the search did not finish, another class is being checked',
+  'State: the failed search\'s plate above the list and, in the footer, the held-with-answer detail line (another class is being checked). Start, "Find music files" and the plate\'s "Try again" are held. Five rows still fit at 1000x720 (L3).',
+  page({ friday: ['ok'], recovery: ['miss', 3], sel: ['miss', 2] }, foot({ mark: 'away', words: missingWords(2, 11), show: true, find: true, busy: true, detail: 'Another class is being checked. Starting waits until this is done' }), undefined, plate('The music files could not be searched', 'Nothing was changed. Try again, or start on the manual clock.', BTN('Try again', '', '', true))));
+
 // The worst case of the footer: a title of 80 characters in wide capitals (class.name), a long
 // plural reason, at the smallest window.
 const WIDE = 'WWWWWWWWWWWW MMMMMMMMMMMM WWWWWWWWWWWW MMMMMMMMMMMM WWWWWWWWWWWW MMMMMMM';
