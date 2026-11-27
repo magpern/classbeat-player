@@ -11,7 +11,7 @@ import { NOW, row, SYNCED, view } from "./list-fixtures.ts";
 
 const song = (k: number): MissingSong => ({ title: `Song ${k}`, artist: `Artist ${k}`, fileName: `f${k}.mp3` });
 const some = (n: number): MissingSong[] => Array.from({ length: n }, (_, i) => song(i + 1));
-const fv = (total: number, missing: number, over: Partial<FilesView> = {}): FilesView => ({ id: "x", hash: "h", phase: "idle", total, missing: some(missing), searched: false, failed: false, ...over });
+const fv = (total: number, missing: number, over: Partial<FilesView> = {}): FilesView => ({ id: "x", hash: "h", phase: "idle", held: over.phase !== undefined && over.phase !== "idle", total, missing: some(missing), searched: false, failed: false, ...over });
 const keys = (l: ReturnType<typeof filesLineOf>): string[] => [l.show?.label, l.find?.label].filter((k): k is string => k !== undefined);
 
 test("every state of the spec has its marker, words and keys", () => {
@@ -21,9 +21,9 @@ test("every state of the spec has its marker, words and keys", () => {
     ["missing", fv(11, 2), "away", "2 music files are missing", ["Show which files", "Find music files"], false],
     ["one missing", fv(11, 1), "away", "1 music file is missing", ["Show which files", "Find music files"], false],
     ["none found", fv(11, 11), "away", "All 11 music files are missing", ["Show which files", "Find music files"], false],
-    ["choosing", fv(11, 2, { phase: "choosing" }), "work", "Choose the folder with your music", ["Find music files"], true],
-    ["finding", fv(11, 2, { phase: "finding" }), "work", "Finding music files…", ["Find music files"], true],
-    ["checking", fv(11, 2, { phase: "checking" }), "work", "Finding music files…", ["Find music files"], true],
+    ["choosing", fv(11, 2, { phase: "choosing" }), "work", "Choose the folder with your music", ["Show which files", "Find music files"], true],
+    ["finding", fv(11, 2, { phase: "finding" }), "work", "Finding music files…", ["Show which files", "Find music files"], true],
+    ["checking", fv(11, 2, { phase: "checking" }), "work", "Finding music files…", ["Show which files", "Find music files"], true],
     ["still missing", fv(11, 2, { searched: true }), "away", "2 music files are still missing", ["Show which files", "Find music files"], false],
     ["still missing, one", fv(11, 1, { searched: true }), "away", "1 music file is still missing", ["Show which files", "Find music files"], false],
   ];
@@ -69,6 +69,34 @@ test("a row says Files found, N files missing, or Finding files", () => {
   assert.deepEqual(rowFilesOf(fv(11, 2)), { marker: "away", text: "2 files missing" });
   assert.deepEqual(rowFilesOf(fv(11, 1)), { marker: "away", text: "1 file missing" });
   assert.deepEqual(rowFilesOf(fv(11, 2, { phase: "finding" })), { marker: "work", text: "Finding files…" });
+});
+
+test("during a check, a choice of folder and a search, Show which files and Find music files are held (shown, disabled), not hidden (#955)", () => {
+  for (const phase of ["checking", "choosing", "finding"] as const) {
+    const l = filesLineOf(fv(11, 2, { phase }));
+    assert.deepEqual([l.show?.label, l.show?.held, l.find?.label, l.find?.held], ["Show which files", true, "Find music files", true], phase);
+  }
+});
+
+test("a held key says why: an answered class that waits for another class says so in its footer detail, with or without the failure plate (#955)", () => {
+  const why = "Another class is being checked. Starting waits until this is done";
+  for (const v of [fv(11, 2, { held: true }), fv(11, 0, { held: true }), fv(11, 2, { held: true, searched: true }), fv(11, 2, { held: true, failed: true })]) assert.equal(filesLineOf(v).detail, why);
+  assert.notEqual(filesLineOf(fv(11, 2)).detail, why, "not when nothing waits");
+});
+
+test("the failure plate's Try again is held while another class runs, and enabled otherwise (#955)", () => {
+  assert.equal(filesPlateOf(fv(11, 2, { failed: true, held: true }))!.button?.held, true);
+  assert.equal(filesPlateOf(fv(11, 2, { failed: true }))!.button?.held, undefined);
+});
+
+test("a class with an answer keeps it while another class runs: its words and row stay, its keys and Start are held (#955)", () => {
+  const v = fv(11, 2, { held: true });
+  const l = filesLineOf(v);
+  assert.deepEqual([l.text, l.marker, l.startHeld, l.find?.held, l.show?.held], ["2 music files are missing", "away", true, true, undefined]);
+  assert.deepEqual(rowFilesOf(v), { marker: "away", text: "2 files missing" });
+  const found = filesLineOf(fv(11, 0, { held: true }));
+  assert.deepEqual([found.text, found.startHeld], ["All 11 music files are found", true]);
+  assert.equal(filesListOf("Thursday threshold", v)!.buttons[0]!.held, true, "the panel's Find is held too");
 });
 
 test("the panel of the missing songs: the class title, the count, every song, Find (Enter) and Back (Esc)", () => {

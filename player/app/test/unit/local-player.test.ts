@@ -32,6 +32,8 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     cues,
     aligned,
     checks,
+    /** How many times the player asked the files service to stop the check it started. */
+    stopped: 0,
     /** While set, the check at Start does not answer until `open()` is called. */
     gate: null as Promise<void> | null,
     open: (): void => undefined,
@@ -77,6 +79,7 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
       const answer = (): FindAnswer | null => (r.account === null ? { status: "failed" } : r.answer);
       return r.gate === null ? Promise.resolve(answer()) : r.gate.then(answer);
     },
+    cancelCheck: () => void r.stopped++,
     account: () => r.account,
     roomId: () => r.room,
     cue: (c) => cues.push(c),
@@ -367,6 +370,73 @@ test("a check at Start that never answers is the manual clock, not a silent \"ch
   await settle();
   assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
   assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("a check at Start that timed out is stopped, so the files service is free again (#955)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(CHECK_TIMEOUT_MS - 1_000);
+  r.snap("running", CHECK_TIMEOUT_MS - 1_000);
+  assert.equal(r.stopped, 0, "not before the time is up");
+  r.tick(2_000);
+  r.snap("running", CHECK_TIMEOUT_MS + 1_000);
+  assert.equal(r.stopped, 1);
+  r.snap("running", CHECK_TIMEOUT_MS + 2_000);
+  assert.equal(r.stopped, 1, "once");
+  r.open();
+  await settle();
+  assert.equal(r.stopped, 1);
+});
+
+test("a check that found the service busy is not stopped at the timeout: it is another operation's, not ours (#955)", async () => {
+  const r = rig();
+  await r.ready();
+  r.answer = null;
+  await r.start(0);
+  for (let t = RECHECK_MS; t <= CHECK_TIMEOUT_MS + RECHECK_MS; t += RECHECK_MS) {
+    r.tick(RECHECK_MS);
+    r.snap("running", t);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
+  assert.equal(r.stopped, 0);
+});
+
+test("a check at Start that answered is not stopped later (#955)", async () => {
+  const r = rig();
+  await r.ready();
+  await r.start(0);
+  r.tick(CHECK_TIMEOUT_MS + 1_000);
+  r.snap("running", CHECK_TIMEOUT_MS + 1_000);
+  assert.equal(r.stopped, 0);
+});
+
+test("a Start check that has answered, or found the service busy, is no longer 'running': a newer class stops nothing (#955)", async () => {
+  for (const answer of [done("found", "found", "found"), null]) {
+    const r = rig();
+    await r.ready();
+    r.answer = answer;
+    await r.start(0);
+    r.loadId = 2;
+    r.snap("ready", 0);
+    assert.equal(r.stopped, 0, answer === null ? "busy" : "answered");
+  }
+});
+
+test("a newer class supersedes a Start check that is still running (#955)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.loadId = 2;
+  r.snap("ready", 0);
+  assert.equal(r.stopped, 1, "the old class's check is stopped, not left to end");
+  r.open();
+  await settle();
+  assert.equal(r.stopped, 1);
 });
 
 test("the presenter's notice names the song that failed and why, never a path; a sign-out names no song (#922)", async () => {

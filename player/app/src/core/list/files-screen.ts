@@ -12,11 +12,11 @@ export interface FilesLine {
   readonly text: string;
   /** The grey line under it; null while a plate is shown (the footer drops it). */
   readonly detail: string | null;
-  /** "Show which files": only while a file is missing and nothing runs. */
+  /** "Show which files": only while a file is missing; held (shown, disabled) while a check runs. */
   readonly show: Button | null;
-  /** "Find music files": only while a file is missing or a search runs; held while one runs. */
+  /** "Find music files": only while a file is missing or a search runs; held while any check or search runs. */
   readonly find: Button | null;
-  /** Start waits for the answer. */
+  /** Start waits for the answer, or for another class's check or search. */
   readonly startHeld: boolean;
 }
 
@@ -32,30 +32,38 @@ const START = "Starting opens the room screen and the presenter window";
 const btn = (id: Button["id"], label: string, key: string | null, primary: boolean, held = false): Button => ({ id, label, key, primary, ...(held ? { held } : {}) });
 
 const files = (n: number): string => `${n} music ${n === 1 ? "file" : "files"}`;
+/** Another class's check or search holds Start of a class that has its answer: the footer says why. */
+const WAITING = "Another class is being checked. Starting waits until this is done";
+const waiting = (v: FilesView): boolean => v.held && v.phase === "idle";
 const busy = (v: FilesView): boolean => v.phase !== "idle";
 const missingOf = (v: FilesView): number => v.missing.length;
 
 function lineOf(v: FilesView): FilesLine {
+  const line = answered(v);
+  return waiting(v) ? { ...line, detail: WAITING } : line;
+}
+
+function answered(v: FilesView): FilesLine {
   const m = missingOf(v);
   const find = (held: boolean): Button => btn("files-find", "Find music files", null, false, held);
-  if (v.phase === "choosing") return { marker: "work", text: "Choose the folder with your music", detail: "A window from this computer is open. Starting waits until you have chosen", show: null, find: find(true), startHeld: true };
+  if (v.phase === "choosing") return { marker: "work", text: "Choose the folder with your music", detail: "A window from this computer is open. Starting waits until you have chosen", show: btn("files-show", "Show which files", null, false, true), find: find(true), startHeld: true };
   // A check the player runs by itself: no folder was chosen, so the words do not speak of one.
-  if (v.phase === "checking") return { marker: "work", text: "Finding music files…", detail: "Looking for them on this computer. Starting waits until this is done", show: null, find: find(true), startHeld: true };
-  if (busy(v)) return { marker: "work", text: "Finding music files…", detail: "Looking in the folder you chose and the folders inside it. Starting waits until this is done", show: null, find: find(true), startHeld: true };
+  if (v.phase === "checking") return { marker: "work", text: "Finding music files…", detail: "Looking for them on this computer. Starting waits until this is done", show: btn("files-show", "Show which files", null, false, true), find: find(true), startHeld: true };
+  if (busy(v)) return { marker: "work", text: "Finding music files…", detail: "Looking in the folder you chose and the folders inside it. Starting waits until this is done", show: btn("files-show", "Show which files", null, false, true), find: find(true), startHeld: true };
   if (m === 0) {
     const one = v.total === 1;
-    return { marker: "ok", text: one ? "The music file is found" : `All ${v.total} music files are found`, detail: `Starting plays ${one ? "it" : "them"} from this computer and opens the room screen and the presenter window`, show: null, find: null, startHeld: false };
+    return { marker: "ok", text: one ? "The music file is found" : `All ${v.total} music files are found`, detail: `Starting plays ${one ? "it" : "them"} from this computer and opens the room screen and the presenter window`, show: null, find: null, startHeld: v.held };
   }
   const all = m === v.total && v.total > 1;
   const words = v.searched ? (all ? `All ${v.total} music files are still missing` : `${files(m)} ${m === 1 ? "is" : "are"} still missing`) : all ? `All ${v.total} music files are missing` : `${files(m)} ${m === 1 ? "is" : "are"} missing`;
   const detail = v.searched ? `${m === 1 ? "It was" : "They were"} not in the folder you chose. Choose another folder, or start on the manual clock` : `${START}. Manual clock until ${m === 1 ? "it is" : "they are"} found`;
-  return { marker: "away", text: words, detail, show: btn("files-show", "Show which files", null, false), find: find(false), startHeld: false };
+  return { marker: "away", text: words, detail, show: btn("files-show", "Show which files", null, false), find: find(v.held), startHeld: v.held };
 }
 
 /** The files line of the selected local class's footer; it drops its grey line while the failure plate is shown, so five rows stay whole. */
 export function filesLineOf(v: FilesView): FilesLine {
   const line = lineOf(v);
-  return v.failed && !busy(v) ? { ...line, detail: null } : line;
+  return v.failed && !busy(v) && !waiting(v) ? { ...line, detail: null } : line;
 }
 
 /** A row's second-line marker and words: "Files found", "2 files missing", "Finding files…". */
@@ -68,7 +76,7 @@ export function rowFilesOf(v: FilesView): RowMix {
 /** The plate above the list after a search that failed; null otherwise. */
 export function filesPlateOf(v: FilesView | null): Plate | null {
   if (v === null || !v.failed || busy(v)) return null;
-  return { headline: "The music files could not be searched", detail: "Nothing was changed. Try again, or start on the manual clock.", lines: [], button: btn("files-find", "Try again", null, false) };
+  return { headline: "The music files could not be searched", detail: "Nothing was changed. Try again, or start on the manual clock.", lines: [], button: btn("files-find", "Try again", null, false, v.held) };
 }
 
 /** The panel of the missing songs, in place of the list; null when no song is missing. */
@@ -79,7 +87,7 @@ export function filesListOf(title: string, v: FilesView): FilesList | null {
     heading: "Missing music files",
     sentence: `${title}: ${m} of ${v.total} music files ${m === 1 ? "is" : "are"} not found on this computer.`,
     songs: v.missing,
-    buttons: [btn("files-find", "Find music files", "Enter", true, busy(v)), btn("files-back", "Back", "Esc", false)],
+    buttons: [btn("files-find", "Find music files", "Enter", true, v.held), btn("files-back", "Back", "Esc", false)],
     fine: "Files are matched by their content, not by name. Nothing leaves this computer.",
   };
 }

@@ -21,6 +21,12 @@ export interface FilesView {
   readonly id: string;
   readonly hash: string;
   readonly phase: FilesPhase;
+  /**
+   * Start of this class waits: its own check or find runs, it has no answer yet, or another class's
+   * operation holds the files service. A row with an answer keeps it while another class runs (its
+   * `phase` stays `idle`), so only the row being checked says "Finding files…".
+   */
+  readonly held: boolean;
   readonly total: number;
   readonly missing: readonly MissingSong[];
   /** A find ended with files still missing: the words are "still missing". */
@@ -49,6 +55,7 @@ export interface FilesInput {
   /** The latest check or find, or null before one answered. */
   readonly answer: FindAnswer | null;
   readonly phase: FilesPhase;
+  readonly held: boolean;
   readonly searched: boolean;
   readonly failed: boolean;
 }
@@ -69,5 +76,5 @@ export function filesViewOf(i: FilesInput): FilesView | null {
     const file = isObject(song.ids) && isObject(song.ids.local_file) ? song.ids.local_file : {};
     missing.push({ title: text(song.title), artist: text(song.artist), fileName: text(file.file_name) });
   });
-  return { id: i.id, hash: i.hash, phase: i.phase, total: songs.length, missing, searched: i.searched, failed: i.failed };
+  return { id: i.id, hash: i.hash, phase: i.phase, held: i.held, total: songs.length, missing, searched: i.searched, failed: i.failed };
 }

@@ -21,6 +21,7 @@ import type { LocalStop, MusicNotice } from "../../core/music-files/music-notice
 import { classTimeOf, fadeOf, ownerAt, slotsAt } from "../../core/music-files/local-timing.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import type { LocalPlays } from "./local-plays.ts";
+import { askCheck, stopRecheck } from "./local-check.ts";
 import { CHECK_TIMEOUT_MS, JUMP_MS, RECHECK_MS, UNANSWERED_MS, runOf, songTitle } from "./local-run.ts";
 import type { LocalPlayState, Slot } from "./local-run.ts";
 
@@ -28,6 +29,8 @@ export interface LocalPlayerDeps {
   readonly plays: LocalPlays;
   /** The check before playing for the open class's document (main/music-files/service.ts `checkOpen`); null while busy. */
   readonly check: (doc: unknown) => Promise<FindAnswer | null>;
+  /** Stops the check running (service.ts `cancel`): a Start check that timed out, or whose class was replaced, must not hold the service. */
+  readonly cancelCheck: () => void;
   /** The paired account's key, or null. */
   readonly account: () => string | null;
   /** The room window's webContents id, or null while it is closed. */
@@ -90,21 +93,6 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
     return { k, play: d.plays.begin({ webContentsId: room, account: run.account, loadId: run.loadId, songIndex: k, sha256: w.sha256, size: w.size }), duration: null };
   };
 
-  const askCheck = (): void => {
-    if (run.checking || d.now() - run.checkedAt < RECHECK_MS) return;
-    const mine = run;
-    mine.checking = true;
-    mine.checkedAt = d.now();
-    void d.check(mine.doc).then(
-      (a) => {
-        mine.checking = false;
-        if (a !== null) mine.check = a;
-      },
-      () => {
-        mine.checking = false;
-      },
-    );
-  };
   const found = (k: number): boolean => run.check?.status === "done" && run.check.songs[k] === "found";
 
   /** Before Start: each found file opened once, paused and silent, in the first <audio>, for its decoded length. */
@@ -198,7 +186,12 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       mine.music = { t: classMs, at: t, running };
       place(true, false, running);
     };
-    void d.check(mine.doc).then(done, () => done(null));
+    mine.rechecking = true;
+    const settled = (a: FindAnswer | null): void => {
+      mine.rechecking = false;
+      done(a);
+    };
+    void d.check(mine.doc).then(settled, () => settled(null));
   };
 
   return {
@@ -206,6 +199,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       if (s.loadId !== run.loadId) {
         silence();
         d.plays.endAll();
+        stopRecheck(d, run);
         run = runOf(s);
         if (run.timing !== null) run.state = { kind: "checking" };
       }
@@ -216,7 +210,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       run.status = status;
       if (!run.started) {
         if (status === "ready") {
-          if (run.check === null) askCheck();
+          if (run.check === null) askCheck(d, run);
           else probe();
           run.state = run.check === null ? { kind: "checking" } : { kind: "ready" };
           return;
@@ -240,6 +234,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         // A second check that never answers must not hold the class silent and "checking" for good.
         if (d.now() - run.startedAt > CHECK_TIMEOUT_MS) {
           run.starting = false;
+          stopRecheck(d, run);
           run.state = { kind: "manual", reason: "not_checked" };
         }
         return;

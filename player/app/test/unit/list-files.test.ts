@@ -22,7 +22,7 @@ function rig() {
     pins: 0,
     account: "a".repeat(64),
   };
-  const files: FilesView = { id: r.rows[1]!.id, hash: r.rows[1]!.hash, phase: "idle", total: 3, missing: [], searched: false, failed: false };
+  const files: FilesView = { id: r.rows[1]!.id, hash: r.rows[1]!.hash, phase: "idle", held: false, total: 3, missing: [], searched: false, failed: false };
   const controller = createListController({
     sync: { view: () => ({ ...SYNCED, classes: 2, pinned: r.pinned as never }), list: () => r.rows, pin: () => (r.pins++, {}), unpin: () => void (r.pinned = null), watch: () => undefined },
     pairing: { view: () => PAIRED },
