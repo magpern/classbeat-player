@@ -71,8 +71,10 @@ export function createFilesState(d: FilesStateDeps): FilesState {
     void d.music.check(id).then(done, () => done(FAILED));
   };
 
-  /** What the page shows: a class waits for any check or find, so Start is held on the page exactly when the shell would refuse it. */
-  const phaseOf = (e: Entry): FilesPhase => (e.phase === "idle" && (e.answer === null || running !== null) ? "checking" : e.phase);
+  /** What the row says: its own operation, or "checking" while it has no answer yet. A class with an answer keeps it while another class runs. */
+  const phaseOf = (e: Entry): FilesPhase => (e.phase === "idle" && e.answer === null ? "checking" : e.phase);
+  /** Start waits for any check or find, so the page holds it exactly when the shell would refuse it (`held`, below). */
+  const heldOf = (e: Entry): boolean => phaseOf(e) !== "idle" || running !== null;
 
   return {
     view(rows) {
@@ -81,7 +83,7 @@ export function createFilesState(d: FilesStateDeps): FilesState {
         if (r.source !== "local") continue;
         const e = entryOf(r);
         if (running === null && e.phase === "idle" && e.answer === null && d.now() >= e.retryAt) check(r.id, e);
-        if (e.memo === null || e.memo.phase !== phaseOf(e)) e.memo = filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), searched: e.searched, failed: e.failed });
+        if (e.memo === null || e.memo.phase !== phaseOf(e) || e.memo.held !== heldOf(e)) e.memo = filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), held: heldOf(e), searched: e.searched, failed: e.failed });
         if (e.memo !== null) out.push(e.memo);
       }
       return out;
@@ -118,7 +120,7 @@ export function createFilesState(d: FilesStateDeps): FilesState {
     held(classId, hash) {
       // Also while another class's check runs: the check at Start would find the service busy and call it "not checked".
       const e = entries.get(classId);
-      return e === undefined || e.hash !== hash ? running !== null : phaseOf(e) !== "idle";
+      return e === undefined || e.hash !== hash ? running !== null : heldOf(e);
     },
     reset() {
       for (const e of entries.values()) touch(e, { answer: null, retryAt: 0, searched: false, failed: false });

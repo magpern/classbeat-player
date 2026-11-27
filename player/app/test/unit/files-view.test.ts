@@ -6,13 +6,13 @@ import { test } from "node:test";
 import type { FindAnswer } from "../../src/core/music-files/answer.ts";
 import { filesViewOf } from "../../src/core/music-files/files-view.ts";
 import type { FilesInput } from "../../src/core/music-files/files-view.ts";
-import { REPLACEMENT, safeText } from "../../src/core/music-files/safe-text.ts";
+import { MONGOLIAN_VOWEL_SEPARATOR, REPLACEMENT, safeText } from "../../src/core/music-files/safe-text.ts";
 
 const HASH = (k: number): string => String(k).repeat(64);
 const song = (k: number, over: Record<string, unknown> = {}) => ({ title: `Song ${k}`, artist: `Artist ${k}`, start_ms: k * 1000, ids: { local_file: { sha256: HASH(k), size_bytes: 1000 + k, file_name: `file ${k}.mp3` } }, ...over });
 const DOC = { music: { source: "local" }, songs: [song(1), song(2), song(3)] };
 const done = (...s: Array<"found" | "missing">): FindAnswer => ({ status: "done", songs: s, limit_reached: false });
-const input = (over: Partial<FilesInput> = {}): FilesInput => ({ id: "c1", hash: "sha256:x", doc: DOC, answer: done("found", "missing", "missing"), phase: "idle", searched: false, failed: false, ...over });
+const input = (over: Partial<FilesInput> = {}): FilesInput => ({ id: "c1", hash: "sha256:x", doc: DOC, answer: done("found", "missing", "missing"), phase: "idle", held: false, searched: false, failed: false, ...over });
 
 test("a song is listed as missing, with the class document's title, artist and file name, only when its file is not found", () => {
   const v = filesViewOf(input())!;
@@ -38,7 +38,7 @@ test("an answer that is not done, or has another song count, counts every song a
 
 test("the view holds only the fields of the spec: no hash, no size, no path, no folder", () => {
   const v = filesViewOf(input({ answer: done("missing", "missing", "missing") }))!;
-  assert.deepEqual(Object.keys(v).sort(), ["failed", "hash", "id", "missing", "phase", "searched", "total"]);
+  assert.deepEqual(Object.keys(v).sort(), ["failed", "hash", "held", "id", "missing", "phase", "searched", "total"]);
   for (const m of v.missing) assert.deepEqual(Object.keys(m).sort(), ["artist", "fileName", "title"]);
   const text = JSON.stringify(v);
   for (const k of [1, 2, 3]) assert.ok(!text.includes(HASH(k)), "no hash");
@@ -58,6 +58,11 @@ test("control and bidirectional characters in the class document's words are neu
   for (const text of [m.fileName, m.title, m.artist]) for (const code of [...NASTY, 0x07]) assert.ok(!text.includes(cp(code)), `U+${code.toString(16)} is gone`);
   assert.ok(m.fileName.includes(REPLACEMENT) && m.fileName.startsWith("evil") && m.fileName.endsWith(".mp3"));
   assert.ok(m.fileName.includes("gnp.exe") && m.title.startsWith("T") && m.title.includes("itle"), "the visible letters stay");
+});
+
+test("the Mongolian vowel separator has a named constant, and it is replaced (#955)", () => {
+  assert.equal(String.fromCodePoint(MONGOLIAN_VOWEL_SEPARATOR), "\u180e");
+  assert.equal(safeText(`a${String.fromCodePoint(MONGOLIAN_VOWEL_SEPARATOR)}b`), `a${REPLACEMENT}b`);
 });
 
 test("safeText leaves ordinary text, accents and emoji alone, and replaces each unsafe character", () => {

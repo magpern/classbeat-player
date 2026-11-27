@@ -37,6 +37,8 @@ export interface Run {
   started: boolean;
   /** Start came and the check is being run again: nothing plays until it answers. */
   starting: boolean;
+  /** The check at Start has been asked and has not answered: it holds the files service until it ends. */
+  rechecking: boolean;
   /** When a check at Start that found the files service busy is asked again, or null. */
   retryAt: number | null;
   /** When Start came (the check at Start is bounded). */
@@ -72,7 +74,7 @@ export function runOf(s: Snapshot): Run {
   const wanted = doc === null ? null : wantedFiles(doc);
   const timing = doc === null || wanted === null ? null : localTimingOf(doc.songs.map((g) => ({ startMs: g.start_ms, endMs: g.end_ms, lengthMs: g.length_ms })), doc.music.design_crossfade_ms, doc.class.length_ms);
   const zero = { classMs: 0, at: 0, running: false };
-  return { loadId: s.loadId, doc, timing, wanted: wanted ?? [], check: null, checking: false, checkedAt: -Infinity, bad: new Set(), probed: new Set(), started: false, starting: false, retryAt: null, startedAt: 0, last: null, status: null, state: null, failure: null, account: null, slots: [null, null], cue: null, cuedAt: 0, answered: false, clock: zero, music: { t: 0, at: 0, running: false }, reading: null };
+  return { loadId: s.loadId, doc, timing, wanted: wanted ?? [], check: null, checking: false, checkedAt: -Infinity, bad: new Set(), probed: new Set(), started: false, starting: false, rechecking: false, retryAt: null, startedAt: 0, last: null, status: null, state: null, failure: null, account: null, slots: [null, null], cue: null, cuedAt: 0, answered: false, clock: zero, music: { t: 0, at: 0, running: false }, reading: null };
 }
 /** A clock further than this from where it should be was moved by a command: the audio seeks. */
 export const JUMP_MS = 1000;

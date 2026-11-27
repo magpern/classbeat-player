@@ -227,7 +227,7 @@ if (!app.requestSingleInstanceLock()) {
     const accountNow = (): string | null => credentialOf(paired)?.account ?? null;
     // A file is served only for a live play, from the account's index, and a fault stops the audio.
     handleLocalScheme((req) => answerLocalRequest(req, { live: (id) => localPlays.live(id), indexed: (a, sha) => musicFiles.indexed(a, sha), onFault: (id) => localPlayer?.fault(id) }));
-    const local = createLocalPlayer({ plays: localPlays, check: (doc) => musicFiles.checkOpen(doc), account: accountNow, roomId: () => room.trusted().roomId, cue: (c) => room.sendLocal(c), align: (ms) => controller.align(ms), now: () => Date.now() });
+    const local = createLocalPlayer({ plays: localPlays, check: (doc) => musicFiles.checkOpen(doc), cancelCheck: () => void musicFiles.cancel(), account: accountNow, roomId: () => room.trusted().roomId, cue: (c) => room.sendLocal(c), align: (ms) => controller.align(ms), now: () => Date.now() });
     localPlayer = local;
     // Sign-out or a new pairing ends the plays of the account before.
     let playsAccount = accountNow();

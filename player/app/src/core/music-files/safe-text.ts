@@ -7,6 +7,9 @@
 /** The replacement character U+FFFD, written as a code point so no invisible character is in this file. */
 export const REPLACEMENT = String.fromCodePoint(0xfffd);
 
+/** U+180E, the Mongolian vowel separator, in decimal on purpose: a hex literal of it trips a scan of the build. */
+export const MONGOLIAN_VOWEL_SEPARATOR = 6158;
+
 /**
  * Code point ranges that are replaced: C0 controls (NUL, tab, line breaks), DEL and C1 controls,
  * the Arabic letter mark, zero-width characters and the left-to-right and right-to-left marks
@@ -20,7 +23,7 @@ const UNSAFE: readonly (readonly [number, number])[] = [
   [0x7f, 0x9f],
   [0x34f, 0x34f],
   [0x61c, 0x61c],
-  [6158, 6158], // U+180E, in decimal on purpose: a hex literal of it trips a scan of the build
+  [MONGOLIAN_VOWEL_SEPARATOR, MONGOLIAN_VOWEL_SEPARATOR],
   [0x200b, 0x200f],
   [0x2028, 0x202e],
   [0x2060, 0x2069],

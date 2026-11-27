@@ -40,7 +40,7 @@ const WIDE = "WWWWWWWWWWWW MMMMMMMMMMMM WWWWWWWWWWWW MMMMMMMMMMMM WWWWWWWWWWWW M
 type Over = Partial<Omit<FilesView, "id" | "hash" | "total" | "missing">>;
 const files = (title: string, total: number, missing: readonly MissingSong[], over: Over = {}): FilesView => {
   const r = rowsOf().find((x) => x.title === title)!;
-  return { id: r.id, hash: r.hash, phase: "idle", total, missing, searched: false, failed: false, ...over };
+  return { id: r.id, hash: r.hash, phase: "idle", held: over.phase !== undefined && over.phase !== "idle", total, missing, searched: false, failed: false, ...over };
 };
 
 const FRIDAY = files("Friday party ride", 15, []);

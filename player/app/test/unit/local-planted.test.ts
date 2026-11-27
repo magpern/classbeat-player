@@ -84,7 +84,7 @@ test("a planted pattern, folder and file name reach nothing but the index and th
     const cues: LocalCue[] = [];
     const served: Array<{ status: number; headers: string; body: Buffer }> = [];
     const faults: string[] = [];
-    const player = createLocalPlayer({ plays, check: (d) => r.service.checkOpen(d), account: () => r.account, roomId: () => 3, cue: (c) => cues.push(c), align: () => undefined, now: () => now });
+    const player = createLocalPlayer({ plays, check: (d) => r.service.checkOpen(d), cancelCheck: () => void r.service.cancel(), account: () => r.account, roomId: () => 3, cue: (c) => cues.push(c), align: () => undefined, now: () => now });
     const snap = (status: string, classMs: number) => player.snapshot({ loadId: 1, doc, view: { status, classMs } } as unknown as Snapshot);
     // The room: fetch each cued play URL as its <audio> would, and report the tone's decoded length.
     const room = async () => {
