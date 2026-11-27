@@ -198,8 +198,25 @@ for it.
 | State | Where | What shows | Mock-up |
 |---|---|---|---|
 | The sign-in and option, dimmed | The Swedebeat line, under the sync status | Hollow square (grey), state words "Swedebeat", grey detail "Not available in this app yet", and the key "Connect Swedebeat" **dimmed**. **The line is always shown on iOS**, also with no Swedebeat class in the list (the sign-in is the thing that is dimmed). The key keeps its place and size, takes the disabled look of class-list.md ("A class that needs a newer player": `--stage-raised` fill, 1 px `--stage-line` border, label `--light-3`) and has `aria-disabled="true"` with `aria-describedby` on the detail line, so a screen reader says "Connect Swedebeat, dimmed, Not available in this app yet". It stays in the tab order (focus is not lost, as the update spec's dimmed key), and pressing it does nothing and shows nothing. Nothing opens the form | [line](mockups/class-list-swedebeat-ios-line.html) |
-| A class from Swedebeat, listed | A row whose `music.source` is `swedebeat` | The row's second line is "Swedebeat, 12 songs" then a hollow square (grey, `--light-2`) and "Not available in this app yet", in the place of the mix words. Same face and size as a mix word (16 px). The row is otherwise the row of class-list.md, selectable, with the selection bar and outline. Spotify and local-file rows are unchanged: no marker, no message | [line](mockups/class-list-swedebeat-ios-line.html) |
+| A class from Swedebeat, listed | A row whose `music.source` is `swedebeat` | The row's second line is "Swedebeat, 12 songs" then a hollow square (grey, `--light-2`) and "Not available in this app yet", in the place of the mix words. Same face and size as a mix word (16 px). The row is otherwise the row of class-list.md, with the selection bar and outline where the window has a selection; **on the phone, not selectable, and the message is the whole cue (see "As built on the phone")**. Spotify and local-file rows are unchanged: no marker, no message | [line](mockups/class-list-swedebeat-ios-line.html) |
 | A class from Swedebeat, selected | The footer | The title as always; the detail line is "Not available in this app yet". **Start class is dimmed**: the exact disabled look and rules of class-list.md ("A class that needs a newer player": raised fill, 1 px line, label `--light-3`, **no Enter hint**, `aria-describedby` on the footer detail, no focus, Tab skips it). Enter on the list and a tap on Start do nothing, and **no message appears for them**: the reason is already on screen. Moving the selection to a Spotify or local-file class enables Start at once, with its hint | [row](mockups/class-list-swedebeat-ios-row.html) |
+
+**As built on the phone (#961, issue #932).** The iOS app's phone page is the web view class list, and
+it has no selected row and no footer Start: a tap on a class row opens the class. So on the phone the
+two Swedebeat class rows above reduce to one, and this is what shipped:
+- The Swedebeat class row is **not selectable**: it is a dimmed key (`aria-disabled="true"`, not
+  `disabled`, so it stays in the tab order), and a tap or press does nothing and shows nothing. It has
+  no selection bar, no footer, no Start key and no hover or focus state beyond the dimmed look.
+- **The message on the row is the whole cue.** "Not available in this app yet" sits on its own line
+  under the title and "Swedebeat, N songs", after a hollow grey square, at the status-line tier. No
+  dialog, plate, toast, tooltip or further detail is opened from the row. The message is part of the
+  row's accessible name and is read once (no `aria-describedby` on the row).
+- The Swedebeat line's dimmed key is the same: `aria-disabled`, in the tab order, `aria-describedby` on
+  the line's message, and nothing happens when pressed.
+- A Swedebeat class reached by its address (not from the list) never opens the room: the page returns
+  to the list and shows one plate with the sentence alone, no detail line.
+- The footer rows of the table (selected row, dimmed Start with its Enter hint rules) are the
+  desktop and wide-window form of the spec and are not part of the phone build.
 
 Notes:
 - The Swedebeat row is not hidden and not removed from the list or from "N classes": the instructor
@@ -265,7 +282,7 @@ three room sizes (room); the product's CI screenshots are held to the same numbe
 | W10 | Tokens | Only `tokens.css` colours, faces and sizes |
 | W11 | iOS, dimmed (this spec's "The iOS app") | The state words and message are live text with the numbers of W1 at the window sizes of the class list, and on the phone the numbers of [app.md](app.md) A1: state words and the message in the row, the footer and the Swedebeat line at the **status-line tier, 1.9 % portrait / 3.4 % landscape of window height, never under 12.5 px**. The message has at least **7 : 1** (measured 10.8 : 1); the dimmed key's label and the dimmed Start label at least **4.5 : 1** (measured 6.1 : 1, as class-list.md L2 for a disabled label) |
 | W12 | iOS, what is visible at once | On the phone, with no scroll: the Swedebeat line with its message, the first Swedebeat row with its message when it is in the first screen, the selected row and the footer with Start, at 390 x 844 and 360 x 640 each way up. At 1000 x 720 the 5 full rows of W4 hold |
-| W13 | iOS, controls and words | The dimmed key and a row are at least 44 px high on the desktop sizes and **64 x 64 CSS px**, 12 px apart, on the phone (app.md A6); the key is in the tab order with `aria-disabled`; the dimmed Start has `disabled` and no hint. The sentence "Not available in this app yet" is the only reason text: a test finds no other wording about why, in the page or in an accessible name |
+| W13 | iOS, controls and words | (As built on the phone: the Swedebeat row is not selectable and shows no further detail; see "As built on the phone".) The dimmed key and a row are at least 44 px high on the desktop sizes and **64 x 64 CSS px**, 12 px apart, on the phone (app.md A6); the key is in the tab order with `aria-disabled`; the dimmed Start has `disabled` and no hint. The sentence "Not available in this app yet" is the only reason text: a test finds no other wording about why, in the page or in an accessible name |
 
 ## Motion
 
