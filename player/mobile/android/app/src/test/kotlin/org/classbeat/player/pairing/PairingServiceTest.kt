@@ -288,6 +288,11 @@ class PairingServiceTest {
         val revokes = backend.sent.filter { it.method == Method.DELETE }.map { it.token }
         assertEquals(listOf(Secrets.token(), Secrets.token('C')), revokes)
         assertEquals(1, forgotten)
+        // The old token went out exactly twice, the check at start and the give-back, and nothing
+        // is tried again later (#964).
+        val old = backend.sent.filter { it.token == Secrets.token() }
+        assertEquals(listOf("GET /api/player/device", "DELETE /api/player/device"), old.map { "${it.method} ${it.path}" })
+        assertTrue("no retry is set", ports.timers.isEmpty())
     }
 
     @Test

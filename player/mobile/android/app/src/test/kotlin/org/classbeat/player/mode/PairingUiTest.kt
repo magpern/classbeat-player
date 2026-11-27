@@ -181,6 +181,54 @@ class PairingUiTest {
         assertEquals(0, screens.hidden)
     }
 
+    /**
+     * The code shows with its tick due, and from here the service's changes no longer reach the
+     * screen ([wired] false): a tick still due after a drop can then only be cleared by the drop's
+     * own cancel, not by a render a change set off (#964).
+     */
+    private fun tickDueAndUnwired(instructor: Boolean, saves: Boolean): Triple<PairingUi, PairingService, () -> Unit> {
+        backend.route = { r ->
+            when (r.path) {
+                "/api/pairing/start" -> FakeBackend.started()
+                "/api/pairing/token" -> FakeBackend.token()
+                else -> FakeBackend.status(204)
+            }
+        }
+        val service = PairingService(ORIGIN, false, "1.0.0", backend, FakeStore(saves = saves), ports)
+        val ui = PairingUi(screens, service, ports, secure, ticker) { true }
+        var wired = true
+        service.changed = { if (wired) ui.changed() }
+        service.load()
+        ui.open(instructor) {}
+        backend.flush()
+        assertTrue(service.view() is PairingView.Waiting)
+        assertNotNull(ticker.due)
+        return Triple(ui, service) { wired = false }
+    }
+
+    @Test
+    fun `a drop cancels the tick by itself`() {
+        val (ui, service, unwire) = tickDueAndUnwired(instructor = false, saves = true)
+        unwire()
+        ui.drop()
+        assertFalse(ui.showing)
+        assertEquals(PairingView.Unpaired(null), service.view())
+        assertNull(ticker.due)
+    }
+
+    @Test
+    fun `a drop that holds the save-failed plate cancels the tick by itself`() {
+        val (ui, service, unwire) = tickDueAndUnwired(instructor = true, saves = false)
+        service.forgotten = ui::drop
+        unwire()
+        // The poll brings a token the store cannot keep: it is forgotten, and that drops the screen.
+        ports.fireNext()
+        backend.flush()
+        assertEquals(PairingView.Unpaired(Notice.SAVE_FAILED), service.view())
+        assertTrue(ui.showing)
+        assertNull(ticker.due)
+    }
+
     @Test
     fun `the countdown changes its words in place, and shows anew when it cannot`() {
         codeShowing()
