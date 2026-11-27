@@ -8,7 +8,7 @@ import type { FindAnswer } from "../../src/core/music-files/answer.ts";
 import type { LocalCue, LocalReport } from "../../src/core/music-files/local-cue.ts";
 import { localPlayIdOf } from "../../src/core/music-files/local-scheme-policy.ts";
 import type { Snapshot } from "../../src/core/snapshot.ts";
-import { createLocalPlayer, RECHECK_MS } from "../../src/main/local/local-player.ts";
+import { CHECK_TIMEOUT_MS, createLocalPlayer, RECHECK_MS } from "../../src/main/local/local-player.ts";
 import { createLocalPlays } from "../../src/main/local/local-plays.ts";
 
 const ACCT = "a".repeat(64);
@@ -32,6 +32,12 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     cues,
     aligned,
     checks,
+    /** While set, the check at Start does not answer until `open()` is called. */
+    gate: null as Promise<void> | null,
+    open: (): void => undefined,
+    hold() {
+      r.gate = new Promise<void>((ok) => void (r.open = () => ok()));
+    },
     loadId: 1,
     tick: (ms: number) => (now += ms),
     now: () => now,
@@ -67,7 +73,9 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     plays,
     check: (d) => {
       checks.push(d);
-      return Promise.resolve(r.answer);
+      // The real check (main/music-files/service.ts) has no account to read after a sign-out and says "failed".
+      const answer = (): FindAnswer | null => (r.account === null ? { status: "failed" } : r.answer);
+      return r.gate === null ? Promise.resolve(answer()) : r.gate.then(answer);
     },
     account: () => r.account,
     roomId: () => r.room,
@@ -291,4 +299,71 @@ test("Start waits for the second check, then plays from the class time reached m
   assert.deepEqual(r.player.state(), { kind: "playing" });
   assert.equal(r.last().playing, true);
   assert.equal(r.last().slots[0].positionMs, 1_000);
+});
+
+const settle = async () => {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+};
+
+test("another class opening while the check at Start runs: nothing plays for it, and the old answer does not touch it (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.loadId = 2;
+  r.snap("ready", 0);
+  const n = r.cues.length;
+  r.open();
+  await settle();
+  assert.equal(r.cues.length, n, "no cue for the class whose check has not answered");
+  assert.ok(r.cues.every((c) => !c.playing));
+  assert.deepEqual(r.player.state(), { kind: "checking" });
+});
+
+test("a class that ends while the check at Start runs never plays (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(5_000);
+  r.snap("ended", 290_000);
+  const n = r.cues.length;
+  r.open();
+  await settle();
+  assert.equal(r.player.state(), null);
+  assert.equal(r.cues.length, n);
+  assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("a pause during the check at Start joins paused, at the paused class time (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(2_000);
+  r.snap("paused", 2_000);
+  r.tick(30_000);
+  r.open();
+  await settle();
+  assert.deepEqual(r.player.state(), { kind: "playing" });
+  assert.equal(r.last().playing, false);
+  assert.equal(r.last().slots[0].positionMs, 2_000, "not advanced by the time spent paused");
+});
+
+test("a check at Start that never answers is the manual clock, not a silent \"checking\" for the whole class (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(CHECK_TIMEOUT_MS - 1_000);
+  r.snap("running", CHECK_TIMEOUT_MS - 1_000);
+  assert.deepEqual(r.player.state(), { kind: "checking" });
+  r.tick(2_000);
+  r.snap("running", CHECK_TIMEOUT_MS + 1_000);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
+  // A late answer changes nothing.
+  r.open();
+  await settle();
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
+  assert.ok(r.cues.every((c) => !c.playing));
 });

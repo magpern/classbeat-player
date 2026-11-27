@@ -3,13 +3,16 @@
 import type { MusicReading } from "../../core/clock/music-link.ts";
 import type { FindAnswer } from "../../core/music-files/answer.ts";
 import type { LocalCue } from "../../core/music-files/local-cue.ts";
+import type { LocalFallback } from "../../core/music-files/local-mode-policy.ts";
 import { localTimingOf } from "../../core/music-files/local-timing.ts";
 import type { LocalTiming } from "../../core/music-files/local-timing.ts";
 import { wantedFiles } from "../../core/music-files/wanted.ts";
 import type { WantedFile } from "../../core/music-files/wanted.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import type { LocalPlay } from "./local-plays.ts";
-import type { LocalPlayState } from "./local-player.ts";
+
+/** Where local playback is, for the instructor's screen: `manual` carries the plain reason. */
+export type LocalPlayState = { readonly kind: "checking" } | { readonly kind: "ready" } | { readonly kind: "playing" } | ({ readonly kind: "manual" } & LocalFallback);
 
 export interface Slot {
   readonly k: number;
@@ -33,6 +36,8 @@ export interface Run {
   started: boolean;
   /** Start came and the check is being run again: nothing plays until it answers. */
   starting: boolean;
+  /** When Start came (the check at Start is bounded). */
+  startedAt: number;
   /** The controller's latest view, kept while the second check runs. */
   last: { status: string; classMs: number; at: number } | null;
   status: string | null;
@@ -54,5 +59,5 @@ export function runOf(s: Snapshot): Run {
   const wanted = doc === null ? null : wantedFiles(doc);
   const timing = doc === null || wanted === null ? null : localTimingOf(doc.songs.map((g) => ({ startMs: g.start_ms, endMs: g.end_ms, lengthMs: g.length_ms })), doc.music.design_crossfade_ms, doc.class.length_ms);
   const zero = { classMs: 0, at: 0, running: false };
-  return { loadId: s.loadId, doc, timing, wanted: wanted ?? [], check: null, checking: false, checkedAt: -Infinity, bad: new Set(), probed: new Set(), started: false, starting: false, last: null, status: null, state: null, account: null, slots: [null, null], cue: null, cuedAt: 0, answered: false, clock: zero, music: { t: 0, at: 0, running: false }, reading: null };
+  return { loadId: s.loadId, doc, timing, wanted: wanted ?? [], check: null, checking: false, checkedAt: -Infinity, bad: new Set(), probed: new Set(), started: false, starting: false, startedAt: 0, last: null, status: null, state: null, account: null, slots: [null, null], cue: null, cuedAt: 0, answered: false, clock: zero, music: { t: 0, at: 0, running: false }, reading: null };
 }

@@ -15,13 +15,12 @@ import type { FindAnswer } from "../../core/music-files/answer.ts";
 import { EMPTY_SLOT } from "../../core/music-files/local-cue.ts";
 import type { LocalCue, LocalReport, LocalSlotCue } from "../../core/music-files/local-cue.ts";
 import { localModePolicy } from "../../core/music-files/local-mode-policy.ts";
-import type { LocalFallback } from "../../core/music-files/local-mode-policy.ts";
 import { localPlayUrl } from "../../core/music-files/local-scheme-policy.ts";
 import { classTimeOf, fadeOf, ownerAt, slotsAt } from "../../core/music-files/local-timing.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import type { LocalPlays } from "./local-plays.ts";
 import { runOf } from "./local-run.ts";
-import type { Slot } from "./local-run.ts";
+import type { LocalPlayState, Slot } from "./local-run.ts";
 
 export interface LocalPlayerDeps {
   readonly plays: LocalPlays;
@@ -39,8 +38,7 @@ export interface LocalPlayerDeps {
   readonly now: () => number;
 }
 
-/** Where local playback is, for the instructor's screen: `manual` carries the plain reason. */
-export type LocalPlayState = { readonly kind: "checking" } | { readonly kind: "ready" } | { readonly kind: "playing" } | ({ readonly kind: "manual" } & LocalFallback);
+export type { LocalPlayState } from "./local-run.ts";
 
 export interface LocalPlayer {
   snapshot(s: Snapshot): void;
@@ -59,6 +57,8 @@ export interface LocalPlayer {
 export const JUMP_MS = 1000;
 /** A cue the room has not answered for this long is sent again, fresh. */
 export const UNANSWERED_MS = 2000;
+/** The check at Start that has not answered after this long is "not checked": the manual clock. */
+export const CHECK_TIMEOUT_MS = 10_000;
 /** A check that found the shell busy is asked again after this long. */
 export const RECHECK_MS = 2000;
 
@@ -170,7 +170,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
   const recheck = (): void => {
     const mine = run;
     const done = (a: FindAnswer | null): void => {
-      if (run !== mine) return;
+      if (run !== mine || !mine.starting) return;
       mine.starting = false;
       mine.check = a;
       const last = mine.last!;
@@ -178,15 +178,15 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         mine.state = null;
         return;
       }
+      // Signed out: the check has no account to read and says "failed", but the reason is the sign-out.
+      mine.account = d.account();
+      if (mine.account === null) {
+        mine.state = { kind: "manual", reason: "failed" };
+        return;
+      }
       const m = localModePolicy({ musicSource: "local", songs: mine.wanted.length, check: mine.check, wrongLength: mine.bad });
       if (m.mode !== "local") {
         mine.state = m.mode !== "manual" ? { kind: "manual", reason: "not_checked" } : m.reason === "missing" ? { kind: "manual", reason: "missing", missing: m.missing } : { kind: "manual", reason: m.reason };
-        return;
-      }
-      mine.account = d.account();
-      // Signed out between Start and now: nothing can play, so the manual clock, not a silent "playing".
-      if (mine.account === null) {
-        mine.state = { kind: "manual", reason: "failed" };
         return;
       }
       const running = last.status === "running";
@@ -224,6 +224,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         silence();
         // A file may have changed since the class opened: the check runs again before anything plays.
         run.starting = true;
+        run.startedAt = d.now();
         run.last = { status, classMs, at: d.now() };
         run.state = { kind: "checking" };
         recheck();
@@ -231,6 +232,11 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       }
       if (run.starting) {
         run.last = { status, classMs, at: d.now() };
+        // A second check that never answers must not hold the class silent and "checking" for good.
+        if (d.now() - run.startedAt > CHECK_TIMEOUT_MS) {
+          run.starting = false;
+          run.state = { kind: "manual", reason: "not_checked" };
+        }
         return;
       }
       if (run.state?.kind !== "playing") return;
