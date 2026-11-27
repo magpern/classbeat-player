@@ -48,13 +48,13 @@ The code never wraps and never shrinks below the value floor; at 360 px wide it 
 | The code, no screen lock | `app-pair-code-no-lock` | The same with a grey note: "This phone has no screen lock. Instructor mode will need one: set it before or after pairing." Pairing goes on |
 | Back from the browser, not yet confirmed | `app-pair-waiting` | The working line "Not yet confirmed on the website" above the code; the main key becomes "Open the page again" |
 | Paired | `app-pair-done` | "This phone is paired", the status line "Paired as <account e-mail>", "Confirm your screen lock to open instructor mode.", and "Continue", which opens the screen-lock prompt (or app-modes.md's no-lock screen). Reached from "Pair again" in instructor mode, the screen has **no screen-lock line**: the phone is already in instructor mode, so "Continue" returns to the class list |
-| Refused | `app-pair-denied` | A white plate "Refused on the website. / Nothing was kept on this phone." Keys "Rider mode" and "Start again" (main) |
+| Refused | `app-pair-denied` | A white plate "Refused on the website. / Nothing was kept on this phone." Keys stacked, in the order built (`PLATE_KEYS`): "Start again" (main) first, then "Rider mode" |
 | Code ran out | `app-pair-code-expired` | Plate "The code ran out. / It was not confirmed in time. Start again for a new code." Same keys |
 | Server unreachable | `app-pair-unreachable` | Plate "The server could not be reached. / Check the connection, then start again." Same keys |
 | No Keystore | `app-pair-no-keystore` | Plate "This phone cannot be paired. / It has no Android Keystore, so there is no safe place for the pairing. Rider mode works without it." One key, "Back to rider mode". There is no plain-text fallback (ADR 0011 section 5) |
 | Too many pairings | `app-pair-too-many` | Plate "Too many pairings were started. / Try again in an hour." (the desktop's `too_many`, from this network). Same keys as Refused; "Start again" asks again, and the server may still refuse until the hour has passed |
 | Answer not understood | `app-pair-unexpected` | Plate "The answer was not understood. / The app could not read the server's answer. Try again later." (the desktop's `unexpected`). Same keys as Refused. Nothing was kept |
-| Pairing could not be kept | `app-pair-save-failed` | Plate "The pairing could not be kept. / The Android Keystore did not keep it, so the pairing was undone. Start again." (the desktop's `save_failed`; the app asks the server to drop the record it made). Same keys as Refused |
+| Pairing could not be kept | `app-pair-save-failed` | Plate "The pairing could not be kept. / The Android Keystore did not keep it, so the pairing was undone. Start again." (the desktop's `save_failed`; the app asks the server to drop the record it made). Same keys as Refused. When the screen is dropped after "Pair again" from instructor mode, this plate stays over rider mode, as on iOS (#956); its keys then lead from rider mode |
 | Unpaired on the website | `app-pair-revoked` | Plate "Unpaired on the website. / The classes saved on this phone were removed." Same keys as Refused. Instructor mode closes to rider mode **at once, with no plate**. The plate shows when pairing next opens **in the same run**, and only "Start again" begins then. A plate that was shown is cleared and is not shown again. It is not kept across a restart (the next pairing opens on "Asking for a code") |
 | Server unreachable, no server address | `app-pair-unreachable` | A release built with no server address (the build's `NO_SERVER`) shows the same plate as Server unreachable. "Start again" cannot succeed there: it shows the plate again until a build with an address is installed |
 
@@ -67,6 +67,8 @@ desktop notice.
 The three new plates use the same mode tag, title, plate and keys as Refused, so each has one mock-up and the same two sizes. "Cancel" and "Rider mode" go back to rider mode's start page; the code is dropped. Back is
 "Cancel". A pairing screen never shows the device token, any part of it or the account's
 password.
+
+While any pairing page shows, the window carries `FLAG_SECURE` (`PairingSeams.kt`, set by `PairingUi.kt`; cleared when the screen closes): the code is blank in Recents and cannot be screenshotted.
 
 ## Motion and reduced motion
 
