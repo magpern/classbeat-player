@@ -53,8 +53,6 @@ object PairingMachine {
     sealed class Effect {
         data class StartCall(val attempt: Int, val origin: String) : Effect()
 
-        data class OpenPage(val page: String) : Effect()
-
         /** Send [Event.PollDue] for this attempt at [at] (the edge's one timer). */
         data class Wake(val attempt: Int, val at: Long) : Effect()
 
@@ -150,9 +148,10 @@ object PairingMachine {
             Start.Unreachable -> return ended(s, s.attempt, Notice.UNREACHABLE)
             Start.Unexpected -> return ended(s, s.attempt, Notice.UNEXPECTED)
         }
+        // The page is not opened here: the code shows first, and only "Open the site" opens the page
+        // (docs/design/app-pairing.md, item 5), so it can be compared or typed on another device.
         val waiting = State.Waiting(s.attempt, s.origin, ok.deviceCode, ok.userCode, ok.page, now + ok.expiresInMs, ok.intervalMs, false, s.back)
-        val next = wait(waiting, now, waiting.intervalMs)
-        return Step(next.state, listOf(Effect.OpenPage(ok.page)) + next.effects)
+        return wait(waiting, now, waiting.intervalMs)
     }
 
     /**

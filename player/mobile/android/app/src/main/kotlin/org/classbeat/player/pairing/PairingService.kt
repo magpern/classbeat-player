@@ -14,7 +14,10 @@ interface PairingPorts {
     /** Runs [run] once, on the main thread, at [time] (a later call for the same pairing replaces nothing: the machine ignores stale wakes). */
     fun at(time: Long, run: () -> Unit)
 
-    /** Opens the pairing page in the system browser or a Custom Tab, never in the app's web view. False when none could open it. */
+    /**
+     * Opens the pairing page in the system browser or a Custom Tab, never in the app's web view. False when none could open it.
+     * Called only by "Open the site" on the pairing screen, never when the code arrives.
+     */
     fun openPage(page: String): Boolean
 
     /** Deletes every cached class: the pairing that fetched them is gone. */
@@ -34,9 +37,10 @@ sealed class PairingView {
 }
 
 /**
- * Runs [PairingMachine] against the device (ADR 0011 §5): the transport, the Keystore-backed store,
- * the timer and the browser. Pure: every side effect goes through a port. Not thread-safe: called
- * on the main thread only, and the transport and the timer answer there.
+ * Runs [PairingMachine] against the device (ADR 0011 §5): the transport, the Keystore-backed store
+ * and the timer. It never opens the pairing page: only the screen's "Open the site" does. Pure:
+ * every side effect goes through a port. Not thread-safe: called on the main thread only, and the
+ * transport and the timer answer there.
  *
  * [origin] is the backend fixed in the build (null when the build holds none it may call); a stored
  * record from any other backend is deleted, never used.
@@ -138,8 +142,6 @@ class PairingService(
             is Effect.StartCall -> transport.send(Calls.pairingStart(effect.origin, version)) {
                 dispatch(Event.Started(effect.attempt, PairingProtocol.parseStart(it, effect.origin)))
             }
-            // No browser: the screen still shows the code and the address, to type in on another device.
-            is Effect.OpenPage -> ports.openPage(effect.page)
             is Effect.Wake -> ports.at(effect.at) { dispatch(Event.PollDue(effect.attempt)) }
             is Effect.PollCall -> transport.send(Calls.pairingToken(effect.origin, effect.deviceCode)) {
                 dispatch(Event.Polled(effect.attempt, effect.origin, PairingProtocol.parsePoll(it)))

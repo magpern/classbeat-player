@@ -22,7 +22,7 @@ import android.widget.TextView
  * are at least 64dp high and 12dp apart, and the screens fade in over 200ms, or not at all when
  * Android's "Remove animations" is on. One screen shows at a time, over the web view.
  */
-class ModeScreens(private val activity: Activity) {
+class ModeScreens(private val activity: Activity) : PairingScreens {
     /** A key: its words, whether it is the main one, and what it does. */
     class Key(val label: String, val main: Boolean, val press: () -> Unit)
 
@@ -83,7 +83,7 @@ class ModeScreens(private val activity: Activity) {
         keys = emptyList(),
     )
 
-    fun hide() {
+    override fun hide() {
         shown?.let { (it.parent as? ViewGroup)?.removeView(it) }
         shown = null
         lineViews.clear()
@@ -91,13 +91,13 @@ class ModeScreens(private val activity: Activity) {
     }
 
     /** A screen of lines and keys, as the pairing screens build it; [act] goes with the keys (the steps). */
-    fun screen(lead: List<ScreenLine>, act: List<ScreenLine>, keys: List<Key>) = show(lead, keys, act = act)
+    override fun screen(lead: List<ScreenLine>, act: List<ScreenLine>, keys: List<Key>) = show(lead, keys, act = act)
 
     /**
      * Changes the words of the screen showing, in place (the countdown), keeping its keys and focus.
      * False when the lines are not the same kinds as those showing: the caller shows the screen anew.
      */
-    fun retext(lines: List<ScreenLine>): Boolean {
+    override fun retext(lines: List<ScreenLine>): Boolean {
         if (shown == null || lines.size != lineViews.size || lines.zip(shownLines).any { (a, b) -> a::class != b::class }) return false
         lines.forEachIndexed { i, l -> (lineViews[i] as? TextView)?.let { if (l is ScreenLine.Code) it.text = l.code else it.text = words(l) } }
         shownLines = lines
