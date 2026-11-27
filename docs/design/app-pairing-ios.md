@@ -36,8 +36,8 @@ Safari; no platform name shows in the steps.
 | State | Mock-up | What shows |
 |---|---|---|
 | Paired | `app-pair-ios-done` | Title "This phone is paired", status "Paired as <account e-mail>", line "Confirm it is you to open instructor mode.", key "Continue" (opens the system prompt). The line is the same words whichever of Face ID, Touch ID or the passcode the phone uses. Reached from "Pair again" in instructor mode, the line is absent and "Continue" returns to the class list, as on Android. A long e-mail wraps inside the window and never scrolls sideways |
-| No passcode (the desktop's `noKeychain`) | `app-pair-ios-no-passcode` | Plate "This phone cannot be paired. / Pairing needs a passcode to keep it safe. Set one in Settings, then start again. Rider mode works without it." Keys "Rider mode" and "Start again" (main). Unlike Android's one key, "Start again" is offered, because setting a passcode can fix it; it checks again and shows the same plate if there is still none. There is no plain-text fallback (ADR 0016 section 3). No key opens Settings: iOS lets an app open only its own settings page |
-| Pairing could not be kept | `app-pair-ios-save-failed` | Plate "The pairing could not be kept. / The Keychain did not keep it, so the pairing was undone. Start again." Same keys as Refused. The app asks the server to drop the record it made |
+| No passcode (the desktop's `noKeychain`) | `app-pair-ios-no-passcode` | Plate "This phone cannot be paired. / Pairing needs a passcode to keep it safe. Set one in Settings, then start again. Rider mode works without it." Keys, in this order as built, "Start again" (main) then "Rider mode" (the same order on every iOS plate; the test asserts `["Start again","Rider mode"]`; app-pairing.md lists them the other way round in prose, and on iOS the code is right). Shown only once a server address exists: "no server" is checked before "no Keychain" (`PairingMachine`), so a build with no address shows the unreachable plate, never this one. Unlike Android's one key, "Start again" is offered, because setting a passcode can fix it; it checks again and shows the same plate if there is still none. There is no plain-text fallback (ADR 0016 section 3). No key opens Settings: iOS lets an app open only its own settings page |
+| Pairing could not be kept | `app-pair-ios-save-failed` | Plate "The pairing could not be kept. / The Keychain did not keep it, so the pairing was undone. Start again." Same keys as Refused (order as above). The app asks the server to drop the record it made. When the screen is dropped (the page that opened it is replaced) after "Pair again" from instructor mode, this plate stays over rider mode, so the user learns why; its keys then lead from rider mode, and a pairing made there goes on to instructor mode as from rider mode's own way in (#950). From rider mode, dropping closes the screen as before |
 | Server unreachable, no server address | `app-pair-unreachable` | **Today every iOS build has no server address** (ADR 0016 section 4, until the owner decides). The pairing's `noServer` notice is shown as this plate, as Android's `NO_SERVER` is. "Start again" shows the plate again. The phone never shows `noServer` or `unpaired` words |
 
 On leaving the phone for Safari and coming back:
@@ -89,6 +89,8 @@ no camera usage key), rules 13 to 15 (pairing is instructor mode's; nothing abou
 
 ## Open questions
 
+- Closed (as built, #950): "no server" is checked before "no Keychain"; the no-passcode plate
+  shows only once a server address exists.
 - The iOS build has no server address until the owner decides on backend calls (docs/owner.md,
   ADR 0016 section 4). Until then every attempt ends on the unreachable plate. Default: as above,
   no separate "not available yet" state, so the screens need no change when the address arrives.

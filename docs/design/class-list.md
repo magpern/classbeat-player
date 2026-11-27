@@ -129,7 +129,7 @@ Spotify, 11 songs   [Playing now]  [Newer version after this class]
 |---|---|---|
 | Title | Atkinson 700, 22 px, light-1 | `document.class.title` |
 | Second line | Atkinson 400, 16 px, light-2: "Spotify, 11 songs", or "Swedebeat, 9 songs", or "Manual clock, no music" when `music.source` is `none` | `document.music.source`, `document.songs.length` |
-| Length | Big Shoulders 600, 26 px, right-aligned, `m:ss` or `h:mm:ss` (`clockText`, core/format.ts) | `document.class.length_ms` |
+| Length | Big Shoulders 600, 26 px, right-aligned, `m:ss` or `h:mm:ss` (`clockText`, core/format.ts) | `document.class.length_ms`. A class of a format major this player does not know has its shape unread: a missing or empty title shows **"Untitled class"** and a missing or invalid length shows **0** (`0:00`), as built in #948 (`newerMajor` in `core/sync/class-list.ts`); the row says it needs a newer player |
 | Updated | Atkinson 400, 16 px, light-2: "Today", "Yesterday", "9 Nov", and with the year when it is not this year ("14 Dec 2025"); the device's local date | the class's `published_at` |
 | Tags (only on the pinned row) | Atkinson 700, 14 px, outlined, light-1 | `SyncView.pinned` |
 
