@@ -44,6 +44,12 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     report(slot: 0 | 1, durationMs: number | null, extra: Partial<LocalReport> = {}) {
       r.player.report({ seq: r.last().seq, slot, positionMs: 0, playing: false, failed: false, durationMs, ...extra });
     },
+    /** Start: the check runs again, and playing begins once it answers. */
+    async start(classMs: number) {
+      r.snap("running", classMs);
+      await Promise.resolve();
+      await Promise.resolve();
+    },
     /** The check answers, and each song's length is reported twice (decoded lengths as given). */
     async ready(lengths: readonly number[] = LEN) {
       r.snap("ready", 0);
@@ -126,7 +132,7 @@ test("a check that found the shell busy is asked again, not before RECHECK_MS", 
 test("Start with every file found plays song 0 in slot 0; the overlap has both, each song ends at its stop", async () => {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   assert.deepEqual(r.player.state(), { kind: "playing" });
   assert.equal(r.last().playing, true);
   const [a] = r.ids();
@@ -148,7 +154,7 @@ test("Start with every file found plays song 0 in slot 0; the overlap has both, 
 test("the owner's report steers the music time and the class clock follows it, beyond the 30 ms drift", async () => {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   r.tick(10_000);
   r.report(0, LEN[0]!, { positionMs: 10_500, playing: true });
   r.snap("running", 10_000);
@@ -166,25 +172,25 @@ test("one song missing, or a length two reports confirm wrong, is the manual clo
   const missing = rig(done("found", "missing", "found"));
   await missing.ready([LEN[0]!, LEN[2]!]);
   const before = missing.cues.length;
-  missing.snap("running", 0);
+  await missing.start(0);
   assert.deepEqual(missing.player.state(), { kind: "manual", reason: "missing", missing: [1] });
   missing.tick(150_000);
   missing.snap("running", 150_000);
   assert.ok(missing.cues.slice(before).every((c) => !c.playing && c.slots.every((s) => s.url === null)));
   const wrong = rig();
   await wrong.ready([LEN[0]!, LEN[1]! + 5_000, LEN[2]!]);
-  wrong.snap("running", 0);
+  await wrong.start(0);
   assert.deepEqual(wrong.player.state(), { kind: "manual", reason: "missing", missing: [1] });
   const unchecked = rig({ status: "failed" });
   await unchecked.ready([]);
-  unchecked.snap("running", 0);
+  await unchecked.start(0);
   assert.deepEqual(unchecked.player.state(), { kind: "manual", reason: "not_checked" });
 });
 
 async function playing() {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   r.tick(103_000);
   r.snap("running", 103_000);
   return r;
@@ -238,4 +244,51 @@ test("plays end when the class ends, when another class opens and when the room 
   const [x, y] = closed.ids();
   assert.ok(x !== null && y !== null && !wids.includes(x) && !wids.includes(y));
   assert.equal(closed.plays.liveFrom(x!, 11)?.songIndex, 0);
+});
+
+test("Start after a sign-out is the manual clock (failed), not a silent \"playing\" (#946 item 1)", async () => {
+  const r = rig();
+  await r.ready();
+  r.account = null;
+  await r.start(0);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "failed" });
+  const n = r.cues.length;
+  r.tick(5_000);
+  r.snap("running", 5_000);
+  assert.equal(r.cues.length, n, "no cue goes out with a snapshot");
+  assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("Start runs the check again: a file that went missing since the class opened is the manual clock (#946 item 2)", async () => {
+  const r = rig();
+  await r.ready();
+  assert.equal(r.checks.length, 1);
+  r.answer = done("found", "missing", "found");
+  r.snap("running", 0);
+  assert.deepEqual(r.player.state(), { kind: "checking" }, "nothing plays until the second check answers");
+  assert.ok(r.cues.every((c) => !c.playing));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(r.checks.length, 2);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "missing", missing: [1] });
+  assert.ok(r.cues.every((c) => !c.playing));
+  // A second check that is busy is not a pass either.
+  const busy = rig();
+  await busy.ready();
+  busy.answer = null;
+  await busy.start(0);
+  assert.deepEqual(busy.player.state(), { kind: "manual", reason: "not_checked" });
+});
+
+test("Start waits for the second check, then plays from the class time reached meanwhile (#946 item 2)", async () => {
+  const r = rig();
+  await r.ready();
+  r.snap("running", 0);
+  r.tick(1_000);
+  r.snap("running", 1_000);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(r.player.state(), { kind: "playing" });
+  assert.equal(r.last().playing, true);
+  assert.equal(r.last().slots[0].positionMs, 1_000);
 });

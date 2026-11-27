@@ -21,15 +21,23 @@ export function mountMix(audio: HTMLAudioElement, report: MixReport, every: (fn:
   let seq = -1;
   let hasSource = false;
   let failedFor = -1;
+  /** The length last reported for this source (null: none yet, or not known). */
+  let said: number | null = null;
+  const lengthNow = (): number | null => (Number.isFinite(audio.duration) && audio.duration >= 0 ? Math.round(audio.duration * 1000) : null);
   const say = (failed: boolean): void => {
     if (seq < 1 || !hasSource) return;
-    const d = audio.duration;
-    report(seq, Math.max(0, Math.round(audio.currentTime * 1000)), !audio.paused, failed, Number.isFinite(d) && d >= 0 ? Math.round(d * 1000) : null);
+    said = lengthNow();
+    report(seq, Math.max(0, Math.round(audio.currentTime * 1000)), !audio.paused, failed, said);
   };
   // The decoded length is known or changed: the shell checks it against the class's at once, not a
-  // second later. It acts on a length only once two reports agree, so a revised estimate counts.
-  audio.addEventListener("loadedmetadata", () => say(false));
-  audio.addEventListener("durationchange", () => say(false));
+  // second later. One decode raises both events with the same length, and the shell acts on a length
+  // only once two reports agree, so an event reports only a length that differs from the last one
+  // reported: the agreeing second report is then the next periodic one, a read of the settled length.
+  const lengthEvent = (): void => {
+    if (lengthNow() !== said) say(false);
+  };
+  audio.addEventListener("loadedmetadata", lengthEvent);
+  audio.addEventListener("durationchange", lengthEvent);
   audio.addEventListener("error", () => {
     // Once per cue: the shell falls back to the manual clock and sends an empty cue.
     if (!hasSource || failedFor === seq) return;
@@ -44,12 +52,16 @@ export function mountMix(audio: HTMLAudioElement, report: MixReport, every: (fn:
       seq = c.seq;
       if (c.url === null) {
         hasSource = false;
+        said = null;
         audio.pause();
         audio.removeAttribute("src");
         audio.load();
         return;
       }
-      if (!hasSource || audio.getAttribute("src") !== c.url) audio.src = c.url;
+      if (!hasSource || audio.getAttribute("src") !== c.url) {
+        audio.src = c.url;
+        said = null;
+      }
       hasSource = true;
       audio.currentTime = c.positionMs / 1000;
       if (c.playing) {

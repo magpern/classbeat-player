@@ -9,7 +9,7 @@
 // reports confirm is wrong, or a sign-out stops the audio at once and leaves the clock running on its
 // own. The hashes, the account and the play ids never leave this process except as play URLs.
 import { DRIFT_MS, wrongLength } from "../../core/mix/audio-cue.ts";
-import type { MusicLink, MusicReading } from "../../core/clock/music-link.ts";
+import type { MusicLink } from "../../core/clock/music-link.ts";
 import { localLink } from "../../core/clock/music-link.ts";
 import type { FindAnswer } from "../../core/music-files/answer.ts";
 import { EMPTY_SLOT } from "../../core/music-files/local-cue.ts";
@@ -17,12 +17,11 @@ import type { LocalCue, LocalReport, LocalSlotCue } from "../../core/music-files
 import { localModePolicy } from "../../core/music-files/local-mode-policy.ts";
 import type { LocalFallback } from "../../core/music-files/local-mode-policy.ts";
 import { localPlayUrl } from "../../core/music-files/local-scheme-policy.ts";
-import { classTimeOf, fadeOf, localTimingOf, ownerAt, slotsAt } from "../../core/music-files/local-timing.ts";
-import type { LocalTiming } from "../../core/music-files/local-timing.ts";
-import { wantedFiles } from "../../core/music-files/wanted.ts";
-import type { WantedFile } from "../../core/music-files/wanted.ts";
+import { classTimeOf, fadeOf, ownerAt, slotsAt } from "../../core/music-files/local-timing.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
-import type { LocalPlay, LocalPlays } from "./local-plays.ts";
+import type { LocalPlays } from "./local-plays.ts";
+import { runOf } from "./local-run.ts";
+import type { Slot } from "./local-run.ts";
 
 export interface LocalPlayerDeps {
   readonly plays: LocalPlays;
@@ -62,48 +61,6 @@ export const JUMP_MS = 1000;
 export const UNANSWERED_MS = 2000;
 /** A check that found the shell busy is asked again after this long. */
 export const RECHECK_MS = 2000;
-
-interface Slot {
-  readonly k: number;
-  readonly play: LocalPlay;
-  /** The decoded length last reported: a wrong one counts only when the next report agrees. */
-  duration: number | null;
-}
-
-interface Run {
-  readonly loadId: number;
-  readonly doc: unknown;
-  readonly timing: LocalTiming | null;
-  readonly wanted: readonly WantedFile[];
-  check: FindAnswer | null;
-  checking: boolean;
-  checkedAt: number;
-  /** Songs whose file failed to open or decode, or whose length two reports confirmed wrong. */
-  readonly bad: Set<number>;
-  /** Songs whose length was read before Start. */
-  readonly probed: Set<number>;
-  started: boolean;
-  status: string | null;
-  state: LocalPlayState | null;
-  account: string | null;
-  slots: [Slot | null, Slot | null];
-  cue: LocalCue | null;
-  cuedAt: number;
-  answered: boolean;
-  /** The controller's clock at the last snapshot, to tell a command's jump from time passing. */
-  clock: { classMs: number; at: number; running: boolean };
-  /** The music time: where the files are on the class's timeline. */
-  music: { t: number; at: number; running: boolean };
-  reading: MusicReading | null;
-}
-
-function runOf(s: Snapshot): Run {
-  const doc = s.doc;
-  const wanted = doc === null ? null : wantedFiles(doc);
-  const timing = doc === null || wanted === null ? null : localTimingOf(doc.songs.map((g) => ({ startMs: g.start_ms, endMs: g.end_ms, lengthMs: g.length_ms })), doc.music.design_crossfade_ms, doc.class.length_ms);
-  const zero = { classMs: 0, at: 0, running: false };
-  return { loadId: s.loadId, doc, timing, wanted: wanted ?? [], check: null, checking: false, checkedAt: -Infinity, bad: new Set(), probed: new Set(), started: false, status: null, state: null, account: null, slots: [null, null], cue: null, cuedAt: 0, answered: false, clock: zero, music: { t: 0, at: 0, running: false }, reading: null };
-}
 
 export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
   let run = runOf({ loadId: 0, doc: null } as Snapshot);
@@ -209,6 +166,40 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
     }
   };
 
+  /** At Start: the check again, then the mode policy; local playback begins at the class time the controller has reached. */
+  const recheck = (): void => {
+    const mine = run;
+    const done = (a: FindAnswer | null): void => {
+      if (run !== mine) return;
+      mine.starting = false;
+      mine.check = a;
+      const last = mine.last!;
+      if (last.status === "ended") {
+        mine.state = null;
+        return;
+      }
+      const m = localModePolicy({ musicSource: "local", songs: mine.wanted.length, check: mine.check, wrongLength: mine.bad });
+      if (m.mode !== "local") {
+        mine.state = m.mode !== "manual" ? { kind: "manual", reason: "not_checked" } : m.reason === "missing" ? { kind: "manual", reason: "missing", missing: m.missing } : { kind: "manual", reason: m.reason };
+        return;
+      }
+      mine.account = d.account();
+      // Signed out between Start and now: nothing can play, so the manual clock, not a silent "playing".
+      if (mine.account === null) {
+        mine.state = { kind: "manual", reason: "failed" };
+        return;
+      }
+      const running = last.status === "running";
+      const t = d.now();
+      const classMs = last.classMs + (running ? t - last.at : 0);
+      mine.state = { kind: "playing" };
+      mine.clock = { classMs, at: t, running };
+      mine.music = { t: classMs, at: t, running };
+      place(true, false, running);
+    };
+    void d.check(mine.doc).then(done, () => done(null));
+  };
+
   return {
     snapshot(s) {
       if (s.loadId !== run.loadId) {
@@ -231,16 +222,15 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         }
         run.started = true;
         silence();
-        const m = localModePolicy({ musicSource: "local", songs: run.wanted.length, check: run.check, wrongLength: run.bad });
-        if (m.mode !== "local") {
-          run.state = m.mode !== "manual" ? { kind: "manual", reason: "not_checked" } : m.reason === "missing" ? { kind: "manual", reason: "missing", missing: m.missing } : { kind: "manual", reason: m.reason };
-          return;
-        }
-        run.state = { kind: "playing" };
-        run.account = d.account();
-        run.clock = { classMs, at: d.now(), running };
-        run.music = { t: classMs, at: d.now(), running };
-        place(true, false, running);
+        // A file may have changed since the class opened: the check runs again before anything plays.
+        run.starting = true;
+        run.last = { status, classMs, at: d.now() };
+        run.state = { kind: "checking" };
+        recheck();
+        return;
+      }
+      if (run.starting) {
+        run.last = { status, classMs, at: d.now() };
         return;
       }
       if (run.state?.kind !== "playing") return;
