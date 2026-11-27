@@ -63,6 +63,11 @@ export const FILES_STATES: readonly State[] = [
   sel("all-missing", files(THURSDAY, 11, made(11))),
   sel("choosing", files(THURSDAY, 11, [NEON, PULSE], { phase: "choosing" })),
   sel("finding", files(THURSDAY, 11, [NEON, PULSE], { phase: "finding" })),
+  // The player checks the class by itself (no folder chosen, no answer yet): the same hollow circle and keys held, with the "on this computer" detail (music-files.md, "Checking (in the background)").
+  sel("checking", files(THURSDAY, 11, [], { phase: "checking" })),
+  // Another class is being checked while this row has its answer: its own marker and words stay, Start and Find are held, Show stays live where a file is missing (music-files.md, "Held with an answer").
+  sel("held-found", files(THURSDAY, 11, [], { held: true })),
+  sel("held-missing", files(THURSDAY, 11, [NEON, PULSE], { held: true })),
   sel("still-missing", files(THURSDAY, 11, [NEON, PULSE], { searched: true })),
   sel("find-failed", files(THURSDAY, 11, [NEON, PULSE], { failed: true })),
   // Another class is being checked while this row has its answer and the failure plate: the held detail line stays, and five rows still fit (music-files.md, "Search failed").
