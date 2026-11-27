@@ -87,7 +87,18 @@ export function createFilesState(d: FilesStateDeps): FilesState {
       for (const r of rows) {
         if (r.source !== "local") continue;
         const e = entryOf(r);
-        if (e.memo === null || e.memo.phase !== phaseOf(e) || e.memo.held !== heldOf(e)) e.memo = filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), held: heldOf(e), searched: e.searched, failed: e.failed });
+        if (e.memo === null || e.memo.phase !== phaseOf(e) || e.memo.held !== heldOf(e)) {
+          e.memo = filesViewOf({
+            id: r.id,
+            hash: r.hash,
+            doc: d.document(r.id),
+            answer: e.answer,
+            phase: phaseOf(e),
+            held: heldOf(e),
+            searched: e.searched,
+            failed: e.failed,
+          });
+        }
         if (e.memo !== null) out.push(e.memo);
       }
       return out;

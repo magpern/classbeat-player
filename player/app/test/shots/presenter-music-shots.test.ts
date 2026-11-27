@@ -65,6 +65,8 @@ async function open(size: readonly [number, number], s: PresenterMusicState): Pr
   const context = await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: 1, reducedMotion: "reduce" });
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(STUB);
+  // A music notice only exists while the class runs, so the page is shown with the clock running.
+  rig.controller.command({ type: "start" });
   const data = { __state: { ...rig.controller.snapshot(), music: s.notice }, __pairing: PAIRED, __live: rig.live.view(), __riders: rig.live.riders() };
   await context.addInitScript(`Object.assign(window, ${JSON.stringify(data)});`);
   const page = await context.newPage();
@@ -101,6 +103,8 @@ test("each music state shows the spec's words, and its plate meets M1, M5 and M7
       const o = await open(size, s);
       try {
         await o.page.screenshot({ path: join(SHOT_DIR, `presenter-music-${name}.png`), animations: "disabled" });
+        // The spec's first line: the class is running. The page writes the clock's own word, "running".
+        assert.equal(await text(o.page, "status"), "running", `${name}: the status line`);
         assert.equal(await text(o.page, "music-line"), s.line, `${name}: the music line`);
         assert.equal(await text(o.page, "music-detail"), s.detail, `${name}: the detail`);
         const plate = o.page.locator("#music-plate");

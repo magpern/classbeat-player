@@ -37,3 +37,21 @@ for (const name of ["source-selected", "major-selected"]) {
     }
   });
 }
+
+// The same row not selected: the sentence is on the row (the meta line) and nowhere else, and the footer
+// holds no needs-newer detail until the row is selected.
+for (const name of ["source", "major"]) {
+  test(`needs-newer-${name}: not selected, the row carries the sentence and the footer does not`, async () => {
+    const s = NEEDS_NEWER_STATES.find((x) => x.name === `needs-newer-${name}`)!;
+    const o = await openList(browser, [1280, 800], s.view);
+    try {
+      const metas = await o.page.locator(".row .m").allInnerTexts();
+      assert.equal(metas.filter((m) => m.trim() === SENTENCE).length, 1, "only the unknown row says it");
+      assert.equal(metas.at(-1)?.trim(), SENTENCE, "the last row is the unknown one");
+      assert.ok(!(await o.page.locator("#foot-detail").allInnerTexts()).some((t) => t.includes(SENTENCE)), "no sentence in the footer");
+      assert.deepEqual(await o.calls(), []);
+    } finally {
+      await o.close();
+    }
+  });
+}

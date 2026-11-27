@@ -147,6 +147,18 @@ test("a find cancelled while the dialog is open answers cancelled and keeps noth
   assert.equal(r.service.cancel(), false, "nothing runs");
 });
 
+test("a check stopped by cancel lets the next check run at once, not busy; the stopped one keeps nothing", async () => {
+  const r = rig();
+  const a = bytes("a", 1000);
+  r.doc = localClass([a]);
+  r.put("a.mp3", a);
+  const first = r.service.checkOpen(r.doc);
+  assert.equal(r.service.cancel(), true);
+  const second = r.service.checkOpen(r.doc);
+  assert.notEqual(await second, null, "the next class's first check is not busy");
+  assert.deepEqual(await first, { status: "cancelled" });
+});
+
 test("a match stopped part way answers nothing and changes nothing", async () => {
   const r = rig();
   const a = bytes("a", 1000);

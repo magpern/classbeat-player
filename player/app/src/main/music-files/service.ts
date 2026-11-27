@@ -49,6 +49,8 @@ export interface MusicFiles {
 
 interface Run {
   stopped: boolean;
+  /** A check has no dialog to wait for: once stopped it is let go at once (see `cancel`). */
+  check: boolean;
 }
 
 export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
@@ -57,9 +59,9 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
   const limit = d.maxFiles ?? MAX_FILES;
 
   /** Runs `body` alone, or answers null while another run is going. */
-  const exclusive = async (body: (run: Run, gen: number) => Promise<FindAnswer>): Promise<FindAnswer | null> => {
+  const exclusive = async (check: boolean, body: (run: Run, gen: number) => Promise<FindAnswer>): Promise<FindAnswer | null> => {
     if (current !== null) return null;
-    const run: Run = { stopped: false };
+    const run: Run = { stopped: false, check };
     current = run;
     try {
       return await body(run, generation);
@@ -84,7 +86,7 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
   };
 
   const checkWanted = (wanted: () => readonly WantedFile[] | null): Promise<FindAnswer | null> =>
-    exclusive(async (run, gen) => {
+    exclusive(true, async (run, gen) => {
       const account = d.account();
       if (account === null) return FAILED;
       return match(run, gen, account, wanted(), (i) => i, (i) => i.folders);
@@ -92,7 +94,7 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
 
   return {
     find: (classId) =>
-      exclusive(async (run, gen) => {
+      exclusive(false, async (run, gen) => {
         const account = d.account();
         if (account === null || wantedFiles(d.classDocument(classId)) === null) return FAILED;
         const folder = await d.pickFolder();
@@ -112,6 +114,10 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
     cancel() {
       if (current === null || current.stopped) return false;
       current.stopped = true;
+      // A stopped check can no longer keep or answer anything, so the next check (the first of the
+      // next class) must not find the service busy while the stopped one unwinds. A find stays held
+      // until its dialog returns.
+      if (current.check) current = null;
       return true;
     },
     wipe() {

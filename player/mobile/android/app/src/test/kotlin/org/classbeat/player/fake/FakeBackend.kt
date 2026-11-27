@@ -54,6 +54,9 @@ class FakeBackend(val origin: String = ORIGIN) : BackendTransport {
     companion object {
         const val ORIGIN = "https://classbeat.test"
 
+        /** The user code every started pairing shows. */
+        const val USER_CODE = "BCDF-GHJK"
+
         fun ok(body: Any?) = HttpAnswer.Http(200, body, null)
 
         val TOKEN_EXPIRED = HttpAnswer.Http(401, mapOf("error" to "token_expired"), null)
@@ -65,7 +68,7 @@ class FakeBackend(val origin: String = ORIGIN) : BackendTransport {
         fun started(origin: String = ORIGIN, code: String = Secrets.deviceCode()) = ok(
             mapOf(
                 "device_code" to code,
-                "user_code" to "BCDF-GHJK",
+                "user_code" to USER_CODE,
                 "verification_uri" to "$origin/pair",
                 "expires_in" to 600.0,
                 "interval" to 5.0,

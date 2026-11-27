@@ -20,6 +20,7 @@ after(async () => {
 });
 
 const SIZE = [1280, 800] as const;
+const WAITING = "Another class is being checked. Starting waits until this is done";
 const stateOf = (name: string): State => FILES_STATES.find((s) => s.name === `music-files-${name}`)!;
 async function open(name: string, patch?: (v: State["view"]) => State["view"]) {
   const s = stateOf(name);
@@ -89,9 +90,15 @@ test("when a search finds the last file the panel closes for good: a file lost l
 });
 
 test("while a search runs, Show, Find and Start are held: neither a click nor Enter does anything", async () => {
+  const details: Record<string, string> = {
+    choosing: "A window from this computer is open. Starting waits until you have chosen",
+    finding: "Looking in the folder you chose and the folders inside it. Starting waits until this is done",
+    checking: "Looking for them on this computer. Starting waits until this is done",
+  };
   for (const name of ["choosing", "finding", "checking"]) {
     const { o } = await open(name);
     try {
+      assert.equal((await o.page.locator("#foot-detail").innerText()).trim(), details[name], `${name}: footer detail`);
       const held = await o.page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>(".foot button")].map((b) => [b.dataset.action, b.disabled]));
       assert.deepEqual(held, [["files-show", true], ["files-find", true], ["start", true]], name);
       await o.page.focus("#list");
@@ -108,8 +115,24 @@ test("held with an answer: Start and Find are held, Show which files stays live 
   try {
     const held = await o.page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>(".foot button")].map((b) => [b.dataset.action, b.disabled]));
     assert.deepEqual(held, [["files-show", false], ["files-find", true], ["start", true]]);
+    assert.equal((await o.page.locator("#foot-detail").innerText()).trim(), WAITING, "footer detail");
     await o.page.focus("#list");
     await o.page.keyboard.press("Enter");
+    assert.deepEqual(await o.calls(), []);
+  } finally {
+    await o.close();
+  }
+});
+
+test("held with all files found: Start is the only key, held, with the waiting detail; neither a click nor Enter does anything", async () => {
+  const { o } = await open("held-found");
+  try {
+    const keys = await o.page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>(".foot button")].map((b) => [b.dataset.action, b.disabled]));
+    assert.deepEqual(keys, [["start", true]]);
+    assert.equal((await o.page.locator("#foot-detail").innerText()).trim(), WAITING, "footer detail");
+    await o.page.focus("#list");
+    await o.page.keyboard.press("Enter");
+    await o.page.locator('.foot button[data-action="start"]').click({ force: true });
     assert.deepEqual(await o.calls(), []);
   } finally {
     await o.close();
