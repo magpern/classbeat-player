@@ -242,15 +242,17 @@ fakes; the one gap was this record (#971). Not checked on a Mac, iPhone or iPad:
 owner (signing, the Apple Developer membership, the backend calls, the PL9 sensor decision). iOS is
 done on fakes.
 
-## ADR 0017: the instructor's own local music files
+## ADR 0017: the instructor's own local music files, done on fakes
 
 The owner decided on 2026-11-26 that the player is not associated with any other cycling product
 (#909, #910, #912, #916, #923, #928) and that a class's music may also be the instructor's own
 local files (ADR 0017, #915). Merged: a class whose music source this player does not know is
-listed as needing a newer player (#917, #927), with its spec (#933, #939), and the spec for the
-music files state (#919, #929). In progress: class format 1.4 with source `local` (#918, PR #934;
-it waits for the player tests of #935). Next: the file index (#920), local playback (#921), the
-music files state (#922) and an unknown major version (#931).
+listed as needing a newer player (#917, #927), with its spec (#933, #939); the spec for the
+music files state (#919, #929); class format 1.4 with source `local` (#934); the file index and
+folder picking (#943); local playback (#945, hardened in #949); an unknown format major listed as
+needing a newer player (#948); the music files state on screen (#951, followed up in #959, #968
+and #970). The Verifier ran the work on fakes at 0ff3133 and found three screenshot gaps, closed
+by #976, #977 and #978.
 
 ## PL9: sensors (ADR 0012), done on fakes
 

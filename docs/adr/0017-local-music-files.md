@@ -1,6 +1,6 @@
 # 0017. Local music files: the instructor's own audio files, played by the player
 
-Status: Proposed. Becomes Accepted when a Reviewer passes its pull request.
+Status: Accepted (Reviewer PASS in #915; built on fakes and verified at 0ff3133).
 
 ## Context
 
