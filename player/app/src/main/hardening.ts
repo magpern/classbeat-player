@@ -3,6 +3,7 @@
 import { app, protocol, session } from "electron";
 import type { WebContents } from "electron";
 import { MIX_SCHEME, MIX_SCHEME_PRIVILEGES } from "../core/mix/scheme-policy.ts";
+import { LOCAL_SCHEME, LOCAL_SCHEME_PRIVILEGES } from "../core/music-files/local-scheme-policy.ts";
 import { answerMixRequest } from "./mix/mix-response.ts";
 import type { MixResponseDeps } from "./mix/mix-response.ts";
 import { refuse, refuseLoose } from "./refuse-loose.ts";
@@ -43,14 +44,15 @@ export function enableSandboxUnlessTest(): void {
 
 /**
  * Call once the app is ready, before the first window. `preloads`: the only preload paths a renderer
- * may have. `livePlay`: whether a `cbp-mix:` play id is live for the requesting renderer.
+ * may have. `livePlay`: whether a `cbp-mix:` play id is live for the requesting renderer;
+ * `liveLocal`: the same for a `cbp-local:` play id.
  */
-export function hardenSession(appDirUrl: string, preloads: readonly string[], livePlay?: LivePlay): void {
+export function hardenSession(appDirUrl: string, preloads: readonly string[], livePlay?: LivePlay, liveLocal?: LivePlay): void {
   const ses = session.defaultSession;
   // No dictionaries are downloaded and nothing is checked; every renderer is refused if it is back on.
   ses.setSpellCheckerEnabled(false);
   ses.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !isAllowedRequest(details.url, appDirUrl, details.webContentsId, livePlay) });
+    callback({ cancel: !isAllowedRequest(details.url, appDirUrl, details.webContentsId, livePlay, liveLocal) });
   });
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   ses.setPermissionCheckHandler(() => false);
@@ -72,18 +74,28 @@ export function hardenSession(appDirUrl: string, preloads: readonly string[], li
   });
 }
 
-// The `cbp-mix:` scheme (ADR 0013 section 5): registered before the app is ready with exactly the
-// privileges of core/mix/scheme-policy.ts (never the privilege that bypasses a CSP), and answered by
-// main/mix/mix-response.ts. The only place that registers or handles a scheme
-// (test/unit/hardening.test.ts). The request filter above has already cancelled every `cbp-mix:`
-// request not from the play's own window by the time the handler runs.
+// The `cbp-mix:` scheme (ADR 0013 section 5) and the `cbp-local:` scheme (ADR 0017 section 3):
+// registered together before the app is ready with exactly the privileges of
+// core/mix/scheme-policy.ts and core/music-files/local-scheme-policy.ts (never the privilege that
+// bypasses a CSP), and answered by main/mix/mix-response.ts and main/music-files/local-response.ts
+// (injected by main.ts). The only place that registers or handles a scheme
+// (test/unit/hardening.test.ts). The request filter above has already cancelled every request of
+// either scheme not from the play's own window by the time a handler runs.
 
-/** Call before the app is ready, once. */
-export function registerMixScheme(): void {
-  protocol.registerSchemesAsPrivileged([{ scheme: MIX_SCHEME, privileges: { ...MIX_SCHEME_PRIVILEGES } }]);
+/** Call before the app is ready, once: Electron takes one registration of every privileged scheme. */
+export function registerSchemes(): void {
+  protocol.registerSchemesAsPrivileged([
+    { scheme: MIX_SCHEME, privileges: { ...MIX_SCHEME_PRIVILEGES } },
+    { scheme: LOCAL_SCHEME, privileges: { ...LOCAL_SCHEME_PRIVILEGES } },
+  ]);
 }
 
 /** Call once the app is ready, after `hardenSession`. */
 export function handleMixScheme(deps: MixResponseDeps): void {
   session.defaultSession.protocol.handle(MIX_SCHEME, (req) => answerMixRequest(req, deps));
+}
+
+/** Call once the app is ready, after `hardenSession`: `answer` is main/music-files/local-response.ts with its deps. */
+export function handleLocalScheme(answer: (req: Request) => Promise<Response>): void {
+  session.defaultSession.protocol.handle(LOCAL_SCHEME, (req) => answer(req));
 }

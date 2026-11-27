@@ -38,7 +38,22 @@ test("the music files index is wiped by every wipe of the class cache, from the 
 test("the room window opens with every class that opens, and is sent every snapshot", () => {
   assert.match(main, /controller\.onOpened\(\(\)\s*=>\s*room\.open\(\)\)/);
   assert.match(main, /controller\.watch\(\(s\)\s*=>\s*room\.send\(s\)\)/);
-  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller,\s*\{ endClass, remote, mixReport: \(r\) => player\.report\(r\) \}\)/);
+  assert.match(main, /registerRoomHandlers\(ipcMain,\s*\(\)\s*=>\s*room\.trusted\(\),\s*controller,\s*\{ endClass, remote, mixReport: \(r\) => player\.report\(r\), localReport: \(r\) => local\.report\(r\) \}\)/);
+});
+
+test("local playback (#921): the room's two <audio> get the snapshot first, and plays end with the window, the account and the scheme's own checks", () => {
+  // The local player reads each snapshot before the room is sent it, so its cue is current.
+  assert.match(main, /controller\.watch\(\(s\) => local\.snapshot\(s\)\);\s*controller\.watch\(\(s\) => room\.send\(s\)\);/);
+  // The filter admits a local play only from its own window while live; the handler serves only a live play from the account's index.
+  assert.match(main, /hardenSession\(APP_DIR_URL, \[PRESENTER_PRELOAD, ROOM_PRELOAD\], \(id, wc\) => plays\.liveFrom\(id, wc\) !== null, \(id, wc\) => localPlays\.liveFrom\(id, wc\) !== null\);/);
+  assert.match(main, /handleLocalScheme\(\(req\) => answerLocalRequest\(req, \{ live: \(id\) => localPlays\.live\(id\), indexed: \(a, sha\) => musicFiles\.indexed\(a, sha\), onFault: \(id\) => localPlayer\?\.fault\(id\) \}\)\);/);
+  assert.match(main, /check: \(doc\) => musicFiles\.checkOpen\(doc\)/, "the files are checked before anything plays");
+  // The room window closing ends its plays, with or without the player.
+  assert.match(main, /if \(localPlayer === null\) localPlays\.endFor\(id\);\s*else localPlayer\.roomClosed\(id\);/);
+  // Sign-out or another pairing ends the account's plays.
+  assert.match(main, /paired\.watch\(\(\) => \{\s*const next = accountNow\(\);\s*if \(playsAccount !== null && playsAccount !== next\) localPlays\.endAccount\(playsAccount\);\s*playsAccount = next;\s*\}\);/);
+  assert.match(main, /^registerSchemes\(\);$/m);
+  assert.doesNotMatch(main, /registerMixScheme/);
 });
 
 test("the room window closes with the class: on the class list unpinned, at the end on the list, with the presenter", () => {

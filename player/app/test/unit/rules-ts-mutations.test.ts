@@ -9,7 +9,7 @@ import { appText, type Check, forbids, MOBILE, mobileTs, type Mutation, mutation
 import {
   AUDIO, AUDIO_EXCEPTIONS, CALLS_SOCKET, callsSocket, CONNECTS, connects, CORE_IO, coreIo, FORBIDDEN, forbidden, IMPORTS_SOCKET, importsSocket,
   LIVE_LITERALS, LIVE_SOCKET, liveLiterals, MIX_ONCE, mixOnce, namesSdkTs, namesSpikesTs, NETWORK, NETWORK_EXCEPTIONS, PERMISSIONS, permissions,
-  ROOM_HTML, ROOM_MIX, SPIKES, TS_SDK, wireUrls, WIRE_URLS,
+  ROOM_HTML, ROOM_LOCAL, ROOM_MIX, SPIKES, TS_SDK, wireUrls, WIRE_URLS,
 } from "./rules-ts.ts";
 
 const MANIFEST = join(MOBILE, "android", "app", "src", "main", "AndroidManifest.xml");
@@ -25,6 +25,7 @@ const MAIN = join("main", "main.ts");
 // Real lines of those files, each the anchor its mutations follow.
 const SOCK = "const runtimeSocket: OpenSocket = (url) => new WebSocket(url);";
 const MIX = "audio.play().catch(() => {";
+const LOCAL = "e.audio.play().catch(() => fail(e));";
 const HTML = '<audio id="mix" preload="auto"></audio>';
 const DIAL = "const dial = (at: string, on: SocketEvents): LiveSocket => d.connect(liveSocketUrl(at), on);";
 const URL_LINE = 'const url = new URL("/api/live/ws", origin);';
@@ -39,6 +40,8 @@ const MUTATIONS: readonly Mutation[] = [
   [AUDIO, LIVE_SOCKET, SOCK, hidden(SOCK, "new Audio(x);"), true],
   [AUDIO, ROOM_MIX, MIX, hidden(MIX, "el.play();"), true],
   [AUDIO, ROOM_MIX, MIX, hidden(MIX, "new AudioContext();"), true],
+  [AUDIO, ROOM_LOCAL, LOCAL, hidden(LOCAL, "el.play();"), true],
+  [AUDIO, ROOM_LOCAL, LOCAL, hidden(LOCAL, "new MediaSource();"), true],
   [AUDIO, ROOM_HTML, HTML, `${HTML}<p>//</p><video></video>`, true],
   [AUDIO, ROOM_HTML, HTML, `${HTML}<p>//</p><audio src="x"></audio>`, true],
   [SPOTIFY, LIVE_SOCKET, SOCK, hidden(SOCK, "new Spotify.Player(o);"), true],
@@ -53,6 +56,8 @@ const MUTATIONS: readonly Mutation[] = [
   [NETWORK, MAIN, IMPORT, hidden(IMPORT, "new WebSocket(u);"), true],
   [MIX_ONCE, ROOM_MIX, MIX, hidden(MIX, "audio.play();"), true],
   [MIX_ONCE, ROOM_HTML, HTML, `${HTML}<p>//</p>${HTML}`, true],
+  [MIX_ONCE, ROOM_HTML, HTML, `${HTML}<p>//</p><audio id="local-b" preload="auto"></audio>`, true],
+  [MIX_ONCE, ROOM_LOCAL, LOCAL, hidden(LOCAL, "audio.play();"), true],
   [LIVE_LITERALS, LIVE_SOCKET, SOCK, `${SOCK} const s = "/api/live//*"; const u = "wss://elsewhere.example/x"; const t = "/api/live/*/";`, true],
   [CONNECTS, SERVICE, DIAL, hidden(DIAL, "d.connect(otherUrl(at), on);"), true],
   [WIRE_URLS, WIRE, URL_LINE, hidden(URL_LINE, 'new URL("https://elsewhere.example", origin);'), true],

@@ -3,7 +3,9 @@
 // the web lane's; this page mounts it, passes it frames, and sends only the room's fixed commands
 // through its preload (room-preload.ts). Where the page has the mix's <audio> (`#mix`, the
 // desktop's room window), it plays a Swedebeat mix as the shell cues it (room-mix.ts) and its reports
-// go back through the preload; a page without one (the phone's room screen) mounts no mix.
+// go back through the preload; a page without one (the phone's room screen) mounts no mix. Where it
+// has the two local <audio> (`#local-a`, `#local-b`), they play the instructor's own files as the
+// shell cues them (room-local.ts), with the same kind of reports.
 import "../../../../web/src/main.ts";
 import "./room-band.css";
 import "./room-join.css";
@@ -13,6 +15,7 @@ import { REMOTE_ABSENT } from "../core/room/remote.ts";
 import type { RemoteView } from "../core/room/remote.ts";
 import type { ClockStatus } from "../core/room/band-view.ts";
 import { mountBand } from "./room-band.ts";
+import { mountLocal } from "./room-local.ts";
 import { mountMix } from "./room-mix.ts";
 import { createMarks } from "./room-marks.ts";
 import { mountSheet } from "./room-join.ts";
@@ -38,6 +41,8 @@ interface RoomApi {
   onRemote(cb: (slot: RemoteView) => void): void;
   onMix(cb: (cue: unknown) => void): void;
   mixReport(seq: number, positionMs: number, playing: boolean, failed: boolean, durationMs: number | null): Answer<true>;
+  onLocal(cb: (cue: unknown) => void): void;
+  localReport(seq: number, slot: 0 | 1, positionMs: number, playing: boolean, failed: boolean, durationMs: number | null): Answer<true>;
 }
 
 const api = (window as unknown as { room: RoomApi }).room;
@@ -111,4 +116,11 @@ const mixElement = document.getElementById("mix");
 if (mixElement instanceof HTMLAudioElement) {
   const mix = mountMix(mixElement, (seq, positionMs, playing, failed, durationMs) => void api.mixReport(seq, positionMs, playing, failed, durationMs));
   api.onMix((cue) => mix.cue(cue));
+}
+// The two local <audio>: the same, for the instructor's own files (ADR 0017 section 3; desktop only).
+const localA = document.getElementById("local-a");
+const localB = document.getElementById("local-b");
+if (localA instanceof HTMLAudioElement && localB instanceof HTMLAudioElement) {
+  const local = mountLocal([localA, localB], (seq, slot, positionMs, playing, failed, durationMs) => void api.localReport(seq, slot, positionMs, playing, failed, durationMs));
+  api.onLocal((cue) => local.cue(cue));
 }

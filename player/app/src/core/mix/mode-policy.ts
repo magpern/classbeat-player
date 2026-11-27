@@ -3,8 +3,11 @@
 // provider. A Swedebeat class never uses the Spotify music link and a Spotify or soundless class
 // never uses mix playback (rule 3); a reason never names a code, a host, a path or the token.
 
-/** The class's `music.source`, as far as this policy cares. */
-export type ClassMusicSource = "spotify" | "swedebeat" | "none";
+/**
+ * The class's `music.source`, as far as this policy cares. A `local` class (ADR 0017 section 3)
+ * never uses mix playback: its case is core/music-files/local-mode-policy.ts, and this one says `not_mix`.
+ */
+export type ClassMusicSource = "spotify" | "swedebeat" | "none" | "local";
 
 /**
  * What the cache and the source say about the class's mix right now.

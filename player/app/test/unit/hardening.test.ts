@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { CSP, LIST_CSP, ROOM_CSP, isAllowedRequest, secureWebPreferences } from "../../src/main/web-preferences.ts";
 import { MIX_SCHEME, MIX_SCHEME_PRIVILEGES } from "../../src/core/mix/scheme-policy.ts";
+import { LOCAL_SCHEME, LOCAL_SCHEME_PRIVILEGES } from "../../src/core/music-files/local-scheme-policy.ts";
+import { createLocalPlays } from "../../src/main/local/local-plays.ts";
 import { REPO } from "./fixtures.ts";
 
 /** Every source file under `dir`. */
@@ -59,22 +61,33 @@ test("the class list's policy is the presenter's with the app's own fonts, nothi
   assert.deepEqual([...directives(LIST_CSP)], list);
 });
 
-test("the room's policy is the class list's with media from cbp-mix: only, nothing else (issue #693)", () => {
-  const room = PRESENTER_POLICY.map(([k, v]) => [k, k === "font-src" ? "'self'" : k === "media-src" ? "cbp-mix:" : v]);
+test("the room's policy is the class list's with media from cbp-mix: and cbp-local: only, nothing else (issues #693, #921)", () => {
+  const room = PRESENTER_POLICY.map(([k, v]) => [k, k === "font-src" ? "'self'" : k === "media-src" ? "cbp-mix: cbp-local:" : v]);
   assert.deepEqual([...directives(ROOM_CSP)], room);
-  // No other page may load the scheme: it is not bypassCSP, and only the room names it.
-  for (const p of [CSP, LIST_CSP]) assert.doesNotMatch(p, /cbp-mix/);
+  // No other page may load either scheme: neither is bypassCSP, and only the room names them.
+  for (const p of [CSP, LIST_CSP]) assert.doesNotMatch(p, /cbp-mix|cbp-local/);
 });
 
 test("the cbp-mix: scheme has exactly its four privileges, never bypassCSP", () => {
   assert.equal(MIX_SCHEME, "cbp-mix");
   assert.deepEqual(Object.entries(MIX_SCHEME_PRIVILEGES).sort(), [["secure", true], ["standard", true], ["stream", true], ["supportFetchAPI", true]]);
   assert.ok(Object.isFrozen(MIX_SCHEME_PRIVILEGES));
-  // The registration passes exactly this object, and nothing in the source names bypassCSP or another privileged scheme.
+  assert.equal(LOCAL_SCHEME, "cbp-local");
+  assert.deepEqual(Object.entries(LOCAL_SCHEME_PRIVILEGES).sort(), [["secure", true], ["standard", true], ["stream", true], ["supportFetchAPI", true]]);
+  assert.ok(Object.isFrozen(LOCAL_SCHEME_PRIVILEGES));
+  // The one registration passes exactly these two schemes with these objects, and nothing in the
+  // source names bypassCSP or another privileged scheme.
   const scheme = readFileSync(join(APP, "src", "main", "hardening.ts"), "utf8");
-  assert.match(scheme, /registerSchemesAsPrivileged\(\[\{ scheme: MIX_SCHEME, privileges: \{ \.\.\.MIX_SCHEME_PRIVILEGES \} \}\]\)/);
+  const reg = /registerSchemesAsPrivileged\(\[([^\]]*)\]\)/.exec(scheme);
+  assert.ok(reg, "one registration");
+  assert.deepEqual(
+    reg[1]!.split("\n").map((l) => l.trim()).filter((l) => l !== ""),
+    ["{ scheme: MIX_SCHEME, privileges: { ...MIX_SCHEME_PRIVILEGES } },", "{ scheme: LOCAL_SCHEME, privileges: { ...LOCAL_SCHEME_PRIVILEGES } },"],
+  );
   assert.equal(scheme.match(/registerSchemesAsPrivileged/g)?.length, 1);
-  assert.equal(scheme.match(/protocol\.handle\(/g)?.length, 1);
+  assert.equal(scheme.match(/protocol\.handle\(/g)?.length, 2);
+  assert.match(scheme, /protocol\.handle\(MIX_SCHEME, /);
+  assert.match(scheme, /protocol\.handle\(LOCAL_SCHEME, /);
   assert.doesNotMatch(scheme, /protocol\.(register\w*Protocol|intercept\w*)\(/);
   for (const f of walk(join(APP, "src"))) {
     const text = readFileSync(f, "utf8");
@@ -125,4 +138,35 @@ test("requests: only the application's own files, and a live play from its own r
   for (const url of [`cbp-mix://play/${id}?x=1`, `cbp-mix://play/${id}/`, `cbp-mix://play/${id}#x`, `cbp-mix://other/${id}`, `cbp-mix://play/${id.toUpperCase()}`, `cbp-mix://play/${id}0`, `CBP-MIX://play/${id}`, "cbp-mix://play/mix-1"]) {
     assert.equal(isAllowedRequest(url, dir, 7, () => true), false, url);
   }
+});
+
+test("requests: a cbp-local: play only from its own renderer while live; ended, unknown and signed-out ids are cancelled (issue #921)", () => {
+  const dir = "file:///opt/app/dist/";
+  let n = 0;
+  // Ids with letters, so an upper-case copy differs.
+  const plays = createLocalPlays(() => Buffer.alloc(16, 0xa0 + ++n));
+  const liveLocal = (i: string, wc: number): boolean => plays.liveFrom(i, wc) !== null;
+  const a = plays.begin({ webContentsId: 7, account: "acct-a", loadId: 1, songIndex: 0, sha256: "a".repeat(64), size: 10 });
+  const b = plays.begin({ webContentsId: 7, account: "acct-a", loadId: 1, songIndex: 1, sha256: "b".repeat(64), size: 10 });
+  const url = (id: string): string => `cbp-local://play/${id}`;
+  assert.equal(isAllowedRequest(url(a.id), dir, 7, undefined, liveLocal), true);
+  assert.equal(isAllowedRequest(url(b.id), dir, 7, undefined, liveLocal), true, "two songs overlap");
+  assert.equal(isAllowedRequest(url(a.id), dir, 8, undefined, liveLocal), false, "another window");
+  assert.equal(isAllowedRequest(url(a.id), dir, undefined, undefined, liveLocal), false, "no renderer");
+  assert.equal(isAllowedRequest(url(a.id), dir, 7), false, "no registry");
+  assert.equal(isAllowedRequest(url("f".repeat(32)), dir, 7, undefined, liveLocal), false, "an unknown id");
+  // An id of one scheme is never a play of the other.
+  assert.equal(isAllowedRequest(`cbp-mix://play/${a.id}`, dir, 7, () => false, liveLocal), false, "a local id as a mix URL");
+  assert.equal(isAllowedRequest(url(a.id), dir, 7, () => true), false, "a mix registry does not admit a local URL");
+  for (const u of [`${url(a.id)}?x=1`, `${url(a.id)}/`, `${url(a.id)}#x`, `cbp-local://other/${a.id}`, url(a.id.toUpperCase()), `${url(a.id)}0`, `CBP-LOCAL://play/${a.id}`, "cbp-local://play/song-1", "cbp-local:///etc/passwd"]) {
+    assert.equal(isAllowedRequest(u, dir, 7, undefined, () => true), false, u);
+  }
+  plays.end(a.id);
+  assert.equal(isAllowedRequest(url(a.id), dir, 7, undefined, liveLocal), false, "an ended play");
+  assert.equal(isAllowedRequest(url(b.id), dir, 7, undefined, liveLocal), true);
+  plays.endAccount("acct-a");
+  assert.equal(isAllowedRequest(url(b.id), dir, 7, undefined, liveLocal), false, "after sign-out");
+  const c = plays.begin({ webContentsId: 7, account: "acct-a", loadId: 2, songIndex: 0, sha256: "c".repeat(64), size: 10 });
+  plays.endFor(7);
+  assert.equal(isAllowedRequest(url(c.id), dir, 7, undefined, liveLocal), false, "after the window closed");
 });

@@ -33,8 +33,8 @@ const groups = (re: RegExp) => (v: string): (string | undefined)[] => [...v.matc
 const names = groups(/^ {2}(\w+):/gm);
 
 export const EXPOSED = ["getState", "command", "openDropped", "onUpdate", "startPairing", "pairingState", "reopenPairingPage", "unpair", "listView", "startClass", "openClassFile", "dismissFileError", "backToClass", "mixSignIn", "mixSignOut", "findMusicFiles", "cancelMusicFilesFind", "liveView", "startLive", "endLive", "makeControlCode", "dropPhone", "riders", "dropRider", "lockJoining", "newJoinCode", "updateStatus", "checkForUpdate", "openReleasePage", "setAutomaticChecks", "setPrereleases"];
-const CHANNELS = ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "room:mix", "room:mix-report", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code", "update:status", "update:check", "update:open-release", "update:set-auto", "update:set-prereleases", "player:music-files-find", "player:music-files-find-cancel"];
-export const ROOM_EXPOSED = ["state", "onUpdate", "start", "pause", "resume", "previous", "next", "forward", "back", "undo", "follow", "endClass", "remoteState", "startRemote", "stopRemote", "onRemote", "onMix", "mixReport"];
+const CHANNELS = ["player:state", "player:command", "player:open-dropped", "player:update", "player:pairing-start", "player:pairing-state", "player:unpair", "player:pairing-reopen", "list:view", "list:start", "list:open-file", "list:dismiss-error", "list:back", "player:mix-sign-in", "player:mix-sign-out", "room:state", "room:update", "room:command", "room:end", "room:remote-state", "room:remote-start", "room:remote-stop", "room:remote-update", "room:mix", "room:mix-report", "room:local", "room:local-report", "live:view", "live:start", "live:end", "live:code", "live:drop", "live:riders", "live:drop-rider", "live:lock", "live:new-code", "update:status", "update:check", "update:open-release", "update:set-auto", "update:set-prereleases", "player:music-files-find", "player:music-files-find-cancel"];
+export const ROOM_EXPOSED = ["state", "onUpdate", "start", "pause", "resume", "previous", "next", "forward", "back", "undo", "follow", "endClass", "remoteState", "startRemote", "stopRemote", "onRemote", "onMix", "mixReport", "onLocal", "localReport"];
 
 /** Each check by name; a check hits a file that breaks it in any view. */
 export const MAC = {
@@ -60,7 +60,7 @@ export const MAC = {
   exposed: differs(names, EXPOSED, slashCode),
   channels: differs(groups(/"([^"]+)"/g), CHANNELS, slashCode),
   roomExposed: differs(names, ROOM_EXPOSED, slashCode),
-  roomArguments: differs((v) => names(v).filter((n) => new RegExp(`^ {2}${n}: \\((?!\\)|cb: )`, "m").test(v)), ["mixReport"], slashCode),
+  roomArguments: differs((v) => names(v).filter((n) => new RegExp(`^ {2}${n}: \\((?!\\)|cb: )`, "m").test(v)), ["mixReport", "localReport"], slashCode),
   roomIpcCalls: differs((v) => count(/ipcRenderer\./g)(v) - names(v).length, 0, slashCode),
   readerSecrets: forbids(/token|oauth|client.?id|bearer|authoriz|https?:|fetch\(|node:net|node:http|node:dns|node:fs|process\.env/i, slashCode),
 } satisfies Record<string, Check>;

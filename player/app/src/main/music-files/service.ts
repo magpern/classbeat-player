@@ -9,8 +9,9 @@
 import { CANCELLED, FAILED, MAX_FILES, doneAnswer } from "../../core/music-files/answer.ts";
 import type { FindAnswer } from "../../core/music-files/answer.ts";
 import { rememberFolder, sameIndex } from "../../core/music-files/index-model.ts";
-import type { MusicIndex } from "../../core/music-files/index-model.ts";
+import type { IndexedFile, MusicIndex } from "../../core/music-files/index-model.ts";
 import { wantedFiles } from "../../core/music-files/wanted.ts";
+import type { WantedFile } from "../../core/music-files/wanted.ts";
 import { matchFiles } from "./matcher.ts";
 import type { IndexStore } from "./index-store.ts";
 
@@ -31,6 +32,10 @@ export interface MusicFiles {
   find(classId: string): Promise<FindAnswer | null>;
   /** The check before playing: the index and the folders chosen, with no dialog. Null when busy. */
   check(classId: string): Promise<FindAnswer | null>;
+  /** The same check for the open class's document, from the controller (a class opened from a file is in no list). */
+  checkOpen(doc: unknown): Promise<FindAnswer | null>;
+  /** The account's indexed file of this hash, as the last find or check left it, or null: for the `cbp-local:` scheme only. */
+  indexed(account: string, sha256: string): IndexedFile | null;
   /** Stops the find or check running; false when none was. */
   cancel(): boolean;
   /**
@@ -64,8 +69,7 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
   };
 
   /** Matches and keeps the index, unless the run was stopped or the pairing changed meanwhile. */
-  const match = async (run: Run, gen: number, account: string, classId: string, index: (loaded: MusicIndex) => MusicIndex, folders: (i: MusicIndex) => readonly string[]): Promise<FindAnswer> => {
-    const wanted = wantedFiles(d.classDocument(classId));
+  const match = async (run: Run, gen: number, account: string, wanted: readonly WantedFile[] | null, index: (loaded: MusicIndex) => MusicIndex, folders: (i: MusicIndex) => readonly string[]): Promise<FindAnswer> => {
     if (wanted === null) return FAILED;
     const before = index(d.store.load(account));
     const stillOurs = (): boolean => !run.stopped && gen === generation && d.account() === account;
@@ -77,6 +81,13 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
     return doneAnswer(wanted, m.found, m.limitReached);
   };
 
+  const checkWanted = (wanted: () => readonly WantedFile[] | null): Promise<FindAnswer | null> =>
+    exclusive(async (run, gen) => {
+      const account = d.account();
+      if (account === null) return FAILED;
+      return match(run, gen, account, wanted(), (i) => i, (i) => i.folders);
+    });
+
   return {
     find: (classId) =>
       exclusive(async (run, gen) => {
@@ -84,14 +95,17 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
         if (account === null || wantedFiles(d.classDocument(classId)) === null) return FAILED;
         const folder = await d.pickFolder();
         if (folder === null || run.stopped || gen !== generation) return CANCELLED;
-        return match(run, gen, account, classId, (i) => rememberFolder(i, folder), () => [folder]);
+        return match(run, gen, account, wantedFiles(d.classDocument(classId)), (i) => rememberFolder(i, folder), () => [folder]);
       }),
-    check: (classId) =>
-      exclusive(async (run, gen) => {
-        const account = d.account();
-        if (account === null) return FAILED;
-        return match(run, gen, account, classId, (i) => i, (i) => i.folders);
-      }),
+    check: (classId) => checkWanted(() => wantedFiles(d.classDocument(classId))),
+    checkOpen: (doc) => checkWanted(() => wantedFiles(doc)),
+    indexed(account, sha256) {
+      try {
+        return d.store.load(account).files.get(sha256) ?? null;
+      } catch {
+        return null;
+      }
+    },
     cancel() {
       if (current === null || current.stopped) return false;
       current.stopped = true;

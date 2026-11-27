@@ -209,7 +209,7 @@ const ROOM_SOURCES = ["preload/room-preload.ts", "main/room/room-handlers.ts", "
 const groups = (re: RegExp) => (v: string): (string | undefined)[] => [...v.matchAll(re)].map((m) => m[1]);
 const C = {
   names: forbids(/control.?code|token|cbp_|\bcontrollers\b|controller_|make_code|hostToken/i, slashCode),
-  pushes: differs(groups(/\bpush\(([^)]*\))\)/g), ["CH_ROOM_UPDATE, frame(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)", "CH_ROOM_MIX, mixCueOf(c)"], slashCode),
+  pushes: differs(groups(/\bpush\(([^)]*\))\)/g), ["CH_ROOM_UPDATE, frame(s)", "CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)", "CH_ROOM_MIX, mixCueOf(c)", "CH_ROOM_LOCAL, localCueOf(c)"], slashCode),
   sends: differs(groups(/\.send\((\w+)/g), ["channel"], slashCode),
   plays: forbids(/\bnew\s+Audio\b|AudioContext|\.play\(\)|writeValue|navigator\.bluetooth/, slashCode),
 } satisfies Record<string, Check>;

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; connect-src 'none'; media-src cbp-mix:; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; connect-src 'none'; media-src cbp-mix: cbp-local:; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Room screen</title>
 <link rel="stylesheet" href="room.css">
 <link rel="stylesheet" href="room-scene.css">
@@ -12,5 +12,7 @@
 <body data-band="hidden" data-join="closed">
 <div id="scene-join"><canvas id="scene"></canvas><div id="text"></div></div>
 <audio id="mix" preload="auto"></audio>
+<audio id="local-a" preload="auto"></audio>
+<audio id="local-b" preload="auto"></audio>
 </body>
 </html>

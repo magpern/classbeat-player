@@ -5,17 +5,21 @@ import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { Trusted } from "../core/ipc-policy.ts";
 import { createController } from "./controller.ts";
-import { enableSandboxUnlessTest, hardenSession, registerMixScheme } from "./hardening.ts";
+import { enableSandboxUnlessTest, handleLocalScheme, hardenSession, registerSchemes } from "./hardening.ts";
 import { registerIpc } from "./ipc.ts";
 import { createListController } from "./list/list-controller.ts";
 import type { ListController } from "./list/list-controller.ts";
 import { registerListHandlers } from "./list/list-handlers.ts";
+import { createLocalPlayer } from "./local/local-player.ts";
+import type { LocalPlayer } from "./local/local-player.ts";
+import { createLocalPlays } from "./local/local-plays.ts";
 import { registerMixHandlers } from "./mix/mix-handlers.ts";
 import type { MixPlayer } from "./mix/mix-player.ts";
 import { setupPlayback } from "./mix/playback-setup.ts";
 import { createPlays } from "./mix/plays.ts";
 import { setupMix } from "./mix/setup.ts";
 import { registerMusicFilesHandlers } from "./music-files/handlers.ts";
+import { answerLocalRequest } from "./music-files/local-response.ts";
 import { setupMusicFiles } from "./music-files/setup.ts";
 import { openClassFile } from "./list/open-class-file.ts";
 import { installMenu, setRoomItemEnabled } from "./menu.ts";
@@ -73,13 +77,21 @@ const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() 
 // Its <audio> plays a cached mix through `cbp-mix:` with a play id bound to it (ADR 0013 section 5).
 const plays = createPlays();
 let mixPlayer: MixPlayer | null = null;
+// Its two local <audio> play the instructor's own files through `cbp-local:`, one play id per song (ADR 0017 section 3).
+const localPlays = createLocalPlays();
+let localPlayer: LocalPlayer | null = null;
 const room = createRoomWindow({
   file: ROOM_FILE,
   url: pathToFileURL(ROOM_FILE).href,
   preload: ROOM_PRELOAD,
   presenter: live,
   mixLine: () => mixPlayer?.line() ?? null,
-  closed: (id) => (mixPlayer === null ? plays.endFor(id) : mixPlayer.roomClosed(id)),
+  closed: (id) => {
+    if (mixPlayer === null) plays.endFor(id);
+    else mixPlayer.roomClosed(id);
+    if (localPlayer === null) localPlays.endFor(id);
+    else localPlayer.roomClosed(id);
+  },
 });
 // The room window's phone-remote slot: absent until the live client is set up, then joined to it
 // (#202). Its Phone remote button is the instructor's request; nothing starts it by itself.
@@ -173,8 +185,9 @@ function createPresenter(): void {
 // Chromium's sandbox for every renderer, unless the test-only --no-sandbox switch is present
 // (CI runs without the sandbox helper). Must run before the app is ready.
 enableSandboxUnlessTest();
-// The mix scheme's privileges are fixed before the app is ready (core/mix/scheme-policy.ts).
-registerMixScheme();
+// The mix and local schemes' privileges are fixed before the app is ready (core/mix/scheme-policy.ts,
+// core/music-files/local-scheme-policy.ts).
+registerSchemes();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -195,7 +208,7 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
   void app.whenReady().then(() => {
-    hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD], (id, wc) => plays.liveFrom(id, wc) !== null);
+    hardenSession(APP_DIR_URL, [PRESENTER_PRELOAD, ROOM_PRELOAD], (id, wc) => plays.liveFrom(id, wc) !== null, (id, wc) => localPlays.liveFrom(id, wc) !== null);
     const paired = setupPairing();
     pairing = paired;
     // The instructor's own music files: found by content, and no path ever leaves this process.
@@ -203,6 +216,18 @@ if (!app.requestSingleInstanceLock()) {
     const musicFiles = setupMusicFiles({ account: () => credentialOf(paired)?.account ?? null, classDocument: (id) => sync?.document(id) ?? null, window: live });
     // Keeps the account's classes offline, and the class list shows them.
     sync = setupSync(paired, () => musicFiles.wipe());
+    const accountNow = (): string | null => credentialOf(paired)?.account ?? null;
+    // A file is served only for a live play, from the account's index, and a fault stops the audio.
+    handleLocalScheme((req) => answerLocalRequest(req, { live: (id) => localPlays.live(id), indexed: (a, sha) => musicFiles.indexed(a, sha), onFault: (id) => localPlayer?.fault(id) }));
+    const local = createLocalPlayer({ plays: localPlays, check: (doc) => musicFiles.checkOpen(doc), account: accountNow, roomId: () => room.trusted().roomId, cue: (c) => room.sendLocal(c), align: (ms) => controller.align(ms), now: () => Date.now() });
+    localPlayer = local;
+    // Sign-out or a new pairing ends the plays of the account before.
+    let playsAccount = accountNow();
+    paired.watch(() => {
+      const next = accountNow();
+      if (playsAccount !== null && playsAccount !== next) localPlays.endAccount(playsAccount);
+      playsAccount = next;
+    });
     // Swedebeat sign-in on the class list page; the token stays in the keychain and this process.
     const mixSetup = setupMix(paired, plays);
     const mix = mixSetup.service;
@@ -222,6 +247,7 @@ if (!app.requestSingleInstanceLock()) {
     // Before the room is sent the snapshot, so its link line is current.
     const { player, prefetch } = setupPlayback(mixSetup, plays, controller, room, sync);
     mixPlayer = player;
+    controller.watch((s) => local.snapshot(s));
     controller.watch((s) => room.send(s));
     controller.watch(() => refreshRoomItem());
     controller.watch((s) => keepAwake.update(s.view));
@@ -233,7 +259,7 @@ if (!app.requestSingleInstanceLock()) {
     controller.watch(() => roomRemote.refresh());
     paired.watch(() => roomRemote.refresh());
     remote.watch((v) => room.sendRemote(v));
-    registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote, mixReport: (r) => player.report(r) });
+    registerRoomHandlers(ipcMain, () => room.trusted(), controller, { endClass, remote, mixReport: (r) => player.report(r), localReport: (r) => local.report(r) });
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
