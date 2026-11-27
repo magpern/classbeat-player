@@ -98,12 +98,17 @@ test("a planted pattern, folder and file name reach nothing but the index and th
         player.report(report);
       }
     };
+    // Before Start: wait (on real file reads, so by time, not a fixed count of turns) until the check
+    // has answered and every file's length was probed, which leaves the last cue with no play.
+    const probing = () => player.state()?.kind !== "ready" || cues.length === 0 || cues[cues.length - 1]!.slots.some((s) => s.url !== null);
     snap("ready", 0);
-    for (let i = 0; i < 20; i += 1) {
-      await new Promise((ok) => setImmediate(ok));
+    for (let i = 0; i < 2_000 && probing(); i += 1) {
+      await new Promise((ok) => setTimeout(ok, 5));
       snap("ready", 0);
       if (cues.length > 0) await room();
+      snap("ready", 0);
     }
+    assert.equal(probing(), false, "the check and the probes finish");
     snap("running", 0);
     assert.deepEqual(player.state(), { kind: "playing" });
     for (let t = 0; t <= 3 * TONE_MS; t += 250) {
