@@ -7,7 +7,10 @@ import { test } from "node:test";
 import type { Snapshot } from "../../src/core/snapshot.ts";
 import { EMPTY_SNAPSHOT } from "../../src/core/snapshot.ts";
 import type { PairingView } from "../../src/core/pairing/view.ts";
+import { classListView } from "../../src/core/sync/class-list.ts";
 import type { ClassRow } from "../../src/core/sync/class-list.ts";
+import { INITIAL } from "../../src/core/sync/sync-model.ts";
+import type { SyncState } from "../../src/core/sync/sync-model.ts";
 import type { SyncView } from "../../src/core/sync/view.ts";
 import { createListController } from "../../src/main/list/list-controller.ts";
 import { MIX_DISABLED } from "../../src/core/mix/view.ts";
@@ -255,6 +258,19 @@ test("with the real sign-in service, Start is refused while its sign-out waits f
   release();
   assert.equal((await out)?.state, "signed_out");
   assert.equal(controller.start(first.id, first.hash), true, "allowed once it has finished");
+});
+
+test("Start is refused for a document of an unknown format major, as the real class list rows it: nothing is pinned or opened", () => {
+  const { r, controller } = rig();
+  const hash = `sha256:${"1".repeat(64)}`;
+  const docs = new Map([["id-next", { format_version: "2.0", class: { title: "Next gen", length_ms: 1000 } }]]);
+  r.rows = [...classListView({ ...INITIAL, held: new Map([["id-next", hash]]) } as SyncState, docs)];
+  assert.equal(r.rows[0]?.source, "unknown");
+  controller.view();
+  r.pinResult = { class: { title: "Next gen" } };
+  assert.equal(controller.start("id-next", hash), false);
+  assert.deepEqual(r.pins, []);
+  assert.deepEqual(r.opened, []);
 });
 
 test("Start is refused for a class with an unknown music source: nothing is pinned or opened", () => {

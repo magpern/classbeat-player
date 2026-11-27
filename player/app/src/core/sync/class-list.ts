@@ -24,6 +24,8 @@ export interface ClassRow {
   readonly notUpdated: boolean;
 }
 
+/** The format major this player reads (the same as schema/ts/src/version.ts); a well-formed version of any other major needs a newer player. */
+const KNOWN_MAJOR = 1;
 const SOURCES: ReadonlySet<unknown> = new Set(["spotify", "swedebeat", "none"]);
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const titles = new Intl.Collator("en", { sensitivity: "base" });
@@ -40,12 +42,27 @@ function fields(doc: Readonly<Record<string, unknown>>): Pick<ClassRow, "title" 
   return { title, lengthMs: length, sport, source: SOURCES.has(kind) ? (kind as ClassRow["source"]) : "unknown", songs: songs.length };
 }
 
+/** A document of a format major this player does not know (ADR 0003 section 7): its shape is not read. The row keeps what is plainly there, a title and a length, and is "unknown" like an unknown music source, so it is listed, says it needs a newer player and never starts. */
+function newerMajor(doc: Readonly<Record<string, unknown>>): Pick<ClassRow, "title" | "lengthMs" | "sport" | "source" | "songs"> | null {
+  const major = typeof doc.format_version === "string" ? /^(\d+)\.\d+$/.exec(doc.format_version)?.[1] : undefined;
+  if (major === undefined || Number(major) === KNOWN_MAJOR) return null;
+  const cls = isObject(doc.class) ? doc.class : {};
+  const length = cls.length_ms;
+  return {
+    title: typeof cls.title === "string" && cls.title !== "" ? cls.title : "Untitled class",
+    lengthMs: typeof length === "number" && Number.isFinite(length) && length >= 0 ? length : 0,
+    sport: cls.sport === "running" ? "running" : "cycling",
+    source: "unknown",
+    songs: 0,
+  };
+}
+
 /** `documents`: the cached documents by class id; a class with none that reads as a class has no row. */
 export function classListView(s: SyncState, documents: ReadonlyMap<string, Readonly<Record<string, unknown>>>): readonly ClassRow[] {
   const rows: ClassRow[] = [];
   for (const [id, hash] of s.held) {
     const doc = documents.get(id);
-    const f = doc === undefined ? null : fields(doc);
+    const f = doc === undefined ? null : (newerMajor(doc) ?? fields(doc));
     if (f === null) continue;
     const playing = s.pinned?.id === id;
     rows.push({ id, hash, ...f, updated: s.published.get(id) ?? null, playing, newer: playing && s.pinned?.hash !== hash, notUpdated: s.notUpdated.has(id) });

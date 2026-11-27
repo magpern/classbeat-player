@@ -168,3 +168,19 @@ test("a music source that is not a non-empty string is still no row", () => {
   const docs = new Map([[id(1), { ...doc("A"), music: { source: 7 } }], [id(2), { ...doc("B"), music: { source: "" } }]]);
   assert.deepEqual(classListView(state, docs), []);
 });
+
+test("a document of an unknown format major is listed as unknown, keeping its title and length, beside the others (ADR 0003 section 7)", () => {
+  const { state } = listed([[1, "Alpha"], [2, "Next"], [3, "Zulu"]]);
+  const docs = new Map([
+    [id(1), doc("Alpha")],
+    [id(2), { format_version: "2.0", class: { title: "Next gen", length_ms: 600_000 }, whatever: [1] }],
+    [id(3), doc("Zulu", { source: "none", songs: 0 })],
+  ]);
+  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source, r.lengthMs, r.songs]), [["Alpha", "spotify", 2_520_000, 11], ["Next gen", "unknown", 600_000, 0], ["Zulu", "none", 2_520_000, 0]]);
+});
+
+test("an unknown major with no readable class block is still listed; a malformed version is not", () => {
+  const { state } = listed([[1, "A"], [2, "B"], [3, "C"]]);
+  const docs = new Map<string, Record<string, unknown>>([[id(1), { format_version: "9.1" }], [id(2), { format_version: "two" }], [id(3), { ...doc("C"), format_version: "1.7" }]]);
+  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["C", "spotify"], ["Untitled class", "unknown"]]);
+});
