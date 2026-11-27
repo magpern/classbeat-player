@@ -439,6 +439,31 @@ test("a newer class supersedes a Start check that is still running (#955)", asyn
   assert.equal(r.stopped, 1);
 });
 
+test("a newer class supersedes the check before Start that is still running (#963)", async () => {
+  const r = rig();
+  r.hold();
+  r.snap("ready", 0);
+  assert.equal(r.checks.length, 1, "the check before Start was asked");
+  r.loadId = 2;
+  r.snap("ready", 0);
+  assert.equal(r.stopped, 1, "the old class's pre-Start check is stopped, not left to end");
+  r.open();
+  await settle();
+  assert.equal(r.stopped, 1);
+});
+
+test("a pre-Start check that answered, or found the service busy, is not stopped by a newer class (#963)", async () => {
+  for (const answer of [done("found", "found", "found"), null]) {
+    const r = rig();
+    r.answer = answer;
+    r.snap("ready", 0);
+    await settle();
+    r.loadId = 2;
+    r.snap("ready", 0);
+    assert.equal(r.stopped, 0, answer === null ? "busy" : "answered");
+  }
+});
+
 test("the presenter's notice names the song that failed and why, never a path; a sign-out names no song (#922)", async () => {
   const playingNow = await playing();
   assert.equal(playingNow.player.notice(), null, "while the files play there is nothing to say");

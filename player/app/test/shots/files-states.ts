@@ -65,6 +65,8 @@ export const FILES_STATES: readonly State[] = [
   sel("finding", files(THURSDAY, 11, [NEON, PULSE], { phase: "finding" })),
   sel("still-missing", files(THURSDAY, 11, [NEON, PULSE], { searched: true })),
   sel("find-failed", files(THURSDAY, 11, [NEON, PULSE], { failed: true })),
+  // Another class is being checked while this row has its answer and the failure plate: the held detail line stays, and five rows still fit (music-files.md, "Search failed").
+  sel("find-failed-held", files(THURSDAY, 11, [NEON, PULSE], { failed: true, held: true })),
   sel("worst-footer", files(THURSDAY, 11, made(11)), { view: page(files(THURSDAY, 11, made(11)), { [THURSDAY]: WIDE }) }),
   sel("list", files(THURSDAY, 11, [NEON, PULSE]), { click: ["files-show"] }),
   sel("list-worst", files(THURSDAY, 11, [{ title: LONG, artist: LONG_ARTIST, fileName: LONG_FILE }, PULSE, NEON, ...made(3)]), { click: ["files-show"] }),

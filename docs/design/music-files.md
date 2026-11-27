@@ -170,7 +170,7 @@ Each state is read from the per-song answer, `found` or `missing`, and nothing e
   differs from "Finding".
 - **Held with an answer.** When: another class is being checked or searched while this row
   already has its answer. The row keeps its own marker and words (found, missing or still
-  missing). Start and "Find music files" are held, and the footer detail reads "Another class is
+  missing). Start and "Find music files" where it is shown are held, and the footer detail reads "Another class is
   being checked. Starting waits until this is done" in place of the state's own line. "Show which
   files" stays live where a file is missing, as the panel is read from the answer. This holds
   under the failure plate too: the detail line stays, and the plate's "Try again" is held as well.

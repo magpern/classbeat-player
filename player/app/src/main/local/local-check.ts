@@ -30,9 +30,15 @@ export function askCheck(d: CheckDeps, run: Run): void {
   );
 }
 
-/** A check of ours that is still running is stopped (a Start check that timed out, or a class that was replaced). */
+/**
+ * A check of ours that is still running is stopped: the one before Start (a class that was replaced
+ * before it answered) or the one at Start (one that timed out, or a class that was replaced). One
+ * stop covers both. A check that answered or found the service busy is no longer "running", so
+ * another operation's work is never stopped.
+ */
 export function stopRecheck(d: CheckDeps, run: Run): void {
-  if (!run.rechecking) return;
+  if (!run.rechecking && !run.checking) return;
   run.rechecking = false;
+  run.checking = false;
   d.cancelCheck();
 }
