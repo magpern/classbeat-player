@@ -276,8 +276,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         AnswerPolicy.mayAnswer(data, pairing.service.secrets() + secrets())
     }
 
-    /// Every answer is checked once more.
-    private func answer(_ call: PageCall, _ data: [String: Any]) {
+    /// Every answer is checked once more. Internal, not private, so the tests drive it.
+    func answer(_ call: PageCall, _ data: [String: Any]) {
         if mayAnswer(data) {
             call.answer(data)
         } else {

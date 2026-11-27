@@ -111,7 +111,7 @@ final class PairingAnswersTests: XCTestCase {
         for (name, answers) in answered {
             for answer in answers {
                 let json = String(decoding: try JSONSerialization.data(withJSONObject: answer), as: UTF8.self)
-                for secret in [Secrets.token(), Secrets.deviceCode()] {
+                for secret in [Secrets.token(), Secrets.token("C"), Secrets.deviceCode()] {
                     XCTAssertFalse(json.contains(secret), "\(name) answered a secret", file: file, line: line)
                     XCTAssertFalse("\(answer)".contains(secret), "\(name) answered a secret", file: file, line: line)
                 }
@@ -119,7 +119,7 @@ final class PairingAnswersTests: XCTestCase {
         }
         // Nor does any word of the native pairing screen.
         for word in pairing.everyWord {
-            for secret in [Secrets.token(), Secrets.deviceCode()] {
+            for secret in [Secrets.token(), Secrets.token("C"), Secrets.deviceCode()] {
                 XCTAssertFalse(word.contains(secret), "the pairing screen showed a secret", file: file, line: line)
             }
         }
@@ -189,6 +189,25 @@ final class PairingAnswersTests: XCTestCase {
         XCTAssertFalse(controller.mayAnswer(["way": Secrets.token()]))
         XCTAssertFalse(controller.mayAnswer(["result": ["nested": "x" + Secrets.token() + "y"]]))
         XCTAssertTrue(controller.mayAnswer(["way": "lock"]))
+    }
+
+    /// Every answer to the page goes through `answer`, which refuses one holding the pairing's own
+    /// secret, with no secrets passed in: the device code while waiting, the token once paired.
+    func testTheAnswerPathRefusesThePairingsSecrets() {
+        rig.toWaiting()
+        let waiting = Call()
+        controller.answer(waiting, ["way": Secrets.deviceCode()])
+        XCTAssertEqual(waiting.refusals, 1)
+        XCTAssertTrue(waiting.answers.isEmpty)
+        rig.backend.ok(FakeBackend.tokenBody())
+        let paired = Call()
+        controller.answer(paired, ["result": ["nested": Secrets.token()]])
+        XCTAssertEqual(paired.refusals, 1)
+        XCTAssertTrue(paired.answers.isEmpty)
+        let plain = Call()
+        controller.answer(plain, ["way": "lock"])
+        XCTAssertEqual(plain.refusals, 0)
+        XCTAssertEqual(plain.answers.first?["way"] as? String, "lock")
     }
 
     /// The page's "unpair" (AC1): the page hears "unpaired", the Keychain token and the cached

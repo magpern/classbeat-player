@@ -16,8 +16,10 @@ extension PairingMachine {
         case let .ok(token, email):
             let record = PairingRecord(origin: s.origin, token: token, email: email)
             let p = Paired(attempt: s.attempt, record: record, deviceName: nil, expired: false, notice: nil)
-            // A "pair again" replaces the expired token: it is given back too, whether the new one
-            // is kept or not, since the save deletes it from the store first (issue #926).
+            // A "pair again" replaces the expired token, and it is given back too, whether the new
+            // one is kept or not (issue #926). Best effort only: the backend refuses an expired token
+            // (401 token_expired) before its revoke runs, and ends it by idle expiry (ADR 0002), so
+            // no answer changes anything here and the token is never kept or sent again.
             let old = s.back.map { [Effect.revoke($0.record)] } ?? []
             return Step(state: .paired(p), effects: [.save(attempt: s.attempt, record: record)] + old)
         case let .retry(afterMs):

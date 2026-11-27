@@ -189,7 +189,7 @@ final class PairingService {
             store.delete()
             ports.forgetCache()
             forgotten()
-        // Given back to the backend; its answer changes nothing here.
+        // Given back to the backend, best effort: any answer, a 401 or no network, changes nothing here.
         case let .revoke(record):
             transport.call(Calls.revoke(record.origin, record.token)) { _ in }
         }
