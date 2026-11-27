@@ -159,6 +159,39 @@ test("a check stopped by cancel lets the next check run at once, not busy; the s
   assert.deepEqual(await first, { status: "cancelled" });
 });
 
+test("a find cancelled with its dialog open still holds the service: a find or a check answers busy until the dialog returns", async () => {
+  const r = rig();
+  const a = bytes("a", 1000);
+  r.doc = localClass([a]);
+  r.put("a.mp3", a);
+  let open!: () => void;
+  r.dialogGate = new Promise((res) => (open = res));
+  const finding = r.service.find(CLASS_ID);
+  await new Promise((res) => setImmediate(res));
+  assert.equal(r.service.cancel(), true);
+  assert.equal(await r.service.find(CLASS_ID), null, "no second folder dialog");
+  assert.equal(r.dialogs, 1);
+  assert.equal(await r.service.checkOpen(r.doc), null, "no check beside the open dialog");
+  open();
+  assert.deepEqual(await finding, { status: "cancelled" });
+  assert.notEqual(await r.service.checkOpen(r.doc), null, "free once the dialog has returned");
+});
+
+test("a released stopped check that unwinds does not free the service under the check that replaced it", async () => {
+  const r = rig();
+  // Many indexed songs, so a check awaits many file reads and the second is still running when the first has unwound.
+  const songs = Array.from({ length: 200 }, (_, i) => bytes(String.fromCharCode(97 + (i % 26)), 1000 + i));
+  r.doc = localClass(songs);
+  songs.forEach((b, i) => r.put(`s${i}.mp3`, b));
+  assert.equal((await r.service.find(CLASS_ID))?.status, "done");
+  const first = r.service.checkOpen(r.doc);
+  assert.equal(r.service.cancel(), true);
+  const second = r.service.checkOpen(r.doc);
+  assert.deepEqual(await first, { status: "cancelled" });
+  assert.equal(await r.service.checkOpen(r.doc), null, "the second check still runs: a third is busy");
+  assert.notEqual(await second, null);
+});
+
 test("a match stopped part way answers nothing and changes nothing", async () => {
   const r = rig();
   const a = bytes("a", 1000);
