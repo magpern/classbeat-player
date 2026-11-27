@@ -1,8 +1,8 @@
 // The iOS side of the mode holder (issue #895): it puts the current mode's plugin on the bridge,
 // loads the mode's pages and no other, shows the native screens and asks the device owner's
 // authentication. It also tells ScreenFollower what the idle timer and the external display follow
-// (issue #897). The holder and the policies decide; this only carries
-// it out, as Android's ModeController.kt.
+// (issue #897), and hands rider mode's live intents to RiderBridge (issue #898). The holder and the
+// policies decide; this only carries it out, as Android's ModeController.kt.
 // Every method runs on the main thread. Pure: no import at all; the screen lock, the screens and
 // the web view come in through the protocols in ModeSeams.swift, so the tests fake every one of them
 // (AppTests/ModeControllerTests.swift).
@@ -18,6 +18,7 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     private let loader: PageLoader
     private let pairing: PairingUi
     private let screen: ScreenFollower
+    private var rider: RiderBridge!
     private let secrets: () -> [String]
     private let stop: ([String]) -> Void
     private var holder: ModeHolder?
@@ -29,8 +30,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     private var exposedMode: Mode?
 
     /// No answer may carry a token the pairing holds, read from the pairing itself so no caller
-    /// can leave it out (issue #926); `secrets` are any others. `stop` ends the app when a switch
-    /// could not drop everything.
+    /// can leave it out (issue #926), nor the rider token the session holds (issue #898); `secrets`
+    /// are any others. `stop` ends the app when a switch could not drop everything.
     init(
         lock: ScreenLock,
         screens: ModeScreens,
@@ -38,6 +39,7 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         pairing: PairingUi,
         awake: KeepAwake,
         display: ExternalDisplay,
+        rider session: RiderSession,
         secrets: @escaping () -> [String] = { [] },
         stop: @escaping ([String]) -> Void
     ) {
@@ -45,13 +47,20 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         self.screens = screens
         self.loader = loader
         self.pairing = pairing
-        screen = ScreenFollower(awake: awake, display: display)
+        screen = ScreenFollower(awake: awake, display: display) { session.joined }
         self.secrets = secrets
         self.stop = stop
         question = PageQuestion<Held>(
             resolve: { [weak self] held, word in self?.answer(held.call, ["result": word]) },
             refuse: { held in held.call.refuse() }
         )
+        rider = RiderBridge(
+            session: session,
+            live: { [weak self] in self?.current == .rider && self?.exposedMode == .rider },
+            answer: { [weak self] call, data in self?.answer(call, data) ?? call.refuse() }
+        )
+        // Joining and leaving keep the screen on and let it go.
+        rider.changed = { [weak self] in self?.screen.follow(self?.current) }
         // The token was deleted (unpaired here, revoked or unknown on the site): instructor mode closes.
         pairing.service.forgotten = { [weak self] in self?.unpaired() }
     }
@@ -123,6 +132,8 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
                 unpairing.ask()
                 return true
             }
+        case "join", "open", "receive", "leave":
+            rider.handle(name, args, call)
         case "askRiderMode":
             question.ask(Held(call)) { holder.askRider() }
         default:
@@ -273,7 +284,7 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
 
     /// Whether an answer may go to the page: never one that carries a token the device holds.
     func mayAnswer(_ data: [String: Any]) -> Bool {
-        AnswerPolicy.mayAnswer(data, pairing.service.secrets() + secrets())
+        AnswerPolicy.mayAnswer(data, pairing.service.secrets() + rider.secrets + secrets())
     }
 
     /// Every answer is checked once more. Internal, not private, so the tests drive it.

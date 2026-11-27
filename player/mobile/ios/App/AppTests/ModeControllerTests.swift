@@ -95,6 +95,7 @@ final class ModeControllerTests: XCTestCase {
     private var controller: ModeController!
     private var rig: PairingRig!
     private var pairingScreens: FakePairingScreens!
+    private var riderLive: FakeRiderTransport!
 
     override func setUp() {
         super.setUp()
@@ -110,6 +111,7 @@ final class ModeControllerTests: XCTestCase {
         tokens = []
         rig = PairingRig()
         pairingScreens = FakePairingScreens()
+        riderLive = FakeRiderTransport()
         controller = ModeController(
             lock: lock,
             screens: screens,
@@ -117,6 +119,7 @@ final class ModeControllerTests: XCTestCase {
             pairing: rig.ui(pairingScreens),
             awake: KeepAwake(flag),
             display: ExternalDisplay(source: displays, surface: surface),
+            rider: RiderSession(transport: riderLive),
             secrets: { [unowned self] in self.tokens },
             stop: { [unowned self] failed in self.stops.append(failed) }
         )
@@ -283,7 +286,10 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertTrue(call(.rider, "join", ["session": "s"]).refusedOnly, "a missing argument")
         XCTAssertTrue(call(.rider, "leave", ["x": 1]).refusedOnly, "an unexpected argument")
         XCTAssertEqual(call(.rider, "leave").answers.first?["result"] as? String, "left")
-        XCTAssertEqual(call(.rider, "join", ["session": "s", "nickname": "n"]).answers.first?["result"] as? String, "unreachable")
+        XCTAssertTrue(call(.rider, "join", ["session": "s", "nickname": "n"]).refusedOnly, "not a session code")
+        let join = call(.rider, "join", ["session": "KXPD-RMTB", "nickname": "Sam"])
+        riderLive.answerJoin(.unreachable)
+        XCTAssertEqual(join.result, "unreachable")
     }
 
     func testBetweenModesEveryCallIsRefused() {
@@ -303,7 +309,69 @@ final class ModeControllerTests: XCTestCase {
         tokens = [Secrets.token()]
         XCTAssertEqual(call(.rider, "leave").answers.count, 1)
         tokens = ["unreachable"]
-        XCTAssertTrue(call(.rider, "join", ["session": "s", "nickname": "n"]).refusedOnly)
+        let join = call(.rider, "join", ["session": "KXPD-RMTB", "nickname": "Sam"])
+        riderLive.answerJoin(.unreachable)
+        XCTAssertTrue(join.refusedOnly)
+    }
+
+    // Rider mode's live session (issue #898).
+
+    /// Joined to a session in rider mode, with the live link open and its `hello` out.
+    private func joinedAndOpen(file: StaticString = #filePath, line: UInt = #line) -> FakeRiderTransport.Link {
+        startInRider(file: file, line: line)
+        let join = call(.rider, "join", ["session": "KXPD-RMTB", "nickname": "Sam"])
+        riderLive.answerJoin(RiderFixtures.joinedAnswer)
+        XCTAssertEqual(join.result, "joined", file: file, line: line)
+        XCTAssertEqual(call(.rider, "open").result, "opening", file: file, line: line)
+        let link = riderLive.links.last!
+        link.events.opened()
+        return link
+    }
+
+    func testTheRiderTokenStaysNativeHelloCarriesItAndNoAnswerMayHoldIt() {
+        let link = joinedAndOpen()
+        XCTAssertEqual(link.sent.count, 1)
+        XCTAssertEqual(RiderFixtures.object(link.sent[0])?["token"] as? String, RiderFixtures.token)
+        XCTAssertEqual(call(.rider, "receive").answers.first?["kind"] as? String, "opened")
+        // The controller's last check holds the rider token too, whoever builds the answer.
+        XCTAssertFalse(controller.mayAnswer(["x": RiderFixtures.token]))
+        XCTAssertFalse(controller.mayAnswer(["x": String(RiderFixtures.token.dropFirst(10))]))
+        XCTAssertTrue(controller.mayAnswer(["kind": "opened"]))
+        let waiting = call(.rider, "receive")
+        let status = RiderExamples.text("host-status/connected.json")
+        link.events.text(status)
+        XCTAssertEqual(waiting.answers.first?["text"] as? String, status)
+        XCTAssertEqual(call(.rider, "leave").result, "left")
+        XCTAssertTrue(link.closed)
+        XCTAssertTrue(controller.mayAnswer(["x": RiderFixtures.token]), "the token went with the session")
+    }
+
+    func testAnEventAfterRiderModeClosedIsRefusedNotSentToTheNextPage() {
+        let link = joinedAndOpen()
+        _ = call(.rider, "receive")
+        let waiting = call(.rider, "receive")
+        XCTAssertTrue(waiting.answers.isEmpty && waiting.refusals == 0)
+        _ = call(.rider, "askInstructorMode")
+        lock.answer(true)
+        link.events.text(RiderExamples.text("host-status/connected.json"))
+        XCTAssertTrue(waiting.refusedOnly)
+    }
+
+    func testTheSwitchsRiderSessionPartDropsTheSession() {
+        let live = FakeRiderTransport()
+        let session = RiderSession(transport: live)
+        session.join("KXPD-RMTB", "Sam") { _ in }
+        live.answerJoin(RiderFixtures.joinedAnswer)
+        session.open { _ in }
+        XCTAssertTrue(session.joined)
+        let parts = ModeParts.teardown(rider: session)
+        XCTAssertEqual(parts.map { $0.name }, ModePolicy.teardown)
+        var done: [Error?] = []
+        XCTAssertNoThrow(try parts.first { $0.name == "riderSession" }?.drop { done.append($0) })
+        XCTAssertEqual(done.count, 1)
+        XCTAssertNil(done.first ?? nil)
+        XCTAssertFalse(session.joined)
+        XCTAssertEqual(live.links.first?.closed, true)
     }
 
     func testTheWayInFollowsThePairing() {
@@ -479,11 +547,22 @@ final class ModeControllerTests: XCTestCase {
         XCTAssertFalse(flag.set)
     }
 
-    func testRiderModeNeverKeepsTheScreenOnWithNoRiderSessionOnIOS() {
+    func testAJoinedRiderKeepsTheScreenOnAndLeavingOrTheBackgroundLetsItGo() {
         startInRider()
         controller.resumed()
         XCTAssertFalse(flag.set)
         XCTAssertFalse(flag.calls.contains(true))
+        let join = call(.rider, "join", ["session": "KXPD-RMTB", "nickname": "Sam"])
+        XCTAssertFalse(flag.set, "not before the join is answered")
+        riderLive.answerJoin(RiderFixtures.joinedAnswer)
+        XCTAssertEqual(join.result, "joined")
+        XCTAssertTrue(flag.set)
+        controller.stopped()
+        XCTAssertFalse(flag.set)
+        controller.resumed()
+        XCTAssertTrue(flag.set)
+        XCTAssertEqual(call(.rider, "leave").result, "left")
+        XCTAssertFalse(flag.set)
     }
 
     func testASwitchToRiderModeReleasesTheScreenAtOnce() {

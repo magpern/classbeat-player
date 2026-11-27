@@ -6,12 +6,15 @@ import Capacitor
 // setting it reads taken from WebViewFactory, the one place that makes and locks the web view.
 // It also starts the mode holder (issue #895): the two mode plugins go on the bridge before it is
 // locked, and the app opens in rider mode once the view has loaded. The mode holder also keeps the
-// idle timer and the external display in step (issue #897).
+// idle timer and the external display in step (issue #897), and holds the rider's session, whose
+// token is dropped when the app goes (issue #898).
 final class ShellViewController: CAPBridgeViewController {
     private var controller: ModeController?
     private var screens: AlertScreens?
     private var loader: WebPageLoader?
     private var pairing: PairingService?
+    /// No live transport yet (ADR 0016 section 4): every join is unreachable.
+    private let riderSession = RiderSession(transport: OfflineRiderTransport { DispatchQueue.main.async(execute: $0) })
 
     override func instanceDescriptor() -> InstanceDescriptor {
         WebViewFactory.descriptor()
@@ -47,7 +50,8 @@ final class ShellViewController: CAPBridgeViewController {
             loader: loader,
             pairing: pairingUi,
             awake: KeepAwake(AppIdleTimer()),
-            display: display
+            display: display,
+            rider: riderSession
         ) { failed in
             fatalError("classbeat: the mode switch could not drop \(failed)")
         }
@@ -74,13 +78,14 @@ final class ShellViewController: CAPBridgeViewController {
         pairing.load()
         let device = PhoneDevice(lock: DeviceLock()) { [weak pairing] in pairing?.paired ?? false }
         do {
-            try controller.start(device: device, store: DefaultsModeStore(), parts: ModeParts.teardown())
+            try controller.start(device: device, store: DefaultsModeStore(), parts: ModeParts.teardown(rider: riderSession))
         } catch {
             fatalError("classbeat: the mode holder could not start")
         }
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(stopped), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(resumed), name: UIApplication.willEnterForegroundNotification, object: nil)
+        center.addObserver(self, selector: #selector(terminating), name: UIApplication.willTerminateNotification, object: nil)
     }
 
     /// The mode the app is in, for the tests.
@@ -92,6 +97,11 @@ final class ShellViewController: CAPBridgeViewController {
 
     @objc private func resumed() {
         controller?.resumed()
+    }
+
+    /// The app goes: the rider token goes with it.
+    @objc private func terminating() {
+        riderSession.drop()
     }
 
     /// The pairing (issue #896): the first-launch wipe runs before anything reads the Keychain, the

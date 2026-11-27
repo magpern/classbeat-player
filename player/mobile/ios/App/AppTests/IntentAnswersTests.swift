@@ -18,8 +18,9 @@ final class IntentAnswersTests: XCTestCase {
             "receive": nil,
             "unpair": nil,
             "pairAgain": nil,
-            "join": #"{"result":"unreachable"}"#,
-            "leave": #"{"result":"left"}"#,
+            // The rider's session answers these (RiderSessionTests).
+            "join": nil,
+            "leave": nil,
             "listClasses": #"{"classes":[],"status":"unavailable"}"#,
             "syncNow": #"{"classes":[],"status":"unavailable"}"#,
             "getClass": #"{"error":"not_found"}"#,

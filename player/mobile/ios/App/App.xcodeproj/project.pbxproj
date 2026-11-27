@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EDC5ABEE8AEC8BE3F20B45C4 /* RiderBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5EE1D2D0D81653666F92DE3 /* RiderBridge.swift */; };
+		D7D3889D4B37F28CD2EC57CC /* RiderSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1880BCC71FC9CAE368E24AC /* RiderSession.swift */; };
+		4A0E79B43C5E4498124D5286 /* RiderTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F08EBDF024BE5F1E21F3695 /* RiderTransport.swift */; };
+		C70A4EEDF7592573AB0A982E /* RiderWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3B91A06E78CB7C3DFBFCE5 /* RiderWire.swift */; };
+		792C9E0535CAA2A34EF85022 /* RiderExamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CAF1361EAC0062CD0EEA892 /* RiderExamples.swift */; };
+		27F2231A3D02CD8F4313A51A /* RiderFakes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 043ED2656C1B7FED0C0F7B01 /* RiderFakes.swift */; };
+		F88333F97C6E94528AD930E5 /* RiderSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A06FEDF5C9C53843366FB21 /* RiderSessionTests.swift */; };
 		F04EDEE8180B7D7B93248D49 /* PairingAnswersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */; };
 		7FBA37CD17FD3423B09AE0CA /* ClassCacheFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */; };
 		C4ACD246EB2F4BE588AA0EBF /* FirstLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */; };
@@ -106,6 +113,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A5EE1D2D0D81653666F92DE3 /* RiderBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiderBridge.swift; sourceTree = "<group>"; };
+		A1880BCC71FC9CAE368E24AC /* RiderSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiderSession.swift; sourceTree = "<group>"; };
+		7F08EBDF024BE5F1E21F3695 /* RiderTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiderTransport.swift; sourceTree = "<group>"; };
+		9C3B91A06E78CB7C3DFBFCE5 /* RiderWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiderWire.swift; sourceTree = "<group>"; };
+		9CAF1361EAC0062CD0EEA892 /* RiderExamples.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RiderExamples.swift; sourceTree = "<group>"; };
+		043ED2656C1B7FED0C0F7B01 /* RiderFakes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RiderFakes.swift; sourceTree = "<group>"; };
+		1A06FEDF5C9C53843366FB21 /* RiderSessionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RiderSessionTests.swift; sourceTree = "<group>"; };
 		26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingAnswersTests.swift; sourceTree = "<group>"; };
 		2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassCacheFolderTests.swift; sourceTree = "<group>"; };
 		E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchTests.swift; sourceTree = "<group>"; };
@@ -249,6 +263,7 @@
 		430B860E3DA06EC400BCC5A5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A5EE1D2D0D81653666F92DE3 /* RiderBridge.swift */,
 				53B3D9EFAC1213D3C0DA23C3 /* PhonePairingPorts.swift */,
 				067BF634EFDAF8D83814E431 /* ClassCacheFolder.swift */,
 				1A3280315D62019931262705 /* FirstLaunch.swift */,
@@ -292,6 +307,9 @@
 		6A8C5ECB2CED19AC32C7B9AB /* AppTests */ = {
 			isa = PBXGroup;
 			children = (
+				9CAF1361EAC0062CD0EEA892 /* RiderExamples.swift */,
+				043ED2656C1B7FED0C0F7B01 /* RiderFakes.swift */,
+				1A06FEDF5C9C53843366FB21 /* RiderSessionTests.swift */,
 				26D356AF2FE812C6D146EC85 /* PairingAnswersTests.swift */,
 				2B915D8078EE327B21C5EB62 /* ClassCacheFolderTests.swift */,
 				E57361A8B13322D06D46E270 /* FirstLaunchTests.swift */,
@@ -339,6 +357,9 @@
 		8A7D50F1308B76B16E0E5AB9 /* Policy */ = {
 			isa = PBXGroup;
 			children = (
+				A1880BCC71FC9CAE368E24AC /* RiderSession.swift */,
+				7F08EBDF024BE5F1E21F3695 /* RiderTransport.swift */,
+				9C3B91A06E78CB7C3DFBFCE5 /* RiderWire.swift */,
 				197A8BE9EB00002751D22CF7 /* PairingStates.swift */,
 				5865A9954F535567D99C95F9 /* PairingTokenAnswers.swift */,
 				B219DD865082449FF315D876 /* PairingReplies.swift */,
@@ -539,6 +560,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				792C9E0535CAA2A34EF85022 /* RiderExamples.swift in Sources */,
+				27F2231A3D02CD8F4313A51A /* RiderFakes.swift in Sources */,
+				F88333F97C6E94528AD930E5 /* RiderSessionTests.swift in Sources */,
 				449D2BF37C0664B61664029D /* AnswerPolicyTests.swift in Sources */,
 				80F0BA052EA81090787DF19C /* DefaultsModeStoreTests.swift in Sources */,
 				A4C01B0601DA998E792C63CC /* DisplayTests.swift in Sources */,
@@ -575,6 +599,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EDC5ABEE8AEC8BE3F20B45C4 /* RiderBridge.swift in Sources */,
+				D7D3889D4B37F28CD2EC57CC /* RiderSession.swift in Sources */,
+				4A0E79B43C5E4498124D5286 /* RiderTransport.swift in Sources */,
+				C70A4EEDF7592573AB0A982E /* RiderWire.swift in Sources */,
 				83678B1599EDFC85EBF20A22 /* AlertScreens.swift in Sources */,
 				335C4E49EBE76B14595BF6E0 /* AppDelegate.swift in Sources */,
 				C72D5498DC7BA292492CA65E /* BridgeFilter.swift in Sources */,

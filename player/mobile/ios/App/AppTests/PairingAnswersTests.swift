@@ -65,7 +65,8 @@ final class PairingAnswersTests: XCTestCase {
             loader: Loader(),
             pairing: rig.ui(pairing),
             awake: KeepAwake(FakeFlag()),
-            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface())
+            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface()),
+            rider: RiderSession(transport: FakeRiderTransport())
         ) { _ in
             XCTFail("a switch could not drop everything")
         }
