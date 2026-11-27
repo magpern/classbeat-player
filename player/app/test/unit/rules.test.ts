@@ -11,8 +11,8 @@ import {
   mobileKt, mobileTs, mutationGaps, SESSION_READER, type Views, withSource,
 } from "./rule-sources.ts";
 import {
-  asksFor, AUDIO, AUDIO_EXCEPTIONS, callsSocket, checked, connects, coreIo, FORBIDDEN, forbidden, importsSocket, LIVE_SETUP, LIVE_SOCKET,
-  liveLiterals, mixOnce, namesSdkTs, namesSpikesTs, NETWORK, NETWORK_EXCEPTIONS, permissions, permissionTags, ROOM_HTML, ROOM_MIX, SDK, wireUrls,
+  asksFor, AUDIO, AUDIO_EXCEPTIONS, AUDIO_ONCE, callsSocket, checked, connects, coreIo, FORBIDDEN, forbidden, importsSocket, LIVE_SETUP, LIVE_SOCKET,
+  liveLiterals, mixOnce, namesSdkTs, namesSpikesTs, NETWORK, NETWORK_EXCEPTIONS, permissions, permissionTags, ROOM_HTML, ROOM_LOCAL, ROOM_MIX, SDK, wireUrls,
 } from "./rules-ts.ts";
 
 const SRC = join(REPO, "player", "app", "src");
@@ -53,9 +53,10 @@ test("the live connection's exception is one file and one word, for the network 
   }
 });
 
-test("the mix's exception is one element and one call, in two files, for the audio check only", () => {
-  assert.deepEqual([...AUDIO_EXCEPTIONS.keys()], [ROOM_HTML, ROOM_MIX]);
-  assert.deepEqual([...AUDIO_EXCEPTIONS.values()].map((r) => r.source), ['<audio id="mix" preload="auto"><\\/audio>', "\\baudio\\.play\\(\\)"]);
+test("the audio exceptions are the mix's and the local files' elements and one call each, in three files, for the audio check only", () => {
+  assert.deepEqual([...AUDIO_EXCEPTIONS.keys()], [ROOM_HTML, ROOM_MIX, ROOM_LOCAL]);
+  assert.deepEqual([...AUDIO_EXCEPTIONS.values()].map((r) => r.source), ['<audio id="(?:mix|local-a|local-b)" preload="auto"><\\/audio>', "\\baudio\\.play\\(\\)", "\\baudio\\.play\\(\\)"]);
+  assert.deepEqual([...AUDIO_ONCE.keys()], [...AUDIO_EXCEPTIONS.keys()]);
   for (const path of AUDIO_EXCEPTIONS.keys()) {
     const s = sources.find((x) => x.path === path);
     assert.ok(s, `${path} exists`);
@@ -63,18 +64,23 @@ test("the mix's exception is one element and one call, in two files, for the aud
     assert.ok(!mixOnce(path, s.text), path);
   }
   // In those files every other way to make sound is still a hit.
-  for (const path of [ROOM_HTML, ROOM_MIX]) {
+  for (const path of [ROOM_HTML, ROOM_MIX, ROOM_LOCAL]) {
     for (const bad of ["new Audio(x)", "<audio src=x>", "<video>", "new AudioContext()", "webkitAudioContext", "new MediaSource()", "el.play()"]) {
       assert.match(checked(path, bad, AUDIO), FORBIDDEN[0][1], `${path}: ${bad}`);
     }
   }
   // The other rules take no exception there.
   for (const [what, bad] of [["a Spotify interface (rule 3)", "api.spotify"], ["equipment control (rule 2)", "c.writeValue(b)"], [NETWORK, "fetch(u)"]] as const) {
-    assert.match(checked(ROOM_MIX, `audio.play() ${bad}`, what), FORBIDDEN.find(([w]) => w === what)![1], what);
+    for (const path of [ROOM_MIX, ROOM_LOCAL]) assert.match(checked(path, `audio.play() ${bad}`, what), FORBIDDEN.find(([w]) => w === what)![1], `${path}: ${what}`);
+  }
+  // A local element under another id, or a second copy of one, is no part of the exception.
+  for (const extra of ['<audio id="local-c" preload="auto"></audio>', '<audio id="local-a" preload="auto" src="x"></audio>']) {
+    assert.match(checked(ROOM_HTML, extra, AUDIO), FORBIDDEN[0][1], extra);
   }
   // Any other file: both are audio playback.
-  for (const path of [join("renderer", "room.ts"), join("renderer", "presenter.html"), join("main", "mix", "mix-player.ts"), join("scene", "x.ts")]) {
+  for (const path of [join("renderer", "room.ts"), join("renderer", "presenter.html"), join("main", "mix", "mix-player.ts"), join("main", "local", "local-player.ts"), join("scene", "x.ts")]) {
     assert.match(checked(path, '<audio id="mix" preload="auto"></audio>', AUDIO), FORBIDDEN[0][1], path);
+    assert.match(checked(path, '<audio id="local-a" preload="auto"></audio>', AUDIO), FORBIDDEN[0][1], path);
     assert.match(checked(path, "audio.play()", AUDIO), FORBIDDEN[0][1], path);
   }
 });

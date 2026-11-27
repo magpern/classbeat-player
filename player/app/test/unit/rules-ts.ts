@@ -24,12 +24,23 @@ export const NETWORK_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([[LIVE_SO
 // plan rule 3 allows, through one `<audio>` element. Exactly that element in renderer/room.html and
 // exactly its `audio.play()` in renderer/room-mix.ts are taken out of the audio check alone. Every
 // other way to make sound stays a hit in those two files, and both words stay hits everywhere else.
+// The third (ADR 0017 section 3, #921): the room window plays the instructor's own files, which plan
+// rule 3 allows, through two more `<audio>` elements, `local-a` and `local-b`, in room.html, and
+// exactly one `audio.play()` in renderer/room-local.ts. AUDIO_ONCE pins each file's exact list.
 export const AUDIO = "audio playback (rule 3)";
 export const ROOM_HTML = join("renderer", "room.html");
 export const ROOM_MIX = join("renderer", "room-mix.ts");
+export const ROOM_LOCAL = join("renderer", "room-local.ts");
 export const AUDIO_EXCEPTIONS: ReadonlyMap<string, RegExp> = new Map([
-  [ROOM_HTML, /<audio id="mix" preload="auto"><\/audio>/g],
+  [ROOM_HTML, /<audio id="(?:mix|local-a|local-b)" preload="auto"><\/audio>/g],
   [ROOM_MIX, /\baudio\.play\(\)/g],
+  [ROOM_LOCAL, /\baudio\.play\(\)/g],
+]);
+/** What each exception file holds of its exception, exactly and in order: no second element or call. */
+export const AUDIO_ONCE: ReadonlyMap<string, readonly string[]> = new Map([
+  [ROOM_HTML, ['<audio id="mix" preload="auto"></audio>', '<audio id="local-a" preload="auto"></audio>', '<audio id="local-b" preload="auto"></audio>']],
+  [ROOM_MIX, ["audio.play()"]],
+  [ROOM_LOCAL, ["audio.play()"]],
 ]);
 export const checked = (path: string, text: string, what: string): string => {
   const strip = what === NETWORK ? NETWORK_EXCEPTIONS.get(path) : what === AUDIO ? AUDIO_EXCEPTIONS.get(path) : undefined;
@@ -42,10 +53,10 @@ export const forbidden = (what: string, rules: readonly [string, RegExp][] = FOR
   return (path, text, views = withSource(code, path)) => views(text).some((v) => re.test(checked(path, v, what)));
 };
 
-/** Each exception covers exactly one element or call: a second one in either view is a hit. */
-export const MIX_ONCE = "the mix's element and call, once each";
+/** Each exception covers exactly the elements and calls AUDIO_ONCE lists: another one in either view is a hit. */
+export const MIX_ONCE = "the audio exceptions' elements and calls, once each";
 export const mixOnce: Check = (path, text, views = withSource(code, path)) =>
-  views(text).some((v) => v.match(AUDIO_EXCEPTIONS.get(path)!)?.length !== 1);
+  views(text).some((v) => JSON.stringify(v.match(AUDIO_EXCEPTIONS.get(path)!) ?? []) !== JSON.stringify(AUDIO_ONCE.get(path)));
 
 /** The live socket's literals: no scheme or host, and any path under /api/live/. */
 export const LIVE_LITERALS = "the live socket's own addresses";

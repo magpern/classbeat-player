@@ -135,5 +135,5 @@ describe("the modules that hold a path", () => {
 
 test("the music-files modules exist where the guards look for them", () => {
   const dir = join(REPO, "player", "app", "src", "main", "music-files");
-  assert.deepEqual(readdirSync(dir).sort(), ["handlers.ts", "hash-file.ts", "index-store.ts", "matcher.ts", "service.ts", "setup.ts", "walk.ts"]);
+  assert.deepEqual(readdirSync(dir).sort(), ["handlers.ts", "hash-file.ts", "index-store.ts", "local-response.ts", "matcher.ts", "service.ts", "setup.ts", "walk.ts"]);
 });

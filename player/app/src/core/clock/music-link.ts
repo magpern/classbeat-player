@@ -18,7 +18,8 @@ export interface MusicReading {
 }
 
 export interface MusicLink {
-  readonly kind: "manual" | "fake";
+  /** `local`: the player plays the instructor's own files and reads their positions (ADR 0017 section 3). */
+  readonly kind: "manual" | "fake" | "local";
   /** The latest reading, or null when there is none. */
   latest(): MusicReading | null;
 }
@@ -39,3 +40,9 @@ export function positionNow(r: Pick<MusicReading, "positionMs" | "playing" | "at
 
 /** The manual clock's link: no readings, ever. */
 export const manualLink: MusicLink = { kind: "manual", latest: () => null };
+
+/**
+ * The link of local playback (ADR 0017 section 3): the readings come from the room's own <audio>,
+ * so they are fresh and the position is exact. `read` gives the owner song's latest reading.
+ */
+export const localLink = (read: () => MusicReading | null): MusicLink => ({ kind: "local", latest: read });

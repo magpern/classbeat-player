@@ -40,6 +40,12 @@ export const CH_ROOM_REMOTE_UPDATE = "room:remote-update";
 // AudioReport (four fields, parsed strictly) and answers true, or null when refused.
 export const CH_ROOM_MIX = "room:mix";
 export const CH_ROOM_MIX_REPORT = "room:mix-report";
+// Local playback in the room window (ADR 0017 section 3): `room:local` is the shell's push of a
+// LocalCue (core/music-files/local-cue.ts) for the window's two <audio> elements;
+// `room:local-report` takes one element's LocalReport (six fields, parsed strictly) and answers
+// true, or null when refused. Neither carries a path, a file name or a hash: only play URLs.
+export const CH_ROOM_LOCAL = "room:local";
+export const CH_ROOM_LOCAL_REPORT = "room:local-report";
 // The presenter's phone-remote panel (ADR 0005): `live:view`, `live:start`, `live:end` and
 // `live:code` take no argument; `live:drop` takes a phone's place, 1 or 2. Each answers with a
 // LivePanelView. They are the presenter page's only: the room window has no way to them.

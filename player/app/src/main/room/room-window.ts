@@ -5,13 +5,16 @@
 // It has the presenter's hardening (web-preferences.ts, hardening.ts), its own page and policy
 // (room.html, ROOM_CSP) and its own preload, which reads frames and the phone remote's slot and
 // sends only the room's fixed controls. During mix playback it also sends the room's <audio> its
-// cue (core/mix/audio-cue.ts) and draws the mix's link line in the frame.
+// cue (core/mix/audio-cue.ts) and draws the mix's link line in the frame; during local playback it
+// sends the room's two <audio> theirs (core/music-files/local-cue.ts).
 import { BrowserWindow, screen } from "electron";
-import { CH_ROOM_MIX, CH_ROOM_REMOTE_UPDATE, CH_ROOM_UPDATE } from "../../core/channels.ts";
+import { CH_ROOM_LOCAL, CH_ROOM_MIX, CH_ROOM_REMOTE_UPDATE, CH_ROOM_UPDATE } from "../../core/channels.ts";
 import type { RoomTrusted } from "../../core/ipc-policy.ts";
 import { mixCueOf } from "../../core/mix/audio-cue.ts";
 import type { MixCue } from "../../core/mix/audio-cue.ts";
 import type { MixLine } from "../../core/mix/mix-line.ts";
+import { localCueOf } from "../../core/music-files/local-cue.ts";
+import type { LocalCue } from "../../core/music-files/local-cue.ts";
 import { roomFrameOf } from "../../core/room/frame.ts";
 import { placeRoom } from "../../core/room/placement.ts";
 import { remoteViewOf } from "../../core/room/remote.ts";
@@ -30,6 +33,8 @@ export interface RoomWindow {
   sendRemote(v: RemoteView): void;
   /** Sends the window's <audio> a cue, as mixCueOf leaves it; nothing when it is not open. */
   sendMix(c: MixCue): void;
+  /** Sends the window's two local <audio> a cue, as localCueOf leaves it; nothing when it is not open. */
+  sendLocal(c: LocalCue): void;
   trusted(): RoomTrusted;
 }
 
@@ -41,7 +46,7 @@ export interface RoomWindowDeps {
   readonly presenter: () => BrowserWindow | null;
   /** The mix's link line for the open class, drawn in every frame (main/mix/mix-player.ts). */
   readonly mixLine?: () => MixLine | null;
-  /** The window with this webContents id closed: its play ends. */
+  /** The window with this webContents id closed: its plays end. */
   readonly closed?: (webContentsId: number) => void;
 }
 
@@ -112,6 +117,7 @@ export function createRoomWindow(d: RoomWindowDeps): RoomWindow {
     send: (s) => push(CH_ROOM_UPDATE, frame(s)),
     sendRemote: (v) => push(CH_ROOM_REMOTE_UPDATE, remoteViewOf(v)),
     sendMix: (c) => push(CH_ROOM_MIX, mixCueOf(c)),
+    sendLocal: (c) => push(CH_ROOM_LOCAL, localCueOf(c)),
     trusted: () => ({ roomId: live()?.webContents.id ?? null, roomUrl: d.url }),
   };
 }

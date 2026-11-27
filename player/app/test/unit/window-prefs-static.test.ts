@@ -147,3 +147,12 @@ test("the runtime's WebSocket may be built in main/live/live-socket.ts only (#17
     assert.notDeepEqual(checkSource(code, other).problems, [], other);
   }
 });
+
+test("Response and ReadableStream may be built in the two scheme answers only (#693, #921)", () => {
+  const code = "export const a = () => new Response(new ReadableStream());";
+  for (const file of [join(SRC, "main", "mix", "mix-response.ts"), join(SRC, "main", "music-files", "local-response.ts")]) {
+    assert.deepEqual(checkSource(code, file).problems, [], file);
+  }
+  const others = [MAIN, join(SRC, "main", "local", "local-player.ts"), join(SRC, "main", "music-files", "local-response.ts.bak.ts"), join(SRC, "main", "mix", "local-response.ts"), join(SRC, "main", "music-files", "mix-response.ts"), join(SRC, "renderer", "local-response.ts")];
+  for (const other of others) assert.equal(checkSource(code, other).problems.length, 2, other);
+});

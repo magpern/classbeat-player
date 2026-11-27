@@ -48,6 +48,9 @@ const STUB = `
     // No mix in the screenshots: the cue never comes, and nothing is reported.
     onMix: () => {},
     mixReport: () => Promise.resolve(null),
+    // No local playback either (#921).
+    onLocal: () => {},
+    localReport: () => Promise.resolve(null),
   };
 `;
 

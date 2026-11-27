@@ -230,7 +230,7 @@ test("the preload bridge: the same four functions, those of pairing (#74), of th
   // The room channels are the room preload's alone (room-ipc.test.ts); the presenter's preload above exposes none.
 });
 
-test("the room preload bridge: exactly its functions; none takes an argument from the page but the mix report, rebuilt from four values; every other one sends fixed text", () => {
+test("the room preload bridge: exactly its functions; none takes an argument from the page but the mix report and the local report (#921), each rebuilt from its values; every other one sends fixed text", () => {
   const preload = src("preload/room-preload.ts");
   assert.deepEqual([...preload.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]), ROOM_EXPOSED);
   assert.ok(!holds("roomExposed", "preload/room-preload.ts"));
@@ -266,7 +266,14 @@ test("the room preload bridge: exactly its functions; none takes an argument fro
     preload,
     /^ {2}mixReport: \(seq: unknown, positionMs: unknown, playing: unknown, failed: unknown, durationMs: unknown\): Promise<unknown> =>\n {4}ipcRenderer\.invoke\(CH_ROOM_MIX_REPORT, \{ seq: Number\(seq\), positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number\.isFinite\(durationMs\) \? durationMs : null \}\),$/m,
   );
-  assert.ok(!holds("roomArguments", "preload/room-preload.ts"), "only the report takes values from the page");
+  // The local cue's push takes only a callback; its report sends a new object of a number, a slot
+  // of 0 or 1, a number, two flags and a finite number or null (#921), never what the page passed.
+  assert.match(preload, /^ {2}onLocal: \(cb: \(cue: unknown\) => void\): void => \{\n {4}if \(typeof cb !== "function"\) return;\n {4}ipcRenderer\.on\(CH_ROOM_LOCAL, \(_e, cue: unknown\) => cb\(cue\)\);\n {2}\},$/m);
+  assert.match(
+    preload,
+    /^ {2}localReport: \(seq: unknown, slot: unknown, positionMs: unknown, playing: unknown, failed: unknown, durationMs: unknown\): Promise<unknown> =>\n {4}ipcRenderer\.invoke\(CH_ROOM_LOCAL_REPORT, \{ seq: Number\(seq\), slot: slot === 1 \? 1 : 0, positionMs: Number\(positionMs\), playing: playing === true, failed: failed === true, durationMs: typeof durationMs === "number" && Number\.isFinite\(durationMs\) \? durationMs : null \}\),$/m,
+  );
+  assert.ok(!holds("roomArguments", "preload/room-preload.ts"), "only the reports take values from the page");
   // Every ipcRenderer call is one of the lines above.
   assert.ok(!holds("roomIpcCalls", "preload/room-preload.ts"));
 });

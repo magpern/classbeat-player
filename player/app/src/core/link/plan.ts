@@ -9,7 +9,8 @@ export function linkPlanFrom(doc: Class): LinkPlan {
   // A Swedebeat class that names a mix never uses the Spotify music link (rule 3, ADR 0013 section 4):
   // its clock is the mix's audio or the manual clock (core/mix/mode-policy.ts).
   const mixClass = doc.music.source === "swedebeat" && classMixOf(doc.music) !== null;
-  const manualOnly = doc.music.source === "none" || doc.music.song_timing === "missing" || mixClass;
+  // A local class plays the instructor's own files or runs on the manual clock (ADR 0017 section 3).
+  const manualOnly = doc.music.source === "none" || doc.music.source === "local" || doc.music.song_timing === "missing" || mixClass;
   return {
     manualOnly,
     plannedCrossfadeMs: doc.music.design_crossfade_ms,
