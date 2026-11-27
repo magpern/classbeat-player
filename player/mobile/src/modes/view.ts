@@ -10,10 +10,8 @@ export const para = (text: string): HTMLElement => el("p", { class: "small" }, [
 export const modeTag = (name: string): HTMLElement => el("p", { class: "mode" }, [el("span", { tier: "label", lines: 1, text: name })]);
 
 export function plate(head: string, detail: string): HTMLElement {
-  const p = el("div", { class: "plate" }, [
-    el("span", { class: "h", tier: "minor", lines: 2, text: head }),
-    el("span", { class: "dt", tier: "label", lines: 4, text: detail }),
-  ]);
+  const p = el("div", { class: "plate" }, [el("span", { class: "h", tier: "minor", lines: 2, text: head })]);
+  if (detail !== "") p.append(el("span", { class: "dt", tier: "label", lines: 4, text: detail }));
   p.setAttribute("role", "alert");
   return p;
 }

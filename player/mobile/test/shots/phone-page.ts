@@ -24,9 +24,9 @@ export function launchChrome(): Promise<Browser> {
 }
 
 /** Builds the pages as build.mjs does, into a new temporary folder; returns it and how to remove it. */
-export async function buildSite(): Promise<{ dir: string; remove: () => void }> {
+export async function buildSite(swift?: string): Promise<{ dir: string; remove: () => void }> {
   const dir = mkdtempSync(join(tmpdir(), "classbeat-mobile-shots-"));
-  await build({ ...buildOptions(dir), absWorkingDir: MOBILE, logLevel: "silent" });
+  await build({ ...buildOptions(dir, swift), absWorkingDir: MOBILE, logLevel: "silent" });
   for (const name of Object.keys(PAGES) as PageName[]) writeFileSync(join(dir, name), pageHtml(name));
   return { dir, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }

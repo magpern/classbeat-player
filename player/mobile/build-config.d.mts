@@ -1,3 +1,4 @@
 import type { BuildOptions } from "esbuild";
 export const ENTRY_POINTS: string[];
-export function buildOptions(outdir: string): BuildOptions;
+export function swedebeatEnabled(swift?: string): boolean;
+export function buildOptions(outdir: string, swift?: string): BuildOptions;

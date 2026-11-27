@@ -8,7 +8,7 @@ const row = { id: ID, title: "Tempo builder", minutes: 45, songs: 11 };
 
 test("a list answer becomes rows with their length and song count", () => {
   assert.deepEqual(parseClassList({ classes: [row], status: "synced" }), {
-    classes: [{ id: ID, title: "Tempo builder", facts: "45 min · 11 songs" }],
+    classes: [{ id: ID, title: "Tempo builder", facts: "45 min · 11 songs", songs: 11 }],
     status: "synced",
   });
   assert.deepEqual(parseClassList({ classes: [], status: "offline" }), { classes: [], status: "offline" });

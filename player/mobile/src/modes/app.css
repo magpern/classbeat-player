@@ -37,3 +37,15 @@
 @media (orientation: landscape) and (max-aspect-ratio: 8/5) {
   :root { --c-value: 7.6vh; --c-text: 7.2vh; --c-text-min: 5.8vh; --c-minor: 5.4vh; --c-label: 4.3vh; }
 }
+
+/* The iOS app with Swedebeat off (issue #932, docs/design/swedebeat.md "The iOS app"): the dimmed
+   Swedebeat line and a class from Swedebeat. The disabled look of class-list.md: raised fill, a 1 px
+   line, a --light-3 label. No hue; the marker is a hollow grey square. Both keys stay in the tab order. */
+.swedebeat { display: flex; flex-direction: column; gap: 12px; }
+.swedebeat .sw-words { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3em 0.6em; font-size: var(--c-minor); }
+.swedebeat .sw-state { color: var(--light-2); font-weight: 700; font-size: var(--c-minor); display: inline-flex; align-items: center; gap: 0.5em; }
+.swedebeat .sw-state::before, .key.row .sw-msg::before { content: ""; width: 0.7em; height: 0.7em; border: 2px solid var(--light-2); background: transparent; flex: none; }
+.swedebeat .sw-detail { color: var(--light-2); font-size: var(--c-minor); }
+.key.dim { background: var(--stage-raised); border: 1px solid var(--stage-line); cursor: default; min-height: 64px; }
+.key.dim .kl { color: var(--light-3); }
+.key.row .sw-msg { font-size: var(--c-minor); display: inline-flex; align-items: center; gap: 0.5em; }
