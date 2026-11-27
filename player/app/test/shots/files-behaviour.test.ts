@@ -88,12 +88,12 @@ test("when a search finds the last file the panel closes for good: a file lost l
   }
 });
 
-test("while a search runs, Find and Start are held: neither a click nor Enter does anything", async () => {
+test("while a search runs, Show, Find and Start are held: neither a click nor Enter does anything", async () => {
   for (const name of ["choosing", "finding"]) {
     const { o } = await open(name);
     try {
       const held = await o.page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>(".foot button")].map((b) => [b.dataset.action, b.disabled]));
-      assert.deepEqual(held, [["files-find", true], ["start", true]], name);
+      assert.deepEqual(held, [["files-show", true], ["files-find", true], ["start", true]], name);
       await o.page.focus("#list");
       await o.page.keyboard.press("Enter");
       assert.deepEqual(await o.calls(), [], name);
