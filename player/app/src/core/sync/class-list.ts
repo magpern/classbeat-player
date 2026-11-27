@@ -12,7 +12,7 @@ export interface ClassRow {
   readonly lengthMs: number;
   readonly sport: "cycling" | "running";
   /** "unknown": a music source this player does not know (a later minor of the format added it); the row says so and is not startable (ADR 0017 section 1). */
-  readonly source: "spotify" | "swedebeat" | "none" | "unknown";
+  readonly source: "spotify" | "swedebeat" | "none" | "local" | "unknown";
   readonly songs: number;
   /** When the server published this version (ISO 8601), or null when not known. */
   readonly updated: string | null;
@@ -26,7 +26,7 @@ export interface ClassRow {
 
 /** The format major this player reads (the same as schema/ts/src/version.ts); a well-formed version of any other major needs a newer player. */
 const KNOWN_MAJOR = 1;
-const SOURCES: ReadonlySet<unknown> = new Set(["spotify", "swedebeat", "none"]);
+const SOURCES: ReadonlySet<unknown> = new Set(["spotify", "swedebeat", "none", "local"]);
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const titles = new Intl.Collator("en", { sensitivity: "base" });
 

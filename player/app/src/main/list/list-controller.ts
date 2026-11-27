@@ -9,6 +9,7 @@ import type { RowSnapshot } from "../../core/list/rows.ts";
 import type { ClassRow } from "../../core/sync/class-list.ts";
 import type { FileErrorView, ListView } from "../../core/list/view.ts";
 import type { MixView } from "../../core/mix/view.ts";
+import type { FilesPort } from "../../core/music-files/files-view.ts";
 import type { PairingService } from "../pairing/service.ts";
 import type { SyncService } from "../sync/service.ts";
 
@@ -21,6 +22,8 @@ export interface ListDeps {
   readonly open: (name: string, text: string) => Snapshot;
   /** The Swedebeat sign-in state (main/mix/service.ts); never a token. */
   readonly mix: () => MixView;
+  /** The music files state of the local classes (main/music-files/files-state.ts); absent: no local class is shown. */
+  readonly files?: FilesPort;
 }
 
 export interface ListController {
@@ -56,6 +59,7 @@ export function createListController(d: ListDeps): ListController {
       if (account !== who) {
         who = account;
         stale();
+        d.files?.reset();
         // The snapshot is the account's it was taken under: never shown under another pairing.
         snapshot = null;
       }
@@ -65,7 +69,7 @@ export function createListController(d: ListDeps): ListController {
         cached = d.sync.list();
         fresh = true;
       }
-      return { sync, pairing, rows: listRows(cached, sync.pinned, snapshot), fileError, mix: d.mix() };
+      return { sync, pairing, rows: listRows(cached, sync.pinned, snapshot), fileError, mix: d.mix(), files: sync.pinned === null ? (d.files?.view(cached) ?? []) : [] };
     },
     start(id, hash) {
       // One class at a time: the shell refuses, whatever the page shows.
@@ -76,6 +80,8 @@ export function createListController(d: ListDeps): ListController {
       const row = cached.find((r) => r.id === id && r.hash === hash);
       // A class whose music is of a kind this player does not know is listed but never started.
       if (row !== undefined && row.source === "unknown") return false;
+      // A local class waits for its music files check or search: the answer decides local playback or the manual clock.
+      if (row !== undefined && row.source === "local" && d.files?.held(id, hash) === true) return false;
       const document = row === undefined ? null : d.sync.pin(id, hash);
       if (row === undefined || document === null) {
         stale();
@@ -99,6 +105,8 @@ export function createListController(d: ListDeps): ListController {
     },
     release() {
       snapshot = null;
+      // The class ended: its files are checked again when the list shows it.
+      d.files?.reset();
       d.sync.unpin();
       stale();
     },

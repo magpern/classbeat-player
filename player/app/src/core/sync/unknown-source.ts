@@ -6,7 +6,7 @@
 
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const KNOWN = ["spotify", "swedebeat", "none"];
+const KNOWN = ["spotify", "swedebeat", "none", "local"];
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** True for a non-empty string that is not one of the sources this player knows. */

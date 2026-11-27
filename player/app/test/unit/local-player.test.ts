@@ -13,7 +13,7 @@ import { createLocalPlays } from "../../src/main/local/local-plays.ts";
 
 const ACCT = "a".repeat(64);
 const LEN = [110_000, 210_000, 500_000];
-const songs = LEN.map((length_ms, k) => ({ start_ms: k * 100_000, end_ms: (k + 1) * 100_000, length_ms, ids: { local_file: { sha256: String(k + 1).repeat(64), size_bytes: 1_000 + k, file_name: `s${k}.mp3` } } }));
+const songs = LEN.map((length_ms, k) => ({ title: `Song ${k + 1}`, artist: `Artist ${k + 1}`, start_ms: k * 100_000, end_ms: (k + 1) * 100_000, length_ms, ids: { local_file: { sha256: String(k + 1).repeat(64), size_bytes: 1_000 + k, file_name: `s${k}.mp3` } } }));
 const DOC = { music: { source: "local", design_crossfade_ms: 6_000 }, class: { length_ms: 290_000 }, songs };
 
 const done = (...s: Array<"found" | "missing">): FindAnswer => ({ status: "done", songs: s, limit_reached: false });
@@ -366,4 +366,37 @@ test("a check at Start that never answers is the manual clock, not a silent \"ch
   await settle();
   assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
   assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("the presenter's notice names the song that failed and why, never a path; a sign-out names no song (#922)", async () => {
+  const playingNow = await playing();
+  assert.equal(playingNow.player.notice(), null, "while the files play there is nothing to say");
+  const stopped = { headline: "The music stopped", line: "Manual clock, music stopped" };
+  const cases: Array<[string, (r: Awaited<ReturnType<typeof playing>>) => void, string | null, string]> = [
+    ["scheme fault", (r) => r.player.fault(r.ids()[1]!), "Song 2 could not be played", "Song 2 could not be read. The clock keeps running."],
+    ["element error", (r) => r.report(1, null, { failed: true }), "Song 2 could not be played", "Song 2 could not be read. The clock keeps running."],
+    ["wrong length", (r) => (r.report(1, 300_000), r.report(1, 300_000)), "Song 2 is the wrong length", "Song 2 is the wrong length. The clock keeps running."],
+    ["sign-out", (r) => ((r.account = null), r.snap("running", 103_000)), null, "The clock keeps running."],
+  ];
+  for (const [what, fault, detail, body] of cases) {
+    const r = await playing();
+    fault(r);
+    r.snap("running", 103_000);
+    assert.deepEqual(r.player.notice(), { line: stopped.line, detail, plate: { headline: stopped.headline, body } }, what);
+    assert.doesNotMatch(JSON.stringify(r.player.notice()), /s\d\.mp3|sha|[/\\]/i, what);
+  }
+});
+
+test("a class started with files missing, or not checked, says so on the presenter with no plate (#922)", async () => {
+  const missing = rig(done("found", "missing", "found"));
+  await missing.ready([LEN[0]!, LEN[2]!]);
+  await missing.start(0);
+  assert.deepEqual(missing.player.notice(), { line: "Manual clock", detail: "1 music file was missing when the class started", plate: null });
+  const unchecked = rig({ status: "failed" });
+  await unchecked.ready([]);
+  await unchecked.start(0);
+  assert.deepEqual(unchecked.player.notice(), { line: "Manual clock", detail: "The music files could not be checked when the class started", plate: null });
+  const other = rig(undefined, { ...DOC, music: { ...DOC.music, source: "spotify" } });
+  other.snap("ready", 0);
+  assert.equal(other.player.notice(), null, "a class that is not local has no notice");
 });

@@ -4,6 +4,9 @@
 import { clockText } from "../format.ts";
 import { footerReason, mixHeadOf, rowMixOf } from "../mix/list-model.ts";
 import type { MixForm, MixHead, MixLine, MixPlate, RowMix } from "../mix/list-model.ts";
+import type { FilesView } from "../music-files/files-view.ts";
+import { filesLineOf, filesListOf, filesPlateOf, rowFilesOf } from "./files-screen.ts";
+import type { FilesLine, FilesList } from "./files-screen.ts";
 import { updatedText } from "../sync/updated-text.ts";
 import { filterRows, FILTER_FROM } from "./filter.ts";
 import type { ListRow } from "./rows.ts";
@@ -27,6 +30,8 @@ export interface RowModel {
   readonly dim: boolean;
   /** A Swedebeat row's mix words, or null. */
   readonly mix: RowMix | null;
+  /** A local row's files marker and words, or null. */
+  readonly files: RowMix | null;
 }
 
 export interface Footer {
@@ -41,6 +46,8 @@ export interface Footer {
   readonly describedBy: typeof FOOT_DETAIL_ID | null;
   /** The row the footer is about. */
   readonly id: string;
+  /** The music files line and keys of a local class, or null. */
+  readonly files: FilesLine | null;
 }
 
 export interface FilterModel {
@@ -51,6 +58,7 @@ export interface FilterModel {
 export type Body =
   | { readonly kind: "list"; readonly rows: readonly RowModel[]; readonly footer: Footer }
   | { readonly kind: "panel"; readonly panel: Panel }
+  | { readonly kind: "files-list"; readonly list: FilesList }
   | { readonly kind: "mix-form"; readonly form: MixForm };
 
 export interface Screen {
@@ -62,6 +70,8 @@ export interface Screen {
   /** The Swedebeat line, or its plate in its place (docs/design/swedebeat.md). */
   readonly mixLine: MixLine | null;
   readonly mixPlate: MixPlate | null;
+  /** The failed search of the selected local class's files: a plate with "Try again". */
+  readonly filesPlate: Plate | null;
   /** Null: no filter (fewer than eight classes, or no list). */
   readonly filter: FilterModel | null;
   readonly body: Body;
@@ -73,7 +83,7 @@ export interface Screen {
 /** The id the renderer gives the footer detail line. */
 export const FOOT_DETAIL_ID = "foot-detail";
 export const NEEDS_NEWER_PLAYER = "This class needs a newer version of the player";
-const SOURCE: Readonly<Record<ListRow["source"], string>> = { spotify: "Spotify", swedebeat: "Swedebeat", none: "", unknown: "" };
+const SOURCE: Readonly<Record<ListRow["source"], string>> = { spotify: "Spotify", swedebeat: "Swedebeat", local: "Music files", none: "", unknown: "" };
 
 export function metaText(r: Pick<ListRow, "sport" | "source" | "songs">): string {
   if (r.source === "unknown") return NEEDS_NEWER_PLAYER;
@@ -88,13 +98,21 @@ function tagsOf(r: ListRow): string[] {
 const START = "Starting opens the room screen and the presenter window";
 
 /** `reason`: the end of the line for a Swedebeat class that plays on the manual clock. */
-function footerOf(r: ListRow | undefined, pinned: boolean, reason: string | null): Footer | null {
+function footerOf(r: ListRow | undefined, pinned: boolean, reason: string | null, files: FilesLine | null): Footer | null {
   if (r === undefined) return null;
+  if (files !== null && !pinned) {
+    // A local class: the files line decides what Start does; a search that runs holds it.
+    const held = files.startHeld;
+    return { title: r.title, detail: files.detail ?? "", button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", disabled: held, describedBy: held ? FOOT_DETAIL_ID : null, id: r.id, files };
+  }
   const detail = r.source === "unknown" ? NEEDS_NEWER_PLAYER : r.source === "swedebeat" && reason !== null ? `${START}. ${reason}` : START;
   return pinned
-    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", disabled: false, describedBy: null, id: r.id }
-    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", disabled: r.source === "unknown", describedBy: r.source === "unknown" ? FOOT_DETAIL_ID : null, id: r.id };
+    ? { title: r.title, detail: "Other classes can start when this one has ended", button: { id: "open-file", label: "Back to the class", key: "Enter", primary: true }, action: "back", disabled: false, describedBy: null, id: r.id, files: null }
+    : { title: r.title, detail, button: { id: "open-file", label: "Start class", key: "Enter", primary: true }, action: "start", disabled: r.source === "unknown", describedBy: r.source === "unknown" ? FOOT_DETAIL_ID : null, id: r.id, files: null };
 }
+
+/** A local row's files view (matching its version), or undefined. */
+const filesOf = (v: ListView, r: ListRow): FilesView | undefined => (r.source === "local" ? v.files.find((f) => f.id === r.id && f.hash === r.hash) : undefined);
 
 const NO_MIX: MixHead = { line: null, plate: null, panel: null, form: null };
 
@@ -105,7 +123,8 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
   // Swedebeat only on a paired list that is shown (a state with a panel of its own comes first).
   const mix = head.panel === null ? mixHeadOf(v.mix, ui.mix ?? "none", v.rows.some((r) => r.source === "swedebeat"), ui.mixNote ?? null) : NO_MIX;
   // The filter is there from eight classes. It steps aside only for a file's error plate or a form's note (the form takes the body); under a Swedebeat fault plate it stays (#724).
-  const allowed = v.rows.length >= FILTER_FROM && v.fileError === null && mix.form === null;
+  // It also steps aside for the failed search plate of the music files, so five rows stay whole beside it (music-files.md).
+  const allowed = v.rows.length >= FILTER_FROM && v.fileError === null && mix.form === null && !v.files.some((f) => f.failed && f.phase === "idle");
   const filterText = allowed ? ui.filter : "";
   const shown = filterRows(v.rows, filterText);
   const playingRow = v.rows.find((r) => r.playing);
@@ -116,6 +135,8 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
 
   let body: Body;
   let withFilter = false;
+  let filesPlate: Plate | null = null;
+  let filesLine: FilesLine | null = null;
   if (head.panel !== null) {
     body = { kind: "panel", panel: head.panel };
   } else if (mix.form !== null) {
@@ -126,8 +147,16 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
     body = { kind: "panel", panel: v.sync.status === "syncing" || v.sync.status === "unpaired" ? FIRST_SYNC : NO_CLASSES };
   } else {
     withFilter = allowed;
-    const footer = footerOf(pinned ? playingRow : shown.find((r) => r.id === selectedId), pinned, footerReason(v.mix));
-    if (shown.length === 0 || footer === null) {
+    const sel = pinned ? playingRow : shown.find((r) => r.id === selectedId);
+    const selFiles = sel !== undefined && !pinned ? filesOf(v, sel) : undefined;
+    filesLine = selFiles === undefined ? null : filesLineOf(selFiles);
+    const footer = footerOf(sel, pinned, footerReason(v.mix), filesLine);
+    const list = selFiles !== undefined && sel !== undefined && ui.filesOpen === sel.id ? filesListOf(sel.title, selFiles) : null;
+    if (list !== null) {
+      body = { kind: "files-list", list };
+      withFilter = false;
+      filesLine = null;
+    } else if (shown.length === 0 || footer === null) {
       body = { kind: "panel", panel: NO_MATCH(filterText.trim()) };
     } else {
       const rows = shown.map((r): RowModel => ({
@@ -141,7 +170,9 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
         selected: r.id === selectedId,
         dim: pinned && !r.playing,
         mix: r.source === "swedebeat" ? rowMix : null,
+        files: ((f) => (f === undefined ? null : rowFilesOf(f)))(filesOf(v, r)),
       }));
+      filesPlate = filesPlateOf(selFiles ?? null);
       body = { kind: "list", rows, footer };
     }
   }
@@ -158,9 +189,11 @@ export function screenOf(v: ListView, ui: ListUi, now: number): Screen {
     filePlate,
     mixLine: mix.line,
     mixPlate: mix.plate,
+    filesPlate,
     filter: withFilter ? { of: filterText.trim() === "" ? null : `${shown.length} of ${v.rows.length}` } : null,
     body,
     selectedId,
-    announce: mix.plate?.headline ?? head.status?.text ?? head.plate?.headline ?? "",
+    // The music files line is a polite live region (music-files.md): a screen reader hears "Finding music files…" and then the result.
+    announce: mix.plate?.headline ?? filesPlate?.headline ?? filesLine?.text ?? head.status?.text ?? head.plate?.headline ?? "",
   };
 }

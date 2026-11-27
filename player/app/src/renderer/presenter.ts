@@ -7,6 +7,7 @@ import type { Snapshot } from "../core/snapshot.ts";
 import { statusText } from "../core/status-text.ts";
 import { mountLive } from "./live-panel.ts";
 import type { LiveApi } from "./live-panel.ts";
+import { mountMusicNotice } from "./music-notice.ts";
 import { mountPairing } from "./pairing-panel.ts";
 import { mountRiders } from "./riders-panel.ts";
 import { mountSensors } from "./sensors-panel.ts";
@@ -33,6 +34,9 @@ const $ = (id: string): HTMLElement => {
 const setText = (id: string, text: string): void => {
   $(id).textContent = text;
 };
+
+// The music files lines of a local class on the manual clock (renderer/music-notice.ts).
+const renderMusic = mountMusicNotice();
 
 // The sensor panel reads a source and never the shell: the shipped source is the unavailable stand-in.
 const sensors = mountSensors(UNAVAILABLE_SOURCE);
@@ -143,6 +147,7 @@ function render(s: Snapshot | null): void {
   setText("next", s.controls?.next ?? "Next interval");
   renderIntervals(s);
   renderLink(s);
+  renderMusic(s);
 }
 
 const buttons: Record<string, unknown> = {

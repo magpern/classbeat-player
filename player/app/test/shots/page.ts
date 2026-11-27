@@ -48,6 +48,8 @@ const STUB = `
     unpair: () => { window.__calls.push(["cancel"]); return Promise.resolve(window.__view.pairing); },
     mixSignIn: (c) => { window.__calls.push(["mix-sign-in", Object.keys(c)]); return answer(); },
     mixSignOut: () => { window.__calls.push(["mix-sign-out"]); return answer(); },
+    // The folder window and the search: the page sends a class id only and reads the answer from the next view.
+    findMusicFiles: (id) => { window.__calls.push(["find", id]); return Promise.resolve(null); },
     // Updates (ADR 0014 section 5): null, as with a class open, unless a test sets window.__update.
     updateStatus: () => Promise.resolve(window.__update ?? null),
     checkForUpdate: (...a) => { window.__calls.push(["update-check", ...a]); return Promise.resolve(window.__update ?? null); },

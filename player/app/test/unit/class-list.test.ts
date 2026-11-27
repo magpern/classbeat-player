@@ -157,10 +157,10 @@ test("the pure modules import no I/O: no database, network, filesystem, process,
   }
 });
 
-test("a class whose music source this player does not know is listed as unknown, beside the others (ADR 0017 section 1)", () => {
-  const { state } = listed([[1, "Alpha"], [2, "Local ride"], [3, "Zulu"]]);
-  const docs = new Map([[id(1), doc("Alpha")], [id(2), doc("Local ride", { source: "local", songs: 4 })], [id(3), doc("Zulu", { source: "none", songs: 0 })]]);
-  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Alpha", "spotify"], ["Local ride", "unknown"], ["Zulu", "none"]]);
+test("a class whose music source this player does not know is listed as unknown, and a local one as local, beside the others (ADR 0017 section 1)", () => {
+  const { state } = listed([[1, "Alpha"], [2, "Local ride"], [3, "Zulu"], [4, "Own files"]]);
+  const docs = new Map([[id(1), doc("Alpha")], [id(2), doc("Local ride", { source: "podcast", songs: 4 })], [id(3), doc("Zulu", { source: "none", songs: 0 })], [id(4), doc("Own files", { source: "local", songs: 4 })]]);
+  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Alpha", "spotify"], ["Local ride", "unknown"], ["Own files", "local"], ["Zulu", "none"]]);
 });
 
 test("a music source that is not a non-empty string is still no row", () => {

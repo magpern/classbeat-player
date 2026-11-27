@@ -47,6 +47,13 @@ p:has(> button), #link-pick-buttons { display: flex; flex-wrap: wrap; align-item
 #link-playlist { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 12px 16px; }
 #link-playlist .detail { color: var(--ink); font-weight: 400; }
 #link-playlist-notice { font-weight: 700; }
+/* The music files notice (music-files.md): the white plate, as the playlist notice; it makes no sound and does not move. */
+#music { border-top: 1px solid var(--stage-line); padding-top: 12px; }
+#music-plate { background: var(--light-1); color: var(--ink); border-radius: 6px; padding: 12px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#music-plate .detail { color: var(--ink); font-weight: 400; }
+#music-plate-headline { font-weight: 700; font-size: 18px; }
+#music-plate button { background: var(--ink); color: var(--light-1); border-color: var(--ink); }
+#music-plate .kbd { font-size: 17px; font-weight: 400; color: var(--light-2); }
 table { border-collapse: collapse; width: 100%; font-size: 15px; overflow-wrap: normal; }
 th { white-space: nowrap; text-align: left; font-weight: 400; color: var(--light-2); padding: 6px 8px; border-bottom: 1px solid var(--stage-line); }
 td { padding: 6px 8px; border-bottom: 1px solid var(--stage-line); vertical-align: top; }
