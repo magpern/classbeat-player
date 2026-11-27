@@ -58,15 +58,14 @@ final class PairingAnswersTests: XCTestCase {
         screens = Screens()
         pairing = FakePairingScreens()
         answered = [:]
-        let service = rig.service
+        // No secrets passed: the controller reads the pairing's own, as the app's shell relies on.
         controller = ModeController(
             lock: lock,
             screens: screens,
             loader: Loader(),
             pairing: rig.ui(pairing),
             awake: KeepAwake(FakeFlag()),
-            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface()),
-            secrets: { service.secrets() }
+            display: ExternalDisplay(source: FakeDisplays(), surface: FakeSurface())
         ) { _ in
             XCTFail("a switch could not drop everything")
         }
@@ -180,10 +179,16 @@ final class PairingAnswersTests: XCTestCase {
         try assertNoSecret()
     }
 
+    /// The controller's own guard knows the pairing's secrets without being handed them (issue
+    /// #926): the device code while it waits, the token once paired.
     func testAnAnswerHoldingTheTokenWouldBeRefused() {
-        rig.pair()
-        XCTAssertFalse(AnswerPolicy.mayAnswer(["way": Secrets.token()], rig.service.secrets()))
-        XCTAssertTrue(AnswerPolicy.mayAnswer(["way": "lock"], rig.service.secrets()))
+        rig.toWaiting()
+        XCTAssertFalse(controller.mayAnswer(["way": Secrets.deviceCode()]))
+        XCTAssertTrue(controller.mayAnswer(["way": "lock"]))
+        rig.backend.ok(FakeBackend.tokenBody())
+        XCTAssertFalse(controller.mayAnswer(["way": Secrets.token()]))
+        XCTAssertFalse(controller.mayAnswer(["result": ["nested": "x" + Secrets.token() + "y"]]))
+        XCTAssertTrue(controller.mayAnswer(["way": "lock"]))
     }
 
     /// The page's "unpair" (AC1): the page hears "unpaired", the Keychain token and the cached
@@ -233,4 +238,35 @@ final class PairingAnswersTests: XCTestCase {
         XCTAssertEqual(controller.current, .instructor)
         try assertNoSecret()
     }
+
+    /// A "pair again" whose token could not be kept (issue #926): instructor mode closes, and the
+    /// save-failed plate stays over rider mode, so the user learns why.
+    func testAPairAgainThatCannotKeepTheTokenShowsWhyOverRiderMode() throws {
+        rig.pair()
+        try start()
+        call(.rider, "askInstructorMode")
+        lock.done?(true)
+        controller.shown(PageOpener.blank)
+        controller.shown("/instructor.html")
+        rig.service.refused(.expired)
+        call(.instructor, "pairAgain")
+        rig.backend.ok(FakeBackend.startBody())
+        rig.ports.fireNext()
+        rig.store.saves = false
+        rig.backend.ok(FakeBackend.tokenBody(Secrets.token("C")))
+        XCTAssertFalse(rig.service.paired)
+        XCTAssertNil(rig.store.text)
+        controller.shown(PageOpener.blank)
+        controller.shown("/rider.html")
+        XCTAssertEqual(controller.current, .rider)
+        XCTAssertTrue(pairing.words.contains("The pairing could not be kept."), "the plate stays")
+        XCTAssertEqual(pairing.current?.keys.map { $0.label }, ["Start again", "Rider mode"])
+        XCTAssertEqual(rig.service.view(), .unpaired(notice: .saveFailed))
+        pairing.press("Rider mode")
+        XCTAssertNil(pairing.current)
+        XCTAssertEqual(rig.service.view(), .unpaired(notice: nil))
+        XCTAssertEqual(controller.current, .rider)
+        try assertNoSecret()
+    }
+
 }

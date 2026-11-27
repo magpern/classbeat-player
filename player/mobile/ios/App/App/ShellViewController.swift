@@ -47,8 +47,7 @@ final class ShellViewController: CAPBridgeViewController {
             loader: loader,
             pairing: pairingUi,
             awake: KeepAwake(AppIdleTimer()),
-            display: display,
-            secrets: { pairing.secrets() }
+            display: display
         ) { failed in
             fatalError("classbeat: the mode switch could not drop \(failed)")
         }
@@ -99,13 +98,9 @@ final class ShellViewController: CAPBridgeViewController {
     /// class cache is made excluded from backup, and with no backend in the build yet (ADR 0016
     /// section 4) the origin is nil and the transport is offline, so the phone pairs nothing.
     private static func makePairing() -> (PairingService, PairingPorts) {
-        let store = FirstLaunch.store(defaults: .standard, keychain: SystemKeychain())
-        let cache: ClassCacheFolder
-        do {
-            cache = ClassCacheFolder(base: try ClassCacheFolder.applicationSupport())
-            try cache.prepare()
-        } catch {
-            fatalError("classbeat: the class cache could not be excluded from backup")
+        // A cache that cannot be kept out of backup closes pairing, never the app (issue #926).
+        let (store, cache) = ClassCacheFolder.launch(base: { try ClassCacheFolder.applicationSupport() }) {
+            FirstLaunch.store(defaults: .standard, keychain: SystemKeychain())
         }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         let ports = PhonePairingPorts(cache: cache)

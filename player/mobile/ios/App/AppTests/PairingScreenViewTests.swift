@@ -83,6 +83,19 @@ final class PairingScreenViewTests: XCTestCase {
         keep("code-landscape")
         show(.unpaired(notice: .noKeychain))
         keep("plate-no-passcode-landscape")
+        // The smallest phone the spec names (issue #926): the code, the longest plate and paired.
+        stage(width: 360, height: 640)
+        show(waiting)
+        keep("code-small")
+        show(.unpaired(notice: .saveFailed))
+        keep("plate-save-failed-small")
+        show(.paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil))
+        keep("paired-small")
+        stage(width: 640, height: 360)
+        show(waiting)
+        keep("code-small-landscape")
+        show(.unpaired(notice: .saveFailed))
+        keep("plate-save-failed-small-landscape")
     }
 
     func testTheScreenCoversThePageAndIsModal() {
@@ -97,7 +110,7 @@ final class PairingScreenViewTests: XCTestCase {
     }
 
     func testEveryKeyIsLargeEnoughToTouch() {
-        for (width, height) in [(CGFloat(393), CGFloat(852)), (852, 393)] {
+        for (width, height) in [(CGFloat(393), CGFloat(852)), (852, 393), (360, 640), (640, 360)] {
             stage(width: width, height: height)
             show(waiting)
             XCTAssertEqual(buttons.count, 2)

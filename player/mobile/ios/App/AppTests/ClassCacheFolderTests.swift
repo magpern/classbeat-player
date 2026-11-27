@@ -35,6 +35,38 @@ final class ClassCacheFolderTests: XCTestCase {
         XCTAssertEqual(values.isExcludedFromBackup, true)
     }
 
+    func testALaunchWhoseCacheCannotBeKeptOutOfBackupNeverPairs() throws {
+        // The base is a file, so the folder cannot be made.
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        let file = base.appendingPathComponent("not-a-folder")
+        XCTAssertTrue(FileManager.default.createFile(atPath: file.path, contents: Data([0])))
+        var opened = 0
+        let open: () -> SecretStore = { opened += 1; return FakeStore() }
+        let roots: [() throws -> URL] = [{ file }, { throw CocoaError(.fileNoSuchFile) }]
+        for root in roots {
+            let (store, cache) = ClassCacheFolder.launch(base: root, store: open)
+            XCTAssertNil(cache)
+            XCTAssertTrue(store is ClosedSecretStore)
+            XCTAssertFalse(store.available())
+        }
+        XCTAssertEqual(opened, 0, "the Keychain store is not opened")
+
+        // Such a launch is unpaired and cannot pair; the ports have nothing to clear.
+        let rig = PairingRig(store: ClosedSecretStore())
+        rig.service.begin()
+        XCTAssertFalse(rig.service.paired)
+        XCTAssertEqual(rig.backend.requests.count, 0)
+        PhonePairingPorts(cache: nil).forgetCache()
+    }
+
+    func testALaunchWithAReadyCacheOpensTheStore() throws {
+        let fake = FakeStore()
+        let (store, cache) = ClassCacheFolder.launch(base: { self.base }) { fake }
+        XCTAssertTrue(store === fake)
+        XCTAssertEqual(cache?.url, ClassCacheFolder(base: base).url)
+        XCTAssertEqual(cache?.excludedFromBackup(), true)
+    }
+
     func testClearDeletesEveryClassAndTheFolderStaysExcluded() throws {
         let folder = ClassCacheFolder(base: base)
         try folder.prepare()

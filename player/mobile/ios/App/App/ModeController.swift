@@ -28,8 +28,9 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     /// The mode whose plugin is on the bridge; nil while none is.
     private var exposedMode: Mode?
 
-    /// `secrets` are the tokens the device holds, which no answer may carry; `stop` ends the app
-    /// when a switch could not drop everything.
+    /// No answer may carry a token the pairing holds, read from the pairing itself so no caller
+    /// can leave it out (issue #926); `secrets` are any others. `stop` ends the app when a switch
+    /// could not drop everything.
     init(
         lock: ScreenLock,
         screens: ModeScreens,
@@ -270,9 +271,14 @@ final class ModeController: ModeEffects, PageSteps, UnpairSteps {
         pairing.service.unpair()
     }
 
-    /// Every answer is checked once more: none may carry a token the device holds.
+    /// Whether an answer may go to the page: never one that carries a token the device holds.
+    func mayAnswer(_ data: [String: Any]) -> Bool {
+        AnswerPolicy.mayAnswer(data, pairing.service.secrets() + secrets())
+    }
+
+    /// Every answer is checked once more.
     private func answer(_ call: PageCall, _ data: [String: Any]) {
-        if AnswerPolicy.mayAnswer(data, secrets()) {
+        if mayAnswer(data) {
             call.answer(data)
         } else {
             call.refuse()

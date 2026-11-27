@@ -21,6 +21,8 @@
 		AAF7EF72DD493CA66903D8A0 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */; };
 		B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7139ED9D7F9F962E8B8875 /* PairingService.swift */; };
 		078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 197A8BE9EB00002751D22CF7 /* PairingStates.swift */; };
+		321C9EEA7999ADAF6184E227 /* PairingTokenAnswers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5865A9954F535567D99C95F9 /* PairingTokenAnswers.swift */; };
+		907D6E814B6C850DD3A329CB /* PairingReplies.swift in Sources */ = {isa = PBXBuildFile; fileRef = B219DD865082449FF315D876 /* PairingReplies.swift */; };
 		59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */; };
 		E15EE94D004A3EE52B0C5229 /* ScreenFollower.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C52294558C3D7F04B7E5D /* ScreenFollower.swift */; };
 		BAADB4C342D7D79670967C2D /* ModeSeams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70967C2D0EA1CEBEE1E31227 /* ModeSeams.swift */; };
@@ -118,6 +120,8 @@
 		B3B46B260F365F53A65DCF6B /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
 		3E7139ED9D7F9F962E8B8875 /* PairingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingService.swift; sourceTree = "<group>"; };
 		197A8BE9EB00002751D22CF7 /* PairingStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingStates.swift; sourceTree = "<group>"; };
+		5865A9954F535567D99C95F9 /* PairingTokenAnswers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingTokenAnswers.swift; sourceTree = "<group>"; };
+		B219DD865082449FF315D876 /* PairingReplies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingReplies.swift; sourceTree = "<group>"; };
 		85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingMachine.swift; sourceTree = "<group>"; };
 		2B0C52294558C3D7F04B7E5D /* ScreenFollower.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFollower.swift; sourceTree = "<group>"; };
 		70967C2D0EA1CEBEE1E31227 /* ModeSeams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSeams.swift; sourceTree = "<group>"; };
@@ -336,6 +340,8 @@
 			isa = PBXGroup;
 			children = (
 				197A8BE9EB00002751D22CF7 /* PairingStates.swift */,
+				5865A9954F535567D99C95F9 /* PairingTokenAnswers.swift */,
+				B219DD865082449FF315D876 /* PairingReplies.swift */,
 				85AF7609820A2BC24A68C7E9 /* PairingMachine.swift */,
 				1B2A53F55C176304A559FBAC /* PairingScreenModel.swift */,
 				A1982993872FFF52CC4FC527 /* ScreenLine.swift */,
@@ -606,6 +612,8 @@
 				260B0DA776102C3F072CE2EF /* TransportContract.swift in Sources */,
 				59CB45DE0926081A7E23447B /* PairingMachine.swift in Sources */,
 				078A6FB008DCB5262691E0F0 /* PairingStates.swift in Sources */,
+				321C9EEA7999ADAF6184E227 /* PairingTokenAnswers.swift in Sources */,
+				907D6E814B6C850DD3A329CB /* PairingReplies.swift in Sources */,
 				B6388191E11B5DAF318AA30A /* PairingService.swift in Sources */,
 				E15EE94D004A3EE52B0C5229 /* ScreenFollower.swift in Sources */,
 				BAADB4C342D7D79670967C2D /* ModeSeams.swift in Sources */,

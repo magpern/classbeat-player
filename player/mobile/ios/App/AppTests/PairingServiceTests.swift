@@ -147,6 +147,21 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertEqual(forgotten, 1)
     }
 
+    func testPairAgainKeepsTheNewTokenAndGivesTheExpiredOneBack() {
+        let rig = PairingRig()
+        rig.pair()
+        rig.service.refused(.expired)
+        rig.toWaiting()
+        rig.backend.ok(FakeBackend.tokenBody(Secrets.token("C")))
+        XCTAssertTrue(rig.service.paired)
+        XCTAssertEqual(rig.service.secrets(), [Secrets.token("C")])
+        let last = rig.backend.requests.last
+        XCTAssertEqual(last?.method, .delete)
+        XCTAssertEqual(last?.path, "/api/player/device")
+        XCTAssertEqual(last?.token, Secrets.token(), "the expired token is the one given back")
+        XCTAssertEqual(rig.ports.cacheForgets, 0, "the classes stay")
+    }
+
     func testCancelStopsTheAttemptAndALateTokenIsGivenBackNotKept() {
         let rig = PairingRig()
         rig.toWaiting()

@@ -59,8 +59,11 @@ final class KeychainSecretStore: SecretStore {
     }
 
     /// Adds and deletes a throwaway item: true only when the Keychain takes the access class (it
-    /// refuses it on a phone without a passcode).
+    /// refuses it on a phone without a passcode). A probe left by an earlier launch that stopped
+    /// between the add and the delete is removed first, or its duplicate would read as "no
+    /// passcode" for ever (issue #926).
     func available() -> Bool {
+        _ = keychain.delete(Self.item(Self.probe))
         let added = keychain.add(Self.addQuery(Self.probe, Data([0]))) == errSecSuccess
         _ = keychain.delete(Self.item(Self.probe))
         return added

@@ -11,13 +11,13 @@ enum PairingMachine {
 
     static let initial: State = .unpaired(attempt: 0, notice: nil)
 
-    private static func unpaired(_ attempt: Int, _ notice: Notice?, _ effects: [Effect] = []) -> Step {
+    static func unpaired(_ attempt: Int, _ notice: Notice?, _ effects: [Effect] = []) -> Step {
         Step(state: .unpaired(attempt: attempt, notice: notice), effects: effects)
     }
 
     /// A pairing attempt ended without a token. A "pair again" goes back to the expired pairing it
     /// started from (its cached classes still play); a first pairing to unpaired.
-    private static func ended(_ s: State, _ attempt: Int, _ notice: Notice?) -> Step {
+    static func ended(_ s: State, _ attempt: Int, _ notice: Notice?) -> Step {
         var back: Paired?
         if case let .starting(_, _, b) = s { back = b }
         if case let .waiting(w) = s { back = w.back }
@@ -25,63 +25,6 @@ enum PairingMachine {
         p.attempt = attempt
         p.notice = notice
         return Step(state: .paired(p))
-    }
-
-    /// The next poll, after `waitMs` and the margin, but never past the pairing's end.
-    private static func wait(_ s: Waiting, _ now: Int, _ waitMs: Int) -> Step {
-        var next = s
-        next.polling = false
-        let at = min(now + waitMs + pollMarginMs, s.expiresAt)
-        return Step(state: .waiting(next), effects: [.wake(attempt: s.attempt, at: at)])
-    }
-
-    private static func polled(_ s: Waiting, _ answer: PairingProtocol.Poll, _ now: Int) -> Step {
-        let state = State.waiting(s)
-        switch answer {
-        case let .ok(token, email):
-            let record = PairingRecord(origin: s.origin, token: token, email: email)
-            let p = Paired(attempt: s.attempt, record: record, deviceName: nil, expired: false, notice: nil)
-            return Step(state: .paired(p), effects: [.save(attempt: s.attempt, record: record)])
-        case let .retry(afterMs):
-            return wait(s, now, max(s.intervalMs, min(afterMs ?? 0, maxIntervalMs)))
-        case .unexpected:
-            return ended(state, s.attempt, .unexpected)
-        case let .refused(code):
-            switch code {
-            case PairingProtocol.pending: return wait(s, now, s.intervalMs)
-            case PairingProtocol.slowDown:
-                var slower = s
-                slower.intervalMs = min(s.intervalMs + slowDownStepMs, maxIntervalMs)
-                return wait(slower, now, slower.intervalMs)
-            case PairingProtocol.denied: return ended(state, s.attempt, .denied)
-            case PairingProtocol.expired: return ended(state, s.attempt, .codeExpired)
-            default: return ended(state, s.attempt, .unexpected)
-            }
-        }
-    }
-
-    private static func started(_ s: State, _ attempt: Int, _ origin: String, _ back: Paired?, _ answer: PairingProtocol.Start, _ now: Int) -> Step {
-        switch answer {
-        case .tooMany: return ended(s, attempt, .tooMany)
-        case .unreachable: return ended(s, attempt, .unreachable)
-        case .unexpected: return ended(s, attempt, .unexpected)
-        case let .started(deviceCode, userCode, page, expiresInMs, intervalMs):
-            let waiting = Waiting(
-                attempt: attempt, origin: origin, deviceCode: deviceCode, userCode: userCode, page: page,
-                expiresAt: now + expiresInMs, intervalMs: intervalMs, polling: false, back: back
-            )
-            // No page opens here: the code shows first, and the page opens only on "Open the site"
-            // (docs/design/app-pairing.md item 5).
-            return wait(waiting, now, intervalMs)
-        }
-    }
-
-    /// A token that arrives when nothing waits for it (after cancel, or for an older attempt) is
-    /// never kept and never shown: it is given back to the backend that issued it, as a failed save
-    /// is. The one exception is the token this state already holds.
-    private static func late(_ s: State, _ origin: String, _ token: String, _ email: String?) -> Step {
-        if case let .paired(p) = s, p.record.token == token { return Step(state: s) }
-        return Step(state: s, effects: [.revoke(PairingRecord(origin: origin, token: token, email: email))])
     }
 
     static func step(_ s: State, _ e: Event, _ now: Int) -> Step {
@@ -137,6 +80,8 @@ enum PairingMachine {
         case .unpaired: break
         }
         let attempt = s.attempt + 1
+        // No server is asked first, as on Android: with nowhere to pair, the Keychain does not
+        // matter, so a build without a backend shows "could not be reached" (issue #926).
         guard let origin = origin else { return ended(.starting(attempt: attempt, origin: "", back: back), attempt, .noServer) }
         // No Keychain, no pairing: the token is never kept where it could be read in the clear.
         if !keychain { return ended(.starting(attempt: attempt, origin: "", back: back), attempt, .noKeychain) }
