@@ -50,7 +50,7 @@ test("open an example class, start, pause and skip", { timeout: 60_000 }, async 
   await drop(first);
   await page.waitForFunction((t) => document.getElementById("title")?.textContent === t, doc.class.title);
   assert.equal(await page.locator("#intervals tr").count(), doc.intervals.length);
-  assert.equal(await text("status"), "ready");
+  assert.equal(await text("status"), "Ready");
 
   await page.click("#start");
   // Wait for the clock to REACH 2 s, never to show exactly "0:02": the main process pushes every
@@ -60,10 +60,10 @@ test("open an example class, start, pause and skip", { timeout: 60_000 }, async 
     const [m, s] = (document.getElementById("class-time")?.textContent ?? "").split(":").map(Number);
     return m * 60 + s >= 2;
   });
-  assert.equal(await text("status"), "running");
+  assert.equal(await text("status"), "Running");
 
   await page.click("#pause");
-  await page.waitForFunction(() => document.getElementById("status")?.textContent === "paused");
+  await page.waitForFunction(() => document.getElementById("status")?.textContent === "Paused");
   const paused = await text("class-time");
   await sleep(1500);
   assert.equal(await text("class-time"), paused, "a paused clock does not move");
@@ -71,11 +71,11 @@ test("open an example class, start, pause and skip", { timeout: 60_000 }, async 
   await page.click("#next");
   await page.waitForFunction(() => document.getElementById("interval-number")?.textContent === "2");
   assert.equal(seconds(await text("class-time")), doc.intervals[1].start_ms / 1000);
-  assert.equal(await text("status"), "paused");
+  assert.equal(await text("status"), "Paused");
   assert.equal(await page.locator('#intervals tr[aria-current="true"] td:nth-child(2)').innerText(), "2");
 
   await page.click("#resume");
-  await page.waitForFunction(() => document.getElementById("status")?.textContent === "running");
+  await page.waitForFunction(() => document.getElementById("status")?.textContent === "Running");
   await page.click("#forward5");
   await page.click("#previous");
   await page.waitForFunction(() => document.getElementById("interval-number")?.textContent === "2");
@@ -84,14 +84,14 @@ test("open an example class, start, pause and skip", { timeout: 60_000 }, async 
   await openFromMenu(join(EXAMPLES, "reader", "rejected-unknown-major.json"));
   await page.waitForFunction((m) => document.getElementById("error")?.textContent === m, NEWER_VERSION_MESSAGE);
   assert.equal(await text("title"), doc.class.title);
-  assert.equal(await text("status"), "running");
+  assert.equal(await text("status"), "Running");
 
   // File menu with a valid class: it replaces the open one, ready at 0.
   const doc2 = JSON.parse(readFileSync(second, "utf8"));
   await openFromMenu(second);
   await page.waitForFunction((t) => document.getElementById("title")?.textContent === t, doc2.class.title);
   assert.equal(await page.locator("#error").isHidden(), true);
-  assert.equal(await text("status"), "ready");
+  assert.equal(await text("status"), "Ready");
   assert.equal(await text("class-time"), "0:00");
 });
 
@@ -125,5 +125,5 @@ test("the shell starts on the manual clock; without a reader there is nothing to
   if (!HAS_READER) assert.equal((await player('command({ type: "follow" })'))?.link?.mode, "manual", "nothing to follow");
 
   await page.click("#start");
-  await page.waitForFunction(() => document.getElementById("status")?.textContent === "running");
+  await page.waitForFunction(() => document.getElementById("status")?.textContent === "Running");
 });

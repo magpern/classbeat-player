@@ -104,7 +104,7 @@ test("each music state shows the spec's words, and its plate meets M1, M5 and M7
       try {
         await o.page.screenshot({ path: join(SHOT_DIR, `presenter-music-${name}.png`), animations: "disabled" });
         // The spec's first line: the class is running. The page writes the clock's own word, "running".
-        assert.equal(await text(o.page, "status"), "running", `${name}: the status line`);
+        assert.equal(await text(o.page, "status"), "Running", `${name}: the status line`);
         assert.equal(await text(o.page, "music-line"), s.line, `${name}: the music line`);
         assert.equal(await text(o.page, "music-detail"), s.detail, `${name}: the detail`);
         const plate = o.page.locator("#music-plate");

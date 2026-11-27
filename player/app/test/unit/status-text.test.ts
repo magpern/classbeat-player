@@ -14,24 +14,24 @@ test("held at a song window's end while following: holding, not paused", () => {
 });
 
 test("a real pause keeps its word", () => {
-  assert.equal(statusText(clock({ status: "paused" }), link({})), "paused");
-  assert.equal(statusText(clock({ status: "paused" }), null), "paused");
+  assert.equal(statusText(clock({ status: "paused" }), link({})), "Paused");
+  assert.equal(statusText(clock({ status: "paused" }), null), "Paused");
 });
 
 test("the class end still says holding at the end", () => {
-  assert.equal(statusText(clock({ status: "ended", holding: true }), null), "ended (holding at the end)");
+  assert.equal(statusText(clock({ status: "ended", holding: true }), null), "Ended, holding at the end");
 });
 
 test("a stale held flag in manual mode is ignored", () => {
-  assert.equal(statusText(clock({ status: "paused" }), link({ mode: "manual", held: true })), "paused");
+  assert.equal(statusText(clock({ status: "paused" }), link({ mode: "manual", held: true })), "Paused");
 });
 
 test("music paused past the window end is a real pause", () => {
-  assert.equal(statusText(clock({ status: "paused" }), link({ state: "Paused", held: true, playing: false })), "paused");
+  assert.equal(statusText(clock({ status: "paused" }), link({ state: "Paused", held: true, playing: false })), "Paused");
 });
 
 test("the last song held and the clock ended keeps the class-end text", () => {
-  assert.equal(statusText(clock({ status: "ended", holding: true }), link({ held: true })), "ended (holding at the end)");
+  assert.equal(statusText(clock({ status: "ended", holding: true }), link({ held: true })), "Ended, holding at the end");
 });
 
 test("the issue's repro through the link: holding while the song plays past its window, paused when the music pauses", () => {
@@ -45,7 +45,7 @@ test("the issue's repro through the link: holding while the song plays past its 
   assert.equal(t.at(175_000).view.held, true);
   assert.equal(text(175_000), "Holding at the end of the song");
   assert.equal(t.at(181_000).state, "Paused");
-  assert.equal(text(181_000), "paused");
+  assert.equal(text(181_000), "Paused");
 });
 
 test("Ambiguous while held: holding when the music plays, paused when it does not", () => {
@@ -58,5 +58,13 @@ test("Ambiguous while held: holding when the music plays, paused when it does no
   assert.equal(text(2000), "Holding at the end of the song");
   assert.equal(t.at(6000).state, "Ambiguous");
   assert.equal(t.at(6000).view.held, true);
-  assert.equal(text(6000), "paused");
+  assert.equal(text(6000), "Paused");
+});
+
+test("every clock word is sentence case, with the comma form for the end hold", () => {
+  assert.equal(statusText(clock({ status: "ready" }), null), "Ready");
+  assert.equal(statusText(clock({ status: "running" }), null), "Running");
+  assert.equal(statusText(clock({ status: "ended" }), null), "Ended");
+  assert.equal(statusText(clock({ status: "running", holding: true }), null), "Running, holding at the end");
+  assert.equal(statusText(clock({ status: "paused", holding: true }), null), "Paused, holding at the end");
 });

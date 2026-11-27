@@ -7,5 +7,7 @@ import type { LinkView } from "./link/view.ts";
 
 export function statusText(v: ClockView, link: LinkView | null): string {
   if (v.status !== "ended" && link?.mode === "following" && link.held && link.playing) return "Holding at the end of the song";
-  return v.holding ? `${v.status} (holding at the end)` : v.status;
+  // Sentence case in the text itself, not by CSS (docs/design/presenter.md, "Clock line").
+  const word = v.status.charAt(0).toUpperCase() + v.status.slice(1);
+  return v.holding ? `${word}, holding at the end` : word;
 }
