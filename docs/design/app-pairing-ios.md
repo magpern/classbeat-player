@@ -49,6 +49,12 @@ On leaving the phone for Safari and coming back:
   from the server's expiry, so a long stay in Safari can come back to "The code ran out".
 - Back in the app through the status-bar breadcrumb or the app switcher is the same return.
 
+## Swedebeat on iOS
+
+Pairing is the account's and never touches Swedebeat: none of these screens, plates or steps changes
+with `swedebeatEnabled` (issue #932). The dimmed Swedebeat sign-in and option are on the class list
+page, after pairing: [swedebeat.md](swedebeat.md), "The iOS app".
+
 ## Measurable criteria
 
 All of app.md's checks A1 to A14 hold on the iOS screens, with the same numbers; the new pages pass
