@@ -120,6 +120,8 @@ final class PairingMachineTests: XCTestCase {
     func testNoBackendOrNoKeychainMeansNoCallAtAll() {
         XCTAssertEqual(M.step(M.initial, .begin(origin: nil, keychain: true), 0), M.Step(state: .unpaired(attempt: 1, notice: .noServer)))
         XCTAssertEqual(M.step(M.initial, .begin(origin: origin, keychain: false), 0), M.Step(state: .unpaired(attempt: 1, notice: .noKeychain)))
+        // Neither: no server is the one named, as on Android (issue #926).
+        XCTAssertEqual(M.step(M.initial, .begin(origin: nil, keychain: false), 0), M.Step(state: .unpaired(attempt: 1, notice: .noServer)))
     }
 
     func testBeginIsIgnoredWhilePairingOrPaired() {
@@ -181,6 +183,22 @@ final class PairingMachineTests: XCTestCase {
         XCTAssertEqual(paired(denied.state)?.expired, true)
         XCTAssertEqual(paired(denied.state)?.notice, .denied)
         XCTAssertEqual(denied.state.attempt, s.attempt)
+    }
+
+    func testASuccessfulPairAgainGivesTheExpiredTokenBack() {
+        let p = M.step(M.initial, .loaded(record), 0).state
+        let expired = M.step(p, .checked(attempt: 1, answer: .expired), 0).state
+        guard let back = paired(expired) else { return XCTFail("not paired") }
+        let s = polling(toWaiting(from: expired, back: back))
+        let fresh = Secrets.token("C")
+        let step = M.step(s, .polled(attempt: s.attempt, origin: origin, answer: .ok(token: fresh, email: nil)), 6000)
+        let made = PairingRecord(origin: origin, token: fresh, email: nil)
+        XCTAssertEqual(paired(step.state)?.record, made)
+        XCTAssertEqual(step.effects, [.save(attempt: s.attempt, record: made), .revoke(record)])
+        // A first pairing has nothing to give back.
+        let first = polling(toWaiting())
+        let none = M.step(first, .polled(attempt: first.attempt, origin: origin, answer: .ok(token: fresh, email: nil)), 6000)
+        XCTAssertEqual(none.effects, [.save(attempt: first.attempt, record: made)])
     }
 
     func testNoTextFormShowsTheTokenOrTheDeviceCode() {

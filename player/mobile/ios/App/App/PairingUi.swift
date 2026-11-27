@@ -82,9 +82,18 @@ final class PairingUi {
         close(false)
     }
 
-    /// Closes the screen with no answer to anyone: the page that opened it is being replaced.
+    /// Closes the screen with no answer to anyone: the page that opened it is being replaced. A
+    /// "pair again" whose token could not be kept closes instructor mode, and its plate stays over
+    /// rider mode so the user learns why (issue #926); its keys then lead from rider mode, and a
+    /// pairing made there goes on to instructor mode as from rider mode's own way in. Only then:
+    /// a screen opened from rider mode closes as before.
     func drop() {
         guard showing else { return }
+        if instructor, case .unpaired(notice: .saveFailed) = service.view() {
+            instructor = false
+            render()
+            return
+        }
         service.cancel()
         service.seen()
         showing = false

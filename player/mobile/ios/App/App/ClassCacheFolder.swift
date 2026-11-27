@@ -34,6 +34,17 @@ final class ClassCacheFolder {
         }
     }
 
+    /// The pairing's store and cache at launch (issue #926): a cache folder that cannot be kept out
+    /// of backup means no pairing at all, a store that refuses everything, so instructor mode never
+    /// opens and no class is ever cached; rider mode, which caches nothing, still launches. The
+    /// store is opened only when the folder is ready.
+    static func launch(base: () throws -> URL, store: () -> SecretStore, files: FileManager = .default) -> (store: SecretStore, cache: ClassCacheFolder?) {
+        guard let root = try? base() else { return (ClosedSecretStore(), nil) }
+        let cache = ClassCacheFolder(base: root, files: files)
+        guard (try? cache.prepare()) != nil else { return (ClosedSecretStore(), nil) }
+        return (store(), cache)
+    }
+
     /// Deletes every cached class, and leaves an empty folder, still excluded from backup.
     func clear() throws {
         if files.fileExists(atPath: url.path) { try files.removeItem(at: url) }

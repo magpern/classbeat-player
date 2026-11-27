@@ -147,6 +147,49 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertEqual(forgotten, 1)
     }
 
+    /// "Pair again" gives the expired token back, best effort: the backend refuses it 401
+    /// token_expired, as it refuses every call with an expired token, and the new pairing carries on.
+    func testPairAgainKeepsTheNewTokenAndGivesTheExpiredOneBack() {
+        let rig = PairingRig()
+        rig.pair()
+        rig.backend.expired = [Secrets.token()]
+        rig.service.refused(.expired)
+        rig.toWaiting()
+        rig.backend.ok(FakeBackend.tokenBody(Secrets.token("C")))
+        let last = rig.backend.requests.last
+        XCTAssertEqual(last?.method, .delete)
+        XCTAssertEqual(last?.path, "/api/player/device")
+        XCTAssertEqual(last?.token, Secrets.token(), "the expired token is the one given back")
+        assertCarriesOn(rig)
+    }
+
+    /// With no network for the give-back, the same: the new pairing is kept, nothing is retried.
+    func testPairAgainCarriesOnWhenTheGiveBackFindsNoNetwork() {
+        let rig = PairingRig()
+        rig.pair()
+        rig.service.refused(.expired)
+        rig.toWaiting()
+        rig.backend.ok(FakeBackend.tokenBody(Secrets.token("C")))
+        XCTAssertEqual(rig.backend.requests.last?.token, Secrets.token())
+        rig.backend.answerNext(.unreachable)
+        assertCarriesOn(rig)
+    }
+
+    /// After the give-back's answer, whatever it was: the new token is held and kept, the classes
+    /// stay, no notice shows, and the old token is never sent again.
+    private func assertCarriesOn(_ rig: PairingRig, file: StaticString = #filePath, line: UInt = #line) {
+        let requests = rig.backend.requests.count
+        XCTAssertEqual(rig.backend.open, 0, "nothing waits", file: file, line: line)
+        XCTAssertEqual(rig.service.view(), .paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil), file: file, line: line)
+        XCTAssertEqual(rig.service.secrets(), [Secrets.token("C")], file: file, line: line)
+        XCTAssertTrue(rig.store.text?.contains(Secrets.token("C")) ?? false, "the new token is kept", file: file, line: line)
+        XCTAssertEqual(rig.ports.cacheForgets, 0, "the classes stay", file: file, line: line)
+        XCTAssertTrue(rig.ports.timers.isEmpty, "no retry is set", file: file, line: line)
+        rig.service.resumed()
+        let sent = rig.backend.requests.dropFirst(requests)
+        XCTAssertFalse(sent.contains { $0.token == Secrets.token() }, "the expired token is not sent again", file: file, line: line)
+    }
+
     func testCancelStopsTheAttemptAndALateTokenIsGivenBackNotKept() {
         let rig = PairingRig()
         rig.toWaiting()

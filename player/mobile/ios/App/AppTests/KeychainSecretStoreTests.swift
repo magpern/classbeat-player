@@ -56,6 +56,13 @@ final class KeychainSecretStoreTests: XCTestCase {
         XCTAssertEqual(keychain.added.first?[kSecAttrAccessible as String] as? String, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
     }
 
+    func testAProbeLeftByAnEarlierLaunchDoesNotReadAsNoPasscode() {
+        let keychain = FakeKeychain()
+        keychain.items["probe"] = Data([0])
+        XCTAssertTrue(KeychainSecretStore(keychain: keychain).available())
+        XCTAssertTrue(keychain.items.isEmpty)
+    }
+
     func testDeleteAllTriesEveryClassSyncedOrNot() {
         let keychain = FakeKeychain()
         keychain.items = ["device": Data(text.utf8)]

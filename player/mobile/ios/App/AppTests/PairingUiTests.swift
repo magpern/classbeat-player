@@ -143,6 +143,25 @@ final class PairingUiTests: XCTestCase {
         XCTAssertFalse(rig.service.paired)
     }
 
+    /// The save-failed plate outlives a drop only after a "pair again" (issue #926): one opened from
+    /// rider mode closes as any screen does.
+    func testOnlyAPairAgainKeepsItsSaveFailedPlateOnADrop() {
+        for instructor in [false, true] {
+            setUp()
+            rig.store.saves = false
+            open(instructor: instructor)
+            rig.backend.ok(FakeBackend.startBody())
+            rig.ports.fireNext()
+            rig.backend.ok(FakeBackend.tokenBody())
+            XCTAssertEqual(rig.service.view(), .unpaired(notice: .saveFailed))
+            ui.drop()
+            XCTAssertTrue(left.isEmpty, "a drop answers no one")
+            XCTAssertEqual(ui.showing, instructor, "instructor: \(instructor)")
+            XCTAssertEqual(screens.current?.keys.map { $0.label }, instructor ? ["Start again", "Rider mode"] : nil)
+            XCTAssertEqual(rig.service.view(), .unpaired(notice: instructor ? .saveFailed : nil))
+        }
+    }
+
     func testNoScreenEverShowsTheTokenOrTheDeviceCode() {
         open()
         rig.backend.ok(FakeBackend.startBody())

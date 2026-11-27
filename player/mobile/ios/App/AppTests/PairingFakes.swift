@@ -13,10 +13,16 @@ final class FakeBackend: BackendTransport {
 
     var requests: [BackendRequest] = []
     private var waiting: [(HttpAnswer) -> Void] = []
+    /// Tokens the backend holds as expired. As its `device_token` dependency does, every call made
+    /// with one is answered 401 token_expired at once, before any route runs.
+    var expired: Set<String> = []
+
+    static let tokenExpired = HttpAnswer.http(status: 401, body: ["error": "token_expired"], retryAfterS: nil)
 
     func call(_ request: BackendRequest, answer: @escaping (HttpAnswer) -> Void) {
         XCTAssertNotNil(TransportContract.address(request, buildOrigin: Self.origin), "\(request)")
         requests.append(request)
+        if let token = request.token, expired.contains(token) { return answer(Self.tokenExpired) }
         waiting.append(answer)
     }
 

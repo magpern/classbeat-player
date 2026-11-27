@@ -5,9 +5,11 @@ import UIKit
 // Safari, never in the app's web view: the page holds the site's own sign-in, which the app must
 // never see.
 final class PhonePairingPorts: PairingPorts {
-    private let cache: ClassCacheFolder
+    /// Nil when the folder could not be kept out of backup: the phone then never pairs, so there
+    /// is nothing to forget.
+    private let cache: ClassCacheFolder?
 
-    init(cache: ClassCacheFolder) {
+    init(cache: ClassCacheFolder?) {
         self.cache = cache
     }
 
@@ -27,6 +29,6 @@ final class PhonePairingPorts: PairingPorts {
     }
 
     func forgetCache() {
-        try? cache.clear()
+        try? cache?.clear()
     }
 }
