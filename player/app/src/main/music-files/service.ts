@@ -25,6 +25,8 @@ export interface MusicFilesDeps {
   store: IndexStore;
   /** The entry limit of one find; MAX_FILES unless a test sets a smaller one. */
   maxFiles?: number;
+  /** Called, with nothing, when the folder window answered with a folder and the search begins. */
+  picked?: () => void;
 }
 
 export interface MusicFiles {
@@ -95,6 +97,7 @@ export function createMusicFiles(d: MusicFilesDeps): MusicFiles {
         if (account === null || wantedFiles(d.classDocument(classId)) === null) return FAILED;
         const folder = await d.pickFolder();
         if (folder === null || run.stopped || gen !== generation) return CANCELLED;
+        d.picked?.();
         return match(run, gen, account, wantedFiles(d.classDocument(classId)), (i) => rememberFolder(i, folder), () => [folder]);
       }),
     check: (classId) => checkWanted(() => wantedFiles(d.classDocument(classId))),

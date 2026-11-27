@@ -36,5 +36,5 @@ export const SYNCED: SyncView = { status: "synced", unavailable: null, wiping: f
 
 export function view(over: Omit<Partial<ListView>, "sync"> & { sync?: Partial<SyncView> } = {}): ListView {
   const { sync, ...rest } = over;
-  return { sync: { ...SYNCED, ...sync }, pairing: PAIRED, rows: [], fileError: null, mix: MIX_DISABLED, ...rest };
+  return { sync: { ...SYNCED, ...sync }, pairing: PAIRED, rows: [], fileError: null, mix: MIX_DISABLED, files: [], ...rest };
 }

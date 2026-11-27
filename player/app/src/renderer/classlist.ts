@@ -10,10 +10,13 @@ import type { Screen } from "../core/list/screen.ts";
 import { FILTER_FROM } from "../core/list/filter.ts";
 import type { ListUi, ListView } from "../core/list/view.ts";
 import type { PairingView } from "../core/pairing/view.ts";
-import { colsEl, footerEl, panelEl, plateEl, rowEl, shortcut, statusEl } from "./list-paint.ts";
+import { colsEl, footerEl, panelEl, rowEl, shortcut } from "./list-paint.ts";
+import { slotsPainter } from "./slots-paint.ts";
 import type { Act } from "./list-paint.ts";
+import { filesPanelEl, swapFooter } from "./files-paint.ts";
+import { filesFlow } from "./files-flow.ts";
 import { mixFlow } from "./mix-flow.ts";
-import { clearTyped, emptyFields, fitPlate, mixFormEl, mixLineEl, mixPlateEl, takeTyped } from "./mix-paint.ts";
+import { clearTyped, emptyFields, fitPlate, mixFormEl, takeTyped } from "./mix-paint.ts";
 import { updatesUi } from "./update-ui.ts";
 
 interface ListApi {
@@ -27,6 +30,8 @@ interface ListApi {
   unpair(): Promise<PairingView | null>;
   mixSignIn(credentials: Record<string, string>): Promise<ListView | null>;
   mixSignOut(): Promise<ListView | null>;
+  /** Opens the folder window and searches; takes a class id and nothing else. The answer is read from the next list view. */
+  findMusicFiles(classId: string): Promise<unknown>;
 }
 
 const api = (window as unknown as { player: ListApi }).player;
@@ -42,7 +47,7 @@ const updates = updatesUi();
 let view: ListView | null = null;
 let screen: Screen | null = null;
 let ui: ListUi = { filter: "", selectedId: null, lastStartedId: null };
-const shown = { status: "", file: "", mix: "", of: "", body: "", footer: "", rows: "", panel: "" };
+const shown = { body: "", footer: "", rows: "", panel: "" };
 let scrollToSelection = false;
 
 const listEl = (): HTMLElement | null => document.getElementById("list");
@@ -75,9 +80,20 @@ const act: Act = (id) => {
     case "close":
       return void api.dismissFileError().then(take);
     default:
-      return mixAct(id);
+      if (!files.act(id)) mixAct(id);
   }
 };
+
+/** The music files keys (renderer/files-flow.ts): find, show the missing songs, back. */
+const files = filesFlow({
+  selectedId: () => ui.selectedId,
+  open: (filesOpen) => {
+    ui = { ...ui, filesOpen };
+    paint();
+  },
+  find: (id) => api.findMusicFiles(id),
+  refresh,
+});
 
 /** Swedebeat: the form, the sign-out question, and the two calls (renderer/mix-flow.ts). */
 const mixAct = mixFlow({
@@ -102,25 +118,7 @@ function select(id: string, scroll: boolean): void {
   paint();
 }
 
-function paintStatus(s: Screen): void {
-  const sig = JSON.stringify([s.status, s.plate]);
-  if (sig !== shown.status) {
-    shown.status = sig;
-    $("status-slot").replaceChildren(...(s.plate !== null ? [plateEl(s.plate, act, "status", false)] : s.status !== null ? [statusEl(s.status)] : []));
-  }
-  const mix = JSON.stringify([s.mixLine, s.mixPlate]);
-  if (mix !== shown.mix) {
-    shown.mix = mix;
-    $("mix-slot").replaceChildren(...(s.mixPlate !== null ? [mixPlateEl(s.mixPlate, act)] : s.mixLine !== null ? [mixLineEl(s.mixLine, act)] : []));
-    // The sign-out question: "Keep connected" has the focus, so Enter or Esc keeps.
-    if (s.mixPlate !== null) ($("mix-slot").querySelector('[data-action="mix-keep"]') as HTMLElement | null)?.focus();
-  }
-  const file = JSON.stringify(s.filePlate);
-  if (file !== shown.file) {
-    shown.file = file;
-    $("file-slot").replaceChildren(...(s.filePlate !== null ? [plateEl(s.filePlate, act, "alert", true)] : []));
-  }
-}
+const paintStatus = slotsPainter($, act);
 
 function paintFilter(s: Screen): void {
   $("filter").hidden = s.filter === null;
@@ -154,9 +152,10 @@ function paintList(s: Screen & { body: { kind: "list" } }): void {
   const footSig = JSON.stringify(s.body.footer);
   if (footSig !== shown.footer) {
     shown.footer = footSig;
-    $("body").lastElementChild?.replaceWith(footerEl(s.body.footer, primary));
+    // A footer of another height (a local class's files line) changes how much of the list shows: the selection stays whole.
+    if (swapFooter($("body"), footerEl(s.body.footer, primary, act))) scrollToSelection = true;
   }
-  // The footer is in place before the scroll: its height decides how much of the list shows.
+  files.restoreFocus($("body"), list);
   const selected = s.body.rows.find((r) => r.selected);
   // A new list scrolls to the selection (the class last started, or the first); after that only the instructor's own moves do.
   if (list.dataset.fresh === "1") scrollToSelection = true;
@@ -182,6 +181,17 @@ function paintPanel(s: Screen & { body: { kind: "panel" } }): void {
   if (document.activeElement === document.body || document.activeElement === null) ($("body").querySelector("button.primary, button") as HTMLElement | null)?.focus();
 }
 
+function paintFilesList(s: Screen & { body: { kind: "files-list" } }): void {
+  const sig = JSON.stringify(s.body.list);
+  const wasOpen = shown.body === "files-list";
+  if (wasOpen && sig === shown.panel) return;
+  shown.body = "files-list";
+  shown.panel = sig;
+  $("body").replaceChildren(filesPanelEl(s.body.list, act));
+  if (!wasOpen) ($("body").querySelector("button.primary") as HTMLElement | null)?.focus();
+  files.restoreFocus($("body"), null);
+}
+
 function paintForm(s: Screen & { body: { kind: "mix-form" } }): void {
   const sig = JSON.stringify(s.body.form);
   if (shown.body === "mix-form" && sig === shown.panel) return;
@@ -195,17 +205,18 @@ function paintForm(s: Screen & { body: { kind: "mix-form" } }): void {
 function paint(): void {
   if (view === null) return;
   screen = screenOf(view, ui, Date.now());
-  ui = { ...ui, selectedId: screen.selectedId };
-  $("app").dataset.body = screen.body.kind === "panel" ? screen.body.panel.kind : "list";
+  ui = { ...ui, selectedId: screen.selectedId, filesOpen: screen.body.kind === "files-list" ? ui.filesOpen : null };
+  $("app").dataset.body = screen.body.kind === "panel" ? screen.body.panel.kind : screen.body.kind === "files-list" ? "files-list" : "list";
   $("count").hidden = screen.count === null;
   $("count").textContent = screen.count ?? "";
   paintStatus(screen);
   paintFilter(screen);
   if (screen.body.kind === "list") paintList(screen as Screen & { body: { kind: "list" } });
+  else if (screen.body.kind === "files-list") paintFilesList(screen as Screen & { body: { kind: "files-list" } });
   else if (screen.body.kind === "mix-form") paintForm(screen as Screen & { body: { kind: "mix-form" } });
   else paintPanel(screen as Screen & { body: { kind: "panel" } });
   // The update notice only on a clear list: a plate or a panel comes first (updates.md, "Priority").
-  updates.listPainted(screen.plate === null && screen.filePlate === null && screen.mixPlate === null && screen.body.kind === "list");
+  updates.listPainted(screen.plate === null && screen.filePlate === null && screen.mixPlate === null && screen.filesPlate === null && screen.body.kind === "list");
   if ($("live").textContent !== screen.announce) $("live").textContent = screen.announce;
   fitPlate($("mix-slot"), listEl());
 }
@@ -270,7 +281,7 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "Escape" && !inField) {
     // Close the file-error plate, else cancel a pairing in progress or the Swedebeat form, or keep Swedebeat connected.
     const close = document.querySelector<HTMLElement>('#file-slot [data-action="close"]');
-    const cancel = document.querySelector<HTMLElement>('#body [data-action="cancel"], #body [data-action="mix-cancel"], #mix-slot [data-action="mix-keep"]');
+    const cancel = document.querySelector<HTMLElement>('#body [data-action="cancel"], #body [data-action="mix-cancel"], #mix-slot [data-action="mix-keep"], #body [data-action="files-back"]');
     (close ?? cancel)?.click();
   }
 });

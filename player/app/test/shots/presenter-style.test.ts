@@ -11,6 +11,8 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { MAX_RIDERS } from "../../src/core/live/riders-model.ts";
+import { musicNoticeOf } from "../../src/core/music-files/music-notice.ts";
+import type { MusicNotice } from "../../src/core/music-files/music-notice.ts";
 import { PAIRED } from "../unit/list-fixtures.ts";
 import { started } from "../unit/live-relay.ts";
 import type { Rig } from "../unit/live-relay.ts";
@@ -24,6 +26,8 @@ interface Shot {
   readonly rig: Rig;
   /** Buttons pressed after the page loads. */
   readonly act: readonly string[];
+  /** The music files notice the shell would put on the snapshot (core/music-files/music-notice.ts). */
+  readonly music?: MusicNotice | null;
 }
 
 const STUB = `
@@ -60,6 +64,11 @@ async function states(): Promise<Shot[]> {
     { name: "class-riders-open", rig: await riders(3), act: ["#riders-toggle"] },
     { name: "class-riders-full", rig: await riders(MAX_RIDERS), act: ["#riders-toggle"] },
     { name: "class-confirm-remove", rig: await riders(3), act: ["#riders-toggle", '[aria-label="Remove Rider 2"]'] },
+    // The instructor's music files (docs/design/music-files.md, "Presenter window, during a class"), in the words the shell makes.
+    { name: "music-stopped", rig: await riders(3), act: [], music: musicNoticeOf({ reason: "failed" }, { song: 0, why: "read" }, "Neon Avenue") },
+    { name: "music-length", rig: await riders(3), act: [], music: musicNoticeOf({ reason: "failed" }, { song: 0, why: "length" }, "Neon Avenue") },
+    { name: "music-closed", rig: await riders(3), act: ["#music-close"], music: musicNoticeOf({ reason: "failed" }, { song: 0, why: "read" }, "Neon Avenue") },
+    { name: "music-missing-at-start", rig: await riders(3), act: [], music: musicNoticeOf({ reason: "missing", missing: [1, 4] }, null, null) },
   ];
 }
 
@@ -67,7 +76,7 @@ async function open(size: readonly [number, number], s: Shot): Promise<{ page: P
   const context = await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: 1, reducedMotion: "reduce" });
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(STUB);
-  const data = { __state: s.rig.controller.snapshot(), __pairing: PAIRED, __live: s.rig.live.view(), __riders: s.rig.live.riders() };
+  const data = { __state: { ...s.rig.controller.snapshot(), music: s.music ?? null }, __pairing: PAIRED, __live: s.rig.live.view(), __riders: s.rig.live.riders() };
   await context.addInitScript(`Object.assign(window, ${JSON.stringify(data)});`);
   const page = await context.newPage();
   const external: string[] = [];

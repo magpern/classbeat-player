@@ -9,7 +9,9 @@ import { SYNC_EVERY_MS } from "../sync/backoff-policy.ts";
 import type { ListView } from "./view.ts";
 
 export type Marker = "ok" | "work" | "away";
-export type ButtonId = "pair" | "pair-again" | "cancel" | "reopen" | "open-file" | "close" | MixButtonId;
+export type ButtonId = "pair" | "pair-again" | "cancel" | "reopen" | "open-file" | "close" | MixButtonId | FilesButtonId;
+/** The music files keys (core/list/files-screen.ts). */
+export type FilesButtonId = "files-find" | "files-show" | "files-back";
 /** The Swedebeat keys (core/mix/list-model.ts). */
 export type MixButtonId = "mix-connect" | "mix-submit" | "mix-cancel" | "mix-sign-out" | "mix-sign-out-yes" | "mix-keep";
 
@@ -19,6 +21,8 @@ export interface Button {
   /** The shortcut shown beside the label ("Esc", "Ctrl+O"), or null. */
   readonly key: string | null;
   readonly primary: boolean;
+  /** Shown but not usable now (dashed, grey): a search runs. */
+  readonly held?: boolean;
 }
 export interface StatusLine {
   readonly marker: Marker;

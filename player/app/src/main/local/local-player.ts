@@ -16,10 +16,12 @@ import { EMPTY_SLOT } from "../../core/music-files/local-cue.ts";
 import type { LocalCue, LocalReport, LocalSlotCue } from "../../core/music-files/local-cue.ts";
 import { localModePolicy } from "../../core/music-files/local-mode-policy.ts";
 import { localPlayUrl } from "../../core/music-files/local-scheme-policy.ts";
+import { musicNoticeOf } from "../../core/music-files/music-notice.ts";
+import type { LocalStop, MusicNotice } from "../../core/music-files/music-notice.ts";
 import { classTimeOf, fadeOf, ownerAt, slotsAt } from "../../core/music-files/local-timing.ts";
 import type { Snapshot } from "../../core/snapshot.ts";
 import type { LocalPlays } from "./local-plays.ts";
-import { runOf } from "./local-run.ts";
+import { CHECK_TIMEOUT_MS, JUMP_MS, RECHECK_MS, UNANSWERED_MS, runOf, songTitle } from "./local-run.ts";
 import type { LocalPlayState, Slot } from "./local-run.ts";
 
 export interface LocalPlayerDeps {
@@ -39,7 +41,7 @@ export interface LocalPlayerDeps {
 }
 
 export type { LocalPlayState } from "./local-run.ts";
-
+export { CHECK_TIMEOUT_MS, JUMP_MS, RECHECK_MS, UNANSWERED_MS } from "./local-run.ts";
 export interface LocalPlayer {
   snapshot(s: Snapshot): void;
   report(r: LocalReport): void;
@@ -49,18 +51,11 @@ export interface LocalPlayer {
   roomClosed(webContentsId: number): void;
   /** Null when the open class is not a local one. */
   state(): LocalPlayState | null;
+  /** What the presenter says while a local class is on the manual clock (core/music-files/music-notice.ts); null otherwise. */
+  notice(): MusicNotice | null;
   /** The `local` music link: the owner song's latest reading. */
   link(): MusicLink;
 }
-
-/** A clock further than this from where it should be was moved by a command: the audio seeks. */
-export const JUMP_MS = 1000;
-/** A cue the room has not answered for this long is sent again, fresh. */
-export const UNANSWERED_MS = 2000;
-/** The check at Start that has not answered after this long is "not checked": the manual clock. */
-export const CHECK_TIMEOUT_MS = 10_000;
-/** A check that found the shell busy is asked again after this long. */
-export const RECHECK_MS = 2000;
 
 export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
   let run = runOf({ loadId: 0, doc: null } as Snapshot);
@@ -82,8 +77,10 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
     run.reading = null;
     if (run.cue !== null && run.cue.slots.some((s) => s.url !== null)) send(false);
   };
-  const fallBack = (): void => {
+  /** The audio stops for the class: `song` is the one that failed (null: the sign-out), `why` the plain reason (never a path or a decode message). */
+  const fallBack = (song: number | null, why: LocalStop["why"]): void => {
     silence();
+    run.failure = { song, why };
     run.state = { kind: "manual", reason: "failed" };
   };
   const beginPlay = (k: number): Slot | null => {
@@ -151,7 +148,8 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
 
   const playing = (classMs: number, running: boolean, statusChanged: boolean): void => {
     const t = d.now();
-    if (d.account() !== run.account || run.slots.some((s) => s !== null && d.plays.live(s.play.id) === null)) return fallBack();
+    if (d.account() !== run.account) return fallBack(null, "signed_out");
+    if (run.slots.some((s) => s !== null && d.plays.live(s.play.id) === null)) return fallBack(run.slots.find((s) => s !== null)?.k ?? null, "read");
     const c = run.clock;
     const expected = c.running ? c.classMs + (t - c.at) : c.classMs;
     const jumped = Math.abs(classMs - expected) > JUMP_MS;
@@ -171,6 +169,8 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
     const mine = run;
     const done = (a: FindAnswer | null): void => {
       if (run !== mine || !mine.starting) return;
+      // The files service was busy (a check of the list's own): asked again when it is free, until CHECK_TIMEOUT_MS.
+      if (a === null && d.now() - mine.startedAt < CHECK_TIMEOUT_MS) return void (mine.retryAt = d.now() + RECHECK_MS);
       mine.starting = false;
       mine.check = a;
       const last = mine.last!;
@@ -181,6 +181,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       // Signed out: the check has no account to read and says "failed", but the reason is the sign-out.
       mine.account = d.account();
       if (mine.account === null) {
+        mine.failure = { song: null, why: "signed_out" };
         mine.state = { kind: "manual", reason: "failed" };
         return;
       }
@@ -232,6 +233,10 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       }
       if (run.starting) {
         run.last = { status, classMs, at: d.now() };
+        if (run.retryAt !== null && d.now() >= run.retryAt) {
+          run.retryAt = null;
+          recheck();
+        }
         // A second check that never answers must not hold the class silent and "checking" for good.
         if (d.now() - run.startedAt > CHECK_TIMEOUT_MS) {
           run.starting = false;
@@ -239,6 +244,8 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         }
         return;
       }
+      // The class ended: a manual state and its notice end with it (the plate stays "until it is closed or the class ends").
+      if (status === "ended" && run.state?.kind === "manual") run.state = run.failure = null;
       if (run.state?.kind !== "playing") return;
       if (status === "ended") {
         silence();
@@ -262,7 +269,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
         return;
       }
       if (run.state?.kind !== "playing") return;
-      if (wrong) return fallBack();
+      if (wrong) return fallBack(slot.k, r.failed ? "read" : "length");
       if (!r.playing || !run.music.running || ownerAt(run.timing, musicNow()) !== slot.k) return;
       const t = d.now();
       run.reading = { songIndex: slot.k, positionMs: r.positionMs, playing: true, at: t };
@@ -274,7 +281,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       const slot = run.slots.find((s) => s?.play.id === playId);
       if (slot === undefined || slot === null) return;
       if (!run.started) return probed(slot.k, true);
-      if (run.state?.kind === "playing") fallBack();
+      if (run.state?.kind === "playing") fallBack(slot.k, "read");
     },
     roomClosed(webContentsId) {
       d.plays.endFor(webContentsId);
@@ -285,6 +292,7 @@ export function createLocalPlayer(d: LocalPlayerDeps): LocalPlayer {
       }
     },
     state: () => (run.timing === null ? null : run.state),
+    notice: () => (run.timing === null || run.state?.kind !== "manual" ? null : musicNoticeOf(run.state, run.failure, run.failure?.song == null ? null : songTitle(run.doc, run.failure.song))),
     link: () => localLink(() => run.reading),
   };
 }

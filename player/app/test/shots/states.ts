@@ -6,6 +6,7 @@ import { fieldsView, MIX_DISABLED } from "../../src/core/mix/view.ts";
 import type { MixView } from "../../src/core/mix/view.ts";
 import { NOTICE_TEXT } from "../../src/core/pairing/view.ts";
 import { PAIRED, row, SYNCED, view } from "../unit/list-fixtures.ts";
+import { FILES_STATES } from "./files-states.ts";
 
 /** The window sizes of the spec: 1920x1080, 1280x800, and 1000x720 (the default and the smallest). */
 export const SIZES: readonly (readonly [number, number])[] = [[1920, 1080], [1280, 800], [1000, 720]];
@@ -56,6 +57,8 @@ export interface State {
   readonly type?: string;
   /** Buttons (their `data-action`) clicked, in order, before the screenshot. */
   readonly click?: readonly string[];
+  /** The id of the row clicked first, so a class other than the first is selected. */
+  readonly select?: string;
 }
 
 // Swedebeat (docs/design/swedebeat.md, "Class list page"): two of the twelve are Swedebeat classes.
@@ -100,4 +103,5 @@ export const STATES: readonly State[] = [
   { name: "sw-off", view: mixed(MIX_DISABLED) },
   { name: "sw-no-keychain", view: mixed({ keychainUsable: false, fields: [] }) },
   { name: "not-updated", view: view({ rows: TWELVE.map((r) => (r.title.startsWith("Hill") ? { ...r, notUpdated: true } : r)), sync: synced(TWELVE, { notUpdated: [TWELVE[3].id] }) }) },
+  ...FILES_STATES,
 ];

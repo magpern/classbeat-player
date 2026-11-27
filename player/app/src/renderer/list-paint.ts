@@ -3,29 +3,13 @@
 // changed, so a poll that finds nothing new touches nothing (and never moves the focus or the
 // scroll position).
 import type { Footer, RowModel } from "../core/list/screen.ts";
-import type { Button, Panel, Plate, StatusLine } from "../core/list/states.ts";
+import type { Panel, Plate, StatusLine } from "../core/list/states.ts";
+import { filesLineEl, rowFilesEl } from "./files-paint.ts";
+import { buttonEl, h, shortcut } from "./paint-base.ts";
+import type { Act } from "./paint-base.ts";
 
-export type Act = (id: Button["id"]) => void;
-
-export function h(tag: string, cls: string | null, text?: string): HTMLElement {
-  const el = document.createElement(tag);
-  if (cls !== null) el.className = cls;
-  if (text !== undefined) el.textContent = text;
-  return el;
-}
-
-/** "Ctrl+O" is "Cmd+O" on a Mac. */
-export const shortcut = (key: string): string => (navigator.platform.startsWith("Mac") ? key.replace("Ctrl", "Cmd") : key);
-
-export function buttonEl(b: Button, act: Act): HTMLButtonElement {
-  const el = h("button", b.primary ? "primary" : null) as HTMLButtonElement;
-  el.type = "button";
-  el.dataset.action = b.id;
-  el.append(h("span", null, b.label));
-  if (b.key !== null) el.append(" ", h("span", "kbd", shortcut(b.key)));
-  el.addEventListener("click", () => act(b.id));
-  return el;
-}
+export { buttonEl, h, shortcut };
+export type { Act };
 
 export function statusEl(s: StatusLine): HTMLElement {
   const box = h("div", "status");
@@ -100,6 +84,8 @@ export function rowEl(r: RowModel, select: (id: string) => void): HTMLElement {
     mix.append(mark, h("span", null, r.mix.text));
     meta.append(mix);
   }
+  // A local row's files marker and words (docs/design/music-files.md).
+  if (r.files !== null) meta.append(rowFilesEl(r.files));
   for (const t of r.tags) meta.append(h("span", "tag", t));
   main.append(meta);
   row.append(main, h("span", "len", r.length), h("span", "upd", r.updated ?? ""));
@@ -114,14 +100,19 @@ export function colsEl(): HTMLElement {
   return cols;
 }
 
-export function footerEl(f: Footer, act: () => void): HTMLElement {
-  const foot = h("footer", "foot");
+export function footerEl(f: Footer, act: () => void, keys: Act): HTMLElement {
+  const foot = h("footer", f.files === null ? "foot" : "foot files");
   const sel = h("div", "sel");
   const t = h("div", "t");
   t.append(h("span", null, f.title));
-  const detail = h("div", "dt", f.detail);
-  if (f.describedBy !== null) detail.id = f.describedBy;
-  sel.append(t, detail);
+  sel.append(t);
+  if (f.files !== null) sel.append(filesLineEl(f.files, keys));
+  // A local class's failure plate takes the detail's place (the line drops it): no empty line.
+  if (f.detail !== "" || f.files === null) {
+    const detail = h("div", "dt", f.detail);
+    if (f.describedBy !== null) detail.id = f.describedBy;
+    sel.append(detail);
+  }
   const b = h("button", "primary") as HTMLButtonElement;
   b.type = "button";
   b.dataset.action = f.action;
@@ -129,6 +120,14 @@ export function footerEl(f: Footer, act: () => void): HTMLElement {
   if (f.describedBy !== null) b.setAttribute("aria-describedby", f.describedBy);
   b.append(h("span", null, f.button.label), " ", h("span", "kbd", shortcut(f.button.key ?? "Enter")));
   b.addEventListener("click", act);
-  foot.append(sel, b);
+  if (f.files === null) {
+    foot.append(sel, b);
+    return foot;
+  }
+  // The keys of a local class: "Find music files" beside Start, both on the right.
+  const acts = h("div", "acts");
+  if (f.files.find !== null) acts.append(buttonEl(f.files.find, keys));
+  acts.append(b);
+  foot.append(sel, acts);
   return foot;
 }

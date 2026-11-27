@@ -18,6 +18,8 @@ export interface MusicFilesSetup {
   classDocument(id: string): unknown;
   /** The window the folder dialog belongs to. */
   window(): BrowserWindow | null;
+  /** The folder window answered with a folder (main/music-files/files-state.ts `picked`). */
+  picked?(): void;
 }
 
 async function pickFolder(win: BrowserWindow | null): Promise<string | null> {
@@ -32,6 +34,7 @@ export function setupMusicFiles(s: MusicFilesSetup): MusicFiles {
     account: s.account,
     classDocument: s.classDocument,
     pickFolder: () => pickFolder(s.window()),
+    picked: s.picked,
     store: indexStore(join(app.getPath("userData"), INDEX_DIR)),
   });
 }

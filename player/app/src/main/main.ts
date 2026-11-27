@@ -18,6 +18,8 @@ import type { MixPlayer } from "./mix/mix-player.ts";
 import { setupPlayback } from "./mix/playback-setup.ts";
 import { createPlays } from "./mix/plays.ts";
 import { setupMix } from "./mix/setup.ts";
+import { createFilesState } from "./music-files/files-state.ts";
+import type { FilesState } from "./music-files/files-state.ts";
 import { registerMusicFilesHandlers } from "./music-files/handlers.ts";
 import { answerLocalRequest } from "./music-files/local-response.ts";
 import { setupMusicFiles } from "./music-files/setup.ts";
@@ -70,7 +72,8 @@ let updates: UpdateService | null = null;
 // The follower is chosen by platform; it asks the system nothing until the instructor picks Follow.
 const music = selectMusic(process.platform);
 const keepAwake = createKeepAwake(electronBlocker);
-const controller = createController(undefined, music.reader, music.transport);
+// A local class on the manual clock tells the presenter why (core/music-files/music-notice.ts); the room frame never carries it.
+const controller = createController(undefined, music.reader, music.transport, () => localPlayer?.notice() ?? null);
 
 const live = (): BrowserWindow | null => (presenter && !presenter.isDestroyed() ? presenter : null);
 // The room screen's own window: it opens with every class that opens, and closes with the class.
@@ -80,6 +83,8 @@ let mixPlayer: MixPlayer | null = null;
 // Its two local <audio> play the instructor's own files through `cbp-local:`, one play id per song (ADR 0017 section 3).
 const localPlays = createLocalPlays();
 let localPlayer: LocalPlayer | null = null;
+// The class list's files state (ADR 0017 section 2); the folder window's answer reaches it from the music files service.
+let filesState: FilesState | null = null;
 const room = createRoomWindow({
   file: ROOM_FILE,
   url: pathToFileURL(ROOM_FILE).href,
@@ -213,9 +218,12 @@ if (!app.requestSingleInstanceLock()) {
     pairing = paired;
     // The instructor's own music files: found by content, and no path ever leaves this process.
     // Built before sync, as its index is wiped by every wipe of the class cache.
-    const musicFiles = setupMusicFiles({ account: () => credentialOf(paired)?.account ?? null, classDocument: (id) => sync?.document(id) ?? null, window: live });
+    const musicFiles = setupMusicFiles({ account: () => credentialOf(paired)?.account ?? null, classDocument: (id) => sync?.document(id) ?? null, window: live, picked: () => filesState?.picked() });
     // Keeps the account's classes offline, and the class list shows them.
     sync = setupSync(paired, () => musicFiles.wipe());
+    // What the class list says of each local class's files: words from the class document, never anything from the disk.
+    const files = createFilesState({ music: musicFiles, document: (id) => sync?.document(id) ?? null, now: () => Date.now() });
+    filesState = files;
     const accountNow = (): string | null => credentialOf(paired)?.account ?? null;
     // A file is served only for a live play, from the account's index, and a fault stops the audio.
     handleLocalScheme((req) => answerLocalRequest(req, { live: (id) => localPlays.live(id), indexed: (a, sha) => musicFiles.indexed(a, sha), onFault: (id) => localPlayer?.fault(id) }));
@@ -231,7 +239,7 @@ if (!app.requestSingleInstanceLock()) {
     // Swedebeat sign-in on the class list page; the token stays in the keychain and this process.
     const mixSetup = setupMix(paired, plays);
     const mix = mixSetup.service;
-    list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text), mix: () => mix.view() });
+    list = createListController({ sync, pairing: paired, account: () => credentialOf(paired)?.account ?? null, open: (name, text) => controller.open(name, text), mix: () => mix.view(), files });
     const trusted = (): Trusted => ({ presenterId: live()?.webContents.id ?? null, presenterUrl: PRESENTER_URL, listUrl: LIST_URL });
     // The class clock reaching its end ends the pin: other classes can start, and a waiting wipe runs.
     controller.onEnded(() => list?.release());
@@ -263,7 +271,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc(controller, trusted, paired, () => list?.release());
     registerListHandlers(ipcMain, trusted, list, { showPresenter, openFile: openClass });
     registerMixHandlers(ipcMain, trusted, mix, list, () => prefetch.check());
-    registerMusicFilesHandlers(ipcMain, trusted, musicFiles);
+    registerMusicFilesHandlers(ipcMain, trusted, files);
     registerLiveHandlers(ipcMain, trusted, phoneRemote);
     // The class gate: a class open in the room and presenter windows, or pinned (updates.md).
     updates = setupUpdates(() => roomMayOpen(controller.snapshot().doc !== null, onListPage(), pinned()));

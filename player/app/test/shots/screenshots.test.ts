@@ -33,13 +33,16 @@ for (const state of STATES) {
           await opened.page.focus("#filter-input");
           await opened.page.keyboard.type(state.type);
         }
+        if (state.select !== undefined) await opened.page.click(`#row-${state.select}`);
         for (const action of state.click ?? []) await opened.page.click(`[data-action="${action}"]`);
         await opened.page.waitForTimeout(100);
         await opened.page.screenshot({ path: join(SHOT_DIR, `class-list-${name}.png`), animations: "disabled" });
         const report = await check(opened.page);
         assert.deepEqual(report.problems, [], name);
         // L3: at least five whole rows with the footer, wherever the titles fit one line (the spec's worst case, wide capitals, shows fewer).
-        if (state.name !== "long-titles" && report.rows > 0) assert.ok(report.rows >= 5, `${name}: ${report.rows} whole rows`);
+        // The worst footer (80 wide capitals, two lines) may show four, as class-list.md L3 allows.
+        const least = state.name === "music-files-worst-footer" ? 4 : 5;
+        if (state.name !== "long-titles" && report.rows > 0) assert.ok(report.rows >= least, `${name}: ${report.rows} whole rows`);
         assert.deepEqual(opened.external, [], `${name}: requests left the file system`);
         assert.deepEqual(opened.errors, [], `${name}: page errors`);
       } finally {

@@ -12,6 +12,7 @@ import { canLoadPlaylist } from "../core/link/playlist.ts";
 import type { PlaylistLoader } from "../core/link/playlist.ts";
 import type { PlayerState } from "../core/player-state.ts";
 import { manualReader } from "../core/link/reader.ts";
+import type { MusicNotice } from "../core/music-files/music-notice.ts";
 import type { MusicReader } from "../core/link/reader.ts";
 import type { MusicTransport, TransportAction } from "../core/link/transport.ts";
 import type { Snapshot } from "../core/snapshot.ts";
@@ -45,7 +46,7 @@ export interface Controller {
  * follows the music, and with it a class opens on the manual clock until Follow is picked. A
  * reader that says following is unavailable on this computer counts as no reader from then on.
  */
-export function createController(now: () => number = () => performance.now(), reader: MusicReader = manualReader, transport: MusicTransport | null = null): Controller {
+export function createController(now: () => number = () => performance.now(), reader: MusicReader = manualReader, transport: MusicTransport | null = null, musicNotice: () => MusicNotice | null = () => null): Controller {
   let state: PlayerState = INITIAL;
   let timer: NodeJS.Timeout | null = null;
   let target: () => WebContents | null = () => null;
@@ -78,7 +79,10 @@ export function createController(now: () => number = () => performance.now(), re
     const t = now();
     // Also right after a class is opened: every snapshot asks, so the reason is always shown.
     catchUp(t);
-    const snap = snapshotOf(state, t, transport !== null, reader.reason?.() ?? null);
+    const base = snapshotOf(state, t, transport !== null, reader.reason?.() ?? null);
+    // The local music files notice rides on the presenter's snapshot only when there is one.
+    const notice = base.doc === null ? null : musicNotice();
+    const snap = notice === null ? base : { ...base, music: notice };
     if (snap.view?.status === "ended" && endedLoad !== snap.loadId) {
       endedLoad = snap.loadId;
       for (const l of enders) l();

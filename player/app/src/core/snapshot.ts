@@ -1,6 +1,7 @@
 // What the shell sends the presenter: the open class, the clock view and the last error. Pure.
 import type { Class } from "../../../../schema/generated/ts/class.d.ts";
 import type { ClockView } from "./clock/view.ts";
+import type { MusicNotice } from "./music-files/music-notice.ts";
 import type { ControlLabels } from "./link/while-following.ts";
 import type { LinkView } from "./link/view.ts";
 import type { PatternSnapshot } from "./pattern-snapshot.ts";
@@ -25,6 +26,12 @@ export interface Snapshot {
   /** The current beat pattern (side and count); null outside a pattern and when the count is not known. */
   readonly pattern: PatternSnapshot | null;
   readonly error: FileError | null;
+  /**
+   * The instructor's music files notice for a local class on the manual clock (core/music-files/
+   * music-notice.ts), set by the shell for the presenter only; absent otherwise. The room frame
+   * is built field by field and never carries it.
+   */
+  readonly music?: MusicNotice | null;
 }
 
 export const EMPTY_SNAPSHOT: Snapshot = { loadId: 0, fileName: null, doc: null, view: null, link: null, controls: null, band: null, pattern: null, error: null };
