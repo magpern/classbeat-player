@@ -414,6 +414,18 @@ test("a check at Start that answered is not stopped later (#955)", async () => {
   assert.equal(r.stopped, 0);
 });
 
+test("a Start check that has answered, or found the service busy, is no longer 'running': a newer class stops nothing (#955)", async () => {
+  for (const answer of [done("found", "found", "found"), null]) {
+    const r = rig();
+    await r.ready();
+    r.answer = answer;
+    await r.start(0);
+    r.loadId = 2;
+    r.snap("ready", 0);
+    assert.equal(r.stopped, 0, answer === null ? "busy" : "answered");
+  }
+});
+
 test("a newer class supersedes a Start check that is still running (#955)", async () => {
   const r = rig();
   await r.ready();
