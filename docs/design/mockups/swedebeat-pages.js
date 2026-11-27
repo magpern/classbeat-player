@@ -37,6 +37,7 @@ const mix = (m) => {
   if (m.k === 'down') return `<span class="mix"><span class="mark work" aria-hidden="true"></span>${M(11, `Downloading the mix ${m.p}%`)}<span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.p}"><i style="width:${m.p}%"></i></span></span>`;
   if (m.k === 'wait') return `<span class="mix"><span class="mark work" aria-hidden="true"></span>${M(11, 'Mix waiting to download')}</span>`;
   if (m.k === 'bad') return `<span class="mix manual"><span class="mark away" aria-hidden="true"></span>${M(11, 'The mix could not be checked')}</span>`;
+  if (m.k === 'ios') return `<span class="mix manual"><span class="mark away" aria-hidden="true"></span>${M(11, 'Not available in this app yet')}</span>`;
   return `<span class="mix manual"><span class="mark away" aria-hidden="true"></span>${M(11, 'Manual clock')}</span>`;
 };
 const rows = (sel, mixes, sw) => CLASSES.map(([t, src, len, upd, kind]) => `<div class="row${t === sel ? ' sel' : ''}">
@@ -54,7 +55,7 @@ const line = (mark, st, dt, btn) => `<div class="status sw"><div class="what"><s
 const plate = (st, dt, btns, second) => `<div class="plate${second ? ' second' : ''}" role="alert"><div>${M(14, st, ' data-lines="2" class="st"')}<div>${M(11, dt, ' data-lines="3" class="dt"')}</div></div><div class="row-btns" style="display:flex;gap:12px">${btns}</div></div>`;
 const COLS = `<div class="cols">${L('Class')}${L('Length')}${L('Updated')}</div>`;
 const foot = (t, dt, btn = 'Start class') => `<footer class="foot"><div class="sel"><div class="t">${M(15, t, ' data-lines="2" data-clamp="2"')}</div><div class="dt">${M(11, dt, ' data-lines="2"')}</div></div>${BTN(btn, 'Enter', 'primary').replace('data-min-cap="12"', 'data-min-cap="15"')}</footer>`;
-const list = (mixes, sw) => `<div data-scroll class="list focus">${rows('Monday morning endurance', mixes, sw)}</div>`;
+const list = (mixes, sw, sel = 'Monday morning endurance') => `<div data-scroll class="list focus">${rows(sel, mixes, sw)}</div>`;
 const SEL = 'Monday morning endurance';
 const START = 'Starting opens the room screen and the presenter window';
 const panel = (h2, body) => `<section class="panel"><h2 class="n" data-tier="minor" data-min-cap="28">${esc(h2)}</h2>${body}</section>`;
@@ -116,6 +117,19 @@ add('sign-out-ask', 'Class list: sign out of Swedebeat?',
 add('signing-out', 'Class list: signing out of Swedebeat',
   'State: the key, the token and the mixes are being deleted, in that order (ADR 0013 section 1). Like clearing the saved classes: no list, no Start.',
   `${HEAD}${SYNC}${line('work', 'Signing out of Swedebeat', 'The mixes saved on this computer are being removed')}${panel('One moment', P('Nothing can start until this is done. You can still open a class file.'))}`);
+
+// The iOS build with `swedebeatEnabled` off (swedebeat.md, "The iOS app"): one fixed state, whatever
+// the account holds. The line is always shown; its key is dimmed, in the tab order, and does nothing.
+const IOS = 'Not available in this app yet';
+const iosLine = `<div class="status sw"><div class="what"><span class="mark away" aria-hidden="true"></span><div>${M(14, 'Swedebeat', ' class="st"')}<div id="sw-why">${M(11, IOS, ' data-lines="2" class="dt"')}</div></div></div><button class="dim" aria-disabled="true" aria-describedby="sw-why"><span data-tier="label" data-min-cap="12">Connect Swedebeat</span></button></div>`;
+const IOSMIX = { '*': { k: 'ios' } };
+const SWSEL = 'Monday morning endurance';
+add('ios-line', 'Class list, iOS: Swedebeat is dimmed',
+  'State: the iOS build, swedebeatEnabled off. The Swedebeat line is shown for every list, signed in or not: hollow square, "Swedebeat", the grey line "Not available in this app yet", and a dimmed "Connect Swedebeat" that stays in the tab order (aria-disabled, described by the line) and does nothing when pressed. Each Swedebeat row ends its second line with a hollow square and the same words. A Spotify class is selected, so Start is active.',
+  `${HEAD}${SYNC}${iosLine}${COLS}${list(IOSMIX, true, 'Pyramid intervals')}${foot('Pyramid intervals', START)}`);
+add('ios-row', 'Class list, iOS: a Swedebeat class cannot be started',
+  'State: the iOS build, swedebeatEnabled off, a Swedebeat class selected. The row keeps its look and the selection; the footer detail is "Not available in this app yet"; Start is disabled as for a class that needs a newer player (class-list.md): raised fill, 1 px line, label in --light-3, no Enter hint, described by the footer detail. Enter and a click on Start do nothing and show nothing.',
+  `${HEAD}${SYNC}${iosLine}${COLS}${list(IOSMIX, true, SWSEL)}<footer class="foot"><div class="sel"><div class="t">${M(15, SWSEL, ' data-lines="2" data-clamp="2"')}</div><div class="dt" id="start-why">${M(11, IOS, ' data-lines="2"')}</div></div><button class="primary" disabled aria-describedby="start-why"><span data-tier="label" data-min-cap="15">Start class</span></button></footer>`);
 
 const NAMES = Object.keys(pages);
 const doc = (name) => {

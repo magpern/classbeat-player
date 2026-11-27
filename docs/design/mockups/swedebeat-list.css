@@ -20,3 +20,6 @@
 .field-box .in.focus { outline: 3px solid var(--light-1); outline-offset: 2px; }
 .field-box .in .ph { color: var(--light-2); }
 .panel p.fine { font-size: 16px; color: var(--light-2); max-width: 34em; }
+
+/* The iOS build with Swedebeat off: a dimmed key that keeps its place in the tab order. */
+button.dim[aria-disabled="true"] { color: var(--light-3); cursor: default; }
