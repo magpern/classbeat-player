@@ -259,7 +259,8 @@ final class PairingAnswersTests: XCTestCase {
         controller.shown(PageOpener.blank)
         controller.shown("/rider.html")
         XCTAssertEqual(controller.current, .rider)
-        XCTAssertTrue(pairing.words.contains("The pairing could not be kept."), "the plate stays")
+        // A plate's words are its head and body, a line apart (ScreenLine.words).
+        XCTAssertTrue(pairing.words.contains { $0.hasPrefix("The pairing could not be kept.\n") }, "the plate stays: \(pairing.words)")
         XCTAssertEqual(pairing.current?.keys.map { $0.label }, ["Start again", "Rider mode"])
         XCTAssertEqual(rig.service.view(), .unpaired(notice: .saveFailed))
         pairing.press("Rider mode")
