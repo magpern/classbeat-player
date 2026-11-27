@@ -234,7 +234,7 @@ The state is a fact about one class, so it follows the selection and changes not
 ### A class from Swedebeat in the iOS app
 
 In the iOS build with Swedebeat off (`swedebeatEnabled`, issue #932) a class whose `music.source` is
-`swedebeat` is listed and selectable, and Start refuses it. This is the "needs a newer player" state
+`swedebeat` is listed and Start refuses it (on the phone, as built in #961, the row is not selectable and the message on the row is the whole cue: no dialog or further detail). This is the "needs a newer player" state
 above with different words: the same selectable row, the same dimmed Start (no Enter hint, no focus,
 `aria-describedby` on the footer detail, Enter and a tap do nothing, no message appears), and the
 sentence, verbatim, **Not available in this app yet** in the footer detail and at the end of the row's
