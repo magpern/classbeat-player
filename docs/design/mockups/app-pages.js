@@ -99,7 +99,7 @@ add('pair-done', 'app-pairing.md', 'App: paired', 'State: the approval came and 
 
 // A pairing notice: NOTICE_TEXT (core/pairing/view.ts) in the app's words, on a plate.
 const notice = (name, title, text, detail, again = true, state = name.replace('-', '_')) => add(`pair-${name}`, 'app-pairing.md', `App: pairing, ${title}`, `State: pairing ended with ${state}. The plate carries the notice; ${again ? '"Start again" asks for a new code' : 'there is nothing to try again'}.`,
-  native(page(mode('Instructor mode') + h1('Pair this phone') + plate(text, detail), again ? duo(key('stay_rider', 'Rider mode'), key('pair_again', 'Start again', { main: true })) : duo(key('stay_rider', 'Back to rider mode', { main: true })))));
+  native(page(mode('Instructor mode') + h1('Pair this phone') + plate(text, detail), again ? stack(key('pair_again', 'Start again', { main: true, full: true }), key('stay_rider', 'Rider mode', { full: true })) : duo(key('stay_rider', 'Back to rider mode', { main: true })))));
 notice('denied', 'refused', 'Refused on the website.', 'Nothing was kept on this phone.');
 notice('code-expired', 'code ran out', 'The code ran out.', 'It was not confirmed in time. Start again for a new code.');
 notice('unreachable', 'no server', 'The server could not be reached.', 'Check the connection, then start again.');
