@@ -22,15 +22,25 @@ object Secrets {
 class FakeBackend(val origin: String = ORIGIN) : BackendTransport {
     val sent = mutableListOf<BackendRequest>()
 
+    /** The answer given to each call in [sent], in the same order. */
+    val answers = mutableListOf<HttpAnswer>()
+
     /** The answer to each call; unreachable unless a test says otherwise. */
     var route: (BackendRequest) -> HttpAnswer = { HttpAnswer.Unreachable }
+
+    /**
+     * Tokens the backend holds as expired. As its `device_token` dependency does, every call made
+     * with one is answered 401 token_expired, before any route runs (issue #952).
+     */
+    var expired: Set<String> = emptySet()
     private val pending = ArrayDeque<() -> Unit>()
 
     override fun send(request: BackendRequest, answer: (HttpAnswer) -> Unit) {
         checkNotNull(TransportContract.address(request, origin)) { "a call the contract refuses: $request" }
         check(TransportContract.headers(request).keys.none { it.equals("Sec-Fetch-Site", ignoreCase = true) })
         sent += request
-        val a = route(request)
+        val a = if (request.token != null && request.token in expired) TOKEN_EXPIRED else route(request)
+        answers += a
         pending.addLast { answer(a) }
     }
 
@@ -45,6 +55,8 @@ class FakeBackend(val origin: String = ORIGIN) : BackendTransport {
         const val ORIGIN = "https://classbeat.test"
 
         fun ok(body: Any?) = HttpAnswer.Http(200, body, null)
+
+        val TOKEN_EXPIRED = HttpAnswer.Http(401, mapOf("error" to "token_expired"), null)
 
         fun status(code: Int, body: Any? = null) = HttpAnswer.Http(code, body, null)
 
@@ -70,9 +82,13 @@ class FakeBackend(val origin: String = ORIGIN) : BackendTransport {
 class FakeStore(var available: Boolean = true, var saves: Boolean = true, var text: String? = null) : SecretStore {
     var deletes = 0
 
+    /** Every text a save was asked to keep, kept or not. */
+    val saved = mutableListOf<String>()
+
     override fun available() = available
 
     override fun save(text: String): Boolean {
+        saved += text
         if (!saves) return false
         this.text = text
         return true

@@ -2,6 +2,8 @@ package org.classbeat.player.mode
 
 import android.os.Handler
 import android.os.Looper
+import android.view.Window
+import android.view.WindowManager
 
 /** What the pairing screen draws on: [ModeScreens] on the phone, a fake in a JVM test. */
 interface PairingScreens {
@@ -29,4 +31,17 @@ class MainTicker : Ticker {
     }
 
     override fun cancel(run: Runnable) = handler.removeCallbacks(run)
+}
+
+/** Keeps the window out of Recents and screenshots while the pairing screen shows its code. */
+interface SecureFlag {
+    fun secure(on: Boolean)
+}
+
+/** [SecureFlag] on the activity's window: FLAG_SECURE blanks the Recents thumbnail and blocks screenshots. */
+class WindowSecureFlag(private val window: Window) : SecureFlag {
+    override fun secure(on: Boolean) {
+        val flag = WindowManager.LayoutParams.FLAG_SECURE
+        if (on) window.addFlags(flag) else window.clearFlags(flag)
+    }
 }

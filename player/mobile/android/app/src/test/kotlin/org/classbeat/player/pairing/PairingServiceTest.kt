@@ -1,6 +1,7 @@
 package org.classbeat.player.pairing
 
 import org.classbeat.player.backend.HttpAnswer
+import org.classbeat.player.backend.Method
 import org.classbeat.player.backend.OfflineTransport
 import org.classbeat.player.fake.FakeBackend
 import org.classbeat.player.fake.FakeBackend.Companion.ORIGIN
@@ -212,6 +213,81 @@ class PairingServiceTest {
         assertNotNull(store.text)
         assertEquals(0, ports.cacheForgets)
         assertEquals(0, forgotten)
+    }
+
+    /**
+     * A stored pairing whose token has expired, then a "pair again" up to the new token: start, the
+     * code, one poll answered with token C (issue #952). Online, the backend holds the old token as
+     * expired and answers every call with it 401 token_expired; [offline], the give-back finds no
+     * network.
+     */
+    private fun pairAgain(offline: Boolean = false): PairingService {
+        store.text = PairingRecord(ORIGIN, Secrets.token(), "coach@example.test").text()
+        if (!offline) backend.expired = setOf(Secrets.token())
+        backend.route = { r ->
+            when (r.path) {
+                "/api/pairing/start" -> FakeBackend.started()
+                "/api/pairing/token" -> FakeBackend.token(Secrets.token('C'))
+                else -> if (r.method == Method.DELETE) HttpAnswer.Unreachable else FakeBackend.TOKEN_EXPIRED
+            }
+        }
+        val s = service()
+        s.load()
+        backend.flush()
+        assertEquals(PairingView.Paired("coach@example.test", null, true, null), s.view())
+        s.begin()
+        backend.flush()
+        ports.fireNext()
+        backend.flush()
+        return s
+    }
+
+    /** The expired token was given back once, as the last call, answered [answer]; it is never sent again. */
+    private fun assertGivenBackOnce(answer: HttpAnswer) {
+        val old = backend.sent.withIndex().filter { it.value.token == Secrets.token() }
+        // The check at start, then the give-back: nothing after it.
+        assertEquals(listOf("GET /api/player/device", "DELETE /api/player/device"), old.map { "${it.value.method} ${it.value.path}" })
+        assertEquals(backend.sent.lastIndex, old.last().index)
+        assertEquals(answer, backend.answers[old.last().index])
+    }
+
+    /** After the give-back's answer, whatever it was: the new token is held and kept, nothing else is. */
+    private fun assertCarriesOn(s: PairingService) {
+        assertEquals(PairingView.Paired("coach@example.test", null, false, null), s.view())
+        assertEquals(listOf(Secrets.token('C')), s.secrets())
+        assertEquals(Secrets.token('C'), s.credential()!!.token)
+        // The new token is the only one saved, and the only one the store holds.
+        assertEquals(listOf(Secrets.token('C')), store.saved.map { PairingRecord.parse(it, false)!!.token })
+        assertEquals(Secrets.token('C'), PairingRecord.parse(store.text!!, false)!!.token)
+        assertEquals(0, ports.cacheForgets)
+        assertEquals(0, forgotten)
+        assertTrue("no retry is set", ports.timers.isEmpty())
+    }
+
+    @Test
+    fun `a pair again gives the expired token back and carries on after the 401`() {
+        val s = pairAgain()
+        assertGivenBackOnce(FakeBackend.TOKEN_EXPIRED)
+        assertCarriesOn(s)
+    }
+
+    @Test
+    fun `a pair again carries on when the give-back finds no network`() {
+        val s = pairAgain(offline = true)
+        assertGivenBackOnce(HttpAnswer.Unreachable)
+        assertCarriesOn(s)
+    }
+
+    @Test
+    fun `a pair again whose token cannot be kept gives both tokens back and keeps neither`() {
+        store.saves = false
+        val s = pairAgain()
+        assertEquals(PairingView.Unpaired(Notice.SAVE_FAILED), s.view())
+        assertNull(store.text)
+        assertEquals(emptyList<String>(), s.secrets())
+        val revokes = backend.sent.filter { it.method == Method.DELETE }.map { it.token }
+        assertEquals(listOf(Secrets.token(), Secrets.token('C')), revokes)
+        assertEquals(1, forgotten)
     }
 
     @Test

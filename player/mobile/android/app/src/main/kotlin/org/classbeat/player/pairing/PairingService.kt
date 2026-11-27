@@ -155,7 +155,7 @@ class PairingService(
                 ports.forgetCache()
                 forgotten()
             }
-            // Given back to the backend; its answer changes nothing here.
+            // Given back to the backend, best effort: any answer, a 401 or no network, changes nothing here.
             is Effect.Revoke -> transport.send(Calls.revoke(effect.record.origin, effect.record.token)) {}
         }
     }
