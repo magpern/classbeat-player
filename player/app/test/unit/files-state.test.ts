@@ -65,6 +65,24 @@ test("only local rows have a view; each is checked once, one at a time, and says
   assert.equal(r.checks.length, 2, "an answered class is not checked again");
 });
 
+test("on the call that starts the next class's check, the answered row's Start is held as held() says", async () => {
+  const { state, settle } = rig();
+  const [a, b] = [ROWS[0]!, ROWS[1]!];
+  state.view(ROWS);
+  await settle();
+  const second = state.view(ROWS);
+  assert.equal(second[0]!.phase, "idle", "A keeps its answer");
+  assert.equal(second[0]!.missing.length, 2);
+  assert.equal(second[1]!.phase, "checking", "only B says checking");
+  assert.equal(second[0]!.held, true, "A's displayed Start is held while B is checked");
+  assert.equal(state.held(a.id, a.hash), true);
+  await settle();
+  const third = state.view(ROWS);
+  assert.deepEqual(third.map((v) => v.held), [false, false], "Start is back when checks finish");
+  assert.equal(state.held(a.id, a.hash), false);
+  assert.equal(state.held(b.id, b.hash), false);
+});
+
 test("a check that found the service busy is asked again after a while, not at once", async () => {
   const { r, state, settle } = rig();
   r.checkAnswer = null;
