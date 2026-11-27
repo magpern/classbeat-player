@@ -25,7 +25,7 @@ import java.util.logging.Logger
  * stub that throws (unitTests.isReturnDefaultValues = false), so a Log call on the run fails it too.
  */
 class PairingLogTest {
-    private val userCode = "BCDF-GHJK"
+    private val userCode = FakeBackend.USER_CODE
     private val secrets = listOf(Secrets.token(), Secrets.token('C'), Secrets.deviceCode(), userCode)
 
     /** Every source the pairing runs through: its state, store and ports, the screen, and the calls it makes. */
@@ -76,8 +76,11 @@ class PairingLogTest {
             first.load()
             first.begin()
             backend.flush()
+            // The codes under test are the ones in play: the user code was shown, the device code was sent.
+            assertEquals(userCode, (first.view() as PairingView.Waiting).userCode)
             ports.fireNext()
             backend.flush()
+            assertTrue(backend.sent.any { it.path == "/api/pairing/token" && it.body?.get("device_code") == Secrets.deviceCode() })
             assertTrue(first.view() is PairingView.Paired)
             first.unpair()
             backend.flush()
@@ -125,11 +128,11 @@ class PairingLogTest {
         val level = root.level
         val out = System.out
         val err = System.err
-        System.setOut(sink)
-        System.setErr(sink)
-        root.level = Level.ALL
-        root.addHandler(handler)
         try {
+            System.setOut(sink)
+            System.setErr(sink)
+            root.level = Level.ALL
+            root.addHandler(handler)
             run()
         } finally {
             root.removeHandler(handler)
