@@ -78,11 +78,15 @@ export function createFilesState(d: FilesStateDeps): FilesState {
 
   return {
     view(rows) {
+      // Start the next automatic check before any row is projected, so every row's `held` is read after the shared flag is set.
+      for (const r of rows) {
+        const e = r.source === "local" ? entryOf(r) : null;
+        if (e !== null && running === null && e.phase === "idle" && e.answer === null && d.now() >= e.retryAt) check(r.id, e);
+      }
       const out: FilesView[] = [];
       for (const r of rows) {
         if (r.source !== "local") continue;
         const e = entryOf(r);
-        if (running === null && e.phase === "idle" && e.answer === null && d.now() >= e.retryAt) check(r.id, e);
         if (e.memo === null || e.memo.phase !== phaseOf(e) || e.memo.held !== heldOf(e)) e.memo = filesViewOf({ id: r.id, hash: r.hash, doc: d.document(r.id), answer: e.answer, phase: phaseOf(e), held: heldOf(e), searched: e.searched, failed: e.failed });
         if (e.memo !== null) out.push(e.memo);
       }
