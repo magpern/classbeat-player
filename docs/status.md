@@ -173,7 +173,7 @@ measurable on fakes: S9's frame rate on a studio-class computer (software GL giv
 that is the owner's spike 2 run ([owner.md](owner.md)). No real GPU, display removal or music
 link was used.
 
-## PL12: installed phone and tablet apps (Android done on fakes)
+## PL12: installed phone and tablet apps (Android and iOS done on fakes)
 
 Merged: the plan (#551), ADR 0011 (Capacitor, #553), spike 3 (an Android media-session follower
 and frame-rate logger, #555) with its CI build (#560) and guard hardening (#561, #566, #568,
@@ -229,9 +229,18 @@ job (#902), no Follow key where a platform has no music reader (#903, #904, #906
 shell with its guards (#905), the runbook for running it from Xcode (#907), the mode holder with
 intents split by mode and the screen-lock check (#908), pairing with a Keychain-held device token
 (#914) and keeping the screen on with the room screen on an external display (#897, #913). Spec:
-the iOS pairing screen (#924, #930). In progress: the pairing screen (#925), then its hardening
-(#926) and rider mode (#898, which adds the Bluetooth permission text and read-only sensors under
-the same guards as Android). The Swedebeat option is dimmed in the iOS build (#932, after #898).
+the iOS pairing screen (#924, #930). Since then: the pairing screen (#925, #938), its hardening
+(#926, #950; specs as built #953), rider mode with its traffic faked (#898, #957) and the Swedebeat
+option shown as unavailable in the iOS build (#932, #961; spec #960, as built #966, #969). Rider
+mode on iOS has no sensors and no Bluetooth permission text (ADR 0016 section 7): native sensors on
+iOS wait for the owner's PL9 guard decision, as on Android ([owner.md](owner.md)).
+
+Verifier at ce6f47a (iOS): the web bundle builds, the 172 mobile tests pass (the iOS guards, the
+Swedebeat dimming and the shots among them), mutated rule guards fail as they should, and the CI
+`ios` job (simulator build and XCTest) is green on main at 08af75e. Every built item is met on
+fakes; the one gap was this record (#971). Not checked on a Mac, iPhone or iPad: that waits for the
+owner (signing, the Apple Developer membership, the backend calls, the PL9 sensor decision). iOS is
+done on fakes.
 
 ## ADR 0017: the instructor's own local music files
 

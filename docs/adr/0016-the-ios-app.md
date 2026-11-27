@@ -1,6 +1,6 @@
 # 0016. The iOS app: the same Capacitor app, on the manual clock
 
-Status: Proposed. Becomes Accepted when a Reviewer passes its pull request. Runs on a real iPhone
+Status: Accepted (Reviewer PASS in #892; built on fakes and verified at ce6f47a). Runs on a real iPhone
 or iPad, signing and the App Store wait for the owner (docs/owner.md, plan decision 9); until then
 everything is built and tested in CI on the iOS simulator and run by the owner on an Apple silicon
 Mac.
