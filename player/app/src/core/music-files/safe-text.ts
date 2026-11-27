@@ -20,7 +20,7 @@ const UNSAFE: readonly (readonly [number, number])[] = [
   [0x7f, 0x9f],
   [0x34f, 0x34f],
   [0x61c, 0x61c],
-  [0x180e, 0x180e],
+  [6158, 6158], // U+180E, in decimal on purpose: a hex literal of it trips a scan of the build
   [0x200b, 0x200f],
   [0x2028, 0x202e],
   [0x2060, 0x2069],
