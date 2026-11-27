@@ -94,6 +94,7 @@
 		DD1B09A77BA8246511E236AE /* ModeHolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939F9981695BFB8DEF816E2D /* ModeHolderTests.swift */; };
 		E88F5917BC95A6F614A4860E /* IntentAnswersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58431064FC41FC5AFD17CF56 /* IntentAnswersTests.swift */; };
 		E8C51FBE75F975F7E5516391 /* BuildFlavor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51DF05BB7FA104DEF0BDF8C /* BuildFlavor.swift */; };
+		A5D0932A0000000000000001 /* SwedebeatSetting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D0932B0000000000000001 /* SwedebeatSetting.swift */; };
 		EB0859F782EB19BF225CB341 /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDC31EC6B910E9E137D48D1 /* ExternalDisplay.swift */; };
 		EC89AE69BD9B79092A5C7132 /* ShellViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319D1AA1E8B5EEA5483C7072 /* ShellViewController.swift */; };
 		ECBDC80A580EC1682DD87C90 /* ShellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBC6C6FFF91B8B9FB1816BD /* ShellTests.swift */; };
@@ -209,6 +210,7 @@
 		F3C3829363C108E0DCA92F8C /* KeepAwake.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeepAwake.swift; sourceTree = "<group>"; };
 		F4160AC257C4E19985D31F8D /* ModePlugins.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ModePlugins.swift; sourceTree = "<group>"; };
 		F51DF05BB7FA104DEF0BDF8C /* BuildFlavor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BuildFlavor.swift; sourceTree = "<group>"; };
+		A5D0932B0000000000000001 /* SwedebeatSetting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwedebeatSetting.swift; sourceTree = "<group>"; };
 		F9BD28E9F55EECD90958F6DB /* BridgeFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BridgeFilter.swift; sourceTree = "<group>"; };
 		FB18AB8DB879F52E58E31FAB /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB85CB804F3244D81DA32F95 /* DeviceLock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceLock.swift; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@
 				70FB675777C7F33A03B80D7E /* WholeMatch.swift */,
 				0B656F40A1C1B4667F5E457F /* AnswerPolicy.swift */,
 				F51DF05BB7FA104DEF0BDF8C /* BuildFlavor.swift */,
+				A5D0932B0000000000000001 /* SwedebeatSetting.swift */,
 				1DDEDDA9909A12F22259AC40 /* ExternalDisplayPolicy.swift */,
 				7A19F338D22936259316E977 /* IntentAnswers.swift */,
 				31BAA6BF79246FEE244D3B44 /* IntentPolicy.swift */,
@@ -625,6 +628,7 @@
 				EE08E4544F3EB6089A681B36 /* WebViewFactory.swift in Sources */,
 				C2894CB92B40C0C84B23AF09 /* AnswerPolicy.swift in Sources */,
 				E8C51FBE75F975F7E5516391 /* BuildFlavor.swift in Sources */,
+				A5D0932A0000000000000001 /* SwedebeatSetting.swift in Sources */,
 				8FB38388EC0B8916058A7C53 /* ExternalDisplayPolicy.swift in Sources */,
 				802F22DD6D29959F607DD2B5 /* IntentAnswers.swift in Sources */,
 				99AF90E70C527D64F87FC61F /* IntentPolicy.swift in Sources */,

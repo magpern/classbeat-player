@@ -47,6 +47,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/Policy/AnswerPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/BuildFlavor.swift": [],
   "ios/App/App/Policy/Calls.swift": [],
+  "ios/App/App/Policy/SwedebeatSetting.swift": [],
   "ios/App/App/Policy/ExternalDisplayPolicy.swift": ["Foundation"],
   "ios/App/App/Policy/IntentAnswers.swift": [],
   "ios/App/App/Policy/IntentPolicy.swift": ["Foundation"],

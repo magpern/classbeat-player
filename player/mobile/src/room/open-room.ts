@@ -9,12 +9,15 @@ import { classIdOf } from "./address.ts";
 import { readClassAnswer } from "./class-answer.ts";
 import type { RoomClassSource } from "./class-source.ts";
 import { type ClockRoom, clockRoom, type ClockRoomDeps } from "./clock-room.ts";
+import { refused } from "../swedebeat-off.ts";
 import { listAfter, type NoClass } from "./plate-words.ts";
 
 export interface OpenRoomDeps extends ClockRoomDeps {
   readonly search: string;
   /** Native code narrowed to getClass (class-source.ts). */
   readonly native: RoomClassSource;
+  /** The iOS app with Swedebeat off (swedebeat-off.ts): a class from Swedebeat never opens. Off when left out. */
+  readonly swedebeatOff?: boolean;
   /** Puts the room where the room screen reads it (`window.room`). */
   readonly install: (room: ClockRoom) => void;
   /** Loads the room screen's module, which reads the room as it first runs. */
@@ -50,6 +53,7 @@ async function opened(id: string, deps: OpenRoomDeps): Promise<"open" | NoClass>
   }
   const answer = readClassAnswer(reply);
   if (!answer.ok) return answer.why;
+  if (refused(deps.swedebeatOff === true, answer.doc.music.source)) return "swedebeat";
   deps.install(clockRoom(`${id}.json`, answer.doc, deps));
   return "open";
 }

@@ -17,6 +17,11 @@ final class ShellTests: XCTestCase {
         throw ShellMissing()
     }
 
+    // Issue #932: the iOS build ships with Swedebeat off (test/ios-swedebeat.test.ts keeps the page in step).
+    func testSwedebeatIsOffInTheShippedBuild() {
+        XCTAssertFalse(SwedebeatSetting.swedebeatEnabled)
+    }
+
     func testTheWebViewIsHardened() throws {
         let webView = try XCTUnwrap(try shell().webView)
         let config = webView.configuration

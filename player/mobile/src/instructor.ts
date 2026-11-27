@@ -9,7 +9,9 @@ import "../../../web/src/companion/companion.css";
 import "../../../web/src/rider/rider.css";
 import "./modes/app.css";
 import { el } from "../../../web/src/room/dom.ts";
-import { instructorMode } from "./modes/bridge.ts";
+import { instructorMode, platformName } from "./modes/bridge.ts";
+import { buildSetting, refused, swedebeatOff } from "./swedebeat-off.ts";
+import { swedebeatLine, swedebeatRow } from "./modes/swedebeat-view.ts";
 import { type ClassList, PAIR_AGAIN, parseClassList, STATUS_WORDS, UNPAIR } from "./modes/classes.ts";
 import { page, h1, key, modeTag, plate, strip } from "./modes/view.ts";
 import { INSTRUCTOR } from "./modes/words.ts";
@@ -28,7 +30,11 @@ const status = el("div", { class: "status" }, [line, unpairKey]);
 const rows = el("div", { class: "rows" }, []);
 let shownPlate: HTMLElement | null = null;
 const s = strip(INSTRUCTOR.key, () => void once(() => native.askRiderMode()));
-document.body.append(page([modeTag(INSTRUCTOR.tag), h1(INSTRUCTOR.title), status], [rows, s.nav]));
+// The iOS app with Swedebeat off (issue #932): the dimmed line under the sync status, always, and
+// a class from Swedebeat listed but never opened. Any other build is unchanged.
+const off = swedebeatOff(platformName(), buildSetting());
+const swedebeat = off ? [swedebeatLine()] : [];
+document.body.append(page([modeTag(INSTRUCTOR.tag), h1(INSTRUCTOR.title), status, ...swedebeat], [rows, s.nav]));
 
 // The class that did not open, once: the fragment goes, so a reload shows the list alone.
 const notOpened = plateFor(window.location.hash);
@@ -63,7 +69,7 @@ function render(list: ClassList): void {
   }
   rows.replaceChildren(
     ...list.classes.map((c) =>
-      key("key row", "open_class", c.title, () => window.location.assign(roomFor(c.id)), [
+      refused(off, c.source) ? swedebeatRow(c) : key("key row", "open_class", c.title, () => window.location.assign(roomFor(c.id)), [
         el("span", { class: "kl", tier: "minor", lines: 2, text: c.title }),
         el("span", { class: "kh", tier: "label", lines: 1, text: c.facts }),
       ]),

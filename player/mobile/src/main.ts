@@ -11,6 +11,7 @@ import { hasMusicReader } from "./room/reader-platform.ts";
 import { roomClass, roomFollow } from "./room/native.ts";
 import { roomPlatform } from "./room/native.ts";
 import { usePhoneLayouts } from "./room/phone-layouts.ts";
+import { buildSetting, swedebeatOff } from "./swedebeat-off.ts";
 import { phoneFollower } from "./room/phone-follower.ts";
 import { openRoom } from "./room/open-room.ts";
 
@@ -29,6 +30,8 @@ void openRoom({
   every,
   follower: () => phoneFollower(roomFollow(), window, { now, every }),
   // No reader on this platform (reader-platform.ts): no follower is built, so no Follow and no native music call.
+  // The iOS build with Swedebeat off never opens a class from Swedebeat (issue #932).
+  swedebeatOff: swedebeatOff(roomPlatform(), buildSetting()),
   hasReader: hasMusicReader(roomPlatform()),
   leave: () => window.location.replace("instructor.html"),
   onClose: (fn) => window.addEventListener("pagehide", fn, { once: true }),

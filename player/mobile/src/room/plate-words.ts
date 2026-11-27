@@ -5,8 +5,10 @@
 // (core/class-file.ts; a test keeps them equal, so the list's bundle need not carry the reader).
 // Nothing from the class or the address becomes a word. Pure.
 
+import { NOT_AVAILABLE } from "../swedebeat-off.ts";
+
 /** Why no class opened. */
-export type NoClass = "missing" | "invalid" | "newer";
+export type NoClass = "missing" | "invalid" | "newer" | "swedebeat";
 
 export interface PlateWords {
   readonly head: string;
@@ -16,6 +18,8 @@ export interface PlateWords {
 export const PLATE_WORDS: Readonly<Record<NoClass, PlateWords>> = {
   missing: { head: "That class is not here", detail: "It may have been deleted." },
   invalid: { head: "That class cannot be opened", detail: "This class file is not valid." },
+  // The iOS app with Swedebeat off (issue #932): the one sentence, no other words, no key but the list.
+  swedebeat: { head: NOT_AVAILABLE, detail: "" },
   newer: { head: "That class cannot be opened", detail: "This class needs a newer version of the player." },
 };
 

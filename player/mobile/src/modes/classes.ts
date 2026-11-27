@@ -5,10 +5,16 @@
 
 export type Status = "syncing" | "synced" | "offline" | "waiting" | "expired" | "unpaired" | "unavailable";
 
+export type Source = "spotify" | "swedebeat" | "local" | "none";
+const SOURCES: readonly Source[] = ["spotify", "swedebeat", "local", "none"];
+
 export interface ClassRow {
   readonly id: string;
   readonly title: string;
   readonly facts: string;
+  readonly songs: number;
+  /** Where the class's songs come from, when native code says. Only "swedebeat" changes anything (swedebeat-off.ts). */
+  readonly source?: Source;
 }
 
 export interface ClassList {
@@ -42,10 +48,13 @@ export function parseClassList(reply: unknown): ClassList | null {
   if (status === undefined) return null;
   const classes: ClassRow[] = [];
   for (const item of o.classes) {
-    const c = exactly(item, ["id", "title", "minutes", "songs"]);
+    // `source` is optional: Android's answer has the four keys, iOS adds the fifth.
+    const c = exactly(item, ["id", "title", "minutes", "songs"]) ?? exactly(item, ["id", "title", "minutes", "songs", "source"]);
     if (c === null || typeof c.id !== "string" || !CLASS_ID.test(c.id) || typeof c.title !== "string" || c.title === "") return null;
     if (!count(c.minutes) || !count(c.songs)) return null;
-    classes.push({ id: c.id, title: c.title, facts: facts(c.minutes, c.songs) });
+    const source = SOURCES.find((x) => x === c.source);
+    if ("source" in c && source === undefined) return null;
+    classes.push({ id: c.id, title: c.title, facts: facts(c.minutes, c.songs), songs: c.songs, ...(source === undefined ? {} : { source }) });
   }
   return { classes, status };
 }
