@@ -1,48 +1,13 @@
 // The iOS side of the mode holder (issue #895): it puts the current mode's plugin on the bridge,
 // loads the mode's pages and no other, shows the native screens and asks the device owner's
-// authentication. It also keeps the idle timer and the external display in step with the mode,
-// the page and the foreground (issue #897). The holder and the policies decide; this only carries
+// authentication. It also tells ScreenFollower what the idle timer and the external display follow
+// (issue #897). The holder and the policies decide; this only carries
 // it out, as Android's ModeController.kt.
 // Every method runs on the main thread. Pure: no import at all; the screen lock, the screens and
-// the web view come in through the protocols below, so the tests fake every one of them
+// the web view come in through the protocols in ModeSeams.swift, so the tests fake every one of them
 // (AppTests/ModeControllerTests.swift).
 
-/// The device owner's authentication (LocalAuthentication on a device, a fake in the tests).
-protocol ScreenLock: AnyObject {
-    /// The device has a passcode. Read again at every decision.
-    var isSet: Bool { get }
-
-    /// Asks the device owner's authentication, afresh every time; `done` hears whether it passed.
-    func ask(_ done: @escaping (Bool) -> Void)
-}
-
-/// The native screens over the page.
-protocol ModeScreens: AnyObject {
-    /// "A passcode is needed": instructor mode cannot open without one.
-    func noLock(stay: @escaping () -> Void)
-
-    /// "Switch to rider mode?"
-    func riderQuestion(stay: @escaping () -> Void, switch: @escaping () -> Void)
-
-    /// The switching screen while a switch runs.
-    func switching(rider: Bool)
-
-    /// Takes down whatever native screen shows.
-    func hide()
-}
-
-/// Loads a bundled page in the web view's main frame.
-protocol PageLoader: AnyObject {
-    func load(_ path: String)
-}
-
-/// A call from the page, answered once.
-protocol PageCall: AnyObject {
-    func answer(_ data: [String: Any])
-    func refuse()
-}
-
-final class ModeController: ModeEffects, PageSteps {
+final class ModeController: ModeEffects, PageSteps, UnpairSteps {
     private final class Held {
         let call: PageCall
         init(_ call: PageCall) { self.call = call }
@@ -51,21 +16,17 @@ final class ModeController: ModeEffects, PageSteps {
     private let lock: ScreenLock
     private let screens: ModeScreens
     private let loader: PageLoader
-    private let awake: KeepAwake
-    private let display: ExternalDisplay
+    private let pairing: PairingUi
+    private let screen: ScreenFollower
     private let secrets: () -> [String]
     private let stop: ([String]) -> Void
     private var holder: ModeHolder?
     private lazy var opener = PageOpener(self)
     private var question: PageQuestion<Held>!
+    private lazy var unpairing = UnpairQuestion(self)
 
     /// The mode whose plugin is on the bridge; nil while none is.
     private var exposedMode: Mode?
-
-    /// The main-frame page last committed, and whether the app is in the foreground: the inputs of
-    /// KeepAwake and ExternalDisplay besides the mode (issue #897).
-    private var page: String?
-    private var foreground = false
 
     /// `secrets` are the tokens the device holds, which no answer may carry; `stop` ends the app
     /// when a switch could not drop everything.
@@ -73,6 +34,7 @@ final class ModeController: ModeEffects, PageSteps {
         lock: ScreenLock,
         screens: ModeScreens,
         loader: PageLoader,
+        pairing: PairingUi,
         awake: KeepAwake,
         display: ExternalDisplay,
         secrets: @escaping () -> [String] = { [] },
@@ -81,25 +43,25 @@ final class ModeController: ModeEffects, PageSteps {
         self.lock = lock
         self.screens = screens
         self.loader = loader
-        self.awake = awake
-        self.display = display
+        self.pairing = pairing
+        screen = ScreenFollower(awake: awake, display: display)
         self.secrets = secrets
         self.stop = stop
         question = PageQuestion<Held>(
             resolve: { [weak self] held, word in self?.answer(held.call, ["result": word]) },
             refuse: { held in held.call.refuse() }
         )
+        // The token was deleted (unpaired here, revoked or unknown on the site): instructor mode closes.
+        pairing.service.forgotten = { [weak self] in self?.unpaired() }
     }
 
     /// Opens the app in rider mode. Throws if the parts are not the ones ModePolicy.teardown names.
     func start(device: Device, store: ModeStore, parts: [Teardown]) throws {
         let holder = try ModeHolder(store: store, device: device, effects: self, parts: parts)
         self.holder = holder
-        // The app opens in the foreground; UIKit sends no foreground event for the launch.
-        foreground = true
-        display.start()
+        screen.launched()
         holder.start()
-        follow()
+        screen.follow(current)
     }
 
     var current: Mode? { holder?.current }
@@ -114,9 +76,9 @@ final class ModeController: ModeEffects, PageSteps {
     }
 
     func shown(_ path: String) {
-        page = path
+        screen.committed(path)
         opener.committed(path)
-        follow()
+        screen.follow(current)
     }
 
     // From the page, through the mode plugins.
@@ -134,16 +96,31 @@ final class ModeController: ModeEffects, PageSteps {
             answer(call, ["way": holder.paired ? "lock" : "pair"])
         case "askInstructorMode":
             question.ask(Held(call)) {
+                if pairing.showing { return false }
                 switch holder.askInstructor() {
                 case nil:
                     return false
+                // On an unpaired phone the strip's key starts pairing, on the native pairing screen.
                 case .pair:
-                    // No pairing on iOS yet: the page hears that the phone is not paired.
-                    question.settle("unpaired")
+                    pairing.open(instructor: false) { [weak self] made in self?.pairingLeft(made) }
                     return true
                 case .noLock, .askLock:
                     return true
                 }
+            }
+        // "Pair again" (the pairing expired): the same native screen, from instructor mode.
+        case "pairAgain":
+            question.ask(Held(call)) {
+                if pairing.showing { return false }
+                pairing.open(instructor: true) { [weak self] made in self?.pairingLeft(made) }
+                return true
+            }
+        // "Unpair this phone": asks first; only "Unpair" deletes anything.
+        case "unpair":
+            question.ask(Held(call)) {
+                if pairing.showing || holder.pending != nil || holder.current != .instructor { return false }
+                unpairing.ask()
+                return true
             }
         case "askRiderMode":
             question.ask(Held(call)) { holder.askRider() }
@@ -158,10 +135,10 @@ final class ModeController: ModeEffects, PageSteps {
 
     // From the app's life.
 
-    /// Back in the app: a passcode may have been set meanwhile.
+    /// Back in the app: a passcode may have been set meanwhile, and a code may have been confirmed.
     func resumed() {
-        foreground = true
-        follow()
+        pairing.resumed()
+        screen.front(true, current)
         guard let holder = holder, holder.pending == .noLock else { return }
         holder.noLockReturned()
         // No longer paired: nothing to ask, so the screen goes and the page hears so.
@@ -171,11 +148,12 @@ final class ModeController: ModeEffects, PageSteps {
         }
     }
 
-    /// Leaving the app while the rider question shows means "Stay".
+    /// Leaving the app while the rider or the unpair question shows means "Stay". The pairing
+    /// screen stays, as the site opens in Safari, but asks the server nothing until the app is back.
     func stopped() {
-        foreground = false
-        follow()
-        if holder?.pending == .riderQuestion { stay() }
+        screen.front(false, current)
+        pairing.stopped()
+        if holder?.pending == .riderQuestion || unpairing.showing { stay() }
     }
 
     /// The pairing's token was deleted (unpaired, revoked or unknown on the site): instructor mode closes.
@@ -187,10 +165,9 @@ final class ModeController: ModeEffects, PageSteps {
 
     func closeBridge() {
         expose(nil)
-        // Between modes: the screen is released at once, before the drops run.
-        page = nil
-        awake.release()
-        display.update(current, page, foreground: foreground)
+        pairing.drop()
+        unpairing.close()
+        screen.between(current)
         // The page that asked is being replaced: its question ends here, with the one refused word.
         question.drop()
     }
@@ -250,6 +227,7 @@ final class ModeController: ModeEffects, PageSteps {
     private func stay() {
         // Between modes (the switching screen): nothing to stay in.
         guard let holder = holder, holder.current != nil else { return }
+        unpairing.close()
         switch holder.pending {
         case .noLock: holder.noLockStay()
         case .riderQuestion: _ = holder.riderAnswered(false)
@@ -259,11 +237,37 @@ final class ModeController: ModeEffects, PageSteps {
         question.settle("stayed")
     }
 
-    /// The idle timer and the external display follow the pure decisions. iOS has no rider session
-    /// yet, so no rider is ever joined.
-    private func follow() {
-        awake.sync(current, page, riderJoined: false, foreground: foreground)
-        display.update(current, page, foreground: foreground)
+    /// The pairing screen went. In rider mode a pairing made goes on to the screen lock, as the key
+    /// now would.
+    private func pairingLeft(_ made: Bool) {
+        guard made, let holder = holder, holder.current == .rider else {
+            question.settle(made ? "paired" : "stayed")
+            return
+        }
+        switch holder.askInstructor() {
+        case .noLock?, .askLock?: break
+        default: question.settle("stayed")
+        }
+    }
+
+    // UnpairSteps. "Unpair": the page hears first, then the token and the classes go and
+    // instructor mode closes.
+
+    func showUnpairQuestion(stay: @escaping () -> Void, unpair: @escaping () -> Void) {
+        screens.unpairQuestion(stay: stay, unpair: unpair)
+    }
+
+    func unpairStay() {
+        stay()
+    }
+
+    func unpairAnswer(_ result: String) {
+        screens.hide()
+        question.settle(result)
+    }
+
+    func unpairNow() {
+        pairing.service.unpair()
     }
 
     /// Every answer is checked once more: none may carry a token the device holds.

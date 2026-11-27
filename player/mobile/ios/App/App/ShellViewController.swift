@@ -37,18 +37,21 @@ final class ShellViewController: CAPBridgeViewController {
         let screens = AlertScreens(host: self)
         let loader = WebPageLoader(webView)
         let display = ExternalDisplay(source: DisplayScenes.shared, surface: SceneRoomSurface(scenes: DisplayScenes.shared))
-        let pairing = Self.makePairing()
+        let (pairing, ports) = Self.makePairing()
+        // The pairing screen (issue #925) is drawn natively over the page; the controller wires the
+        // service's unpair to instructor mode closing.
+        let pairingUi = PairingUi(service: pairing, ports: ports, screens: PairingScreenView(host: self), ticker: SecondTicker())
         let controller = ModeController(
             lock: DeviceLock(),
             screens: screens,
             loader: loader,
+            pairing: pairingUi,
             awake: KeepAwake(AppIdleTimer()),
             display: display,
             secrets: { pairing.secrets() }
         ) { failed in
             fatalError("classbeat: the mode switch could not drop \(failed)")
         }
-        pairing.forgotten = { [weak controller] in controller?.unpaired() }
         self.pairing = pairing
         let rider = RiderModePlugin()
         rider.controller = controller
@@ -95,7 +98,7 @@ final class ShellViewController: CAPBridgeViewController {
     /// The pairing (issue #896): the first-launch wipe runs before anything reads the Keychain, the
     /// class cache is made excluded from backup, and with no backend in the build yet (ADR 0016
     /// section 4) the origin is nil and the transport is offline, so the phone pairs nothing.
-    private static func makePairing() -> PairingService {
+    private static func makePairing() -> (PairingService, PairingPorts) {
         let store = FirstLaunch.store(defaults: .standard, keychain: SystemKeychain())
         let cache: ClassCacheFolder
         do {
@@ -105,14 +108,16 @@ final class ShellViewController: CAPBridgeViewController {
             fatalError("classbeat: the class cache could not be excluded from backup")
         }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-        return PairingService(
+        let ports = PhonePairingPorts(cache: cache)
+        let service = PairingService(
             origin: nil,
             allowLoopbackHttp: BuildFlavor.isDebug,
             version: version,
             transport: OfflineTransport { DispatchQueue.main.async(execute: $0) },
             store: store,
-            ports: PhonePairingPorts(cache: cache)
+            ports: ports
         )
+        return (service, ports)
     }
 }
 

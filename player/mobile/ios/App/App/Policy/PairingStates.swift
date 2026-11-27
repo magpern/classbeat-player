@@ -53,7 +53,6 @@ extension PairingMachine {
     /// Its text and its mirror never show the device code or the token.
     enum Effect: Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
         case startCall(attempt: Int, origin: String)
-        case openPage(String)
         /// Send `.pollDue` for this attempt at `at` (the edge's one timer).
         case wake(attempt: Int, at: Int)
         case pollCall(attempt: Int, origin: String, deviceCode: String)
@@ -65,7 +64,6 @@ extension PairingMachine {
         var description: String {
             switch self {
             case let .startCall(a, origin): return "StartCall(\(a), \(origin))"
-            case let .openPage(page): return "OpenPage(\(page))"
             case let .wake(a, at): return "Wake(\(a), \(at))"
             case let .pollCall(a, _, _): return "PollCall(\(a))"
             case let .save(a, r): return "Save(\(a), \(r))"

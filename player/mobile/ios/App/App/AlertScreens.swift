@@ -37,6 +37,20 @@ final class AlertScreens: ModeScreens {
         present(screen)
     }
 
+    /// What the unpair question says (docs/design/app-pairing-ios.md).
+    static let unpairTitle = "Unpair this phone?"
+    static let unpairMessage = "The classes saved on this phone are removed and instructor mode closes. Teaching from it again needs a new pairing."
+
+    func unpairQuestion(stay: @escaping () -> Void, unpair: @escaping () -> Void) {
+        let screen = UIAlertController(title: Self.unpairTitle, message: Self.unpairMessage, preferredStyle: .alert)
+        // "Stay" is the main key and has the focus (app-modes.md, app-unpair-ask).
+        let keep = UIAlertAction(title: "Stay", style: .cancel) { _ in stay() }
+        screen.addAction(keep)
+        screen.addAction(UIAlertAction(title: "Unpair", style: .destructive) { _ in unpair() })
+        screen.preferredAction = keep
+        present(screen)
+    }
+
     func switching(rider: Bool) {
         hide()
         guard let view = host?.view else { return }

@@ -32,15 +32,18 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertEqual(rig.backend.open, 0)
     }
 
-    func testThePairingPageOpensThroughThePortsNeverTheAppsWebView() {
+    /// Issue #925: the code shows first; the service never opens the page by itself (only the
+    /// screen's "Open the site" does, PairingUiTests).
+    func testTheServiceNeverOpensThePairingPageByItself() {
         let rig = PairingRig()
         rig.service.begin()
-        XCTAssertEqual(rig.ports.pages, [])
         rig.backend.ok(FakeBackend.startBody())
-        XCTAssertEqual(rig.ports.pages, [origin + "/pair"])
-        // The page never carries the codes.
-        XCTAssertFalse(rig.ports.pages[0].contains("BCDF"))
-        XCTAssertFalse(rig.ports.pages[0].contains(Secrets.deviceCode()))
+        XCTAssertEqual(rig.service.view(), .waiting(userCode: "BCDF-GHJK", page: origin + "/pair", expiresAt: 601_000))
+        rig.ports.fireNext()
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.ports.pages, [])
     }
 
     func testSecretsAreTheDeviceCodeWhileWaitingAndTheTokenOncePaired() {
@@ -173,6 +176,50 @@ final class PairingServiceTests: XCTestCase {
         posted.removeFirst()()
         XCTAssertEqual(service.view(), .unpaired(notice: .unreachable))
         XCTAssertNil(store.text)
+    }
+
+    /// Issue #925: in the background the phone asks the server nothing; back in front it asks at once.
+    func testNothingIsAskedInTheBackgroundAndTheServerIsAskedAtOnceOnReturn() {
+        let rig = PairingRig()
+        rig.toWaiting()
+        rig.service.stopped()
+        // The poll in flight answers "pending" in the background: no wake is set.
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        XCTAssertTrue(rig.ports.timers.isEmpty)
+        let asked = rig.backend.requests.count
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1, "asked at once on return")
+        XCTAssertEqual(rig.backend.requests.last?.body, ["device_code": Secrets.deviceCode()])
+        rig.backend.ok(FakeBackend.tokenBody())
+        XCTAssertTrue(rig.service.paired)
+    }
+
+    func testAWakeSetBeforeTheBackgroundDoesNothing() {
+        let rig = PairingRig()
+        rig.toWaiting()
+        rig.backend.answerNext(.http(status: 400, body: ["error": PairingProtocol.pending], retryAfterS: nil))
+        XCTAssertEqual(rig.ports.timers.count, 1)
+        rig.service.stopped()
+        let asked = rig.backend.requests.count
+        rig.ports.fireNext()
+        XCTAssertEqual(rig.backend.requests.count, asked, "a stale wake asks nothing")
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1)
+        // A second return while that poll is out asks nothing more.
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked + 1)
+    }
+
+    func testResumingWithNoCodeWaitingAsksNothing() {
+        let rig = PairingRig()
+        rig.service.stopped()
+        rig.service.resumed()
+        rig.pair()
+        let asked = rig.backend.requests.count
+        rig.service.stopped()
+        rig.service.resumed()
+        XCTAssertEqual(rig.backend.requests.count, asked)
     }
 
     func testTheShippedBuildHasNoBackendSoItNeverPairs() {

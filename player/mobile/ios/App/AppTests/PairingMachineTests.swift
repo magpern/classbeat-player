@@ -32,7 +32,7 @@ final class PairingMachineTests: XCTestCase {
         XCTAssertEqual(begun.state, .starting(attempt: attempt, origin: origin, back: back))
         XCTAssertEqual(begun.effects, [.startCall(attempt: attempt, origin: origin)])
         let w = M.step(begun.state, .started(attempt: attempt, answer: started()), 0)
-        XCTAssertEqual(w.effects, [.openPage(page), .wake(attempt: attempt, at: 5500)])
+        XCTAssertEqual(w.effects, [.wake(attempt: attempt, at: 5500)], "no page opens until the key is pressed")
         return w.state
     }
 

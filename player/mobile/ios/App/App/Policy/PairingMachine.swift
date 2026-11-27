@@ -70,8 +70,9 @@ enum PairingMachine {
                 attempt: attempt, origin: origin, deviceCode: deviceCode, userCode: userCode, page: page,
                 expiresAt: now + expiresInMs, intervalMs: intervalMs, polling: false, back: back
             )
-            let next = wait(waiting, now, intervalMs)
-            return Step(state: next.state, effects: [.openPage(page)] + next.effects)
+            // No page opens here: the code shows first, and the page opens only on "Open the site"
+            // (docs/design/app-pairing.md item 5).
+            return wait(waiting, now, intervalMs)
         }
     }
 
