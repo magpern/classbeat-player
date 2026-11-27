@@ -44,8 +44,8 @@ function fields(doc: Readonly<Record<string, unknown>>): Pick<ClassRow, "title" 
 
 /** A document of a format major this player does not know (ADR 0003 section 7): its shape is not read. The row keeps what is plainly there, a title and a length, and is "unknown" like an unknown music source, so it is listed, says it needs a newer player and never starts. */
 function newerMajor(doc: Readonly<Record<string, unknown>>): Pick<ClassRow, "title" | "lengthMs" | "sport" | "source" | "songs"> | null {
-  const major = typeof doc.format_version === "string" ? /^(\d+)\.\d+$/.exec(doc.format_version)?.[1] : undefined;
-  if (major === undefined || Number(major) === KNOWN_MAJOR) return null;
+  const major = typeof doc.format_version === "string" && /^\d+\.\d+$/.test(doc.format_version) ? Number(doc.format_version.split(".")[0]) : undefined;
+  if (major === undefined || major === KNOWN_MAJOR) return null;
   const cls = isObject(doc.class) ? doc.class : {};
   const length = cls.length_ms;
   return {
