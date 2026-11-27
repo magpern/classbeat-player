@@ -110,6 +110,8 @@ test("a planted pattern, folder and file name reach nothing but the index and th
     }
     assert.equal(probing(), false, "the check and the probes finish");
     snap("running", 0);
+    // Start runs the check again, on real file reads.
+    for (let i = 0; i < 2_000 && player.state()?.kind === "checking"; i += 1) await new Promise((ok) => setTimeout(ok, 5));
     assert.deepEqual(player.state(), { kind: "playing" });
     for (let t = 0; t <= 3 * TONE_MS; t += 250) {
       now = t;

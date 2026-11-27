@@ -8,7 +8,7 @@ import type { FindAnswer } from "../../src/core/music-files/answer.ts";
 import type { LocalCue, LocalReport } from "../../src/core/music-files/local-cue.ts";
 import { localPlayIdOf } from "../../src/core/music-files/local-scheme-policy.ts";
 import type { Snapshot } from "../../src/core/snapshot.ts";
-import { createLocalPlayer, RECHECK_MS } from "../../src/main/local/local-player.ts";
+import { CHECK_TIMEOUT_MS, createLocalPlayer, RECHECK_MS } from "../../src/main/local/local-player.ts";
 import { createLocalPlays } from "../../src/main/local/local-plays.ts";
 
 const ACCT = "a".repeat(64);
@@ -32,6 +32,12 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     cues,
     aligned,
     checks,
+    /** While set, the check at Start does not answer until `open()` is called. */
+    gate: null as Promise<void> | null,
+    open: (): void => undefined,
+    hold() {
+      r.gate = new Promise<void>((ok) => void (r.open = () => ok()));
+    },
     loadId: 1,
     tick: (ms: number) => (now += ms),
     now: () => now,
@@ -43,6 +49,12 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     },
     report(slot: 0 | 1, durationMs: number | null, extra: Partial<LocalReport> = {}) {
       r.player.report({ seq: r.last().seq, slot, positionMs: 0, playing: false, failed: false, durationMs, ...extra });
+    },
+    /** Start: the check runs again, and playing begins once it answers. */
+    async start(classMs: number) {
+      r.snap("running", classMs);
+      await Promise.resolve();
+      await Promise.resolve();
     },
     /** The check answers, and each song's length is reported twice (decoded lengths as given). */
     async ready(lengths: readonly number[] = LEN) {
@@ -61,7 +73,9 @@ function rig(answer: FindAnswer = done("found", "found", "found"), doc: unknown 
     plays,
     check: (d) => {
       checks.push(d);
-      return Promise.resolve(r.answer);
+      // The real check (main/music-files/service.ts) has no account to read after a sign-out and says "failed".
+      const answer = (): FindAnswer | null => (r.account === null ? { status: "failed" } : r.answer);
+      return r.gate === null ? Promise.resolve(answer()) : r.gate.then(answer);
     },
     account: () => r.account,
     roomId: () => r.room,
@@ -126,7 +140,7 @@ test("a check that found the shell busy is asked again, not before RECHECK_MS", 
 test("Start with every file found plays song 0 in slot 0; the overlap has both, each song ends at its stop", async () => {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   assert.deepEqual(r.player.state(), { kind: "playing" });
   assert.equal(r.last().playing, true);
   const [a] = r.ids();
@@ -148,7 +162,7 @@ test("Start with every file found plays song 0 in slot 0; the overlap has both, 
 test("the owner's report steers the music time and the class clock follows it, beyond the 30 ms drift", async () => {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   r.tick(10_000);
   r.report(0, LEN[0]!, { positionMs: 10_500, playing: true });
   r.snap("running", 10_000);
@@ -166,25 +180,25 @@ test("one song missing, or a length two reports confirm wrong, is the manual clo
   const missing = rig(done("found", "missing", "found"));
   await missing.ready([LEN[0]!, LEN[2]!]);
   const before = missing.cues.length;
-  missing.snap("running", 0);
+  await missing.start(0);
   assert.deepEqual(missing.player.state(), { kind: "manual", reason: "missing", missing: [1] });
   missing.tick(150_000);
   missing.snap("running", 150_000);
   assert.ok(missing.cues.slice(before).every((c) => !c.playing && c.slots.every((s) => s.url === null)));
   const wrong = rig();
   await wrong.ready([LEN[0]!, LEN[1]! + 5_000, LEN[2]!]);
-  wrong.snap("running", 0);
+  await wrong.start(0);
   assert.deepEqual(wrong.player.state(), { kind: "manual", reason: "missing", missing: [1] });
   const unchecked = rig({ status: "failed" });
   await unchecked.ready([]);
-  unchecked.snap("running", 0);
+  await unchecked.start(0);
   assert.deepEqual(unchecked.player.state(), { kind: "manual", reason: "not_checked" });
 });
 
 async function playing() {
   const r = rig();
   await r.ready();
-  r.snap("running", 0);
+  await r.start(0);
   r.tick(103_000);
   r.snap("running", 103_000);
   return r;
@@ -238,4 +252,118 @@ test("plays end when the class ends, when another class opens and when the room 
   const [x, y] = closed.ids();
   assert.ok(x !== null && y !== null && !wids.includes(x) && !wids.includes(y));
   assert.equal(closed.plays.liveFrom(x!, 11)?.songIndex, 0);
+});
+
+test("Start after a sign-out is the manual clock (failed), not a silent \"playing\" (#946 item 1)", async () => {
+  const r = rig();
+  await r.ready();
+  r.account = null;
+  await r.start(0);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "failed" });
+  const n = r.cues.length;
+  r.tick(5_000);
+  r.snap("running", 5_000);
+  assert.equal(r.cues.length, n, "no cue goes out with a snapshot");
+  assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("Start runs the check again: a file that went missing since the class opened is the manual clock (#946 item 2)", async () => {
+  const r = rig();
+  await r.ready();
+  assert.equal(r.checks.length, 1);
+  r.answer = done("found", "missing", "found");
+  r.snap("running", 0);
+  assert.deepEqual(r.player.state(), { kind: "checking" }, "nothing plays until the second check answers");
+  assert.ok(r.cues.every((c) => !c.playing));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(r.checks.length, 2);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "missing", missing: [1] });
+  assert.ok(r.cues.every((c) => !c.playing));
+  // A second check that is busy is not a pass either.
+  const busy = rig();
+  await busy.ready();
+  busy.answer = null;
+  await busy.start(0);
+  assert.deepEqual(busy.player.state(), { kind: "manual", reason: "not_checked" });
+});
+
+test("Start waits for the second check, then plays from the class time reached meanwhile (#946 item 2)", async () => {
+  const r = rig();
+  await r.ready();
+  r.snap("running", 0);
+  r.tick(1_000);
+  r.snap("running", 1_000);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(r.player.state(), { kind: "playing" });
+  assert.equal(r.last().playing, true);
+  assert.equal(r.last().slots[0].positionMs, 1_000);
+});
+
+const settle = async () => {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+};
+
+test("another class opening while the check at Start runs: nothing plays for it, and the old answer does not touch it (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.loadId = 2;
+  r.snap("ready", 0);
+  const n = r.cues.length;
+  r.open();
+  await settle();
+  assert.equal(r.cues.length, n, "no cue for the class whose check has not answered");
+  assert.ok(r.cues.every((c) => !c.playing));
+  assert.deepEqual(r.player.state(), { kind: "checking" });
+});
+
+test("a class that ends while the check at Start runs never plays (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(5_000);
+  r.snap("ended", 290_000);
+  const n = r.cues.length;
+  r.open();
+  await settle();
+  assert.equal(r.player.state(), null);
+  assert.equal(r.cues.length, n);
+  assert.ok(r.cues.every((c) => !c.playing));
+});
+
+test("a pause during the check at Start joins paused, at the paused class time (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(2_000);
+  r.snap("paused", 2_000);
+  r.tick(30_000);
+  r.open();
+  await settle();
+  assert.deepEqual(r.player.state(), { kind: "playing" });
+  assert.equal(r.last().playing, false);
+  assert.equal(r.last().slots[0].positionMs, 2_000, "not advanced by the time spent paused");
+});
+
+test("a check at Start that never answers is the manual clock, not a silent \"checking\" for the whole class (#946)", async () => {
+  const r = rig();
+  await r.ready();
+  r.hold();
+  r.snap("running", 0);
+  r.tick(CHECK_TIMEOUT_MS - 1_000);
+  r.snap("running", CHECK_TIMEOUT_MS - 1_000);
+  assert.deepEqual(r.player.state(), { kind: "checking" });
+  r.tick(2_000);
+  r.snap("running", CHECK_TIMEOUT_MS + 1_000);
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
+  // A late answer changes nothing.
+  r.open();
+  await settle();
+  assert.deepEqual(r.player.state(), { kind: "manual", reason: "not_checked" });
+  assert.ok(r.cues.every((c) => !c.playing));
 });

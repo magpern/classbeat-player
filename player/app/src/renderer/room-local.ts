@@ -30,17 +30,20 @@ interface Element {
   hasSource: boolean;
   fade: Fade | null;
   failedFor: number;
+  /** The length last reported for this source (null: none yet, or not known). */
+  said: number | null;
 }
 
 export function mountLocal(audios: readonly [HTMLAudioElement, HTMLAudioElement], report: LocalReportFn, every: (fn: () => void, ms: number) => () => void = interval): LocalDriver {
   let seq = -1;
   let playing = false;
-  const els: Element[] = audios.map((audio, i) => ({ audio, slot: i === 1 ? 1 : 0, hasSource: false, fade: null, failedFor: -1 }));
+  const els: Element[] = audios.map((audio, i) => ({ audio, slot: i === 1 ? 1 : 0, hasSource: false, fade: null, failedFor: -1, said: null }));
   const posOf = (a: HTMLAudioElement): number => Math.max(0, Math.round(a.currentTime * 1000));
+  const lengthOf = (e: Element): number | null => (Number.isFinite(e.audio.duration) && e.audio.duration >= 0 ? Math.round(e.audio.duration * 1000) : null);
   const say = (e: Element, failed: boolean): void => {
     if (seq < 1 || !e.hasSource) return;
-    const d = e.audio.duration;
-    report(seq, e.slot, posOf(e.audio), !e.audio.paused, failed, Number.isFinite(d) && d >= 0 ? Math.round(d * 1000) : null);
+    e.said = lengthOf(e);
+    report(seq, e.slot, posOf(e.audio), !e.audio.paused, failed, e.said);
   };
   const fail = (e: Element): void => {
     // Once per cue: the shell stops the audio and sends an empty cue.
@@ -56,9 +59,14 @@ export function mountLocal(audios: readonly [HTMLAudioElement, HTMLAudioElement]
     if (p >= e.fade.stopMs && !e.audio.paused) e.audio.pause();
   };
   for (const e of els) {
-    // The decoded length is known or changed: the shell acts on a length only once two reports agree.
-    e.audio.addEventListener("loadedmetadata", () => say(e, false));
-    e.audio.addEventListener("durationchange", () => say(e, false));
+    // The decoded length is known or changed. One decode raises both events with the same length, and
+    // the shell acts on a length only once two reports agree, so an event reports only a length that
+    // differs from the last one reported: the agreeing second report is the next periodic one.
+    const lengthEvent = (): void => {
+      if (lengthOf(e) !== e.said) say(e, false);
+    };
+    e.audio.addEventListener("loadedmetadata", lengthEvent);
+    e.audio.addEventListener("durationchange", lengthEvent);
     e.audio.addEventListener("error", () => fail(e));
   }
   const stopReports = every(() => els.forEach((e) => say(e, false)), REPORT_MS);
@@ -67,6 +75,7 @@ export function mountLocal(audios: readonly [HTMLAudioElement, HTMLAudioElement]
   const apply = (e: Element, url: string | null, positionMs: number, fade: Fade): void => {
     if (url === null) {
       e.hasSource = false;
+      e.said = null;
       e.fade = null;
       e.audio.pause();
       e.audio.removeAttribute("src");
@@ -74,7 +83,10 @@ export function mountLocal(audios: readonly [HTMLAudioElement, HTMLAudioElement]
       return;
     }
     const fresh = !e.hasSource || e.audio.getAttribute("src") !== url;
-    if (fresh) e.audio.src = url;
+    if (fresh) {
+      e.audio.src = url;
+      e.said = null;
+    }
     e.hasSource = true;
     e.fade = fade;
     if (fresh || Math.abs(e.audio.currentTime * 1000 - positionMs) > SEEK_MS) e.audio.currentTime = positionMs / 1000;

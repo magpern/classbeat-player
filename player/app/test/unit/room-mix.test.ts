@@ -160,3 +160,20 @@ test("the decoded length is reported in ms once known, at once on loadedmetadata
     assert.equal(r.reports.at(-1)?.[4], null, String(bad));
   }
 });
+
+test("one decode's loadedmetadata and durationchange are one report, so they never confirm a length alone (#946 item 3)", () => {
+  const r = rig();
+  r.driver.cue({ seq: 1, url: URL1, playing: true, positionMs: 0 });
+  r.audio.duration = 2_700;
+  r.fire("durationchange");
+  r.fire("loadedmetadata");
+  r.fire("durationchange");
+  assert.equal(r.reports.length, 1);
+  // The agreeing second report is a later read of the settled length.
+  r.tick();
+  assert.deepEqual(r.reports.map((x) => x[4]), [2_700_000, 2_700_000]);
+  // A new source starts over: its first length is reported even when equal to the last one's.
+  r.driver.cue({ seq: 2, url: URL1.replace(/.$/, "f"), playing: true, positionMs: 0 });
+  r.fire("loadedmetadata");
+  assert.equal(r.reports.length, 3);
+});

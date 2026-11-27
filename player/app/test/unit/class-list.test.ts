@@ -184,3 +184,23 @@ test("an unknown major with no readable class block is still listed; a malformed
   const docs = new Map<string, Record<string, unknown>>([[id(1), { format_version: "9.1" }], [id(2), { format_version: "two" }], [id(3), { ...doc("C"), format_version: "1.7" }]]);
   assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["C", "spotify"], ["Untitled class", "unknown"]]);
 });
+
+test("a malformed version without a minor is not read as a newer major (#946 item 5)", () => {
+  const versions = ["2", "2.x", "2.", ".1", "2.0.1", " 2.0", "2.0\n", "+2.0", "", 2];
+  const { state } = listed(versions.map((_, i) => [i + 1, `V${i}`] as [number, string]));
+  const docs = new Map(versions.map((v, i) => [id(i + 1), { format_version: v, class: { title: `V${i}`, length_ms: 1 } }] as [string, Record<string, unknown>]));
+  assert.deepEqual(classListView(state, docs), []);
+});
+
+test("KNOWN_MAJOR here is the format major of schema/ts/src/version.ts (#946 item 4)", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const major = (path: string): string | undefined => /^const KNOWN_MAJOR = (\d+);$/m.exec(readFileSync(path, "utf8"))?.[1];
+  const player = major(join(here, "../../src/core/sync/class-list.ts"));
+  const schema = major(join(here, "../../../../schema/ts/src/version.ts"));
+  assert.ok(player !== undefined && schema !== undefined, "both declare it");
+  assert.equal(player, schema);
+  // The list agrees: the schema's major is read as a class, the next one needs a newer player.
+  const { state } = listed([[1, "Known"], [2, "Next"]]);
+  const docs = new Map([[id(1), doc("Known")], [id(2), { format_version: `${Number(schema) + 1}.0`, class: { title: "Next", length_ms: 1 } }]]);
+  assert.deepEqual(classListView(state, docs).map((r) => [r.title, r.source]), [["Known", "spotify"], ["Next", "unknown"]]);
+});

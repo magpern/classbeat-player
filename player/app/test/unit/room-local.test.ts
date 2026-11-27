@@ -113,3 +113,23 @@ test("reports name the cue and slot; an error or a refused play is reported once
   r.driver.stop();
   assert.equal(r.stops(), 2);
 });
+
+test("one decode's loadedmetadata and durationchange are one report, so they never confirm a length alone (#946 item 3)", () => {
+  const r = rig();
+  r.driver.cue(cue(1, false, slot(URL_A, 0)));
+  r.a.duration = 210;
+  r.a.fire("durationchange");
+  r.a.fire("loadedmetadata");
+  r.a.fire("durationchange");
+  assert.equal(r.reports.length, 1);
+  // A revised length is a new report; the agreeing second report is a later read.
+  r.a.duration = 211;
+  r.a.fire("durationchange");
+  assert.deepEqual(r.reports.map((x) => x[5]), [210_000, 211_000]);
+  r.tick(REPORT_MS);
+  assert.deepEqual(r.reports.map((x) => x[5]), [210_000, 211_000, 211_000]);
+  // Another source starts over: its first length is reported even when equal.
+  r.driver.cue(cue(2, false, slot(URL_B, 0)));
+  r.a.fire("loadedmetadata");
+  assert.equal(r.reports.length, 4);
+});
