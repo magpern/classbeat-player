@@ -49,8 +49,9 @@ Footer of a selected local class, before the start:
 1. The state in words, with its marker: "All 11 music files are found", "2 music files are
    missing", "Finding music files…".
 2. What Start will do, in the grey detail line, with the reason when it will be the manual clock.
-3. The keys that fit: "Find music files" (only while a file is missing or a search runs),
-   "Show which files" (only while a file is missing), and Start.
+3. The keys that fit: "Find music files" (only while a file is missing or a check or search
+   runs), "Show which files" (while a file is missing, and held, shown but disabled, in checking,
+   choosing and finding alike), and Start.
 
 The list of missing songs, per song, in this order: **title**, **artist**, then the **file name
 the class document holds** (`ids.local_file.file_name`), grey, in its own column.
@@ -94,7 +95,7 @@ Regions of the footer, top to bottom:
 
 - **Title.** The selected class's title, at most two lines, then an ellipsis, as class-list.md.
 - **Files line.** The marker, the words (Atkinson 700, 18 px), then "Show which files" when a file
-  is missing. It stays on one line while it fits; the key wraps under the words rather than
+  is missing, or held while a check, a choice or a search runs. It stays on one line while it fits; the key wraps under the words rather than
   shrink. Present only for a local class.
 - **Detail.** Atkinson 400, 16 px, light-2, at most three lines: what Start does, and why.
 - **Keys.** "Find music files" (raised, 20 px bold) and Start (white, 22 px), right-aligned, side
@@ -155,21 +156,32 @@ Each state is read from the per-song answer, `found` or `missing`, and nothing e
   detail: As "some missing". [none](mockups/class-list-music-files-all-missing.html).
 - **Choosing the folder.** When: the operating system's folder
   window is open. Marker and words: hollow circle, "Choose the folder with your music". Keys:
-  "Find music files" and Start **held** (disabled, grey). Footer detail: "A window from this
+  "Find music files", "Show which files" and Start **held** (disabled, grey). Footer detail: "A window from this
   computer is open. Starting waits until you have chosen".
   [choosing](mockups/class-list-music-files-choosing.html).
 - **Finding.** When: the main process is matching. Marker and
-  words: Hollow circle, "Finding music files…". Keys: both held. Footer detail: "Looking in the
+  words: Hollow circle, "Finding music files…". Keys: "Find music files", "Show which files" and Start, all held. Footer detail: "Looking in the
   folder you chose and the folders inside it. Starting waits until this is done".
   [finding](mockups/class-list-music-files-finding.html).
+- **Checking (in the background).** When: the player checks a class by itself and the row has no
+  answer yet, or no folder was chosen. Marker and words: hollow circle, "Finding music files…".
+  Keys: all three held, as in "Finding". Footer detail: "Looking for them on this computer.
+  Starting waits until this is done" (no folder is spoken of, as none was chosen). Nothing else
+  differs from "Finding".
+- **Held with an answer.** When: another class is being checked or searched while this row
+  already has its answer. The row keeps its own marker and words (found, missing or still
+  missing). Start and "Find music files" are held, and the footer detail reads "Another class is
+  being checked. Starting waits until this is done" in place of the state's own line. "Show which
+  files" stays live where a file is missing, as the panel is read from the answer. This holds
+  under the failure plate too: the detail line stays, and the plate's "Try again" is held as well.
 - **Still missing.** When: a find ended with files missing.
   Marker and words: hollow square, "2 music files are still missing". Keys: as "some missing".
   Footer detail: "They were not in the folder you chose. Choose another folder, or start on the
   manual clock". [still](mockups/class-list-music-files-still-missing.html).
 - **Search failed.** When: `player:music-files-find` failed. Marker and words: the previous
   state, plus a **plate** above the list: "The music files could not be searched", detail
-  "Nothing was changed. Try again, or start on the manual clock.", key "Try again". The footer
-  drops its grey detail line while the plate is shown, so five rows stay whole at 1000×720.
+  "Nothing was changed. Try again, or start on the manual clock.", key "Try again". Five rows
+  still fit at 1000×720, with the plate and with the held-with-answer detail line.
   [failed](mockups/class-list-music-files-find-failed.html).
 - **The list.** When: "Show which files" pressed. Marker and
   words: Panel "Missing music files" (above). Keys: "Find music files" (main, Enter), "Back"
