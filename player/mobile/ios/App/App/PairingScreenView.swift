@@ -282,7 +282,7 @@ final class PairingScreenView: NSObject, PairingScreens {
 
         /// The cap height a tier needs in this window, in points.
         static func cap(_ floor: (CGFloat, CGFloat, CGFloat), height: CGFloat, landscape: Bool) -> CGFloat {
-            max(height * (landscape ? floor.1 : floor.0) * margin, floor.2)
+            max(height * (landscape ? floor.1 : floor.0), floor.2) * margin
         }
 
         init(height: CGFloat, landscape: Bool) {
