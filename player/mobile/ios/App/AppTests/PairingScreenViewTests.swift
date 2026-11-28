@@ -144,6 +144,56 @@ final class PairingScreenViewTests: XCTestCase {
         XCTAssertEqual(spoken?.attribute(.accessibilitySpeechSpellOut, at: 0, effectiveRange: nil) as? Bool, true)
     }
 
+    /// Every pairing screen draws in the bundled fonts, never the system's (issue #988).
+    func testEveryWordIsInABundledFont() {
+        XCTAssertNotNil(UIFont(name: PairingFonts.numberName, size: 20), "the number face is registered")
+        XCTAssertNotNil(UIFont(name: PairingFonts.textName, size: 20), "the text face is registered")
+        XCTAssertNotNil(UIFont(name: PairingFonts.textBoldName, size: 20), "the bold text face is registered")
+        let pairings: [PairingView] = [
+            .starting, waiting, .paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil),
+            .unpaired(notice: .noKeychain),
+        ]
+        for pairing in pairings {
+            show(pairing, returned: true)
+            for label in labels { XCTAssertTrue(PairingFonts.names.contains(label.font.fontName), "\(label.text ?? ""): \(label.font.fontName)") }
+            for key in buttons {
+                XCTAssertEqual(key.titleLabel?.font.fontName, PairingFonts.textBoldName, key.title(for: .normal) ?? "")
+            }
+        }
+    }
+
+    func testTheTitleCodeAndNumeralsUseTheNumberFace() {
+        show(waiting)
+        let faces = Dictionary(labels.compactMap { l in l.text.map { ($0, l.font.fontName) } }, uniquingKeysWith: { a, _ in a })
+        XCTAssertEqual(faces["Pair this phone"], PairingFonts.numberName)
+        XCTAssertEqual(faces["BCDF-GHJK"], PairingFonts.numberName)
+        for numeral in ["1", "2", "3"] { XCTAssertEqual(faces[numeral], PairingFonts.numberName, numeral) }
+        XCTAssertEqual(faces["●  Instructor mode"], PairingFonts.textBoldName)
+        XCTAssertEqual(faces["Sign in and type the code."], PairingFonts.textName)
+    }
+
+    func testStepOneSaysYourBrowserAndNoPlatform() {
+        show(waiting)
+        let one = labels.compactMap { $0.text }.first { $0.hasPrefix("Open " + page) }
+        XCTAssertEqual(one, "Open " + page + ": the button below opens it in your browser")
+        for word in labels.compactMap({ $0.text }) {
+            XCTAssertFalse(word.contains("Safari"), word)
+            XCTAssertFalse(word.contains("iOS"), word)
+        }
+    }
+
+    func testTheCodeStaysOnOneLineAt360Wide() {
+        stage(width: 360, height: 640)
+        show(waiting)
+        guard let code = labels.first(where: { $0.accessibilityIdentifier == "pairing.code" }) else {
+            return XCTFail("no code label")
+        }
+        let wanted = code.attributedText?.size().width ?? .infinity
+        XCTAssertLessThanOrEqual(wanted, code.bounds.width + 0.5, "the code fits its line without wrapping")
+        XCTAssertFalse(code.adjustsFontSizeToFitWidth)
+        XCTAssertEqual(code.numberOfLines, 1)
+    }
+
     func testNoLabelHoldsTheTokenOrTheDeviceCode() {
         for pairing in [PairingView.starting, waiting, .paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil)] {
             show(pairing)

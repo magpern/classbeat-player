@@ -35,6 +35,12 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Confirms it is you before instructor mode opens.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>big-shoulders-display-800.ttf</string>
+		<string>atkinson-hyperlegible-400.ttf</string>
+		<string>atkinson-hyperlegible-700.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

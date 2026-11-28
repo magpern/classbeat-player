@@ -40,6 +40,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
   "ios/App/App/ModePlugins.swift": ["Foundation", "Capacitor"],
   "ios/App/App/PageOpener.swift": [],
   "ios/App/App/PageQuestion.swift": [],
+  "ios/App/App/PairingFonts.swift": ["UIKit"],
   "ios/App/App/PairingScreenView.swift": ["UIKit"],
   "ios/App/App/PairingService.swift": [],
   "ios/App/App/PairingUi.swift": [],

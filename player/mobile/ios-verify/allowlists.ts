@@ -4,7 +4,7 @@
 
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
-/** The Info.plist keys the app may have. NSFaceIDUsageDescription is for the sign-in to come (ADR 0016). */
+/** The Info.plist keys the app may have. NSFaceIDUsageDescription is for the sign-in to come (ADR 0016); UIAppFonts registers the bundled fonts the native pairing screens draw in (#988). */
 export const INFO_KEYS = new Set([
   "CFBundleDevelopmentRegion",
   "CFBundleDisplayName",
@@ -17,6 +17,7 @@ export const INFO_KEYS = new Set([
   "CFBundleVersion",
   "LSRequiresIPhoneOS",
   "NSFaceIDUsageDescription",
+  "UIAppFonts",
   "UIApplicationSceneManifest",
   "UILaunchScreen",
   "UIRequiredDeviceCapabilities",
