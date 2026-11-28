@@ -41,8 +41,8 @@ Remove, Lock joining, New code) are specified in [riders-panel.md](riders-panel.
 | Held at the end of a song's window while the music plays | Holding at the end of the song |
 | Ended | Ended |
 | Ended while the last song plays on | Ended, holding at the end |
-| Running, held at the end of the last song | Running, holding at the end |
-| Paused, held at the end of the last song | Paused, holding at the end |
+| Running, held at the end of a song's window | Running, holding at the end |
+| Paused, held at the end of a song's window | Paused, holding at the end |
 | Following just stopped because a control moved the clock | Manual clock, following stopped |
 
 ## Music link line
