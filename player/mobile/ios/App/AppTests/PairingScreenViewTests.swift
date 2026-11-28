@@ -96,6 +96,16 @@ final class PairingScreenViewTests: XCTestCase {
         keep("code-small-landscape")
         show(.unpaired(notice: .saveFailed))
         keep("plate-save-failed-small-landscape")
+        // The tablet sizes the spec names (issue #990): the code, the longest plate and paired, both ways up.
+        for (suffix, width, height) in [("tablet", CGFloat(768), CGFloat(1024)), ("tablet-landscape", 1024, 768)] {
+            stage(width: width, height: height)
+            show(waiting)
+            keep("code-\(suffix)")
+            show(.unpaired(notice: .saveFailed))
+            keep("plate-save-failed-\(suffix)")
+            show(.paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil))
+            keep("paired-\(suffix)")
+        }
     }
 
     func testTheScreenCoversThePageAndIsModal() {
@@ -110,7 +120,7 @@ final class PairingScreenViewTests: XCTestCase {
     }
 
     func testEveryKeyIsLargeEnoughToTouch() {
-        for (width, height) in [(CGFloat(393), CGFloat(852)), (852, 393), (360, 640), (640, 360)] {
+        for (width, height) in [(CGFloat(393), CGFloat(852)), (852, 393), (360, 640), (640, 360), (768, 1024), (1024, 768)] {
             stage(width: width, height: height)
             show(waiting)
             XCTAssertEqual(buttons.count, 2)
