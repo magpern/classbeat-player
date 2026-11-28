@@ -45,6 +45,10 @@ const FILE_REFS = new Set([
   "text.plist.xml|<group>|Info-Debug.plist",
   "none|<group>|capacitor.config.json",
   "folder|<group>|public",
+  // The bundled fonts of the native pairing screens (#988), listed in Info.plist's UIAppFonts.
+  "file|<group>|big-shoulders-display-800.ttf",
+  "file|<group>|atkinson-hyperlegible-400.ttf",
+  "file|<group>|atkinson-hyperlegible-700.ttf",
   "wrapper.application|BUILT_PRODUCTS_DIR|App.app",
   "wrapper.cfbundle|BUILT_PRODUCTS_DIR|AppTests.xctest",
   "wrapper.framework|DEVELOPER_DIR|Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/Frameworks/Foundation.framework",

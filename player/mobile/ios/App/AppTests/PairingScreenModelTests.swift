@@ -22,7 +22,7 @@ final class PairingScreenModelTests: XCTestCase {
         let screen = M.screen(view, now: 0, returned: false, instructor: false)
         XCTAssertEqual(words(screen), [
             "●  Instructor mode", "Pair this phone", "BCDF-GHJK", "The code runs out in 10:00",
-            "1.  Open " + page, "2.  Sign in and type the code.", "3.  Confirm only if this phone shows the same code.",
+            "1.  Open " + page + ": the button below opens it in your browser", "2.  Sign in and type the code.", "3.  Confirm only if this phone shows the same code.",
         ])
         XCTAssertEqual(screen.act.count, 3, "the steps go with the keys")
         XCTAssertEqual(screen.keys, [M.Key(label: "Open the site", main: true, action: .open), M.Key(label: "Cancel", main: false, action: .cancel)])

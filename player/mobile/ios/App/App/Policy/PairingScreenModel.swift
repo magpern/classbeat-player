@@ -69,7 +69,7 @@ enum PairingScreenModel {
         lead.append(.code(userCode))
         lead.append(.text("The code runs out in " + left))
         let steps: [ScreenLine] = [
-            .step(1, "Open " + page),
+            .step(1, "Open " + page + ": the button below opens it in your browser"),
             .step(2, "Sign in and type the code."),
             .step(3, "Confirm only if this phone shows the same code."),
         ]

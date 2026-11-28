@@ -154,7 +154,7 @@ final class PairingScreenView: NSObject, PairingScreens {
             box.addArrangedSubview(text("Code", size.label, Self.light2, bold: false))
             // The largest text on the screen, never wrapped, read letter by letter by VoiceOver.
             let label = text(code, size.value * Sizes.codeScale, Self.light1, bold: true)
-            label.font = UIFont.monospacedSystemFont(ofSize: size.value * Sizes.codeScale, weight: .bold)
+            label.font = PairingFonts.number(size.value * Sizes.codeScale)
             label.numberOfLines = 1
             label.adjustsFontSizeToFitWidth = false
             label.accessibilityIdentifier = "pairing.code"
@@ -177,6 +177,23 @@ final class PairingScreenView: NSObject, PairingScreens {
                 rest?.text = body
             }
             return box
+        case let .step(number, words):
+            // The numeral in the number face, the words in the text face, side by side (app.css .steps).
+            let numeral = text("\(number)", size.text, Self.light1, bold: true)
+            numeral.font = PairingFonts.number(size.text)
+            numeral.setContentHuggingPriority(.required, for: .horizontal)
+            numeral.setContentCompressionResistancePriority(.required, for: .horizontal)
+            let said = text(words, size.text, Self.light1, bold: false)
+            let row = UIStackView(arrangedSubviews: [numeral, said])
+            row.axis = .horizontal
+            row.alignment = .firstBaseline
+            row.spacing = 12
+            setters.append { [weak numeral, weak said] line in
+                guard case let .step(number, words) = line else { return }
+                numeral?.text = "\(number)"
+                said?.text = words
+            }
+            return row
         default:
             let label: UILabel
             switch line {
@@ -184,6 +201,7 @@ final class PairingScreenView: NSObject, PairingScreens {
             case .note: label = text(line.words, size.label, Self.light2, bold: false)
             case .title:
                 label = text(line.words, size.value, Self.light1, bold: true)
+                label.font = PairingFonts.number(size.value)
                 label.accessibilityTraits = .header
             default: label = text(line.words, size.text, Self.light1, bold: false)
             }
@@ -195,7 +213,7 @@ final class PairingScreenView: NSObject, PairingScreens {
     private static func spell(_ label: UILabel?, _ code: String) {
         label?.text = code
         label?.attributedText = NSAttributedString(string: code, attributes: [
-            .font: label?.font ?? UIFont.systemFont(ofSize: 21),
+            .font: label?.font ?? PairingFonts.number(21),
             .foregroundColor: light1,
             .kern: (label?.font.pointSize ?? 21) * 0.15,
         ])
@@ -205,7 +223,7 @@ final class PairingScreenView: NSObject, PairingScreens {
     private func text(_ words: String, _ points: CGFloat, _ color: UIColor, bold: Bool) -> UILabel {
         let label = UILabel()
         label.text = words
-        label.font = bold ? .boldSystemFont(ofSize: points) : .systemFont(ofSize: points)
+        label.font = PairingFonts.text(points, bold: bold)
         label.textColor = color
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
@@ -225,7 +243,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         let button = UIButton(type: .custom)
         button.setTitle(key.label, for: .normal)
         button.setTitleColor(key.main ? Self.ink : Self.light1, for: .normal)
-        button.titleLabel?.font = .boldSystemFont(ofSize: size.key)
+        button.titleLabel?.font = PairingFonts.text(size.key, bold: true)
         button.titleLabel?.numberOfLines = 0
         button.titleLabel?.textAlignment = .center
         button.backgroundColor = key.main ? Self.light1 : Self.stageRaised
