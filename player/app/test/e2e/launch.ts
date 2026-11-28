@@ -35,6 +35,17 @@ function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 /**
+ * Waits until the page's document has been parsed, by asking the page, not by Playwright's load-state bookkeeping. `waitForLoadState`
+ * answers from the lifecycle events Playwright saw for the frame; the shell navigates the window itself (loadFile in the main process),
+ * and on Windows CI that left it waiting the whole 30 s for an event it had already missed although the page was loaded (seen in
+ * `web preferences of the live window`, which then failed every test after it). The document's own state cannot be missed. The poll is
+ * on a timer, not on animation frames, which a window that is not shown does not run.
+ */
+export function documentParsed(page: Page, ms = 30_000): Promise<unknown> {
+  return page.waitForFunction(() => document.readyState !== "loading", undefined, { polling: 100, timeout: ms });
+}
+
+/**
  * Closes the app and makes sure its process is gone: a polite close first, the kill after a limit.
  * A process left behind keeps the test runner alive, which is what turned one failed start into a
  * hang that only a manual cancel ended.
@@ -82,7 +93,7 @@ export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronA
     );
     // A live window: it exists and its page has loaded before any test looks at it.
     const page = await within(app.firstWindow(), 60_000, "the first window opening");
-    await within(page.waitForLoadState("domcontentloaded"), 30_000, "the first window loading");
+    await within(documentParsed(page), 35_000, "the first window loading");
     if (page.isClosed()) throw new Error("e2e: the first window closed before the test started");
     // The app's own first load (the class list, started by the shell with loadFile) must be over:
     // Playwright's firstWindow and "domcontentloaded" can be answered by the window's blank first
@@ -110,7 +121,7 @@ export async function launch(opts: LaunchOptions = {}): Promise<{ app: ElectronA
         "the presenter page loading",
       );
       await within(page.waitForFunction(() => location.pathname.endsWith("/presenter.html")), 30_000, "the presenter page showing");
-      await page.waitForLoadState("domcontentloaded");
+      await documentParsed(page);
     }
     return { app, page };
   } catch (error) {
