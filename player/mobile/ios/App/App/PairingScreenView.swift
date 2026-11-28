@@ -167,8 +167,8 @@ final class PairingScreenView: NSObject, PairingScreens {
             return box
         case let .plate(head, body):
             let box = panel(Self.light1)
-            let top = text(head, size.text, Self.ink, bold: true)
-            let rest = text(body, size.text, Self.ink, bold: false)
+            let top = text(head, size.status, Self.ink, bold: true)
+            let rest = text(body, size.status, Self.ink, bold: false)
             box.addArrangedSubview(top)
             box.addArrangedSubview(rest)
             setters.append { [weak top, weak rest] line in
@@ -179,11 +179,11 @@ final class PairingScreenView: NSObject, PairingScreens {
             return box
         case let .step(number, words):
             // The numeral in the number face, the words in the text face, side by side (app.css .steps).
-            let numeral = text("\(number)", size.text, Self.light1, bold: true)
-            numeral.font = PairingFonts.number(size.text)
+            let numeral = text("\(number)", size.status, Self.light1, bold: true)
+            numeral.font = PairingFonts.number(size.status)
             numeral.setContentHuggingPriority(.required, for: .horizontal)
             numeral.setContentCompressionResistancePriority(.required, for: .horizontal)
-            let said = text(words, size.text, Self.light1, bold: false)
+            let said = text(words, size.status, Self.light1, bold: false)
             let row = UIStackView(arrangedSubviews: [numeral, said])
             row.axis = .horizontal
             row.alignment = .firstBaseline
@@ -203,7 +203,7 @@ final class PairingScreenView: NSObject, PairingScreens {
                 label = text(line.words, size.value, Self.light1, bold: true)
                 label.font = PairingFonts.number(size.value)
                 label.accessibilityTraits = .header
-            default: label = text(line.words, size.text, Self.light1, bold: false)
+            default: label = text(line.words, size.status, Self.light1, bold: false)
             }
             setters.append { [weak label] line in label?.text = line.words }
             return label
@@ -243,7 +243,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         let button = UIButton(type: .custom)
         button.setTitle(key.label, for: .normal)
         button.setTitleColor(key.main ? Self.ink : Self.light1, for: .normal)
-        button.titleLabel?.font = PairingFonts.text(size.key, bold: true)
+        button.titleLabel?.font = PairingFonts.text(size.status, bold: true)
         button.titleLabel?.numberOfLines = 0
         button.titleLabel?.textAlignment = .center
         button.backgroundColor = key.main ? Self.light1 : Self.stageRaised
@@ -257,20 +257,38 @@ final class PairingScreenView: NSObject, PairingScreens {
         return button
     }
 
-    /// The spec's floors: a share of the window height, portrait or landscape, never under the minimum.
+    /// The spec's floors (app.md A1): the cap height as a share of the window height, portrait or
+    /// landscape, never under the pixel floor. Sizes are points, so each tier's cap height is divided
+    /// by its face's cap-height ratio (the fonts' OS/2 sCapHeight over the em), then raised by `margin`
+    /// so rounding never lands under a floor.
     struct Sizes {
         static let codeScale: CGFloat = 1.25
         static let touch: CGFloat = 64
+        /// Cap height over the em: Big Shoulders Display 1600/2000, Atkinson Hyperlegible 668/1000.
+        static let numberCap: CGFloat = 0.8
+        static let textCap: CGFloat = 0.668
+        static let margin: CGFloat = 1.08
+        /// A1's floors as (portrait share, landscape share, pixels): values, status/keys/steps/plates, labels.
+        static let valueFloor: (CGFloat, CGFloat, CGFloat) = (0.034, 0.06, 21)
+        static let statusFloor: (CGFloat, CGFloat, CGFloat) = (0.019, 0.034, 12.5)
+        static let labelFloor: (CGFloat, CGFloat, CGFloat) = (0.015, 0.027, 10)
+
+        /// The title's points; the code is `codeScale` times it.
         let value: CGFloat
-        let text: CGFloat
-        let key: CGFloat
+        /// Steps, plates, the countdown and the keys.
+        let status: CGFloat
+        /// "Code", the mode tag and the notes.
         let label: CGFloat
 
+        /// The cap height a tier needs in this window, in points.
+        static func cap(_ floor: (CGFloat, CGFloat, CGFloat), height: CGFloat, landscape: Bool) -> CGFloat {
+            max(height * (landscape ? floor.1 : floor.0) * margin, floor.2)
+        }
+
         init(height: CGFloat, landscape: Bool) {
-            value = max(height * (landscape ? 0.06 : 0.034), 21)
-            text = max(height * (landscape ? 0.045 : 0.026), 16.5)
-            key = max(height * (landscape ? 0.034 : 0.019), 12.5)
-            label = max(height * (landscape ? 0.027 : 0.015), 10)
+            value = Self.cap(Self.valueFloor, height: height, landscape: landscape) / Self.numberCap
+            status = Self.cap(Self.statusFloor, height: height, landscape: landscape) / Self.textCap
+            label = Self.cap(Self.labelFloor, height: height, landscape: landscape) / Self.textCap
         }
     }
 }
