@@ -143,7 +143,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         let column = UIStackView()
         column.axis = .vertical
         column.alignment = .fill
-        column.spacing = 12
+        column.spacing = 8
         return column
     }
 
@@ -259,7 +259,7 @@ final class PairingScreenView: NSObject, PairingScreens {
 
     /// The spec's floors (app.md A1): the cap height as a share of the window height, portrait or
     /// landscape, never under the pixel floor. Sizes are points, so each tier's cap height is divided
-    /// by its face's cap-height ratio (the fonts' OS/2 sCapHeight over the em), then raised by `margin` (1 %: 360x640 is tight)
+    /// by its face's cap-height ratio (the fonts' OS/2 sCapHeight over the em), then raised by `margin` (5.1 %, so rounding stays over the 5 % of app.md "Measurable checks")
     /// so rounding never lands under a floor.
     struct Sizes {
         static let codeScale: CGFloat = 1.25
@@ -267,7 +267,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         /// Cap height over the em: Big Shoulders Display 1600/2000, Atkinson Hyperlegible 668/1000.
         static let numberCap: CGFloat = 0.8
         static let textCap: CGFloat = 0.668
-        static let margin: CGFloat = 1.01
+        static let margin: CGFloat = 1.051
         /// A1's floors as (portrait share, landscape share, pixels): values, status/keys/steps/plates, labels.
         static let valueFloor: (CGFloat, CGFloat, CGFloat) = (0.034, 0.06, 21)
         static let statusFloor: (CGFloat, CGFloat, CGFloat) = (0.019, 0.034, 12.5)

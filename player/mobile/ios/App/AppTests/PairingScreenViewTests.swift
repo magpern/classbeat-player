@@ -138,12 +138,14 @@ final class PairingScreenViewTests: XCTestCase {
     /// A1's floors, written out here on purpose so lowering `Sizes` cannot lower them: the cap height
     /// as a share of the window height (portrait, landscape) and in points, as (portrait, landscape, points).
     private enum Floor {
+        /// app.md "Measurable checks": every floored text sits at least 5 % over its floor.
+        static let margin: CGFloat = 1.05
         static let value: (CGFloat, CGFloat, CGFloat) = (0.034, 0.06, 21)
         static let status: (CGFloat, CGFloat, CGFloat) = (0.019, 0.034, 12.5)
         static let label: (CGFloat, CGFloat, CGFloat) = (0.015, 0.027, 10)
 
         static func points(_ tier: (CGFloat, CGFloat, CGFloat), _ height: CGFloat, _ landscape: Bool) -> CGFloat {
-            max(height * (landscape ? tier.1 : tier.0), tier.2)
+            max(height * (landscape ? tier.1 : tier.0), tier.2) * margin
         }
     }
 
@@ -193,11 +195,11 @@ final class PairingScreenViewTests: XCTestCase {
                 (self.labels.first { ($0.text ?? "").hasPrefix(text) }?.font.capHeight ?? 0) / height
             }
             let spot = "\(Int(width))x\(Int(height))"
-            XCTAssertGreaterThanOrEqual(share("Pair this phone"), landscape ? 0.06 : 0.034, "title \(spot)")
-            XCTAssertGreaterThanOrEqual(share("BCDF-GHJK"), landscape ? 0.06 : 0.034, "code \(spot)")
-            XCTAssertGreaterThanOrEqual(share("\u{25CF}"), landscape ? 0.027 : 0.015, "tag \(spot)")
-            XCTAssertGreaterThanOrEqual(share("Code"), landscape ? 0.027 : 0.015, "Code label \(spot)")
-            XCTAssertGreaterThanOrEqual(share("The code runs out"), landscape ? 0.034 : 0.019, "status \(spot)")
+            XCTAssertGreaterThanOrEqual(share("Pair this phone"), (landscape ? 0.06 : 0.034) * Floor.margin, "title \(spot)")
+            XCTAssertGreaterThanOrEqual(share("BCDF-GHJK"), (landscape ? 0.06 : 0.034) * Floor.margin, "code \(spot)")
+            XCTAssertGreaterThanOrEqual(share("\u{25CF}"), (landscape ? 0.027 : 0.015) * Floor.margin, "tag \(spot)")
+            XCTAssertGreaterThanOrEqual(share("Code"), (landscape ? 0.027 : 0.015) * Floor.margin, "Code label \(spot)")
+            XCTAssertGreaterThanOrEqual(share("The code runs out"), (landscape ? 0.034 : 0.019) * Floor.margin, "status \(spot)")
         }
     }
 
@@ -208,7 +210,7 @@ final class PairingScreenViewTests: XCTestCase {
             stage(width: width, height: height)
             for (name, pairing) in states {
                 show(pairing, returned: true)
-                guard let root = view.shown else { return XCTFail("no screen") }
+                guard let root = view.shown else { XCTFail("no screen for \(width)x\(height) \(name)"); continue }
                 let spot = "\(Int(width))x\(Int(height)) \(name)"
                 let items: [UIView] = labels + buttons
                 for item in items {
