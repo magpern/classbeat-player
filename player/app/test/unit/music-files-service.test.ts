@@ -189,7 +189,7 @@ test("a released stopped check that unwinds does not free the service under the 
   const first = r.service.checkOpen(r.doc);
   assert.equal(r.service.cancel(), true);
   const second = r.service.find(CLASS_ID);
-  assert.notEqual(second, null);
+  assert.equal(r.dialogs, 1, "the replacing find is at its folder dialog");
   assert.deepEqual(await first, { status: "cancelled" });
   assert.equal(await r.service.checkOpen(r.doc), null, "the replacing run still holds the service: a check is busy");
   assert.equal(await r.service.find(CLASS_ID), null, "and so is a second find");

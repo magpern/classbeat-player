@@ -60,14 +60,13 @@ interface Opened {
   readonly errors: string[];
 }
 
-async function open(size: readonly [number, number], s: PresenterMusicState, running: boolean): Promise<Opened> {
+async function open(size: readonly [number, number], s: PresenterMusicState): Promise<Opened> {
   const rig = await started();
   const context = await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: 1, reducedMotion: "reduce" });
   await context.addInitScript("globalThis.__name = (f) => f;");
   await context.addInitScript(STUB);
-  // The words test draws the spec's states while the class runs, so it starts the clock; the floors test measures the same notice
-  // as the snapshot paints it and does not need the clock.
-  if (running) rig.controller.command({ type: "start" });
+  // Every state is drawn while the class runs (the spec's first line), in the words test and in the floors test alike.
+  rig.controller.command({ type: "start" });
   const data = { __state: { ...rig.controller.snapshot(), music: s.notice }, __pairing: PAIRED, __live: rig.live.view(), __riders: rig.live.riders() };
   await context.addInitScript(`Object.assign(window, ${JSON.stringify(data)});`);
   const page = await context.newPage();
@@ -101,7 +100,7 @@ test("each music state shows the spec's words, and its plate meets M1, M5 and M7
     for (const size of SIZES) {
       const name = `${s.name}-${size[0]}x${size[1]}`;
       if (only && !only.test(name)) continue;
-      const o = await open(size, s, true);
+      const o = await open(size, s);
       try {
         await o.page.screenshot({ path: join(SHOT_DIR, `presenter-music-${name}.png`), animations: "disabled" });
         // The spec's first line: the class is running. The page writes the clock's own word, "Running".
@@ -140,7 +139,7 @@ test("each music state meets the presenter's readability floors at both sizes", 
     for (const size of SIZES) {
       const name = `${s.name}-${size[0]}x${size[1]}`;
       if (only && !only.test(name)) continue;
-      const o = await open(size, s, false);
+      const o = await open(size, s);
       try {
         const m = await measure(o.page);
         assert.deepEqual(m.cap, [], `${name}: S1 cap heights`);

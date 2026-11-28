@@ -74,6 +74,7 @@ test("each planted build gives a finding", () => {
     ["a camera key", verify({ "Debug-iphonesimulator": { ...debug, NSCameraUsageDescription: "x" } }), "NSCameraUsageDescription"],
     ["the source scene name", verify({ "Debug-iphonesimulator": { ...debug, UIApplicationSceneManifest: scenes() } }), "scene manifest"],
     ["a fourth font name", verify({ "Debug-iphonesimulator": { ...debug, UIAppFonts: [...(debug["UIAppFonts"] as string[]), "extra.ttf"] } }), "UIAppFonts"],
+    ["one font name dropped", verify({ "Debug-iphonesimulator": { ...debug, UIAppFonts: (debug["UIAppFonts"] as string[]).slice(1) } }), "UIAppFonts"],
     ["no fonts listed", verify({ "Debug-iphonesimulator": Object.fromEntries(Object.entries(debug).filter(([k]) => k !== "UIAppFonts")) }), "UIAppFonts"],
     ["loads in a release build", verify({ "Release-iphoneos": { ...release, NSAppTransportSecurity: DEBUG_ATS } }), "NSAppTransportSecurity is set"],
     ["a capability prepared for signing", verify({ "Debug-iphonesimulator": debug }, unsigned, { "com.apple.developer.healthkit": true }), "healthkit is not allowed"],
