@@ -177,19 +177,25 @@ test("a find cancelled with its dialog open still holds the service: a find or a
   assert.notEqual(await r.service.checkOpen(r.doc), null, "free once the dialog has returned");
 });
 
-test("a released stopped check that unwinds does not free the service under the check that replaced it", async () => {
+test("a released stopped check that unwinds does not free the service under the run that replaced it", async () => {
   const r = rig();
-  // Many indexed songs, so a check awaits many file reads and the second is still running when the first has unwound.
-  const songs = Array.from({ length: 200 }, (_, i) => bytes(String.fromCharCode(97 + (i % 26)), 1000 + i));
-  r.doc = localClass(songs);
-  songs.forEach((b, i) => r.put(`s${i}.mp3`, b));
-  assert.equal((await r.service.find(CLASS_ID))?.status, "done");
+  const a = bytes("a", 1000);
+  r.doc = localClass([a]);
+  r.put("a.mp3", a);
+  // The order is forced, not timed: the replacing find holds the service at its folder dialog until the test opens the gate, so the
+  // stopped check has unwound (its answer is in) while the replacement is certainly still running.
+  let open!: () => void;
+  r.dialogGate = new Promise((res) => (open = res));
   const first = r.service.checkOpen(r.doc);
   assert.equal(r.service.cancel(), true);
-  const second = r.service.checkOpen(r.doc);
+  const second = r.service.find(CLASS_ID);
+  assert.notEqual(second, null);
   assert.deepEqual(await first, { status: "cancelled" });
-  assert.equal(await r.service.checkOpen(r.doc), null, "the second check still runs: a third is busy");
-  assert.notEqual(await second, null);
+  assert.equal(await r.service.checkOpen(r.doc), null, "the replacing run still holds the service: a check is busy");
+  assert.equal(await r.service.find(CLASS_ID), null, "and so is a second find");
+  open();
+  assert.equal((await second)?.status, "done");
+  assert.notEqual(await r.service.checkOpen(r.doc), null, "free again once the replacing run is over");
 });
 
 test("a match stopped part way answers nothing and changes nothing", async () => {
