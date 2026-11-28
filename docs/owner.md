@@ -119,6 +119,11 @@ with other work; nothing in the development loop waits for an answer.
   configuration, only the backend origin fixed in the build, no redirects, a 64 KiB answer limit, a 10 s timeout, no relaxed certificate
   or host checks), and for one Swift file holding the rider socket to the same origin. Until you
   decide, the iOS app is built with these calls faked: it pairs nothing and syncs no classes.
+- **Font licence files in the built iOS app (#995, 2026-11-28).** The iOS app bundles three
+  font files (Big Shoulders Display, Atkinson Hyperlegible). Their `OFL-*.txt` files now sit
+  beside them in the source, byte-identical to the other copies in the repository, but are not
+  packaged into the built app. Your call whether the app should carry them, and where a user
+  would see them. Until you decide, nothing changes.
 - **Sensors and two rule guards (PL9, ADR 0012, 2026-11-24).** The player's guard bans
   `navigator.bluetooth` in all its code, and the live guard bans `power`, `cadence`, `rpm` and
   `ftms` in every live message, so two parts of PL9 need you. Proposals, like #173: (1) one player
