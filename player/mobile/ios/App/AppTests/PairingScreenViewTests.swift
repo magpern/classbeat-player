@@ -130,6 +130,118 @@ final class PairingScreenViewTests: XCTestCase {
         }
     }
 
+    /// Every window the spec names (app.md A1): the phones and the tablets, both ways up.
+    private static let windows: [(CGFloat, CGFloat)] = [
+        (390, 844), (844, 390), (360, 640), (640, 360), (768, 1024), (1024, 768),
+    ]
+
+    /// A1's floors, written out here on purpose so lowering `Sizes` cannot lower them: the cap height
+    /// as a share of the window height (portrait, landscape) and in points, as (portrait, landscape, points).
+    private enum Floor {
+        /// app.md "Measurable checks": every floored text sits at least 5 % over its floor.
+        static let margin: CGFloat = 1.05
+        static let value: (CGFloat, CGFloat, CGFloat) = (0.034, 0.06, 21)
+        static let status: (CGFloat, CGFloat, CGFloat) = (0.019, 0.034, 12.5)
+        static let label: (CGFloat, CGFloat, CGFloat) = (0.015, 0.027, 10)
+
+        static func points(_ tier: (CGFloat, CGFloat, CGFloat), _ height: CGFloat, _ landscape: Bool) -> CGFloat {
+            max(height * (landscape ? tier.1 : tier.0), tier.2) * margin
+        }
+    }
+
+    private func tier(of text: String) -> (CGFloat, CGFloat, CGFloat) {
+        if text == "BCDF-GHJK" || text == "Pair this phone" || text == "This phone is paired" { return Floor.value }
+        if text == "Code" || text.hasPrefix("\u{25CF}") || text.hasPrefix("\u{25A1}") { return Floor.label }
+        return Floor.status
+    }
+
+    private var states: [(String, PairingView)] {
+        [
+            ("asking", .starting), ("code", waiting),
+            ("paired", .paired(email: "rider@classbeat.test", deviceName: nil, expired: false, notice: nil)),
+            ("plate", .unpaired(notice: .saveFailed)), ("plate-long", .unpaired(notice: .noKeychain)),
+        ]
+    }
+
+    /// Every text's cap height, measured from the font it is drawn in, against its A1 floor at every window.
+    func testEveryTextMeetsItsReadabilityFloorAtEveryWindow() {
+        for (width, height) in Self.windows {
+            let landscape = width > height
+            stage(width: width, height: height)
+            for (name, pairing) in states {
+                show(pairing, returned: true)
+                let spot = "\(Int(width))x\(Int(height)) \(name)"
+                XCTAssertFalse(labels.isEmpty, spot)
+                for label in labels {
+                    let words = label.text ?? ""
+                    let need = Floor.points(tier(of: words), height, landscape)
+                    XCTAssertGreaterThanOrEqual(label.font.capHeight, need, "\(spot): \(words)")
+                }
+                for key in buttons {
+                    let font = key.titleLabel?.font ?? .systemFont(ofSize: 1)
+                    XCTAssertGreaterThanOrEqual(font.capHeight, Floor.points(Floor.status, height, landscape), "\(spot): \(key.title(for: .normal) ?? "")")
+                }
+            }
+        }
+    }
+
+    /// The same floors as the share of the window height, the way the design review measures it.
+    func testTheTitleCodeTagAndStatusShareOfTheWindowHeightMeetsA1() {
+        for (width, height) in Self.windows {
+            let landscape = width > height
+            stage(width: width, height: height)
+            show(waiting)
+            let share = { (text: String) -> CGFloat in
+                (self.labels.first { ($0.text ?? "").hasPrefix(text) }?.font.capHeight ?? 0) / height
+            }
+            let spot = "\(Int(width))x\(Int(height))"
+            XCTAssertGreaterThanOrEqual(share("Pair this phone"), (landscape ? 0.06 : 0.034) * Floor.margin, "title \(spot)")
+            XCTAssertGreaterThanOrEqual(share("BCDF-GHJK"), (landscape ? 0.06 : 0.034) * Floor.margin, "code \(spot)")
+            XCTAssertGreaterThanOrEqual(share("\u{25CF}"), (landscape ? 0.027 : 0.015) * Floor.margin, "tag \(spot)")
+            XCTAssertGreaterThanOrEqual(share("Code"), (landscape ? 0.027 : 0.015) * Floor.margin, "Code label \(spot)")
+            XCTAssertGreaterThanOrEqual(share("The code runs out"), (landscape ? 0.034 : 0.019) * Floor.margin, "status \(spot)")
+        }
+    }
+
+    /// Nothing scrolls: every text and key sits whole inside the window, and no label is squeezed
+    /// below the height its words need.
+    func testKeysSitAtLeast12ApartAtEveryWindow() {
+        for (width, height) in Self.windows {
+            stage(width: width, height: height)
+            for (name, pairing) in states {
+                show(pairing, returned: true)
+                guard let root = view.shown else { XCTFail("no screen"); continue }
+                let boxes = buttons.map { $0.convert($0.bounds, to: root) }.sorted { $0.minY < $1.minY }
+                for (above, below) in zip(boxes, boxes.dropFirst()) {
+                    XCTAssertGreaterThanOrEqual(below.minY - above.maxY, 12 - 0.5, "\(Int(width))x\(Int(height)) \(name)")
+                }
+            }
+        }
+    }
+
+    func testNothingOverflowsTheWindowAtEveryWindow() {
+        for (width, height) in Self.windows {
+            stage(width: width, height: height)
+            for (name, pairing) in states {
+                show(pairing, returned: true)
+                guard let root = view.shown else { XCTFail("no screen for \(width)x\(height) \(name)"); continue }
+                let spot = "\(Int(width))x\(Int(height)) \(name)"
+                let items: [UIView] = labels + buttons
+                for item in items {
+                    let box = item.convert(item.bounds, to: root)
+                    XCTAssertGreaterThanOrEqual(box.minX, -0.5, spot)
+                    XCTAssertGreaterThanOrEqual(box.minY, -0.5, spot)
+                    XCTAssertLessThanOrEqual(box.maxX, width + 0.5, spot)
+                    XCTAssertLessThanOrEqual(box.maxY, height + 0.5, "\(spot): \((item as? UILabel)?.text ?? "key")")
+                }
+                for label in labels {
+                    let needed = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height
+                    XCTAssertGreaterThanOrEqual(label.bounds.height + 0.5, needed, "\(spot): \(label.text ?? "")")
+                }
+            }
+        }
+    }
+
     func testTheCodeIsTheLargestTextAndSpelledOut() {
         show(waiting)
         guard let code = labels.first(where: { $0.accessibilityIdentifier == "pairing.code" }) else {
@@ -139,6 +251,8 @@ final class PairingScreenViewTests: XCTestCase {
         XCTAssertEqual(code.numberOfLines, 1)
         let biggest = labels.map { $0.font.pointSize }.max() ?? 0
         XCTAssertEqual(code.font.pointSize, biggest)
+        let tallest = labels.map { $0.font.capHeight }.max() ?? 0
+        XCTAssertEqual(code.font.capHeight, tallest, "the code is the tallest text by cap height too")
         let spoken = code.accessibilityAttributedLabel
         XCTAssertEqual(spoken?.string, "BCDF-GHJK")
         XCTAssertEqual(spoken?.attribute(.accessibilitySpeechSpellOut, at: 0, effectiveRange: nil) as? Bool, true)
