@@ -5,7 +5,7 @@
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEBUG_ATS, type Json, scenes } from "./allowlists.ts";
+import { APP_FONTS, DEBUG_ATS, type Json, scenes } from "./allowlists.ts";
 import { entitlementFindings, plistFindings, projectJsonFindings } from "./checks.ts";
 import { plistXml } from "./plist-xml.ts";
 
@@ -59,7 +59,7 @@ export function verifyBuild(derivedData: string, project: string, tools: Tools):
   return found;
 }
 
-const BUILT: Json = { CFBundleIdentifier: "x", DTXcode: "1640", UIApplicationSceneManifest: scenes("App"), NSAppTransportSecurity: DEBUG_ATS };
+const BUILT: Json = { CFBundleIdentifier: "x", DTXcode: "1640", UIApplicationSceneManifest: scenes("App"), UIAppFonts: APP_FONTS, NSAppTransportSecurity: DEBUG_ATS };
 const omit = (v: Json, key: string): Json => Object.fromEntries(Object.entries(v as object).filter(([k]) => k !== key)) as Json;
 const add = (v: Json, extra: { [key: string]: Json }): Json => ({ ...(v as object), ...extra }) as Json;
 const ID = "AA0000000000000000000099";
@@ -91,6 +91,7 @@ export function selfTest(project: string, tools: Tools): string[] {
       ["a camera key", add(BUILT, { NSCameraUsageDescription: "x" }), true, false],
       ["background modes", add(BUILT, { UIBackgroundModes: ["audio"] }), true, false],
       ["a banned key deeper", add(BUILT, { UILaunchScreen: { NSLocationUsageDescription: "x" } }), true, false],
+      ["a fourth font name", add(BUILT, { UIAppFonts: [...(APP_FONTS as string[]), "extra.ttf"] }), true, false],
       ["an unlisted key", add(BUILT, { UIStatusBarHidden: true }), true, false],
       ["arbitrary loads", add(BUILT, { NSAppTransportSecurity: { NSAllowsArbitraryLoads: true } }), true, false],
       ["loads in release", BUILT, false, false],

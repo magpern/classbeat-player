@@ -3,7 +3,7 @@
 // readers, or Apple's plutil on macOS) and returns what is wrong, one line each.
 import { isDeepStrictEqual } from "node:util";
 import {
-  BANNED_KEY, BANNED_PROJECT_WORDS, BUILD_ADDED_KEYS, DEBUG_ATS, DEBUG_ENTITLEMENTS, ENTITLEMENTS, INFO_KEYS, type Json, OBJECT_KINDS, scenes,
+  APP_FONTS, BANNED_KEY, BANNED_PROJECT_WORDS, BUILD_ADDED_KEYS, DEBUG_ATS, DEBUG_ENTITLEMENTS, ENTITLEMENTS, INFO_KEYS, type Json, OBJECT_KINDS, scenes,
   SETTING_KEYS,
 } from "./allowlists.ts";
 
@@ -32,6 +32,7 @@ export function plistFindings(name: string, plist: Json, { debug, built }: Plist
   if (!isDeepStrictEqual(plist["UIApplicationSceneManifest"], scenes(built ? "App" : undefined))) {
     found.push(`${name}: the scene manifest is not the one window scene`);
   }
+  if (!isDeepStrictEqual(plist["UIAppFonts"], APP_FONTS)) found.push(`${name}: UIAppFonts is not the three bundled fonts`);
   const ats = plist["NSAppTransportSecurity"];
   if (!debug && ats !== undefined) found.push(`${name}: NSAppTransportSecurity is set (HTTPS only means no exception)`);
   if (debug && !isDeepStrictEqual(ats, DEBUG_ATS)) found.push(`${name}: the transport security is not the localhost exception alone`);
