@@ -61,7 +61,13 @@ final class PairingScreenView: NSObject, PairingScreens {
         let lead = column()
         screen.lead.forEach { lead.addArrangedSubview(line($0, size)) }
         let act = column()
-        screen.act.forEach { act.addArrangedSubview(line($0, size)) }
+        // Keys sit 12 apart (app.md A6); the steps above them sit closer so 360x640 still fits.
+        act.spacing = Sizes.keyGap
+        screen.act.forEach {
+            let view = line($0, size)
+            act.addArrangedSubview(view)
+            act.setCustomSpacing(Sizes.lineGap, after: view)
+        }
         screen.keys.forEach { act.addArrangedSubview(key($0, size)) }
         kinds = screen.lines.map { $0.kind }
 
@@ -143,7 +149,7 @@ final class PairingScreenView: NSObject, PairingScreens {
         let column = UIStackView()
         column.axis = .vertical
         column.alignment = .fill
-        column.spacing = 8
+        column.spacing = Sizes.lineGap
         return column
     }
 
@@ -264,6 +270,9 @@ final class PairingScreenView: NSObject, PairingScreens {
     struct Sizes {
         static let codeScale: CGFloat = 1.25
         static let touch: CGFloat = 64
+        /// The least gap between two keys (app.md A6), and the gap between lines.
+        static let keyGap: CGFloat = 12
+        static let lineGap: CGFloat = 8
         /// Cap height over the em: Big Shoulders Display 1600/2000, Atkinson Hyperlegible 668/1000.
         static let numberCap: CGFloat = 0.8
         static let textCap: CGFloat = 0.668

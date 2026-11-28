@@ -205,6 +205,20 @@ final class PairingScreenViewTests: XCTestCase {
 
     /// Nothing scrolls: every text and key sits whole inside the window, and no label is squeezed
     /// below the height its words need.
+    func testKeysSitAtLeast12ApartAtEveryWindow() {
+        for (width, height) in Self.windows {
+            stage(width: width, height: height)
+            for (name, pairing) in states {
+                show(pairing, returned: true)
+                guard let root = view.shown else { XCTFail("no screen"); continue }
+                let boxes = buttons.map { $0.convert($0.bounds, to: root) }.sorted { $0.minY < $1.minY }
+                for (above, below) in zip(boxes, boxes.dropFirst()) {
+                    XCTAssertGreaterThanOrEqual(below.minY - above.maxY, 12 - 0.5, "\(Int(width))x\(Int(height)) \(name)")
+                }
+            }
+        }
+    }
+
     func testNothingOverflowsTheWindowAtEveryWindow() {
         for (width, height) in Self.windows {
             stage(width: width, height: height)
