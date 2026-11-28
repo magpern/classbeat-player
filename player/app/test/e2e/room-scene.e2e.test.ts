@@ -25,6 +25,10 @@ let room: Page;
 const rows: { fps: number; level: string }[] = [];
 const logs: string[] = [];
 const SLOW_MS = 400;
+/** Written by the room page in the same step that wraps requestAnimationFrame: console messages of one page arrive in order, so it splits the frame-rate rows into before and after the wrap. */
+const WRAPPED = "test: requestAnimationFrame wrapped";
+/** Where in `rows` the wrap marker arrived (-1 until it has). */
+let wrappedAt = -1;
 
 before(async () => {
   let origin: string;
@@ -61,6 +65,7 @@ test("a class with songs: the scene mounts in the room window and draws its canv
   room.on("console", (m) => {
     const r = /^scene frame rate: second=\d+ fps=(\d+(?:\.\d+)?) level=(\w+)$/.exec(m.text());
     logs.push(m.text().slice(0, 160));
+    if (m.text() === WRAPPED) wrappedAt = rows.length;
     if (r) rows.push({ fps: Number(r[1]), level: r[2]! });
   });
   // Nothing is forced here: the scene must be on before any step-down (which software GL may begin by itself some seconds later).
@@ -82,16 +87,19 @@ test("a forced slow frame rate ends on the plain screen, and the class clock goe
   await waitFor(async () => (await remaining()) !== undefined, 10_000, "the running class");
   const before = (await within(10_000, "read the clock", remaining()))!;
   // About 2.5 frames a second, from the next frame on.
-  const mark = rows.length;
-  await room.evaluate((ms) => {
+  await room.evaluate(([ms, marker]) => {
     const w = window as unknown as { requestAnimationFrame(cb: FrameRequestCallback): number };
     const g = window as unknown as { slowFrames: number };
     g.slowFrames = 0;
     w.requestAnimationFrame = (cb) => window.setTimeout(() => { g.slowFrames++; cb(performance.now()); }, ms);
-  }, SLOW_MS);
+    console.log(marker);
+  }, [SLOW_MS, WRAPPED] as const);
   await waitFor(async () => (await scene()) === "off", 90_000, "the plain screen after the step-downs");
-  // What the scene itself measured after the wrap (the first sample may straddle it): never faster than the forced rate allows.
-  const seen = rows.slice(mark + 1);
+  // What the scene itself measured after the wrap: never faster than the forced rate allows. The first row after the marker is the
+  // window that was open when the wrap came, with frames from before it, so it is left out. (Counting rows from the number logged when
+  // the wrap was made is not enough: a row still on its way to the test then lands before the marker and shifts the count.)
+  assert.ok(wrappedAt >= 0, "the wrap marker reached the test");
+  const seen = rows.slice(wrappedAt + 1);
   assert.ok(seen.length >= 1, "the scene logged samples while it was slowed");
   assert.ok(seen.every((r) => r.fps <= 3), `the forced rate decided the frame rate: ${JSON.stringify(seen)}`);
   // The scene took its frames through the wrap (not through the real frame clock), at the forced pace: at most one per SLOW_MS.

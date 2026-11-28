@@ -25,6 +25,8 @@ export const INFO_KEYS = new Set([
   "UISupportedInterfaceOrientations~ipad",
   "UIViewControllerBasedStatusBarAppearance",
 ]);
+/** The font files UIAppFonts lists, in order: the three the native pairing screens draw in (#988), beside Info.plist. */
+export const APP_FONTS: Json = ["big-shoulders-display-800.ttf", "atkinson-hyperlegible-400.ttf", "atkinson-hyperlegible-700.ttf"];
 /** Keys that are never in the app, at any depth: camera, microphone, photos, location, background
  * modes, Bluetooth, arbitrary loads, other apps' links and the rest of what it does not do. */
 export const BANNED_KEY =
